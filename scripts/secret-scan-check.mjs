@@ -43,10 +43,18 @@ export const ALLOWLIST = [
   // The key side matches by identifier component (the same widening as the
   // detector's generic-secret rule) so affixed keys — my_password_value,
   // sharedToken — get the same reference suppression bare keys have always
-  // had. The value side stays code-shaped: an identifier-led structured
-  // prefix (member/index/call groups) plus a quote-free tail up to a
-  // terminator, so a quote-led literal can never inherit this exemption.
-  /["']?(?:[\w$-]*?(?:secret|password|passwd|pwd|token|api[_-]?key)[\w$-]*?)["']?\s*[:=]\s*[a-zA-Z_$][\w$]*(?:\s*(?:\.\s*[a-zA-Z_$][\w$]*|\[[^\]]*\]|\([^)]*\)))*[^"']*?([,;)\]}]|$)/i,
+  // had. The value side stays code-shaped: a structured operand (identifier
+  // or interpolation lead; member/index/call segments, private-field and
+  // optional-chained included), optionally followed by operator tails
+  // (??, ||, &&, comparisons, ternary, +/-) whose operands are themselves
+  // code-shaped — never a quoted literal — and then an ending: a
+  // terminator, an arrow-body opening, or an unterminated call at end of
+  // line (multiline arguments). There is deliberately no free-form tail:
+  // a tail that can cross an operator or end at a call's closing paren
+  // would let a conditional's literal branch inherit this exemption
+  // (R7 defect, fixed in F1W2-T7b). A quote-led literal can never inherit
+  // it either, and neither can a quoted tail operand.
+  /["']?(?:[\w$-]*?(?:secret|password|passwd|pwd|token|api[_-]?key)[\w$-]*?)["']?\s*[:=]\s*(?:[a-zA-Z_$][\w$]*|\$\{[^{}"']*\})(?:\s*(?:(?:\?\.\s*|\.\s*)#?[a-zA-Z_$][\w$]*|(?:\?\.)?\[[^\]]*\]|\((?:[^()]|\([^()]*\))*\)|\$\{[^{}"']*\}|\\.))*(?:\s*(?:\?\?|\|\||&&|===|!==|==|!=|>=|<=|>|<|\+|\?|:|AND\b|OR\b)\s*(?:[a-zA-Z_$][\w$]*|\$\{[^{}"']*\}|\d+(?:\.\d+)?|\?|\{[^{}"']*\})(?:\s*(?:(?:\?\.\s*|\.\s*)#?[a-zA-Z_$][\w$]*|(?:\?\.)?\[[^\]]*\]|\((?:[^()]|\([^()]*\))*\)|\$\{[^{}"']*\}|\\.))*)*(?:(?:\s*`)?\s*(?:[,;)\]}]|$)|(?:\s*=>\s*\{?\s*$)|(?:\s*\((?:[^()]|\([^()]*\))*$))/i,
   /(?:[\w$-]*?(?:secret|password|passwd|pwd|token|api[_-]?key)[\w$-]*?)\s*[:=]\s*["'][^"']{0,11}["']/, // short placeholders (component keys, as above)
   // Template literals assembled at runtime: `token = `${a}.${b}``. Allowed only
   // when every character outside an interpolation is a separator, so a literal
@@ -142,8 +150,14 @@ export const ALLOWLIST = [
     // same line still flags (per-finding allowlist).
   // Component-key companions to the generic-secret widening (same change):
   // a quoted SNAKE_UPPER value containing an underscore is an env var NAME,
-  // not a value (mirrors the process.env entry above).
-  /["']?(?:[\w$-]*?(?:secret|password|passwd|pwd|token)[\w$-]*?)["']?\s*[:=]\s*["'][A-Z][A-Z0-9]*_[A-Z0-9_]*["']/i,
+  // not a value (mirrors the process.env entry above). The value side has
+  // no case-insensitive flag and is anchored to the complete quoted value
+  // plus a terminator: with /i the [A-Z] classes also matched lowercase,
+  // which exempted any snake_case credential value (sk_test_..., ghp_...,
+  // a snake_case passphrase) assigned to a component key (R7 defect, fixed
+  // in F1W2-T7b). Only a complete genuine SNAKE_UPPER name is exempt; the
+  // key side keeps lower/Upper/UPPER keyword spellings explicitly.
+  /["']?(?:[\w$-]*?(?:secret|password|passwd|pwd|token|SECRET|PASSWORD|PASSWD|PWD|TOKEN|Secret|Password|Passwd|Pwd|Token)[\w$-]*?)["']?\s*[:=]\s*["'][A-Z][A-Z0-9]*(?:_[A-Z0-9]+)+["'](?=\s*(?:[,;)\]}]|$))/,
   // A value led by template interpolations is assembled at runtime; only
   // separators may follow an interpolation, up to a terminator, so a
   // literal tail still flags.

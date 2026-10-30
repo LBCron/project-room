@@ -1720,8 +1720,11 @@ export function resolveNamedReviewers(item, members = {}) {
   }
   return [...ids];
 }
+export function currentReviewOf(item, memberId) {
+  return (item?.reviews ?? []).find(review => review?.memberId === memberId && currentReviewBasis(review, item)) ?? null;
+}
 export function hasCurrentReview(item, memberId) {
-  return (item?.reviews ?? []).some(review => review?.memberId === memberId && currentReviewBasis(review, item));
+  return currentReviewOf(item, memberId) !== null;
 }
 // Query helpers over a list.
 export function workOwnedBy(items, agentId) {

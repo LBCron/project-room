@@ -97,7 +97,7 @@ test("batch sweep rolls up per-channel open counts and breach lists", () => {
 
 test("batch sweep isolates a future-dated thread instead of failing the batch", () => {
   const batch = assessSlaBatch([
-    { threadId: "future", channel: "telegram", messages: [inbound("mF", -1)] },
+    { threadId: "future", channel: "telegram", messages: [inbound("mF", 11)] },
     { threadId: "ok-mail", channel: "email", messages: [inbound("m1", 9)] },
   ], { now: NOW });
   assert.equal(batch.assessed.length, 1);

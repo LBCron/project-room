@@ -50,8 +50,9 @@ export class RoomClient {
   heartbeat({ hostId, cadenceSeconds = 30 }) {
     return this.request("/api/agent-heartbeats", { body: { hostId, mode: "wakeable", cadenceSeconds, listenerLease: { roomId: this.roomId } } });
   }
-  poll({ hostId, waitMs = 25000, signal }) {
-    return this.request(`/api/agent-wakes/poll?hostId=${encodeURIComponent(hostId)}&waitMs=${waitMs}`, { timeoutMs: waitMs + 15000, signal });
+  poll({ hostId, waitMs = 25000, signal, cursor = null }) {
+    const page = cursor ? `&cursor=${encodeURIComponent(cursor)}` : "";
+    return this.request(`/api/agent-wakes/poll?hostId=${encodeURIComponent(hostId)}&waitMs=${waitMs}${page}`, { timeoutMs: waitMs + 15000, signal });
   }
   ack({ signalIds, fencingToken }) {
     return this.request("/api/agent-heartbeats/ack", { body: { signalIds, ...(fencingToken ? { fencingToken } : {}) } });

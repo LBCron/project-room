@@ -16,6 +16,10 @@ import { PermissionBroker, decisionOf, DEFAULT_PERMISSION_TIMEOUT_MS } from "./p
 
 export const CRASH_LIMIT = 3;
 export const CRASH_WINDOW_MS = 5 * 60 * 1000;
+// The Room pages pending wakes (50 per page) and reports more/nextCursor.
+// One poll cycle follows at most this many pages, so a queue that grows
+// while the bridge sleeps drains across cycles instead of looping here.
+export const MAX_POLL_PAGES = 20;
 
 const sleep = (ms, signal) => new Promise(resolve => {
   if (signal?.aborted) { resolve(); return; }
@@ -383,11 +387,22 @@ export class Bridge {
     if (gap > 0) await sleep(gap, this.controller.signal);
     if (this.controller.signal.aborted) return;
     this.lastPollAt = Date.now();
-    const value = await this.room.poll({ hostId: this.connection.hostId, waitMs: this.waitMs, signal: this.controller.signal });
-    if (value?.pendingWakes?.length) await this.refreshRoom();
-    for (const signal of value?.pendingWakes ?? []) {
-      if (this.controller.signal.aborted) break;
-      await this.accept(signal);
+    // Drain every queued page in this cycle: signals on later pages are
+    // just as queued as the first page's, and a first-page signal that
+    // cannot ack yet (a long turn, a parked receipt) must not hide them.
+    // Later pages are already waiting, so they are read without a wait.
+    let cursor = null;
+    for (let page = 0; page < MAX_POLL_PAGES; page++) {
+      if (this.controller.signal.aborted) return;
+      const value = await this.room.poll({ hostId: this.connection.hostId, waitMs: page === 0 ? this.waitMs : 0, signal: this.controller.signal, cursor });
+      const wakes = value?.pendingWakes ?? [];
+      if (wakes.length && page === 0) await this.refreshRoom();
+      for (const signal of wakes) {
+        if (this.controller.signal.aborted) break;
+        await this.accept(signal);
+      }
+      if (!value?.more || !value?.nextCursor) return;
+      cursor = value.nextCursor;
     }
   }
 

@@ -58,7 +58,7 @@ test('stale plans and late failure cannot leave SQL or resident keys partially r
   assert.throws(() => retireQaRoom(f.store, { ...input, planHash: fresh.planHash, requestId: 'rollback' }, true), /injected late failure/);
   assert.ok(f.store.agentPlugin.verifyPresentedApiKey(f.key.credential));
   assert.equal(f.store.room(roomId).state.room.archivedAt, undefined);
-  assert.throws(() => retireQaRoom(f.store, { ...input, roomId: 'other' }), e => e.code === 'invalid_retirement');
+  assert.throws(() => retireQaRoom(f.store, { ...input, roomId: 'other' }), e => e.status === 403 && e.code === 'operator_retirement_scope');
 });
 
 for (const invitation of [false, true]) test(`retirement revokes bound OAuth code/access/refresh only (invitation=${invitation})`, t => {
@@ -95,7 +95,7 @@ test('operator HTTP gate refuses room bearer and requires exact QA scope and pla
     method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: authorization }, body: JSON.stringify(input) });
   const input = { roomId, reason: 'HTTP qualification' };
   assert.equal((await post('plan', 'Bearer ' + f.legacy, input)).status, 404);
-  assert.equal((await post('plan', 'Operator ' + operator, { ...input, roomId: 'other' })).status, 422);
+  assert.equal((await post('plan', 'Operator ' + operator, { ...input, roomId: 'other' })).status, 403);
   const response = await post('plan', 'Operator ' + operator, input); assert.equal(response.status, 200);
   const plan = await response.json();
   for (const secret of [f.legacy, f.identity.secret, f.key.credential]) assert.equal(JSON.stringify(plan).includes(secret), false);

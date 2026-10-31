@@ -157,7 +157,11 @@ export function openCodexStdio(config, { allowedThreadIds = [], onAttention = ()
       if (pending.size >= 128) return Promise.reject(new Error("Too many pending runtime requests"));
       const result = new Promise((resolve, reject) => {
         const id = nextId++;
-        const timer = setTimeout(() => fail(new Error("Runtime request timed out; outcome uncertain, do not retry writes")), settings.requestTimeoutMs);
+        // A turn's first frame can legitimately take far longer than an
+        // ordinary request: turn/start is governed by the configured
+        // turnTimeoutMs, every other request by requestTimeoutMs.
+        const timeoutMs = method === "turn/start" ? settings.turnTimeoutMs : settings.requestTimeoutMs;
+        const timer = setTimeout(() => fail(new Error("Runtime request timed out; outcome uncertain, do not retry writes")), timeoutMs);
         pending.set(id, { resolve, reject, timer, method });
         try { write({ id, method, params }); } catch (error) { clearTimeout(timer); pending.delete(id); reject(error); }
       });

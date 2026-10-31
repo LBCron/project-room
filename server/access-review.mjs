@@ -109,8 +109,8 @@ export function assembleAccessReview(store, roomId) {
   // record, like an expired link). Only the hash-free inviteId handle that
   // revoke() takes is selected — never the code or its stored hash.
   const pendingInvites = db.prepare("SELECT * FROM agent_invite_codes WHERE room_id=? AND redeemed_at IS NULL AND revoked_at IS NULL ORDER BY created_at DESC,code_hash").all(roomId).map(row => {
-    const { inviteId, displayName, permissions, createdBy, createdAt, expiresAt, status, ownerEquivalent } = store.invites.view(row, now);
-    return { inviteId, displayName, permissions, ownerEquivalent, inviterMemberId: createdBy, createdAt: iso(createdAt), expiresAt: iso(expiresAt), status };
+    const { inviteId, displayName, permissions, createdBy, createdAt, expiresAt, status, ownerEquivalent, unreadable } = store.invites.view(row, now);
+    return { inviteId, displayName, permissions, ...(unreadable ? { unreadable: true } : {}), ownerEquivalent, inviterMemberId: createdBy, createdAt: iso(createdAt), expiresAt: iso(expiresAt), status };
   });
   const agentIdentities = db.prepare(`SELECT l.identity_id AS identityId, l.member_id AS memberId, l.linked_at AS linkedAt,
       i.display_name AS displayName FROM identity_links l JOIN agent_identities i ON i.identity_id=l.identity_id

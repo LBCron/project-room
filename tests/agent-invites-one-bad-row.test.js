@@ -18,7 +18,7 @@ function fixture(t) {
   store.initialize(initialRoom("commons"));
   const ownerKey = store.issueAccessKey("commons", "owner");
   t.after(() => { store.close(); rmSync(directory, { recursive: true, force: true }); });
-  const good = store.invites.create(ownerKey, "commons", { profile: "chat", expiresInMinutes: 60, displayName: "Good Bot" }, null);
+  const good = store.invites.create(ownerKey, "commons", { permissions: ["accept_work", "complete_work"], expiresInMinutes: 60, displayName: "Good Bot" }, null);
   const bad = store.invites.create(ownerKey, "commons", { permissions: ["steer"], expiresInMinutes: 60, displayName: "Legacy Bot" }, null);
   return { store, ownerKey, good, bad };
 }

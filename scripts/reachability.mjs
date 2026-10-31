@@ -36,8 +36,6 @@ export const KEEP = [
   "server/channel-adapters/webhook-secret.mjs",
   "server/channel-adapters/slack-webhook.mjs",
   "server/channel-adapters/discord-webhook.mjs",
-  // Existing merge-queue integration remains unmounted.
-  "server/merge-queue.mjs",
   // Client stores restored for audit-wave-3c regression coverage (#2893);
   // runtime wiring is a separate product decision, not implicit enablement.
   "src/handoff-store.mjs",

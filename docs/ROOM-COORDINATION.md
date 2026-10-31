@@ -113,10 +113,8 @@ at that exact head. Never push directly to `main`.
 
 The merge-slot is the Board claim `MERGE-SLOT` in muse-room. Claim it, read it
 back, merge one PR, post the LAND receipt, then release it or hand it to the
-next lander. If someone else holds it, wait or ask them. The HTTP merge-queue
-routes in `server/merge-queue.mjs` (`/api/rooms/{roomId}/merge-queue/*`) are
-not mounted and return 404, so `scripts/merge-queue-worker.mjs` cannot run
-against production. GitHub's native merge queue is not enabled on `main`.
+next lander. If someone else holds it, wait or ask them. GitHub's native
+merge queue is not enabled on `main`.
 
 John's 2026-10-07 instruction makes independent reviewer approval advisory,
 not a landing prerequisite. Assess review findings and fix actual correctness,
@@ -124,14 +122,6 @@ security or data-loss blockers. A missing approval or CHANGES REQUESTED status
 alone does not block authorized work. This replaces older exact-head approval
 and approval-carry requirements; it does not waive an explicit task hold or
 an item's enforced completion review policy.
-
-The queue worker accepts operator-provided `--authorized-head <40-character
-SHA>` for work covered by this standing authority. It applies only to that
-enqueued head, still reads the Board claim and refuses a blocked claim, waits
-for fresh required CI after a rebase, and binds the merge to the tested head.
-Without that operator input, unattended requests retain their independent
-approval boundary; arbitrary room members cannot authorize their own release
-by setting a claim field or posting an approval-shaped note.
 
 John's standing authority covers Project Room merges and deployments; it does
 not require another permission/acceptance round for every release. Deploy via

@@ -22,6 +22,14 @@ const statuses = () => ({ prod: status(prodId), entry: status(entryId) });
 // The fixture serves a signed card and the workflow env injects the matching
 // test key through the smoke's SMOKE_AGENT_CARD_* seams (the suite cannot
 // sign for the production pinned key).
+// The same smoke also verifies deployment job health: it reads
+// /api/health/jobs on both doors and requires a room.job-health/1 view whose
+// summary agrees with the /api/health envelope (707ae1e4d, "Qualify truthful
+// Worker health without masking failed jobs"). The fixture therefore serves
+// the current production envelope on /api/health (status + liveness + jobs
+// summary) and a fresh, fully-ok jobs view naming the required room-backup
+// job. generatedAt is minted per request: the smoke rejects snapshots older
+// than 60 seconds.
 const cardKeyPair = generateKeyPair();
 const cardKeyId = "test-card-key-rollback";
 const cardAgentId = "project-room";
@@ -36,6 +44,16 @@ const buildFixtureCard = () => {
   return withEnvelope;
 };
 const fixtureCard = buildFixtureCard();
+const buildFixtureJobHealth = () => ({
+  schema: "room.job-health/1",
+  status: "ok",
+  generatedAt: new Date().toISOString(),
+  jobs: [
+    { name: "room-backup", status: "ok", required: true, stale: false, consecutiveFailures: 0 },
+    { name: "integrity", status: "ok", required: true, stale: false, consecutiveFailures: 0 },
+    { name: "claim-prs", status: "ok", required: false, stale: false, consecutiveFailures: 0 },
+  ],
+});
 function directory(t) {
   const path = mkdtempSync(join(tmpdir(), "rollback-readback-"));
   t.after(() => rmSync(path, { recursive: true, force: true }));
@@ -52,16 +70,21 @@ async function doors(t, failure) {
       res.writeHead(200, { "content-type": "application/json" }).end("{}");
       return;
     }
-    const match = req.url.match(/^\/(canonical|room)(\/api\/(version(?:\/worker)?|health|ready)|\/terms|\/privacy|\/|\/\.well-known\/agent-card\.json)$/);
+    const match = req.url.match(/^\/(canonical|room)(\/api\/(version(?:\/worker)?|health\/jobs|health|ready)|\/terms|\/privacy|\/|\/\.well-known\/agent-card\.json)$/);
     if (req.method !== "GET" || !match) return res.writeHead(404).end("Unexpected request");
     if (match[2] === "/.well-known/agent-card.json") {
       res.writeHead(200, { "content-type": "application/json" });
       res.end(JSON.stringify(fixtureCard));
       return;
     }
+    if (match[3] === "health/jobs") {
+      res.writeHead(200, { "content-type": "application/json" });
+      res.end(JSON.stringify(buildFixtureJobHealth()));
+      return;
+    }
     let body = { sourceRevision: revision }, code = 200;
     if (match[3] === 'version/worker') body = { ...body, status: 'ok', servedBy: 'worker' };
-    if (match[3] === "health") body = { status: "ok" };
+    if (match[3] === "health") body = { status: "ok", liveness: "ok", jobs: { status: "ok" } };
     if (match[3] === "ready") body = { status: "ready", emailVerification: "enforced", emailVerificationScope: "durable-object" };
     if (failure?.ready && match[1] === failure.door && match[3] === "ready") body = failure.body;
     if (!match[3]) body = "<!doctype html><title>Room</title>";

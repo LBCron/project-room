@@ -49,6 +49,9 @@ function proposeWork(state, incoming) {
   if (independentVerificationRequired && incoming.data.accountableMemberId === incoming.data.verifierMemberId) {
     throw new Error("Independent verification requires a different accountable member and verifier");
   }
+  if (independentVerificationRequired && ownerDecisionRequired && incoming.data.verifierMemberId && incoming.data.verifierMemberId === humanDecisionMakerId) {
+    throw new Error("Independent verification requires a verifier different from the human decision-maker");
+  }
   if (incoming.data.sourceMessageId && !state.messages.some((message) => message.id === incoming.data.sourceMessageId)) {
     throw new Error("Source message must exist in this Room");
   }
@@ -343,6 +346,9 @@ function recordVerification(state, incoming) {
   requirePermission(state, incoming.actorId, "verify");
   if (item.independentVerificationRequired && incoming.actorId === item.accountableMemberId) {
     throw new Error("Independent verification requires a different actor");
+  }
+  if (item.independentVerificationRequired && item.ownerDecisionRequired && item.humanDecisionMakerId && incoming.actorId === item.humanDecisionMakerId) {
+    throw new Error("Independent verification requires a verifier different from the human decision-maker");
   }
   requireFields(incoming.data, ["result", "completionEventId", "evidenceVersion", "summary"]);
   const matchesCurrentReceipt = matchesReceipt(incoming.data, item.receipt);

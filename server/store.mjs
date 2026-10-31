@@ -1188,7 +1188,7 @@ function roomSchemaStamp() {
     ownerDelegateSchema, agentRoomSchema, oauthPendingSchema, gmailSchema, requestRunSchema, roomAssistantSchema,
     directSendSchema, inboxStitchSchema, RETIRED_BOARD_V2_SCHEMA,
     agentKeyRegistrySchema, INTEGRITY_SNAPSHOT_SCHEMA, OPERATOR_ACTIONS_SCHEMA,
-    INTEGRITY_JOB_CURSOR_SCHEMA, INTEGRITY_ROOM_STATE_SCHEMA, INTEGRITY_SWEEP_COLUMN, INTEGRITY_ROOM_HASH_COLUMN,
+    INTEGRITY_JOB_CURSOR_SCHEMA, INTEGRITY_ROOM_STATE_SCHEMA, INTEGRITY_SWEEP_COLUMN, INTEGRITY_ROOM_HASH_COLUMN, INTEGRITY_SNAPSHOT_WATERMARK_COLUMN,
     ROOM_SCHEMA_STAMP_SCHEMA, LOOKUP_INDEXES, MESSAGES_SCHEMA, MESSAGE_REPLAY_SNAPSHOT_SCHEMA, MESSAGES_BACKFILL_CURSOR_SCHEMA, MESSAGES_BACKFILL_BLOCKS_SCHEMA, WANTS_WORK_SCHEMA, CODE_DROPS_SCHEMA, PROJECTION_BODIES_SCHEMA, WORK_REPOSITORY_SCHEMA,
     PUBLIC_READ_MODEL_SCHEMA,
     // Additive tables converged outside the version bump. A warm wake whose
@@ -1237,6 +1237,15 @@ export const INTEGRITY_FAILURES_SCHEMA = `CREATE TABLE IF NOT EXISTS integrity_f
 const INTEGRITY_SWEEP_COLUMN = "ALTER TABLE integrity_job_cursor ADD COLUMN sweep_after TEXT NOT NULL DEFAULT ''";
 const INTEGRITY_DEFERRED_SKIPS_COLUMN = "ALTER TABLE integrity_job_cursor ADD COLUMN deferred_skips INTEGER NOT NULL DEFAULT 0";
 const INTEGRITY_ROOM_HASH_COLUMN = "ALTER TABLE integrity_room_state ADD COLUMN projection_hash TEXT";
+// Dot round-3 review of #5506: the snapshot row also records the event
+// log's insertion high-water mark (the events table's max rowid) at the
+// moment a baseline is written, so a later scan can decide whether a
+// room was covered by that baseline from INSERTION ORDER — the store's
+// own sequencing — instead of from author-supplied body timestamps.
+// NULL on snapshots written before the mark existed; those keep the
+// round-2 timestamp test as a bounded legacy bridge (see
+// verifyRoomIntegrity).
+const INTEGRITY_SNAPSHOT_WATERMARK_COLUMN = "ALTER TABLE integrity_snapshot ADD COLUMN covered_event_rowid INTEGER";
 // L05-C1: the integrity checksum covers projection CONTENT. A room's
 // content hash binds its id, its sequence and the exact stored projection
 // bytes; the snapshot's digest is a hash over the per-room hashes in id
@@ -2716,6 +2725,9 @@ this.slaBreachAlerts = new SlaBreachAlertJournal(this); // Task 26: durable in-a
     if (!columns.has("deferred_skips")) this.db.exec(INTEGRITY_DEFERRED_SKIPS_COLUMN);
     const roomColumns = new Set(this.db.prepare("PRAGMA table_info(integrity_room_state)").all().map(column => column.name));
     if (!roomColumns.has("projection_hash")) this.db.exec(INTEGRITY_ROOM_HASH_COLUMN);
+    this.db.exec(INTEGRITY_SNAPSHOT_SCHEMA);
+    const snapshotColumns = new Set(this.db.prepare("PRAGMA table_info(integrity_snapshot)").all().map(column => column.name));
+    if (!snapshotColumns.has("covered_event_rowid")) this.db.exec(INTEGRITY_SNAPSHOT_WATERMARK_COLUMN);
   }
 
   // #3896: the durable streak of consecutive verifyRoomIntegrity calls
@@ -2891,7 +2903,12 @@ this.slaBreachAlerts = new SlaBreachAlertJournal(this); // Task 26: durable in-a
       if (changed.length && text === snapshotText) return { ok: false };
       if (!changed.length && text !== snapshotText) return { ok: false };
       if (text !== snapshotText) {
-        this.db.prepare("UPDATE integrity_snapshot SET checksum=?, verified_at=? WHERE id=1").run(text, this.now());
+        // Advancing the baseline advances its insertion mark with it:
+        // the composition above is only sound when every current room
+        // holds a state row, so every room that exists at this moment
+        // is covered by the baseline being written, and any room whose
+        // first event is inserted later orders after this mark.
+        this.db.prepare("UPDATE integrity_snapshot SET checksum=?, verified_at=?, covered_event_rowid=? WHERE id=1").run(text, this.now(), this.eventLogHighWater());
       }
       if (sweep) {
         this.db.prepare(`INSERT INTO integrity_job_cursor(singleton, step, sweep_after) VALUES(1, 0, ?)
@@ -2921,10 +2938,21 @@ this.slaBreachAlerts = new SlaBreachAlertJournal(this); // Task 26: durable in-a
     try { return this.db.prepare("SELECT checksum FROM integrity_snapshot WHERE id=1").get()?.checksum ?? null; }
     catch { return null; }
   }
+  // The event log's insertion high-water mark: the largest rowid the
+  // events table has handed out. Rowids are assigned in insertion order
+  // and a surviving row keeps its rowid for its whole life (this store
+  // never runs VACUUM and sets no auto_vacuum), so a room's smallest
+  // event rowid orders its first insertion against any mark recorded
+  // earlier — evidence about when the room entered the store that does
+  // not depend on anything the events' bodies claim.
+  eventLogHighWater() {
+    return this.db.prepare("SELECT COALESCE(MAX(rowid), 0) AS mark FROM events").get().mark;
+  }
   writeIntegritySnapshot(text) {
+    this.ensureIntegrityRoomState();
     this.transaction(() => {
-      this.db.prepare("INSERT INTO integrity_snapshot(id, checksum, verified_at) VALUES(1, ?, ?) ON CONFLICT(id) DO UPDATE SET checksum=excluded.checksum, verified_at=excluded.verified_at")
-        .run(text, this.now());
+      this.db.prepare("INSERT INTO integrity_snapshot(id, checksum, verified_at, covered_event_rowid) VALUES(1, ?, ?, ?) ON CONFLICT(id) DO UPDATE SET checksum=excluded.checksum, verified_at=excluded.verified_at, covered_event_rowid=excluded.covered_event_rowid")
+        .run(text, this.now(), this.eventLogHighWater());
     });
   }
   helpProjectionPresent() {
@@ -3012,30 +3040,59 @@ this.slaBreachAlerts = new SlaBreachAlertJournal(this); // Task 26: durable in-a
     // missing or emptied baseline fails closed: the rooms are recorded
     // below as standing content failures, the scan certifies nothing
     // and adopts nothing for them, and the result names the state
-    // baselineUnverifiable. The one exemption is a genuinely new room:
-    // one whose genesis event postdates the snapshot's verified_at was
-    // not covered by this baseline at all, and the full pass baselines
-    // it in the normal flow. The genesis timestamp is read from the
-    // event log, not from the projection under examination; a room
-    // whose genesis carries no readable timestamp is treated as
-    // covered — the conservative side. Only an authorised history
-    // replacement (importEvents, which rebuilds a room's baseline from
-    // its replayed log) restores a room that fails closed.
+    // baselineUnverifiable. Only an authorised history replacement
+    // (importEvents, which rebuilds a room's baseline from its replayed
+    // log) restores a room that fails closed.
+    // The one exemption is a genuinely new room — one the baseline
+    // never covered — and Dot's round-3 review sets the standard for
+    // proving it: coverage is decided by INSERTION ORDER, never by the
+    // genesis event's body timestamp. A body timestamp is
+    // author-supplied data: a room constructed before the baseline but
+    // initialized into the store after it, or one whose genesis merely
+    // ties the baseline's verified_at, was still absent when the
+    // baseline was written, and round 2's timestamp test convicted
+    // exactly those rooms with a durable failure. The evidence used
+    // here is the store's own sequencing: the snapshot records the
+    // event log's insertion high-water mark (covered_event_rowid) when
+    // the baseline is written, and a room whose first-inserted event
+    // orders after that mark entered the store after the baseline —
+    // whatever its bodies claim. A room with no events carries no
+    // insertion evidence and is treated as covered, the conservative
+    // side. The mark trusts the log's insertion order exactly as the
+    // recovery path trusts its content; rewriting the log itself is
+    // the authorised importEvents act, outside this check's model.
+    // (Events are deleted only by importEvents — which refreshes the
+    // room's state row itself, so its rooms are never candidates — and
+    // by operator purge, which removes the room with its events.)
+    // An emptied row never takes the exemption: the row's existence
+    // proves a baseline pass wrote it, so the room was covered by
+    // construction. Snapshots written before the mark existed carry
+    // NULL and keep the round-2 timestamp test as a bounded legacy
+    // bridge — the first baseline this code writes records the mark,
+    // so the bridge governs only pre-cure snapshots.
     const unverifiableRooms = [];
     if (snapshot?.format === "v2") {
-      const verifiedAt = this.db.prepare("SELECT verified_at FROM integrity_snapshot WHERE id=1").get()?.verified_at;
-      const candidates = this.db.prepare(`SELECT r.id FROM rooms r LEFT JOIN integrity_room_state s ON s.room_id=r.id
+      const snapRow = this.db.prepare("SELECT verified_at, covered_event_rowid AS coveredMark FROM integrity_snapshot WHERE id=1").get();
+      const verifiedAt = snapRow?.verified_at;
+      const coveredMark = snapRow?.coveredMark ?? null;
+      const candidates = this.db.prepare(`SELECT r.id, s.room_id AS stateRoomId FROM rooms r LEFT JOIN integrity_room_state s ON s.room_id=r.id
         WHERE s.room_id IS NULL OR s.projection_hash='' ORDER BY r.id`).all();
-      for (const { id } of candidates) {
-        let genesisAt = NaN;
-        try {
-          const genesis = this.db.prepare("SELECT body FROM events WHERE room_id=? ORDER BY sequence LIMIT 1").get(id);
-          const at = genesis ? JSON.parse(genesis.body)?.at : undefined;
-          genesisAt = typeof at === "number" ? at : typeof at === "string" ? Date.parse(at) : NaN;
-        } catch { /* an unreadable genesis is not proof of newness */ }
-        if (!(Number.isFinite(genesisAt) && Number.isFinite(verifiedAt) && genesisAt > verifiedAt)) {
-          unverifiableRooms.push(id);
+      for (const { id, stateRoomId } of candidates) {
+        if (stateRoomId !== null) { unverifiableRooms.push(id); continue; }
+        let exempt;
+        if (coveredMark !== null) {
+          const firstInserted = this.db.prepare("SELECT MIN(rowid) AS mark FROM events WHERE room_id=?").get(id)?.mark;
+          exempt = firstInserted !== null && firstInserted !== undefined && firstInserted > coveredMark;
+        } else {
+          let genesisAt = NaN;
+          try {
+            const genesis = this.db.prepare("SELECT body FROM events WHERE room_id=? ORDER BY sequence LIMIT 1").get(id);
+            const at = genesis ? JSON.parse(genesis.body)?.at : undefined;
+            genesisAt = typeof at === "number" ? at : typeof at === "string" ? Date.parse(at) : NaN;
+          } catch { /* an unreadable genesis is not proof of newness */ }
+          exempt = Number.isFinite(genesisAt) && Number.isFinite(verifiedAt) && genesisAt > verifiedAt;
         }
+        if (!exempt) unverifiableRooms.push(id);
       }
     }
     await yieldBetween();

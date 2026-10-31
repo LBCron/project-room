@@ -2838,6 +2838,19 @@ this.slaBreachAlerts = new SlaBreachAlertJournal(this); // Task 26: durable in-a
       const uncovered = this.db.prepare(`SELECT 1 FROM rooms r LEFT JOIN integrity_room_state s ON s.room_id=r.id WHERE s.room_id IS NULL
         UNION SELECT 1 FROM integrity_room_state s LEFT JOIN rooms r ON r.id=s.room_id WHERE r.id IS NULL LIMIT 1`).get();
       if (uncovered) return { ok: false };
+      // Dot review of #5506: an outstanding projection_content record is
+      // a live failure, not a leftover. Reconcile the rooms whose bytes
+      // returned to their baseline; any record that remains blocks the
+      // incremental shortcut — in particular a sequence change (an
+      // ordinary event appended over drifted bytes) must not adopt the
+      // room's new hash here and launder the failure into a match.
+      this.reconcileProjectionContentFailures();
+      const blockedDrift = this.integrityFailures().find(row => row.step === "projection_content");
+      if (blockedDrift) return { ok: false, contentDrift: blockedDrift.recordId };
+      // A remembered row with no content hash is no baseline for that
+      // room: the full check runs the explicit, uncertified transition
+      // instead of this path adopting a hash for the room in passing.
+      if (this.db.prepare("SELECT 1 FROM integrity_room_state WHERE projection_hash IS NULL LIMIT 1").get()) return { ok: false };
       if (sweep) {
         const stored = this.db.prepare("SELECT sequence, projection_bytes AS bytes, projection_hash AS hash FROM integrity_room_state WHERE room_id=?").get(sweep.id);
         if (!stored) return { ok: false };
@@ -2976,7 +2989,14 @@ this.slaBreachAlerts = new SlaBreachAlertJournal(this); // Task 26: durable in-a
     // (the rebaseline trap the L05 probe exploited). A store with no
     // snapshot at all is a first baseline, not a transition, and keeps
     // the historical verified:1 on a clean audit.
-    const untrustedBaseline = snapshot !== null && snapshot.format !== "v2";
+    // Dot review of #5506: a v2 snapshot is only as trustworthy as its
+    // per-room hashes. A remembered row whose hash is NULL leaves that
+    // room with no content baseline at all, so the scan is a transition
+    // for the store exactly like a legacy snapshot: it may adopt a
+    // digest explicitly (baselineUpgraded) but it must not certify.
+    const hashlessRoomState = snapshot?.format === "v2"
+      && Boolean(this.db.prepare("SELECT 1 FROM integrity_room_state WHERE projection_hash IS NULL LIMIT 1").get());
+    const untrustedBaseline = (snapshot !== null && snapshot.format !== "v2") || hashlessRoomState;
     await yieldBetween();
     if (Date.now() > deadline) return finish({ matched: 0, skipped: 0, verified: 0, budgetExceeded: 1, failures: this.integrityFailures() });
     // Per-record isolation for the full path's audits: one inconsistent
@@ -3044,6 +3064,16 @@ this.slaBreachAlerts = new SlaBreachAlertJournal(this); // Task 26: durable in-a
     this.reconcileProjectionContentFailures();
     const outstanding = this.integrityFailures()
       .filter(row => row.step === "invitation_audit" || row.step === "help_history");
+    // Dot review of #5506: a projection_content record that survived
+    // reconciliation is live drift. It blocks certification and keeps
+    // the snapshot frozen even when the room's sequence has since moved
+    // (an ordinary event over drifted bytes does not retire it); only a
+    // return to the baseline bytes (reconciled above), a rehydration
+    // the store performs itself, or an importEvents history replacement
+    // retires the record.
+    let blockedDrift = this.integrityFailures()
+      .filter(row => row.step === "projection_content")
+      .map(row => row.recordId);
     let after = before;
     let drifted = [];
     if (!outstanding.length) {
@@ -3067,7 +3097,8 @@ this.slaBreachAlerts = new SlaBreachAlertJournal(this); // Task 26: durable in-a
         this.recordIntegrityFailure("projection_content", roomId,
           new Error("Projection content does not match its integrity baseline"));
       }
-      if (!drifted.length) {
+      blockedDrift = [...new Set([...blockedDrift, ...drifted])];
+      if (!blockedDrift.length) {
         try {
           after = this.integrityChecksum();
           this.writeIntegritySnapshot(after.text);
@@ -3080,9 +3111,9 @@ this.slaBreachAlerts = new SlaBreachAlertJournal(this); // Task 26: durable in-a
     // A clean audit over an untrusted (digest-less) baseline establishes
     // the v2 baseline above but does not certify it: verified stays 0 and
     // the transition is named on the result as baselineUpgraded.
-    const verified = outstanding.length || drifted.length || untrustedBaseline ? 0 : 1;
-    const baselineUpgraded = untrustedBaseline && !outstanding.length && !drifted.length ? { baselineUpgraded: 1 } : {};
-    const contentDrift = drifted.length ? { contentDrift: 1 } : {};
+    const verified = outstanding.length || blockedDrift.length || untrustedBaseline ? 0 : 1;
+    const baselineUpgraded = untrustedBaseline && !outstanding.length && !blockedDrift.length ? { baselineUpgraded: 1 } : {};
+    const contentDrift = blockedDrift.length ? { contentDrift: 1 } : {};
     if (Date.now() > deadline) return finish({ matched: 0, skipped: 0, verified, invitations: after.invitations, budgetExceeded: 1, ...baselineUpgraded, ...contentDrift, failures: this.integrityFailures() });
     const deferred = await this.runDeferredIntegrityBatch({ deadline, yieldBetween });
     deferredProgressed = deferredProgressed || (deferred?.ran ?? 0) > 0;
@@ -3947,6 +3978,21 @@ this.slaBreachAlerts = new SlaBreachAlertJournal(this); // Task 26: durable in-a
         restoreArchivedMessages(this, id);
         const state = this.room(id).state;
         this.db.prepare("UPDATE rooms SET projection=? WHERE id=?").run(storedProjection(this.db, id, state, { enabled: false }), id);
+        // L05-C1 (Dot review of #5506): this rewrite is the store's own
+        // representation change — full bodies restored inline at an
+        // unchanged sequence — not content drift. Refresh the room's
+        // remembered content hash from the rewritten row, or the next
+        // integrity scan manufactures a drift verdict on unchanged
+        // content. A room with an outstanding projection_content record
+        // keeps its old baseline: rehydration must not launder drift
+        // that was detected before it ran.
+        this.ensureIntegrityRoomState();
+        this.ensureIntegrityFailures();
+        if (!this.db.prepare("SELECT 1 FROM integrity_failures WHERE step='projection_content' AND record_id=?").get(id)) {
+          const row = this.db.prepare("SELECT sequence, projection, LENGTH(projection) AS bytes FROM rooms WHERE id=?").get(id);
+          this.db.prepare("UPDATE integrity_room_state SET sequence=?, projection_bytes=?, projection_hash=? WHERE room_id=?")
+            .run(row.sequence, row.bytes, projectionContentHash(id, row.sequence, row.projection), id);
+        }
         this._projectionCache?.clear?.();
         count += 1;
       }

@@ -1523,7 +1523,13 @@ function retainedByState(state) {
     if (typeof item?.receipt?.nativeText?.messageId === "string") keep.add(item.receipt.nativeText.messageId);
     if (typeof item?.receipt?.evidenceMessageId === "string") keep.add(item.receipt.evidenceMessageId);
   }
-  for (const id of Object.keys(state.replyRequests ?? {})) keep.add(id);
+  for (const [id, request] of Object.entries(state.replyRequests ?? {})) {
+    keep.add(id);
+    // Follow-up drafts read the recorded answer from state.messages. A formal
+    // request need not contain a question mark, so open-question retention alone
+    // cannot keep its response. The existing request cap bounds these extra IDs.
+    if (typeof request?.responseMessageId === "string") keep.add(request.responseMessageId);
+  }
   for (const message of state.messages ?? []) if (typeof message?.workItemId === "string" && message.workItemId) keep.add(message.id);
   return keep;
 }

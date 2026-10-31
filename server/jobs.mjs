@@ -162,7 +162,7 @@ const PUBLIC_BLOCK_TOKEN = /^[a-z][a-z0-9_]{0,40}$/i;
 
 function logIntegrity(integrity) {
   const line = { event: "room.integrity" };
-  for (const key of ["matched", "skipped", "verified", "budgetExceeded", "invitations", "paused", "checked", "swept", "blockedRooms", "quarantinedEvents", "deferredSkips", "verifiedRooms", "blockedFailures", "blockedSince", "baselineUpgraded", "contentDrift"]) {
+  for (const key of ["matched", "skipped", "verified", "budgetExceeded", "invitations", "paused", "checked", "swept", "blockedRooms", "quarantinedEvents", "deferredSkips", "verifiedRooms", "blockedFailures", "blockedSince", "baselineUpgraded", "contentDrift", "baselineUnverifiable"]) {
     if (typeof integrity?.[key] === "number") line[key] = integrity[key];
   }
   for (const key of ["blockReason", "blockComponent"]) {
@@ -637,7 +637,7 @@ export const JOBS = Object.freeze([
           scanParkedCount = parked.length;
           scanParkedRooms = new Set(parked.map(failure => failure.recordId));
           const summary = {};
-          for (const key of ["matched", "skipped", "verified", "invitations", "checked", "swept", "deferredSkips", "verifiedRooms", "budgetExceeded", "baselineUpgraded", "contentDrift"]) {
+          for (const key of ["matched", "skipped", "verified", "invitations", "checked", "swept", "deferredSkips", "verifiedRooms", "budgetExceeded", "baselineUpgraded", "contentDrift", "baselineUnverifiable"]) {
             if (typeof integrity?.[key] === "number") summary[key] = integrity[key];
           }
           if (parked.length) {

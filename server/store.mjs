@@ -2827,7 +2827,12 @@ this.slaBreachAlerts = new SlaBreachAlertJournal(this); // Task 26: durable in-a
       const snapshot = parseIntegritySnapshot(snapshotText);
       const roomCount = this.db.prepare("SELECT COUNT(*) AS n FROM rooms").get().n;
       const stateCount = this.db.prepare("SELECT COUNT(*) AS n FROM integrity_room_state").get().n;
-      if (!snapshot || snapshot.format !== "v2" || stateCount !== roomCount) return { ok: false };
+      // The composition below rebuilds the snapshot text from the
+      // snapshot's own counts plus per-room deltas, so it is only sound
+      // when the snapshot covers exactly the current room set: the
+      // snapshot's room count must match the current one too, and a
+      // room the snapshot does not cover belongs to the full check.
+      if (!snapshot || snapshot.format !== "v2" || stateCount !== roomCount || snapshot.counts[0] !== roomCount) return { ok: false };
       const parts = snapshot.counts;
       const sweepAfter = this.db.prepare("SELECT sweep_after FROM integrity_job_cursor WHERE singleton=1").get()?.sweep_after ?? "";
       const sweepSql = "SELECT id, sequence, LENGTH(projection) AS bytes, projection FROM rooms";
@@ -2997,6 +3002,42 @@ this.slaBreachAlerts = new SlaBreachAlertJournal(this); // Task 26: durable in-a
     const hashlessRoomState = snapshot?.format === "v2"
       && Boolean(this.db.prepare("SELECT 1 FROM integrity_room_state WHERE projection_hash IS NULL LIMIT 1").get());
     const untrustedBaseline = (snapshot !== null && snapshot.format !== "v2") || hashlessRoomState;
+    // Dot round-2 review of #5506: a v2 snapshot whose per-room row for
+    // a room is missing entirely, or whose hash is an empty string, has
+    // no baseline the scan can trust for that room — an empty string is
+    // a value no writer in this codebase produces, and the state table
+    // is written only by the integrity passes, so a covered room's row
+    // does not go missing in normal operation. Unlike a NULL hash (a
+    // row the digest never reached, transitioned explicitly above), a
+    // missing or emptied baseline fails closed: the rooms are recorded
+    // below as standing content failures, the scan certifies nothing
+    // and adopts nothing for them, and the result names the state
+    // baselineUnverifiable. The one exemption is a genuinely new room:
+    // one whose genesis event postdates the snapshot's verified_at was
+    // not covered by this baseline at all, and the full pass baselines
+    // it in the normal flow. The genesis timestamp is read from the
+    // event log, not from the projection under examination; a room
+    // whose genesis carries no readable timestamp is treated as
+    // covered — the conservative side. Only an authorised history
+    // replacement (importEvents, which rebuilds a room's baseline from
+    // its replayed log) restores a room that fails closed.
+    const unverifiableRooms = [];
+    if (snapshot?.format === "v2") {
+      const verifiedAt = this.db.prepare("SELECT verified_at FROM integrity_snapshot WHERE id=1").get()?.verified_at;
+      const candidates = this.db.prepare(`SELECT r.id FROM rooms r LEFT JOIN integrity_room_state s ON s.room_id=r.id
+        WHERE s.room_id IS NULL OR s.projection_hash='' ORDER BY r.id`).all();
+      for (const { id } of candidates) {
+        let genesisAt = NaN;
+        try {
+          const genesis = this.db.prepare("SELECT body FROM events WHERE room_id=? ORDER BY sequence LIMIT 1").get(id);
+          const at = genesis ? JSON.parse(genesis.body)?.at : undefined;
+          genesisAt = typeof at === "number" ? at : typeof at === "string" ? Date.parse(at) : NaN;
+        } catch { /* an unreadable genesis is not proof of newness */ }
+        if (!(Number.isFinite(genesisAt) && Number.isFinite(verifiedAt) && genesisAt > verifiedAt)) {
+          unverifiableRooms.push(id);
+        }
+      }
+    }
     await yieldBetween();
     if (Date.now() > deadline) return finish({ matched: 0, skipped: 0, verified: 0, budgetExceeded: 1, failures: this.integrityFailures() });
     // Per-record isolation for the full path's audits: one inconsistent
@@ -3062,6 +3103,15 @@ this.slaBreachAlerts = new SlaBreachAlertJournal(this); // Task 26: durable in-a
     // record left outstanding by an earlier run blocks certification
     // until the reconciliation above retires it or it verifies clean.
     this.reconcileProjectionContentFailures();
+    // A lost per-room baseline (see unverifiableRooms above) stands as
+    // a content failure exactly like drift: reconciliation cannot
+    // retire it — there is no remembered hash for the bytes to return
+    // to — so it joins blockedDrift below, blocks certification, and
+    // keeps the snapshot frozen until importEvents rebuilds the room.
+    for (const roomId of unverifiableRooms) {
+      this.recordIntegrityFailure("projection_content", roomId,
+        new Error("Projection content has no integrity baseline to verify against"));
+    }
     const outstanding = this.integrityFailures()
       .filter(row => row.step === "invitation_audit" || row.step === "help_history");
     // Dot review of #5506: a projection_content record that survived
@@ -3114,10 +3164,11 @@ this.slaBreachAlerts = new SlaBreachAlertJournal(this); // Task 26: durable in-a
     const verified = outstanding.length || blockedDrift.length || untrustedBaseline ? 0 : 1;
     const baselineUpgraded = untrustedBaseline && !outstanding.length && !blockedDrift.length ? { baselineUpgraded: 1 } : {};
     const contentDrift = blockedDrift.length ? { contentDrift: 1 } : {};
-    if (Date.now() > deadline) return finish({ matched: 0, skipped: 0, verified, invitations: after.invitations, budgetExceeded: 1, ...baselineUpgraded, ...contentDrift, failures: this.integrityFailures() });
+    const baselineUnverifiable = unverifiableRooms.length ? { baselineUnverifiable: 1 } : {};
+    if (Date.now() > deadline) return finish({ matched: 0, skipped: 0, verified, invitations: after.invitations, budgetExceeded: 1, ...baselineUpgraded, ...contentDrift, ...baselineUnverifiable, failures: this.integrityFailures() });
     const deferred = await this.runDeferredIntegrityBatch({ deadline, yieldBetween });
     deferredProgressed = deferredProgressed || (deferred?.ran ?? 0) > 0;
-    return finish({ matched: 0, skipped: 0, verified, invitations: after.invitations, deferred, ...baselineUpgraded, ...contentDrift, failures: this.integrityFailures() });
+    return finish({ matched: 0, skipped: 0, verified, invitations: after.invitations, deferred, ...baselineUpgraded, ...contentDrift, ...baselineUnverifiable, failures: this.integrityFailures() });
   }
 
   // With `collect` (an array), a room whose help history does not reconcile
@@ -3973,22 +4024,38 @@ this.slaBreachAlerts = new SlaBreachAlertJournal(this); // Task 26: durable in-a
     return this.transaction(() => {
       let count = 0;
       for (const { id } of this.db.prepare("SELECT id FROM rooms WHERE projection LIKE '%\"bodyRef\"%' OR instr(projection, '\"_entity\":1') > 0 OR instr(projection, '\"_nul\":1') > 0 OR instr(projection, '\"messagesArchive\"') > 0").all()) {
+        // The stored row as the baseline last saw it, captured before
+        // anything in this loop rewrites it: whether the room's baseline
+        // may be refreshed is decided over THESE bytes, not over the
+        // bytes the rewrite produces.
+        const before = this.db.prepare("SELECT sequence, projection FROM rooms WHERE id=?").get(id);
         // Migration validates stored authority, never a previously hydrated cache.
         this._dropProjectionCache();
         restoreArchivedMessages(this, id);
         const state = this.room(id).state;
         this.db.prepare("UPDATE rooms SET projection=? WHERE id=?").run(storedProjection(this.db, id, state, { enabled: false }), id);
-        // L05-C1 (Dot review of #5506): this rewrite is the store's own
+        // L05-C1 (Dot reviews of #5506): this rewrite is the store's own
         // representation change — full bodies restored inline at an
         // unchanged sequence — not content drift. Refresh the room's
         // remembered content hash from the rewritten row, or the next
         // integrity scan manufactures a drift verdict on unchanged
-        // content. A room with an outstanding projection_content record
-        // keeps its old baseline: rehydration must not launder drift
-        // that was detected before it ran.
+        // content. The refresh is allowed only when it is provably
+        // representational: no outstanding projection_content record
+        // (round 1 — rehydration must not launder drift that was
+        // detected before it ran), a remembered baseline exists, and
+        // the PRE-REWRITE bytes still hash to that baseline at an
+        // unchanged sequence (round 2 — a mutation that landed before
+        // any detecting sweep leaves no record for the first check to
+        // see, but it cannot pass the baseline comparison). Anything
+        // else keeps its old baseline untouched: undetected drift stays
+        // detectable by the next scan, and no baseline is manufactured
+        // for a room that never had a trustworthy one.
         this.ensureIntegrityRoomState();
         this.ensureIntegrityFailures();
-        if (!this.db.prepare("SELECT 1 FROM integrity_failures WHERE step='projection_content' AND record_id=?").get(id)) {
+        const remembered = this.db.prepare("SELECT sequence, projection_hash AS hash FROM integrity_room_state WHERE room_id=?").get(id);
+        const outstanding = this.db.prepare("SELECT 1 FROM integrity_failures WHERE step='projection_content' AND record_id=?").get(id);
+        if (!outstanding && remembered?.hash && before && remembered.sequence === before.sequence
+          && projectionContentHash(id, before.sequence, before.projection) === remembered.hash) {
           const row = this.db.prepare("SELECT sequence, projection, LENGTH(projection) AS bytes FROM rooms WHERE id=?").get(id);
           this.db.prepare("UPDATE integrity_room_state SET sequence=?, projection_bytes=?, projection_hash=? WHERE room_id=?")
             .run(row.sequence, row.bytes, projectionContentHash(id, row.sequence, row.projection), id);

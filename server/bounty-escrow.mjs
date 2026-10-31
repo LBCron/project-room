@@ -1572,6 +1572,17 @@ export class BountyEscrow {
       this.ensureGenesis(roomId);
       const { bounty, lane } = this._triageBounty(roomId, bountyId, funder);
       const act = this._actorFor(roomId, actor, lane);
+      // EA2-009: the deadline is the funding deadline. Past it, funding is
+      // refused and the keeper's expire-unfunded settlement stands —
+      // whether a late fund or a keeper pass runs first can no longer
+      // decide whether a dead bounty locks escrow. Same half-open edge as
+      // claimBounty/submitWork and the accept/reject gate (PR #5500),
+      // with the keeper's own proposed-state snooze exception: a proposal
+      // snoozed past its deadline stays fundable until the snooze itself
+      // expires, exactly the interval _keeperPass also leaves it alone.
+      check(this.nowMs() < bounty.deadlineMs
+        || (bounty.snoozedUntilMs !== null && this.nowMs() < bounty.snoozedUntilMs),
+        "invalid_state", "the bounty deadline passed");
       this._requirePayable(roomId, lane, bounty.amountMillis, "fund");
       const at = isoNow(this.nowMs());
       const lotId = newId("lot_");

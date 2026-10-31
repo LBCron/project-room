@@ -1042,12 +1042,16 @@ export class AgentPluginStore {
       const deliveries = [];
       const wakePing = buildWakePing({ agentId: identityId, signal });
       const eventId = signal?.signalId ?? null;
+      // T2-L03a-C1: journal the signal's real room, not null. The drain's
+      // dispatch-time membership re-check only fires for rows with a
+      // room_id, so a null room disarmed it for every agent.wake delivery.
+      const roomId = typeof signal?.roomId === "string" && signal.roomId ? signal.roomId : null;
       for (const row of rows) {
         let events = [];
         try { events = JSON.parse(row.eventsJson); } catch { continue; }
         if (!events.includes(WAKE_PING_EVENT) && !events.includes("*")) continue;
         deliveries.push(this.buildWebhookDelivery(row.subscriptionId,
-          { eventType: WAKE_PING_EVENT, data: wakePing, eventId, roomId: null }));
+          { eventType: WAKE_PING_EVENT, data: wakePing, eventId, roomId }));
       }
       // Event-push: when the agent registered wakeable hosts with wakeUrls,
       // the same wake ping is also POSTed to each distinct wakeUrl via the
@@ -1060,7 +1064,7 @@ export class AgentPluginStore {
         for (const wake of this.wakeUrlTargets(identityId)) {
           try {
             deliveries.push(this.buildWebhookDelivery(deliveries[0].subscriptionId,
-              { eventType: WAKE_PING_EVENT, data: wakePing, eventId, roomId: null,
+              { eventType: WAKE_PING_EVENT, data: wakePing, eventId, roomId,
                 url: wake.wakeUrl, idempotencySuffix: `wake-url:${wake.hostId}` }));
           } catch { /* skip invalid wakeUrl; the subscription-URL delivery still stands */ }
         }

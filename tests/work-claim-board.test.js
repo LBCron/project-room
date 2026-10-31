@@ -105,19 +105,6 @@ async function startReviewedClaim(f, id, reviewPolicy, extra = {}) {
 const BUNDLE = { artifact: { kind: "text", ref: "room://artifacts/board", sha256: "c".repeat(64) },
   checks: [{ name: "unit", result: "pass" }], criteria: [] };
 
-// #3546: completion under a reviewed policy is two transitions — the
-// holder finishes to delivered with the delivery bundle, then the reviewer
-// verifies to done from their own session.
-async function deliverAndVerify(f, id, verifyKey) {
-  const delivered = await f.call(f.ownerKey, `/work-claims/${id}/update`, { state: "delivered", delivery: BUNDLE });
-  assert.equal(delivered.status, 200);
-  assert.equal(delivered.value.state, "delivered");
-  const done = await f.call(verifyKey, `/work-claims/${id}/update`, { state: "done" });
-  assert.equal(done.status, 200);
-  assert.equal(done.value.state, "done");
-  return done;
-}
-
 // EA-006 (expiry-at-delivery): an approval recorded before the delivery
 // no longer verifies it. Tests whose approvals were scaffolding recorded
 // in flight deliver first, approve the delivery that exists, then verify.

@@ -5389,6 +5389,37 @@ this.slaBreachAlerts = new SlaBreachAlertJournal(this); // Task 26: durable in-a
       if (!working.has(worker)) working.set(worker, []);
       working.get(worker).push({ workItemId: item.id, title: item.title, heartbeat_at: item.heartbeat_at });
     }
+    // REGISTER row 59 (F-B10-2), board-door claims: a claim taken through
+    // the work-claims routes is written only to the board registry — it
+    // never lands on the item's projection claim, and a board-native row
+    // has no item at all — so the item pass above cannot see the board
+    // door's holds (wave-5 PROBE-05 leg (b): create-with-assignee,
+    // create-then-claim, and item-backed board claims all read back []).
+    // The board is the other store of record for held work (its own read
+    // merges both stores), so merge its live rows in here: an active
+    // state, a holder, and a lease unexpired at read time (a null
+    // leaseExpiresAt is a lease-less claim, live while its state stays
+    // active). Entries key on the work item the row belongs to, so a
+    // hold the item pass already listed still lists once, and a linked
+    // item whose session is suspended stays excluded, as above.
+    try {
+      for (const row of this.workClaims?.list(roomId) ?? []) {
+        if (!row || typeof row.owner !== "string" || row.owner.length === 0) continue;
+        if (!["claimed", "in_progress", "blocked"].includes(row.state)) continue;
+        if (row.leaseExpiresAt != null) {
+          const expires = Date.parse(row.leaseExpiresAt);
+          if (!Number.isFinite(expires) || expires <= now) continue;
+        }
+        const workItemId = typeof row.workItemId === "string" && row.workItemId ? row.workItemId : row.id;
+        if (typeof workItemId !== "string" || workItemId.length === 0) continue;
+        const linked = room.state.workItems?.[workItemId];
+        if (linked && sessionRecord(linked).status === "suspended") continue;
+        const entries = held.get(row.owner) ?? [];
+        if (entries.some(entry => entry.workItemId === workItemId)) continue;
+        entries.push({ workItemId, title: row.title ?? workItemId, status: row.state });
+        held.set(row.owner, entries);
+      }
+    } catch { /* board registry unreadable: the item-derived entries still stand */ }
     // F-S6c-3: presence is a shared, viewer-less picture, so a private
     // act must not advance a member's stamp at all — a targeted
     // message.posted (or a follow-up event targeting one) is excluded

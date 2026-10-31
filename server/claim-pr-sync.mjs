@@ -130,6 +130,40 @@ async function readJson(response) {
   return { error: true };
 }
 
+// T2-L04a-C5: the endpoint URL is built from the stored link, but the
+// response body is not proof it describes that pull — a transferred-repo
+// redirect, a cache/proxy fault, or a future fetch change could hand back
+// another pull's body, and pullRequestOutcomeFromApi reads only
+// merged/state. Verify every identity field the body carries (number,
+// html_url, the API url, and base.repo.full_name) against the requested
+// pull, exactly as the search path below cross-checks its hits. A field
+// that is present and disagrees refuses the lookup; fields a body does
+// not carry cannot disagree (older test doubles omit them).
+function pullBodyMatchesRequest(body, pullRequest) {
+  if (!body || typeof body !== "object" || Array.isArray(body)) return false;
+  const repo = String(pullRequest?.repo ?? "").toLowerCase();
+  const number = pullRequest?.number;
+  if (body.number !== undefined && body.number !== null) {
+    if (!Number.isSafeInteger(body.number) || body.number !== number) return false;
+  }
+  if (body.html_url !== undefined && body.html_url !== null) {
+    const parsed = parsePullRequestUrl(body.html_url);
+    if (!parsed || parsed.number !== number || parsed.repo.toLowerCase() !== repo) return false;
+  }
+  if (body.url !== undefined && body.url !== null) {
+    if (typeof body.url !== "string") return false;
+    let parsed;
+    try { parsed = new URL(body.url); } catch { return false; }
+    if (parsed.origin !== "https://api.github.com" || parsed.search || parsed.hash
+      || parsed.pathname.toLowerCase() !== `/repos/${repo}/pulls/${number}`) return false;
+  }
+  const fullName = body.base?.repo?.full_name;
+  if (fullName !== undefined && fullName !== null) {
+    if (typeof fullName !== "string" || fullName.toLowerCase() !== repo) return false;
+  }
+  return true;
+}
+
 async function lookupPull(pullRequest, { fetchImpl, token, nowMs, deadline = Infinity }) {
   const [owner, name] = pullRequest.repo.split("/");
   const endpoint = `https://api.github.com/repos/${encodeURIComponent(owner)}/${encodeURIComponent(name)}/pulls/${pullRequest.number}`;
@@ -170,6 +204,9 @@ async function lookupPull(pullRequest, { fetchImpl, token, nowMs, deadline = Inf
   if (!response.ok) return { kind: "error" };
   const read = await readJson(response);
   if (read.error) return { kind: "error", etag };
+  // A body that is not the pull we asked for settles nothing: report an
+  // error (the claim is remembered and re-polled) rather than an outcome.
+  if (!pullBodyMatchesRequest(read.body, pullRequest)) return { kind: "error", etag };
   const outcome = pullRequestOutcomeFromApi(read.body);
   const headSha = typeof read.body?.head?.sha === "string" && /^[0-9a-f]{40}$/.test(read.body.head.sha) ? read.body.head.sha : null;
   const mergedSha = read.body?.merged === true && typeof read.body?.merge_commit_sha === "string" && /^[0-9a-f]{40}$/.test(read.body.merge_commit_sha)

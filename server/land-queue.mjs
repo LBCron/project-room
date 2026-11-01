@@ -7,7 +7,10 @@
 // GitHub access reuses a token already present in the environment
 // (GITHUB_TOKEN or GH_TOKEN). Public repositories answer without one. A 401,
 // or a 403 that is not a rate limit when no token is set, is 503
-// github_unconfigured. A 404 is pr_not_found and is not stored. The token is
+// github_unconfigured. A 404 is pr_not_found: on the add path's first read
+// the new item is not stored, but on a scheduled refresh of an established
+// item a 404 is inconclusive (private-repo hiding uses the same status) and
+// is recorded as last_error with backoff — never a delete. The token is
 // never logged and never copied onto an item or a room event.
 //
 // There is no inbound GitHub webhook receiver in this service. Refresh runs
@@ -999,7 +1002,19 @@ export class LandQueue {
         });
         fail(503, "github_unavailable", "GitHub refused the pull request read");
       }
-      if (error?.code === "pr_not_found" && !duplicate) {
+      // Deleting on a 404 is safe only here: the add path's first read of a
+      // brand-new item, where the caller is present, receives pr_not_found
+      // synchronously, and nothing established exists yet. A scheduled
+      // refresh (cron) or a duplicate re-add never deletes on a 404: the
+      // fetch layer's own note stands — private-repo hiding and a token
+      // losing repo access use the same status as a genuinely missing pull
+      // request, so for an established item a 404 is inconclusive, not
+      // evidence the pull request is gone. It takes the defer branch below
+      // instead, like github_unavailable: last_error is recorded and the
+      // poll retries on the backoff ladder. Confirmed-gone cleanup is the
+      // successful-read path (merged/closed are observed and stop being
+      // polled) and the manual remove().
+      if (error?.code === "pr_not_found" && !duplicate && !cron) {
         this.store.transaction(() => {
           const claim = typeof this.store.workClaims?.get === "function"
             ? this.store.workClaims.get(item.roomId, item.itemId)
@@ -1015,7 +1030,7 @@ export class LandQueue {
             if (claim) this.#receiptClaimDeleted(item.roomId, { actorId: item.claimantMemberId, claim, dependents });
           }
         });
-      } else if (error?.code === "github_unconfigured" || error?.code === "github_unavailable") {
+      } else if (error?.code === "pr_not_found" || error?.code === "github_unconfigured" || error?.code === "github_unavailable") {
         const backoff = nextPollBackoff(row?.backoff_ms);
         this.store.transaction(() => {
           this.db.prepare(`UPDATE land_queue SET last_error=?, backoff_ms=?, next_poll_at=?, updated_at=?

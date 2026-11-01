@@ -37,6 +37,159 @@ const BOND_DM_DATA_SHAPES = {
 // migrates surface by surface under the tracking issue filed with this PR.
 // ---------------------------------------------------------------------------
 export const ERROR_REGISTRY = {
+  attachment_index_budget_exceeded: {
+    status: "action_required", hint: uiText("agentError.attachment_index_budget_exceeded.hint"),
+    next: [{ command: uiText("agentError.attachment_index_budget_exceeded.recovery") }],
+    catalog: { http: 409, retry: "no", recovery: uiText("agentError.attachment_index_budget_exceeded.recovery") }
+  },
+  attachment_index_conflict: {
+    status: "action_required", hint: uiText("agentError.attachment_index_conflict.hint"),
+    next: [{ command: uiText("agentError.attachment_index_conflict.recovery") }],
+    catalog: { http: 409, retry: "no", recovery: uiText("agentError.attachment_index_conflict.recovery") }
+  },
+  // Bounded operator authority: no reset, limit increase or automatic retry.
+  invalid_authority_request: {
+    "status": "action_required",
+    "hint": uiText("agentError.invalid_authority_request.hint"),
+    "next": [
+      {
+        "command": uiText("agentError.invalid_authority_request.recovery")
+      }
+    ],
+    "catalog": {
+      "http": 422,
+      "retry": "fix+resend",
+      "recovery": uiText("agentError.invalid_authority_request.recovery")
+    }
+  },
+  authority_plan_required: {
+    "status": "action_required",
+    "hint": uiText("agentError.authority_plan_required.hint"),
+    "next": [
+      {
+        "command": uiText("agentError.authority_plan_required.recovery")
+      }
+    ],
+    "catalog": {
+      "http": 422,
+      "retry": "fix+resend",
+      "recovery": uiText("agentError.authority_plan_required.recovery")
+    }
+  },
+  request_id_required: {
+    "status": "action_required",
+    "hint": uiText("agentError.request_id_required.hint"),
+    "next": [
+      {
+        "command": uiText("agentError.request_id_required.recovery")
+      }
+    ],
+    "catalog": {
+      "http": 422,
+      "retry": "fix+resend",
+      "recovery": uiText("agentError.request_id_required.recovery")
+    }
+  },
+  authority_budget_exceeded: {
+    "status": "action_required",
+    "hint": uiText("agentError.authority_budget_exceeded.hint"),
+    "next": [
+      {
+        "command": uiText("agentError.authority_budget_exceeded.recovery")
+      }
+    ],
+    "catalog": {
+      "http": 409,
+      "retry": "no",
+      "recovery": uiText("agentError.authority_budget_exceeded.recovery")
+    }
+  },
+  authority_archive_not_supported: {
+    "status": "action_required",
+    "hint": uiText("agentError.authority_archive_not_supported.hint"),
+    "next": [
+      {
+        "command": uiText("agentError.authority_archive_not_supported.recovery")
+      }
+    ],
+    "catalog": {
+      "http": 409,
+      "retry": "no",
+      "recovery": uiText("agentError.authority_archive_not_supported.recovery")
+    }
+  },
+  authority_not_ready: {
+    "status": "action_required",
+    "hint": uiText("agentError.authority_not_ready.hint"),
+    "next": [
+      {
+        "command": uiText("agentError.authority_not_ready.recovery")
+      }
+    ],
+    "catalog": {
+      "http": 409,
+      "retry": "no",
+      "recovery": uiText("agentError.authority_not_ready.recovery")
+    }
+  },
+  authority_integrity_failure: {
+    "status": "action_required",
+    "hint": uiText("agentError.authority_integrity_failure.hint"),
+    "next": [
+      {
+        "command": uiText("agentError.authority_integrity_failure.recovery")
+      }
+    ],
+    "catalog": {
+      "http": 409,
+      "retry": "no",
+      "recovery": uiText("agentError.authority_integrity_failure.recovery")
+    }
+  },
+
+  invalid_work_page: {
+    "status": "action_required",
+    "hint": uiText("agentError.invalid_work_page.hint"),
+    "next": [
+      {
+        "command": uiText("agentError.invalid_work_page.recovery")
+      }
+    ],
+    "catalog": {
+      "http": 422,
+      "retry": "fix+resend",
+      "recovery": uiText("agentError.invalid_work_page.recovery")
+    }
+  },
+  invalid_work_cursor: {
+    "status": "action_required",
+    "hint": uiText("agentError.invalid_work_cursor.hint"),
+    "next": [
+      {
+        "command": uiText("agentError.invalid_work_cursor.recovery")
+      }
+    ],
+    "catalog": {
+      "http": 422,
+      "retry": "fix+resend",
+      "recovery": uiText("agentError.invalid_work_cursor.recovery")
+    }
+  },
+  stale_work_cursor: {
+    "status": "action_required",
+    "hint": uiText("agentError.stale_work_cursor.hint"),
+    "next": [
+      {
+        "command": uiText("agentError.stale_work_cursor.recovery")
+      }
+    ],
+    "catalog": {
+      "http": 409,
+      "retry": "fix+resend",
+      "recovery": uiText("agentError.stale_work_cursor.recovery")
+    }
+  },
+
   // Operator archive: refuse unsafe requests with an explicit recovery.
   invalid_archive_request: {
     "status": "action_required",

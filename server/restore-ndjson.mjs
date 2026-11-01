@@ -23,7 +23,7 @@
 import { createHash, timingSafeEqual } from "node:crypto";
 import { sqlChunks, sqlPlaceholders } from "./sql-binds.mjs";
 import { auditRecovery } from "./recovery.mjs";
-import { ensureNativeAgentRestoreSchema, cellOf, checkStoredBytes, verifyTrailer, assertTrailerShape, createTableDigests, contentVerificationLevel, REPLAY_SKIPPED_TABLES, createSanitizedCellTracker, BACKUP_SANITIZE_POLICY } from "./room-export.mjs";
+import { verifyRestoredTableCounts, restoreSourceSchemaVersion, restoreLegacyWriteProofs, withRestoreTableRows, ensureNativeAgentRestoreSchema, cellOf, checkStoredBytes, verifyTrailer, assertTrailerShape, createTableDigests, contentVerificationLevel, REPLAY_SKIPPED_TABLES, createSanitizedCellTracker, BACKUP_SANITIZE_POLICY } from "./room-export.mjs";
 import { verifyPublicWorkClaimFence } from "./public-work-claim-fence.mjs";
 import { BACKUP_MANIFEST_VERSION, backupObjectKey, backupPartKey } from "../cloudflare/room-backup.mjs";
 
@@ -171,10 +171,11 @@ function topologicalTableOrder(names, deps) {
 // qualification on the result instead — the semantics of the file replay's
 // report mode (server/room-export.mjs replayNdjson), for backups whose
 // stored projections were written by older code.
-export function replayNdjsonInto(ndjson, store, { audit = "strict" } = {}) {
+export function replayNdjsonInto(ndjson, store, { audit = "strict", sourceSchemaVersion = null } = {}) {
   if (audit !== "strict" && audit !== "report") throw new Error("audit must be strict or report");
   if (!store?.db) throw new Error("Restore needs an open store");
   const { watermark, byTable, trailer, skippedTables, tableDigests } = parseNdjsonExport(ndjson);
+  restoreSourceSchemaVersion(watermark, sourceSchemaVersion);
   // Torn export (a write landed mid-stream): refuse before touching the store.
   if (trailer) verifyTrailer(trailer, byTable);
   const db = store.db;
@@ -217,16 +218,18 @@ export function replayNdjsonInto(ndjson, store, { audit = "strict" } = {}) {
         // Parents before children, matching the exporter's credentials order.
         if (table === "credentials") rows.sort((a, b) => Number(a.parent_hash != null) - Number(b.parent_hash != null));
         const known = new Set(tableColumns(db, table));
-        for (const row of rows) {
-          const keys = Object.keys(row);
-          if (keys.some(key => !known.has(key))) throw new Error("Export row does not match the store schema");
-          if (!keys.length) continue;
-          // Binary cells leave the exporter as {$base64}; decode and prove them.
-          const cells = Object.fromEntries(keys.map(key => [key, tracker.resolve(table, key, cellOf(row[key]))]));
-          checkStoredBytes(table, cells);
-          db.prepare(`INSERT INTO ${quoteIdent(table)} (${keys.map(quoteIdent).join(", ")}) VALUES (${keys.map(() => "?").join(", ")})`)
-            .run(...keys.map(key => cells[key]));
-        }
+        withRestoreTableRows(db, table, () => {
+          for (const row of rows) {
+            const keys = Object.keys(row);
+            if (keys.some(key => !known.has(key))) throw new Error("Export row does not match the store schema");
+            if (!keys.length) continue;
+            // Binary cells leave the exporter as {$base64}; decode and prove them.
+            const cells = Object.fromEntries(keys.map(key => [key, tracker.resolve(table, key, cellOf(row[key]))]));
+            checkStoredBytes(table, cells);
+            db.prepare(`INSERT INTO ${quoteIdent(table)} (${keys.map(quoteIdent).join(", ")}) VALUES (${keys.map(() => "?").join(", ")})`)
+              .run(...keys.map(key => cells[key]));
+          }
+        });
       }
       if (claimPermit) {
         db.prepare(`UPDATE ${CLAIM_PERMIT_TABLE} SET enabled=0 WHERE singleton=1`).run();
@@ -251,6 +254,8 @@ export function replayNdjsonInto(ndjson, store, { audit = "strict" } = {}) {
       // Report mode: the recovery audit's refusal becomes the result's
       // audit qualification instead of a failed restore — the data lands,
       // the drift is enumerated, and `verified` never stands unqualified.
+      verifyRestoredTableCounts(db, byTable);
+      const writeProofs = restoreLegacyWriteProofs(store, watermark, sourceSchemaVersion);
       let recovery = null, invitations = {}, auditResult = { ok: true };
       try {
         recovery = auditRecovery(store);
@@ -259,7 +264,7 @@ export function replayNdjsonInto(ndjson, store, { audit = "strict" } = {}) {
         if (audit !== "report") throw error;
         auditResult = auditFailure(error);
       }
-      return { verified: true, trailer: trailer ? "verified" : "absent", contentVerification, events, tables: order.length, backedUpAt: watermark.backedUpAt ?? null, skippedTables, sanitizedCells: tracker.report(), ...invitations, recovery, audit: auditResult };
+      return { verified: true, trailer: trailer ? "verified" : "absent", contentVerification, writeProofs, events, tables: order.length, backedUpAt: watermark.backedUpAt ?? null, skippedTables, sanitizedCells: tracker.report(), ...invitations, recovery, audit: auditResult };
     });
   } finally {
     db.exec("PRAGMA foreign_keys=ON");
@@ -281,7 +286,8 @@ export function replayNdjsonInto(ndjson, store, { audit = "strict" } = {}) {
 const REPLAY_BATCH_ROWS = 500;
 const REPLAY_BATCH_BYTES = 4 * 1024 * 1024;
 
-export function createBackupReplaySession(store, { audit = "strict" } = {}) {
+export function createBackupReplaySession(store, { audit = "strict", sourceSchemaVersion = null } = {}) {
+  restoreSourceSchemaVersion(null, sourceSchemaVersion);
   if (audit !== "strict" && audit !== "report") throw new Error("audit must be strict or report");
   if (!store?.db) throw new Error("Restore needs an open store");
   const db = store.db;
@@ -384,19 +390,21 @@ export function createBackupReplaySession(store, { audit = "strict" } = {}) {
         cleared.add(table);
       }
       const known = columnsOf(table);
-      for (const row of insertable) {
-        const keys = Object.keys(row);
-        if (keys.some(key => !known.has(key))) throw new Error("Export row does not match the store schema");
-        // An empty row object carries no cells and never lands (the
-        // buffered replay skips it the same way); count it so finish()'s
-        // landed-count reconciliation stays exact.
-        if (!keys.length) { unlandedEmpty.set(table, (unlandedEmpty.get(table) ?? 0) + 1); continue; }
-        const cells = Object.fromEntries(keys.map(key => [key, cellTracker().resolve(table, key, cellOf(row[key]))]));
-        checkStoredBytes(table, cells);
-        db.prepare(`INSERT INTO ${quoteIdent(table)} (${keys.map(quoteIdent).join(", ")}) VALUES (${keys.map(() => "?").join(", ")})`)
-          .run(...keys.map(key => cells[key]));
-        inserted += 1;
-      }
+      withRestoreTableRows(db, table, () => {
+        for (const row of insertable) {
+          const keys = Object.keys(row);
+          if (keys.some(key => !known.has(key))) throw new Error("Export row does not match the store schema");
+          // An empty row object carries no cells and never lands (the
+          // buffered replay skips it the same way); count it so finish()'s
+          // landed-count reconciliation stays exact.
+          if (!keys.length) { unlandedEmpty.set(table, (unlandedEmpty.get(table) ?? 0) + 1); continue; }
+          const cells = Object.fromEntries(keys.map(key => [key, cellTracker().resolve(table, key, cellOf(row[key]))]));
+          checkStoredBytes(table, cells);
+          db.prepare(`INSERT INTO ${quoteIdent(table)} (${keys.map(quoteIdent).join(", ")}) VALUES (${keys.map(() => "?").join(", ")})`)
+            .run(...keys.map(key => cells[key]));
+          inserted += 1;
+        }
+      });
     });
     buffers.set(table, held.length ? held : []);
     return inserted;
@@ -422,6 +430,7 @@ export function createBackupReplaySession(store, { audit = "strict" } = {}) {
     catch { throw new Error("Export line is not JSON"); }
     if (record?.kind === "watermark") {
       if (watermark) throw new Error("Export has more than one watermark");
+      restoreSourceSchemaVersion(record, sourceSchemaVersion);
       watermark = record;
       tracker = createSanitizedCellTracker(db, { legacySanitize: record.sanitizePolicy !== BACKUP_SANITIZE_POLICY });
       return;
@@ -558,6 +567,9 @@ export function createBackupReplaySession(store, { audit = "strict" } = {}) {
         db.prepare(`UPDATE ${CLAIM_PERMIT_TABLE} SET enabled=0 WHERE singleton=1`).run();
         verifyPublicWorkClaimFence(db);
       }
+      const legacyVersion = restoreSourceSchemaVersion(watermark, sourceSchemaVersion);
+      if (legacyVersion === 42 || legacyVersion === 43) cleared.add('integrity_room_state');
+      const writeProofs = restoreLegacyWriteProofs(store, watermark, sourceSchemaVersion);
       // Report mode: as in replayNdjsonInto, the recovery audit's refusal
       // becomes the result's audit qualification; the data lands.
       let recovery = null, invitations = {}, auditResult = { ok: true };
@@ -570,7 +582,7 @@ export function createBackupReplaySession(store, { audit = "strict" } = {}) {
       }
       db.exec("PRAGMA foreign_keys=ON");
       settled = true;
-      return { verified: true, trailer: trailer ? "verified" : "absent", contentVerification, events, tables: counts.size, backedUpAt: watermark.backedUpAt ?? null, skippedTables, sanitizedCells: cellTracker().report(), ...invitations, recovery, audit: auditResult };
+      return { verified: true, trailer: trailer ? "verified" : "absent", contentVerification, writeProofs, events, tables: counts.size, backedUpAt: watermark.backedUpAt ?? null, skippedTables, sanitizedCells: cellTracker().report(), ...invitations, recovery, audit: auditResult };
     } catch (error) {
       abort();
       throw error;
@@ -667,6 +679,10 @@ export async function operatorRestoreResponse(request, token, store) {
   const auditParam = url.searchParams.get("audit");
   if (auditParam !== null && auditParam !== "strict" && auditParam !== "report")
     return jsonResponse(422, { error: { code: "invalid_restore", message: "audit must be strict or report" } });
+  const sourceParam = url.searchParams.get("sourceSchemaVersion");
+  const sourceSchemaVersion = sourceParam === null ? null : sourceParam === "42" ? 42 : sourceParam === "43" ? 43 : NaN;
+  try { restoreSourceSchemaVersion(null, sourceSchemaVersion); }
+  catch (error) { return jsonResponse(422, { error: { code: "invalid_restore", message: error.message } }); }
   const declared = Number(request.headers.get("content-length"));
   if (Number.isFinite(declared) && declared > RESTORE_MAX_BYTES)
     return jsonResponse(413, { error: { code: "too_large", message: "Restore is too large for a single request" } });
@@ -681,13 +697,13 @@ export async function operatorRestoreResponse(request, token, store) {
   }
   let result;
   try {
-    result = replayNdjsonInto(ndjson, store, { audit: auditParam ?? "strict" });
+    result = replayNdjsonInto(ndjson, store, { audit: auditParam ?? "strict", sourceSchemaVersion });
   } catch (error) {
     const message = error?.message ?? String(error);
     if (/non-empty/.test(message)) return jsonResponse(409, { error: { code: "restore_refused_nonempty", message: "Restore refuses a store that already holds rooms" } });
-    if (/Export (is empty|line is not JSON|is missing its watermark|has more than one watermark|line is not a table row|has more than one trailer|trailer is malformed|BLOB cell|cell is an object|bytes do not match|names a table|row does not match)|unrecognized placeholder/.test(message))
+    if (/Export (is empty|line is not JSON|is missing its watermark|has more than one watermark|line is not a table row|has more than one trailer|trailer is malformed|BLOB cell|cell is an object|bytes do not match|names a table|row does not match)|sourceSchemaVersion|unrecognized placeholder/.test(message))
       return jsonResponse(422, { error: { code: "invalid_restore", message } });
-    if (/watermark does not match|torn|foreign key check|table digest does not match|trailer pins|does not pin|requires operator reconciliation/.test(message))
+    if (/watermark does not match|torn|foreign key check|table digest does not match|trailer pins|does not pin|projection_corrupt|requires operator reconciliation/.test(message))
       return jsonResponse(422, { error: { code: "restore_verification_failed", message } });
     return jsonResponse(500, { error: { code: "restore_failed", message: "Restore failed during replay" } });
   }
@@ -696,6 +712,7 @@ export async function operatorRestoreResponse(request, token, store) {
     verified: result.verified,
     audit: result.audit,
     contentVerification: result.contentVerification,
+    writeProofs: result.writeProofs,
     events: result.events,
     tables: result.tables,
     backedUpAt: result.backedUpAt ? new Date(result.backedUpAt).toISOString() : null,
@@ -740,11 +757,14 @@ export async function operatorRestoreFromBackupResponse(request, token, store, k
     return jsonResponse(503, { error: { code: "backup_unavailable", message: "No backup namespace is configured on this deployment" } });
   let key = url.searchParams.get("key");
   let auditMode = url.searchParams.get("audit");
+  const sourceParam = url.searchParams.get("sourceSchemaVersion");
+  let sourceSchemaVersion = sourceParam === null ? null : sourceParam === "42" ? 42 : sourceParam === "43" ? 43 : NaN;
   try {
     const text = await request.text();
     if (text.trim()) {
       const parsed = JSON.parse(text);
       if (parsed && typeof parsed.key === "string") key = parsed.key;
+      if (parsed && Object.hasOwn(parsed, "sourceSchemaVersion") && sourceParam === null) sourceSchemaVersion = parsed.sourceSchemaVersion;
       if (parsed && typeof parsed.audit === "string" && auditMode === null) auditMode = parsed.audit;
     }
   } catch {
@@ -752,6 +772,8 @@ export async function operatorRestoreFromBackupResponse(request, token, store, k
   }
   if (auditMode !== null && auditMode !== "strict" && auditMode !== "report")
     return jsonResponse(422, { error: { code: "invalid_restore", message: "audit must be strict or report" } });
+  try { restoreSourceSchemaVersion(null, sourceSchemaVersion); }
+  catch (error) { return jsonResponse(422, { error: { code: "invalid_restore", message: error.message } }); }
   if (key == null) key = backupObjectKey(new Date());
   if (!BACKUP_KEY_PATTERN.test(key))
     return jsonResponse(422, { error: { code: "invalid_restore", message: "Backup key is not a daily backup key" } });
@@ -773,7 +795,7 @@ export async function operatorRestoreFromBackupResponse(request, token, store, k
 
   let session;
   try {
-    session = createBackupReplaySession(store, { audit: auditMode ?? "strict" });
+    session = createBackupReplaySession(store, { audit: auditMode ?? "strict", sourceSchemaVersion });
   } catch (error) {
     const message = error?.message ?? String(error);
     if (/non-empty/.test(message)) return jsonResponse(409, { error: { code: "restore_refused_nonempty", message: "Restore refuses a store that already holds rooms" } });
@@ -801,6 +823,7 @@ export async function operatorRestoreFromBackupResponse(request, token, store, k
       verified: result.verified,
       audit: result.audit,
       contentVerification: result.contentVerification,
+      writeProofs: result.writeProofs,
       events: result.events,
       tables: result.tables,
       backedUpAt: result.backedUpAt ? new Date(result.backedUpAt).toISOString() : null,
@@ -816,9 +839,9 @@ export async function operatorRestoreFromBackupResponse(request, token, store, k
     try { cleanup = session.abort() ?? cleanup; } catch (cleanupError) { cleanup = { cleaned: false, error: cleanupError, skipped: false }; }
     const cleanupNote = !cleanup.cleaned && !cleanup.skipped ? { cleanupFailed: true } : {};
     const message = error?.message ?? String(error);
-    if (/Export (is empty|line is not JSON|is missing its watermark|has more than one watermark|line is not a table row|has more than one trailer|trailer is malformed|BLOB cell|cell is an object|bytes do not match|names a table|row does not match)|unrecognized placeholder/.test(message))
+    if (/Export (is empty|line is not JSON|is missing its watermark|has more than one watermark|line is not a table row|has more than one trailer|trailer is malformed|BLOB cell|cell is an object|bytes do not match|names a table|row does not match)|sourceSchemaVersion|unrecognized placeholder/.test(message))
       return jsonResponse(422, { error: { code: "invalid_restore", message, ...cleanupNote } });
-    if (/watermark does not match|torn|foreign key check|table digest does not match|trailer pins|does not pin|Backup (part|does not match)|requires operator reconciliation/.test(message))
+    if (/watermark does not match|torn|foreign key check|table digest does not match|trailer pins|does not pin|Backup (part|does not match)|projection_corrupt|requires operator reconciliation/.test(message))
       return jsonResponse(422, { error: { code: "restore_verification_failed", message, ...cleanupNote } });
     return jsonResponse(500, { error: { code: "restore_failed", message: "Restore failed during replay", ...cleanupNote } });
   }

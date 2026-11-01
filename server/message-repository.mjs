@@ -3,6 +3,7 @@ import { messageQueries, decodeMessageRecord as decode } from './message-queries
 // only rows explicitly removed by the archive marker may supply missing records.
 // Uncertified non-archived rows are never used as a fallback. Authorization stays
 // with the caller; this repository neither caches viewers nor relaxes visibility.
+import { hasMessageAuthority } from './message-authority.mjs';
 import { messageReadIndex } from './message-read-index.mjs';
 import { archiveMarker, archivedMessageRow } from './messages-store.mjs';
 import { hydrateRecordText } from './projection-at-rest.mjs';
@@ -78,6 +79,12 @@ export function messageThreadRoot(repository, id) {
 // storage. SQLite still scans the legacy JSON carrier; only one record crosses
 // into JS and unrelated bodies are never hydrated. Call inside a read transaction.
 export function selectedMessageRecord(store, roomId, id, hasArchive = false) {
+  const marker = store.db.prepare("SELECT json_extract(projection,'$.messageAuthority') AS marker FROM rooms WHERE id=?").get(roomId);
+  if (marker?.marker !== null && marker?.marker !== undefined) {
+    hasMessageAuthority({ messageAuthority: JSON.parse(marker.marker) });
+    const canonical = store.db.prepare('SELECT message_id,body,record_json FROM messages WHERE room_id=? AND message_id=?').get(roomId, id);
+    return canonical ? decode(canonical) : undefined;
+  }
   const row = store.db.prepare("SELECT m.value FROM rooms r,json_each(r.projection,'$.messages') m WHERE r.id=? AND json_extract(m.value,'$.id')=? ORDER BY CAST(m.key AS INTEGER) DESC LIMIT 1").get(roomId, id);
   if (row) {
     const record = JSON.parse(row.value);

@@ -64,7 +64,7 @@ test("growth invite: copy kit, inviter landing, dead link", { timeout: 60000 }, 
   assert.ok(!agentInstructions.includes(inviteUrl), 'native invitation is distinct from reusable people link');
   assert.match(agentInstructions, /room_check_access/);
   assert.match(agentInstructions, /read the shared brief/);
-  assert.match(agentInstructions, /keep this invitation unused/);
+  assert.match(agentInstructions, /keep the invitation unused until/);
   assert.equal(fixture.store.db.prepare('SELECT redeemed_at FROM agent_invite_codes').get().redeemed_at, null);
   mkdirSync("test-results", { recursive: true });
   await page.screenshot({ path: "test-results/growth-invite-kit.png" });

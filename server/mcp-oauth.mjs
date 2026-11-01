@@ -4,6 +4,9 @@
 import { createHash } from 'node:crypto';
 import { AsyncLocalStorage } from 'node:async_hooks';
 import { OAUTH_SCOPES } from './oauth-provider.mjs';
+import { PILOT_LIMITS } from './store.mjs';
+import { hasMessageAuthority } from './message-authority.mjs';
+import { assertProjectionWrite } from './write-integrity.mjs';
 
 export function mcpOAuthResourceMetadata(resource, issuer) {
   for (const value of [resource, issuer]) {
@@ -20,6 +23,33 @@ export function mcpOAuthChallenge(metadataUrl) {
   if (url.protocol !== 'https:' || url.username || url.password || url.hash || url.search
     || url.href !== metadataUrl || /["\r\n]/.test(metadataUrl)) throw new TypeError('Exact HTTPS metadata URL required');
   return { 'WWW-Authenticate': `Bearer resource_metadata="${metadataUrl}"` };
+}
+
+// Binding authorization consumes only membership metadata, never history. This
+// does not certify unrelated message rows or change their recovery/count proof.
+function canonicalOAuthBindingMembers(store, roomId) {
+  // Existing lightweight store adapters retain their original room reader.
+  if (typeof store.roomAuthority !== 'function' || typeof store.readTransaction !== 'function') return null;
+  return store.readTransaction(() => {
+    const db = store.db;
+    const sizes = db.prepare(`SELECT length(CAST(r.projection AS BLOB)) AS projection_bytes,
+      length(CAST(i.metadata_hash AS BLOB)) AS metadata_hash_bytes,
+      COALESCE(length(CAST(i.projection_hash AS BLOB)),0) AS projection_hash_bytes,
+      COALESCE(length(CAST(i.sequence AS BLOB)),0) AS sequence_bytes
+      FROM rooms r LEFT JOIN integrity_room_state i ON i.room_id=r.id
+      WHERE r.id=? AND json_type(r.projection,'$.messageAuthority') IS NOT NULL`).get(roomId);
+    if (!sizes || sizes.metadata_hash_bytes === null) return null;
+    if (sizes.metadata_hash_bytes !== 64 || Object.values(sizes).some(size => !Number.isSafeInteger(size) || size < 0))
+      throw Error('projection_corrupt: invalid OAuth membership metadata proof');
+    // Exceeding admission does not erase a present proof or excuse corruption.
+    assertProjectionWrite(db, roomId);
+    if (Object.values(sizes).reduce((sum, size) => sum + size, 0) > PILOT_LIMITS.projectionBytes) return null;
+    const raw = JSON.parse(db.prepare('SELECT projection FROM rooms WHERE id=?').get(roomId).projection);
+    if (!hasMessageAuthority(raw)) return null;
+    if (Object.hasOwn(raw, 'messages')) throw Error('projection_corrupt: competing canonical message array');
+    if (raw.messagesArchive || raw.room?.archivedAt) return null;
+    return raw.members;
+  });
 }
 
 // No fallback to room owner, invite issuer, display name, or human credentials.
@@ -40,7 +70,10 @@ export function validateMcpOAuthBinding(store, userId, binding) {
   const identityLink = store.db.prepare('SELECT member_id FROM identity_links WHERE room_id=? AND identity_id=?').get(roomId, identityId);
   if (identityLink?.member_id !== memberId) return null;
   let state;
-  try { state = store.room(roomId).state; } catch { return null; }
+  try {
+    const members = canonicalOAuthBindingMembers(store, roomId);
+    state = members === null ? store.room(roomId).state : { members };
+  } catch { return null; }
   const human = state.members?.[humanMemberId];
   const agent = state.members?.[memberId];
   if (human?.kind !== 'human' || human.active !== true || agent?.kind !== 'agent' || agent.active !== true
@@ -87,7 +120,10 @@ export function authenticateMcpOAuthRequest(store, token, roomId) {
   return resolveMcpOAuthPrincipal(current);
 }
 
+// Invitation consent is separate from chat/work. Existing grants gain no
+// invitation tools; current Room authority is still checked by the service.
 const scopeTools = {
+  'members:invite': ['room_create_agent_invite'],
   'rooms:read': ['room_check_access'],
   'chat:read': ['room_read_messages', 'room_read_inbox', 'room_list_requests', 'room_read_request'],
   'chat:write': ['room_post_message', 'room_reply', 'room_request_reply', 'room_respond_to_request'],

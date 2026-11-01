@@ -62,7 +62,7 @@ test("join redeems the link, saves 0600, and never prints the credential", async
   assert.equal(saved.displayName, "Coder");
   assert.match(saved.credential, /^rak_/);
   assert.match(saved.hostId, /^room-acp-/);
-  const [file] = readdirSync(room.home);
+  const file = readdirSync(room.home).find(name => name.endsWith(".json"));
   if (process.platform !== "win32") {
     assert.equal(statSync(join(room.home, file)).mode & 0o777, 0o600);
     assert.equal(statSync(room.home).mode & 0o777, 0o700);

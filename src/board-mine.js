@@ -52,7 +52,12 @@ export function myBoardWork(items, viewerId, members = {}, now = Date.now()) {
     if (item.owner === viewerId && open) {
       const left = Date.parse(item.leaseExpiresAt ?? "") - now;
       const quietFor = now - lastTouch(item);
-      if (item.state !== "blocked" && Number.isFinite(left) && left < LEASE_SOON_MS) out.expiring.push({ item, left });
+      // Blocked claims lease-expire in the kernel too: blocked is an active
+      // claim state and releaseExpired auto-releases it on lapse, clearing
+      // the owner (T2-L04c-C2). An expiring blocked claim must surface here
+      // with its Renew action. Quiet stays suppressed for blocked claims:
+      // blocked is a deliberate park, not neglect.
+      if (Number.isFinite(left) && left < LEASE_SOON_MS) out.expiring.push({ item, left });
       else if (item.state !== "blocked" && Number.isFinite(quietFor) && quietFor >= QUIET_MS) out.quiet.push({ item, quietFor });
       else out.owned.push({ item });
       continue;

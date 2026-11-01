@@ -9,6 +9,9 @@ import { EVENT_TYPES, isRoomArchived } from "../src/events.js";
 import { claimWork, updateWork } from "./work-claims.mjs";
 import { emitWorkClaimEvent, enqueueClaimWake } from "./work-claim-events.mjs";
 import { ROOM_GUIDE_ID, appendRoomEvent, stableEventId } from "./receipt-cards.mjs";
+import { hasMessageAuthority } from './message-authority.mjs';
+import { assertProjectionWrite } from './write-integrity.mjs';
+import { ownMember } from '../src/events.js';
 
 export { ROOM_GUIDE_ID };
 
@@ -101,6 +104,25 @@ function commitClaim(store, roomId, item, action, actorId, atMs) {
 }
 
 function step(store, roomId, now) {
+  // A canonical room's carrier contains bounded metadata, not message history.
+  // Trust an inactive Guide verdict only after checking its independent write
+  // proof in this transaction. Legacy, active and missing-proof rooms retain
+  // the original full context and its failure/retry behavior.
+  if (typeof store.db.prepare === 'function') {
+    const row = store.db.prepare("SELECT projection FROM rooms WHERE id=? AND json_type(projection,'$.messageAuthority') IS NOT NULL").get(roomId);
+    if (row) {
+      const metadata = JSON.parse(row.projection);
+      if (hasMessageAuthority(metadata)) {
+        if (Object.hasOwn(metadata, 'messages')) throw Error('projection_corrupt: competing canonical message array');
+        const proof = store.db.prepare('SELECT metadata_hash FROM integrity_room_state WHERE room_id=?').get(roomId);
+        if (proof?.metadata_hash) {
+          assertProjectionWrite(store.db, roomId);
+          const guide = ownMember(metadata.members, ROOM_GUIDE_ID);
+          if (!metadata.room?.starterSeeded || isRoomArchived(metadata) || !guide || guide.active === false) return null;
+        }
+      }
+    }
+  }
   const room = store.room(roomId);
   const state = room.state;
   if (!state?.room?.starterSeeded || isRoomArchived(state)) return null;

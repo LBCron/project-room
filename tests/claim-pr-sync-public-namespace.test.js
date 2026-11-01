@@ -20,6 +20,7 @@
 // independent, and the suite stays hermetic.
 import test from "node:test";
 import assert from "node:assert/strict";
+import { createHmac } from "node:crypto";
 import { DatabaseSync } from "node:sqlite";
 import { RoomStore } from "../server/store.mjs";
 import { initialRoom } from "../server/bootstrap.mjs";
@@ -27,11 +28,23 @@ import { createWork, claimWork, appendWorkPullRequest, claimHistoryLength } from
 import { recordPullOutcome } from "../server/claim-coordination.mjs";
 import * as claimSync from "../server/claim-pr-sync.mjs";
 const { syncClaimPullRequests, sweepStaleUnclaimedClaims, applyPullRequestWebhook, isPublicClaimNamespace, publicNamespaceSqlExclusion } = claimSync;
-import { autoLinkPullRequest, linkDeployToSettledClaims } from "../server/claim-autolink.mjs";
+import { autoLinkPullRequest, linkDeployToSettledClaims, PR_WEBHOOK_SECRET_ENV } from "../server/claim-autolink.mjs";
 import { withPublicWorkClaimWriter, verifyPublicWorkClaimFence } from "../server/public-work-claim-fence.mjs";
 import { createDurableWorkClaimRegistry } from "../server/work-claim-sqlite.mjs";
 import { SOURCE_REVISION } from "../server/version.mjs";
 import { jobByName } from '../server/jobs.mjs';
+
+// RES-0140: applyPullRequestWebhook verifies the delivery's HMAC itself;
+// tests present signed deliveries with this fixture secret.
+const WEBHOOK_SECRET = "namespace-test-secret";
+const signedDelivery = payload => {
+  const rawBody = JSON.stringify(payload);
+  return {
+    rawBody,
+    signature256: "sha256=" + createHmac("sha256", WEBHOOK_SECRET).update(rawBody).digest("hex"),
+    env: { [PR_WEBHOOK_SECRET_ENV]: WEBHOOK_SECRET },
+  };
+};
 
 const HOUR = 3600_000;
 const DAY = 24 * HOUR;
@@ -137,11 +150,12 @@ test("G5 sibling: a merged-PR webhook settles the private room and skips the nam
   const privClaimed = claimWork(createWork({ id: "sync-webhook-private" }), "owner", { leaseHours: 6, now: Date.now() });
   store.workClaims.set("commons", linkItem(privClaimed, "owner"));
 
-  const out = applyPullRequestWebhook(store, {
+  const payload = {
     action: "closed",
     pull_request: { html_url: PR_URL, merged: true, state: "closed" },
     repository: { full_name: "Uuriko/project-room" }
-  }, { nowMs: Date.now() });
+  };
+  const out = await applyPullRequestWebhook(store, payload, { nowMs: Date.now(), ...signedDelivery(payload) });
   assert.deepEqual(out.applied, [{ roomId: "commons", claimId: "sync-webhook-private", outcome: "merged" }]);
   assert.equal(store.workClaims.get("commons", "sync-webhook-private").state, "done");
   const pubAfter = store.workClaims.get(namespace, offerId);

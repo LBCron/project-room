@@ -199,6 +199,26 @@ verified before being marked latest. An invalid original release does not
 silently trigger a new revision. This input selects publication identity; it
 does not bypass deployment policy or change the deployed commit.
 
+### Automatic rollback source proof
+
+A rollback command and a restored Worker allocation do not prove that the
+shared Durable Object adopted the prior source. Recovery marks a rollback
+verified only after the allocation check and bounded reads of both
+`/api/version/worker` and `/api/version` agree with the expected sources through
+each affected door. The DO response must have `status: ok` and the expected
+40-hex source revision; its existing protocol omits `servedBy`, while an explicit
+marker is accepted only as `durable-object`. The edge requires `servedBy: worker`.
+The entry Worker's previous source can differ; its shared
+Durable Object must report the production Worker's previous source.
+
+Source observation starts after rollback commands finish and has one total
+420-second deadline, including HTTP time. Individual reads allow at most
+15 seconds and observations are separated by 15 seconds. Commands are never
+repeated by this observation loop. Missing, failed, mismatched or late evidence
+leaves `ROLLBACK NOT VERIFIED` with the last source observations and attempt
+count. This verifies source adoption, not compatibility of new data with old
+code; the existing schema and writer-fence gates still apply.
+
 ### Bounded health probe budget
 
 Worker readiness and job-health RPC probes each allow 2.5 seconds. Successful
@@ -210,6 +230,10 @@ are not cached. Static and discovery responses do not start these probes.
 This trades up to 1.5 seconds of additional failure-detection latency for fewer
 false timeouts under observed service latency. It does not make slow requests
 fast, retry until a check passes, or explain the original long-stall incident.
+Readiness events contain only validated static source/build stamps (a full lowercase commit SHA and exact valid UTC ISO build timestamp, otherwise null). The Worker requests an optional internal `readiness-observation-v1` result from `probeStorage`; a new authority returns its own stamps, SQL outcome and local SQL/DO elapsed observations. The existing `worker_rpc_settled` event copies only this closed validated envelope. The public readiness response is unchanged. No-argument RPC callers retain their exact legacy result; older authorities that ignore the opt-in remain usable and produce `authorityObservation: "absent"`. Malformed observational metadata produces `invalid` without changing readiness, errors or policy.
+
+This binds a successful late RPC to callee observations even when its separate tail record is missing. It does not measure CPU or distinguish queue, transport or scheduling, and durations from different I/O-driven clocks must not be subtracted to claim queue latency. Original RPC errors remain original errors and may have no returned diagnostic envelope. Missing source/observations cannot attest a deployment. The deadline, sharing, waitUntil, one-statement storage probe and lack of completed-result caching remain unchanged; this visibility change is not a demonstrated latency cure.
+
 ### Durable Object adoption grace
 
 Cloudflare changed the default on October 30, 2026: active Durable Objects can
@@ -226,12 +250,12 @@ explicit configuration pin. Do not add an ignored field or force immediate
 resets. A separately qualified Wrangler upgrade can make that policy explicit
 on the canonical production Worker; entry bindings reference that Worker.
 
-Rollback is also a deployment and can wait for adoption. Automatic recovery's
-`rollback_verified` currently proves traffic allocation and Worker source only,
-not shared Durable Object convergence. Manual preflight-bound readback checks
-the shared object too, but may fail closed while adoption is pending. A recovery
-receipt must not be treated as proof that the shared object has adopted code
-until its `/api/version` agrees. Existing pending adoption timers adopt the
+Rollback is also a deployment and can wait for adoption. Automatic recovery now
+requires the shared Durable Object source proof described above before setting
+`rollback_verified`; older receipts proved allocation and Worker source only.
+Manual preflight-bound readback also checks the shared object and may fail closed
+while adoption is pending. A receipt without matching `/api/version` evidence
+is not proof that the shared object adopted the rollback source. Existing pending adoption timers adopt the
 latest deployed version when they expire; redeployment is not a safe way to
 force the object through every intervening version.
 

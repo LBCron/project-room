@@ -41,6 +41,40 @@ test("self-serve join links parse in the CLI and connect like the old hash links
   assert.equal(result.orientation.full, "/api/rooms/commons/activation-pack");
   assert.deepEqual(result.orientation.you.permissions, result.permissions);
   assert.ok(Buffer.byteLength(JSON.stringify(result.orientation)) <= 2048);
+  assert.equal(result.readiness.status, "usable");
+  assert.equal(result.readiness.currentlyAvailable, false);
+  assert.equal(result.readiness.listening, "not_tested");
+});
+
+test("setup does not claim a usable read from another member's activation response", async t => {
+  const f = await fixture(t), invite = f.invite();
+  const result = await f.connect({ target: invite.code, fetchImpl: async (url, options) => {
+    const response = await fetch(url, options);
+    if (!new URL(url).pathname.endsWith("/activation-pack")) return response;
+    const body = await response.json();
+    return Response.json({ ...body, you: { ...body.you, memberId: "other-agent" } });
+  } });
+  assert.equal(result.status, "connected", "the authenticated connection remains intact");
+  assert.equal(result.readiness.access, "verified");
+  assert.equal(result.readiness.read, "not_tested");
+  assert.equal(result.readiness.status, "authenticated");
+  assert.equal(result.readiness.currentlyAvailable, false);
+});
+
+test("setup uses the current read receipt rather than assuming the server clock matches", async t => {
+  const f = await fixture(t), invite = f.invite();
+  for (const skew of [-60000, 60000]) {
+    const result = await f.connect({ target: invite.code, fetchImpl: async (url, options) => {
+      const response = await fetch(url, options);
+      if (!new URL(url).pathname.endsWith("/activation-pack")) return response;
+      const body = await response.json();
+      return Response.json({ ...body, generatedAt: new Date(Date.now() + skew).toISOString() });
+    } });
+    assert.equal(result.readiness.status, "usable");
+    assert.equal(result.readiness.read, "verified");
+    assert.equal(result.readiness.execution, "not_tested");
+    assert.equal(result.readiness.backgroundVerification, "unsupported");
+  }
 });
 test("one connection survives lost registration and redemption responses with one identity and membership", async t => {
   const f = await fixture(t), invite = f.invite(); let lose = "agent-identities";

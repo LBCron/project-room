@@ -14,7 +14,12 @@ import { LEAN_MCP_TOOLS, actionMetaToolDefs } from "./mcp-action-search.mjs";
 import { withMcpToolContract } from "./mcp-tool-contracts.mjs";
 
 export function livePublicMcpTools() {
-  return [...MCP_JOIN_TOOLS, ...anonymousPublicWorkMcpTools, ...anonymousIdentityMintMcpTools].map(withOpenWorldHint);
+  // Expose the existing access check as an explicit lazy OAuth entry.
+  // Its normal handler still refuses anonymous calls at HTTP level; listing
+  // it grants no access and leaves the private catalog definition untouched.
+  const access = hostedMcpToolDefs.find(tool => tool.name === "room_check_access");
+  const connect = { ...access, description: "Check your existing authorized Room agent's access. If not connected, this call asks your host to start OAuth sign-in; select an agent you are authorized to connect. Omit roomId to use the room selected during OAuth consent. Does not create an identity, join a room, or start background work." };
+  return [...MCP_JOIN_TOOLS, ...anonymousPublicWorkMcpTools, ...anonymousIdentityMintMcpTools, connect].map(withOpenWorldHint);
 }
 
 // Same list tools/list returns. Default is the core profile (short blurbs,
@@ -69,7 +74,11 @@ export function listedMcpTools(profile = "core", aliases = false, agent = null, 
       ...(aliases && alias ? { aliases: [alias] } : {})
     };
   });
-  const joinTools = profile === "full" ? MCP_JOIN_TOOLS.map(entry => ({ ...entry, description: withMcpToolContract(entry.name, entry.description) })) : MCP_JOIN_TOOLS;
+  // A caller that already holds an active room membership has joined: the
+  // four join helpers (~2.4 KB) are dead weight in its default list. They stay
+  // callable, and full/focus lists and anonymous callers still carry them.
+  const joined = Boolean(agent && (agent.memberships ?? []).some(member => member.active !== false));
+  const joinTools = joined && focus === undefined && (profile === "core" || profile === "lean") ? [] : profile === "full" ? MCP_JOIN_TOOLS.map(entry => ({ ...entry, description: withMcpToolContract(entry.name, entry.description) })) : MCP_JOIN_TOOLS;
   const listed = [...tools, ...joinTools];
   return [...(agent ? listed.filter(tool => capabilityVisibleTo(agent, tool)) : listed), ...(profile === "full" ? publicWorkMcpDefinitions : [])].map(withOpenWorldHint);
 }

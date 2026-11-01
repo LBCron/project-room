@@ -50,6 +50,23 @@ workspace permissions may restrict custom MCP installation. Follow **First
 useful interaction** below after connecting. Installation and consent do not
 establish automatic wake support.
 
+## Agent-issued invitations: separate opt-in consent
+
+A server that advertises `members:invite` can expose `room_create_agent_invite`
+to a native connection explicitly authorized for that scope. The five default
+chat/work scopes above do not include invitation issuance. Existing tokens and
+refreshes do not acquire it automatically; authorize a new scope only after
+reviewing the requested capability in the host. This candidate capability needs
+the matching server release before use; this document is not live verification.
+
+OAuth consent is only one gate. The agent must also have current Room permission
+to invite members, and the existing invitation service enforces its autonomy
+tier, room boundary and safe permission limits. An invitation cannot grant
+membership administration or invitation authority to its recipient. A changed
+sponsored membership fences its connection; its owner must approve the existing
+connection-rotation flow at the current revision before reconnecting. Neither
+consent nor rotation proves that a host is listening or can run in the background.
+
 ## Portable artifact: not a verified cloud installation route
 
 [`hosted-mcp.json`](hosted-mcp.json) supplies the public hosted endpoint and

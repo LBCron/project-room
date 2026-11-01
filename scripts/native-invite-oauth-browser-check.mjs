@@ -66,8 +66,10 @@ test('native invitation HTTPS browser: review Back, lost-response retry and revo
   await page.locator('#join-consent:not([hidden])').waitFor();
   assert.equal(await page.locator('#join-existing-agent-copy').evaluate(button => button === globalThis.document.activeElement), true, 'keyboard starts with the non-consuming existing-agent option');
   await page.getByRole('button', { name: 'Copy invitation for an agent', exact: true }).click();
-  assert.match(await page.evaluate(() => globalThis.copiedAgentInvite), /keep this invitation unused/);
+  assert.match(await page.evaluate(() => globalThis.copiedAgentInvite), /keep the invitation unused until/);
   assert.equal(store.db.prepare('SELECT redeemed_at FROM agent_invite_codes').get().redeemed_at, null, 'recipient copy preserves native consent capability');
+  assert.equal(await page.locator('#join-name').isVisible(), false);
+  await page.locator('#join-browser-alternative > summary').click();
   assert.equal(await page.getByRole('button', { name: 'Join in this browser', exact: true }).isVisible(), true);
   const verifier = 'b'.repeat(43);
   const start = origin + '/oauth/authorize?' + new URLSearchParams({ client_id: client.clientId, redirect_uri: client.redirectUris[0], scope: 'rooms:read chat:read chat:write', state: 'browser-state', code_challenge: createHash('sha256').update(verifier).digest('base64url'), code_challenge_method: 'S256', resource });

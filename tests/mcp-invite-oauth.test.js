@@ -134,10 +134,14 @@ test('accountless native agent discovers work, submits, revises and reads exact 
     return reply.body.result.structuredContent;
   };
   const { memberId } = await call('room_check_access');
+  // The producer, verifier and human decision-maker occupy distinct seats.
+  f.store.command(f.owner, 'commons', { id: 'native-reviewer-seat', type: 'member.added',
+    data: { memberId: 'native-reviewer', displayName: 'Independent reviewer', kind: 'agent', permissions: ['verify'] } });
+  const reviewer = f.store.issueAccessKey('commons', 'native-reviewer');
   f.store.command(f.owner, 'commons', { id: 'first-native-task', type: 'work.proposed', data: {
     workItemId: 'native-first-task', title: 'Suggest a useful first step',
     definitionOfDone: 'One concrete step and why it helps', accountableMemberId: memberId,
-    mode: 'read', verifierMemberId: 'owner', independentVerificationRequired: true,
+    mode: 'read', verifierMemberId: 'native-reviewer', independentVerificationRequired: true,
     ownerDecisionRequired: true, humanDecisionMakerId: 'owner',
   } });
   const discovered = await call('room_list_work', { focus: 'needs_me' });
@@ -168,9 +172,9 @@ test('accountless native agent discovers work, submits, revises and reads exact 
   assert.equal(f.store.room('commons').state.workItems['native-first-task'].state, 'completed');
   const workItemId = 'native-first-task';
   const read = () => call('room_read_work', { workItemId });
-  const ownerCommand = async (type, data) => {
+  const ownerCommand = async (type, data, credential = f.owner) => {
     const response = await fetch(f.base + '/api/rooms/commons/commands', { method: 'POST',
-      headers: { Authorization: 'Bearer ' + f.owner, 'Content-Type': 'application/json' },
+      headers: { Authorization: 'Bearer ' + credential, 'Content-Type': 'application/json' },
       body: JSON.stringify({ id: crypto.randomUUID(), type, data }) });
     assert.equal(response.status, 201, await response.clone().text());
     return response.json();
@@ -178,7 +182,7 @@ test('accountless native agent discovers work, submits, revises and reads exact 
   const review = async (result, exact, summary) => {
     const response = await fetch(f.base + '/api/rooms/commons/work-result?' + new URLSearchParams({
       workItemId, completionEventId: exact.result.receipt.eventId,
-    }), { headers: { Authorization: 'Bearer ' + f.owner } });
+    }), { headers: { Authorization: 'Bearer ' + reviewer } });
     assert.equal(response.status, 200);
     const inspected = await response.json();
     assert.equal(inspected.result.text.body, exact.result.text.body);
@@ -186,11 +190,11 @@ test('accountless native agent discovers work, submits, revises and reads exact 
       workItemId, expectedRevision: (await read()).work.revision, result,
       completionEventId: inspected.result.receipt.eventId, evidenceVersion: inspected.result.text.evidenceVersion,
       summary, nextAction: 'Add a reconnect check',
-    });
+    }, reviewer);
   };
   const first = await call('room_read_result', { workItemId });
   assert.equal((await read()).next.action, 'verify');
-  assert.equal((await read()).next.memberId, 'owner');
+  assert.equal((await read()).next.memberId, 'native-reviewer');
   const selfReview = await f.rpc(tokens.access_token, 'room_record_verification', {
     workItemId, result: 'pass', completionEventId: first.result.receipt.eventId,
     evidenceVersion: first.result.text.evidenceVersion, summary: 'Self approval must be refused',
@@ -321,4 +325,36 @@ test('hosted portable public client preserves the existing client and separates 
     assert.equal(response.status, expected);
     assert.equal(response.headers.get('location'), null);
   }
+});
+
+// Claude custom connectors (claude.com/docs/connectors/building/authentication):
+// hosted Claude surfaces send exactly https://claude.ai/api/mcp/auth_callback,
+// and Claude accepts a user-entered client ID with no secret as a public client.
+test('hosted Claude public client is registered with the published callback and completes consent', async t => {
+  const config = JSON.parse(readFileSync(new URL('../cloudflare/wrangler.jsonc', import.meta.url), 'utf8'));
+  const clients = JSON.parse(config.env.production.vars.ROOM_MCP_OAUTH_CLIENTS);
+  const client = clients.find(c => c.clientId === 'project-room-claude');
+  assert.ok(client, 'production registers project-room-claude');
+  assert.deepEqual(client.redirectUris, ['https://claude.ai/api/mcp/auth_callback']);
+  assert.ok(clients.find(c => c.clientId === 'project-room-chatgpt'), 'existing ChatGPT client is kept');
+  const f = await setup(t, { client, clients });
+  for (const changes of [
+    { redirect_uri: 'https://example.invalid/callback' },
+    { code_challenge_method: 'plain' },
+    { resource: 'https://example.invalid/mcp' },
+  ]) {
+    const response = await fetch(f.base + '/oauth/authorize?' + new URLSearchParams({
+      client_id: client.clientId, redirect_uri: client.redirectUris[0], scope: 'rooms:read',
+      code_challenge: challenge, code_challenge_method: 'S256', resource, ...changes,
+    }));
+    assert.equal(response.status, 400, JSON.stringify(changes));
+    assert.equal(response.headers.get('location'), null, 'invalid authorization must not redirect to an untrusted callback');
+  }
+  const allowed = await f.submit('allow');
+  assert.ok([302, 303].includes(allowed.status), 'Claude rejects 307; the authorization response must be 302 or 303');
+  const redirect = new URL(allowed.headers.get('location'));
+  assert.equal(redirect.origin + redirect.pathname, 'https://claude.ai/api/mcp/auth_callback');
+  assert.equal(redirect.searchParams.get('iss'), origin);
+  const tokens = await (await f.exchange({ grant_type: 'authorization_code', code: redirect.searchParams.get('code') })).json();
+  assert.equal(typeof tokens.access_token, 'string');
 });

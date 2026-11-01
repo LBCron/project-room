@@ -4,7 +4,7 @@
 // Nothing printed here carries the identity secret, an invite code, or a share token: the invite
 // line points at the room's public page, never at the invitation that was used to get in.
 import { loginCommand } from "./login.mjs";
-import { setupCommand, SETUP_TOOLS } from "./setup.mjs";
+import { setupCommand, SETUP_TOOLS, preflightSetup } from "./setup.mjs";
 
 const TOOL_HINTS = Object.freeze([
   ["CLAUDECODE", "claude-code"],
@@ -60,6 +60,8 @@ export async function joinCommand(argv, io = {}) {
   const { env = process.env, out = console.log, login = loginCommand, setup = setupCommand } = io;
   const { target, flags } = parse(argv);
   const name = flags.name ?? "Room agent";
+  const tool = flags.tool ?? detectTool(env);
+  if (flags.setup) preflightSetup(tool, { env });
   let joined = null;
   const loginArgs = ["--room", target, "--name", name, "--accept"];
   const code = await login(loginArgs, { ...io, out: line => { try { joined = JSON.parse(line); } catch { joined = null; } } });
@@ -70,7 +72,6 @@ export async function joinCommand(argv, io = {}) {
   }
   out(`Joined room ${joined.roomId} as ${name}.`);
   if (flags.setup) {
-    const tool = flags.tool ?? detectTool(env);
     const setupArgs = [tool, "--name", name, ...(flags.project ? ["--project", flags.project] : [])];
     const lines = [];
     let setupCode;

@@ -5,6 +5,7 @@ import { mcpOAuthResourceMetadata, listMcpOAuthAgents, validateMcpOAuthBinding }
 import { messageRepository } from "./message-repository.mjs";
 // JDOT-PUBLIC-CSP-RUM begin: public-page policy
 import { dmEventVisibility, dmConsentEventVisible } from "./dm-event-visibility.mjs";
+import { recordedReceiptsOptOut } from "./public-visibility.mjs";
 import { publicPageCsp } from "./public-search.mjs";
 // JDOT-PUBLIC-CSP-RUM end
 import { acceptPrefersHtml, publicHtmlNotFoundPath, publicSearchAssets, publicSearchCanonical, publicSearchMarketingPolicy, publicSearchPageCsp, publicSearchSitemap, PUBLIC_NOT_FOUND_HTML, PUBLIC_PAGE_LASTMOD, reviewedPublicSearchPaths } from "./public-search.mjs";
@@ -1354,7 +1355,7 @@ export function createRoomServer({ store, origin, assetRoot = new URL("../", imp
       if (!enableDeferredInbox && (url.pathname === "/api/inbox" || url.pathname.startsWith("/api/inbox/")
         || url.pathname.startsWith("/api/auth/gmail/"))) reject(404, "not_found", "Not found");
       if (await dispatchRoute({
-        req, res, url, store, remoteAddress, loopback, operationId,
+        req, res, url, store, remoteAddress, loopback, operationId, operatorRoutes,
         // JDOT-MEMBER-PERMS begin: share quotas across request aliases.
         accessRequests,
         // JDOT-MEMBER-PERMS end
@@ -1795,6 +1796,7 @@ export function createRoomServer({ store, origin, assetRoot = new URL("../", imp
           "chat:write": "Post messages",
           "work:read": "See work items",
           "work:write": "Accept and complete work",
+          "members:invite": "Create agent invitations where your Room permissions allow it",
         };
         const esc = s => String(s).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
         const scopeItems = validated.client.clientId === "project-room-macos"
@@ -2164,13 +2166,15 @@ export function createRoomServer({ store, origin, assetRoot = new URL("../", imp
         rate(`public-work-read:${remoteAddress}`, 120);
         if (publicWorkReceiptMatch) {
           const receiptId = pathId(publicWorkReceiptMatch[1]);
-          // Owner-only public-receipts toggle: a room that turned receipts
+          // Owner public-receipts controls (directory toggle or the
+          // authoritative recorded opt-out): a room that turned receipts
           // private still serves them to its members; everyone else gets 403.
           // The credential is optional here — anonymous reads stay open for
           // rooms that never flipped the toggle (current behavior).
           const receiptRoomId = store.publicWorkClaims.receiptRoomId(receiptId);
           let memberId = null;
-          if (receiptRoomId && !store.roomDirectory.publicReceiptsVisible(receiptRoomId)) {
+          if (receiptRoomId && (!store.roomDirectory.publicReceiptsVisible(receiptRoomId)
+            || recordedReceiptsOptOut(store.db, receiptRoomId))) {
             const secret = bearer(req);
             if (secret) {
               try {

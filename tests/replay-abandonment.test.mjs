@@ -1,8 +1,12 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
+import { mkdtempSync, rmSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 import { RoomStore } from '../server/store.mjs';
 import { initialRoom } from '../server/bootstrap.mjs';
 import { auditRecovery } from '../server/recovery.mjs';
+import { exportNdjsonText, replayNdjson } from '../server/room-export.mjs';
 import * as replay from '../server/replay-cutover.mjs';
 
 function fixture(t) {
@@ -77,4 +81,63 @@ test('whole-store audit recognizes retained abandoned derivation without serving
   replay.abandonReplayCapture(f.store, f.input);
   assert.equal(auditRecovery(f.store).checks.writerFence, true);
   assert.equal(replay.auditReplayCutoverRecovery(f.store.db).abandoned, 1);
+});
+
+
+test('cleanup receipt failure restores every already deleted row and progress', t => {
+  const f = fixture(t), db = f.store.db;
+  replay.abandonReplayCapture(f.store, f.input);
+  const before = db.prepare('SELECT * FROM message_replay_units').all();
+  db.exec(`CREATE TRIGGER synthetic_cleanup_audit_failure BEFORE INSERT ON operator_actions
+    WHEN NEW.action='replay_cutover_cleanup'
+    BEGIN SELECT RAISE(ABORT,'synthetic cleanup audit storage failure'); END`);
+  assert.throws(() => replay.cleanupReplayCapture(f.store, {
+    roomId: 'commons', generation: f.captured.generation, expectedDeleted: 0, requestId: 'cleanup-fault'
+  }), /synthetic cleanup audit storage failure/);
+  assert.deepEqual(db.prepare('SELECT * FROM message_replay_units').all(), before);
+});
+
+test('a valid abandonment receipt from a later generation cannot authorize old cleanup', t => {
+  const f = fixture(t), db = f.store.db;
+  replay.abandonReplayCapture(f.store, f.input);
+  const later = f.capture('later');
+  replay.abandonReplayCapture(f.store, { ...f.input, generation: later.generation, requestId: 'later-abandon' });
+  const pointer = db.prepare(`SELECT payload FROM message_replay_units
+    WHERE generation=? AND domain='control' AND unit_key='abandonment'`).get(later.generation);
+  db.prepare(`UPDATE message_replay_units SET payload=?
+    WHERE generation=? AND domain='control' AND unit_key='abandonment'`)
+    .run(pointer.payload, f.captured.generation);
+  const before = db.prepare('SELECT * FROM message_replay_units').all();
+  assert.throws(() => replay.cleanupReplayCapture(f.store, {
+    roomId: 'commons', generation: f.captured.generation, expectedDeleted: 0, requestId: 'wrong-binding'
+  }), /independent replay abandonment binding changed/);
+  assert.deepEqual(db.prepare('SELECT * FROM message_replay_units').all(), before);
+});
+
+test('oversized lifecycle control refuses before payload transfer or any cleanup', t => {
+  const f = fixture(t), db = f.store.db;
+  replay.abandonReplayCapture(f.store, f.input);
+  db.prepare(`UPDATE message_replay_units SET payload=?,payload_bytes=?
+    WHERE generation=? AND domain='control' AND unit_key='abandonment'`)
+    .run(Buffer.alloc(2 * 1024 * 1024), 2 * 1024 * 1024, f.captured.generation);
+  assert.throws(() => replay.cleanupReplayCapture(f.store, {
+    roomId: 'commons', generation: f.captured.generation, expectedDeleted: 0, requestId: 'oversized-control'
+  }), /missing or invalid replay proof pointer/);
+});
+
+
+test('whole-store round trip retains abandoned lifecycle and exact historical receipt', t => {
+  const f = fixture(t);
+  const original = replay.abandonReplayCapture(f.store, f.input);
+  const directory = mkdtempSync(join(tmpdir(), 'replay-abandoned-restore-'));
+  const filename = join(directory, 'restored.sqlite');
+  const result = replayNdjson(exportNdjsonText(f.store.db), filename);
+  assert.equal(result.verified, true);
+  const target = new RoomStore(filename);
+  t.after(() => { target.close(); rmSync(directory, { recursive:true, force:true }); });
+  assert.deepEqual(target.db.prepare('SELECT * FROM message_replay_units').all(),
+    f.store.db.prepare('SELECT * FROM message_replay_units').all());
+  const retried = replay.abandonReplayCapture(target, f.input);
+  assert.deepEqual({ ...retried, duplicate: false }, original);
+  assert.equal(replay.auditReplayCutoverRecovery(target.db).abandoned, 1);
 });

@@ -34,6 +34,18 @@ export class ReplayCutoverRoom extends ReplayWitnessRoom {
         this.db.prepare("UPDATE message_replay_units SET payload=?,payload_bytes=?,payload_sha256=? WHERE domain='metadata-entry' AND unit_key=?").run(bytes,bytes.length,createHash('sha256').update(bytes).digest('hex'),key);
         return Response.json({tampered:true});
       }
+      if(url.pathname==='/durable-abandon')return Response.json(cutover.abandonReplayCapture(this.s,{
+        roomId:'commons',generation:url.searchParams.get('generation'),requestId:'worker-abandon',reason:'Synthetic explicit abandonment'}));
+      if(url.pathname==='/durable-cleanup'){
+        const before={...this.stats};
+        const result=cutover.cleanupReplayCapture(this.s,{roomId:'commons',generation:url.searchParams.get('generation'),
+          expectedDeleted:Number(url.searchParams.get('deleted')),requestId:'cleanup-'+url.searchParams.get('step')});
+        return Response.json({result,cost:Object.fromEntries(Object.keys(before).map(k=>[k,this.stats[k]-before[k]]))});
+      }
+      if(url.pathname==='/lifecycle-census')return Response.json({
+        units:this.db.prepare('SELECT count(*) AS n FROM message_replay_units WHERE generation=?').get(url.searchParams.get('generation')).n,
+        head:this.s.headSequence('commons'),metadataHash:this.db.prepare("SELECT metadata_hash FROM integrity_room_state WHERE room_id='commons'").get().metadata_hash,
+        audit:cutover.auditReplayCutoverRecovery(this.db)});
       if(url.pathname==='/readmit'){cutover.admitReplayCutoverSchema(this.db);return Response.json({admitted:true});}
       if(url.pathname==='/durable-capture')return Response.json(captureReplayWitness(this.s,{roomId:'commons',requestId:'durable-capture',expectedHead:2,reason:'Synthetic durable capture'}));
       if(url.pathname==='/durable-step')return Response.json(advanceReplayWitness(this.s,{roomId:'commons',generation:url.searchParams.get('generation'),requestId:'step-'+url.searchParams.get('step'),expectedBytes:Number(url.searchParams.get('bytes'))}));

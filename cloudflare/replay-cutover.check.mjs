@@ -60,3 +60,56 @@ test('actual Worker partitions 17,405 captured messages through bounded codec st
     console.log('DURABLE_REPLAY_CODEC_WORKER '+JSON.stringify({bytes:seed.bytes,steps,maxRecords,maxInputBytes,census,head:progress.head,certified:false,publication:progress.publication}));
   }finally{await mf.dispose();await rm(directory,{recursive:true,force:true});}
 });
+
+
+test('actual Worker abandons and cleans a large derived generation across restart without serving changes', async () => {
+  const built = await build({entryPoints:[fileURLToPath(new URL('./replay-cutover.test-fixture.mjs', import.meta.url))],
+    bundle:true, write:false, format:'esm', platform:'neutral', external:['node:*','cloudflare:*']});
+  const directory = await mkdtemp(join(tmpdir(), 'abandon-cutover-'));
+  const create = () => new Miniflare({modules:true, script:built.outputFiles[0].text,
+    compatibilityDate:'2026-07-30', compatibilityFlags:['nodejs_compat'], durableObjectsPersist:directory,
+    durableObjects:{ROOM:{className:'ReplayCutoverRoom',useSQLite:true}}});
+  let mf = create();
+  const call = async path => {
+    const response = await mf.dispatchFetch('http://localhost' + path), body = await response.json();
+    assert.equal(response.status, 200, JSON.stringify(body));
+    return body;
+  };
+  try {
+    assert.equal((await call('/runtime')).storage.valueLimitBytes, 8388642);
+    await call('/seed?bytes=2376000');
+    const capture = await call('/durable-capture'), suffix = '?generation=' + capture.generation;
+    await call('/seed-derived?count=17405&generation=' + capture.generation);
+    const before = await call('/lifecycle-census' + suffix);
+    const abandoned = await call('/durable-abandon' + suffix);
+    assert.equal(abandoned.lifecycle, 'abandoned');
+    assert.equal(abandoned.certified, false);
+    let progress = {deleted:0}, first, steps = 0;
+    const maxCost = {statements:0,rowsRead:0,rowsWritten:0};
+    const maxWarmCost = {statements:0,rowsRead:0,rowsWritten:0};
+    let coldCost;
+    while (!progress.done && steps < 100) {
+      const response = await call(`/durable-cleanup${suffix}&deleted=${progress.deleted}&step=${steps}`);
+      first ??= response.result;
+      progress = response.result;
+      assert.ok(progress.rowsDeleted <= 200);
+      for (const key of Object.keys(maxCost)) {
+        maxCost[key] = Math.max(maxCost[key], response.cost[key]);
+        if (steps !== 1) maxWarmCost[key] = Math.max(maxWarmCost[key], response.cost[key]);
+      }
+      if (steps === 1) coldCost = response.cost;
+      if (++steps === 1) { await mf.dispose(); mf = create(); }
+    }
+    assert.equal(progress.done, true);
+    const after = await call('/lifecycle-census' + suffix);
+    assert.equal(after.units, 0);
+    assert.equal(after.head, before.head);
+    assert.equal(after.metadataHash, before.metadataHash);
+    const historical = await call(`/durable-cleanup${suffix}&deleted=0&step=0`);
+    assert.deepEqual({...historical.result,duplicate:false}, first);
+    const oldAbandonment = await call('/durable-abandon' + suffix);
+    assert.deepEqual({...oldAbandonment,duplicate:false}, abandoned);
+    console.log('DURABLE_REPLAY_ABANDONMENT_WORKER ' + JSON.stringify({head:after.head,derivedUnits:17405,
+      steps,maxPhysicalCost:maxCost,maxWarmPhysicalCost:maxWarmCost,coldAdmissionCost:coldCost,certified:false,servingMetadataUnchanged:true}));
+  } finally { await mf.dispose(); await rm(directory,{recursive:true,force:true}); }
+});

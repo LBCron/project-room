@@ -175,13 +175,28 @@ function auditBinding(db, receiptId) {
   if(typeof receiptId!=='string' || !/^oa_brc_[a-f0-9]{64}$/.test(receiptId))throw Error('invalid replay audit binding');
   const row=db.prepare(`SELECT CASE WHEN typeof(counts_json)='text' AND octet_length(counts_json)<=4096
     THEN counts_json END AS json FROM operator_actions WHERE id=?
-    AND action IN ('replay_cutover_capture','replay_cutover_hash','replay_cutover_codec')`).get(receiptId);
+    AND action IN ('replay_cutover_capture','replay_cutover_hash','replay_cutover_codec',
+      'replay_cutover_abandon','replay_cutover_cleanup')`).get(receiptId);
   if(!row?.json)throw Error('missing independent replay audit binding');
   return JSON.parse(row.json);
 }
 
 function validate(input, phase) {
   if (!input || !id(input.roomId) || !id(input.requestId)) throw Error('invalid replay capture intent');
+  if (phase === 'abandon' || phase === 'cleanup') {
+    const keys = phase === 'abandon'
+      ? ['roomId', 'generation', 'requestId', 'reason']
+      : ['roomId', 'generation', 'requestId', 'expectedDeleted'];
+    if (Object.keys(input).some(key => !keys.includes(key)) || !digest(input.generation))
+      throw Error('invalid replay lifecycle intent');
+    if (phase === 'abandon' && (typeof input.reason !== 'string'
+      || Buffer.byteLength(input.reason) > 280 || !input.reason.trim()))
+      throw Error('invalid replay lifecycle intent');
+    if (phase === 'cleanup' && (!Number.isSafeInteger(input.expectedDeleted)
+      || input.expectedDeleted < 0 || input.expectedDeleted > MAX))
+      throw Error('invalid replay lifecycle intent');
+    return;
+  }
   const keys = phase === 'capture' ? ['roomId','requestId','expectedHead','reason','ceilingBytes']
     : ['roomId','requestId','generation','expectedBytes'];
   if (Object.keys(input).some(key => !keys.includes(key))) throw Error('invalid replay capture intent');
@@ -194,7 +209,11 @@ function validate(input, phase) {
 }
 function receipt(store, input, phase, operation) {
   validate(input, phase);
-  const intent=phase==='capture'
+  const intent=phase==='abandon'
+    ? {phase,roomId:input.roomId,requestId:input.requestId,generation:input.generation,reason:input.reason}
+    : phase==='cleanup'
+      ? {phase,roomId:input.roomId,requestId:input.requestId,generation:input.generation,expectedDeleted:input.expectedDeleted}
+      : phase==='capture'
     ? {phase,roomId:input.roomId,requestId:input.requestId,expectedHead:input.expectedHead,reason:input.reason,ceilingBytes:input.ceilingBytes??REPLAY_CAPTURE_BYTES}
     : {phase,roomId:input.roomId,requestId:input.requestId,generation:input.generation,expectedBytes:input.expectedBytes};
   const fingerprint = hash(JSON.stringify(intent));
@@ -215,7 +234,7 @@ function receipt(store, input, phase, operation) {
     store.db.prepare(`INSERT INTO operator_actions
       (id,at,action,target_kind,target_id,reason,plan_hash,counts_json,result,request_id)
       VALUES(?,?,?,?,?,?,?,?,?,?)`).run(receiptId,store.now(),'replay_cutover_'+phase,
-      'room',input.roomId,input.reason??null,fingerprint,JSON.stringify(value),'pending',input.requestId);
+      'room',input.roomId,input.reason??null,fingerprint,JSON.stringify(value),value.lifecycle==='abandoned'?'abandoned':'pending',input.requestId);
     return value;
   });
 }
@@ -263,7 +282,90 @@ export function captureReplayWitness(store, input) {
   });
 }
 
+
+// Abandonment is a derived lifecycle transition, never a serving repair. The
+// retained pointer is independently bound to an immutable phase receipt. Cleanup
+// keeps the header and lifecycle pointers until the final bounded delete.
+function abandonedBinding(db, roomId, generation) {
+  const exists = db.prepare(`SELECT 1 FROM message_replay_units
+    WHERE room_id=? AND generation=? AND domain='control' AND unit_key='abandonment'`)
+    .get(roomId, generation);
+  if (!exists) return null;
+  const saved = pointer(db, roomId, generation, 'control', 'abandonment');
+  const independent = auditBinding(db, saved.receiptId);
+  if (independent.lifecycle !== 'abandoned' || independent.generation !== generation
+    || independent.roomId !== roomId || independent.abandonmentReceiptId !== saved.receiptId)
+    throw Error('independent replay abandonment binding changed');
+  return independent;
+}
+
+export function abandonReplayCapture(store, input) {
+  return receipt(store, input, 'abandon', ({receiptId}) => {
+    const db = store.db, {roomId, generation} = input;
+    if (abandonedBinding(db, roomId, generation)) throw Error('replay capture already abandoned');
+    if (!db.prepare(`SELECT 1 FROM message_replay_units
+      WHERE room_id=? AND generation=? AND domain='header' AND unit_key='state'`)
+      .get(roomId, generation)) throw Error('missing replay capture to abandon');
+    // No unbounded control value is read. A malformed or different active
+    // pointer cannot authorize deleting a later generation's active pointer.
+    db.prepare(`DELETE FROM message_replay_units WHERE room_id=? AND generation=''
+      AND domain='control' AND unit_key='capture-head'
+      AND typeof(payload)='blob' AND octet_length(payload)=64 AND payload=?`)
+      .run(roomId, Buffer.from(generation));
+    putPointer(db, roomId, generation, 'control', 'abandonment', {receiptId});
+    return {roomId, generation, abandonmentReceiptId:receiptId, lifecycle:'abandoned',
+      certified:false, publication:'none', cleanup:'pending'};
+  });
+}
+
+export function cleanupReplayCapture(store, input) {
+  return receipt(store, input, 'cleanup', ({receiptId}) => {
+    const db = store.db, {roomId, generation} = input;
+    if (!abandonedBinding(db, roomId, generation)) throw Error('replay cleanup requires abandonment');
+    if (db.prepare(`SELECT 1 FROM message_replay_units WHERE room_id=? AND generation=''
+      AND domain='control' AND unit_key='capture-head' AND payload=?`)
+      .get(roomId, Buffer.from(generation))) throw Error('replay cleanup cannot delete active source');
+    const hasProgress = db.prepare(`SELECT 1 FROM message_replay_units
+      WHERE room_id=? AND generation=? AND domain='control' AND unit_key='cleanup'`)
+      .get(roomId, generation);
+    const prior = hasProgress ? auditBinding(db,
+      pointer(db, roomId, generation, 'control', 'cleanup').receiptId) : {deleted:0};
+    if (hasProgress && (prior.roomId !== roomId || prior.generation !== generation
+      || prior.lifecycle !== 'abandoned')) throw Error('independent replay cleanup binding changed');
+    if (prior.deleted !== input.expectedDeleted) throw Error('replay cleanup progress changed');
+    // Prefix lookup plus LIMIT stops at 194 rows; no payload/key materialization
+    // or whole-generation count/sort. Three lifecycle rows, the phase receipt and two runtime writer-permit
+    // writes are reserved for the final delete. Native removal of the one <=4 MiB witness is distinct from
+    // JavaScript input bytes and is not a 256 KiB physical-delete claim.
+    const candidates = db.prepare(`SELECT rowid AS id FROM message_replay_units
+      WHERE room_id=? AND generation=?
+      AND NOT (domain='header' AND unit_key='state')
+      AND NOT (domain='control' AND unit_key IN ('abandonment','cleanup')) LIMIT 194`)
+      .all(roomId, generation);
+    const remove = db.prepare('DELETE FROM message_replay_units WHERE rowid=?');
+    for (const row of candidates) remove.run(row.id);
+    const remaining = db.prepare(`SELECT 1 FROM message_replay_units
+      WHERE room_id=? AND generation=?
+      AND NOT (domain='header' AND unit_key='state')
+      AND NOT (domain='control' AND unit_key IN ('abandonment','cleanup')) LIMIT 1`)
+      .get(roomId, generation);
+    let rowsDeleted = candidates.length;
+    if (!remaining) {
+      rowsDeleted += db.prepare('DELETE FROM message_replay_units WHERE room_id=? AND generation=?')
+        .run(roomId, generation).changes;
+    } else {
+      rowsDeleted += db.prepare(`DELETE FROM message_replay_units WHERE room_id=? AND generation=?
+        AND domain='control' AND unit_key='cleanup'`).run(roomId, generation).changes;
+      putPointer(db, roomId, generation, 'control', 'cleanup', {receiptId});
+    }
+    if (rowsDeleted > 200) throw Error('replay cleanup row limit');
+    return {roomId, generation, lifecycle:'abandoned', deleted:prior.deleted+rowsDeleted,
+      rowsDeleted, done:!remaining, certified:false, publication:'none'};
+  });
+}
+
 function captureBinding(db,roomId,generation) {
+  if(abandonedBinding(db,roomId,generation))throw Error('replay capture abandoned');
   const header=get(db,roomId,generation,'header');
   const captured=auditBinding(db,header.value.captureReceiptId);
   if(captured.bindingHash!==header.hash || captured.generation!==generation)throw Error('independent replay capture binding changed');
@@ -522,8 +624,10 @@ export function auditReplayCutoverRecovery(db) {
       THEN room_id END AS room_id,CASE WHEN typeof(generation)='text' AND octet_length(generation)=64
       THEN generation END AS generation FROM message_replay_units
     WHERE domain='header' AND unit_key='state'`).all();
+  let abandoned=0;
   for(const {room_id:roomId,generation} of headers){
     if(!id(roomId)||!digest(generation))throw Error('invalid recovered replay identity');
+    if(abandonedBinding(db,roomId,generation)){abandoned++;continue;}
     const header=captureBinding(db,roomId,generation);
     if(!Number.isSafeInteger(header.value.bytes)||header.value.bytes<1||header.value.bytes>REPLAY_CAPTURE_BYTES)
       throw Error('invalid recovered replay witness bound');
@@ -551,5 +655,5 @@ export function auditReplayCutoverRecovery(db) {
     if(independent.digest('hex')!==header.value.metadataHash)
       throw Error('independent recovered replay witness mismatch');
   }
-  return {captures:headers.length,certified:false,publication:'pending'};
+  return {captures:headers.length-abandoned,abandoned,certified:false,publication:'pending'};
 }

@@ -1,3 +1,4 @@
+import {readCurrentNativeInbox} from './current-native-inbox.mjs';
 import {readCurrentEventWindow,currentEventRedactionMessages} from './current-room-events.mjs';
 import { assertRestoreAdmitted, restorePending, verifyRestoreControl } from './restore-admission.mjs';
 import {readCurrentWorkListing} from './current-work-list.mjs';
@@ -6703,6 +6704,7 @@ this.slaBreachAlerts = new SlaBreachAlertJournal(this); // Task 26: durable in-a
     // bond proposals, peer messages, DM requests) are current state, not a
     // log, and always ride in full. after=0 keeps the legacy response.
     if (!Number.isSafeInteger(after) || after < 0) fail(422, "invalid_inbox_cursor", "After must be a sequence number of 0 or more");
+    if(isCurrentRoom(this.db,roomId))return readCurrentNativeInbox(this,token,roomId,{limit,after,expectedSessionBinding});
     // RC-2026-09-18-013: the first per-room collab access lazily replays the
     // persisted journal inside a WRITE transaction. That replay cannot run
     // inside the readTransaction below ("Cannot write inside a read-only

@@ -137,7 +137,11 @@ test("choose_room prints your rooms and public rooms as choices without setup or
   assert.match(all, /Your rooms/);
   assert.match(all, /Public rooms — request access/);
   assert.equal((all.match(/#room\/muse-room/g) ?? []).length, 1, "deduped");
-  assert.match(all, /Old \(archived\): .*https:\/\/room\.example\/#room\/old:room/);
+  assert.match(all, /Old \(archived, read-only; no join command\)/);
+  assert.doesNotMatch(all, /#room\/old:room/, "archived rooms get no join/setup command");
+  // Untrusted labels never share a line with an executable command.
+  for (const line of lines.filter(line => /room join/.test(line))) assert.match(line, /^    room join '/);
+  assert.ok(lines.some(line => line === "  Open $(rm -rf) — p"));
   assert.match(all, /https:\/\/room\.example\/#room\/open/);
   assert.doesNotMatch(all, /\/r\//);
   assert.match(all, /--name 'Peer'\\''s bot'/);
@@ -157,4 +161,22 @@ test("choose_room with no rooms says so and still asks for a room link", async (
   assert.equal(code, 1);
   assert.match(lines.join("\n"), /no rooms yet/i);
   assert.doesNotMatch(lines.join("\n"), /more public rooms/i);
+});
+
+test("choose_room with an empty page that has a cursor does not claim there are no rooms", async () => {
+  const lines = [];
+  await joinCommand(["https://room.example/"], { env: {}, out: line => lines.push(line),
+    login: fakeLogin({ status: "choose_room", memberships: [], directory: { rooms: [], nextCursor: "c9" } }, []),
+    setup: async () => { throw new Error("setup must not run"); } });
+  assert.match(lines.join("\n"), /more public rooms/i);
+  assert.doesNotMatch(lines.join("\n"), /no rooms yet/i);
+});
+
+test("choose_room with a missing directory says unavailable instead of empty", async () => {
+  const lines = [];
+  await joinCommand(["https://room.example/"], { env: {}, out: line => lines.push(line),
+    login: fakeLogin({ status: "choose_room", memberships: [], directory: "oops" }, []),
+    setup: async () => { throw new Error("setup must not run"); } });
+  assert.match(lines.join("\n"), /directory is unavailable/);
+  assert.doesNotMatch(lines.join("\n"), /no rooms yet/i);
 });

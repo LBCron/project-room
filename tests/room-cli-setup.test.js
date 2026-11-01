@@ -305,6 +305,7 @@ test("login without a room prints the choose_room memberships and directory, nev
   assert.deepEqual(Object.keys(printed.memberships[0]).sort(), ["archivedAt", "memberId", "roomId", "title"]);
   assert.ok(Array.isArray(printed.directory.rooms));
   assert.ok(Object.hasOwn(printed.directory, "nextCursor"));
+  for (const room of printed.directory.rooms) assert.ok(room.listedAt === null || ["string", "number"].includes(typeof room.listedAt));
   assert.equal(choose.out.includes("pri_"), false);
   assert.equal(choose.out.includes(invite.code), false);
 });

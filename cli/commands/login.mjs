@@ -26,16 +26,22 @@ function parse(argv) {
 // choose_room carries the caller's memberships and the opted-in public directory.
 // Whitelist each field; never spread the raw response (it may grow secrets).
 const str = value => typeof value === "string" ? value : null;
+const int = value => Number.isSafeInteger(value) && value >= 0 ? value : null;
+const time = value => typeof value === "string" || int(value) !== null ? value : null;
 function chooseRoomLists(result) {
-  const memberships = (Array.isArray(result.memberships) ? result.memberships : []).map(room => ({
-    roomId: str(room?.roomId), title: str(room?.title), memberId: str(room?.memberId), archivedAt: str(room?.archivedAt),
-  })).filter(room => room.roomId);
-  const raw = result.directory && typeof result.directory === "object" ? result.directory : {};
-  const rooms = (Array.isArray(raw.rooms) ? raw.rooms : []).map(room => ({
-    roomId: str(room?.roomId), title: str(room?.title), purpose: str(room?.purpose), kind: str(room?.kind),
-    memberCount: Number.isSafeInteger(room?.memberCount) ? room.memberCount : null, listedAt: room?.listedAt ?? null,
-  })).filter(room => room.roomId);
-  return { memberships, directory: { rooms, nextCursor: str(raw.nextCursor) } };
+  const memberships = Array.isArray(result.memberships) ? result.memberships.map(room => ({
+    roomId: str(room?.roomId), title: str(room?.title), memberId: str(room?.memberId), archivedAt: time(room?.archivedAt),
+  })).filter(room => room.roomId) : null;
+  // A missing or malformed directory is unavailable, never an empty list of choices.
+  const raw = result.directory;
+  const directory = raw && typeof raw === "object" && !Array.isArray(raw) && Array.isArray(raw.rooms) ? {
+    rooms: raw.rooms.map(room => ({
+      roomId: str(room?.roomId), title: str(room?.title), purpose: str(room?.purpose), kind: str(room?.kind),
+      memberCount: int(room?.memberCount), listedAt: time(room?.listedAt),
+    })).filter(room => room.roomId),
+    nextCursor: str(raw.nextCursor),
+  } : null;
+  return { memberships, directory };
 }
 
 function publicResult(result) {

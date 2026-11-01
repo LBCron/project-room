@@ -61,20 +61,27 @@ export function chooseRoomLines(result, target, { name, flags = {} } = {}) {
     seen.add(room.roomId); return true;
   });
   const mine = unique(result.memberships), listed = unique(result.directory?.rooms);
+  const more = Boolean(result.directory?.nextCursor), directoryKnown = Array.isArray(result.directory?.rooms);
   const lines = ["Not joined yet (choose_room): pick a room and run join again with its link."];
-  if (!mine.length && !listed.length) {
-    lines.push("You have no rooms yet and no public rooms are listed. Ask the room owner for an invite or room link.");
-    return lines;
-  }
-  if (mine.length) {
+  // Labels are untrusted text: print them on their own line and the command
+  // alone below, so copying the command never copies label text.
+  const label = text => `  ${clean(text)}`;
+  if (!Array.isArray(result.memberships)) lines.push("Your rooms could not be read; retry login.");
+  else if (mine.length) {
     lines.push("Your rooms:");
-    for (const room of mine) lines.push(`  ${clean(room.title) || room.roomId}${room.archivedAt ? " (archived)" : ""}: ${rerun(room.roomId)}`);
+    for (const room of mine) {
+      if (room.archivedAt) { lines.push(label(`${room.title || room.roomId} (archived, read-only; no join command)`)); continue; }
+      lines.push(label(room.title || room.roomId), `    ${rerun(room.roomId)}`);
+    }
   }
-  if (listed.length) {
+  if (!directoryKnown) lines.push("The public room directory is unavailable right now; retry later.");
+  else if (listed.length) {
     lines.push("Public rooms — request access:");
-    for (const room of listed) lines.push(`  ${clean(room.title) || room.roomId}${room.purpose ? ` — ${clean(room.purpose)}` : ""}: ${rerun(room.roomId)}`);
+    for (const room of listed) lines.push(label(`${room.title || room.roomId}${room.purpose ? ` — ${room.purpose}` : ""}`), `    ${rerun(room.roomId)}`);
   }
-  if (result.directory?.nextCursor) lines.push("There are more public rooms; see GET /api/public/rooms/directory and follow its nextCursor.");
+  if (more) lines.push("There are more public rooms; see GET /api/public/rooms/directory and follow its nextCursor.");
+  else if (Array.isArray(result.memberships) && directoryKnown && !mine.length && !listed.length)
+    lines.push("You have no rooms yet and no public rooms are listed. Ask the room owner for an invite or room link.");
   return lines;
 }
 

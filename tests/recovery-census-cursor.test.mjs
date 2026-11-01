@@ -23,3 +23,10 @@ test('repository-free work selectors remain the canonical board exports',()=>{
  assert.equal(board.boardStateForWorkItem,boardStateForWorkItem);
  assert.equal(board.liveClaim,liveClaim);
 });
+
+import {initialRecoveryReplay,validateRecoveryReplay} from '../server/recovery-replay-continuation.mjs';
+test('cold replay cursor refuses invalid source progress and inconsistent deferral',()=>{
+ const cursor=initialRecoveryReplay();assert.doesNotThrow(()=>validateRecoveryReplay(cursor));
+ for(const value of [{...cursor,sequence:-1},{...cursor,version:0},{...cursor,reason:'unproved'},{...cursor,stage:'deferred'},{...cursor,counts:{...cursor.counts,messages:NaN}}])
+  assert.throws(()=>validateRecoveryReplay(value),/reconciliation/);
+});

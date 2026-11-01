@@ -1,4 +1,4 @@
-import {isCurrentRoom,withCurrentReadContext,readCurrentMessage,readCurrentHead,readCurrentHistoryFloor,chargeCurrentReadBudget} from './current-room-repository.mjs';
+import {isCurrentRoom,withCurrentReadContext,readCurrentMessage,readCurrentHead,readCurrentHistoryFloor,chargeCurrentReadBudget,withCurrentServingWriter} from './current-room-repository.mjs';
 import {conversationCursorCodec} from './conversation-sync.mjs';
 import {messageInHistory} from './history-visibility.mjs';
 import { messageRepository } from "./message-repository.mjs";
@@ -114,15 +114,29 @@ export class RoomAttachmentBytes {
     this.db = store.db;
   }
 
+  authorityState(roomId, memberId) {
+    if (!isCurrentRoom(this.db, roomId)) return this.store.room(roomId).state;
+    const authority = this.store.roomAuthority(roomId, { memberId });
+    return { room: { id: roomId, ownerId: authority.ownerId }, members: authority.members };
+  }
+
+  write(roomId, operation) {
+    return withCurrentServingWriter(this.db, roomId, operation);
+  }
+
   expire(roomId, now) {
-    this.db.prepare(`UPDATE room_attachments SET state='expired', bytes=NULL
-      WHERE room_id=? AND state IN ('staged','committed') AND state='staged' AND expires_at<=?`).run(roomId, now);
+    return this.store.transaction(() => {
+      // Avoid opening an admission receipt when there are no expired bytes.
+      if (!this.db.prepare("SELECT 1 FROM room_attachments WHERE room_id=? AND state='staged' AND expires_at<=? LIMIT 1").get(roomId, now)) return;
+      return this.write(roomId, () => this.db.prepare(`UPDATE room_attachments SET state='expired', bytes=NULL
+      WHERE room_id=? AND state IN ('staged','committed') AND state='staged' AND expires_at<=?`).run(roomId, now));
+    });
   }
 
   stage(token, roomId, { id, filename, mediaType, data } = {}) {
     return this.store.transaction(() => {
       const auth = this.store.authenticate(token, roomId);
-      enforceAutonomyTierForAction({ db: this.db, roomId, state: this.store.room(roomId).state, actor: auth.member, action: "room_put_file", fail });
+      enforceAutonomyTierForAction({ db: this.db, roomId, state: this.authorityState(roomId, auth.member.id), actor: auth.member, action: "room_put_file", fail });
       // Guests may read and chat but may not store room files. stage()
       // authenticates directly and bypasses store.command, so the RoomStore
       // guest scope gate never runs here — enforce the same denial
@@ -168,11 +182,11 @@ export class RoomAttachmentBytes {
         throw error;
       }
       const expiresAt = now + attachmentLimits.lifetimeMs;
-      this.db.prepare(`INSERT INTO room_attachments(
+      this.write(roomId, () => this.db.prepare(`INSERT INTO room_attachments(
         room_id,id,uploader_id,filename,media_type,byte_length,sha256,bytes,state,created_at,expires_at,message_id
       ) VALUES(?,?,?,?,?,?,?,?,'staged',?,?,NULL)`).run(
         roomId, id, auth.member.id, file.filename, file.mediaType, bytes.length, sha, bytes, now, expiresAt
-      );
+      ));
       const row = this.db.prepare("SELECT * FROM room_attachments WHERE room_id=? AND id=?").get(roomId, id);
       return { status: "staged", duplicate: false, roomId, attachment: view(row) };
     });
@@ -272,7 +286,7 @@ export class RoomAttachmentBytes {
   discard(token, roomId, id) {
     return this.store.transaction(() => {
       const auth = this.store.authenticate(token, roomId);
-      enforceAutonomyTierForAction({ db: this.db, roomId, state: this.store.room(roomId).state, actor: auth.member, action: "room_discard_file", fail });
+      enforceAutonomyTierForAction({ db: this.db, roomId, state: this.authorityState(roomId, auth.member.id), actor: auth.member, action: "room_discard_file", fail });
       // Guests may read and chat but may not store room files. discard()
       // authenticates directly and bypasses store.command, so the RoomStore
       // guest scope gate never runs here — enforce the same denial
@@ -284,7 +298,7 @@ export class RoomAttachmentBytes {
       this.expire(roomId, now);
       const row = this.db.prepare(`SELECT ${FILE_METADATA} FROM room_attachments WHERE room_id=? AND id=?`).get(roomId, id);
       if (!row) fail(404, "attachment_not_found", "Attachment not found");
-      const ownerId = this.store.room(roomId).state.room.ownerId;
+      const ownerId = this.authorityState(roomId, auth.member.id).room.ownerId;
       const permitted = row.uploader_id === auth.member.id || ownerId === auth.member.id;
       // Committed files never expire, so without a delete path a room whose
       // byte quota fills with committed files can never upload again. The
@@ -303,8 +317,8 @@ export class RoomAttachmentBytes {
       }
       if (row.state === "committed") {
         if (!permitted) fail(403, "attachment_forbidden", "Only the uploader or the room owner can delete this file");
-        const removed = this.db.prepare(`UPDATE room_attachments SET state='deleted', bytes=NULL
-          WHERE room_id=? AND id=? AND state='committed'`).run(roomId, id).changes;
+        const removed = this.write(roomId, () => this.db.prepare(`UPDATE room_attachments SET state='deleted', bytes=NULL
+          WHERE room_id=? AND id=? AND state='committed'`).run(roomId, id).changes);
         if (removed !== 1) fail(409, "attachment_conflict", "That attachment changed before it could be deleted");
         return { status: "deleted", duplicate: false, roomId, id };
       }
@@ -312,8 +326,8 @@ export class RoomAttachmentBytes {
       if (!permitted) {
         fail(403, "attachment_forbidden", "Only the uploader or the room owner can discard this file");
       }
-      const changed = this.db.prepare(`UPDATE room_attachments SET state='discarded', bytes=NULL
-        WHERE room_id=? AND id=? AND state='staged'`).run(roomId, id).changes;
+      const changed = this.write(roomId, () => this.db.prepare(`UPDATE room_attachments SET state='discarded', bytes=NULL
+        WHERE room_id=? AND id=? AND state='staged'`).run(roomId, id).changes);
       if (changed !== 1) fail(409, "attachment_conflict", "That attachment changed before it could be discarded");
       return { status: "discarded", roomId, id };
     });
@@ -324,7 +338,7 @@ export class RoomAttachmentBytes {
   commit(token, roomId, { id, messageId } = {}) {
     return this.store.transaction(() => {
       const auth = this.store.authenticate(token, roomId);
-      enforceAutonomyTierForAction({ db: this.db, roomId, state: this.store.room(roomId).state, actor: auth.member, action: "room_commit_file", fail });
+      enforceAutonomyTierForAction({ db: this.db, roomId, state: this.authorityState(roomId, auth.member.id), actor: auth.member, action: "room_commit_file", fail });
       // Guests may read and chat but may not store room files. commit()
       // authenticates directly and bypasses store.command, so the RoomStore
       // guest scope gate never runs here — enforce the same denial
@@ -344,15 +358,15 @@ export class RoomAttachmentBytes {
       }
       if (row.state === "committed") fail(409, "attachment_conflict", "That file is already committed to a message");
       if (row.state !== "staged") fail(410, "attachment_unavailable", "Only a staged room file can be committed");
-      const message = messageRepository(this.store, roomId).get(messageId);
+      const message = this.messageIndex(roomId).get(messageId);
       if (!message || message.deletedAt) fail(404, "message_not_found", "Message not found");
       if (message.authorId !== auth.member.id) {
         fail(403, "attachment_forbidden", "Commit a file only onto a message you posted");
       }
-      const changed = this.db.prepare(`UPDATE room_attachments SET state='committed', message_id=?
+      const changed = this.write(roomId, () => this.db.prepare(`UPDATE room_attachments SET state='committed', message_id=?
         WHERE room_id=? AND id=? AND state='staged' AND uploader_id=? AND message_id IS NULL`).run(
         messageId, roomId, id, auth.member.id
-      ).changes;
+      ).changes);
       if (changed !== 1) {
         const current = this.db.prepare("SELECT * FROM room_attachments WHERE room_id=? AND id=?").get(roomId, id);
         if (current?.state === "committed" && current.message_id === messageId && current.uploader_id === auth.member.id) {

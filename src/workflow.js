@@ -1,3 +1,4 @@
+import { uiText } from "./strings.js";
 import { workProgress } from "./work-packet.js";
 import { EVENT_TYPES as T, WORK_STATES as S, validId, receiptHasKnownProducer, matchesReceipt, hasConfirmedIndependentPass } from "./events.js";
 
@@ -248,7 +249,8 @@ export function renderWorkActions(item, member, { now = Date.now(), busy = false
   const more = moreButtons
     ? `<details class="work-more"><summary data-focus-key="work-more:${esc(workId)}">More</summary><div class="work-more-actions">${moreButtons}</div></details>`
     : "";
-  const limit = `<p class="work-begin-limit">Records the Room action. Does not invoke Begin or start a host.</p>`;
+  const limit = member?.kind === "agent" && ["accept", "start"].includes(presented.primary?.action)
+    ? `<p class="work-begin-limit">${esc(uiText("work.actions.agentRunHint"))}</p>` : "";
   return primary || result || more ? limit + primary + result + more : "";
 }
 

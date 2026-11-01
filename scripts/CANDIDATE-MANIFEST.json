@@ -179,10 +179,10 @@
     "src/work-reducers.js": "sha256:98b640f34c8ee4d03123843c7912f16bf1d5efe6e71b64836d55521bcc58456b",
     "src/work-selectors.js": "sha256:4f8dce1bdf6558c270c24af64c6b93a3c0e71287c14fc2b27de64e0002d9b13b",
     "src/work-status.js": "sha256:fa3394eb7d8dfa39999d5f8b5c85f7b305f815bc573aa6e34be5a48e5ff34478",
-    "src/workflow.js": "sha256:7a7b57700bea2aa06ee4135d7c1d58d48daca1a5f95fe44910242bd0d7284b52",
+    "src/workflow.js": "sha256:817422b3183d96e773f87bbe28b12453a1f761cd1bf024aecaa3e3e62438539a",
     "src/workspace-navigation.js": "sha256:9b36dd33d00c0015b61fdb2aeafdf22583658d9f04c758fca72e56233589aa4a",
-    "strings/en.js": "sha256:c76383147e4eaceae4c19a2c77a382b1ea168a06e139d83c98718ec25b4851ab",
-    "strings/en.json": "sha256:d910945f706beb3237cfc54d8e354e5b01ed880558e9513c07a230fb851f17e4"
+    "strings/en.js": "sha256:2c8edc52dd5bb87c219f95fdeda7968b80da3161547e66aec48ab19cde7e58e2",
+    "strings/en.json": "sha256:c34a7118207de7ea4b9a2cf78d7d7e28d1165ce949be45402926830e22269332"
   },
   "deployment": {
     ".github/workflows/deploy-prod.yml": "sha256:4c4e1fd13d5d6daa135b05024cb682daa8e1b8a102f0b5282cefa338d43d48f1",

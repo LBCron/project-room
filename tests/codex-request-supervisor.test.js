@@ -413,3 +413,15 @@ test("single request requires one explicit requester and request", async t => {
   await assert.rejects(f.run({ singleRequest: true }).promise, /exactly one/);
   await assert.rejects(f.run({ singleRequest: true, allowedRequestIds: ["one", "two"] }).promise, /exactly one/);
 });
+
+test("a refused run report survives restart as report attention without fencing unrelated work", async t => {
+  const f = await fixture(t);
+  f.db.prepare("INSERT INTO request_runs(id,response,delivered,attempt_id,reported) VALUES (?,?,1,?,2)").run("refused-op", '{"responseToRequestId":"gone"}', "refused-attempt");
+  f.reopen();
+  const events = [], run = f.run({ emit: e => events.push(e) });
+  await waitUntil(() => events.some(e => e.type === "host_status" && e.status === "report_reconciliation_pending")); await delay(150);
+  run.controller.abort(); await run.promise;
+  const statuses = events.filter(e => e.type === "host_status").map(e => e.status);
+  assert.equal(statuses.includes("watching_room"), false, "durable refusal is never reported as plain watching");
+  assert.equal(statuses.includes("recovery_pending"), false, "report attention is not the unknown-execution fence");
+});

@@ -297,6 +297,22 @@ test("a lost 'delivered' run report is surfaced and retried until the service re
   assert.equal((await f.client.requestRuns()).runs[requestMessageId].state, "delivered");
   assert.equal(calls, 1);
 });
+test("the queue reports a pending run report as report_pending, keeps working, and does not mark it needs_attention", async t => {
+  const f = await fixture(t), args = runner(t, f), requestMessageId = f.open("queue-report-pending").command.data.messageId;
+  const connection = { ...f.config, fetchImpl: async (url, options) => {
+    if (options.method === "POST" && new URL(url).pathname.endsWith("/request-runs")
+      && JSON.parse(options.body).action === "delivered") throw new TypeError("lost run report");
+    return fetch(url, options);
+  } };
+  await assert.rejects(runRequestOnce({ ...args, connection, requestMessageId, execute: async () => ({ body: "A" }) }), error => error.runReportPending === true);
+  const controller = new AbortController(); t.after(() => controller.abort());
+  const seen = [];
+  await runRequestQueue({ ...args, connection, signal: controller.signal, intervalMs: 1000, stream: false, execute: async () => ({ body: "A" }),
+    emit: result => { seen.push(result); if (result.status === "report_pending" || seen.length > 5) controller.abort(); } });
+  assert.deepEqual(seen.map(event => event.status), ["report_pending"], "no needs_attention or connection_unavailable for a pending report");
+  assert.equal(seen[0].requestMessageId, requestMessageId);
+  assert.deepEqual({ ...args.db.prepare("SELECT delivered, reported FROM request_runs").get() }, { delivered: 1, reported: 0 });
+});
 test("a terminally refused 'delivered' report is recorded and stops retrying", async t => {
   const f = await fixture(t), args = runner(t, f), requestMessageId = f.open("host-report-refused").command.data.messageId;
   let refused = 0;

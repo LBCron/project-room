@@ -233,7 +233,7 @@ export async function runRequestQueue({ connection, db, execute, preflight, sign
   let delay = intervalMs, connectionUnavailable = false, pendingStatement, recoveryRow = 0;
   const pending = request => (pendingStatement ??= db.prepare("SELECT 1 FROM request_runs WHERE (delivered=0 OR reported=0) AND delivery_refused=0 AND json_extract(response,'$.responseToRequestId')=?")).get(request.id);
   while (!signal?.aborted) {
-    let cursor = null;
+    let cursor = null, reportPending = false;
     try {
       const { requests, evaluatedThrough, runs, blockedBy = {} } = await client.agentWork({ signal });
       onPoll();
@@ -262,6 +262,9 @@ export async function runRequestQueue({ connection, db, execute, preflight, sign
           recovering.add(requestMessageId);
         } catch (error) {
           if (requestMessageId && error?.code !== "saved_reply_identity_mismatch") recovering.add(requestMessageId);
+          // The reply is saved; only its run report is unconfirmed. Report that
+          // distinctly, back off, and keep serving unrelated work.
+          if (error?.runReportPending) { reportPending = true; emit({ status: "report_pending", requestMessageId }); continue; }
           emit({ status: "needs_attention", ...(requestMessageId ? { requestMessageId } : {}) });
           if ([401, 429].includes(error?.status) || error?.status >= 500
             || ["TypeError", "TimeoutError"].includes(error?.name)) throw error;
@@ -281,12 +284,15 @@ export async function runRequestQueue({ connection, db, execute, preflight, sign
         try { emit(await runRequestOnce({ connection, requestMessageId: request.id, db, execute, preflight, signal, allowRequest, selectRequest })); }
         catch (error) {
           if (error?.code === "host_isolation_unavailable") throw error;
+          if (error?.runReportPending) { reportPending = true; emit({ status: "report_pending", requestMessageId: request.id }); continue; }
           emit({ status: "needs_attention", requestMessageId: request.id });
           if ([401, 429].includes(error?.status) || error?.status >= 500
             || ["TypeError", "TimeoutError"].includes(error?.name)) throw error;
         }
       }
-      delay = intervalMs;
+      // A pending run report backs off like a transient failure without
+      // claiming the connection is unavailable.
+      delay = reportPending ? Math.min(delay * 2, 60000) : intervalMs;
       connectionUnavailable = false;
     } catch (error) {
       if (error?.code === "host_isolation_unavailable") throw error;

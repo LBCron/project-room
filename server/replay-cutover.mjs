@@ -1,4 +1,5 @@
 import {emptyWorkPrivacy,applyWorkPrivacyRequest,workRequestKey,workRequestValue} from './current-work-privacy.mjs';
+import {canonicalCurrentProofPlan} from './replay-canonical-plan.mjs';
 import {currentWorkSummary} from './current-work-summary.mjs';
 import {advanceCanonicalH} from './replay-canonical-h.mjs';
 import {purgeCurrentCandidateForPrivacy,assertCurrentCandidateEmpty,cleanupCurrentCandidateRecords,stageCurrentCandidateRecords,currentCandidateCommandContext,applyCurrentCandidateEvent,publishCurrentCandidate,readCurrentRecord,admitCurrentCandidateBudget} from './current-room-repository.mjs';
@@ -394,9 +395,11 @@ function validate(input, phase) {
       throw Error('invalid replay lifecycle intent');
     return;
   }
-  const keys = phase === 'capture' ? ['roomId','requestId','expectedHead','reason','ceilingBytes']
+  const keys = phase === 'capture' ? ['roomId','requestId','expectedHead','reason','ceilingBytes','contentBasis','contentPlanHash']
     : ['roomId','requestId','generation','expectedBytes'];
   if (Object.keys(input).some(key => !keys.includes(key))) throw Error('invalid replay capture intent');
+  if(phase==='capture'&&(Object.hasOwn(input,'contentBasis')||Object.hasOwn(input,'contentPlanHash'))
+    &&(input.contentBasis!=='current-write-proofs'||!digest(input.contentPlanHash)))throw Error('invalid explicit replay content-proof intent');
   if (phase === 'capture' && (!Number.isSafeInteger(input.expectedHead) || input.expectedHead < 1
     || typeof input.reason !== 'string' || input.reason.length>280 || Buffer.byteLength(input.reason)>280 || !input.reason.trim()
     || (input.ceilingBytes !== undefined && (!Number.isSafeInteger(input.ceilingBytes)
@@ -411,7 +414,7 @@ function receipt(store, input, phase, operation) {
     : phase==='cleanup'
       ? {phase,roomId:input.roomId,requestId:input.requestId,generation:input.generation,expectedDeleted:input.expectedDeleted}
       : phase==='capture'
-    ? {phase,roomId:input.roomId,requestId:input.requestId,expectedHead:input.expectedHead,reason:input.reason,ceilingBytes:input.ceilingBytes??REPLAY_CAPTURE_BYTES}
+    ? {phase,roomId:input.roomId,requestId:input.requestId,expectedHead:input.expectedHead,reason:input.reason,ceilingBytes:input.ceilingBytes??REPLAY_CAPTURE_BYTES,...(input.contentBasis===undefined?{}:{contentBasis:input.contentBasis,contentPlanHash:input.contentPlanHash})}
     : {phase,roomId:input.roomId,requestId:input.requestId,generation:input.generation,expectedBytes:input.expectedBytes};
   const fingerprint = hash(JSON.stringify(intent));
   const receiptId = 'oa_brc_' + hash(phase+'\0'+input.roomId+'\0'+input.requestId);
@@ -454,8 +457,14 @@ export function captureReplayWitness(store, input) {
     const runtime=sqliteValueLimit(db);
     if(!Number.isSafeInteger(runtime?.valueLimitBytes) || admitted.bytes+512>runtime.valueLimitBytes)throw Error('replay capture runtime value limit');
     if (!digest(admitted.metadata_hash) || !admitted.event_id_hex) throw Error('independent replay proof required');
-    if(admitted.message_authority_type!==null && (admitted.historical_checkpoint_sequence!==admitted.head || !digest(admitted.content_hash)))
-      throw Error('Canonical-authority current content qualification required');
+    let contentProofIntent;
+    const staleCanonical=admitted.message_authority_type!==null&&(admitted.historical_checkpoint_sequence!==admitted.head||!digest(admitted.content_hash));
+    if(staleCanonical){
+      if(input.contentBasis!=='current-write-proofs')throw Error('Canonical-authority current content qualification required');
+      const plan=canonicalCurrentProofPlan(roomId,admitted);
+      if(plan.planHash!==input.contentPlanHash)throw Error('Replay current-write-proof plan changed');
+      contentProofIntent={basis:plan.contentBasis,planHash:plan.planHash,checkpointComparison:plan.checkpointComparison};
+    }else if(input.contentBasis!==undefined)throw Error('Explicit current-write-proof plan requires a stale canonical checkpoint');
     const generation=hash(input.roomId+'\0'+input.requestId);
     const active=activeCapture(db,roomId);
     if(active && db.prepare(`SELECT 1 FROM message_replay_units WHERE room_id=? AND generation=?
@@ -467,7 +476,7 @@ export function captureReplayWitness(store, input) {
       payload_bytes=excluded.payload_bytes,payload_sha256=excluded.payload_sha256,payload=excluded.payload`)
       .run(roomId,admitted.head,hash(generation),Buffer.from(generation));
     const header={version:1,roomId,generation,captureReceiptId:receiptId,head:admitted.head,eventId:rawId(admitted.event_id_hex),
-      bytes:admitted.bytes,metadataHash:admitted.metadata_hash,
+      bytes:admitted.bytes,metadataHash:admitted.metadata_hash,...(contentProofIntent?{contentProofIntent}:{}),
       historicalCheckpoint:{sequence:admitted.historical_checkpoint_sequence??null,contentHash:admitted.content_hash??null},
       epoch:epoch(db,roomId),ceiling};
     const headerHash=put(db,roomId,generation,'header',header,header.head);
@@ -481,7 +490,7 @@ export function captureReplayWitness(store, input) {
     const targetHead=stageCurrentCandidateRecords(store,{changes:[{domain:'migrationFence',key:'active',value:{generation,headerHash}}],
       counts:{roomId,sequence:header.head,eventId:header.eventId,messages:0,workItems:0,replyRequests:0,members:0,roundLimitPauses:0,
         threadParticipants:0,historyFloors:0,historyExclusions:0,metadataRecords:0,metadataProofs:0}});
-    return {generation,targetHead,bindingHash:headerHash,hashStateHash:hash(state),sourceRoot:SOURCE_EMPTY[8],codecStateHash:hash(codecState),head:header.head,bytes:header.bytes,phase:'captured',publication:'pending',certified:false};
+    return {generation,targetHead,bindingHash:headerHash,hashStateHash:hash(state),sourceRoot:SOURCE_EMPTY[8],codecStateHash:hash(codecState),head:header.head,bytes:header.bytes,phase:'captured',publication:'pending',certified:false,...(contentProofIntent?{contentProof:{...contentProofIntent,historicalCheckpoint:header.historicalCheckpoint},historyProvenance:'unknown'}:{})};
   });
 }
 
@@ -1287,6 +1296,7 @@ export function qualifyReplayHMessages(store,input) {
       workCount:state.workCount,workDefaultsQualified:state.workDefaultsQualified,hMessageSteps:state.hMessageSteps,
       hMessageCount:state.hMessageCount,hCanonicalCount:state.hCanonicalCount,hMessagesQualified:state.hMessagesQualified===true,
       phase:state.hMessagesQualified?'h_messages_qualified':'h_messages_qualifying',inputBytes:budget.bytes,
+      ...(state.canonicalH?{contentProof:{basis:state.canonicalH.basis,checkpointComparison:state.canonicalH.checkpointComparison,...(state.canonicalH.contentHash?{currentDigest:state.canonicalH.contentHash}:{})}}:{}),
       basis:'protected-current-state',historyProvenance:'unknown',certified:false};
   });
 }

@@ -1,0 +1,63 @@
+{
+  "version": 1,
+  "checkedAt": "2026-11-01T07:30:53.969Z",
+  "sourceCommit": "00b79e8bde2bceb9e21bbcbb7ce72cd24a1f7e53",
+  "platform": "darwin",
+  "architecture": "arm64",
+  "node": "v24.22.1",
+  "binary": {
+    "path": "/Applications/ChatGPT.app/Contents/Resources/codex-cli/CodexCLI.app/Contents/MacOS/codex",
+    "resolution": "path",
+    "bytes": 240185120,
+    "sha256": "50ac633af64851511f9bbc71032cdae7f1ba20b3234c189687d61ba846c354c5",
+    "version": "not_executed_isolation_unavailable",
+    "staticBundleVersion": "1",
+    "staticVersionMarkerFound": false
+  },
+  "runtimeProtocolPin": "rust-v0.162.1",
+  "sourceHashes": {
+    "client/codex-runtime.mjs": "59a86e5d3b010997fc6ba5e7aae6ba2fb4c9f9f46d990b6eb318011cd73e9785",
+    "client/codex-stdio.mjs": "4a4165fb3ed8955df65f56036b5befcafaf8cb2f4dfc96353f01b03e2dbbd0e3",
+    "client/host-subprocess.mjs": "1608a5424da1a8c9110bdbb6db69eedbd68c04462631205434e3561f689634d4",
+    "client/host-context-policy.mjs": "7a9a67546b75c697b35658b9c1511042cb030cbcbdba9e1c5a85abcc5c06c33e",
+    "scripts/qualify-codex-room.mjs": "b09bdfa35b794bf9033f139baa7e202f72128e61a441dab3a0983618392c9448"
+  },
+  "fixture": {
+    "root": "/private/tmp/room-codex-protocol-6maryz",
+    "workspaceMode": "700",
+    "codexHomeMode": "700",
+    "codexHomeEmpty": true,
+    "nativeConfigValidation": "passed"
+  },
+  "genericIsolation": {
+    "version": 1,
+    "backend": "linux-bwrap",
+    "platform": "darwin",
+    "ready": false,
+    "code": "unsupported_platform",
+    "message": "The generic command host requires Linux. Use a qualified native Codex host or an explicitly selected Linux worker."
+  },
+  "isolationCommandRefusal": "Host isolation is unavailable",
+  "bwrapPresent": false,
+  "nativeTransportBoundary": "openCodexStdio clears inherited environment and uses a dedicated profile; its source explicitly states this is not an OS sandbox",
+  "status": "blocked_before_runtime_launch",
+  "actualCodexProcessStarted": false,
+  "modelTurnExecuted": false,
+  "accountSecretRead": false,
+  "credentialImported": false,
+  "networkRequested": false,
+  "persistentAutomationChanged": false,
+  "actualRuntimeInitializationTested": false,
+  "actualThreadPersistenceTested": false,
+  "actualProcessRestartRecoveryTested": false,
+  "roomPublicationTested": false,
+  "idleRoomWakeTested": false,
+  "limitation": "The only existing generic no-network/no-ambient-files OS isolation backend requires Linux bubblewrap and rejects darwin. Launching the native transport alone cannot establish the requested no-network guarantee. No unsandboxed fallback or unqualified new sandbox profile was used.",
+  "nextQualification": [
+    "Use a qualified Linux isolated worker with an explicitly supplied compatible standalone Codex binary, or separately qualify a native macOS transport isolation boundary before launching it.",
+    "Within the approved boundary, use dedicated empty HOME/CODEX_HOME and the existing checkCodexProtocol start/name/read/resume sequence, close the actual process, reopen with the saved thread ID, and verify durable local history without a model turn.",
+    "Separately obtain explicit dedicated-profile account login/host consent for one synthetic real model turn plus exact-journal disconnect/restart recovery. Generic offline command policy cannot silently gain model-network access.",
+    "Actual idle Room event delivery/resumption and saved permitted response remains separate host qualification."
+  ],
+  "officialReference": "https://developers.openai.com/siwc/token-sharing-open-source/codex-app-server"
+}

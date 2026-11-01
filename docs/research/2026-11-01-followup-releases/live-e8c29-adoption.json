@@ -1,0 +1,14 @@
+[
+  {
+    "origin": "https://room.trydemigod.com",
+    "http": 200,
+    "source": "e8c29d2f36fd8859d1c2c733abc1ed0052f9d68b",
+    "buildId": "2026-11-01T07:26:29.441Z"
+  },
+  {
+    "origin": "https://www.getdasha.com/room",
+    "http": 200,
+    "source": "e8c29d2f36fd8859d1c2c733abc1ed0052f9d68b",
+    "buildId": "2026-11-01T07:26:29.441Z"
+  }
+]

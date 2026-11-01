@@ -1,0 +1,19 @@
+{
+  "passed": true,
+  "sourceRevision": "8835b2bee1821123ea0421bb11fab7d2dee36653",
+  "checkedAt": "2026-11-01T07:20:31.341Z",
+  "roomId": "qa-release-8835-1101",
+  "workItemId": "release-evidence",
+  "memberId": "ai_c564fc5a275378c2c941b380aea39a3bed60fe61",
+  "acceptedEventId": "fcea4e75-7862-4f7b-ab14-a9d0b82a5ee4",
+  "startedEventId": "c49a1b12-e40f-448f-96ed-54c86095617b",
+  "completionEventId": "a29fdf11-5226-4f37-8288-858b870d76ea",
+  "evidenceVersion": "sha256:5f6a8eb4cd04116e24cf70b172e017efbdd843e25dc8993c6a64c0e4168a7512",
+  "exactAcceptRetry": true,
+  "changedInputRejected": true,
+  "exactCompletionRetry": true,
+  "savedResultReadback": true,
+  "workState": "completed",
+  "independentReviewTested": false,
+  "hostExecutionTested": false
+}

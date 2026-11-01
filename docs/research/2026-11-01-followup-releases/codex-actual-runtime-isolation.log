@@ -1,0 +1,1 @@
+{"status":"blocked_before_runtime_launch","sourceCommit":"00b79e8bde2bceb9e21bbcbb7ce72cd24a1f7e53","platform":"darwin","binaryPresent":true,"runtimeProtocolPin":"rust-v0.162.1","configValidation":"passed","readinessCode":"unsupported_platform","isolationError":"Host isolation is unavailable","actualCodexProcessStarted":false,"modelTurnExecuted":false,"threadRestartTested":false}

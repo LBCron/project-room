@@ -1,0 +1,32 @@
+[
+  {
+    "origin": "https://room.trydemigod.com",
+    "status": 200,
+    "version": {
+      "status": "ok",
+      "servedBy": "worker",
+      "sourceRevision": "8835b2bee1821123ea0421bb11fab7d2dee36653",
+      "buildId": "2026-11-01T07:13:21.804Z",
+      "deployment": "production",
+      "durableObject": {
+        "name": "invite-only-pilot",
+        "id": "c0de0ca12c0abd206a4ffa824879974d56cab15897121b38f8ea03a5c6e11023"
+      }
+    }
+  },
+  {
+    "origin": "https://www.getdasha.com/room",
+    "status": 200,
+    "version": {
+      "status": "ok",
+      "servedBy": "worker",
+      "sourceRevision": "8835b2bee1821123ea0421bb11fab7d2dee36653",
+      "buildId": "2026-11-01T07:13:30.088Z",
+      "deployment": "production",
+      "durableObject": {
+        "name": "invite-only-pilot",
+        "id": "c0de0ca12c0abd206a4ffa824879974d56cab15897121b38f8ea03a5c6e11023"
+      }
+    }
+  }
+]

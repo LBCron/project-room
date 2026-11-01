@@ -1,5 +1,6 @@
 import {emptyWorkPrivacy,validateWorkPrivacy,applyWorkPrivacyRequest,deriveWorkPrivacy,workRequestPrefix,workRequestKey,workRequestValue} from './current-work-privacy.mjs';
-import {CURRENT_LEGACY_WORK_INDEXES} from './current-legacy-work-gate.mjs';
+import {CURRENT_LEGACY_WORK_INDEXES,CURRENT_LEGACY_WORK_GUARDS,assertLegacyWorkReconciled} from './current-legacy-work-gate.mjs';
+import {currentWorkCapacity,assertCurrentWorkCapacity,CURRENT_WORK_CAPACITY_INDEXES} from './current-work-capacity.mjs';
 import {workRoleHolder} from './work-context.mjs';
 import {currentWorkSummary} from './current-work-summary.mjs';
 import {archiveRetains,recoverArchiveMarker} from './current-room-archive.mjs';
@@ -20,7 +21,7 @@ import { syncMessageRows } from './messages-store.mjs';
 import { ServiceError } from './service-error.mjs';
 
 export const CURRENT_ROOM_TABLES = Object.freeze(['current_room_records','current_room_record_proofs','current_room_head','current_room_writer_permit']);
-export const CURRENT_WRITER_FORMAT = 'normalized-current-v1-work-privacy-1';
+export const CURRENT_WRITER_FORMAT = 'normalized-current-v1-native-work-2';
 const hash = text => createHash('sha256').update(text).digest('hex');
 const corrupt = message => { throw Error('current_room_corrupt: ' + message); };
 const refuse = message => { throw new ServiceError(409,'current_room_context_unavailable',message); };
@@ -48,7 +49,7 @@ const definitions = [
 export const CURRENT_ROOM_SCHEMA = definitions.map(([,sql])=>sql+';').join('\n') + '\n' + RESTORE_CONTROL_SCHEMA
   + '\nINSERT OR IGNORE INTO current_room_writer_permit VALUES(1,0,NULL,NULL);';
 const permitFor = row => `(SELECT enabled=1 AND room_id=${row}.room_id FROM current_room_writer_permit WHERE singleton=1) IS 1`;
-const guardDefinitions = [];
+const guardDefinitions = [...CURRENT_LEGACY_WORK_GUARDS];
 for (const table of ['current_room_records','current_room_record_proofs','current_room_head','messages','work_entities','events','commands','rooms']) {
   for (const operation of ['INSERT','UPDATE','DELETE']) {
     const rows=operation==='UPDATE'?['OLD','NEW']:[operation==='DELETE'?'OLD':'NEW'];
@@ -83,7 +84,7 @@ guardDefinitions.push(['current_room_permit_update',`CREATE TRIGGER IF NOT EXIST
       THEN RAISE(ABORT,'unsupported current room permit') END; END`],
   ['current_room_permit_delete',`CREATE TRIGGER IF NOT EXISTS current_room_permit_delete BEFORE DELETE ON current_room_writer_permit BEGIN
     SELECT RAISE(ABORT,'unsupported current room permit'); END`]);
-export const CURRENT_ROOM_GUARDS = [...guardDefinitions,...RESTORE_CONTROL_GUARDS].map(([,sql])=>sql+';').join('\n') + CURRENT_LEGACY_WORK_INDEXES + `
+export const CURRENT_ROOM_GUARDS = [...guardDefinitions,...RESTORE_CONTROL_GUARDS].map(([,sql])=>sql+';').join('\n') + CURRENT_LEGACY_WORK_INDEXES + CURRENT_WORK_CAPACITY_INDEXES + `
 CREATE INDEX IF NOT EXISTS current_work_summary_keys ON current_room_record_proofs(room_id,record_key) WHERE domain='workSummary' AND present=1;
 CREATE INDEX IF NOT EXISTS current_reply_request_keys ON current_room_record_proofs(room_id,record_key) WHERE domain='replyRequests' AND present=1;
 CREATE INDEX IF NOT EXISTS current_messages_public_seq ON messages(room_id,seq DESC,message_id DESC) WHERE to_member_id IS NULL OR to_member_id='';
@@ -253,16 +254,20 @@ export function initializeCurrentRoom(store,state,events) {
   return withCurrentRoomWriter(db,roomId,()=>{
     // New room only. Existing-room adoption must come through H/tail equality.
     if(db.prepare('SELECT 1 FROM rooms WHERE id=?').get(roomId))throw Error('Current room initialization requires a new room');
+    assertLegacyWorkReconciled(db,roomId);
     db.prepare('INSERT INTO rooms(id,sequence,projection,archived_at) VALUES(?,?,?,NULL)').run(roomId,events.length,'{}');
     const insert=db.prepare('INSERT INTO events VALUES(?,?,?,?)');
     events.forEach((event,index)=>{insert.run(roomId,index+1,event.id,JSON.stringify(event));syncMessageRows(db,{roomId,sequence:index+1,event,state});});
     const referenced=referenceWorkItems(db,roomId,state,{enabled:true});
     const fields=fieldsOf(referenced);
-    for(const [id,item] of Object.entries(state.workItems))fields.set(JSON.stringify(['workSummary',id]),currentWorkSummary(item,referenced.workItems[id]));
+    for(const [id,item] of Object.entries(state.workItems)) {
+      fields.set(JSON.stringify(['workSummary',id]),currentWorkSummary(item,referenced.workItems[id]));
+      fields.set(JSON.stringify(['workCapacity',id]),currentWorkCapacity(item));
+    }
     const privacy=deriveWorkPrivacy(state);
     for(const [id,value] of privacy.privacy)fields.set(JSON.stringify(['workPrivacy',id]),value);
     for(const [key,value] of privacy.links)fields.set(JSON.stringify(['workRequest',key]),value);
-    const counts={messages:state.messages.length,workItems:Object.keys(state.workItems).length,
+    const counts={messages:state.messages.length,workItems:Object.keys(state.workItems).length,workCapacity:Object.keys(state.workItems).length,
       replyRequests:Object.keys(state.replyRequests??{}).length,members:Object.keys(state.members).length,roundLimitPauses:0,threadParticipants:0};
     for(const message of state.messages) {
       const row=db.prepare('SELECT seq,entity_hash FROM messages WHERE room_id=? AND message_id=?').get(roomId,message.id);
@@ -420,7 +425,10 @@ export function prepareCurrentWrite(store,{roomId,previous,state,event,sequence,
     if(!isDeepStrictEqual(refs[id],prior))workWrites.push({id,item,body,digest});
   }
   const after=fieldsOf({...state,workItems:refs}),changes=[];
-  for(const {id,item} of workWrites)changes.push({domain:'workSummary',key:id,value:currentWorkSummary(item,refs[id])});
+  for(const {id,item} of workWrites) {
+    assertCurrentWorkCapacity(store,roomId,current.head,previous.state.workItems[id],item,Date.parse(event.at),bytes=>charge(current.budget,bytes));
+    changes.push({domain:'workSummary',key:id,value:currentWorkSummary(item,refs[id])},{domain:'workCapacity',key:id,value:currentWorkCapacity(item)});
+  }
   for(const key of new Set([...current.before.keys(),...after.keys()]))if(!isDeepStrictEqual(current.before.get(key),after.get(key))) {
     const [domain,id]=JSON.parse(key);changes.push({domain,key:id,value:after.get(key)});
   }
@@ -457,6 +465,7 @@ export function prepareCurrentWrite(store,{roomId,previous,state,event,sequence,
     const existed=current.before.has(JSON.stringify([domain,change.key]));
     counts[domain]+=(change.value===undefined?-1:existed?0:1);
   }
+  counts.workCapacity=counts.workItems;
   for(const change of changes) {
     const proof=db.prepare('SELECT present FROM current_room_record_proofs WHERE room_id=? AND domain=? AND record_key=?').get(roomId,change.domain,change.key);
     counts.metadataRecords+=(change.value===undefined?0:1)-(proof?.present??0);
@@ -542,7 +551,8 @@ export function currentConversationRows(store,roomId,{viewerId,limit,before,befo
   };
   const rows=[],seen=new Set();let examined=0,last=null,interrupted=false;
   while(rows.length<limit&&examined<64) {
-    for(const stream of streams)refill(stream);
+    try{for(const stream of streams)refill(stream);}
+    catch(error){if(error.code==='current_room_context_unavailable'&&last){interrupted=true;break;}throw error;}
     const available=streams.filter(stream=>stream.rows.length);if(!available.length)break;
     available.sort((a,c)=>c.rows[0].seq-a.rows[0].seq||Buffer.compare(Buffer.from(c.rows[0].message_id),Buffer.from(a.rows[0].message_id)));
     const row=available[0].rows.shift();if(seen.has(row.message_id))continue;seen.add(row.message_id);
@@ -566,7 +576,8 @@ export function readCurrentRoomForAudit(store,roomId) {
   const db=store.db;
   if(!db.isTransaction)throw Error('Current room census requires a consistent recovery transaction');
   const head=readCurrentHead(db,roomId);if(!head)return null;
-  const state=emptyRoomState(),refs=new Map(),participants=new Map(),floors=new Map(),exclusions=new Map(),messageWitnesses=new Map(),workSummaries=new Map(),workPrivacy=new Map(),workRequests=new Map(),archiveRetained=new Map(),canonicalMessages=[];let proofs=0,records=0;
+  assertLegacyWorkReconciled(db,roomId);
+  const state=emptyRoomState(),refs=new Map(),participants=new Map(),floors=new Map(),exclusions=new Map(),messageWitnesses=new Map(),workSummaries=new Map(),workCapacities=new Map(),workPrivacy=new Map(),workRequests=new Map(),archiveRetained=new Map(),canonicalMessages=[];let proofs=0,records=0;
   const auditReceipts=new Map();
   const unitBudget=()=>({...budget(),schemaVerified:true,auditReceipts});
   for(const scalar of db.prepare(`SELECT rowid,length(CAST(domain AS BLOB)) AS domain_bytes,
@@ -587,6 +598,7 @@ export function readCurrentRoomForAudit(store,roomId) {
     } else if(proof.domain==='workPrivacy')workPrivacy.set(key,value);
     else if(proof.domain==='workRequest')workRequests.set(key,value);
     else if(proof.domain==='workSummary')workSummaries.set(key,value);
+    else if(proof.domain==='workCapacity')workCapacities.set(key,value);
     else if(proof.domain==='messageWitness')messageWitnesses.set(key,value);
     else if(proof.domain==='archiveRetained')archiveRetained.set(key,value);
     else if(proof.domain==='threadParticipants')participants.set(key,value);
@@ -607,6 +619,7 @@ export function readCurrentRoomForAudit(store,roomId) {
   const expectedPrivacy=deriveWorkPrivacy(state);
   if(!isDeepStrictEqual(workPrivacy,expectedPrivacy.privacy)||!isDeepStrictEqual(workRequests,expectedPrivacy.links))corrupt('complete work privacy census differs');
   if(workSummaries.size!==refs.size||[...refs].some(([id,ref])=>!isDeepStrictEqual(workSummaries.get(id),currentWorkSummary(state.workItems[id],ref))))corrupt('complete work summary census differs');
+  if(head.counts.workCapacity!==refs.size||workCapacities.size!==refs.size||[...refs.keys()].some(id=>!isDeepStrictEqual(workCapacities.get(id),currentWorkCapacity(state.workItems[id]))))corrupt('complete work capacity census differs');
   for(const scalar of db.prepare('SELECT rowid,length(CAST(message_id AS BLOB)) AS bytes FROM messages WHERE room_id=? ORDER BY seq,message_id').iterate(roomId)) {
     if(scalar.bytes<1||scalar.bytes>200)corrupt('invalid recovered message identity');
     const {message_id:id}=db.prepare('SELECT message_id FROM messages WHERE rowid=?').get(scalar.rowid);

@@ -1,6 +1,7 @@
 import {emptyWorkPrivacy,applyWorkPrivacyRequest,workRequestKey,workRequestValue} from './current-work-privacy.mjs';
 import {canonicalCurrentProofPlan} from './replay-canonical-plan.mjs';
 import {assertLegacyWorkReconciled} from './current-legacy-work-gate.mjs';
+import {currentWorkCapacity} from './current-work-capacity.mjs';
 import {currentWorkSummary} from './current-work-summary.mjs';
 import {advanceCanonicalH} from './replay-canonical-h.mjs';
 import {purgeCurrentCandidateForPrivacy,assertCurrentCandidateEmpty,cleanupCurrentCandidateRecords,stageCurrentCandidateRecords,currentCandidateCommandContext,applyCurrentCandidateEvent,publishCurrentCandidate,readCurrentRecord,admitCurrentCandidateBudget} from './current-room-repository.mjs';
@@ -491,7 +492,7 @@ export function captureReplayWitness(store, input) {
     const codecState=JSON.stringify(initialProjectionScan());
     put(db,roomId,generation,'codec',{version:1,headerHash,state:codecState,receiptId});
     const targetHead=stageCurrentCandidateRecords(store,{changes:[{domain:'migrationFence',key:'active',value:{generation,headerHash}}],
-      counts:{roomId,sequence:header.head,eventId:header.eventId,messages:0,workItems:0,replyRequests:0,members:0,roundLimitPauses:0,
+      counts:{roomId,sequence:header.head,eventId:header.eventId,messages:0,workItems:0,workCapacity:0,replyRequests:0,members:0,roundLimitPauses:0,
         threadParticipants:0,historyFloors:0,historyExclusions:0,metadataRecords:0,metadataProofs:0}});
     return {generation,targetHead,bindingHash:headerHash,hashStateHash:hash(state),sourceRoot:SOURCE_EMPTY[8],codecStateHash:hash(codecState),head:header.head,bytes:header.bytes,phase:'captured',publication:'pending',certified:false,...(contentProofIntent?{contentProof:{...contentProofIntent,historicalCheckpoint:header.historicalCheckpoint},historyProvenance:'unknown'}:{})};
   });
@@ -1343,7 +1344,7 @@ export function advanceCurrentRoomConversion(store,input) {
     if(state.currentSteps!==input.expectedSteps)throw Error('Current conversion cursor changed');
     const effects=[];
     const counts=state.candidateHead?{...state.candidateHead.counts,...(state.currentSteps===0?{messages:state.hMessageCount}:{})}:{roomId:input.roomId,sequence:header.value.head,eventId:header.value.eventId,messages:state.hMessageCount,
-      workItems:0,replyRequests:0,members:0,roundLimitPauses:0,threadParticipants:0,historyFloors:0,historyExclusions:0,metadataRecords:0,metadataProofs:0};
+      workItems:0,workCapacity:0,replyRequests:0,members:0,roundLimitPauses:0,threadParticipants:0,historyFloors:0,historyExclusions:0,metadataRecords:0,metadataProofs:0};
     const stage=(changes,nextCounts=counts)=>{state={...state,candidateHead:stageCurrentCandidateRecords(store,{head:state.candidateHead,changes,counts:nextCounts,inputBudget:budget})};};
     const maps=new Set(['members','channels','workItems','replyRequests','agentHalts','helpOffers','bonds']);
     const omitted=new Set(['messages','messageAuthority','eventLog','seenEvents','seenIdempotencyKeys']);
@@ -1389,6 +1390,7 @@ export function advanceCurrentRoomConversion(store,input) {
                 if(item?.suspended_by==='round_limit')nextCounts.roundLimitPauses++;
                 if(value?._workEntity!==1)throw Error('Inline work requires code-owned target reference conversion');
                 changes.push({domain:'workSummary',key:address[1],value:currentWorkSummary(item,value)});
+                changes.push({domain:'workCapacity',key:address[1],value:currentWorkCapacity(item)});nextCounts.workCapacity=(counts.workCapacity??0)+1;
                 if(readCurrentRecord(db,input.roomId,'workPrivacy',address[1],budget)===undefined)changes.push({domain:'workPrivacy',key:address[1],value:emptyWorkPrivacy()});
               }
               if(key==='replyRequests'&&typeof value?.workItemId==='string'&&value.workItemId) {

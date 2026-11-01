@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import {RoomStore} from '../server/store.mjs';
 import {initialRoom} from '../server/bootstrap.mjs';
 import {createWork} from '../server/work-claims.mjs';
+import {CURRENT_LEGACY_WORK_GUARDS} from '../server/current-legacy-work-gate.mjs';
 import {assertLegacyWorkReconciled} from '../server/current-legacy-work-gate.mjs';
 import {replayCutoverSchema,captureReplayWitness,advanceReplayWitness,partitionReplayWitness,qualifyReplayHWork,qualifyReplayHMessages,advanceCurrentRoomConversion} from '../server/replay-cutover.mjs';
 const by={kind:'human',id:'owner'};
@@ -33,4 +34,28 @@ test('publication rechecks newly admitted legacy assignments and leaves room leg
  s.collab.assignThread('commons','late-thread',{kind:'agent',id:'worker'},{by});
  p={currentSteps:0};i=0;assert.throws(()=>{while(p.phase!=='current_serving'&&i<100)p=advanceCurrentRoomConversion(s,{...input,requestId:'current'+i++,expectedSteps:p.currentSteps});},e=>e.code==='current_room_legacy_work_unreconciled');
  assert.equal(s.db.prepare('SELECT count(*) n FROM current_room_head').get().n,0);assert.ok(s.room('commons').state.room);
+});
+
+import {mkdtempSync,rmSync,symlinkSync,realpathSync} from 'node:fs';
+import {tmpdir} from 'node:os';import {join} from 'node:path';import {execFileSync} from 'node:child_process';import {pathToFileURL} from 'node:url';
+test('actual old same-floor prepared writers cannot create or reopen legacy assignments after activation',async t=>{
+ const directory=mkdtempSync(join(tmpdir(),'current-legacy-old45-'));t.after(()=>rmSync(directory,{recursive:true,force:true}));
+ const archive=execFileSync('git',['archive','a75c9e0bf','server','src','client','strings','package.json'],{maxBuffer:64*1024*1024});execFileSync('tar',['-x','-C',directory],{input:archive});symlinkSync(realpathSync(new URL('../node_modules',import.meta.url)),join(directory,'node_modules'),'dir');
+ const {RoomStore:OldStore}=await import(pathToFileURL(join(directory,'server/store.mjs')).href),old=new OldStore(':memory:');t.after(()=>old.close());old.initialize(initialRoom(),{representation:'normalized-current-v1'});
+ const item=createWork({id:'existing',title:'Existing recorded legacy history'},{agentId:'owner',now:new Date(old.now())});old.workClaims.set('commons',item);
+ old.workClaims.set('commons',{...item,state:'closed'});
+ const assigned=old.collab.assignThread('commons','existing-thread',{kind:'agent',id:'worker'},{by});old.collab.releaseAssignment('commons',assigned.assignmentId,{by});
+ const preparedClaim=old.db.prepare("UPDATE work_claims SET item_json=json_set(item_json,'$.data.state','unclaimed') WHERE room_id='commons' AND claim_id='existing'");
+ const preparedAssignment=old.db.prepare("UPDATE collab_assignments SET record_json=json_set(record_json,'$.status','assigned') WHERE room_id='commons'");
+ // Controlled installation of only the newly added authority guards. This
+ // isolates actual old/prepared writes without claiming a release upgrade.
+ old.transaction(()=>{for(const [,sql] of CURRENT_LEGACY_WORK_GUARDS)old.db.exec(sql);});
+ const snapshot=()=>JSON.stringify(Object.fromEntries(['work_claims','work_claim_history','collab_assignments','operator_actions','rooms','events','commands'].map(table=>[table,old.db.prepare('SELECT * FROM '+table).all()]))),before=snapshot();
+ for(const action of [()=>old.transaction(()=>preparedClaim.run()),()=>old.transaction(()=>preparedAssignment.run()),
+   ()=>old.workClaims.set('commons',createWork({id:'new',title:'Hidden new legacy obligation'},{agentId:'owner',now:new Date(old.now())})),
+   ()=>old.collab.assignThread('commons','new-thread',{kind:'agent',id:'worker'},{by})]){
+  assert.throws(action,/normalized room requires native work/);assert.equal(snapshot(),before);
+ }
+ assert.equal(old.workClaims.get('commons','existing').state,'closed');assert.equal(old.collab.listAssignments('commons')[0].status,'released');
+ assert.doesNotThrow(()=>old.workClaims.set('commons',{...item,state:'closed'}));
 });

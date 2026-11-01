@@ -192,13 +192,18 @@ export function publicWorkTablesReadable(db) {
 // Whether the recorded setting's read-model copy can be read here at
 // all: a store predating room_public_receipts_setting carries no
 // recorded setting the public read may consult, so the opt-out leg
-// cannot apply there.
+// cannot apply there. Only a missing TABLE is that legacy case: a
+// store whose table exists but whose enabled column cannot be read
+// may hold recorded opt-outs behind the column, so the error
+// propagates and the composed reads throw rather than serve with
+// the leg silently omitted (the JS twin's rule in
+// mirroredReceiptsSetting; Codex review, seq 25107/25108).
 export function recordedSettingReadable(db) {
   try {
     db.prepare("SELECT room_id, enabled FROM room_public_receipts_setting LIMIT 0").all();
     return true;
   } catch (error) {
-    if (!/no such (column|table)/i.test(error?.message ?? "")) throw error;
+    if (!/no such table/i.test(error?.message ?? "")) throw error;
     return false;
   }
 }
@@ -279,7 +284,15 @@ export function hiddenReceiptIds(db, receiptIds) {
         LEFT JOIN public_work_receipts pwr ON pwr.receipt_id = pr.id
         LEFT JOIN public_work_tasks pwt ON pwt.offer_id = pwr.offer_id
         WHERE pr.id IN (SELECT value FROM json_each(?))`).all(idList);
-    } catch {
+    } catch (error) {
+      // Only schema absence degrades (the predating store above, whose
+      // absent tables mean no task record can exist). Any other
+      // failure — an I/O error reading live tables — is not absence:
+      // rethrow, and the outer catch hides everything asked about
+      // rather than re-attributing a public-work receipt to its
+      // stored namespace/origin room, the deciding room the opt-out
+      // leg's attribution rule removed (Codex review, seq 25107/25108).
+      if (!/no such (column|table)/i.test(error?.message ?? "")) throw error;
       taskLegAvailable = false;
       rows = db.prepare(`SELECT id, room_id AS roomId, origin_room_id AS origin, NULL AS taskRoom, NULL AS pwrId
         FROM public_receipts WHERE id IN (SELECT value FROM json_each(?))`).all(idList);
@@ -427,7 +440,13 @@ function mirroredReceiptsSetting(db, roomId) {
   try {
     row = db.prepare("SELECT enabled FROM room_public_receipts_setting WHERE room_id=?").get(roomId);
   } catch (error) {
-    if (/no such (column|table)/i.test(error?.message ?? "")) return null;
+    // Only a missing TABLE is the legacy null above: no recorded
+    // setting can exist in a store that predates the mirror. A
+    // missing or unreadable COLUMN on a present table is not
+    // absence — recorded rows may sit behind that column — so it
+    // propagates like any other read error and the verdict
+    // composers fail closed (Codex review, seq 25107/25108).
+    if (/no such table/i.test(error?.message ?? "")) return null;
     throw error;
   }
   if (!row) return null;

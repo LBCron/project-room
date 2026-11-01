@@ -219,6 +219,111 @@ test("dedicated door: recorded opt-out refuses anonymous receipt and artifact re
   claims._requireReceiptVisible(ROOM, undefined); // never recorded: directory default governs
 });
 
+// --- Round-2 adversarial pass (Codex review, seq 25107/25108): two
+// further fail-open paths at the round-1 cured head. (1) The mirror
+// table EXISTS but its enabled column cannot be read: round 1 mapped
+// a missing-column error to the same null as a missing table
+// ("absent"), so a store whose recorded settings live behind an
+// unreadable column read as never-recorded and served. Only a missing
+// TABLE is the legacy case — no recorded setting can exist there. A
+// present table with an unreadable column resolves PRIVATE on every
+// surface. (2) hiddenReceiptIds degraded on ANY task-join error, so a
+// SQLITE_IOERR on the join silently re-attributed a public-work
+// receipt to its stored namespace/origin room — the deciding room the
+// round-1 attribution rule removed. The degrade is legitimate only
+// for the predating-schema case (the join's tables absent); an I/O
+// error fails closed like every other leg. ---
+
+function makeDbColumnBroken() {
+  const db = makeDb(null); // full fixture; no recorded row written yet
+  db.exec("DROP TABLE room_public_receipts_setting");
+  db.exec("CREATE TABLE room_public_receipts_setting (room_id TEXT PRIMARY KEY)");
+  db.prepare("INSERT INTO room_public_receipts_setting (room_id) VALUES (?)").run(ROOM);
+  return db;
+}
+
+test("round-2 read-error, column: a present mirror table with an unreadable enabled column resolves private", () => {
+  const db = makeDbColumnBroken();
+  // JS surfaces: hidden, and the door's opt-out fact answers private.
+  assert.equal(receiptVisible(db, PWR), false);
+  assert.equal(receiptVisible(db, WCR), false);
+  assert.deepEqual([...hiddenReceiptIds(db, [PWR, WCR])].sort(), [PWR, WCR].sort());
+  assert.equal(recordedReceiptsOptOut(db, ROOM), true);
+  // SQL surfaces: the probe propagates, so the composed reads throw
+  // rather than serve a list/detail with the opt-out leg omitted.
+  assert.throws(() => queryPublicReceipts({ db }, { limit: 10 }), /no such column/);
+  assert.throws(() => publicReceiptById({ db }, PWR), /no such column/);
+  assert.throws(() => collectPublicReceipts({ db }), /no such column/);
+  assert.throws(() => listPublicReceiptSitemap({ db }), /no such column/);
+});
+
+// The task room (ROOM) recorded the opt-out; the receipt is STORED
+// under a namespace room that recorded nothing. With a working join
+// the task room decides and the receipt hides; the stored room must
+// never decide a public-work receipt.
+function makeDbNamespaced() {
+  const db = new DatabaseSync(":memory:");
+  db.exec(PUBLIC_READ_MODEL_SCHEMA);
+  db.exec(publicUnpublishSchema);
+  db.exec(roomDirectorySchema);
+  db.exec(publicWorkClaimsSchema);
+  setRecorded(db, false); // ROOM (the task room) opted out
+  db.prepare(`INSERT INTO public_receipts
+    (id, title, source, origin_room_id, room_id, room_title, agents_json, humans_json,
+     pull_request, merged_at, verification_state, hashes_json, at, start_href)
+    VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?)`)
+    .run(PWR, "Settled work", "public-work", "ns-room", "ns-room", "Namespace", "[]", "[]", null, null, null, "[]",
+      "2026-10-01T00:00:00.000Z", "https://room.trydemigod.com/?start=room");
+  db.prepare(`INSERT INTO public_work_receipts
+    (receipt_id, offer_id, namespace_key, generation, identity_id, artifact_text, artifact_sha256, artifact_bytes, receipt_json, created_at)
+    VALUES (?,?,?,?,?,?,?,?,?,?)`).run(PWR, "offer-1", "ns", 1, "ai_x", "note", "0".repeat(64), 4, "{}", 0);
+  db.prepare(`INSERT INTO public_work_tasks
+    (offer_id, namespace_key, room_id, terms_version, repository_url, repository_ref, files_json, generation, created_at)
+    VALUES (?,?,?,?,?,?,?,?,?)`).run("offer-1", "ns", ROOM, 1, "https://example.invalid/repo", "main", "[]", 1, 0);
+  return db;
+}
+
+function joinReadFails(db, makeError) {
+  return {
+    prepare(sql, ...rest) {
+      if (String(sql).includes("LEFT JOIN public_work_tasks")) throw makeError();
+      return db.prepare(sql, ...rest);
+    },
+  };
+}
+
+test("round-2 read-error, task-join: a SQLITE_IOERR on the join never re-attributes a pwr_ receipt to its namespace room", () => {
+  const db = makeDbNamespaced();
+  assert.equal(receiptVisible(db, PWR), false); // working join: the task room's opt-out decides
+  const failing = joinReadFails(db, ioErr);
+  assert.equal(receiptVisible(failing, PWR), false); // failed join: fail closed, never namespace-served
+  assert.deepEqual([...hiddenReceiptIds(failing, [PWR])], [PWR]);
+});
+
+test("round-2 degrade preserved: a predating store (join tables absent) still degrades to room attribution", () => {
+  const db = makeDbNamespaced();
+  const absent = joinReadFails(db, () => new Error("no such table: public_work_tasks"));
+  // Schema absence means no task record can be resolved: the receipt
+  // degrades to its stored room, which recorded nothing — the SQL
+  // origin twin's semantics, unchanged by the round-2 cure.
+  assert.equal(receiptVisible(absent, PWR), true);
+  // And a genuinely table-less store still hides an opted-out room's
+  // own receipt through the room_id attribution.
+  const legacy = new DatabaseSync(":memory:");
+  legacy.exec(PUBLIC_READ_MODEL_SCHEMA);
+  legacy.exec(publicUnpublishSchema);
+  legacy.exec(roomDirectorySchema);
+  // No publicWorkClaimsSchema: the public-work tables do not exist.
+  setRecorded(legacy, false);
+  legacy.prepare(`INSERT INTO public_receipts
+    (id, title, source, origin_room_id, room_id, room_title, agents_json, humans_json,
+     pull_request, merged_at, verification_state, hashes_json, at, start_href)
+    VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?)`)
+    .run(WCR, "Settled work", "work-claim", ROOM, ROOM, "Room A", "[]", "[]", null, null, null, "[]",
+      "2026-10-01T00:00:00.000Z", "https://room.trydemigod.com/?start=room");
+  assert.equal(receiptVisible(legacy, WCR), false);
+});
+
 test("adversarial read-error over HTTP: the anonymous door stays shut when the setting read fails", async t => {
   const HPWR = `pwr_${"cd".repeat(32)}`;
   const NAMESPACE = `public_${"ef".repeat(16)}`;

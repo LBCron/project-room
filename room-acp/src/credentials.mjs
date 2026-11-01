@@ -1,8 +1,9 @@
 // The saved Room connection: one private JSON file per room under
 // ~/.config/room-acp (0700 dir, 0600 file). Never printed.
-import { mkdirSync, readFileSync, writeFileSync, rmSync, readdirSync, chmodSync, statSync } from "node:fs";
+import { mkdirSync, readFileSync, rmSync, readdirSync, chmodSync, statSync } from "node:fs";
 import { homedir } from "node:os";
 import { join } from "node:path";
+import { atomicPrivateJson } from "./private-state.mjs";
 import { registerSecret } from "./redact.mjs";
 
 export function configDir(env = process.env) {
@@ -15,7 +16,7 @@ export function saveConnection(connection, env = process.env) {
   mkdirSync(dir, { recursive: true, mode: 0o700 });
   chmodSync(dir, 0o700);
   const path = fileFor(connection.roomId, env);
-  writeFileSync(path, JSON.stringify(connection, null, 2) + "\n", { mode: 0o600 });
+  atomicPrivateJson(path, connection);
   chmodSync(path, 0o600);
   return path;
 }

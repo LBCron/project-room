@@ -1,5 +1,6 @@
 // Thin client for the Room HTTP APIs the bridge uses. Every call carries the
-// room-scoped credential from the invite; responses never reach logs raw.
+// room-scoped credential from the invite. Only explicit redemption recovery
+// uses its private identity secret; responses never reach logs raw.
 import { randomUUID } from "node:crypto";
 
 export class RoomError extends Error {
@@ -7,9 +8,9 @@ export class RoomError extends Error {
 }
 
 export class RoomClient {
-  #token; #fetch;
-  constructor({ apiBase, roomId = null, memberId = null, credential = null, fetchImpl = fetch }) {
-    this.apiBase = apiBase; this.roomId = roomId; this.memberId = memberId; this.#token = credential; this.#fetch = fetchImpl;
+  #token; #fetch; #identitySecret;
+  constructor({ apiBase, roomId = null, memberId = null, credential = null, identitySecret = null, fetchImpl = fetch }) {
+    this.apiBase = apiBase; this.roomId = roomId; this.memberId = memberId; this.#token = credential; this.#identitySecret = identitySecret; this.#fetch = fetchImpl;
   }
 
   async request(path, { body, timeoutMs = 15000, auth = true, signal, listenerToken } = {}) {
@@ -32,15 +33,43 @@ export class RoomClient {
     return value;
   }
 
-  async redeem({ code, displayName, requestId = randomUUID() }) {
-    const value = await this.request("/api/agent-invites/redeem", { body: { code, displayName, requestId }, auth: false });
-    if (!value?.mcpToken?.credential) throw new RoomError(200, "no_credential", "The Room did not return a credential for this invite (was it already used?)");
-    this.roomId = value.roomId; this.#token = value.mcpToken.credential;
-    return {
-      roomId: value.roomId, memberId: value.memberId, identityId: value.identityId, displayName: value.displayName,
-      permissions: value.permissions ?? [], credential: value.mcpToken.credential, credentialExpiresAt: value.mcpToken.expiresAt ?? null,
-      identitySecret: value.identitySecret ?? null,
-    };
+  async redeem({ code, displayName, requestId = randomUUID(), saveRecovery = async () => {} }) {
+    const identity=this.#identitySecret ? new RoomClient({apiBase:this.apiBase,credential:this.#identitySecret,fetchImpl:this.#fetch}) : null;
+    const value = await (identity ?? this).request("/api/agent-invites/redeem", { body: { code, displayName, requestId }, auth: Boolean(identity) });
+    const identitySecret=value?.identitySecret ?? this.#identitySecret;
+    if (!value?.mcpToken?.credential) {
+      if(value?.duplicate!==true || typeof identitySecret!=='string' || !identitySecret.startsWith('pri_')
+        || !Array.isArray(value.next) || !value.next.some(step=>step?.action==='rotate'))
+        throw new RoomError(200,"no_credential","The Room did not return a recoverable connection for this invite");
+      const recovery={roomId:value.roomId,memberId:value.memberId,identityId:value.identityId,displayName:value.displayName,
+        permissions:value.permissions ?? [],identitySecret};
+      await saveRecovery(recovery); // Before rotation: a lost rotate response must not lose identity.
+      return this.recoverRedemption(recovery);
+    }
+    return this.#redeemed({...value,identitySecret},value.mcpToken);
+  }
+  #redeemed(value,token) {
+    if(typeof value.roomId!=='string' || typeof value.memberId!=='string' || typeof value.identityId!=='string'
+      || typeof token?.credential!=='string' || !token.credential.startsWith('rak_'))
+      throw new RoomError(200,'invalid_response','Room returned an invalid connection');
+    this.roomId=value.roomId;this.memberId=value.memberId;this.#token=token.credential;this.#identitySecret=value.identitySecret ?? null;
+    return {roomId:value.roomId,memberId:value.memberId,identityId:value.identityId,displayName:value.displayName,
+      permissions:value.permissions ?? [],credential:token.credential,credentialExpiresAt:token.expiresAt ?? null,identitySecret:value.identitySecret ?? null};
+  }
+  async recoverRedemption(recovery) {
+    const identity=new RoomClient({apiBase:this.apiBase,credential:recovery.identitySecret,fetchImpl:this.#fetch});
+    const rotated=await identity.request(`/api/agent-rooms/${encodeURIComponent(recovery.roomId)}/token/rotate`,{body:{}});
+    if(rotated?.roomId!==recovery.roomId)throw new RoomError(200,'identity_mismatch','Recovery returned another room');
+    return this.#redeemed(recovery,rotated.mcpToken);
+  }
+
+  async checkConnection() {
+    const access=await this.request(`/api/rooms/${encodeURIComponent(this.roomId)}?view=identity`);
+    if(access?.snapshotView!=='identity' || access?.snapshotVersion!==1 || access?.viewerId!==this.memberId
+      || access?.roomId!==this.roomId || access?.state?.members?.[this.memberId]?.id!==this.memberId
+      || access.state.members[this.memberId].kind!=='agent' || access.state.members[this.memberId].active!==true)
+      throw new RoomError(200,'identity_mismatch','Saved connection no longer matches active membership');
+    return access;
   }
 
   disconnect({ hostId, fencingToken = null }) {

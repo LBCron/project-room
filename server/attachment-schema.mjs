@@ -26,8 +26,8 @@ export const attachmentSchema = attachmentSchemaV28
 // by ensureAttachmentSchema or its startup stamp.
 export const attachmentLiveIndexSql = "CREATE INDEX room_attachments_live ON room_attachments(room_id,state) WHERE state IN ('staged','committed')";
 export function attachmentLiveIndexState(db) {
-  const row = db.prepare("SELECT CASE WHEN length(CAST(sql AS BLOB))<=? THEN sql ELSE NULL END AS sql FROM sqlite_master WHERE type='index' AND name='room_attachments_live'").get(attachmentLiveIndexSql.length);
-  return !row ? 'absent' : row.sql === attachmentLiveIndexSql ? 'installed' : 'conflict';
+  const row = db.prepare("SELECT type,CASE WHEN length(CAST(sql AS BLOB))<=? THEN sql ELSE NULL END AS sql FROM sqlite_master WHERE name='room_attachments_live' LIMIT 1").get(attachmentLiveIndexSql.length);
+  return !row ? 'absent' : row.type === 'index' && row.sql === attachmentLiveIndexSql ? 'installed' : 'conflict';
 }
 
 export function ensureAttachmentSchema(db) {

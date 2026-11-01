@@ -56,5 +56,11 @@ test('actual Workers admit optional index boundaries, preserve rollback/retry an
     const reversed = await call('/execute', { reverse: true, planHash: reverse.planHash, requestId: 'boundary-reverse' });
     assert.equal(reversed.result.installed, false); assert.equal((await call('/state')).rows, 32768);
     console.log(JSON.stringify({ fixture: 'bounded-index-reverse', measured: reversed.measured }));
+    await mf.dispose(); mf = worker();
+    const absent = await call('/state'); assert.equal(absent.installed, 'absent'); assert.equal(absent.builds, 0); assert.equal(absent.keyReads, 0); assert.equal(absent.stamp, state.stamp);
+    assert.equal((await call('/plan')).installed, false, 'a schema stamp does not certify optional index presence');
+    const historical = await call('/execute', { planHash: plan.planHash, requestId: 'boundary-install' });
+    assert.equal(historical.duplicate, true); assert.equal(historical.result.installed, true);
+    assert.equal((await call('/state')).installed, 'absent', 'historical success does not reinstall after explicit reversal');
   } finally { await mf.dispose(); await rm(persistence, { recursive: true, force: true }); }
 });

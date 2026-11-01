@@ -4,8 +4,10 @@ import { stampNeedsMe } from "./content-trust.mjs";
 // Cross-room "what needs me" for one identity.
 //
 // One read replaces listing rooms and then opening each inbox. Items are
-// mentions, direct reply asks, open handoffs, unread DMs, bond requests,
-// and land-queue rows this member owns that have changed. Each item carries
+// mentions, replies to this member's own posts (conversation attention:
+// an open-thread reply carrying no @mention of the member and no formal
+// reply request), direct reply asks, open handoffs, unread DMs, bond
+// requests, and land-queue rows this member owns that have changed. Each item carries
 // roomId, a seq cursor, and a suggested next tool call. Standing sections
 // ride beside items and never move the cursor: openWork (ready Board work),
 // reviewAsks (deliveries naming me as reviewer), myWork (my claims whose
@@ -170,6 +172,93 @@ function mentionsOf(store, roomId, memberId, after, through) {
       }
     }
   }));
+}
+
+// Conversation attention (RES-1538, the reply-alert lane): an open-thread
+// reply to a message this member authored, carrying no @mention of the
+// member and no formal reply request. This selection cannot ride the
+// mention_states reply row: trackMentions writes that row only when the
+// parent author is an agent-kind member AND the parent is resident in the
+// live projection at reply time, so a human-kind seat (and any parent the
+// projection has shed) never surfaced — the reply was invisible here. Scan
+// the event log instead, the way roomDmsOf does, so the parent set is every
+// message the member ever posted in the room. Covered elsewhere and
+// excluded here, so one message yields one item: DM replies (toMemberId
+// set — the dm kind serves the recipient), formal reply requests addressed
+// to this member (direct_ask), and replies an open mention row already
+// surfaces (mention). The mention-covered check runs inside the scan loop
+// so a covered reply never consumes one of the MAX_PER_KIND + 1 slots.
+function repliesOf(store, roomId, memberId, after, state) {
+  const myMessageIds = new Set();
+  const parentRows = store.db.prepare(
+    `SELECT id, json_extract(body,'$.data.messageId') AS messageId FROM events
+     WHERE room_id=? AND json_extract(body,'$.type')='message.posted' AND json_extract(body,'$.actorId')=?`
+  ).all(roomId, memberId);
+  for (const row of parentRows) {
+    if (typeof row.messageId === "string" && row.messageId) myMessageIds.add(row.messageId);
+    if (typeof row.id === "string" && row.id) myMessageIds.add(row.id);
+  }
+  if (!myMessageIds.size) return [];
+  const askIds = new Set(Object.values(state.replyRequests ?? {})
+    .filter(request => request?.recipientId === memberId && request.status === "open")
+    .map(request => request.id));
+  const coveredByMention = eventIds => {
+    if (!eventIds.length) return new Set();
+    try {
+      const rows = store.db.prepare(
+        `SELECT message_event_id AS eventId FROM mention_states
+         WHERE room_id=? AND mentioned_member_id=? AND state IN ('delivered','acknowledged','timed_out')
+           AND message_event_id IN (${eventIds.map(() => "?").join(",")})`
+      ).all(roomId, memberId, ...eventIds);
+      return new Set(rows.map(row => row.eventId));
+    } catch (error) {
+      if (/no such table/i.test(error?.message ?? "")) return new Set();
+      throw error;
+    }
+  };
+  const currentById = messageRepository(store, roomId, state);
+  const items = [];
+  let cursor = after;
+  while (items.length <= MAX_PER_KIND) {
+    const rows = store.db.prepare(
+      `SELECT id, sequence, body FROM events
+       WHERE room_id=? AND sequence>? AND json_extract(body,'$.type')='message.posted'
+         AND json_extract(body,'$.data.replyToId') IS NOT NULL
+       ORDER BY sequence ASC LIMIT ?`
+    ).all(roomId, cursor, MAX_PER_KIND + 1);
+    if (!rows.length) break;
+    const parsed = rows.map(row => {
+      cursor = row.sequence;
+      let event = null;
+      try { event = JSON.parse(row.body); } catch { event = null; }
+      return { row, event };
+    }).filter(({ event }) => event && event.actorId !== memberId
+      && typeof event.data?.replyToId === "string" && myMessageIds.has(event.data.replyToId)
+      && !event.data.toMemberId);
+    const covered = coveredByMention(parsed.map(({ row }) => row.id));
+    for (const { row, event } of parsed) {
+      if (covered.has(row.id)) continue;
+      const messageId = event.data.messageId ?? row.id;
+      if (askIds.has(messageId)) continue;
+      const current = currentById.get(messageId);
+      if (current?.deletedAt) continue;
+      items.push({
+        kind: "reply",
+        roomId,
+        seq: row.sequence,
+        id: messageId,
+        replyToId: event.data.replyToId,
+        summary: clip(current ? current.body : event.data.body),
+        next: {
+          tool: "room_reply",
+          arguments: { roomId, requestId: `needs-me-${roomId}-${messageId}`, replyToId: messageId }
+        }
+      });
+      if (items.length > MAX_PER_KIND) break;
+    }
+    if (rows.length < MAX_PER_KIND + 1) break;
+  }
+  return items.sort((a, b) => a.seq - b.seq);
 }
 
 function directAsksOf(store, roomId, memberId, after, state) {
@@ -340,13 +429,45 @@ function landChangesOf(store, roomId, memberId, after, afterId) {
 
 function mentionHorizon(store, roomId, memberId, after, through) {
   try {
+    // The window counts only rows the selection can return (RES-1538).
+    // openDirectMentions discards deleted/redacted messages, private
+    // messages the member is not party to, and timed_out rows the member
+    // already answered or late-acknowledged. Counting those dead rows let
+    // them consume the whole window on a warm read: the read returned a
+    // window ending before live mentions newer than the caller's cursor,
+    // with the returned cursor ahead of the returned items and
+    // hasMore=true, and the live mentions surfaced only after paging
+    // through the dead backlog. The two id sets (deleted/redacted message
+    // ids; this member's reply targets) are built once per call instead of
+    // probing per row, and every exclusion mirrors a discard the selection
+    // provably makes, so the horizon never under-counts a returnable row.
+    const deletedIds = store.db.prepare(
+      `SELECT DISTINCT json_extract(body,'$.data.messageId') AS messageId FROM events
+       WHERE room_id=? AND json_extract(body,'$.type') IN ('message.deleted','message.redacted')
+         AND json_extract(body,'$.data.messageId') IS NOT NULL`
+    ).all(roomId).map(row => row.messageId).filter(id => typeof id === "string" && id);
+    const answeredIds = store.db.prepare(
+      `SELECT DISTINCT json_extract(body,'$.data.replyToId') AS messageId FROM events
+       WHERE room_id=? AND json_extract(body,'$.type')='message.posted' AND json_extract(body,'$.actorId')=?
+         AND json_extract(body,'$.data.replyToId') IS NOT NULL`
+    ).all(roomId, memberId).map(row => row.messageId).filter(id => typeof id === "string" && id);
     const rows = store.db.prepare(
       `SELECT e.sequence FROM mention_states m
        JOIN events e ON e.room_id=m.room_id AND e.id=m.message_event_id
+       LEFT JOIN mention_observations o ON o.room_id=m.room_id AND o.message_event_id=m.message_event_id
+         AND o.mentioned_member_id=m.mentioned_member_id
        WHERE m.room_id=? AND m.mentioned_member_id=? AND e.sequence>? AND e.sequence<=?
          AND m.state IN ('delivered','acknowledged','timed_out')
+         AND json_extract(e.body,'$.type')='message.posted'
+         AND (COALESCE(json_extract(e.body,'$.data.toMemberId'),'')=''
+           OR json_extract(e.body,'$.data.toMemberId')=? OR json_extract(e.body,'$.actorId')=?)
+         AND COALESCE(json_extract(e.body,'$.data.messageId'), e.id) NOT IN (SELECT value FROM json_each(?))
+         AND NOT (m.state='timed_out' AND COALESCE(json_extract(e.body,'$.data.messageId'), e.id) IN (SELECT value FROM json_each(?)))
+         AND NOT (m.state='timed_out' AND (o.late_acknowledged_at IS NOT NULL
+           OR (o.acknowledged_at IS NOT NULL AND o.acknowledged_at > m.timeout_at)))
        ORDER BY e.sequence LIMIT ?`
-    ).all(roomId, memberId, after, through, MENTION_WINDOW + 1);
+    ).all(roomId, memberId, after, through, memberId, memberId,
+      JSON.stringify(deletedIds), JSON.stringify(answeredIds), MENTION_WINDOW + 1);
     return rows.length > MENTION_WINDOW ? rows[MENTION_WINDOW - 1].sequence : through;
   } catch (error) {
     if (/no such table/i.test(error?.message ?? "")) return through;
@@ -371,6 +492,7 @@ export function roomAttention(store, roomId, memberId, identityId, after) {
   const pendingBonds = identityId ? store.bonds.pendingProposalsFor(identityId) : [];
   const kinds = [
     mentionsOf(store, roomId, memberId, messageAfter, through),
+    repliesOf(store, roomId, memberId, messageAfter, state),
     roomDmsOf(store, roomId, memberId, messageAfter, state),
     peerDmsOf(store, roomId, identityId, after),
     bondRequestsOf(store, roomId, pendingBonds, after),
@@ -740,6 +862,7 @@ export function collectNeedsMe(store, secret, { since, roomId: scopedRoom = null
       const state = store.room(link.roomId).state;
       const kinds = [
         mentionsOf(store, link.roomId, link.memberId, messageAfter, through),
+        repliesOf(store, link.roomId, link.memberId, messageAfter, state),
         roomDmsOf(store, link.roomId, link.memberId, messageAfter, state),
         peerDmsOf(store, link.roomId, identity.identityId, after),
         bondRequestsOf(store, link.roomId, pendingBonds, after),

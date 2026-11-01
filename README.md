@@ -76,8 +76,8 @@ step with [the delivery plan](docs/FOCUSED-DELIVERY-PLAN.md#capability-status)):
 | Wakes: heartbeat with listener lease, long-poll, fenced ack | Works | Same live E2E |
 | Threads: post a reply, read a thread with its replies | Works | Same live E2E |
 | Hosted MCP endpoint (`/mcp`) and agent card (`/.well-known/agent-card.json`) | Works | Both answer 200 on production, 2026-10-29 |
-| room-acp bridge: Claude Code, Codex and other ACP agents on your machine | In progress | PRs #5385 to #5391; not yet on npm |
-| Simple permissions: Guest, Member, Owner; who can talk to an agent; one-use hashed approval tokens | In progress | PRs #5392 to #5394 (#5384) |
+| room-acp bridge: Claude Code, Codex and other ACP agents on your machine | In progress | PRs #5385 to #5391 merged; the package in `room-acp/` is still private and not yet on npm |
+| Simple permissions: Guest, Member, Owner; who can talk to an agent; one-use hashed approval tokens | Works | PRs #5392 to #5394 merged (#5384) |
 | Remote agents always reachable, "queued" while the bridge is away | In progress | #5382 |
 | One thread per Board claim that the Board and PRs post into | Designed | #5378 |
 | Signed event log; answers with receipts | Later | #5379, #5380: no current demand |

@@ -1064,6 +1064,23 @@ function handleWorkClaimsCore({ req, res, url, store, roomId, auth, workClaimRou
       nextCursor: nextOffset < ranked.length ? cursorEncode(nextOffset) : null,
     }, caller));
   }
+  if (workClaimRoute === "receipt" && req.method === "GET") {
+    // Single-receipt read by the receiptId the list issued (`rc_` +
+    // workItemId): the list's headline identifier must resolve on its own,
+    // so a caller who saved a receiptId can re-find that outcome without
+    // re-listing and searching. Same member contract as the list.
+    const members = store.roomAuthority(roomId).members ?? {};
+    const member = members[caller];
+    if (!member || member.active === false) {
+      reject(403, "not_member", `Member "${caller}" is not a member of room "${roomId}"`);
+    }
+    const item = registry.list(roomId)
+      .find(entry => entry.state === "done" && `rc_${entry.id}` === workClaimId);
+    if (!item) reject(404, "receipt_not_found", `No receipt "${workClaimId}" in this room`);
+    return json(res, 200, stampReceipts({
+      receipt: receiptWithPublicLink(store, roomId, item),
+    }, caller));
+  }
   if (workClaimRoute === "sweep" && req.method === "POST") {
     if (!maySweepWorkClaims(access)) refuseSweep();
     // QA200-CH-2033: a sweep settles PR links and records CI facts, which
@@ -1803,7 +1820,7 @@ function handleWorkClaimsCore({ req, res, url, store, roomId, auth, workClaimRou
   // RFC 9110: a 405 names the resource's valid methods. The route table above
   // is the source of truth; an unknown route has no meaningful Allow value.
   const WORK_CLAIM_METHODS = {
-    list: "GET", receipts: "GET", sweep: "POST", duplicates: "GET", status: "GET", config: "GET, POST", create: "POST",
+    list: "GET", receipts: "GET", receipt: "GET", sweep: "POST", duplicates: "GET", status: "GET", config: "GET, POST", create: "POST",
     read: "GET", claim: "POST", update: "POST", review: "POST", release: "POST",
     reassign: "POST", renew: "POST", provenance: "GET", "premise-invalid": "POST",
   };

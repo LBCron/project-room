@@ -4039,6 +4039,7 @@ export function createRoomServer({ store, origin, assetRoot = new URL("../", imp
       const workClaimReleaseMatch = /^\/api\/rooms\/([^/]{1,384})\/work-claims\/([^/]{1,128})\/release$/.exec(url.pathname);
       const workClaimReassignMatch = /^\/api\/rooms\/([^/]{1,384})\/work-claims\/([^/]{1,128})\/reassign$/.exec(url.pathname);
       const workClaimReceiptsMatch = /^\/api\/rooms\/([^/]{1,384})\/receipts$/.exec(url.pathname);
+      const workClaimReceiptItemMatch = /^\/api\/rooms\/([^/]{1,384})\/receipts\/([^/]{1,256})$/.exec(url.pathname);
       const workClaimRenewMatch = /^\/api\/rooms\/([^/]{1,384})\/work-claims\/([^/]{1,128})\/renew$/.exec(url.pathname);
       // Provenance walk + premise-invalid rollback (orch-provenance-rollback).
       // Literal segments are matched before the {id} template so they are
@@ -4046,7 +4047,7 @@ export function createRoomServer({ store, origin, assetRoot = new URL("../", imp
       const workClaimMatch = workClaimsMatch ?? workClaimsStatusMatch ?? workClaimsSweepMatch ?? workClaimsDuplicatesMatch ?? workClaimsConfigMatch ?? workClaimClaimMatch
         ?? workClaimUpdateMatch ?? workClaimReviewMatch ?? workClaimReleaseMatch ?? workClaimReassignMatch ?? workClaimRenewMatch
         ?? workClaimItemMatch
-        ?? workClaimReceiptsMatch;
+        ?? workClaimReceiptsMatch ?? workClaimReceiptItemMatch;
       // Agent /feedback endpoint (structured bug/feature reports): every
       // route template below is documented in docs/openapi.yaml — the
       // route-docs gate extracts these literals from this file. The literal
@@ -4354,6 +4355,7 @@ export function createRoomServer({ store, origin, assetRoot = new URL("../", imp
           : workClaimsConfigMatch ? "config"
           : workClaimsMatch ? (req.method === "GET" ? "list" : "create")
           : workClaimReceiptsMatch ? "receipts"
+          : workClaimReceiptItemMatch ? "receipt"
           : workClaimItemMatch ? "read"
           : workClaimClaimMatch ? "claim"
           : workClaimUpdateMatch ? "update"
@@ -4363,7 +4365,7 @@ export function createRoomServer({ store, origin, assetRoot = new URL("../", imp
           : "reassign";
         const workClaimIdMatch = workClaimItemMatch ?? workClaimClaimMatch ?? workClaimUpdateMatch
           ?? workClaimReviewMatch ?? workClaimReleaseMatch ?? workClaimReassignMatch ?? workClaimRenewMatch
-         ;
+          ?? workClaimReceiptItemMatch;
         // DC4-A1 cure: handleWorkClaims throws the stale-round release
         // refusal (body on the error) for direct-call consumers; this HTTP
         // transport converts that one thrown body-carrying error into the

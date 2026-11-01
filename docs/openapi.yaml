@@ -7422,6 +7422,42 @@ paths:
             allowed methods — resend with a named method instead of
             retrying the same one.
         '422': { description: invalid_receipt_query }
+  /api/rooms/{roomId}/receipts/{receiptId}:
+    get:
+      summary: Read one receipt by its receiptId
+      description: |
+        Read a single completed-work receipt by the stable `receiptId`
+        (`"rc_" + workItemId`) issued by the receipts list, so a caller who
+        saved a receiptId can re-find that outcome without re-listing and
+        searching. Same member contract as the list: member-only (403
+        `not_member`); API keys need `rooms:read`. A receiptId with no
+        `done` claim behind it in this room returns 404 `receipt_not_found`.
+      parameters:
+        - $ref: '#/components/parameters/RoomId'
+        - name: receiptId
+          in: path
+          required: true
+          schema: { type: string, maxLength: 256 }
+          description: The `rc_`-prefixed receipt identifier from the receipts list
+      responses:
+        '200':
+          description: The receipt
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  receipt:
+                    $ref: '#/components/schemas/Receipt'
+        '401': { description: unauthenticated }
+        '403': { description: not_member }
+        '404': { description: receipt_not_found }
+        '405':
+          description: >-
+            method_not_allowed: this route only serves GET. A wrong-method
+            response may carry an RFC 9110 Allow header naming the route's
+            allowed methods — resend with a named method instead of
+            retrying the same one.
   /api/rooms/{roomId}/work-claims/{claimId}/renew:
     post:
       summary: Renew a work claim's lease
@@ -9323,11 +9359,7 @@ paths:
     get:
       summary: Liveness
       description: >-
-        Open (also HEAD). Node returns `{ status: "ok", mode, emailVerification }`.
-        Worker adds `liveness: ok` and `jobs.status`, using a bounded one-second
-        Durable Object job-health probe. Worker `status` is `ok` only when that
-        classifier is healthy, otherwise `degraded` (including unknown, timeout,
-        or error). HTTP 200 still reports liveness, not successful background work;
+        Open (also HEAD). Returns `{ status: "ok", mode, emailVerification }`;
         operational metadata only. `emailVerification` is `enforced` when a
         magic-link mailer is configured, or `relaxed-no-mailer` when it is not
         and the email-verification gates follow the agent-invites escape hatch.
@@ -9336,7 +9368,7 @@ paths:
         bound Durable Object. Use `/api/ready` for the authority policy.
       security: []
       responses:
-        '200': { description: "Liveness response; Worker status ok or degraded, liveness ok, jobs.status; Node status ok" }
+        '200': { description: "{ status: ok, mode, emailVerification: enforced | relaxed-no-mailer }" }
     head:
       summary: Read public response headers
       description: Uses the same public GET policy and status with no response body.
@@ -9354,7 +9386,7 @@ paths:
         Public Host aliases are served identically.
       security: []
       responses:
-        '200': { description: "Liveness response; Worker status ok or degraded, liveness ok, jobs.status; Node status ok" }
+        '200': { description: "{ status: ok, mode, emailVerification: enforced | relaxed-no-mailer }" }
     head:
       summary: Read public response headers
       description: Uses the same public GET policy and status with no response body.
@@ -9589,8 +9621,7 @@ paths:
         Worker readiness also reports the bound authority's `emailVerification`
         and `emailVerificationScope: durable-object` when that authority supports
         policy reporting. Missing policy is unknown, never proof of enforcement.
-        `/api/health` retains HTTP liveness semantics; the Worker separately probes
-        job health with the same time bound, while `/api/ready` checks storage.
+        `/api/health` stays Worker and Node liveness and does not run this probe.
       security: []
       responses:
         '200': { description: "{ status: ready }" }

@@ -175,8 +175,13 @@ export function listMcpOAuthAgents(store, userId, resource, {preferredRoomId,pre
       if (member.kind !== 'agent' || member.accountableHumanId !== human.member_id || !member.identityId) continue;
       const binding = { resource, roomId: human.room_id, identityId: member.identityId, memberId: member.id, humanMemberId: human.member_id, identityEpoch: mcpOAuthIdentityEpoch(store, member.identityId) };
       const directBinding = {...binding, principalType:'account-owned-agent',accountEpoch:String(store.db.prepare('SELECT auth_epoch FROM accounts WHERE id=?').get(userId)?.auth_epoch)};
-      const selected = validateMcpOAuthBinding(store,userId,directBinding) ? directBinding
-        : validateMcpOAuthBinding(store,userId,binding) ? binding : null;
+      // Accountability alone does not prove that the account controls an invited
+      // agent. A durable owner grant starts from the explicitly configured seat
+      // or the existing managed connection proof; never from every sponsored seat.
+      const configured = preferredRoomId === human.room_id && preferredMemberId === member.id;
+      const managed = validateMcpOAuthBinding(store,userId,binding);
+      const selected = (configured || managed) && validateMcpOAuthBinding(store,userId,directBinding) ? directBinding
+        : managed ? binding : null;
       if (selected) result.push({binding:selected, label:`${member.displayName || member.id} — ${state.room?.title || human.room_id}`});
     }
   }

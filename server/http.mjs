@@ -1965,7 +1965,11 @@ export function createRoomServer({ store, origin, assetRoot = new URL("../", imp
           const requiredSeat = requiredMcpSeat(validated.client.clientId, accountId);
           if (requiredSeat && (binding?.memberId !== requiredSeat.preferredMemberId || binding?.roomId !== requiredSeat.preferredRoomId))
             return failRedirect("access_denied", "Choose the configured existing agent and room");
-          if (binding?.resource !== oauthResource || !validateMcpOAuthBinding(store, accountId, binding))
+          const eligible = listMcpOAuthAgents(store, accountId, oauthResource, mcpClientPreference(validated.client.clientId) ?? {});
+          const listed = eligible.some(choice => Object.keys(choice.binding).length === Object.keys(binding ?? {}).length
+            && Object.entries(choice.binding).every(([key, value]) => binding?.[key] === value));
+          if (binding?.principalType === "account-owned-agent" && !listed
+            || binding?.resource !== oauthResource || !validateMcpOAuthBinding(store, accountId, binding))
             return failRedirect("access_denied", "This agent is not currently connected to your account");
         } else if (data.resource !== undefined || data.agent_binding !== undefined)
           return failRedirect("invalid_target", "This client is not enabled for MCP");

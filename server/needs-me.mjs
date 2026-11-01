@@ -53,6 +53,24 @@ const MY_WORK_SHOWN = 5;
 const MY_ACTIVE_STATES = new Set(["claimed", "in_progress"]);
 export const LEASE_SOON_MS = 3_600_000;
 const MENTION_WINDOW = 100;
+// Scan budgets for the conversation-attention scans (W2-F9-CURE of
+// RES-1538; Codex's source review, room seq 25038, found the first cut
+// scanned full history per read). Each scan below walks an indexed
+// cursor range in batches and examines at most its row budget per room
+// per read: replies need only MAX_PER_KIND + 1 items, so 256 examined
+// reply rows is ~28x the useful yield; the mention horizon must count
+// up to MENTION_WINDOW eligible rows through dead-row runs, so 512
+// examined mention rows gives 5x headroom over the author's 100-dead-row
+// case before paging. A scan that stops at its budget reports
+// exhausted=true with scannedThrough at the last examined sequence; the
+// caller clamps the room horizon there, so the read's cursor never
+// claims unscanned history and the caller's next read (hasMore=true)
+// resumes exactly where the scan stopped — no skipped asks, and no
+// silent truncation that looks complete.
+export const REPLY_SCAN_ROW_BUDGET = 256;
+export const MENTION_SCAN_ROW_BUDGET = 512;
+const REPLY_SCAN_BATCH = 64;
+const MENTION_SCAN_BATCH = 128;
 
 const fail = (status, code, message) => { throw new ServiceError(status, code, message); };
 
@@ -185,25 +203,36 @@ function mentionsOf(store, roomId, memberId, after, through) {
 // mention_states reply row: trackMentions writes that row only when the
 // parent author is an agent-kind member AND the parent is resident in the
 // live projection at reply time, so a human-kind seat (and any parent the
-// projection has shed) never surfaced — the reply was invisible here. Scan
-// the event log instead, the way roomDmsOf does, so the parent set is every
-// message the member ever posted in the room. Covered elsewhere and
-// excluded here, so one message yields one item: DM replies (toMemberId
-// set — the dm kind serves the recipient), formal reply requests addressed
-// to this member (direct_ask), and replies an open mention row already
-// surfaces (mention). The mention-covered check runs inside the scan loop
-// so a covered reply never consumes one of the MAX_PER_KIND + 1 slots.
-function repliesOf(store, roomId, memberId, after, state) {
-  const myMessageIds = new Set();
-  const parentRows = store.db.prepare(
-    `SELECT id, json_extract(body,'$.data.messageId') AS messageId FROM events
-     WHERE room_id=? AND json_extract(body,'$.type')='message.posted' AND json_extract(body,'$.actorId')=?`
-  ).all(roomId, memberId);
-  for (const row of parentRows) {
-    if (typeof row.messageId === "string" && row.messageId) myMessageIds.add(row.messageId);
-    if (typeof row.id === "string" && row.id) myMessageIds.add(row.id);
-  }
-  if (!myMessageIds.size) return [];
+// projection has shed) never surfaced — the reply was invisible here.
+// Covered elsewhere and excluded here, so one message yields one item:
+// DM replies (toMemberId set — the dm kind serves the recipient), formal
+// reply requests addressed to this member (direct_ask), and replies an
+// open mention row already surfaces (mention). The mention-covered check
+// runs inside the scan loop so a covered reply never consumes one of the
+// MAX_PER_KIND + 1 slots.
+//
+// Bounded scan (W2-F9-CURE, Codex seq 25038): the first cut built a Set
+// of every message id the member ever authored (full history, no
+// sequence bound) and then batch-looped reply events until the kind
+// filled, with no through bound — a no-match room scanned its whole
+// reply history on every inbox read. This cut asks the same question
+// with indexed, normalized lookups instead: candidate replies come from
+// the events primary-key cursor range (room_id, sequence) bounded by
+// (after, through], exactly the roomDmsOf idiom, and each candidate's
+// parent is resolved per candidate — the message repository's current
+// record (live read index, else the messages table's (room_id,
+// message_id) primary key), falling back to the posting event's own
+// UNIQUE id lookup for a replyToId that names the event rather than the
+// canonical message id. No history-sized structure is built: the only
+// sets are the standing open-ask ids and a per-call parent memo bounded
+// by the rows examined. The scan examines at most
+// REPLY_SCAN_ROW_BUDGET rows; on exhaustion it reports
+// { exhausted: true, scannedThrough } and the caller clamps the room
+// horizon to scannedThrough, so continuation resumes mid-history
+// instead of the read silently passing over unscanned replies.
+function repliesOf(store, roomId, memberId, after, through, state) {
+  const scan = { items: [], scannedRows: 0, scannedThrough: after, exhausted: false };
+  if (!(through > after)) return scan;
   const askIds = new Set(Object.values(state.replyRequests ?? {})
     .filter(request => request?.recipientId === memberId && request.status === "open")
     .map(request => request.id));
@@ -222,24 +251,54 @@ function repliesOf(store, roomId, memberId, after, state) {
     }
   };
   const currentById = messageRepository(store, roomId, state);
-  const items = [];
+  const parentMemo = new Map();
+  const parentIsMine = replyToId => {
+    if (!parentMemo.has(replyToId)) {
+      const current = currentById.get(replyToId);
+      let mine = current ? current.authorId === memberId : false;
+      if (!current) {
+        const posted = store.db.prepare(
+          `SELECT json_extract(body,'$.type') AS type, json_extract(body,'$.actorId') AS actorId
+           FROM events WHERE room_id=? AND id=?`
+        ).get(roomId, replyToId);
+        mine = posted?.type === "message.posted" && posted?.actorId === memberId;
+      }
+      parentMemo.set(replyToId, mine);
+    }
+    return parentMemo.get(replyToId);
+  };
+  const items = scan.items;
   let cursor = after;
   while (items.length <= MAX_PER_KIND) {
+    if (scan.scannedRows >= REPLY_SCAN_ROW_BUDGET) {
+      scan.exhausted = scan.scannedThrough < through;
+      break;
+    }
+    const want = Math.min(REPLY_SCAN_BATCH, REPLY_SCAN_ROW_BUDGET - scan.scannedRows);
     const rows = store.db.prepare(
       `SELECT id, sequence, body FROM events
-       WHERE room_id=? AND sequence>? AND json_extract(body,'$.type')='message.posted'
+       WHERE room_id=? AND sequence>? AND sequence<=? AND json_extract(body,'$.type')='message.posted'
          AND json_extract(body,'$.data.replyToId') IS NOT NULL
        ORDER BY sequence ASC LIMIT ?`
-    ).all(roomId, cursor, MAX_PER_KIND + 1);
+    ).all(roomId, cursor, through, want);
     if (!rows.length) break;
-    const parsed = rows.map(row => {
+    const parsed = [];
+    for (const row of rows) {
       cursor = row.sequence;
+      scan.scannedRows += 1;
+      scan.scannedThrough = row.sequence;
       let event = null;
       try { event = JSON.parse(row.body); } catch { event = null; }
-      return { row, event };
-    }).filter(({ event }) => event && event.actorId !== memberId
-      && typeof event.data?.replyToId === "string" && myMessageIds.has(event.data.replyToId)
-      && !event.data.toMemberId);
+      if (event && event.actorId !== memberId
+        && typeof event.data?.replyToId === "string" && event.data.replyToId
+        && !event.data.toMemberId && parentIsMine(event.data.replyToId)) {
+        parsed.push({ row, event });
+      }
+      // Enough candidates to fill the kind: stop examining here. The
+      // rows past the cursor in this batch were fetched, not examined;
+      // they stay unscanned and a later read re-fetches from the cursor.
+      if (parsed.length > MAX_PER_KIND) break;
+    }
     const covered = coveredByMention(parsed.map(({ row }) => row.id));
     for (const { row, event } of parsed) {
       if (covered.has(row.id)) continue;
@@ -261,9 +320,10 @@ function repliesOf(store, roomId, memberId, after, state) {
       });
       if (items.length > MAX_PER_KIND) break;
     }
-    if (rows.length < MAX_PER_KIND + 1) break;
+    if (rows.length < want) break;
   }
-  return items.sort((a, b) => a.seq - b.seq);
+  items.sort((a, b) => a.seq - b.seq);
+  return scan;
 }
 
 function directAsksOf(store, roomId, memberId, after, state) {
@@ -432,50 +492,98 @@ function landChangesOf(store, roomId, memberId, after, afterId) {
   }));
 }
 
+// The window counts only rows the selection can return (RES-1538).
+// openDirectMentions discards deleted/redacted messages, private
+// messages the member is not party to, and timed_out rows the member
+// already answered or late-acknowledged. Counting those dead rows let
+// them consume the whole window on a warm read: the read returned a
+// window ending before live mentions newer than the caller's cursor,
+// with the returned cursor ahead of the returned items and
+// hasMore=true, and the live mentions surfaced only after paging
+// through the dead backlog.
+//
+// Bounded scan (W2-F9-CURE, Codex seq 25038): the first cut pre-built
+// two full-history id sets (every deleted/redacted message id; every
+// reply target the member ever posted) and shipped them to SQLite as
+// JSON on every read. This cut walks the mention_states_member index
+// (room_id, mentioned_member_id, state) joined to the events primary
+// key in batches and decides eligibility per row with the selection's
+// own normalized checks: the current message record's deletedAt (set
+// by both delete and redact) and the repository's hasReply, both served
+// by the message repository (live read index, else the messages
+// table's primary key), plus the mention_observations columns the join
+// already carries. No history-sized set is built. The scan examines at
+// most MENTION_SCAN_ROW_BUDGET rows; on exhaustion the horizon is the
+// last examined sequence — never `through` — so the caller's cursor
+// stops at scanned ground, hasMore stays true, and the next read
+// resumes the count instead of skipping the unscanned rows.
 function mentionHorizon(store, roomId, memberId, after, through) {
+  const scan = { horizon: through, scannedRows: 0, exhausted: false };
+  if (!(through > after)) return scan;
   try {
-    // The window counts only rows the selection can return (RES-1538).
-    // openDirectMentions discards deleted/redacted messages, private
-    // messages the member is not party to, and timed_out rows the member
-    // already answered or late-acknowledged. Counting those dead rows let
-    // them consume the whole window on a warm read: the read returned a
-    // window ending before live mentions newer than the caller's cursor,
-    // with the returned cursor ahead of the returned items and
-    // hasMore=true, and the live mentions surfaced only after paging
-    // through the dead backlog. The two id sets (deleted/redacted message
-    // ids; this member's reply targets) are built once per call instead of
-    // probing per row, and every exclusion mirrors a discard the selection
-    // provably makes, so the horizon never under-counts a returnable row.
-    const deletedIds = store.db.prepare(
-      `SELECT DISTINCT json_extract(body,'$.data.messageId') AS messageId FROM events
-       WHERE room_id=? AND json_extract(body,'$.type') IN ('message.deleted','message.redacted')
-         AND json_extract(body,'$.data.messageId') IS NOT NULL`
-    ).all(roomId).map(row => row.messageId).filter(id => typeof id === "string" && id);
-    const answeredIds = store.db.prepare(
-      `SELECT DISTINCT json_extract(body,'$.data.replyToId') AS messageId FROM events
-       WHERE room_id=? AND json_extract(body,'$.type')='message.posted' AND json_extract(body,'$.actorId')=?
-         AND json_extract(body,'$.data.replyToId') IS NOT NULL`
-    ).all(roomId, memberId).map(row => row.messageId).filter(id => typeof id === "string" && id);
-    const rows = store.db.prepare(
-      `SELECT e.sequence FROM mention_states m
+    const stmt = store.db.prepare(
+      `SELECT e.sequence, e.id AS eventId, e.body, m.state AS state, m.timeout_at AS timeoutAt,
+              o.acknowledged_at AS acknowledgedAt, o.late_acknowledged_at AS lateAcknowledgedAt
+       FROM mention_states m
        JOIN events e ON e.room_id=m.room_id AND e.id=m.message_event_id
        LEFT JOIN mention_observations o ON o.room_id=m.room_id AND o.message_event_id=m.message_event_id
          AND o.mentioned_member_id=m.mentioned_member_id
        WHERE m.room_id=? AND m.mentioned_member_id=? AND e.sequence>? AND e.sequence<=?
          AND m.state IN ('delivered','acknowledged','timed_out')
-         AND json_extract(e.body,'$.type')='message.posted'
-         AND (COALESCE(json_extract(e.body,'$.data.toMemberId'),'')=''
-           OR json_extract(e.body,'$.data.toMemberId')=? OR json_extract(e.body,'$.actorId')=?)
-         AND COALESCE(json_extract(e.body,'$.data.messageId'), e.id) NOT IN (SELECT value FROM json_each(?))
-         AND NOT (m.state='timed_out' AND COALESCE(json_extract(e.body,'$.data.messageId'), e.id) IN (SELECT value FROM json_each(?)))
-         AND NOT (m.state='timed_out' AND (o.late_acknowledged_at IS NOT NULL
-           OR (o.acknowledged_at IS NOT NULL AND o.acknowledged_at > m.timeout_at)))
-       ORDER BY e.sequence LIMIT ?`
-    ).all(roomId, memberId, after, through, memberId, memberId,
-      JSON.stringify(deletedIds), JSON.stringify(answeredIds), MENTION_WINDOW + 1);
-    return rows.length > MENTION_WINDOW ? rows[MENTION_WINDOW - 1].sequence : through;
+       ORDER BY e.sequence ASC LIMIT ?`
+    );
+    let currentById = null;
+    const records = () => {
+      if (!currentById) {
+        try { currentById = messageRepository(store, roomId); }
+        catch (error) {
+          if (error?.code !== "room_not_found") throw error;
+          currentById = { get: () => undefined, hasReply: () => false };
+        }
+      }
+      return currentById;
+    };
+    const eligible = row => {
+      let logged = null;
+      try { logged = JSON.parse(row.body); } catch { logged = null; }
+      if (logged?.type !== "message.posted") return false;
+      const toMemberId = logged.data?.toMemberId;
+      if (toMemberId && toMemberId !== memberId && logged.actorId !== memberId) return false;
+      const messageId = logged.data?.messageId ?? row.eventId;
+      if (records().get(messageId)?.deletedAt) return false;
+      if (row.state === "timed_out") {
+        if (records().hasReply(memberId, messageId)) return false;
+        if (row.lateAcknowledgedAt != null) return false;
+        if (row.acknowledgedAt != null && row.timeoutAt != null && row.acknowledgedAt > row.timeoutAt) return false;
+      }
+      return true;
+    };
+    let cursor = after;
+    let eligibleCount = 0;
+    let windowEnd = null;
+    while (true) {
+      if (scan.scannedRows >= MENTION_SCAN_ROW_BUDGET) {
+        scan.exhausted = cursor < through;
+        scan.horizon = scan.exhausted ? cursor : through;
+        return scan;
+      }
+      const want = Math.min(MENTION_SCAN_BATCH, MENTION_SCAN_ROW_BUDGET - scan.scannedRows);
+      const batch = stmt.all(roomId, memberId, cursor, through, want);
+      if (!batch.length) { scan.horizon = through; return scan; }
+      let decided = false;
+      for (const row of batch) {
+        cursor = row.sequence;
+        scan.scannedRows += 1;
+        if (!eligible(row)) continue;
+        eligibleCount += 1;
+        if (eligibleCount === MENTION_WINDOW) windowEnd = row.sequence;
+        if (eligibleCount > MENTION_WINDOW) { scan.horizon = windowEnd; decided = true; break; }
+      }
+      if (decided) return scan;
+      if (batch.length < want) { scan.horizon = through; return scan; }
+    }
   } catch (error) {
-    if (/no such table/i.test(error?.message ?? "")) return through;
+    if (/no such table/i.test(error?.message ?? "")) return scan;
     throw error;
   }
 }
@@ -493,11 +601,15 @@ export function roomAttention(store, roomId, memberId, identityId, after) {
   const state = store.room(roomId).state;
   const floor = store.historyFloor(roomId, memberId, authority.sequence);
   const messageAfter = Math.max(after, floor ? floor.sequence - 1 : 0);
-  let through = mentionHorizon(store, roomId, memberId, messageAfter, sessionWatermark(after, authority.sequence));
+  let through = mentionHorizon(store, roomId, memberId, messageAfter, sessionWatermark(after, authority.sequence)).horizon;
+  // A budget-exhausted reply scan clamps the window to scanned ground,
+  // the same rule the per-kind overflow clamp below applies.
+  const replyScan = repliesOf(store, roomId, memberId, messageAfter, through, state);
+  if (replyScan.exhausted) through = Math.min(through, replyScan.scannedThrough);
   const pendingBonds = identityId ? store.bonds.pendingProposalsFor(identityId) : [];
   const kinds = [
     mentionsOf(store, roomId, memberId, messageAfter, through),
-    repliesOf(store, roomId, memberId, messageAfter, state),
+    replyScan.items,
     roomDmsOf(store, roomId, memberId, messageAfter, state),
     peerDmsOf(store, roomId, identityId, after),
     bondRequestsOf(store, roomId, pendingBonds, after),
@@ -833,6 +945,12 @@ export function collectNeedsMe(store, secret, { since, roomId: scopedRoom = null
   const actionsNeeded = [];
   let roomAfter = parsed.roomAfter ?? "";
   let hasMore = scopedRoom === null && links.length > MAX_ROOMS;
+  // Bounded-scan report for this read (W2-F9-CURE): rows examined by the
+  // reply and mention-horizon scans across the rooms this page walked,
+  // and whether any scan stopped at its row budget before its range end.
+  // An exhausted read never looks complete: it carries hasMore=true with
+  // a cursor at scanned ground, and scan.exhausted says why.
+  const scan = { scannedRows: 0, exhausted: false };
   for (const link of links.slice(0, MAX_ROOMS)) {
     if (allowedRooms && !allowedRooms.includes(link.roomId)) { roomAfter = link.roomId; continue; }
     if (link.archivedAt) { roomAfter = link.roomId; continue; }
@@ -863,13 +981,24 @@ export function collectNeedsMe(store, secret, { since, roomId: scopedRoom = null
     const pendingAfter = parsed.provided ? after : 0;
     const pendingMessageAfter = Math.max(pendingAfter, floor ? floor.sequence - 1 : 0);
     const landAfter = landWatermark(parsed, link.roomId);
-    let through = mentionHorizon(store, link.roomId, link.memberId, messageAfter, sessionWatermark(after, authority.sequence));
+    const horizonScan = mentionHorizon(store, link.roomId, link.memberId, messageAfter, sessionWatermark(after, authority.sequence));
+    scan.scannedRows += horizonScan.scannedRows;
+    scan.exhausted = scan.exhausted || horizonScan.exhausted;
+    let through = horizonScan.horizon;
     let candidates = [];
     if (authority.sequence > after) {
       const state = store.room(link.roomId).state;
+      const replyScan = repliesOf(store, link.roomId, link.memberId, messageAfter, through, state);
+      scan.scannedRows += replyScan.scannedRows;
+      scan.exhausted = scan.exhausted || replyScan.exhausted;
+      // Budget exhaustion clamps the window to scanned ground (see
+      // repliesOf): every kind is then windowed to examined sequences,
+      // `pending` below keeps hasMore true, and the reported cursor
+      // cannot advance past the unscanned remainder.
+      if (replyScan.exhausted) through = Math.min(through, replyScan.scannedThrough);
       const kinds = [
         mentionsOf(store, link.roomId, link.memberId, messageAfter, through),
-        repliesOf(store, link.roomId, link.memberId, messageAfter, state),
+        replyScan.items,
         roomDmsOf(store, link.roomId, link.memberId, messageAfter, state),
         peerDmsOf(store, link.roomId, identity.identityId, after),
         bondRequestsOf(store, link.roomId, pendingBonds, pendingAfter),
@@ -930,5 +1059,6 @@ export function collectNeedsMe(store, secret, { since, roomId: scopedRoom = null
     const held = new Set(pausedRooms.map(p => p.roomId));
     for (let i = 0; i < items.length; i++) if (held.has(items[i]?.roomId)) items[i] = { ...items[i], paused: true };
   }
-  return stampNeedsMe({ identityId: identity.identityId, items, ...(pausedRooms.length ? { paused: pausedRooms } : {}), ...(openWork.length ? { openWork } : {}), ...(reviewAsks.length ? { reviewAsks } : {}), ...(myWork.length ? { myWork } : {}), ...(myClaims.length ? { myClaims } : {}), ...(actionsNeeded.length ? { actionsNeeded } : {}), cursor, hasMore });
+  return stampNeedsMe({ identityId: identity.identityId, items, ...(pausedRooms.length ? { paused: pausedRooms } : {}), ...(openWork.length ? { openWork } : {}), ...(reviewAsks.length ? { reviewAsks } : {}), ...(myWork.length ? { myWork } : {}), ...(myClaims.length ? { myClaims } : {}), ...(actionsNeeded.length ? { actionsNeeded } : {}), cursor, hasMore,
+    scan: { scannedRows: scan.scannedRows, exhausted: scan.exhausted, rowBudgets: { replies: REPLY_SCAN_ROW_BUDGET, mentions: MENTION_SCAN_ROW_BUDGET }, ...(scan.exhausted ? { continuation: "pass the returned cursor back unchanged; the scan resumes at the first unscanned sequence" } : {}) } });
 }

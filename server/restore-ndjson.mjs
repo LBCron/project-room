@@ -240,7 +240,7 @@ export function continueRestoreCoverage(store,input){
    // Intentionally still the existing full census. Do not describe this phase
    // as bounded until its replay/SQLite/subsystem/report scans are resumable.
    const recovery=auditRecovery(store),invitations=store.verifyInvitationAudit();validateCoverageState(db,state);verifyCurrentRoomSchema(db);
-   const result={ok:true,verified:true,pending:false,resumed:true,contentVerification:'full',events:state.seal.events,tables:state.seal.tables.length,backedUpAt:state.seal.backedUpAt,recovery,audit:{ok:true},...invitations};
+   const result={ok:true,verified:true,pending:false,reportVersion:recovery.contractVersion,resumed:true,contentVerification:'full',events:state.seal.events,tables:state.seal.tables.length,backedUpAt:state.seal.backedUpAt,recovery,audit:{ok:true},...invitations};
    removeRestoreFreeze(db,state.seal.inventory);completeRestore(db,{...input,result});invalidateCurrentRoomSchema(db);return result;
   }
   const p={...state.progress,bag:{...state.progress.bag}};let rows=0,bytes=0;

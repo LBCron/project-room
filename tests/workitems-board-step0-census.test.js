@@ -34,8 +34,9 @@ import { makeTestSigner } from "../scripts/helpers/signed-evidence.mjs";
 // work_entities rows/bytes for conversion admission; no board-sync change.
 // Amended 2026-11-01: canonical plain-post admission inspects inline work
 // metadata for resumable sessions and declines canonical work references.
+// Historical-session operator reconciliation adds two explicit read/replay sites.
 const WORKITEMS_REFERENCE_SITES = [
-  "server/agent-fleet.mjs", "server/agent-orientation.mjs", "server/available-work.mjs", "server/claim-scopes.mjs", "server/content-trust.mjs", "server/inbox.mjs", "server/mcp-events-runtime.mjs", "server/mcp-room-profile.mjs", "server/message-authority.mjs", "server/message-redaction.mjs", "server/messages-store.mjs", "server/needs-me.mjs", "server/notifications.mjs", "server/operator-message-authority.mjs", "server/opportunities.mjs", "server/orient.mjs", "server/owner-attention.mjs", "server/owner-overview.mjs", "server/project-offers.mjs", "server/public-read-model.mjs", "server/public-work-reviews.mjs", "server/purge-registry.mjs", "server/receipt-cards.mjs", "server/recovery.mjs", "server/reminders.mjs", "server/reply-requests.mjs", "server/return-brief.mjs", "server/room-activation-pack.mjs", "server/room-context.mjs", "server/snapshot-window.mjs", "server/spend-allowance.mjs", "server/store.mjs", "server/text-results.mjs", "server/updates.mjs", "server/usage-summary.mjs", "server/work-context.mjs", "server/work-discussion.mjs", "server/work-help.mjs", "server/work-item-board.mjs", "server/work-repository.mjs", "server/work-wakes.mjs", "server/write-integrity.mjs", "server/writer-fence.mjs",
+  "server/agent-fleet.mjs", "server/agent-orientation.mjs", "server/available-work.mjs", "server/claim-scopes.mjs", "server/content-trust.mjs", "server/inbox.mjs", "server/legacy-session-replay.mjs", "server/mcp-events-runtime.mjs", "server/mcp-room-profile.mjs", "server/message-authority.mjs", "server/message-redaction.mjs", "server/messages-store.mjs", "server/needs-me.mjs", "server/notifications.mjs", "server/operator-legacy-session-repair.mjs", "server/operator-message-authority.mjs", "server/opportunities.mjs", "server/orient.mjs", "server/owner-attention.mjs", "server/owner-overview.mjs", "server/project-offers.mjs", "server/public-read-model.mjs", "server/public-work-reviews.mjs", "server/purge-registry.mjs", "server/receipt-cards.mjs", "server/recovery.mjs", "server/reminders.mjs", "server/reply-requests.mjs", "server/return-brief.mjs", "server/room-activation-pack.mjs", "server/room-context.mjs", "server/snapshot-window.mjs", "server/spend-allowance.mjs", "server/store.mjs", "server/text-results.mjs", "server/updates.mjs", "server/usage-summary.mjs", "server/work-context.mjs", "server/work-discussion.mjs", "server/work-help.mjs", "server/work-item-board.mjs", "server/work-repository.mjs", "server/work-wakes.mjs", "server/write-integrity.mjs", "server/writer-fence.mjs",
   "src/app.js", "src/board-ui.js", "src/board.js", "src/conversation.js", "src/events.js", "src/growth-emit.js", "src/help-offers.js", "src/human-experience.js", "src/message-reducers.js", "src/portable-work.js", "src/reminders.js", "src/reply-requests.js", "src/result-reader.js", "src/room-layout.js", "src/room-templates.js", "src/work-help.js", "src/work-item-session.js", "src/work-packet.js", "src/work-reducers.js", "src/work-selectors.js", "src/workflow.js",
 ];
 
@@ -55,7 +56,7 @@ function referenceSites() {
   return found.sort();
 }
 
-test("step0 census: workItems reference-site inventory is pinned (64 files)", () => {
+test("step0 census: workItems reference-site inventory is pinned (66 files)", () => {
   assert.deepEqual(referenceSites(), WORKITEMS_REFERENCE_SITES);
 });
 

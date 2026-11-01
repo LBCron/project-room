@@ -249,13 +249,23 @@ export function createOAuthProvider({ clients, codes, accessTokens, refreshToken
     const a = Buffer.from(expected);
     const b = Buffer.from(record.codeChallenge);
     check(a.length === b.length && timingSafeEqual(a, b), "PKCE verification failed");
-    // Bind the minted family to the code record BEFORE issuing, so the
-    // linkage survives even if the issuer throws after this point.
+    // Issue the token pair BEFORE consuming the code — the same ordering
+    // refresh() was given for exactly this failure (#2944). issueTokenPair
+    // can still throw (validateScopes, or normalizeSessionMeta for a
+    // non-object session); burning the code first persisted immediately
+    // on the SQLite store (and by reference on Map stores), stranding
+    // the grant — the legitimate retry then took the code-reuse path
+    // above and read as theft against a family that never issued a
+    // token. Issuing first is safe: those throws happen before
+    // issueTokenPair writes any new record, and this function is
+    // synchronous, so nothing can observe the still-unused code
+    // alongside live tokens in between. The family linkage is recorded
+    // on success, before the tokens can be presented anywhere.
     const familyId = `oarf_${newSecret(16)}`;
+    const tokens = issueTokenPair({ clientId: record.clientId, userId: record.userId, scopes: [...record.scopes], familyId, session, binding: record.binding });
     record.familyId = familyId;
     record.used = true;
-
-    return issueTokenPair({ clientId: record.clientId, userId: record.userId, scopes: [...record.scopes], familyId, session, binding: record.binding });
+    return tokens;
   };
 
   // Session metadata attached at issuance (F-02): the IP and User-Agent

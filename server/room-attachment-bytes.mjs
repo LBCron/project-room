@@ -251,9 +251,28 @@ export class RoomAttachmentBytes {
       this.expire(roomId, now);
       const row = this.db.prepare("SELECT * FROM room_attachments WHERE room_id=? AND id=?").get(roomId, id);
       if (!row) fail(404, "attachment_not_found", "Attachment not found");
-      if (row.state !== "staged") fail(410, "attachment_unavailable", "Only a staged room file can be discarded");
       const ownerId = this.store.room(roomId).state.room.ownerId;
-      if (row.uploader_id !== auth.member.id && ownerId !== auth.member.id) {
+      const permitted = row.uploader_id === auth.member.id || ownerId === auth.member.id;
+      // Committed files never expire, so without a delete path a room whose
+      // byte quota fills with committed files can never upload again. The
+      // uploader or the room owner deletes a committed file: bytes are
+      // dropped and the row moves to the existing terminal 'deleted' state,
+      // which no quota counts. Visibility is checked first so the id does
+      // not leak a DM file's existence.
+      if (row.state === "deleted") {
+        if (!permitted) fail(404, "attachment_not_found", "Attachment not found");
+        return { status: "deleted", duplicate: true, roomId, id };
+      }
+      if (row.state === "committed") {
+        if (!this.visibleTo(row, this.messageIndex(roomId), auth.member.id)) fail(404, "attachment_not_found", "Attachment not found");
+        if (!permitted) fail(403, "attachment_forbidden", "Only the uploader or the room owner can delete this file");
+        const removed = this.db.prepare(`UPDATE room_attachments SET state='deleted', bytes=NULL
+          WHERE room_id=? AND id=? AND state='committed'`).run(roomId, id).changes;
+        if (removed !== 1) fail(409, "attachment_conflict", "That attachment changed before it could be deleted");
+        return { status: "deleted", duplicate: false, roomId, id };
+      }
+      if (row.state !== "staged") fail(410, "attachment_unavailable", "Only a staged or committed room file can be discarded");
+      if (!permitted) {
         fail(403, "attachment_forbidden", "Only the uploader or the room owner can discard this file");
       }
       const changed = this.db.prepare(`UPDATE room_attachments SET state='discarded', bytes=NULL

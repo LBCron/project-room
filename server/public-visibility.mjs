@@ -177,35 +177,43 @@ export function receiptVisibilitySql({ ownerToggle = true, taskRoomLeg = true, r
   return legs.join(" AND ");
 }
 
+// Whether a table exists in this store at all, read structurally
+// from the schema. The degrade decisions below key on genuine
+// ABSENCE, never on error text: a present table with a renamed or
+// unreadable column is not absent, and pattern-matching an error
+// message cannot tell the two apart — a renamed column produces
+// the same "no such column" as a predating schema (Codex review,
+// seq 25136).
+function tableExists(db, name) {
+  return Boolean(db.prepare("SELECT 1 FROM sqlite_master WHERE type='table' AND name=?").get(name));
+}
+
 // Whether the public-work tables the task leg reads can be read here.
 export function publicWorkTablesReadable(db) {
-  try {
-    db.prepare("SELECT receipt_id, offer_id FROM public_work_receipts LIMIT 0").all();
-    db.prepare("SELECT offer_id, room_id FROM public_work_tasks LIMIT 0").all();
-    return true;
-  } catch (error) {
-    if (!/no such (column|table)/i.test(error?.message ?? "")) throw error;
-    return false;
-  }
+  if (!tableExists(db, "public_work_receipts") || !tableExists(db, "public_work_tasks")) return false;
+  // Both tables exist: a further read failure (a renamed column on
+  // a populated table) is present-but-unreadable, not absence — let
+  // it propagate, so the composed reads fail closed instead of
+  // degrading the task-room attribution to the origin room.
+  db.prepare("SELECT receipt_id, offer_id FROM public_work_receipts LIMIT 0").all();
+  db.prepare("SELECT offer_id, room_id FROM public_work_tasks LIMIT 0").all();
+  return true;
 }
 
 // Whether the recorded setting's read-model copy can be read here at
 // all: a store predating room_public_receipts_setting carries no
 // recorded setting the public read may consult, so the opt-out leg
-// cannot apply there. Only a missing TABLE is that legacy case: a
-// store whose table exists but whose enabled column cannot be read
-// may hold recorded opt-outs behind the column, so the error
-// propagates and the composed reads throw rather than serve with
-// the leg silently omitted (the JS twin's rule in
-// mirroredReceiptsSetting; Codex review, seq 25107/25108).
+// cannot apply there. Only a genuinely absent TABLE is that legacy
+// case (checked structurally, per tableExists): a store whose table
+// exists but whose enabled column cannot be read may hold recorded
+// opt-outs behind the column, so the error propagates and the
+// composed reads throw rather than serve with the leg silently
+// omitted (the JS twin's rule in mirroredReceiptsSetting; Codex
+// review, seq 25107/25108).
 export function recordedSettingReadable(db) {
-  try {
-    db.prepare("SELECT room_id, enabled FROM room_public_receipts_setting LIMIT 0").all();
-    return true;
-  } catch (error) {
-    if (!/no such table/i.test(error?.message ?? "")) throw error;
-    return false;
-  }
+  if (!tableExists(db, "room_public_receipts_setting")) return false;
+  db.prepare("SELECT room_id, enabled FROM room_public_receipts_setting LIMIT 0").all();
+  return true;
 }
 
 // The composed predicate for a concrete store, with both schema probes
@@ -285,14 +293,18 @@ export function hiddenReceiptIds(db, receiptIds) {
         LEFT JOIN public_work_tasks pwt ON pwt.offer_id = pwr.offer_id
         WHERE pr.id IN (SELECT value FROM json_each(?))`).all(idList);
     } catch (error) {
-      // Only schema absence degrades (the predating store above, whose
-      // absent tables mean no task record can exist). Any other
-      // failure — an I/O error reading live tables — is not absence:
-      // rethrow, and the outer catch hides everything asked about
-      // rather than re-attributing a public-work receipt to its
-      // stored namespace/origin room, the deciding room the opt-out
-      // leg's attribution rule removed (Codex review, seq 25107/25108).
-      if (!/no such (column|table)/i.test(error?.message ?? "")) throw error;
+      // Only genuine ABSENCE degrades (the predating store above,
+      // whose missing tables mean no task record can exist), and
+      // absence is checked structurally in the schema — never from
+      // the error text: a present table with a renamed column
+      // produces the same "no such column" as a predating schema,
+      // and an I/O error reading live tables is not absence either.
+      // Anything else rethrows, and the outer catch hides everything
+      // asked about rather than re-attributing a public-work receipt
+      // to its stored namespace/origin room, the deciding room the
+      // opt-out leg's attribution rule removed (Codex review,
+      // seq 25107/25108 and seq 25136).
+      if (tableExists(db, "public_work_receipts") && tableExists(db, "public_work_tasks")) throw error;
       taskLegAvailable = false;
       rows = db.prepare(`SELECT id, room_id AS roomId, origin_room_id AS origin, NULL AS taskRoom, NULL AS pwrId
         FROM public_receipts WHERE id IN (SELECT value FROM json_each(?))`).all(idList);
@@ -440,13 +452,14 @@ function mirroredReceiptsSetting(db, roomId) {
   try {
     row = db.prepare("SELECT enabled FROM room_public_receipts_setting WHERE room_id=?").get(roomId);
   } catch (error) {
-    // Only a missing TABLE is the legacy null above: no recorded
-    // setting can exist in a store that predates the mirror. A
-    // missing or unreadable COLUMN on a present table is not
-    // absence — recorded rows may sit behind that column — so it
-    // propagates like any other read error and the verdict
-    // composers fail closed (Codex review, seq 25107/25108).
-    if (/no such table/i.test(error?.message ?? "")) return null;
+    // Only a genuinely absent TABLE is the legacy null above: no
+    // recorded setting can exist in a store that predates the
+    // mirror. Absence is checked structurally (tableExists), not by
+    // error text — a missing or unreadable COLUMN on a present
+    // table is not absence (recorded rows may sit behind that
+    // column) and propagates like any other read error, so the
+    // verdict composers fail closed (Codex review, seq 25107/25108).
+    if (!tableExists(db, "room_public_receipts_setting")) return null;
     throw error;
   }
   if (!row) return null;

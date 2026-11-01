@@ -300,28 +300,47 @@ test("round-2 read-error, task-join: a SQLITE_IOERR on the join never re-attribu
   assert.deepEqual([...hiddenReceiptIds(failing, [PWR])], [PWR]);
 });
 
-test("round-2 degrade preserved: a predating store (join tables absent) still degrades to room attribution", () => {
-  const db = makeDbNamespaced();
-  const absent = joinReadFails(db, () => new Error("no such table: public_work_tasks"));
-  // Schema absence means no task record can be resolved: the receipt
-  // degrades to its stored room, which recorded nothing — the SQL
-  // origin twin's semantics, unchanged by the round-2 cure.
-  assert.equal(receiptVisible(absent, PWR), true);
-  // And a genuinely table-less store still hides an opted-out room's
-  // own receipt through the room_id attribution.
+test("round-2 degrade preserved: a genuinely table-less store still degrades to room attribution", () => {
+  // No publicWorkClaimsSchema: the public-work tables do not exist at
+  // all — the only legitimate degrade. (Round 2 simulated absence by
+  // injecting a "no such table" ERROR while the tables existed; the
+  // round-3 structural rule keys on the store itself, so that
+  // simulation is no longer a degrade — it is the defect's shape.)
   const legacy = new DatabaseSync(":memory:");
   legacy.exec(PUBLIC_READ_MODEL_SCHEMA);
   legacy.exec(publicUnpublishSchema);
   legacy.exec(roomDirectorySchema);
-  // No publicWorkClaimsSchema: the public-work tables do not exist.
-  setRecorded(legacy, false);
-  legacy.prepare(`INSERT INTO public_receipts
+  setRecorded(legacy, false); // ROOM opted out
+  const ins = (id, source, room) => legacy.prepare(`INSERT INTO public_receipts
     (id, title, source, origin_room_id, room_id, room_title, agents_json, humans_json,
      pull_request, merged_at, verification_state, hashes_json, at, start_href)
     VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?)`)
-    .run(WCR, "Settled work", "work-claim", ROOM, ROOM, "Room A", "[]", "[]", null, null, null, "[]",
+    .run(id, "Settled work", source, room, room, "Room", "[]", "[]", null, null, null, "[]",
       "2026-10-01T00:00:00.000Z", "https://room.trydemigod.com/?start=room");
+  ins(WCR, "work-claim", ROOM);
+  ins(PWR, "public-work", "ns-room");
+  // The opted-out room's own receipt hides through room attribution;
+  // the namespace-stored receipt serves (no task record can exist,
+  // so nothing attributes it to ROOM) — degrade is not hide-all.
   assert.equal(receiptVisible(legacy, WCR), false);
+  assert.equal(receiptVisible(legacy, PWR), true);
+});
+
+// Round 3 (Codex review, seq 25136): the round-2 join degrade keyed
+// on error TEXT, so a populated public_work_tasks table with its
+// room_id column renamed still produced a "no such column" error and
+// degraded — the receipt fell back to namespace attribution and
+// served. A present-but-unreadable attribution source is not
+// absence: the degrade now keys on the table's existence in the
+// schema (sqlite_master), and the renamed column resolves PRIVATE
+// on the JS surfaces and throws on the SQL surfaces.
+test("round-3 read-error, renamed column: a populated task table with room_id renamed resolves private", () => {
+  const db = makeDbNamespaced(); // task room ROOM opted out; receipt stored under ns-room
+  db.exec("ALTER TABLE public_work_tasks RENAME COLUMN room_id TO room_id_legacy");
+  assert.equal(receiptVisible(db, PWR), false);
+  assert.deepEqual([...hiddenReceiptIds(db, [PWR])], [PWR]);
+  assert.throws(() => queryPublicReceipts({ db }, { limit: 10 }), /no such column/);
+  assert.throws(() => publicReceiptById({ db }, PWR), /no such column/);
 });
 
 test("adversarial read-error over HTTP: the anonymous door stays shut when the setting read fails", async t => {

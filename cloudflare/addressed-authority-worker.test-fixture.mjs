@@ -23,10 +23,11 @@ export class AddressedAuthorityRoom extends DurableObject{
   try{
    if(url.pathname==='/seed'){
     const count=Number(url.searchParams.get('count'));if(![2,100].includes(count))throw Error('invalid count');
-    const events=initialRoom();for(let i=1;i<count;i++){
+    const events=initialRoom();if(url.searchParams.has('maxmeta')){events[0].data.title='界'.repeat(4096);events[0].data.purpose='界'.repeat(4096);}for(let i=1;i<count;i++){
      const memberId='member-'+String(i).padStart(3,'0');events.push(event({roomId:'commons',actorId:'owner',type:'member.added',data:{memberId,displayName:memberId,kind:'agent',permissions:[]}}));
      if(i!==1)events.push(event({roomId:'commons',actorId:memberId,type:'capabilities.advertised',data:{capabilities:Array.from({length:30},(_,j)=>String(j).padStart(2,'0')+'x'.repeat(78))}}));
     }
+    if(url.searchParams.has('maxmeta'))events.push(event({roomId:'commons',actorId:'owner',type:'room.charter_updated',data:{expectedRevision:0,purpose:'界'.repeat(1000),outputs:'界'.repeat(1000),boundaries:'界'.repeat(1000),escalation:'界'.repeat(1000)}}));
     events.push(event({roomId:'commons',actorId:'owner',type:'work.proposed',data:{workItemId:'selected-work',title:'Useful selected task',definitionOfDone:'Save exact useful result',accountableMemberId:'member-001'}}));
     this.store.initialize(events,{representation:'normalized-current-v1'});await this.ctx.storage.put('key',this.store.issueAccessKey('commons','member-001'));return Response.json({count});
    }
@@ -36,4 +37,4 @@ export class AddressedAuthorityRoom extends DurableObject{
   }catch(error){return Response.json({error:{code:error.code,message:error.message,stack:error.stack},cost:cost()},{status:500});}
  }
 }
-export default{fetch(request,env){const name=new URL(request.url).searchParams.get('surface')??'small';if(!['small','large'].includes(name))return new Response('invalid surface',{status:400});return env.ROOM.getByName(name).fetch(request);}};
+export default{fetch(request,env){const name=new URL(request.url).searchParams.get('surface')??'small';if(!['small','large','maxmeta'].includes(name))return new Response('invalid surface',{status:400});return env.ROOM.getByName(name).fetch(request);}};

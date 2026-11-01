@@ -6043,6 +6043,16 @@ this.slaBreachAlerts = new SlaBreachAlertJournal(this); // Task 26: durable in-a
       try { state = compact(replayEvents(emptyRoomState(), events)); }
       catch (error) { fail(422, "invalid_import", `Export does not replay: ${error.message}`); }
       if (new Set(events.map(e => e.id)).size !== events.length) fail(422, "invalid_import", "Import has duplicate event ids");
+      // RES-0126 (L05-C2): an import is a room write, so the replayed end
+      // state must satisfy the same pilot caps command() enforces — the
+      // events/member/work counts here, and the projection byte cap on
+      // the final stored projection below, with the same 409 pilot_limit
+      // shapes. A refusal throws inside this transaction, so no data
+      // changes. There is no cleanup exemption here: an import replaces
+      // the whole history rather than ending individual items, and
+      // larger restores go through database backup (see the HTTP import
+      // route), not this path.
+      if (events.length > PILOT_LIMITS.eventsPerRoom || activeMemberCount(state.members) > PILOT_LIMITS.membersPerRoom || Object.keys(state.workItems ?? {}).length > PILOT_LIMITS.workItemsPerRoom) fail(409, "pilot_limit", "Bounded pilot capacity reached; no data was changed");
       // Dependent rows reference event ids/sequences; a history replacement
       // drops them. Pending invitations are lost on restore (documented).
       this.db.prepare("DELETE FROM commands WHERE room_id=?").run(roomId);
@@ -6080,6 +6090,10 @@ this.slaBreachAlerts = new SlaBreachAlertJournal(this); // Task 26: durable in-a
         state.messageAuthority = { version: 1, count: state.messages.length };
       }
       const projection = withVerifiedRoomReconstruction(this.db,roomId,()=>this.storedProjection(roomId,state));
+      // RES-0126 (L05-C2): the projection byte cap, measured on the exact
+      // stored projection like command() and appendSideTableEvent() do.
+      // Throwing here rolls back the whole import transaction above.
+      if (Buffer.byteLength(projection) > PILOT_LIMITS.projectionBytes) fail(409, "pilot_limit", "Room projection limit reached; no data was changed. Ask the room owner to have older messages archived to free space.");
       this.db.prepare("UPDATE rooms SET sequence=?,projection=?,archived_at=? WHERE id=?").run(events.length, projection, archivedAtOf(state), roomId);
       // L05-C1: the imported projection is rebuilt from the replayed log
       // above, so it is verified against its history by construction.

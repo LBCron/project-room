@@ -59,6 +59,15 @@ for (const [repairCheck, damage] of cases) test(`fixed diagnostic ${repairCheck}
   });
   assert.deepEqual(snapshot(f.s.db), before);
 });
+for (let index = 0; index < cases.length - 1; index++) test(`refusal precedence ${cases[index][0]} before ${cases[index + 1][0]}`, t => {
+  const f = fixture(t);
+  // Apply the later fault first: an earlier fault remains the first predicate
+  // even when another independent guard would also reject the same fixture.
+  cases[index + 1][1](f); cases[index][1](f);
+  const before = snapshot(f.s.db);
+  assert.throws(() => repairLegacyMessages(f.s, f.request), error => error.detail?.repairCheck === cases[index][0]);
+  assert.deepEqual(snapshot(f.s.db), before);
+});
 test('first refusal retains short circuit and never reaches serving payload scans', t => {
   const f = fixture(t); f.s.db.prepare('UPDATE integrity_room_state SET metadata_hash=NULL,projection_hash=NULL WHERE room_id=?').run(roomId);
   const prepare = f.s.db.prepare.bind(f.s.db); let scans = 0;

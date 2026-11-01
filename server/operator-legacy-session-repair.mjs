@@ -14,6 +14,12 @@ const hash = x => createHash('sha256').update(typeof x === 'string' ? x : JSON.s
 const fail = (code, status = 409) => {
   throw new ServiceError(status, code, 'Historical session repair refused; inspect fresh plan and independent serving proofs');
 };
+// Only fixed, code-owned operator diagnostics; no persisted values or errors.
+const projectionUnavailable = repairCheck => {
+  const error = new ServiceError(409, 'repair_projection_unavailable', 'Historical session repair refused; inspect fresh plan and independent serving proofs');
+  error.detail = { repairCheck };
+  throw error;
+};
 const parse = text => {
   try {
     return JSON.parse(text);
@@ -129,15 +135,19 @@ function inventory(store, input, target) {
   || typeof raw.workItems !== 'object' || Array.isArray(raw.workItems)) fail('repair_not_exact_legacy');
   if (raw.messages.length > LIMIT || Object.keys(raw.workItems).length > LIMIT) fail('repair_bound_exceeded');
   if (Object.hasOwn(raw, 'messagesArchive') || Object.hasOwn(raw, 'messageAuthority')) fail('repair_not_exact_legacy');
-  if (!proof?.metadata_hash || !proof.projection_hash || proof.sequence !== room.sequence
-  || proof.metadata_hash !== projectionDigest(room.projection) || proof.projection_hash !== projectionContentHash(db, roomId, room.sequence, room.projection)) fail('repair_projection_unavailable');
-  if (servingProofDrift(db, roomId, room.projection) || data.messages.some(row => !messageProofMatches(row))) fail('repair_projection_unavailable');
+  if (!proof?.metadata_hash) projectionUnavailable('metadata_proof_missing');
+  if (!proof.projection_hash) projectionUnavailable('content_proof_missing');
+  if (proof.sequence !== room.sequence) projectionUnavailable('proof_head_mismatch');
+  if (proof.metadata_hash !== projectionDigest(room.projection)) projectionUnavailable('metadata_hash_mismatch');
+  if (proof.projection_hash !== projectionContentHash(db, roomId, room.sequence, room.projection)) projectionUnavailable('content_hash_mismatch');
+  if (servingProofDrift(db, roomId, room.projection)) projectionUnavailable('serving_proof_drift');
+  if (data.messages.some(row => !messageProofMatches(row))) projectionUnavailable('message_proof_mismatch');
   for (const row of data.projection_bodies) if (typeof row.body !== 'string'
-  || hash(row.body) !== row.sha) fail('repair_projection_unavailable');
+  || hash(row.body) !== row.sha) projectionUnavailable('projection_body_proof_mismatch');
   const messageRows = new Map(data.messages.map(row => [row.message_id, row]));
   for (const ref of raw.messages) if (ref?._entity === 1 && (typeof ref.id !== 'string'
   || !messageRows.has(ref.id) || Object.keys(ref).some(key => key !== 'id'
-  && key !== '_entity'))) fail('repair_projection_unavailable');
+  && key !== '_entity'))) projectionUnavailable('message_reference_invalid');
   for (const row of data.messages) {
     object(row.record_json);
     if (row.reducer_extras_json !== null) object(row.reducer_extras_json);
@@ -146,16 +156,16 @@ function inventory(store, input, target) {
   // Strict complete work membership: referenced bodies are independently
   // anchored by the metadata proof; stale or missing side rows never heal.
   const references = Object.entries(raw.workItems ?? { }).filter(([, x]) => x?._workEntity === 1);
-  if (references.length !== data.work_entities.length) fail('repair_projection_unavailable');
+  if (references.length !== data.work_entities.length) projectionUnavailable('work_membership_mismatch');
   for (const [id, ref] of references) {
     const row = data.work_entities.find(x => x.work_id === id);
     if (!row || ref.id !== id || row.digest !== ref.digest || row.revision !== ref.revision
-    || hash(row.body) !== row.digest) fail('repair_projection_unavailable');
+    || hash(row.body) !== row.digest) projectionUnavailable('work_reference_proof_mismatch');
     const value = object(row.body);
-    if (value.id !== id || value.revision !== ref.revision) fail('repair_projection_unavailable');
+    if (value.id !== id || value.revision !== ref.revision) projectionUnavailable('work_body_identity_mismatch');
   }
   const hydrated = hydrateProjection(db, roomId, raw, { verifyBodyHashes: true });
-  if (hydrated.missing.length) fail('repair_projection_unavailable');
+  if (hydrated.missing.length) projectionUnavailable('hydration_body_missing');
   const events = data.events;
   if (events.length !== room.sequence || events.some((r, i) => r.sequence !== i + 1)) fail('repair_not_exact_legacy');
   if (!cursor || cursor.applied_seq > room.sequence || cursor.state_seq > room.sequence

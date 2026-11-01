@@ -4,6 +4,7 @@
 import { createHash } from 'node:crypto';
 import { AsyncLocalStorage } from 'node:async_hooks';
 import { OAUTH_SCOPES } from './oauth-provider.mjs';
+import { ownMember } from '../src/events.js';
 import { PILOT_LIMITS } from './store.mjs';
 import { hasMessageAuthority } from './message-authority.mjs';
 import { assertProjectionWrite } from './write-integrity.mjs';
@@ -77,8 +78,8 @@ export function validateMcpOAuthBinding(store, userId, binding) {
     const members = canonicalOAuthBindingMembers(store, roomId, memberId);
     state = members === null ? store.room(roomId).state : { members, room: store.roomAuthority(roomId,{memberId}) };
   } catch { return null; }
-  const human = state.members?.[humanMemberId];
-  const agent = state.members?.[memberId];
+  const human = ownMember(state.members,humanMemberId);
+  const agent = ownMember(state.members,memberId);
   if (direct) {
     // Explicit account consent sponsors this existing seat, not its old API key.
     // Legacy rooms may bind the owner's account to an agent-shaped member.

@@ -388,6 +388,16 @@ test('Claude DCR, existing owned seat consent and grant survive provider restart
  assert.deepEqual(Object.keys(f.store.room('commons').state.members),before.members);assert.equal(f.store.db.prepare('SELECT count(*) n FROM agent_identities').get().n,before.identities);
  const wrong=await f.exchange({grant_type:'refresh_token',refresh_token:pair.refresh_token,client_id:registered.client_id,resource:'https://evil.example/mcp'});assert.equal(wrong.status,400);
  const otherOwner=await f.consent({agent_binding:JSON.stringify({...f.binding,humanMemberId:'stranger'})});assert.match(new URL(otherOwner.headers.get('location')).search,/access_denied/);
+
+ f.store.command(f.ownerKey,'commons',{id:'owned-task-propose',type:'work.proposed',data:{workItemId:'owned-task',title:'Deliver one scoped change',definitionOfDone:'Save one reviewed useful result',accountableMemberId:'friend-dot',mode:'write',independentVerificationRequired:false,ownerDecisionRequired:false}});
+ const action=async(name,args)=>{const r=await f.rpc('tools/call',{name,arguments:args},pair.access_token);assert.equal(r.response.status,200);assert.equal(r.body.error,undefined,JSON.stringify(r.body));assert.notEqual(r.body.result?.isError,true,JSON.stringify(r.body));return r;};
+ await action('room_accept_work',{workItemId:'owned-task'});
+ await action('room_acquire_claim',{roomId:'commons',workItemId:'owned-task',repository:'Uuriko/project-room',ref:'codex/owned-task',paths:['example.txt'],expiresAt:new Date(now+3600000).toISOString()});
+ assert.equal(f.store.room('commons').state.workItems['owned-task'].claim.holderId,'friend-dot');
+ await action('room_release_claim',{roomId:'commons',workItemId:'owned-task'});
+ assert.equal(f.store.room('commons').state.workItems['owned-task'].claim.status,'released');
+ await action('room_post_message',{body:'Useful work from the existing Claude seat'});
+ assert.equal(f.store.room('commons').state.messages.find(m=>m.body==='Useful work from the existing Claude seat').authorId,'friend-dot');
  let nextPair=pair;
  for(let round=0;round<3;round++) {
   now+=29*86400000;await f.restart();
@@ -436,4 +446,16 @@ test('owned-seat consent is fenced by owner transfer, membership removal and ide
   assert.equal((await f.rpc('tools/list')).response.status,401,change);
   assert.equal((await f.exchange({grant_type:'refresh_token',refresh_token:f.tokens.refresh_token,client_id:CLAUDE.clientId,resource})).status,400,change);
  }
+});
+
+test('in-flight consent cannot issue a code after browser account-slot logout',async t=>{
+ const f=await setup(t,{legacyOwned:true,client:CLAUDE});
+ const slotToken=f.cookie.split('=')[1],auth=f.store.authenticateAccountSession(slotToken),before=f.store.db.prepare('SELECT count(*) n FROM oauth_provider_codes').get().n;
+ const payload=JSON.stringify({decision:'allow',client_id:CLAUDE.clientId,redirect_uri:CLAUDE.redirectUris[0],scope:'rooms:read chat:read',state:'late',code_challenge:challenge,code_challenge_method:'S256',resource,agent_binding:JSON.stringify(f.binding)});
+ let entered;const authenticated=new Promise(resolve=>entered=resolve),original=f.store.authenticateAccountSession.bind(f.store);
+ f.store.authenticateAccountSession=(...args)=>{const value=original(...args);entered();return value;};
+ let req;const response=new Promise((resolve,reject)=>{req=request(f.base+'/oauth/authorize',{method:'POST',headers:{Host:'room.example',Origin:origin,Cookie:f.cookie,'X-CSRF-Token':auth.csrf,'Content-Type':'application/json','Content-Length':Buffer.byteLength(payload)}},res=>{let text='';res.on('data',chunk=>text+=chunk);res.on('end',()=>resolve({status:res.statusCode,text}));});req.on('error',reject);req.write(payload.slice(0,1));});
+ await authenticated;f.store.logoutAccountSession(slotToken,f.store.accountSessionSlot(slotToken).sessionRevision);req.end(payload.slice(1));
+ const denied=await response;assert.equal(denied.status,401,denied.text);assert.equal(f.store.db.prepare('SELECT count(*) n FROM oauth_provider_codes').get().n,before);
+ f.store.authenticateAccountSession=original;
 });

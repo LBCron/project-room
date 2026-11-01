@@ -31,7 +31,7 @@ import { memoizeBoardList } from "./available-work.mjs";
 import { walkProvenance, ClaimError } from "./work-claims.mjs";
 import { claimThread } from "./claim-thread.mjs";
 import { randomUUID } from "node:crypto";
-import { validId, ROOM_KINDS, MAX_MESSAGE_BODY_CHARS } from "../src/events.js";
+import { validId, ownMember, ROOM_KINDS, MAX_MESSAGE_BODY_CHARS } from "../src/events.js";
 import { nextWorkStep } from "../src/workflow.js";
 import { completedResults, searchWorkMatches as searchWork } from "../src/work-selectors.js";
 import { sortWorkByCuriosity, viewerHistory } from "../src/curiosity-rank.mjs";
@@ -1216,7 +1216,7 @@ export function createHostedRoomMcp(store, { agentRooms, spendCredential, oauthP
       const options = { store, provider, token, resource: oauthResource, roomId: grant?.binding?.roomId };
       const principal = grant && resolveMcpOAuthPrincipal(options);
       if (!principal) return rpcError(message, MCP_AUTH_REQUIRED, "OAuth grant no longer grants access to this agent");
-      const identity = { identityId: principal.identityId, displayName: store.roomAuthority(principal.roomId,{memberId:principal.memberId}).members[principal.memberId].displayName };
+      const identity = { identityId: principal.identityId, displayName: ownMember(store.roomAuthority(principal.roomId,{memberId:principal.memberId}).members,principal.memberId).displayName };
       return runMcpOAuthRequest(options, () => {
         if (typeof nativeHandler === "function" && typeof message?.method === "string" && message.method.startsWith("events/"))
           return nativeHandler(message, { principal, descriptor: mcpOAuthPrincipalDescriptor(principal),

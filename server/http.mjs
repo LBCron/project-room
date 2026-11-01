@@ -1836,8 +1836,17 @@ export function createRoomServer({ store, origin, assetRoot = new URL("../", imp
         const preference = mcpOAuthClients.find(client => client.clientId === validated.client.clientId)
           ?? (isClaudeClient(validated.client.clientId) ? mcpOAuthClients.find(client => client.clientId === "project-room-claude") : null);
         const agentChoices = mcpConsent ? listMcpOAuthAgents(store, auth.account.id, oauthResource, preference ?? {}) : [];
-        if (preference?.preferredMemberId) agentChoices.sort((a,b) => Number(b.binding.memberId === preference.preferredMemberId && b.binding.roomId === preference.preferredRoomId)
-          - Number(a.binding.memberId === preference.preferredMemberId && a.binding.roomId === preference.preferredRoomId));
+        if (preference?.preferredMemberId && preference.preferredRoomId) {
+          const link=store.db.prepare("SELECT member_id FROM member_accounts WHERE room_id=? AND account_id=?").get(preference.preferredRoomId,auth.account.id);
+          if(link) {
+            const authority=store.roomAuthority(preference.preferredRoomId,{memberId:preference.preferredMemberId});
+            if(authority.ownerId===link.member_id) {
+              const match=agentChoices.find(choice=>choice.binding.memberId===preference.preferredMemberId && choice.binding.roomId===preference.preferredRoomId);
+              if(!match)return json(res,409,{error:"existing_agent_connection_required",error_description:"The configured existing agent is not currently eligible; no replacement seat was created"});
+              agentChoices.splice(0,agentChoices.length,match);
+            }
+          }
+        }
         if (mcpConsent && !agentChoices.length)
           return json(res, 409, { error: "agent_connection_required", error_description: "Join the room as yourself, then create your own connected agent before authorizing it" });
         const scopeLabels = {
@@ -1949,6 +1958,11 @@ export function createRoomServer({ store, origin, assetRoot = new URL("../", imp
             return failRedirect("access_denied", "This agent is not currently connected to your account");
         } else if (data.resource !== undefined || data.agent_binding !== undefined)
           return failRedirect("invalid_target", "This client is not enabled for MCP");
+        // Body arrival is asynchronous. A browser slot can be revoked or switched
+        // while the consent body is in flight; no cached auth can issue a code.
+        const confirmed=store.authenticateAccountSession(slotToken,null,auth.sessionBinding);
+        if(confirmed.account.id!==accountId || confirmed.csrf!==auth.csrf)
+          reject(401,"account_session_required","Sign in again before confirming this connection");
         const { code } = oauthProvider.issueCode({
           binding,
           clientId: validated.client.clientId,

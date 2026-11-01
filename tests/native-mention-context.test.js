@@ -1,11 +1,35 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { nativeFixture, cloneNativeFixture, measureNative } from './helpers/native-mention-context-fixture.mjs';
+import { nativeFixture, cloneNativeFixture, measureNative, resource } from './helpers/native-mention-context-fixture.mjs';
 import { writeTalkPolicy } from '../server/agent-talk-policy.mjs';
+import { canonicalNativeMentionPolicyContext } from '../server/native-mention-context.mjs';
+import { runMcpOAuthRequest } from '../server/mcp-oauth.mjs';
 const outbox = f => f.store.db.prepare('SELECT * FROM mcp_event_outbox ORDER BY event_id').all();
 const policy = (f, value) => writeTalkPolicy(f.store.db, f.store.room('commons').state, {
   roomId: 'commons', actorId: 'owner', memberId: f.principal.memberId, policy: value
 }, f.store.now(), (...args) => { throw Error(args.join(' ')); });
+
+test('native point context returns only proved policy metadata and declines other event scopes', async t => {
+  const f = await nativeFixture(t); f.post();
+  const event = { name: 'room.requested', data: { roomId: 'commons', memberId: f.principal.memberId, messageId: 'native-update' } };
+  const context = { kind: 'mention', actorId: 'coordinator' };
+  const measured = await measureNative(f, () => f.store.transaction(() => canonicalNativeMentionPolicyContext(f.store, f.descriptor, event, context)));
+  assert.deepEqual(Object.keys(measured.value).sort(), ['members', 'room']);
+  assert.equal(measured.fullRoomReads, 0); assert.equal(measured.messageRows, 3);
+  for (const kind of ['dm', 'work', 'board']) assert.equal(f.store.transaction(() => canonicalNativeMentionPolicyContext(f.store, f.descriptor, event, { ...context, kind })), null);
+  assert.equal(f.store.transaction(() => canonicalNativeMentionPolicyContext(f.store, f.descriptor, { ...event, data: { ...event.data, memberId: 'owner' } }, context)), null);
+});
+
+test('a native invitation OAuth sender keeps its resource-scoped grant while posting bounded mentions', async t => {
+  const f = await nativeFixture(t, 30);
+  const measured = await measureNative(f, () => runMcpOAuthRequest({ store: f.store, provider: f.oauth.provider,
+    token: f.tokens.accessToken, resource, roomId: 'commons', requiredScopes: ['chat:write'] }, () => f.store.command(f.tokens.accessToken, 'commons', {
+    id: 'oauth-sender', type: 'message.posted', data: { messageId: 'oauth-sender', body: '@Coordinator checkpoint complete' }
+  })));
+  assert.equal(measured.value.event.actorId, f.principal.memberId);
+  assert.equal(measured.fullRoomReads, 0); assert.ok(measured.messageRows <= 8);
+  assert.throws(() => f.store.command(f.tokens.accessToken, 'commons', { id: 'outside-resource', type: 'message.posted', data: { messageId: 'outside-resource', body: 'Not admitted' } }));
+});
 for (const retained of [1000, 10000]) test(`installed native subscription bounds ordinary mention post and delivery at ${retained} messages`, async t => {
   const f = await nativeFixture(t, retained);
   const posted = await measureNative(f, () => f.post());

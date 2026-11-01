@@ -6,6 +6,8 @@ import { join } from 'node:path';
 import { RoomStore } from '../server/store.mjs';
 import { initialRoom } from '../server/bootstrap.mjs';
 import { makeTestSigner } from '../scripts/helpers/signed-evidence.mjs';
+import { createRoomServer } from '../server/http.mjs';
+import { createWork, claimWork } from '../server/work-claims.mjs';
 
 test('partial handoff resumes the original canonical contract after restart without inventing accepted work', t => {
   const directory = mkdtempSync(join(tmpdir(), 'room-handoff-continuation-'));
@@ -64,4 +66,38 @@ test('an explicitly proposed follow-up preserves its own acceptance gate', t => 
   store.command(token, 'commons', { id: 'explicit-acceptance', type: 'work.accepted', data: { workItemId, expectedRevision: 0 } });
   assert.equal(store.workClaims.get('commons', workItemId).workItemId, workItemId);
   assert.equal(store.workClaims.get('commons', workItemId).state, 'unclaimed');
+});
+
+test('old dangling cards retain history and offer recovery instead of new execution or a missing destination', async t => {
+  const store = new RoomStore(':memory:'); store.initialize(initialRoom());
+  const token = store.issueAccessKey('commons', 'owner');
+  const server = createRoomServer({ store });
+  await new Promise(resolve => server.listen(0, '127.0.0.1', resolve));
+  t.after(async () => { server.closeStreams(); server.closeAllConnections(); await new Promise(resolve => server.close(resolve)); store.close(); });
+  const origin = `http://127.0.0.1:${server.address().port}`;
+  const request = async (path, body) => {
+    const response = await fetch(origin + path, { method: body ? 'POST' : 'GET',
+      headers: { Origin: origin, authorization: `Bearer ${token}`, ...(body ? { 'content-type': 'application/json' } : {}) },
+      ...(body ? { body: JSON.stringify(body) } : {}) });
+    return { status: response.status, body: await response.json() };
+  };
+  for (const claimed of [false, true]) {
+    const id = 'historical-next-' + claimed;
+    const initial = createWork({ id, title: 'Saved historical work', files: ['saved.txt'] }, { now: Date.now(), agentId: 'owner' });
+    const row = { ...(claimed ? claimWork(initial, 'owner', { now: Date.now() }) : initial), workItemId: id };
+    store.workClaims.set('commons', row);
+    const before = store.workClaims.get('commons', id);
+    for (const [route, body] of [['claim', {}], ['update', { state: 'in_progress' }], ['update', { state: 'delivered', note: 'Saved result' }]]) {
+      const refused = await request(`/api/rooms/commons/work-claims/${id}/${route}`, body);
+      assert.equal(refused.status, 409, JSON.stringify(refused));
+      assert.equal(refused.body.linkedWork.status, 'unavailable');
+      assert.equal(refused.body.next.some(next => next.path.includes('work-context')), false);
+      assert.equal((await request(refused.body.next[0].path)).status, 200);
+      assert.deepEqual(store.workClaims.get('commons', id), before, 'refusal does not rewrite saved history or scope');
+    }
+    const closed = await request(`/api/rooms/commons/work-claims/${id}/close`, { reason: 'Superseded by an explicitly authorized recovery plan' });
+    assert.equal(closed.status, 200, JSON.stringify(closed));
+    assert.equal(store.workClaims.get('commons', id).state, 'closed');
+    assert.deepEqual(store.workClaims.get('commons', id).history.slice(0, before.history.length), before.history);
+  }
 });

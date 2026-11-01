@@ -516,7 +516,7 @@ export function boardClaimForWorkItem(item, facts = null, { nowMs = Date.now(), 
     if (event.type === "work.superseded" && typeof event.data?.supersededByWorkItemId === "string") {
       chain.push({ kind: "supersede", targetId: boardClaimId(event.data.supersededByWorkItemId), at: atIso, actorId: event.actorId ?? "system", note: cleanText(event.data?.reason, 2000) });
     } else if (event.type === "work.handoff_recorded") {
-      chain.push({ kind: "handoff", targetId: boardClaimId(`${item.id}-next`), at: atIso, actorId: event.actorId ?? "system", note: cleanText(event.data?.nextAction, 2000) });
+      chain.push({ kind: "handoff", targetId: boardClaimId(item.id), at: atIso, actorId: event.actorId ?? "system", note: cleanText(event.data?.nextAction, 2000) });
     }
   }
 
@@ -787,23 +787,10 @@ export function planWorkItemBoardBackfill({ items, events = [], existing = new M
       }));
     }
   }
-  // Handoff successors: "<item>-next" phantom cards for items with a
-  // recorded handoff, when no row for them exists yet. The title is the
-  // FIRST handoff's nextAction — the mirror creates the card at the
-  // first handoff and never retitles it.
-  for (const item of items ?? []) {
-    if (!item || (!item.handoff && !(item.handoffHistory?.length > 0))) continue;
-    const nextId = boardClaimId(`${item.id}-next`);
-    if (rows.has(nextId) || existing.has(nextId)) continue;
-    const firstHandoff = (factsByItem.get(item.id)?.events ?? []).find(event => event.type === "work.handoff_recorded");
-    rows.set(nextId, phantomSuccessorCard({
-      targetId: `${item.id}-next`,
-      title: firstHandoff?.data?.nextAction ?? item.handoff?.nextAction ?? `${item.id}-next`,
-      at: firstHandoff?.at ?? item.updatedAt,
-      by: firstHandoff?.actorId,
-      dependsOn: [boardClaimId(item.id)],
-    }));
-  }
+  // A handoff is partial progress on the original contract. It does not
+  // propose or accept another task; its chain points back to the real work.
+  // Existing historical successor rows are left untouched, including any
+  // ownership, delivery or review history they have accumulated.
   return { rows, diverged };
 }
 
@@ -1073,8 +1060,8 @@ export function syncWorkItemClaim(store, roomId, actorId, incoming, state) {
   // Occupied-successor refusal (the mirror's work_claim_conflict): a
   // handoff/supersede successor card that is a live claim NOT already
   // chained to this source belongs to someone else's work.
-  if (incoming.type === "work.handoff_recorded" || (incoming.type === "work.superseded" && typeof data.supersededByWorkItemId === "string")) {
-    const targetId = incoming.type === "work.handoff_recorded" ? boardClaimId(`${workItemId}-next`) : boardClaimId(data.supersededByWorkItemId);
+  if (incoming.type === "work.superseded" && typeof data.supersededByWorkItemId === "string") {
+    const targetId = boardClaimId(data.supersededByWorkItemId);
     const successorRow = existing.get(targetId);
     if (successorRow && SYNC_ACTIVE.has(successorRow.state) && !(successorRow.dependsOn ?? []).includes(claimId)) {
       refuse(409, "work_claim_conflict", `Board card ${targetId} is already claimed. It is not a successor of ${claimId}.`);

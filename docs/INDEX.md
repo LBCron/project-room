@@ -173,6 +173,10 @@ Dated plans, checkpoints, and working notes are in [history/](../archive/docs/hi
 
 ## Storage migration
 
+[Canonical handoff continuation](research/2026-11-01-member2-canonical-handoff-choice.md) records the continuation contract, restart controls and preservation of historical dangling cards.
+
+[Legacy wake drain removal](research/2026-11-01-legacy-wake-drain-removal.md) records the removal of dormant wake polling.
+
 [Simplify, October 2026](design/SIMPLIFY-2026-10.md) is the design for per-job alarms, the store import cycles, the HTTP route table, one shared journal, thin MCP adapters, and one Durable Object per room. It is a design, not an execution queue.
 
 [Bounded operator authority activation](research/2026-11-01-message-authority-activation.md) records the initial admission, recovery and refusal limits.

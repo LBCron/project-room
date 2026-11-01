@@ -58,3 +58,35 @@ the complete cross-owner interruption/provider-replacement journey. Need final
 design for existing records, a real authorized transfer or replacement path,
 exact result/review preservation, conflict/rollback tests and restart coverage.
 Do not present this red test branch as land-ready or the full MVP as complete.
+
+## Draft cure after those controls
+
+The subsequent draft implements the existing handoff semantics: no new -next
+card, handoff chain points to the real original task, and an unrelated row with
+that suffix stays untouched. Historical rows remain stored byte for byte until
+an authorized cleanup action. Missing canonical work or a merely proposed
+canonical item refuses new board execution with an existing work_claim_conflict
+409. The refusal distinguishes unavailable from awaiting_acceptance, gives a
+valid board or canonical context read, and retains close/release/cancel paths.
+No unsigned board delivery can become a canonical result through this change.
+Supersession generation remains unchanged in this draft.
+
+Added real HTTP controls for unclaimed and already-claimed historical rows:
+claim/start/deliver refuse without altering history or scope, every advertised
+recovery read resolves, and authorized close preserves prior history. The
+baseline c52 runtime fails this new test by accepting the dangling claim (200).
+Draft runtime plus affected migration and verified-route tests: 64 pass, zero
+fail. Three old migration expectations initially failed because they required
+phantom creation or occupied-suffix refusal; updated to the explicit contract
+and unrelated-row preservation. Initial CI contract stopped for missing local
+yaml dependency before completing; reused the existing ignored dependency tree.
+The next contract run exposed main's unindexed legacy-wake-drain removal note;
+added its normal index link, matching the earlier context-cure integration.
+
+Remaining before calling this a complete B cure: discovery still lists an
+old unclaimed dangling row, even though execution now refuses truthfully;
+qualify and align discovery without adding unbounded per-card hydration or
+overlapping the attention owner's active work. Supersession can still generate
+a dangling or unaccepted target; retain its separate semantics for review.
+Cross-owner transfer/provider replacement also remains outside the local
+restart proof. This is a reviewable partial runtime draft, not landing approval.

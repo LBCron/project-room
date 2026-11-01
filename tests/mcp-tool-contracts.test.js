@@ -13,6 +13,9 @@ import { CORE_REST_TWINS, CORE_REST_EXEMPT } from "./mcp-core-rest-parity.test.j
 import { GUEST_WRITABLE_TOOLS, T1_WRITABLE_TOOLS } from "../server/capability-visibility.mjs";
 import { buildWorkCommand } from "../client/work-actions.mjs";
 import { planBegin } from "../client/begin-work.mjs";
+import { RoomStore } from "../server/store.mjs";
+import { initialRoom } from "../server/bootstrap.mjs";
+import { event } from "../src/events.js";
 
 export const KNOWN_UNCOVERED = Object.freeze(new Set([
   "bounty_accept", "bounty_claim", "bounty_dispute",
@@ -56,6 +59,21 @@ test("begin-work REST contract covers every actual planner stage", () => {
     const command = buildWorkCommand(stage.action, stage.args);
     assert.ok(MCP_TOOL_CONTRACTS.room_begin_work.rest.includes(command.type), command.type);
   }
+});
+
+test("clear-halt description does not invent a self-clear restriction", t => {
+  const store = new RoomStore(":memory:"); t.after(() => store.close());
+  const make = (id, type, data) => event({ id, actorId: "owner", roomId: "commons", type, data });
+  store.initialize([...initialRoom("commons"),
+    make("propose", "work.proposed", { workItemId: "work", title: "Task", definitionOfDone: "Done", accountableMemberId: "owner", mode: "read", independentVerificationRequired: false, ownerDecisionRequired: false }),
+    make("accept", "work.accepted", { workItemId: "work", expectedRevision: 0 }),
+    make("halt", "work.handoff_recorded", { workItemId: "work", expectedRevision: 1, doneSummary: "Partial", nextAction: "Continue", limitReason: "Stop", haltAll: true })
+  ]);
+  const key = store.issueAccessKey("commons", "owner");
+  const receipt = store.command(key, "commons", { id: "clear-self", type: "work.halt_cleared", data: { memberId: "owner", haltEventId: "halt" } });
+  assert.equal(receipt.event.type, "work.halt_cleared");
+  const served = listedMcpTools("full").find(tool => tool.name === "room_clear_halt");
+  assert.doesNotMatch(served.description, /cannot clear (?:its|their) own halt/);
 });
 
 test("full: every contracted tool states access, cost and REST twin", () => {

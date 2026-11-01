@@ -571,21 +571,33 @@ export function currentConversationRows(store,roomId,{viewerId,limit,before,befo
   return {rows,continuation:!complete?last:null,examined,complete};
 }
 
+// Shared independent census leaf reads. One factory lives only inside the
+// current synchronous transaction; no reconstructed source state is trusted.
+export function withCurrentAuditUnits(store,roomId,operation) {
+  const db=store.db;
+  if(!db.isTransaction)throw Error('Current room census requires a consistent recovery transaction');
+  const head=readCurrentHead(db,roomId),auditReceipts=new Map();
+  if(head)assertLegacyWorkReconciled(db,roomId);
+  let active=true;
+  const unitBudget=()=>{if(!active||!db.isTransaction)throw Error('Current audit unit scope expired');return {...budget(),schemaVerified:true,auditReceipts};};
+  try {const result=operation({head,record:(domain,key)=>readCurrentRecord(db,roomId,domain,key,unitBudget()),
+    message:id=>readCurrentMessage(db,roomId,id,unitBudget())});if(result?.then)throw Error('Current census must remain synchronous');return result;}
+  finally {active=false;auditReceipts.clear();}
+}
+
 // Explicit independent recovery census. This full scan is deliberately absent
 // from serving admission, command contexts and conversation pagination.
 export function readCurrentRoomForAudit(store,roomId) {
   const db=store.db;
   if(!db.isTransaction)throw Error('Current room census requires a consistent recovery transaction');
-  const head=readCurrentHead(db,roomId);if(!head)return null;
-  assertLegacyWorkReconciled(db,roomId);
+  return withCurrentAuditUnits(store,roomId,units=>{
+  const head=units.head;if(!head)return null;
   const state=emptyRoomState(),refs=new Map(),participants=new Map(),floors=new Map(),exclusions=new Map(),messageWitnesses=new Map(),workSummaries=new Map(),workCapacities=new Map(),workPrivacy=new Map(),workRequests=new Map(),archiveRetained=new Map(),canonicalMessages=[];let proofs=0,records=0;
-  const auditReceipts=new Map();
-  const unitBudget=()=>({...budget(),schemaVerified:true,auditReceipts});
   for(const scalar of db.prepare(`SELECT rowid,length(CAST(domain AS BLOB)) AS domain_bytes,
     length(CAST(record_key AS BLOB)) AS key_bytes FROM current_room_record_proofs WHERE room_id=? ORDER BY domain,record_key`).iterate(roomId)) {
     if(scalar.domain_bytes<1||scalar.domain_bytes>64||scalar.key_bytes<1||scalar.key_bytes>200)corrupt('invalid recovery membership identity');
     const proof=db.prepare('SELECT domain,record_key,present FROM current_room_record_proofs WHERE rowid=?').get(scalar.rowid);
-    const value=readCurrentRecord(db,roomId,proof.domain,proof.record_key,unitBudget());proofs++;
+    const value=units.record(proof.domain,proof.record_key);proofs++;
     if(!proof.present)continue;records++;
     const key=proof.record_key;
     if(proof.domain==='shape') {
@@ -624,7 +636,7 @@ export function readCurrentRoomForAudit(store,roomId) {
   for(const scalar of db.prepare('SELECT rowid,length(CAST(message_id AS BLOB)) AS bytes FROM messages WHERE room_id=? ORDER BY seq,message_id').iterate(roomId)) {
     if(scalar.bytes<1||scalar.bytes>200)corrupt('invalid recovered message identity');
     const {message_id:id}=db.prepare('SELECT message_id FROM messages WHERE rowid=?').get(scalar.rowid);
-    const source=readCurrentMessage(db,roomId,id,unitBudget());canonicalMessages.push(source.value);
+    const source=units.message(id);canonicalMessages.push(source.value);
     if(archiveRetains(state.messagesArchive,source.row.seq,archiveRetained.get(id)))state.messages.push(source.value);
   }
   if(messageWitnesses.size!==head.counts.messages||canonicalMessages.length!==head.counts.messages||state.messages.length+(state.messagesArchive?.count??0)!==head.counts.messages||Object.keys(state.workItems).length!==head.counts.workItems
@@ -649,6 +661,7 @@ export function readCurrentRoomForAudit(store,roomId) {
   if(floors.size!==head.counts.historyFloors||exclusions.size!==head.counts.historyExclusions
     ||!isDeepStrictEqual(floors,expectedFloors)||!isDeepStrictEqual(exclusions,expectedExclusions))corrupt('complete history floor/exclusion census differs');
   return {sequence:head.sequence,state};
+  });
 }
 
 export function withCurrentReadContext(db,roomId,operation) {

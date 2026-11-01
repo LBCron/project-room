@@ -1709,7 +1709,11 @@ export function hasConfirmedIndependentPass(item) {
     verification.verifierId === item.verifierMemberId &&
     matchesReceipt(verification, receipt) &&
     receiptHasKnownProducer(receipt) &&
-    receipt.producerId !== verification.verifierId;
+    receipt.producerId !== verification.verifierId &&
+    // Independence is also against the decision-maker: where an owner
+    // decision is required, the designated verifier's PASS does not
+    // confirm independence when the verifier is the deciding human.
+    (!item.ownerDecisionRequired || verification.verifierId !== item.humanDecisionMakerId);
 }
 
 function requireMember(state, memberId) {

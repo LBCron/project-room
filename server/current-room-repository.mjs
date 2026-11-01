@@ -352,7 +352,7 @@ export function readCurrentMessage(db,roomId,messageId,b=contextBudgets.get(db)?
   return {row,value:decodeMessageEntity(row)};
 }
 
-const supported = new Set(['reply_request.cancelled','work_claim.updated','message.posted','work.proposed','work.accepted','work.started','work.completed','work.handoff_recorded','work.halt_cleared','verification.recorded','owner.decision_recorded']);
+const supported = new Set(['ownership.transferred','reply_request.cancelled','work_claim.updated','message.posted','work.proposed','work.accepted','work.started','work.completed','work.handoff_recorded','work.halt_cleared','verification.recorded','owner.decision_recorded']);
 const contextBudgets = new WeakMap();
 export function withCurrentServingWriter(db,roomId,operation) {
   if(!isCurrentRoom(db,roomId) && !db.prepare("SELECT 1 FROM current_room_record_proofs WHERE room_id=? AND domain='migrationFence' AND record_key='active' AND present=1").get(roomId))return operation();
@@ -378,6 +378,8 @@ function commandContextFromHead(store,roomId,command,head,b,{readMessage,readWor
   const db=store.db;
   if(!supported.has(command.type))refuse('This command has no qualified current-record dependency plan');
   if(head.counts.roundLimitPauses!==0)refuse('Round-limit resume dependencies require qualification');
+  if(command.type==='ownership.transferred'&&db.prepare('SELECT 1 FROM membership_delegation_grants WHERE room_id=? AND granted_by=? AND revoked_at IS NULL AND added_invite_member=1 LIMIT 1').get(roomId,actorId))
+    refuse('Revoke membership delegation before transferring this current Room; its permission-strip dependencies require qualification');
   if(store.messageProjectionWindow!==null)refuse('Legacy automatic archive mode is not a current-record writer');
   if(db.prepare('SELECT 1 FROM activity_fanout_failures WHERE room_id=? AND recovered_at IS NULL LIMIT 1').get(roomId))
     refuse('Pending activity recovery requires an addressed recovery context');

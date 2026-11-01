@@ -91,6 +91,12 @@ import { affectedMessageIds, archiveMarker } from "./messages-store.mjs";
 // Events tailed per room per tick — the messages backfill's batch size, so a
 // long room catches up over ticks instead of holding one tick open.
 export const PATROL_BATCH = 200;
+// Rooms tailed per scheduled tick. Deployed Workers freeze Date.now() during
+// synchronous execution, so the deadline below cannot bound a pass that never
+// does I/O; this count does (at most PATROL_TICK_ROOMS * PATROL_BATCH events).
+// Each tick resumes after the last room it tailed, so no room starves.
+export const PATROL_TICK_ROOMS = 8;
+const patrolRotation = new WeakMap();
 
 export const PATROL_INVARIANTS = Object.freeze(["sequence", "messages_parity", "claim_legality", "receipt_linkage"]);
 
@@ -351,13 +357,13 @@ export function patrolStatus(store) {
   return { rooms, findings: total, parked };
 }
 
-export function runPatrolTick(store, { deadline = Infinity, limit = PATROL_BATCH, roomId = null } = {}) {
+export function runPatrolTick(store, { deadline = Infinity, limit = PATROL_BATCH, roomId = null, roomBudget = PATROL_TICK_ROOMS } = {}) {
   if (!store?.db?.prepare) return { skipped: 1 };
   if (store.readOnly) return { skipped: 1, readOnly: 1 };
   ensurePatrolSchema(store);
   const rooms = roomId
     ? store.db.prepare("SELECT id, sequence FROM rooms WHERE id=?").all(roomId)
-    : store.db.prepare("SELECT id, sequence FROM rooms ORDER BY id").all();
+    : rotate(store.db.prepare("SELECT id, sequence FROM rooms ORDER BY id").all(), patrolRotation.get(store));
   // Parks for rooms that no longer exist described a deleted room's state;
   // they do not carry (the refreshStaleBlocks rule in the backfill).
   if (!roomId) {
@@ -381,7 +387,9 @@ export function runPatrolTick(store, { deadline = Infinity, limit = PATROL_BATCH
     // single-room recheck) earns one retry.
     const throwParked = !roomId && blocks.has(room.id) && blocks.get(room.id).headSeq === room.sequence;
     if (caughtUp || headGapParked || throwParked) continue;
+    if (!roomId && patrolled >= roomBudget) { budgetExceeded = 1; break; }
     patrolled += 1;
+    if (!roomId) patrolRotation.set(store, room.id);
     try {
       const outcome = patrolRoom(store, room, { deadline, limit, forced: Boolean(roomId) });
       checked += outcome.checked;
@@ -438,6 +446,13 @@ export function runPatrolTick(store, { deadline = Infinity, limit = PATROL_BATCH
     }
   }
   return result;
+}
+
+// Start after the last room the previous tick tailed, wrapping around.
+function rotate(rooms, after) {
+  if (after === undefined) return rooms;
+  const start = rooms.findIndex(room => room.id > after);
+  return start <= 0 ? rooms : [...rooms.slice(start), ...rooms.slice(0, start)];
 }
 
 // Tail one room from its cursor. The log, the room head, and — when the

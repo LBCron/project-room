@@ -104,6 +104,18 @@ test('composed context reads the board once, preserves legacy version refresh an
   assert.equal(store.db.prepare('SELECT total_changes() AS n').get().n, changes);
 });
 
+test('unchanged structural context does not recompute transient action rankings', t => {
+  const store = new RoomStore(':memory:'); t.after(() => store.close()); store.initialize(initialRoom());
+  const token = store.issueAccessKey('commons', 'owner');
+  const first = readComposedRoomContext(store, token, 'commons');
+  const list = store.nextActions.list.bind(store.nextActions);
+  let rankings = 0;
+  t.mock.method(store.nextActions, 'list', (...args) => { rankings++; return list(...args); });
+  const quiet = readComposedRoomContext(store, token, 'commons', { sinceVersion: first.context_version });
+  assert.equal(quiet.not_modified, true);
+  assert.equal(rankings, 0, 'no transient ranking is returned or needed to validate an unchanged structural projection');
+});
+
 test('hosted MCP conditional context refreshes a changed current board projection', async t => {
   const store = new RoomStore(':memory:');
   t.after(() => store.close());

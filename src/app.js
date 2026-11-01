@@ -358,6 +358,7 @@ let agentInvitesUI = null;
 let instructionsUI = null;
 let workspaceUI = null;
 let state = null, session = null, pendingMessage = null, pendingWork = null, pendingAction = null;
+let partialWorkSnapshot = false, inspectedWorkRecord = null;
 // JDOT-COH-NAV begin
 let updatesUi = null, resetNavigationBoard = null, navigationBoardReady = null, navigationBoardRevealClaim = null;
 const SOURCE_UNAVAILABLE_NOTICE = "That source is no longer available in this room.";
@@ -505,11 +506,14 @@ const client = new RoomClient({
   onSnapshot(snapshot, identity) {
     snapshotAuditView = snapshot.auditView ?? "full";
     const firstSnapshot = !state;
+    const priorWorkDetailsOpen = activeWorkNavigationId ? workRecord(activeWorkNavigationId)?.querySelector(".work-details")?.open : false;
     const presenceBoundary = firstSnapshot || state.room?.id !== snapshot.state.room?.id || roomGeneration !== client.generation;
     if (presenceBoundary) { selectedMessage.clear(); directDirectory.clear(); }
     if (presenceBoundary) { recordLoading = null; recordLoadFailed = false; }
     if (presenceBoundary) stopPresencePoll();
     const pendingSends = (state?.messages ?? []).filter(message => message.pendingSend && !snapshot.state.messages.some(held => held.id === message.id));
+    partialWorkSnapshot = snapshot.snapshotVersion === 2;
+    inspectedWorkRecord = null;
     state = pendingSends.length ? { ...snapshot.state, messages: [...snapshot.state.messages, ...pendingSends] } : snapshot.state;
     session = identity;
     displayNames = createMemberDisplayNames(state.members);
@@ -591,6 +595,7 @@ const client = new RoomClient({
     }
     if (!briefView.owns(briefView.chain)) loadReturnBrief();
     if (firstSnapshot) revealLocationHash();
+    else if (partialWorkSnapshot && !presenceBoundary && activeWorkNavigationId) void revealWork(activeWorkNavigationId, Boolean(priorWorkDetailsOpen));
     retryPendingHashReveal();
     resumeConfirmedWorkNavigation();
   },
@@ -617,6 +622,7 @@ const client = new RoomClient({
     releaseSubmission(submitControls);
     submitOperationId += 1; busy = false;
     displayNames = createMemberDisplayNames({});
+    partialWorkSnapshot = false; inspectedWorkRecord = null;
     state = null; session = null; pendingMessage = null; pendingWork = null; pendingAction = null; offerContextVersion = null; actionEpoch++;
     pendingHashReveal = null; selectedMessage.clear(); directDirectory.clear();
     // JDOT-COH-NAV begin
@@ -3357,6 +3363,16 @@ function revealWorkTimeline(id) {
 }
 // JDOT-COH-NAV begin
 function revealWork(id, expandDetails = false) {
+  // A normalized snapshot carries a bounded summary window. Missing entries
+  // are unknown, and held summaries are not full records or action authority.
+  if (partialWorkSnapshot && inspectedWorkRecord !== state?.workItems?.[id]) {
+    if (activeWorkNavigationId && activeWorkNavigationId !== id) {
+      const previous = workRecord(activeWorkNavigationId)?.querySelector(".work-details");
+      if (previous) previous.open = false;
+    }
+    activeWorkNavigationId = id;
+    return readSelectedWorkRecord(id, expandDetails);
+  }
   // #3795: a record id the legacy workItems projection does not hold may be
   // a board claim — its record lives on the board. Reveal it there instead
   // of reporting the record missing; deep links, reloads and the
@@ -3377,6 +3393,33 @@ function revealWork(id, expandDetails = false) {
   focusRecord(card);
   syncWorkReturnControl();
   return card;
+}
+async function readSelectedWorkRecord(id, expandDetails) {
+  const context = workNavigationContext();
+  if (!context || busy) return null;
+  const generation = client.generation, identity = session, held = state;
+  const epoch = workNavigationEpoch, url = location.href;
+  const current = () => context === workNavigationContext() && generation === client.generation
+    && identity === session && held === state && epoch === workNavigationEpoch && url === location.href && activeWorkNavigationId === id;
+  try {
+    const selected = await client.workContext(id);
+    if (!current()) return null;
+    const item = selected?.work;
+    if (!selected || !client.ownsResponse(selected, identity) || selected.roomId !== identity.roomId
+      || selected.viewerId !== identity.member.id || item?.id !== id || typeof item.title !== "string"
+      || typeof item.definitionOfDone !== "string" || !Number.isSafeInteger(item.revision) || item.revision < 0
+      || Number.isSafeInteger(held.workItems[id]?.revision) && item.revision < held.workItems[id].revision) {
+      notice(SOURCE_UNAVAILABLE_NOTICE, true); return null;
+    }
+    // Mount only this independently selected current record. The room's
+    // summary window and completeness metadata remain unchanged.
+    inspectedWorkRecord = structuredClone(item);
+    state = { ...state, workItems: { ...state.workItems, [id]: inspectedWorkRecord } };
+    return revealWork(id, expandDetails);
+  } catch (error) {
+    if (current()) notice(error.message || SOURCE_UNAVAILABLE_NOTICE, true);
+    return null;
+  }
 }
 function workNavigationContext() {
   const member = session?.member?.id;
@@ -3466,7 +3509,7 @@ async function revealClaimRecord(id) {
 }
 function navigateWorkRecord(kind, id, extra = {}) {
   if (!workNavigationContext() || busy) return false;
-  if (kind === "work" ? !Object.hasOwn(state.workItems, id) || state.workItems[id]?.id !== id : !conversation?.byId.has(id) && !client.owesHistory) {
+  if (kind === "work" ? !partialWorkSnapshot && (!Object.hasOwn(state.workItems, id) || state.workItems[id]?.id !== id) : !conversation?.byId.has(id) && !client.owesHistory) {
     notice(SOURCE_UNAVAILABLE_NOTICE, true); return false;
   }
   const presentation = extra.presentation ?? "focus";
@@ -3652,6 +3695,12 @@ $("#work-navigation-return").addEventListener("click", () => {
 });
 // JDOT-COH-NAV end
 function revealDrafts(id) {
+  if (partialWorkSnapshot && inspectedWorkRecord !== state?.workItems?.[id]) {
+    const epoch = workNavigationEpoch, url = location.href;
+    return Promise.resolve(revealWork(id, false)).then(card => {
+      if (card && epoch === workNavigationEpoch && url === location.href) return revealDrafts(id);
+    });
+  }
   const card = revealWorkTimeline(id);
   if (!card) return;
   const choices = card.querySelector('.work-drafts');
@@ -4006,6 +4055,13 @@ function releaseSubmission(ticket, { restoreFocus = false } = {}) {
 // Unified timeline: work items render inline in #message-list, interleaved
 // chronologically with messages (Discord/Slack-style). Work cards follow the
 // active channel: a card shows when its proposal message is in the channel.
+function workSummaryCard(item) {
+  const card = document.createElement("article"), heading = document.createElement("h3"), link = document.createElement("a");
+  card.className = "work-card"; card.dataset.workSummaryId = item.id;
+  link.className = "source-link"; link.href = workHref(item.id); link.dataset.openWork = item.id; link.textContent = item.title;
+  heading.append(link); card.append(heading);
+  return card.outerHTML;
+}
 function timelineWorkEntries(onlyId) {
   if (onlyId === null) return [];
   const now = Date.now();
@@ -4028,7 +4084,9 @@ function timelineWorkEntries(onlyId) {
       // proposal determines the work card's channel.
       const mostRecent = proposals[0];
       return { item, channelId: mostRecent ? messageChannelId(mostRecent) : DEFAULT_CHANNEL_ID,
-        ts: Date.parse(item.updatedAt) || 0, html: workCard(item, now, proposals, state.messages) };
+        ts: Date.parse(item.updatedAt) || 0, html: partialWorkSnapshot && item !== inspectedWorkRecord
+          ? workSummaryCard(item)
+          : workCard(item, now, proposals, state.messages) };
     })
     .sort((a, b) => a.ts - b.ts);
 }

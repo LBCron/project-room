@@ -24,6 +24,7 @@ const ROOM_EXPORT_PATH = /^\/api\/operator\/rooms\/([^/]+)\/export$/;
 const ROUTES = Object.freeze({
   "/api/operator/messages/authority/plan": POST,
   "/api/operator/messages/authority/execute": POST,
+  "/api/operator/messages/authority/prepare": POST,
   "/api/operator/messages/legacy-repair/plan": POST,
   "/api/operator/messages/legacy-repair/execute": POST,
   "/api/operator/purge/plan": POST,
@@ -118,8 +119,8 @@ export function createOperatorRoutes({ store, json, reject, body, rate }) {
       json(res, 200, purge.execute(await body(req), requestId));
       return true;
     }
-    if (path === "/api/operator/messages/authority/plan" || path === "/api/operator/messages/authority/execute") {
-      json(res, 200, operatorMessageAuthority(store, await body(req), path.endsWith("/execute"), requestId));
+    if (path === "/api/operator/messages/authority/plan" || path === "/api/operator/messages/authority/execute" || path === "/api/operator/messages/authority/prepare") {
+      json(res, 200, operatorMessageAuthority(store, await body(req), path.endsWith("/prepare")?'prepare':path.endsWith("/execute"), requestId));
       return true;
     }
     if (path === "/api/operator/archive") {

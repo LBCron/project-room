@@ -34,7 +34,7 @@ function boundedDomain(db,roomId,table,order,columns,cap) {
   const lengths=columns.map(c=>`COALESCE(length(CAST(${c} AS BLOB)),0)`).join('+');
   const rows=db.prepare(`SELECT ${lengths} AS bytes FROM ${table} WHERE room_id=? ORDER BY ${order} LIMIT ?`).all(roomId,cap+1);
   const bytes=rows.reduce((n,row)=>n+row.bytes,0);
-  if(rows.length>cap || bytes>MESSAGE_AUTHORITY_LIMITS.payloadBytes)
+  if (rows.length > cap || bytes > MESSAGE_AUTHORITY_LIMITS.payloadBytes)
     fail(409,'authority_budget_exceeded','This room needs bounded continuation before authority migration; no conversion was attempted');
   return {rows:rows.length,bytes};
 }

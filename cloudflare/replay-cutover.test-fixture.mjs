@@ -14,6 +14,40 @@ export class ReplayCutoverRoom extends ReplayWitnessRoom {
   async fetch(request){
     const url=new URL(request.url);
     try{
+      if(url.pathname==='/reference-seed'){
+        this.s.bodiesAtRest=true;
+        this.s.initialize([...initialRoom(),event({id:'ref-work',roomId:'commons',actorId:'owner',type:'work.proposed',
+          data:{workItemId:'task',title:'H work',definitionOfDone:'Save result',mode:'read',accountableMemberId:'owner'}}),
+          event({id:'ref-post',roomId:'commons',actorId:'owner',type:'message.posted',data:{messageId:'long',body:'Original body '.repeat(80)}})]);
+        while(!this.s.backfillMessages({limit:200}).done){}
+        this.s.checkMessagesParity({roomId:'commons'});
+        return Response.json({capture:captureReplayWitness(this.s,{roomId:'commons',requestId:'reference-capture',expectedHead:4,
+          reason:'Synthetic work and body consistency'}),
+          work:this.db.prepare("SELECT work_id,revision,digest,body FROM work_entities WHERE room_id='commons'").get(),
+          body:this.db.prepare("SELECT sha,body FROM projection_bodies WHERE room_id='commons'").get()});
+      }
+      if(url.pathname==='/reference-edit'){
+        this.s.bodiesAtRest=true;const key=this.s.issueAccessKey('commons','owner'),before={...this.stats};
+        this.s.command(key,'commons',{id:'ref-accept',type:'work.accepted',data:{workItemId:'task',expectedRevision:0}});
+        this.s.command(key,'commons',{id:'ref-edit',type:'message.edited',data:{messageId:'long',body:'Edited body '.repeat(80),expectedMessageRevision:0}});
+        return Response.json({cost:Object.fromEntries(Object.keys(before).map(k=>[k,this.stats[k]-before[k]]))});
+      }
+      if(url.pathname==='/tail-read')return Response.json(cutover.readReplayTailEvent(this.s,{
+        roomId:'commons',generation:url.searchParams.get('generation'),sequence:Number(url.searchParams.get('sequence'))}));
+      if(url.pathname==='/tail-fault'){
+        this.db.exec("CREATE TRIGGER synthetic_tail_failure BEFORE INSERT ON message_replay_units WHEN NEW.domain='tail-event' BEGIN SELECT RAISE(ABORT,'synthetic prospective binding failure'); END");
+        const key=this.s.issueAccessKey('commons','owner');
+        this.s.command(key,'commons',{id:'tail-fault',type:'message.posted',data:{messageId:'tail-fault',body:'Must roll back'}});
+        return Response.json({unexpected:true});
+      }
+      if(url.pathname==='/reference-read')return Response.json(cutover.readReplayHReference(this.s,{
+        roomId:'commons',generation:url.searchParams.get('generation'),kind:url.searchParams.get('kind'),key:url.searchParams.get('key')}));
+      if(url.pathname==='/reference-delete'){
+        this.db.exec('DROP TRIGGER IF EXISTS synthetic_tail_failure');
+        const key=this.s.issueAccessKey('commons','owner');
+        this.s.command(key,'commons',{id:'ref-delete',type:'message.deleted',data:{messageId:'long',expectedMessageRevision:1}});
+        return Response.json({remaining:this.db.prepare("SELECT count(*) AS n FROM message_replay_units WHERE generation<>''").get().n});
+      }
       if(url.pathname==='/cow-seed'){
         this.s.initialize([...initialRoom(),event({id:'cow-post',roomId:'commons',actorId:'owner',
           type:'message.posted',data:{messageId:'existing',body:'Independent original body'}})]);
@@ -141,5 +175,5 @@ export class ReplayCutoverRoom extends ReplayWitnessRoom {
   }
 }
 export default {fetch(request,env){const surface=new URL(request.url).searchParams.get('surface')??'cutover';
-  if(!/^(?:cutover|cow-baseline|cow-idle|cow-active|cow-fault)$/.test(surface))return new Response('invalid fixture surface',{status:400});
+  if(!/^(?:cutover|cow-baseline|cow-idle|cow-active|cow-fault|references)$/.test(surface))return new Response('invalid fixture surface',{status:400});
   return env.ROOM.getByName(surface).fetch(request);}};

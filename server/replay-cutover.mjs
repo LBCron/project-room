@@ -125,6 +125,68 @@ function messageCaptureSchema() {
     ${absence()} END;`;
 }
 
+// Work/body payloads are mutable storage dependencies of the immutable H
+// witness. These copies bind their EXISTING digest; membership/reference
+// validation still belongs to the protected witness equality pass.
+function referenceCaptureSchema(kind) {
+  const work=kind==='work', table=work?'work_entities':'projection_bodies';
+  const key=work?'work_id':'sha', proof=work?'digest':'sha', prefix=work?'hw':'hb';
+  const fields=work?['work_id','revision','digest','body']:['sha','body'];
+  const payload=`json_object(${fields.map(f=>`'${f}',OLD.${f}`).join(',')})`;
+  const keyOK=row=>`typeof(${row}.${key})='text' AND octet_length(${row}.${key}) BETWEEN 1 AND 200`;
+  const raw=`${keyOK('OLD')} AND typeof(OLD.body)='text' AND octet_length(OLD.body)<=131072
+    AND typeof(OLD.${proof})='text' AND octet_length(OLD.${proof})=64
+    AND OLD.${proof} NOT GLOB '*[^a-f0-9]*'
+    ${work?`AND typeof(OLD.revision)='integer' AND OLD.revision BETWEEN 0 AND ${MAX}`:''}`;
+  const admitted=`(CASE WHEN ${raw} THEN octet_length(${payload})<=131072 ELSE 0 END)`;
+  const active=row=>`SELECT room_id,generation,header_hash FROM replay_capture_active WHERE room_id=${row}.room_id`;
+  const missing=row=>`NOT EXISTS(SELECT 1 FROM message_replay_units x WHERE x.room_id=a.room_id
+    AND x.generation=a.generation AND x.domain IN ('h-${kind}','h-${kind}-absent') AND x.unit_key=${row}.${key})`;
+  const dependency=(suffix,row)=>`'oa_brc_${prefix}${suffix}_'||a.generation||'_'||lower(hex(CAST(${row}.${key} AS BLOB)))`;
+  const at=`CAST(strftime('%s','now') AS INTEGER)*1000`;
+  const old=()=>{
+    const source=`(${active('OLD')}) a WHERE (CASE WHEN ${keyOK('OLD')} THEN ${missing('OLD')} ELSE 1 END)`;
+    const invalid=`'oa_brc_inv_'||a.generation`, receiptId=dependency('','OLD');
+    return `INSERT INTO operator_actions(id,at,action,target_kind,target_id,counts_json,result)
+      SELECT ${invalid},${at},'replay_cutover_abandon','room',a.room_id,
+        json_object('roomId',a.room_id,'generation',a.generation,'lifecycle','abandoned',
+          'abandonmentReceiptId',${invalid},'reason','dependency_admission'),'abandoned'
+      FROM ${source} AND NOT ${admitted};
+    INSERT INTO message_replay_units SELECT a.room_id,a.generation,'control','abandonment',1,
+      octet_length(json_object('receiptId',${invalid})),'',CAST(json_object('receiptId',${invalid}) AS BLOB)
+      FROM ${source} AND NOT ${admitted};
+    DELETE FROM message_replay_units WHERE room_id=OLD.room_id AND generation=''
+      AND domain='control' AND unit_key='capture-head' AND EXISTS(SELECT 1 FROM message_replay_units x
+        WHERE x.room_id=OLD.room_id AND x.generation=CASE WHEN typeof(message_replay_units.payload)='blob'
+          AND octet_length(message_replay_units.payload)=64 THEN CAST(message_replay_units.payload AS TEXT) END
+        AND x.domain='control' AND x.unit_key='abandonment');
+    INSERT INTO operator_actions(id,at,action,target_kind,target_id,counts_json,result)
+      SELECT ${receiptId},${at},'replay_cutover_dependency','room',a.room_id,
+        json_object('roomId',a.room_id,'generation',a.generation,'headerHash',a.header_hash,
+          'domain','h-${kind}','key',OLD.${key},'entityHash',OLD.${proof}),'pending'
+      FROM ${source} AND ${admitted};
+    INSERT INTO message_replay_units SELECT a.room_id,a.generation,'h-${kind}',OLD.${key},0,
+      octet_length(${payload}),'',CAST(${payload} AS BLOB) FROM ${source} AND ${admitted};`;
+  };
+  const absent=()=>{
+    const source=`(${active('NEW')}) a WHERE ${keyOK('NEW')} AND ${missing('NEW')}
+      AND NOT EXISTS(SELECT 1 FROM ${table} t WHERE t.room_id=NEW.room_id AND t.${key}=NEW.${key})`;
+    const receiptId=dependency('a','NEW');
+    return `INSERT INTO operator_actions(id,at,action,target_kind,target_id,counts_json,result)
+      SELECT ${receiptId},${at},'replay_cutover_dependency','room',a.room_id,
+        json_object('roomId',a.room_id,'generation',a.generation,'headerHash',a.header_hash,
+          'domain','h-${kind}-absent','key',NEW.${key},'entityHash',NULL),'pending' FROM ${source};
+    INSERT INTO message_replay_units SELECT a.room_id,a.generation,'h-${kind}-absent',NEW.${key},0,4,'',CAST('null' AS BLOB)
+      FROM ${source};`;
+  };
+  return `CREATE TRIGGER replay_${kind}_before_update BEFORE UPDATE ON ${table}
+    WHEN EXISTS(${active('OLD')}) OR EXISTS(${active('NEW')}) BEGIN ${old()} ${absent()} END;
+  CREATE TRIGGER replay_${kind}_before_delete BEFORE DELETE ON ${table}
+    WHEN EXISTS(${active('OLD')}) BEGIN ${old()} END;
+  CREATE TRIGGER replay_${kind}_before_insert BEFORE INSERT ON ${table}
+    WHEN EXISTS(${active('NEW')}) BEGIN ${absent()} END;`;
+}
+
 // Separate typed identities are necessary: the existing (room_id,part) table
 // already owns its part-zero legacy checkpoint. No internal room/key aliases.
 export function replayCutoverSchema({durable = false} = {}) {
@@ -136,7 +198,7 @@ export function replayCutoverSchema({durable = false} = {}) {
     row_version INTEGER NOT NULL, payload_bytes INTEGER NOT NULL,
     payload_sha256 TEXT NOT NULL, payload BLOB NOT NULL,
     PRIMARY KEY(room_id,generation,domain,unit_key),
-    CHECK(domain IN ('control','header','witness','hash','codec','message','metadata','replay-message','replay-metadata','semantic','source-chunk','source-merkle','leaf-proof','metadata-entry','h-message','h-message-absent'))
+    CHECK(domain IN ('control','header','witness','hash','codec','message','metadata','replay-message','replay-metadata','semantic','source-chunk','source-merkle','leaf-proof','metadata-entry','h-message','h-message-absent','h-work','h-work-absent','h-body','h-body-absent','tail-event'))
   );
   ${['INSERT','UPDATE','DELETE'].map(operation => `CREATE TRIGGER replay_units_writer_${operation.toLowerCase()}
     BEFORE ${operation} ON message_replay_units BEGIN
@@ -171,16 +233,19 @@ export function replayCutoverSchema({durable = false} = {}) {
       WHERE room_id=OLD.id AND generation='' AND domain='control' AND unit_key='epoch';
     DELETE FROM message_replay_units WHERE room_id=OLD.id AND generation<>'';
     END;
-  ${messageCaptureSchema()}`;
+  ${messageCaptureSchema()}
+  ${referenceCaptureSchema('work')}
+  ${referenceCaptureSchema('body')}`;
 }
 
+const schemaPresence=new WeakMap();
 const schemaAdmissions=new WeakMap(),schemaContracts=new Map(),receiptInputBytes=new WeakMap();
 function schemaContract(db){
   const durable=Boolean(db.storage?.sql);
   if(!schemaContracts.has(durable)){
     const ddl=replayCutoverSchema({durable});
     const definitions=[...ddl.matchAll(/(CREATE (?:TABLE|TRIGGER|VIEW) ([a-z_]+)[\s\S]*?);(?=\s*CREATE |\s*$)/g)];
-    if(definitions.length!==12)throw Error('invalid replay schema contract');
+    if(definitions.length!==18)throw Error('invalid replay schema contract');
     schemaContracts.set(durable,{definitions,hash:hash(ddl),
       bindingBytes:definitions.reduce((sum,[,sql])=>sum+Buffer.byteLength(sql.trim()),0)});
   }
@@ -199,6 +264,7 @@ function catalogDefinition(db,definition,catalogId=null){
     FROM sqlite_master WHERE ${selector}`).get(type,name,table,Buffer.byteLength(text),text,catalogId??name);
 }
 export function admitReplayCutoverSchema(db){
+  schemaPresence.set(db,true);
   schemaAdmissions.set(db,{invalid:true});
   const contract=schemaContract(db),objects=[];
   for(const definition of contract.definitions){
@@ -274,11 +340,11 @@ function get(db, roomId, generation, domain) {
   return {value, hash: saved.payload_sha256,inputBytes:saved.payload.byteLength};
 }
 function auditBinding(db, receiptId) {
-  if(typeof receiptId!=='string' || !/^oa_brc_(?:[a-f0-9]{64}|inv_[a-f0-9]{64}|h[ma]_[a-f0-9]{64}_[a-f0-9]{2,400})$/.test(receiptId))throw Error('invalid replay audit binding');
+  if(typeof receiptId!=='string' || !/^oa_brc_(?:[a-f0-9]{64}|inv_[a-f0-9]{64}|h(?:m|a|w|wa|b|ba)_[a-f0-9]{64}_[a-f0-9]{2,400}|tail_[a-f0-9]{64}_[1-9][0-9]{0,15})$/.test(receiptId))throw Error('invalid replay audit binding');
   const row=db.prepare(`SELECT CASE WHEN typeof(counts_json)='text' AND octet_length(counts_json)<=4096
     THEN counts_json END AS json FROM operator_actions WHERE id=?
     AND action IN ('replay_cutover_capture','replay_cutover_hash','replay_cutover_codec',
-      'replay_cutover_abandon','replay_cutover_cleanup','replay_cutover_dependency')`).get(receiptId);
+      'replay_cutover_abandon','replay_cutover_cleanup','replay_cutover_dependency','replay_cutover_tail')`).get(receiptId);
   if(!row?.json)throw Error('missing independent replay audit binding');
   const value=JSON.parse(row.json);
   if(!value||typeof value!=='object'||Array.isArray(value))throw Error('invalid replay audit binding');
@@ -505,6 +571,7 @@ export function readReplayHMessage(store, input) {
     || Buffer.byteLength(input.messageId) > 200
     || Object.keys(input).some(key => !['roomId','generation','messageId'].includes(key)))
     throw Error('invalid replay H-row intent');
+  return store.readTransaction(()=>{
   const db = store.db, {roomId,generation,messageId} = input;
   verifyReplayCutoverSchema(db);
   const header = captureBinding(db,roomId,generation);
@@ -522,18 +589,134 @@ export function readReplayHMessage(store, input) {
   if (independent.roomId !== roomId || independent.generation !== generation
     || independent.headerHash !== header.hash || independent.domain !== source.domain
     || independent.key !== messageId) throw Error('independent replay H-row binding changed');
+  const inputBytes=source.payload.byteLength+header.inputBytes+header.captureReceiptInputBytes
+    +receiptInputBytes.get(independent)+schemaContract(db).bindingBytes+8192;
+  if(inputBytes>262144)throw Error('replay H-row aggregate byte limit');
   const value = JSON.parse(fatalText(source.payload));
   if (absent) {
     if (value !== null || independent.entityHash !== null)
       throw Error('independent replay H-absence changed');
-    return {absent:true,receiptId,inputBytes:source.payload.byteLength,schemaDefinitionBindingBytes:schemaContract(db).bindingBytes};
+    return {absent:true,receiptId,inputBytes,schemaDefinitionBindingBytes:schemaContract(db).bindingBytes};
   }
   const fields = [...MESSAGE_PROOF_FIELDS,'entity_hash'];
   if (!value || Object.keys(value).length !== fields.length
     || fields.some(field => !Object.hasOwn(value,field)) || value.message_id !== messageId
     || independent.entityHash !== value.entity_hash || !messageProofMatches(value))
     throw Error('independent replay H-row proof changed');
-  return {absent:false,row:value,receiptId,inputBytes:source.payload.byteLength,schemaDefinitionBindingBytes:schemaContract(db).bindingBytes};
+  return {absent:false,row:value,receiptId,inputBytes,schemaDefinitionBindingBytes:schemaContract(db).bindingBytes};
+  });
+}
+
+// Called only by the existing code-owned positional append hook AFTER its
+// INSERT and inside the same transaction. Old/out-of-transaction writers get
+// no authority retrofit. Continuation must stop at a missing binding.
+export function bindReplayAppend(db,{roomId,sequence,eventId,body}) {
+  if(!db.isTransaction||!id(roomId)||!Number.isSafeInteger(sequence)||sequence<1
+    ||typeof eventId!=='string'||Buffer.byteLength(eventId)<1||Buffer.byteLength(eventId)>200
+    ||typeof body!=='string')return;
+  if(!schemaPresence.has(db))schemaPresence.set(db,Boolean(db.prepare(
+    "SELECT 1 FROM sqlite_master WHERE type='table' AND name='message_replay_units'").get()));
+  if(!schemaPresence.get(db))return;
+  const active=db.prepare(`SELECT generation,header_hash FROM replay_capture_active WHERE room_id=?`).get(roomId);
+  if(!active||!digest(active.generation)||!digest(active.header_hash))return;
+  const pointer=db.prepare(`SELECT row_version AS head FROM message_replay_units
+    WHERE room_id=? AND generation='' AND domain='control' AND unit_key='capture-head'`).get(roomId);
+  if(!Number.isSafeInteger(pointer?.head)||sequence<=pointer.head)return;
+  const bytes=Buffer.byteLength(body);if(bytes<1||bytes>131072)return;
+  const bodyHash=hash(body),receiptId=`oa_brc_tail_${active.generation}_${sequence}`;
+  const proof={roomId,generation:active.generation,headerHash:active.header_hash,sequence,eventId,bytes,bodyHash};
+  db.prepare(`INSERT INTO operator_actions(id,at,action,target_kind,target_id,counts_json,result)
+    VALUES(?,?,'replay_cutover_tail','room',?,?,'pending')`).run(receiptId,Date.now(),roomId,JSON.stringify(proof));
+  db.prepare(`INSERT INTO message_replay_units VALUES(?,?,'tail-event',?,1,?,?,?)`)
+    .run(roomId,active.generation,String(sequence),bytes,bodyHash,Buffer.from(body));
+}
+export function readReplayTailEvent(store,input) {
+  if(!input||!id(input.roomId)||!digest(input.generation)||!Number.isSafeInteger(input.sequence)||input.sequence<1
+    ||Object.keys(input).some(k=>!['roomId','generation','sequence'].includes(k)))throw Error('invalid replay tail intent');
+  return store.readTransaction(()=>{
+    const db=store.db;verifyReplayCutoverSchema(db);
+    const header=captureBinding(db,input.roomId,input.generation);
+    if(input.sequence<=header.value.head)throw Error('prospective replay tail must follow H');
+    const receiptId=`oa_brc_tail_${input.generation}_${input.sequence}`,proof=auditBinding(db,receiptId);
+    const controlBytes=schemaContract(db).bindingBytes+header.inputBytes+header.captureReceiptInputBytes
+      +receiptInputBytes.get(proof)+8192;
+    if(proof.roomId!==input.roomId||proof.generation!==input.generation||proof.headerHash!==header.hash
+      ||proof.sequence!==input.sequence||typeof proof.eventId!=='string'||Buffer.byteLength(proof.eventId)>200
+      ||!digest(proof.bodyHash)||!Number.isSafeInteger(proof.bytes)||proof.bytes<1||proof.bytes>131072
+      ||controlBytes+2*proof.bytes>262144)throw Error('prospective replay binding admission changed');
+    // Scalar admission precedes either payload fetch; the source may have been
+    // modified without this code-owned observer since the original append.
+    const current=db.prepare(`SELECT CASE WHEN typeof(id)='text' AND octet_length(id)<=200 THEN id END AS id,
+      CASE WHEN typeof(body)='text' THEN octet_length(body) END AS bytes FROM events WHERE room_id=? AND sequence=?`)
+      .get(input.roomId,input.sequence);
+    const saved=db.prepare(`SELECT CASE WHEN typeof(payload)='blob' AND typeof(payload_bytes)='integer'
+      AND payload_bytes=? AND octet_length(payload)=? AND row_version=1 AND payload_sha256=?
+      THEN 1 ELSE 0 END AS admitted FROM message_replay_units
+      WHERE room_id=? AND generation=? AND domain='tail-event' AND unit_key=?`)
+      .get(proof.bytes,proof.bytes,proof.bodyHash,input.roomId,input.generation,String(input.sequence));
+    if(current?.id!==proof.eventId||current?.bytes!==proof.bytes||saved?.admitted!==1)
+      throw Error('prospective replay source changed');
+    const payload=db.prepare(`SELECT payload FROM message_replay_units WHERE room_id=? AND generation=? AND domain='tail-event' AND unit_key=?`)
+      .get(input.roomId,input.generation,String(input.sequence)).payload;
+    const source=db.prepare('SELECT body FROM events WHERE room_id=? AND sequence=?').get(input.roomId,input.sequence).body;
+    if(hash(new Uint8Array(payload))!==proof.bodyHash||hash(source)!==proof.bodyHash)
+      throw Error('prospective replay source digest changed');
+    const incoming=JSON.parse(fatalText(payload));
+    if(incoming.id!==proof.eventId||incoming.roomId!==input.roomId||typeof incoming.type!=='string')
+      throw Error('prospective replay event framing changed');
+    return {event:incoming,sequence:input.sequence,inputBytes:controlBytes+2*proof.bytes,certified:false};
+  });
+}
+
+// This verifies only the captured dependency bytes and existing digest. The
+// protected H reference/member must separately match before candidate use.
+export function readReplayHReference(store,input) {
+  if(!input||!id(input.roomId)||!digest(input.generation)||!['work','body'].includes(input.kind)
+    ||typeof input.key!=='string'||Buffer.byteLength(input.key)<1||Buffer.byteLength(input.key)>200
+    ||Object.keys(input).some(k=>!['roomId','generation','kind','key'].includes(k)))
+    throw Error('invalid replay reference intent');
+  return store.readTransaction(()=>{
+    const db=store.db;verifyReplayCutoverSchema(db);
+    const header=captureBinding(db,input.roomId,input.generation),domain='h-'+input.kind;
+    const rows=db.prepare(`SELECT domain,CASE WHEN typeof(payload)='blob' AND typeof(payload_bytes)='integer'
+      AND payload_bytes BETWEEN 1 AND 131072 AND octet_length(payload)=payload_bytes
+      AND row_version=0 AND payload_sha256='' THEN payload END AS payload
+      FROM message_replay_units WHERE room_id=? AND generation=? AND domain IN (?,?) AND unit_key=?`)
+      .all(input.roomId,input.generation,domain,domain+'-absent',input.key);
+    if(rows.length!==1||!rows[0].payload)throw Error('missing or invalid captured H reference');
+    const source=rows[0],absent=source.domain.endsWith('-absent');
+    const receiptId=`oa_brc_h${input.kind==='work'?'w':'b'}${absent?'a':''}_${input.generation}_${Buffer.from(input.key).toString('hex')}`;
+    const independent=auditBinding(db,receiptId);
+    if(independent.roomId!==input.roomId||independent.generation!==input.generation
+      ||independent.headerHash!==header.hash||independent.domain!==source.domain||independent.key!==input.key)
+      throw Error('independent replay H-reference binding changed');
+    const value=JSON.parse(fatalText(source.payload));
+    if(absent){
+      if(value!==null||independent.entityHash!==null)throw Error('independent replay H-absence changed');
+    }else{
+      const work=input.kind==='work',fields=work?['work_id','revision','digest','body']:['sha','body'];
+      if(!value||Object.keys(value).length!==fields.length||fields.some(f=>!Object.hasOwn(value,f))
+        ||value[work?'work_id':'sha']!==input.key||typeof value.body!=='string'
+        ||!digest(value[work?'digest':'sha'])||independent.entityHash!==value[work?'digest':'sha']
+        ||hash(value.body)!==independent.entityHash||(work&&(!Number.isSafeInteger(value.revision)||value.revision<0)))
+        throw Error('independent replay H-reference digest changed');
+      if(work){const item=JSON.parse(value.body);if(item.id!==input.key||item.revision!==value.revision)
+        throw Error('independent replay H-work identity changed');}
+    }
+    const inputBytes=source.payload.byteLength+header.inputBytes+header.captureReceiptInputBytes
+      +receiptInputBytes.get(independent)+schemaContract(db).bindingBytes+8192;
+    if(inputBytes>262144)throw Error('replay reference aggregate byte limit');
+    return {absent,...(absent?{}:{row:value}),receiptId,inputBytes,certified:false};
+  });
+}
+
+// Explicit privacy erasure is stronger than abandonment. Delete every raw
+// generation for this room in the caller's existing deletion transaction.
+// Ordinary body cache releases instead use first-H COW until continuation.
+export function purgeReplayCapturesForPrivacy(db,roomId) {
+  if(!db.isTransaction)throw Error('replay privacy purge requires deletion transaction');
+  if(!db.prepare("SELECT 1 FROM sqlite_master WHERE type='table' AND name='message_replay_units'").get())return;
+  db.prepare("DELETE FROM message_replay_units WHERE room_id=? AND (generation<>'' OR (domain='control' AND unit_key='capture-head'))").run(roomId);
 }
 
 const leafCommitment=(headerHash,sourceRoot,generation,domain,key,offset,sourceLength,bytes,sha256,keyFrame=null)=>hash(JSON.stringify(

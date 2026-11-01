@@ -1,3 +1,4 @@
+import {purgeReplayCapturesForPrivacy} from './replay-cutover.mjs';
 import { assertMessageWrite, recordMessageWrite } from './write-integrity.mjs';
 import { readMessageReplaySnapshot, writeMessageReplaySnapshot, discardMessageReplaySnapshot } from './message-replay-snapshot.mjs';
 // PRIV-1: rewrite a message out of the log, the projection, and the messages
@@ -66,6 +67,7 @@ export function commitMessageRedaction(db, { roomId, state, actorId, at, message
   if (typeof roomId !== "string" || typeof messageId !== "string" || !messageId) {
     return { state, sequence: null, rewritten: 0 };
   }
+  purgeReplayCapturesForPrivacy(db,roomId);
   const shared = log && log.roomId === roomId ? log : readRedactionLog(db, roomId);
   let postedBody = null;
   let alreadyRedacted = false;

@@ -162,3 +162,28 @@ test('actual Worker first-H COW measures idle/active overhead and preserves proo
       restartOldProofPreserved:true,erasureRemovedGeneration:true,storageFaultRolledBack:true,certified:false}));
   } finally {await mf.dispose();await rm(directory,{recursive:true,force:true});}
 });
+
+
+test('actual Worker preserves H work and released body across restart and explicit privacy erasure',async()=>{
+  const built=await build({entryPoints:[fileURLToPath(new URL('./replay-cutover.test-fixture.mjs',import.meta.url))],bundle:true,write:false,format:'esm',platform:'neutral',external:['node:*','cloudflare:*']});
+  const directory=await mkdtemp(join(tmpdir(),'reference-cow-'));
+  const create=()=>new Miniflare({modules:true,script:built.outputFiles[0].text,compatibilityDate:'2026-07-30',compatibilityFlags:['nodejs_compat'],durableObjectsPersist:directory,durableObjects:{ROOM:{className:'ReplayCutoverRoom',useSQLite:true}}});
+  let mf=create();const call=async path=>{const response=await mf.dispatchFetch('http://localhost'+path+(path.includes('?')?'&':'?')+'surface=references'),value=await response.json();assert.equal(response.status,200,JSON.stringify(value));return value;};
+  try{
+    assert.equal((await call('/runtime')).storage.valueLimitBytes,8388642);
+    const seed=await call('/reference-seed');await call('/seed-derived?count=17405&generation='+seed.capture.generation);
+    const edit=await call('/reference-edit');await mf.dispose();mf=create();
+    const read=(kind,key)=>call('/reference-read?generation='+seed.capture.generation+'&kind='+kind+'&key='+key);
+    assert.deepEqual((await read('work','task')).row,seed.work);
+    assert.deepEqual((await read('body',seed.body.sha)).row,seed.body);
+    const tail=await call('/tail-read?generation='+seed.capture.generation+'&sequence=5');
+    assert.equal(tail.sequence,5);assert.equal(tail.certified,false);assert.ok(tail.inputBytes<=262144);
+    const before=await call('/cow-state');
+    const fault=await mf.dispatchFetch('http://localhost/tail-fault?surface=references');
+    assert.equal(fault.status,500);assert.match((await fault.json()).message,/synthetic prospective binding failure/);
+    assert.deepEqual(await call('/cow-state'),before);
+
+    assert.equal((await call('/reference-delete')).remaining,0);
+    console.log('DURABLE_REPLAY_REFERENCE_COW '+JSON.stringify({cost:edit.cost,oldWorkAndBodySurviveRestart:true,privacyRemovedAllRawUnits:true,certified:false}));
+  }finally{await mf.dispose();await rm(directory,{recursive:true,force:true});}
+});

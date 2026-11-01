@@ -1,3 +1,4 @@
+import {bindReplayAppend} from './replay-cutover.mjs';
 import { bootstrapLegacyWriteProofs, configureWriteIntegrity, beginWriteProofFrame, endWriteProofFrame, publishProjectionWrites, projectionDigest, projectionContentHash, servingContentProof, servingProofDrift, assertProjectionWrite, assertMessageWrite, recordMessageWrite, withVerifiedRoomReconstruction } from './write-integrity.mjs';
 const OPERATOR_QA_ARCHIVE = Symbol("operator QA room archive");
 import { authenticateMcpOAuthRequest } from './mcp-oauth.mjs';
@@ -3914,7 +3915,10 @@ this.slaBreachAlerts = new SlaBreachAlertJournal(this); // Task 26: durable in-a
         }
         // Every events insert in the codebase binds (roomId, sequence, ...)
         // positionally; anything else is ignored rather than guessed at.
-        if (eventAppend && typeof args[0] === "string" && Number.isSafeInteger(args[1])) this._noteEventAppend(args[0]);
+        if (eventAppend && typeof args[0] === "string" && Number.isSafeInteger(args[1])) {
+          bindReplayAppend(this.db,{roomId:args[0],sequence:args[1],eventId:args[2],body:args[3]});
+          this._noteEventAppend(args[0]);
+        }
         return result;
       };
       return stmt;

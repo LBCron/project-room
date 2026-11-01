@@ -34,3 +34,22 @@ test('ordinary body-reference release retains the exact H bytes in the capture',
   const saved=f.unit('h-body',f.body.sha);assert.ok(saved,'RED: ordinary body cache release lost referenced H bytes');
   assert.deepEqual(JSON.parse(Buffer.from(saved.payload)),{...f.body});
 });
+
+test('captured reference reader preserves old digest and rejects coherent payload replacement',t=>{
+  const f=fixture(t);f.command('accept','work.accepted',{workItemId:'task',expectedRevision:0});
+  const input={roomId:'commons',generation:f.capture.generation,kind:'work',key:'task'};
+  const read=cutover.readReplayHReference(f.store,input);assert.deepEqual(read.row,{...f.work});
+  assert.equal(read.certified,false);assert.ok(read.inputBytes<=262144);
+  const now=f.store.db.prepare("SELECT work_id,revision,digest,body FROM work_entities WHERE room_id='commons'").get();
+  const bytes=Buffer.from(JSON.stringify(now));f.store.db.prepare("UPDATE message_replay_units SET payload=?,payload_bytes=? WHERE domain='h-work'").run(bytes,bytes.length);
+  assert.throws(()=>cutover.readReplayHReference(f.store,input),/independent replay H-reference digest changed/);
+});
+test('explicit message deletion purges H work, body, witness and all shared raw leaves',t=>{
+  const f=fixture(t);f.command('accept','work.accepted',{workItemId:'task',expectedRevision:0});
+  f.command('edit','message.edited',{messageId:'long',body:'Edited body '.repeat(80),expectedMessageRevision:0});
+  assert.ok(f.unit('h-body',f.body.sha));assert.ok(f.unit('h-work','task'));
+  assert.deepEqual(cutover.readReplayHReference(f.store,{roomId:'commons',generation:f.capture.generation,kind:'body',key:f.body.sha}).row,{...f.body});
+  f.command('delete','message.deleted',{messageId:'long',expectedMessageRevision:1});
+  assert.equal(f.store.db.prepare('SELECT 1 FROM message_replay_units WHERE generation=?').get(f.capture.generation),undefined);
+  assert.equal(f.store.db.prepare("SELECT 1 FROM message_replay_units WHERE domain='control' AND unit_key='capture-head'").get(),undefined);
+});

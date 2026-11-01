@@ -25,3 +25,30 @@ test('actual prospective-binding write failure rolls back event and derived serv
   assert.deepEqual(f.store.db.prepare("SELECT sequence,projection FROM rooms WHERE id='commons'").get(),before);
   assert.equal(f.store.db.prepare("SELECT 1 FROM events WHERE sequence=3").get(),undefined);
 });
+
+test('tail consumer requires original append binding and exact immutable source bytes',t=>{
+  const f=fixture(t);f.post();const input={roomId:'commons',generation:f.capture.generation,sequence:3};
+  const read=cutover.readReplayTailEvent(f.store,input);assert.equal(read.event.data.messageId,'new');
+  assert.equal(read.certified,false);assert.ok(read.inputBytes<=262144);
+  const replacement=Buffer.from(JSON.stringify({...read.event,data:{...read.event.data,body:'Forged current event'}}));
+  f.store.db.prepare("UPDATE message_replay_units SET payload=?,payload_bytes=?,payload_sha256=? WHERE domain='tail-event'")
+    .run(replacement,replacement.length,'a'.repeat(64));
+  assert.throws(()=>cutover.readReplayTailEvent(f.store,input),/prospective replay source changed/);
+});
+test('raw older writer cannot obtain prospective authority through a later read',t=>{
+  const f=fixture(t);f.store.transaction(()=>f.store.db.exec(`INSERT INTO events VALUES('commons',3,'old-writer','{"id":"old-writer","roomId":"commons","type":"message.posted","data":{}}')`));
+  assert.throws(()=>cutover.readReplayTailEvent(f.store,{roomId:'commons',generation:f.capture.generation,sequence:3}),/missing independent replay audit binding/);
+  assert.equal(f.store.db.prepare("SELECT 1 FROM message_replay_units WHERE domain='tail-event'").get(),undefined);
+});
+test('out-of-transaction SQL append stays unbound rather than claiming atomic capture',t=>{
+  const f=fixture(t);f.store.db.prepare('INSERT INTO events VALUES(?,?,?,?)').run('commons',3,'outside','{"id":"outside","roomId":"commons","type":"message.posted"}');
+  assert.equal(f.store.db.prepare("SELECT 1 FROM message_replay_units WHERE domain='tail-event'").get(),undefined);
+});
+test('large valid ordinary post is accepted without laundering unsupported tail into bounded continuation',t=>{
+  const f=fixture(t);const key=f.store.issueAccessKey('commons','owner');
+  f.store.command(key,'commons',{id:'large',type:'message.posted',data:{messageId:'large',body:'é'.repeat(50000)}});
+  assert.equal(f.store.headSequence('commons'),3);
+  // The event is below the 128 KiB storage ceiling, but fetching both bound
+  // source copies plus exact schema/control bytes exceeds the step budget.
+  assert.throws(()=>cutover.readReplayTailEvent(f.store,{roomId:'commons',generation:f.capture.generation,sequence:3}),/binding admission changed/);
+});

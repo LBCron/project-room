@@ -4603,7 +4603,7 @@ export function createRoomServer({ store, origin, assetRoot = new URL("../", imp
         if (req.method === "POST") return json(res, 200, store.requestRuns.apply(selected.token, roomId, await body(req), fence));
       }
       if (["reply-requests", "reply-context", "reply-history"].includes(route) && req.method === "GET") {
-        const params = url.searchParams, names = route === "reply-requests" ? ["direction", "status"]
+        const params = url.searchParams, names = route === "reply-requests" ? ["direction", "status", "cursor", "limit"]
           : route === "reply-context" ? ["requestMessageId", "cursor", "limit"] : ["direction", "cursor", "checkpoint", "limit"];
         if ([...params.keys()].some(key => ![...names, "auth"].includes(key) || params.getAll(key).length !== 1)
           || params.has("limit") && !/^[1-9]\d*$/.test(params.get("limit"))) reject(422, "invalid_reply_selection", "Invalid request selection");

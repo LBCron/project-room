@@ -272,6 +272,10 @@ async function dispatchHostedStdioTool(store, secret, name, args) {
       if (value.responseActions) value.responseActions = value.responseActions.map(action => ({
         ...action, arguments: { roomId, ...action.arguments }
       }));
+      if(value.contractVersion===2&&value.nextRead){
+        value.nextRead={...value.nextRead,arguments:{roomId,...value.nextRead.arguments}};
+        if(value.page)value.page={...value.page,nextRead:value.nextRead};
+      }
       if (value.nextReads) value.nextReads = value.nextReads.map(pointer => ({ ...pointer,
         nextRead: { ...pointer.nextRead, arguments: { roomId, ...pointer.nextRead.arguments } }
       }));

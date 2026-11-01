@@ -1,3 +1,5 @@
+import {readCurrentReplies} from './current-reply-reader.mjs';
+import {isCurrentRoom} from './current-room-repository.mjs';
 import { messageRepository } from "./message-repository.mjs";
 import { randomUUID } from "node:crypto";
 import { buildReplyCommand } from "../client/reply-actions.mjs";
@@ -60,7 +62,10 @@ export class ReplyRequests {
         ...fn({ auth, room, floor: this.store.historyFloor(roomId, auth.member.id, room.sequence) }), scope };
     });
   }
-  list(token, roomId, { direction = "incoming", status = "open", expectedSessionBinding = null } = {}) {
+  list(token, roomId, options = {}) {
+    const {direction="incoming",status="open",expectedSessionBinding=null}=options;
+    if(isCurrentRoom(this.store.db,roomId))return readCurrentReplies(this.store,token,roomId,"list",options,{scope,compactRequest,readMessage,responseTemplates});
+    if(options.cursor!==undefined||options.limit!==undefined)fail("invalid_reply_selection","Legacy request lists do not accept pagination; omit cursor and limit");
     if (!["incoming", "outgoing", "both"].includes(direction) || !["open", "answered", "declined", "cancelled", "all"].includes(status))
       fail("invalid_reply_selection", "Choose a request direction and current status");
     return this.read(token, roomId, expectedSessionBinding, ({ auth, room, floor }) => {
@@ -92,6 +97,7 @@ export class ReplyRequests {
     if (!integer(limit) || limit < 1 || limit > REPLY_MAX_PAGE_LIMIT || cursor !== null && checkpoint !== null
       || requestMessageId !== null && checkpoint !== null || requestMessageId === null && !["incoming", "outgoing", "both"].includes(direction))
       fail("invalid_reply_selection", "Choose a bounded page and one continuation or checkpoint");
+    if(isCurrentRoom(this.store.db,roomId))return readCurrentReplies(this.store,token,roomId,requestMessageId===null?"history":"selected",{direction,requestMessageId,cursor,checkpoint,limit,expectedSessionBinding},{scope,compactRequest,readMessage,responseTemplates});
     return this.read(token, roomId, expectedSessionBinding, ({ auth, room, floor }) => {
       const state = room.state, requests = state.replyRequests ?? {};
       if (requestMessageId !== null && (!Object.hasOwn(requests, requestMessageId)
@@ -232,22 +238,7 @@ export class ReplyRequests {
           ? { expectedRequestRevision: request.revision, contextEventId: context.id, contextSequence: context.sequence } : null;
         // These are incomplete templates, never submitted automatically. Only the
         // selected recipient's complete, current context can populate fixed inputs.
-        result.responseActions = answerBasis ? ["answered", "declined"].map(responseOutcome => ({
-          tool: "room_respond_to_request",
-          arguments: { responseToRequestId: request.id, ...answerBasis, responseOutcome,
-            toMemberId: request.requesterId, workItemId: request.workItemId },
-          requiredInput: ["requestId", "body"]
-        })) : [];
-        result.responseHttpActions = result.responseActions.map(action => {
-          const command = buildReplyCommand({ roomId, memberId: auth.member.id }, action.tool,
-            { ...action.arguments, requestId: randomUUID(), body: "pending caller input" });
-          delete command.data.body;
-          return { method: "POST", path: `/api/rooms/${encodeURIComponent(roomId)}/commands`, command,
-            requiredInput: ["command.data.body"],
-            instructions: "Add only your answer or decline reason at command.data.body, then POST command as the JSON body. command.id is this new operation's retry ID; data.responseToRequestId and data.replyToId identify the original question. Preserve the entire filled command on an unknown result; never obtain a new recipe for a retry. Do not add requestPolicyVersion. A receipt is not current status; follow verify.",
-            verify: { method: "GET", path: `/api/rooms/${encodeURIComponent(roomId)}/reply-context?requestMessageId=${encodeURIComponent(request.id)}` }
-          };
-        });
+        Object.assign(result, responseTemplates(roomId, auth.member.id, request, answerBasis));
         // Current preparation shares this authenticated read transaction. It is
         // intentionally distinct from the frozen conversation page and answer basis.
         const instructions = charterContext(state.room);
@@ -418,4 +409,24 @@ export function auditReplyRequests(state, history, checkpoint = null, archivedId
   }
   check(checkpointChecked);
   compare(state, archivedIds?.size ? { ...projected, messages: projected.messages.filter(message => !archivedIds.has(message.id)) } : projected);
+}
+
+function responseTemplates(roomId,viewerId,request,answerBasis) {
+  const responseActions = answerBasis ? ["answered", "declined"].map(responseOutcome => ({
+          tool: "room_respond_to_request",
+          arguments: { responseToRequestId: request.id, ...answerBasis, responseOutcome,
+            toMemberId: request.requesterId, workItemId: request.workItemId },
+          requiredInput: ["requestId", "body"]
+        })) : [];
+  const responseHttpActions = responseActions.map(action => {
+          const command = buildReplyCommand({ roomId, memberId: viewerId }, action.tool,
+            { ...action.arguments, requestId: randomUUID(), body: "pending caller input" });
+          delete command.data.body;
+          return { method: "POST", path: `/api/rooms/${encodeURIComponent(roomId)}/commands`, command,
+            requiredInput: ["command.data.body"],
+            instructions: "Add only your answer or decline reason at command.data.body, then POST command as the JSON body. command.id is this new operation's retry ID; data.responseToRequestId and data.replyToId identify the original question. Preserve the entire filled command on an unknown result; never obtain a new recipe for a retry. Do not add requestPolicyVersion. A receipt is not current status; follow verify.",
+            verify: { method: "GET", path: `/api/rooms/${encodeURIComponent(roomId)}/reply-context?requestMessageId=${encodeURIComponent(request.id)}` }
+          };
+        });
+  return {responseActions,responseHttpActions};
 }

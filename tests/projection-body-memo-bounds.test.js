@@ -34,7 +34,7 @@ test('serializer remains exact after cross-room eviction, rollback, and immediat
   const store = new RoomStore(':memory:'); t.after(() => store.close());
   const body = tag => `${tag}:${'content'.repeat(100)}`;
   const state = text => ({ messages: [{ id: 'm', body: text }] });
-  const save = (room, text) => storedProjection(store.db, room, state(text), { enabled: true });
+  const save = (room, text) => store.transaction(() => storedProjection(store.db, room, state(text), { enabled: true }));
   const first = save('original', body('first'));
   for (let i = 0; i < 40; i++) save(`other-${i}`, body(`other-${i}`));
   assert.equal(save('original', body('first')), first, 'eviction cannot alter stored hashes');
@@ -52,10 +52,10 @@ for (const mode of ['empty', 'inline', 'short']) test(`serializer drops obsolete
   const original = ProjectionBodyHashMemo.prototype.set;
   ProjectionBodyHashMemo.prototype.set = function (...args) { captured = this; return original.apply(this, args); };
   try {
-    storedProjection(store.db, 'room', { messages: [{ id: 'old', body: 'secret'.repeat(100) }] }, { enabled: true });
+    store.transaction(() => storedProjection(store.db, 'room', { messages: [{ id: 'old', body: 'secret'.repeat(100) }] }, { enabled: true }));
     assert.equal(captured.get('room').size, 1);
     const messages = mode === 'empty' ? [] : [{ id: 'new', body: mode === 'inline' ? 'new'.repeat(100) : 'short' }];
-    storedProjection(store.db, 'room', { messages }, { enabled: mode !== 'inline' });
+    store.transaction(() => storedProjection(store.db, 'room', { messages }, { enabled: mode !== 'inline' }));
     assert.equal(captured.get('room').size, 0);
     assert.equal(captured.bytes, 0);
     assert.equal(store.db.prepare('SELECT COUNT(*) AS n FROM projection_bodies WHERE room_id=?').get('room').n, 0);

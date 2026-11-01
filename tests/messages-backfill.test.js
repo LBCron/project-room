@@ -336,6 +336,7 @@ test('v38 archived entities migrate to the current schema lazily and fence the o
  finish(seed);seed.checkMessagesParity();seed.archiveMessages('commons',{keepNewest:1,dryRun:false});
  for(const row of seed.db.prepare("SELECT name FROM sqlite_master WHERE type='trigger' AND (name GLOB 'writer_v39_*' OR name GLOB 'writer_v4[01234]_*')").all())seed.db.exec(`DROP TRIGGER ${row.name}`);
  for(const {sql} of fenceDefinitions(38))seed.db.exec(sql);
+ seed.db.exec('ALTER TABLE messages DROP COLUMN entity_hash');
  seed.db.exec('ALTER TABLE messages DROP COLUMN reducer_extras_json');seed.db.exec('PRAGMA user_version=38');seed.close();
  const old=new DatabaseSync(filename);old.function('project_room_writer_v38',()=>38);const write=old.prepare("UPDATE messages SET body=body WHERE message_id='old'");write.run();
  const current=new RoomStore(filename,{messageProjectionWindow:2});

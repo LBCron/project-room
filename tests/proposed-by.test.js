@@ -296,8 +296,8 @@ test("v1 upgrades checkpoint a conservative projection and strictly replay the v
     delete body.data.producerId;
     store.db.prepare("UPDATE events SET body=? WHERE id=?").run(JSON.stringify(body), completion.id);
   }
-  store.db.prepare("UPDATE rooms SET projection=? WHERE id='commons'").run(JSON.stringify(legacy));
-  store.db.exec("DROP TABLE private_email_folders; DROP TABLE private_email_commands; DROP TABLE private_email_connections; DROP TABLE private_inbox_drafts; DROP TABLE private_inbox_versions; DROP TABLE private_inbox_sources; DROP TABLE private_inbox_commands; DROP TABLE agent_connection_operations; DROP TABLE agent_connections; DROP TABLE private_reminder_commands; DROP TABLE private_reminders; DROP TABLE membership_invitation_journal; DROP TABLE projection_checkpoints; PRAGMA user_version=1");
+  store.transaction(() => store.db.prepare("UPDATE rooms SET projection=? WHERE id='commons'").run(store.storedProjection("commons", legacy)));
+  store.db.exec("DROP TABLE integrity_room_state; DROP TABLE private_email_folders; DROP TABLE private_email_commands; DROP TABLE private_email_connections; DROP TABLE private_inbox_drafts; DROP TABLE private_inbox_versions; DROP TABLE private_inbox_sources; DROP TABLE private_inbox_commands; DROP TABLE agent_connection_operations; DROP TABLE agent_connections; DROP TABLE private_reminder_commands; DROP TABLE private_reminders; DROP TABLE membership_invitation_journal; DROP TABLE projection_checkpoints; PRAGMA user_version=1");
   const eventBodies = store.db.prepare("SELECT body FROM events WHERE room_id='commons' ORDER BY sequence").all().map(row => row.body);
   const legacyEvents = eventBodies.map(body => JSON.parse(body));
   store.close();
@@ -352,7 +352,7 @@ test("the v1 projection, checkpoint, and version marker roll back together", () 
     store.initialize(initialRoom());
     const originalProjection = store.db.prepare("SELECT projection FROM rooms WHERE id='commons'").get().projection;
     const originalEvents = store.db.prepare("SELECT body FROM events WHERE room_id='commons' ORDER BY sequence").all().map(row => row.body);
-    store.db.exec("DROP TABLE private_email_folders; DROP TABLE private_email_commands; DROP TABLE private_email_connections; DROP TABLE private_inbox_drafts; DROP TABLE private_inbox_versions; DROP TABLE private_inbox_sources; DROP TABLE private_inbox_commands; DROP TABLE agent_connection_operations; DROP TABLE agent_connections; DROP TABLE private_reminder_commands; DROP TABLE private_reminders; DROP TABLE projection_checkpoints; PRAGMA user_version=1");
+    store.db.exec("DROP TABLE integrity_room_state; DROP TABLE private_email_folders; DROP TABLE private_email_commands; DROP TABLE private_email_connections; DROP TABLE private_inbox_drafts; DROP TABLE private_inbox_versions; DROP TABLE private_inbox_sources; DROP TABLE private_inbox_commands; DROP TABLE agent_connection_operations; DROP TABLE agent_connections; DROP TABLE private_reminder_commands; DROP TABLE private_reminders; DROP TABLE projection_checkpoints; PRAGMA user_version=1");
     store.db.prepare("INSERT INTO rooms(id,sequence,projection) VALUES('z-malformed',0,'{')").run();
 
     assert.throws(() => store.repairProjectionProvenance({ upgradeV1: true }), SyntaxError);

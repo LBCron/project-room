@@ -224,7 +224,7 @@ test('archived edits restore indexed reducer history without replaying unrelated
 
 test('legacy archived rows without reducer extras use journal recovery and upgrade on mutation',t=>{
  const f=setup(t);f.post('legacy-entity','Old wording.');f.post('last-entity','Last.');f.certify();f.store.archiveMessages('commons',{keepNewest:1,dryRun:false});
- f.store.db.prepare('UPDATE messages SET reducer_extras_json=NULL WHERE message_id=?').run('legacy-entity');
+ f.store.db.prepare('UPDATE messages SET reducer_extras_json=NULL,entity_hash=NULL WHERE message_id=?').run('legacy-entity');
  f.store.messageProjectionWindow=2;
  let replays=0;const replay=f.store._replayRoom.bind(f.store);f.store._replayRoom=(...args)=>{replays++;return replay(...args);};
  f.command('message.edited',{messageId:'legacy-entity',body:'Current wording.',expectedMessageRevision:0});
@@ -334,7 +334,7 @@ test('entity references fail closed on missing or malformed canonical records',a
   "DELETE FROM messages WHERE message_id='guarded'",
   "UPDATE messages SET record_json='{invalid' WHERE message_id='guarded'",
   "UPDATE messages SET body='mismatch' WHERE message_id='guarded'",
-  "UPDATE messages SET reducer_extras_json=NULL WHERE message_id='guarded'",
+  "UPDATE messages SET reducer_extras_json=NULL,entity_hash=NULL WHERE message_id='guarded'",
   "UPDATE messages SET reducer_extras_json='{\"unexpected\":true}' WHERE message_id='guarded'"
  ]) {
   try {f.store.transaction(()=>{
@@ -351,8 +351,8 @@ test('mixed legacy entities remain inline and unsupported commands safely return
  const {storedProjection,hydrateProjection}=await import('../server/projection-at-rest.mjs');
  const f=setup(t,true,4,true);f.certify();f.post('legacy','Retained legacy.');f.post('ready','Ready record.');
  const state=f.store.room('commons').state;
- f.store.db.prepare("UPDATE messages SET reducer_extras_json=NULL WHERE message_id='legacy'").run();
- const mixed=JSON.parse(storedProjection(f.store.db,'commons',state,{messageEntities:true}));
+ f.store.db.prepare("UPDATE messages SET reducer_extras_json=NULL,entity_hash=NULL WHERE message_id='legacy'").run();
+ const mixed=JSON.parse(f.store.transaction(()=>storedProjection(f.store.db,'commons',state,{messageEntities:true})));
  assert.equal(mixed.messages[0].body,'Retained legacy.');assert.equal(mixed.messages[1]._entity,1);
  assert.deepEqual(hydrateProjection(f.store.db,'commons',mixed).state.messages,state.messages);
  // Restore the legacy row before reading the already-persisted reference.
@@ -382,12 +382,12 @@ test('entity carrier consumes old body references before releasing their storage
  const f=setup(t);f.store.bodiesAtRest=true;
  const body='Old body storage. '.repeat(100);f.post('body-ref',body);f.certify();
  const state=f.store.room('commons').state;
- const raw=JSON.parse(storedProjection(f.store.db,'commons',state,{enabled:true}));
+ const raw=JSON.parse(f.store.transaction(()=>storedProjection(f.store.db,'commons',state,{enabled:true})));
  assert.equal(typeof raw.messages[0].bodyRef,'string');
  // Legacy extras force the new carrier to keep this record inline. It must
  // expand the old body reference before removing the old body-storage row.
- f.store.db.prepare("UPDATE messages SET reducer_extras_json=NULL WHERE message_id='body-ref'").run();
- const converted=JSON.parse(storedProjection(f.store.db,'commons',raw,{messageEntities:true}));
+ f.store.db.prepare("UPDATE messages SET reducer_extras_json=NULL,entity_hash=NULL WHERE message_id='body-ref'").run();
+ const converted=JSON.parse(f.store.transaction(()=>storedProjection(f.store.db,'commons',raw,{messageEntities:true})));
  assert.equal(converted.messages[0].body,body);
  assert.equal(converted.messages[0].bodyRef,undefined);
  assert.equal(hydrateProjection(f.store.db,'commons',converted).missing.length,0);

@@ -71,7 +71,24 @@ test('an unrelated valid event cannot certify earlier metadata corruption',async
 test('editing another canonical message cannot certify earlier payload corruption',async t=>{
  const s=fixture(t),key=s.issueAccessKey('alpha','owner');for(const id of ['first','second'])s.command(key,'alpha',{id,type:'message.posted',data:{messageId:id,body:'Original body'}});
  while(!s.backfillMessages({limit:1000}).done){}s.checkMessagesParity({roomId:'alpha'});s.migrateMessageAuthority('alpha');await tick(s);await tick(s);
+ const original=s.db.prepare("SELECT body,record_json FROM messages WHERE room_id='alpha' AND message_id='first'").get();
  s.db.prepare("UPDATE messages SET body='Tampered body',record_json=json_set(record_json,'$.body','Tampered body') WHERE room_id='alpha' AND message_id='first'").run();
  try{s.command(key,'alpha',{id:'edit-other',type:'message.edited',data:{messageId:'second',body:'Valid edit',expectedMessageRevision:0}});}catch(error){assert.match(error.message,/projection_corrupt|content|integrity/i);}
  const result=await tick(s);assert.equal(result.verified,0);assert.ok(s.integrityFailures().some(f=>f.recordId==='alpha'&&f.step==='projection_content'));
+ // Repair the independent damaged leaf without undoing the unrelated edit.
+ s.db.prepare("UPDATE messages SET body=?,record_json=? WHERE room_id='alpha' AND message_id='first'").run(original.body,original.record_json);
+ const repaired=await tick(s);assert.equal(repaired.matched || repaired.verified,1);
+ assert.equal(s.integrityFailures().some(f=>f.recordId==='alpha'&&f.step==='projection_content'),false);
+ assert.equal(s.room('alpha').state.messages.find(m=>m.id==='second').body,'Valid edit');
+});
+
+for (const target of ['retained','archived']) test(`canonical ${target} deletion cannot be adopted after an unrelated edit`,async t=>{
+ const s=fixture(t),key=s.issueAccessKey('alpha','owner');
+ for(const id of ['archived','retained','edit'])s.command(key,'alpha',{id,type:'message.posted',data:{messageId:id,body:id}});
+ while(!s.backfillMessages({limit:1000}).done){}s.checkMessagesParity({roomId:'alpha'});
+ s.archiveMessages('alpha',{keepNewest:2,dryRun:false});s.checkMessagesParity({roomId:'alpha'});s.migrateMessageAuthority('alpha');await tick(s);await tick(s);
+ s.db.prepare("DELETE FROM messages WHERE room_id='alpha' AND message_id=?").run(target);
+ s.command(key,'alpha',{id:'unrelated-edit',type:'message.edited',data:{messageId:'edit',body:'Changed',expectedMessageRevision:0}});
+ const result=await tick(s);assert.equal(result.verified,0);
+ assert.ok(s.integrityFailures().some(f=>f.recordId==='alpha'&&f.step==='projection_content'));
 });

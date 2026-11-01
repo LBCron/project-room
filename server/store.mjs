@@ -2295,6 +2295,26 @@ this.slaBreachAlerts = new SlaBreachAlertJournal(this); // Task 26: durable in-a
     }
     configureWriteIntegrity(this.db,(id,row,proof)=>Boolean(proof?.projection_hash && proof.sequence===row.sequence
       && projectionContentHash(this.db,id,row.sequence,row.projection)===proof.projection_hash));
+    // A genuine older schema has no prospective write proof. Record its
+    // current metadata before the first new writer, without inventing a
+    // historical content baseline: projection_hash deliberately stays NULL.
+    // Existing strong baselines must still match; current-schema missing
+    // proofs never enter this one-time format transition.
+    if (version < 44) this.transaction(() => {
+      const insert = this.db.prepare(`INSERT OR IGNORE INTO integrity_room_state(room_id,sequence,projection_bytes)
+        VALUES(?,?,?)`);
+      const update = this.db.prepare('UPDATE integrity_room_state SET metadata_hash=? WHERE room_id=? AND metadata_hash IS NULL');
+      for (const row of this.db.prepare('SELECT id,sequence,projection,LENGTH(projection) AS bytes FROM rooms').iterate()) {
+        const proof = this.db.prepare('SELECT sequence,projection_hash,metadata_hash FROM integrity_room_state WHERE room_id=?').get(row.id);
+        if (proof?.metadata_hash) continue;
+        if (proof?.projection_hash && (proof.sequence !== row.sequence
+          || projectionContentHash(this.db,row.id,row.sequence,row.projection) !== proof.projection_hash)) {
+          throw Error('projection_corrupt: legacy content does not match its baseline');
+        }
+        insert.run(row.id,row.sequence,row.bytes);
+        update.run(projectionDigest(row.projection),row.id);
+      }
+    });
     configureWorkRepository(this.db, this.workEntities);
     if (this.workEntities && version < 42) this.migrateWorkProjections();
     // Legacy coldStart.durationMs ends before the backfill above. Keep it
@@ -2836,6 +2856,20 @@ this.slaBreachAlerts = new SlaBreachAlertJournal(this); // Task 26: durable in-a
     });
   }
 
+  // Internal owner-authorized history reconstruction, never ordinary write
+  // admission. The repair caller has replayed and checked its exact head in
+  // this transaction; refresh only this room and preserve the fleet snapshot.
+  rememberReconstructedRoomProof(roomId) {
+    if (!this.db.isTransaction) throw Error("Reconstruction proof requires its transaction");
+    const row=this.db.prepare('SELECT sequence,projection,LENGTH(projection) AS bytes FROM rooms WHERE id=?').get(roomId);
+    if (!row) throw Error("Reconstructed room is missing");
+    this.db.prepare(`INSERT INTO integrity_room_state(room_id,sequence,projection_bytes,projection_hash,metadata_hash) VALUES(?,?,?,?,?)
+      ON CONFLICT(room_id) DO UPDATE SET sequence=excluded.sequence,projection_bytes=excluded.projection_bytes,
+      projection_hash=excluded.projection_hash,metadata_hash=excluded.metadata_hash`)
+      .run(roomId,row.sequence,row.bytes,projectionContentHash(this.db,roomId,row.sequence,row.projection),projectionDigest(row.projection));
+    this.clearIntegrityFailure("projection_content",roomId);
+  }
+
   // Retire projection_content failure records whose room once again
   // hashes to the remembered baseline (an operator repaired the bytes),
   // or no longer exists. A room whose stored hash still disagrees keeps
@@ -2847,11 +2881,18 @@ this.slaBreachAlerts = new SlaBreachAlertJournal(this); // Task 26: durable in-a
     for (const row of outstanding) {
       const current = this.db.prepare("SELECT sequence, projection FROM rooms WHERE id=?").get(row.recordId);
       if (!current) { this.clearIntegrityFailure("projection_content", row.recordId); continue; }
-      const stored = this.db.prepare("SELECT sequence, projection_hash AS hash FROM integrity_room_state WHERE room_id=?").get(row.recordId);
-      if (stored?.hash && stored.sequence === current.sequence
-        && projectionContentHash(this.db, row.recordId, current.sequence, current.projection) === stored.hash) {
-        this.clearIntegrityFailure("projection_content", row.recordId);
-      }
+      const stored = this.db.prepare("SELECT sequence, projection_hash AS hash,metadata_hash FROM integrity_room_state WHERE room_id=?").get(row.recordId);
+      const sameBaseline=stored?.hash && stored.sequence===current.sequence
+        && projectionContentHash(this.db,row.recordId,current.sequence,current.projection)===stored.hash;
+      // A valid edit elsewhere may have advanced the head after corruption.
+      // Canonical metadata binds membership; every payload still needs its
+      // independent proof. Never retire a lost/empty baseline or an unproved
+      // legacy reference by trusting only the surviving rows.
+      const independentlyRepaired=stored?.hash && stored.sequence!==current.sequence
+        && stored.metadata_hash===projectionDigest(current.projection)
+        && hasMessageAuthority(JSON.parse(current.projection))
+        && !servingProofDrift(this.db,row.recordId,current.projection);
+      if (sameBaseline || independentlyRepaired) this.clearIntegrityFailure("projection_content", row.recordId);
     }
   }
 
@@ -2919,6 +2960,7 @@ this.slaBreachAlerts = new SlaBreachAlertJournal(this); // Task 26: durable in-a
       if (sweep) {
         const stored = this.db.prepare("SELECT sequence, projection_bytes AS bytes, projection_hash AS hash FROM integrity_room_state WHERE room_id=?").get(sweep.id);
         if (!stored) return { ok: false };
+        if (servingProofDrift(this.db,sweep.id,sweep.projection)) return { ok:false,contentDrift:sweep.id,swept:1 };
         if (stored.sequence === sweep.sequence) {
           if (stored.bytes !== sweep.bytes) return { ok: false, contentDrift: sweep.id, swept: 1 };
           if (!stored.hash) return { ok: false };

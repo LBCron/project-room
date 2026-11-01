@@ -1,3 +1,4 @@
+import { operatorWakeIndex } from './operator-wake-index.mjs';
 import { operatorAttachmentIndex } from './operator-attachment-index.mjs';
 import { operatorMessageAuthority } from './operator-message-authority.mjs';
 import { repairLegacyMessages } from './operator-legacy-message-repair.mjs';
@@ -23,6 +24,8 @@ const GET = "GET";
 const ROOM_EXPORT_ROUTE = "/api/operator/rooms/{roomId}/export";
 const ROOM_EXPORT_PATH = /^\/api\/operator\/rooms\/([^/]+)\/export$/;
 const ROUTES = Object.freeze({
+  "/api/operator/wakes/ordered-indexes/plan": POST,
+  "/api/operator/wakes/ordered-indexes/execute": POST,
   "/api/operator/attachments/live-index/plan": POST,
   "/api/operator/attachments/live-index/execute": POST,
   "/api/operator/messages/authority/plan": POST,
@@ -102,6 +105,10 @@ export function createOperatorRoutes({ store, json, reject, body, rate }) {
       res.end(result.body);
       return true;
     }
+    if (path === "/api/operator/wakes/ordered-indexes/plan" || path === "/api/operator/wakes/ordered-indexes/execute") {
+      json(res, 200, operatorWakeIndex(store, await body(req), path.endsWith('/execute'), requestId));
+      return true;
+    }
     if (path === "/api/operator/attachments/live-index/plan" || path === "/api/operator/attachments/live-index/execute") {
       json(res, 200, operatorAttachmentIndex(store, await body(req), path.endsWith('/execute'), requestId));
       return true;
@@ -170,6 +177,17 @@ export function createOperatorRoutes({ store, json, reject, body, rate }) {
 export const OPERATOR_ATTACHMENT_INDEX_ROUTES = Object.freeze(['plan', 'execute'].map(phase => Object.freeze({
   id: 'operator.attachment-live-index.' + phase, method: 'POST',
   path: '/api/operator/attachments/live-index/' + phase, mount: true,
+  auth: 'none', capability: null, scope: 'worker', events: [],
+  parity: 'exempt:operator-token-only maintenance; no public or MCP authority',
+  schema: { body: { type: 'object' }, response: { type: 'object' } },
+  async handler(ctx) {
+    const handled = await ctx.operatorRoutes(ctx.req, ctx.res, { url: ctx.url, remoteAddress: ctx.remoteAddress, requestId: ctx.operationId });
+    if (!handled) ctx.reject(404, 'not_found', 'Not found');
+  }
+})));
+export const OPERATOR_WAKE_INDEX_ROUTES = Object.freeze(['plan', 'execute'].map(phase => Object.freeze({
+  id: 'operator.wake-ordered-indexes.' + phase, method: 'POST',
+  path: '/api/operator/wakes/ordered-indexes/' + phase, mount: true,
   auth: 'none', capability: null, scope: 'worker', events: [],
   parity: 'exempt:operator-token-only maintenance; no public or MCP authority',
   schema: { body: { type: 'object' }, response: { type: 'object' } },

@@ -1,0 +1,27 @@
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import { RoomStore } from '../server/store.mjs';
+import { initialRoom } from '../server/bootstrap.mjs';
+import { exportNdjsonText } from '../server/room-export.mjs';
+import { replayNdjsonInto } from '../server/restore-ndjson.mjs';
+import { operatorWakeIndex } from '../server/operator-wake-index.mjs';
+import { WAKE_INDEX_RECEIPT, wakeIndexState, boundedWakeDeliveryActive } from '../server/wake-delivery-window.mjs';
+test('logical restore preserves activation receipt and explicitly reinstalls admitted indexes without replacing it', t => {
+  const source = new RoomStore(':memory:'); source.initialize(initialRoom());
+  const target = new RoomStore(':memory:'); t.after(() => { source.close(); target.close(); });
+  const reason = 'Synthetic original installation';
+  const plan = operatorWakeIndex(source, { reason });
+  operatorWakeIndex(source, { reason, requestId: 'original', planHash: plan.planHash }, true);
+  const bytes = source.db.prepare('SELECT counts_json FROM operator_actions WHERE id=?').get(WAKE_INDEX_RECEIPT).counts_json;
+  const restored = replayNdjsonInto(exportNdjsonText(source.db), target); assert.equal(restored.verified, true);
+  assert.equal(wakeIndexState(target.db), 'absent');
+  assert.throws(() => boundedWakeDeliveryActive(target.db), { code: 'storage_unavailable' });
+  assert.equal(target.db.prepare('SELECT counts_json FROM operator_actions WHERE id=?').get(WAKE_INDEX_RECEIPT).counts_json, bytes);
+  const repairReason = 'Synthetic explicit post-restore index reinstallation';
+  const repair = operatorWakeIndex(target, { reason: repairReason, reinstall: true });
+  const input = { reason: repairReason, reinstall: true, requestId: 'restore-install', planHash: repair.planHash };
+  const installed = operatorWakeIndex(target, input, true); assert.equal(installed.duplicate, false);
+  assert.equal(boundedWakeDeliveryActive(target.db), true);
+  assert.equal(target.db.prepare('SELECT counts_json FROM operator_actions WHERE id=?').get(WAKE_INDEX_RECEIPT).counts_json, bytes);
+  assert.deepEqual(operatorWakeIndex(target, input, true), { ...installed, duplicate: true });
+});

@@ -364,6 +364,17 @@ const SOURCE_UNAVAILABLE_NOTICE = "That source is no longer available in this ro
 const workNavigationOrigins = new Map();
 let activeWorkNavigation = null, activeWorkNavigationId = null, workNavigationEpoch = 0, workHistoryReplayKey = null;
 let navigationBoardEpoch = 0;
+// #3892: a cold deep link reaches revealClaimRecord before the lazy board
+// module has installed navigationBoardReady; wait for installation (or its
+// failure/close) instead of exiting on undefined.
+let navigationBoardWaiters = [];
+function settleNavigationBoardWaiters(installed) {
+  const waiters = navigationBoardWaiters; navigationBoardWaiters = [];
+  for (const resolve of waiters) resolve(installed);
+}
+function whenNavigationBoardInstalled() {
+  return navigationBoardReady ? Promise.resolve(true) : new Promise(resolve => navigationBoardWaiters.push(resolve));
+}
 // JDOT-COH-NAV end
 // Phase 2 channels: the visible channel; persisted per room, defaults to the main channel.
 let activeChannelId = DEFAULT_CHANNEL_ID, activeChannelRoomId = null;
@@ -3441,9 +3452,16 @@ async function revealClaimRecord(id) {
   const epoch = workNavigationEpoch;
   if (!$("#board-dialog").open) $("#tasks-board-open").click();
   const opening = navigationBoardEpoch;
-  if (!await navigationBoardReady?.() || opening !== navigationBoardEpoch || epoch !== workNavigationEpoch
-    || !workNavigationContext()) return;
-  await navigationBoardRevealClaim?.(id);
+  const context = workNavigationContext();
+  const current = () => opening === navigationBoardEpoch && epoch === workNavigationEpoch && context === workNavigationContext();
+  if (!await whenNavigationBoardInstalled() || !current()) return;
+  if (!await navigationBoardReady?.() || !current()) return;
+  // #3892: surface a failed reveal like the click path does instead of
+  // leaving the board open on nothing — but only if the user is still on
+  // this destination after the (possibly forced) board read.
+  const revealed = await navigationBoardRevealClaim?.(id);
+  if (!current()) return;
+  if (!revealed) notice(SOURCE_UNAVAILABLE_NOTICE, true);
   syncWorkReturnControl();
 }
 function navigateWorkRecord(kind, id, extra = {}) {
@@ -8316,12 +8334,13 @@ const ready = (async () => {
         .catch(() => { /* keyboard nav is progressive enhancement; the board works without it */ });
       navigationBoardReady = () => controller.whenReady();
       navigationBoardRevealClaim = id => controller.revealClaim(id);
+      settleNavigationBoardWaiters(true);
       return controller;
     },
     // JDOT-COH-NAV end
-    onError: () => notice("Could not load the board. Close and reopen to retry.", true) });
+    onError: () => { settleNavigationBoardWaiters(false); notice("Could not load the board. Close and reopen to retry.", true); } });
   // JDOT-COH-NAV begin
-  resetNavigationBoard = () => { $("#board-dialog").close(); $("#board-panel").open = false; board.reset(); };
+  resetNavigationBoard = () => { settleNavigationBoardWaiters(false); $("#board-dialog").close(); $("#board-panel").open = false; board.reset(); };
   // JDOT-COH-NAV end
   // #3688: the native <dialog> close returns focus to whatever was focused
   // before showModal() — for the board that chain can bottom out at <body>
@@ -8350,7 +8369,7 @@ const ready = (async () => {
   // once on workspace arrival through this hook (see openBoardFromEntrance).
   openBoardFromEntrance = () => { openBoard(); return $("#board-dialog")?.open === true; };
   // JDOT-COH-NAV begin
-  $("#board-close").addEventListener("click", () => { navigationBoardEpoch++; $("#board-dialog").close(); $("#board-panel").open = false; });
+  $("#board-close").addEventListener("click", () => { navigationBoardEpoch++; settleNavigationBoardWaiters(false); $("#board-dialog").close(); $("#board-panel").open = false; });
   $("#board-dialog").addEventListener("cancel", () => { navigationBoardEpoch++; });
   $("#board-dialog").addEventListener("close", () => {
     const opener = boardOpener; boardOpener = null;

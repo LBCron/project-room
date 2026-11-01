@@ -21,7 +21,7 @@ Two of Grok's open PRs are red at head for small, PR-caused reasons (NOT pre-exi
 
 Heads: #5409 `7b99c915` (base main), #5411 `a8076524` (base `grok/claim-threads`), #5412 `930455e4` (base `grok/claim-thread-mcp`).
 
-Failed jobs at heads — #5409: contract, unit, test, browser, browser shard 1/6 · #5411: contract, unit, test, cloudflare · #5412: contract, unit, test, browser, browser shards 1/6 and 3/6. PASSED at all three heads: gates, mechanical, schema-gate, changes, safety-net, lint, visual-refresh-guard, cloudflare (#5409/#5412), most browser shards.
+Failed jobs at heads — #5409: contract, unit, test, browser, browser shard 1/6, cloudflare · #5411: contract, unit, test, cloudflare · #5412: contract, unit, test, browser, browser shards 1/6 and 3/6. PASSED at all three heads: gates, mechanical, schema-gate, changes, safety-net, lint, visual-refresh-guard, and most browser shards; cloudflare passed only at #5412.
 
 Pre-existing proof, against the stack's pre-change head: the check runs on #5409's merge-base `b2c428e3eebeaaf698d5beb13d5c655ff05b49b6` (main at the branch point) show **contract = failure, unit = failure, test = failure** — the same three jobs already red on main before the stack's first commit. Those three are NOT the stack's to fix.
 

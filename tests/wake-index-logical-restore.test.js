@@ -31,6 +31,8 @@ test('logical restore preserves activation receipt and explicitly reinstalls adm
   assert.equal(target.db.prepare('SELECT counts_json FROM operator_actions WHERE id=?').get(WAKE_INDEX_RECEIPT).counts_json, bytes);
   assert.deepEqual(operatorWakeIndex(target, input, true), { ...installed, duplicate: true });
   assert.deepEqual(operatorWakeIndex(target, originalInput, true), { ...first, duplicate: true });
+  target.transaction(() => target.db.prepare('DELETE FROM operator_actions WHERE id=?').run(WAKE_INDEX_RECEIPT));
+  assert.throws(() => operatorWakeIndex(target, input, true), { code: 'wake_index_conflict' });
 });
 test('reinstall is separate explicit intent, refuses partial pair and retains original bytes', t => {
   const store = new RoomStore(':memory:'); t.after(() => store.close()); store.initialize(initialRoom());

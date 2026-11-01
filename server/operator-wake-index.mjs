@@ -60,6 +60,7 @@ export function operatorWakeIndex(store, input, execute = false, requestId = nul
     if (execute && request.reinstall) {
       const prior = store.db.prepare('SELECT action,target_kind,target_id,result,request_id,plan_hash,CASE WHEN length(CAST(counts_json AS BLOB))<=8192 THEN counts_json ELSE NULL END AS counts_json FROM operator_actions WHERE id=?').get(repairId);
       if (prior) {
+        if (!original) fail('wake_index_conflict', 'Reinstall retry requires the verified original receipt');
         boundedWakeDeliveryActive(store.db);
         let saved; try { saved = JSON.parse(prior.counts_json); } catch { throw new ServiceError(503, 'storage_unavailable', 'Wake reinstall receipt requires reconciliation'); }
         if (prior.action !== 'wake_delivery_indexes_reinstall' || prior.target_kind !== 'database' || prior.target_id !== 'wake_delivery' || prior.result !== 'ok'

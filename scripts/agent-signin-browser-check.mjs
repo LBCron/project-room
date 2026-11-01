@@ -137,7 +137,7 @@ for (const accountCookie of [false, true]) test(`agent browser sign-in keeps its
   // sign-in — on the sign-in page now (decision #37), and its steps
   // (or the Enter link under it) take the agent into the room.
   await page.locator("#agent-first-run").waitFor({ state: "visible" });
-  assert.match(await page.locator("#agent-first-run").textContent(), /DMs are open by default/);
+  assert.equal(await page.locator("#agent-first-run .agent-first-run-steps button").first().getAttribute("data-step"), "board", "useful work is the first action");
   await page.locator('#agent-first-run [data-step="dismiss"]').click();
   await page.locator("#agent-first-run").waitFor({ state: "detached" });
   assert.equal(await page.evaluate(secret => Object.values(localStorage).concat(Object.values(sessionStorage)).some(value => value.includes(secret)), identity.secret), false);

@@ -31,7 +31,8 @@ function prepare(store,input,actorId){
  const size=db.prepare('SELECT length(CAST(item_json AS BLOB)) bytes FROM work_claims WHERE room_id=? AND claim_id=?').get(roomId,claimId);
  bytes+=size?.bytes??0;if(!size||size.bytes>131072||bytes>262144)fail('mirror_retirement_too_large','Select one existing mirror within the bounded retirement input');
  const raw=db.prepare('SELECT item_json FROM work_claims WHERE room_id=? AND claim_id=?').get(roomId,claimId).item_json,envelope=JSON.parse(raw),data=envelope.v===undefined?envelope:envelope.data;
- if(!data||Object.keys(data).some(key=>!WORK_CLAIM_FIELDS.includes(key))||envelope.v!==undefined&&Object.keys(envelope).some(key=>!['v','kind','data'].includes(key)))
+ if (!data || Object.keys(data).some(key => ! WORK_CLAIM_FIELDS . includes ( key ))
+  || envelope.v !== undefined && Object.keys(envelope).some(key => !['v', 'kind', 'data'].includes(key)))
   fail('independent_legacy_work','Unknown legacy fields require explicit reconciliation; retirement will not drop them');
  const legacy=workOf(decodeWorkClaimRow(raw)),item=JSON.parse(current);
  if(legacy.workItemId!==workItemId||legacy.id!==claimId||legacy.kind!=='work'||legacy.supersededBy
@@ -39,7 +40,7 @@ function prepare(store,input,actorId){
   fail('independent_legacy_work','This row is not an unambiguous current mirror. Reconcile its independent holder/state through the existing board inspection route');
  if((legacy.files?.length??0)||(legacy.attestations?.length??0)||(legacy.reviews?.length??0)||Object.keys(legacy.fileBlocks??{}).length)fail('independent_legacy_work','Existing files, review obligations, or file locks require explicit reconciliation before closing this mirror');
  if(['done','closed'].includes(legacy.state))fail('mirror_already_retired','The mirror is terminal; preserve its history and proceed with independent qualification');
- if(legacy.history.length>MAX_CLAIM_HISTORY)fail('mirror_retirement_too_large','Apply existing legacy history retention before this bounded retirement');
+ if (legacy.history.length > MAX_CLAIM_HISTORY)fail('mirror_retirement_too_large','Apply existing legacy history retention before this bounded retirement');
  const binding={version:1,roomId,generation,actorId,head,hHead:source.hHead,headerHash:source.headerHash,workItemId,workRevision:scalar.revision,workDigest:scalar.digest,claimId,mirrorDigest:hash(raw)};
  return {binding,planHash:hash(JSON.stringify(binding)),legacy,item,current,inputBytes:bytes};
 }

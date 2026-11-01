@@ -1,0 +1,89 @@
+{"event":"room.cold_start","clockSemantics":"runtime-dependent","durationMs":52,"integrity":"eager","phases":{"schema":{"ms":12,"rowsRead":0},"plugin":{"ms":22,"rowsRead":0},"fence":{"ms":9,"rowsRead":0},"verifies":{"ms":2,"rowsRead":0},"checksum":{"ms":0,"rowsRead":0}},"cpuMs":53,"heapBytes":40001416,"rooms":0,"sequences":0,"projectionBytes":0,"events":0}
+{"event":"room.store_initialized","initializationMs":53,"legacyColdStartMs":52,"clockSemantics":"runtime-dependent","cpuMeasured":false}
+[boot-config] ERROR: the agent card is UNSIGNED and no explicit opt-in was recorded at build time — members fetching /.well-known/agent-card.json will see an unsigned card (marked signed:false). To fix: set ROOM_AGENT_CARD_SIGNING_KEY and re-run scripts/sign-agent-card.mjs, or pass --allow-unsigned explicitly to record the choice.
+ROOM_SECURITY_CONTACT is unset; /.well-known/security.txt returns 404
+No magic-link mailer is configured: email-verification gates are relaxed (agent-invite escape hatch); /api/health reports emailVerification: relaxed-no-mailer
+{"event":"room.cold_start","clockSemantics":"runtime-dependent","durationMs":40,"integrity":"eager","phases":{"schema":{"ms":9,"rowsRead":0},"plugin":{"ms":20,"rowsRead":0},"fence":{"ms":6,"rowsRead":0},"verifies":{"ms":1,"rowsRead":0},"checksum":{"ms":0,"rowsRead":0}},"cpuMs":42,"heapBytes":47545664,"rooms":0,"sequences":0,"projectionBytes":0,"events":0}
+{"event":"room.store_initialized","initializationMs":41,"legacyColdStartMs":40,"clockSemantics":"runtime-dependent","cpuMeasured":false}
+▶ operator archive below the backfill cursor
+  ✔ a parked room archives only rows at or below its cursor, frees bytes, and certifies once unparked (273.889625ms)
+{"event":"room.cold_start","clockSemantics":"runtime-dependent","durationMs":45,"integrity":"eager","phases":{"schema":{"ms":11,"rowsRead":0},"plugin":{"ms":22,"rowsRead":0},"fence":{"ms":7,"rowsRead":0},"verifies":{"ms":1,"rowsRead":0},"checksum":{"ms":0,"rowsRead":0}},"cpuMs":46,"heapBytes":45818296,"rooms":0,"sequences":0,"projectionBytes":0,"events":0}
+{"event":"room.store_initialized","initializationMs":45,"legacyColdStartMs":45,"clockSemantics":"runtime-dependent","cpuMeasured":false}
+  ✔ an old message a later event names stays, and the archive still certifies (196.921875ms)
+{"event":"room.cold_start","clockSemantics":"runtime-dependent","durationMs":40,"integrity":"eager","phases":{"schema":{"ms":9,"rowsRead":0},"plugin":{"ms":19,"rowsRead":0},"fence":{"ms":7,"rowsRead":0},"verifies":{"ms":1,"rowsRead":0},"checksum":{"ms":0,"rowsRead":0}},"cpuMs":43,"heapBytes":49408856,"rooms":0,"sequences":0,"projectionBytes":0,"events":0}
+{"event":"room.store_initialized","initializationMs":40,"legacyColdStartMs":40,"clockSemantics":"runtime-dependent","cpuMeasured":false}
+  ✔ without a usable cursor nothing moves, and the flag is checked (153.114583ms)
+{"event":"room.cold_start","clockSemantics":"runtime-dependent","durationMs":71,"integrity":"eager","phases":{"schema":{"ms":8,"rowsRead":0},"plugin":{"ms":52,"rowsRead":0},"fence":{"ms":6,"rowsRead":0},"verifies":{"ms":1,"rowsRead":0},"checksum":{"ms":0,"rowsRead":0}},"cpuMs":38,"heapBytes":62124000,"rooms":0,"sequences":0,"projectionBytes":0,"events":0}
+{"event":"room.store_initialized","initializationMs":71,"legacyColdStartMs":71,"clockSemantics":"runtime-dependent","cpuMeasured":false}
+  ✔ a caught-up room archives the same with or without the flag (146.910375ms)
+{"event":"room.cold_start","clockSemantics":"runtime-dependent","durationMs":35,"integrity":"eager","phases":{"schema":{"ms":8,"rowsRead":0},"plugin":{"ms":17,"rowsRead":0},"fence":{"ms":5,"rowsRead":0},"verifies":{"ms":1,"rowsRead":0},"checksum":{"ms":0,"rowsRead":0}},"cpuMs":34,"heapBytes":62931424,"rooms":0,"sequences":0,"projectionBytes":0,"events":0}
+{"event":"room.store_initialized","initializationMs":35,"legacyColdStartMs":35,"clockSemantics":"runtime-dependent","cpuMeasured":false}
+  ✔ below-cursor planning never invokes global backfill or changes its evidence (202.494917ms)
+{"event":"room.cold_start","clockSemantics":"runtime-dependent","durationMs":34,"integrity":"eager","phases":{"schema":{"ms":8,"rowsRead":0},"plugin":{"ms":17,"rowsRead":0},"fence":{"ms":5,"rowsRead":0},"verifies":{"ms":1,"rowsRead":0},"checksum":{"ms":0,"rowsRead":0}},"cpuMs":34,"heapBytes":63461424,"rooms":0,"sequences":0,"projectionBytes":0,"events":0}
+{"event":"room.store_initialized","initializationMs":34,"legacyColdStartMs":34,"clockSemantics":"runtime-dependent","cpuMeasured":false}
+  ✔ a mismatched moving row refuses both planning and execution without publishing a marker (154.859375ms)
+  ✔ an invalid cursor event anchor refuses below-cursor compaction (142.893625ms)
+✔ operator archive below the backfill cursor (1271.927625ms)
+{"event":"room.cold_start","clockSemantics":"runtime-dependent","durationMs":56,"integrity":"eager","phases":{"schema":{"ms":14,"rowsRead":0},"plugin":{"ms":24,"rowsRead":0},"fence":{"ms":10,"rowsRead":0},"verifies":{"ms":2,"rowsRead":0},"checksum":{"ms":0,"rowsRead":0}},"cpuMs":57,"heapBytes":26120424,"rooms":0,"sequences":0,"projectionBytes":0,"events":0}
+{"event":"room.store_initialized","initializationMs":57,"legacyColdStartMs":56,"clockSemantics":"runtime-dependent","cpuMeasured":false}
+{"event":"room.cold_start","clockSemantics":"runtime-dependent","durationMs":46,"integrity":"eager","phases":{"schema":{"ms":12,"rowsRead":0},"plugin":{"ms":21,"rowsRead":0},"fence":{"ms":7,"rowsRead":0},"verifies":{"ms":1,"rowsRead":0},"checksum":{"ms":0,"rowsRead":0}},"cpuMs":50,"heapBytes":38486120,"rooms":0,"sequences":0,"projectionBytes":0,"events":0}
+{"event":"room.store_initialized","initializationMs":46,"legacyColdStartMs":46,"clockSemantics":"runtime-dependent","cpuMeasured":false}
+✔ with a frozen clock one dry run replays no more than the event cap and refuses with progress kept (404.726583ms)
+✔ repeated capped dry runs finish the catch-up, certify and plan (425.285334ms)
+✔ the default cap keeps one call inside the 30 s CPU limit at the slowest measured replay rate (0.0905ms)
+{"event":"room.cold_start","clockSemantics":"runtime-dependent","durationMs":52,"integrity":"eager","phases":{"schema":{"ms":12,"rowsRead":0},"plugin":{"ms":21,"rowsRead":0},"fence":{"ms":9,"rowsRead":0},"verifies":{"ms":2,"rowsRead":0},"checksum":{"ms":0,"rowsRead":0}},"cpuMs":53,"heapBytes":40165824,"rooms":0,"sequences":0,"projectionBytes":0,"events":0}
+{"event":"room.store_initialized","initializationMs":53,"legacyColdStartMs":52,"clockSemantics":"runtime-dependent","cpuMeasured":false}
+[boot-config] ERROR: the agent card is UNSIGNED and no explicit opt-in was recorded at build time — members fetching /.well-known/agent-card.json will see an unsigned card (marked signed:false). To fix: set ROOM_AGENT_CARD_SIGNING_KEY and re-run scripts/sign-agent-card.mjs, or pass --allow-unsigned explicitly to record the choice.
+ROOM_SECURITY_CONTACT is unset; /.well-known/security.txt returns 404
+No magic-link mailer is configured: email-verification gates are relaxed (agent-invite escape hatch); /api/health reports emailVerification: relaxed-no-mailer
+{"event":"room.cold_start","clockSemantics":"runtime-dependent","durationMs":42,"integrity":"eager","phases":{"schema":{"ms":9,"rowsRead":0},"plugin":{"ms":21,"rowsRead":0},"fence":{"ms":7,"rowsRead":0},"verifies":{"ms":1,"rowsRead":0},"checksum":{"ms":0,"rowsRead":0}},"cpuMs":60,"heapBytes":45898080,"rooms":0,"sequences":0,"projectionBytes":0,"events":0}
+{"event":"room.store_initialized","initializationMs":43,"legacyColdStartMs":42,"clockSemantics":"runtime-dependent","cpuMeasured":false}
+▶ operator archive door
+  ✔ a dry run catches the room up, certifies it, plans, and changes no room data (202.1435ms)
+{"event":"room.cold_start","clockSemantics":"runtime-dependent","durationMs":44,"integrity":"eager","phases":{"schema":{"ms":10,"rowsRead":0},"plugin":{"ms":23,"rowsRead":0},"fence":{"ms":6,"rowsRead":0},"verifies":{"ms":1,"rowsRead":0},"checksum":{"ms":0,"rowsRead":0}},"cpuMs":44,"heapBytes":48182040,"rooms":0,"sequences":0,"projectionBytes":0,"events":0}
+{"event":"room.store_initialized","initializationMs":45,"legacyColdStartMs":44,"clockSemantics":"runtime-dependent","cpuMeasured":false}
+  ✔ a real run needs the dry run's counts; stale counts are refused with nothing changed (160.141833ms)
+{"event":"room.cold_start","clockSemantics":"runtime-dependent","durationMs":55,"integrity":"eager","phases":{"schema":{"ms":13,"rowsRead":0},"plugin":{"ms":27,"rowsRead":0},"fence":{"ms":10,"rowsRead":0},"verifies":{"ms":1,"rowsRead":0},"checksum":{"ms":0,"rowsRead":0}},"cpuMs":54,"heapBytes":54947824,"rooms":0,"sequences":0,"projectionBytes":0,"events":0}
+{"event":"room.store_initialized","initializationMs":55,"legacyColdStartMs":55,"clockSemantics":"runtime-dependent","cpuMeasured":false}
+  ✔ a real run archives a room whose certification a later post voided, frees bytes, and posting continues (177.671917ms)
+{"event":"room.cold_start","clockSemantics":"runtime-dependent","durationMs":41,"integrity":"eager","phases":{"schema":{"ms":10,"rowsRead":0},"plugin":{"ms":20,"rowsRead":0},"fence":{"ms":5,"rowsRead":0},"verifies":{"ms":1,"rowsRead":0},"checksum":{"ms":0,"rowsRead":0}},"cpuMs":42,"heapBytes":55863048,"rooms":0,"sequences":0,"projectionBytes":0,"events":0}
+{"event":"room.store_initialized","initializationMs":42,"legacyColdStartMs":41,"clockSemantics":"runtime-dependent","cpuMeasured":false}
+  ✔ a room that cannot certify is refused with the step named, audited, and left unchanged (143.801333ms)
+{"event":"room.cold_start","clockSemantics":"runtime-dependent","durationMs":38,"integrity":"eager","phases":{"schema":{"ms":9,"rowsRead":0},"plugin":{"ms":19,"rowsRead":0},"fence":{"ms":6,"rowsRead":0},"verifies":{"ms":1,"rowsRead":0},"checksum":{"ms":0,"rowsRead":0}},"cpuMs":39,"heapBytes":49235216,"rooms":0,"sequences":0,"projectionBytes":0,"events":0}
+{"event":"room.store_initialized","initializationMs":39,"legacyColdStartMs":38,"clockSemantics":"runtime-dependent","cpuMeasured":false}
+  ✔ input is checked before anything runs (59.524416ms)
+{"event":"room.cold_start","clockSemantics":"runtime-dependent","durationMs":37,"integrity":"eager","phases":{"schema":{"ms":9,"rowsRead":0},"plugin":{"ms":19,"rowsRead":0},"fence":{"ms":5,"rowsRead":0},"verifies":{"ms":1,"rowsRead":0},"checksum":{"ms":0,"rowsRead":0}},"cpuMs":37,"heapBytes":54833904,"rooms":0,"sequences":0,"projectionBytes":0,"events":0}
+{"event":"room.store_initialized","initializationMs":37,"legacyColdStartMs":37,"clockSemantics":"runtime-dependent","cpuMeasured":false}
+  ✔ without the operator token the door is the same 404 as an unknown path (81.824708ms)
+✔ operator archive door (826.049833ms)
+✔ targeted parity: a room not replayed to its head is not certified and the sweep does not move (45.699375ms)
+✔ no projection-cap refusal tells people to raise a limit that has no setting (11.898458ms)
+{"event":"room.cold_start","clockSemantics":"runtime-dependent","durationMs":57,"integrity":"eager","phases":{"schema":{"ms":11,"rowsRead":0},"plugin":{"ms":22,"rowsRead":0},"fence":{"ms":17,"rowsRead":0},"verifies":{"ms":4,"rowsRead":0},"checksum":{"ms":0,"rowsRead":0}},"cpuMs":58,"heapBytes":26254800,"rooms":0,"sequences":0,"projectionBytes":0,"events":0}
+{"event":"room.store_initialized","initializationMs":58,"legacyColdStartMs":57,"clockSemantics":"runtime-dependent","cpuMeasured":false}
+{"event":"room.cold_start","clockSemantics":"runtime-dependent","durationMs":41,"integrity":"eager","phases":{"schema":{"ms":11,"rowsRead":0},"plugin":{"ms":21,"rowsRead":0},"fence":{"ms":7,"rowsRead":0},"verifies":{"ms":1,"rowsRead":0},"checksum":{"ms":0,"rowsRead":0}},"cpuMs":42,"heapBytes":31683600,"rooms":0,"sequences":0,"projectionBytes":0,"events":0}
+{"event":"room.store_initialized","initializationMs":41,"legacyColdStartMs":41,"clockSemantics":"runtime-dependent","cpuMeasured":false}
+{"event":"room.cold_start","clockSemantics":"runtime-dependent","durationMs":34,"integrity":"eager","phases":{"schema":{"ms":9,"rowsRead":0},"plugin":{"ms":18,"rowsRead":0},"fence":{"ms":6,"rowsRead":0},"verifies":{"ms":1,"rowsRead":0},"checksum":{"ms":0,"rowsRead":0}},"cpuMs":35,"heapBytes":37282392,"rooms":0,"sequences":0,"projectionBytes":0,"events":0}
+{"event":"room.store_initialized","initializationMs":35,"legacyColdStartMs":34,"clockSemantics":"runtime-dependent","cpuMeasured":false}
+{"event":"room.cold_start","clockSemantics":"runtime-dependent","durationMs":41,"integrity":"eager","phases":{"schema":{"ms":10,"rowsRead":0},"plugin":{"ms":20,"rowsRead":0},"fence":{"ms":8,"rowsRead":0},"verifies":{"ms":1,"rowsRead":0},"checksum":{"ms":0,"rowsRead":0}},"cpuMs":44,"heapBytes":27545584,"rooms":0,"sequences":0,"projectionBytes":0,"events":0}
+{"event":"room.store_initialized","initializationMs":41,"legacyColdStartMs":41,"clockSemantics":"runtime-dependent","cpuMeasured":false}
+{"event":"room.cold_start","clockSemantics":"runtime-dependent","durationMs":41,"integrity":"eager","phases":{"schema":{"ms":14,"rowsRead":0},"plugin":{"ms":19,"rowsRead":0},"fence":{"ms":6,"rowsRead":0},"verifies":{"ms":1,"rowsRead":0},"checksum":{"ms":0,"rowsRead":0}},"cpuMs":41,"heapBytes":32663040,"rooms":0,"sequences":0,"projectionBytes":0,"events":0}
+{"event":"room.store_initialized","initializationMs":41,"legacyColdStartMs":41,"clockSemantics":"runtime-dependent","cpuMeasured":false}
+{"event":"room.cold_start","clockSemantics":"runtime-dependent","durationMs":40,"integrity":"deferred","phases":{"schema":{"ms":10,"rowsRead":0},"plugin":{"ms":21,"rowsRead":0},"fence":{"ms":7,"rowsRead":0},"verifies":{"ms":1,"rowsRead":0},"checksum":{"ms":0,"rowsRead":0}},"cpuMs":40,"heapBytes":38197088,"rooms":0,"sequences":0,"projectionBytes":0,"events":0}
+{"event":"room.store_initialized","initializationMs":40,"legacyColdStartMs":40,"clockSemantics":"runtime-dependent","cpuMeasured":false}
+{"event":"room.cold_start","clockSemantics":"runtime-dependent","durationMs":37,"integrity":"eager","phases":{"schema":{"ms":11,"rowsRead":0},"plugin":{"ms":18,"rowsRead":0},"fence":{"ms":7,"rowsRead":0},"verifies":{"ms":1,"rowsRead":0},"checksum":{"ms":0,"rowsRead":0}},"cpuMs":39,"heapBytes":28683392,"rooms":0,"sequences":0,"projectionBytes":0,"events":0}
+{"event":"room.store_initialized","initializationMs":37,"legacyColdStartMs":37,"clockSemantics":"runtime-dependent","cpuMeasured":false}
+✔ unused serialized candidates never publish proof and expire after their transaction (63.8445ms)
+✔ proof updates roll back when the actual projection write fails (47.386458ms)
+✔ entity proof binds current payload and query indexes without scanning other messages (36.655083ms)
+✔ isolated rollback discards its candidate without consuming the outer candidate (43.131583ms)
+✔ referral row, event, projection and proof stay atomic for standalone callers (44.726375ms)
+✔ deferred-integrity runtime migrates before any failure journal has been created (46.0115ms)
+✔ legacy bootstrap trusts a matching current metadata proof after a legitimate write advances an older baseline (42.709375ms)
+ℹ tests 25
+ℹ suites 2
+ℹ pass 25
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 1460.339167

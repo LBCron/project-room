@@ -1,0 +1,28 @@
+{
+  "found": true,
+  "from": "server/operator-routes.mjs",
+  "to": "server/write-integrity.mjs",
+  "nodes": [
+    {
+      "kind": "file",
+      "file": "server/operator-routes.mjs"
+    },
+    {
+      "kind": "file",
+      "file": "server/operator-message-authority.mjs"
+    },
+    {
+      "kind": "file",
+      "file": "server/write-integrity.mjs"
+    }
+  ],
+  "engine": "graphify",
+  "revision": "9dc769a1ed8279b1925ffd46232fc3bd1367d114",
+  "builtAt": 1793513865898,
+  "truncated": true,
+  "sourceScope": "server",
+  "projection": "files-symbols-imports-calls",
+  "semanticCompleteness": "partial",
+  "graphifyVersion": "0.9.96",
+  "schemaVersion": null
+}

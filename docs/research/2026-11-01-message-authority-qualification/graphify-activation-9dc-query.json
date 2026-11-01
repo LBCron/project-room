@@ -1,0 +1,38 @@
+{
+  "found": true,
+  "kind": "symbol",
+  "symbol": "operatorMessageAuthority",
+  "label": "operatorMessageAuthority",
+  "definitions": [
+    {
+      "file": "server/operator-message-authority.mjs",
+      "kind": "function",
+      "line": 85
+    }
+  ],
+  "neighbors": [
+    "server/db-util.mjs",
+    "server/message-authority.mjs",
+    "server/operator-actions.mjs",
+    "server/service-error.mjs",
+    "server/write-integrity.mjs"
+  ],
+  "dependents": [
+    "server/operator-routes.mjs"
+  ],
+  "callers": [
+    {
+      "file": "server/operator-routes.mjs",
+      "symbol": "operatorMessageAuthority"
+    }
+  ],
+  "engine": "graphify",
+  "revision": "9dc769a1ed8279b1925ffd46232fc3bd1367d114",
+  "builtAt": 1793513865898,
+  "truncated": true,
+  "sourceScope": "server",
+  "projection": "files-symbols-imports-calls",
+  "semanticCompleteness": "partial",
+  "graphifyVersion": "0.9.96",
+  "schemaVersion": null
+}

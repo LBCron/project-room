@@ -1,0 +1,54 @@
+{"event":"room.cold_start","clockSemantics":"io-bound","durationMs":52,"integrity":"deferred","phases":{"schema":{"ms":12,"rowsRead":7935},"plugin":{"ms":23,"rowsRead":40258},"fence":{"ms":12,"rowsRead":40845},"verifies":{"ms":3,"rowsRead":19095},"checksum":{"ms":0,"rowsRead":0}},"rooms":0,"sequences":0,"projectionBytes":0,"events":0}
+{"event":"room.store_initialized","initializationMs":53,"legacyColdStartMs":52,"clockSemantics":"io-bound","cpuMeasured":false}
+[boot-config] ERROR: the agent card is UNSIGNED and no explicit opt-in was recorded at build time — members fetching /.well-known/agent-card.json will see an unsigned card (marked signed:false). To fix: set ROOM_AGENT_CARD_SIGNING_KEY and re-run scripts/sign-agent-card.mjs, or pass --allow-unsigned explicitly to record the choice.
+No magic-link mailer is configured: email-verification gates are relaxed (agent-invite escape hatch); /api/health reports emailVerification: relaxed-no-mailer
+{"event":"room.do_initialized","clockSemantics":"io-bound","cpuMeasured":false,"initializationMs":58,"storeInitializationMs":53}
+{"event":"room.cold_start","clockSemantics":"io-bound","durationMs":11,"integrity":"eager","phases":{"schema":{"ms":2,"rowsRead":21958},"plugin":{"ms":3,"rowsRead":48520},"fence":{"ms":4,"rowsRead":40580},"verifies":{"ms":2,"rowsRead":19517},"checksum":{"ms":0,"rowsRead":0}},"rooms":1,"sequences":5,"projectionBytes":748,"events":5}
+{"event":"room.store_initialized","initializationMs":11,"legacyColdStartMs":11,"clockSemantics":"io-bound","cpuMeasured":false}
+✔ Workers canonical authority survives cold reopen, corruption rollback and reverse (770.928041ms)
+{"event":"room.cold_start","clockSemantics":"io-bound","durationMs":64,"integrity":"eager","phases":{"schema":{"ms":13,"rowsRead":7935},"plugin":{"ms":34,"rowsRead":40258},"fence":{"ms":10,"rowsRead":40845},"verifies":{"ms":4,"rowsRead":19095},"checksum":{"ms":0,"rowsRead":0}},"rooms":0,"sequences":0,"projectionBytes":0,"events":0}
+{"event":"room.store_initialized","initializationMs":65,"legacyColdStartMs":64,"clockSemantics":"io-bound","cpuMeasured":false}
+{"event":"room.cold_start","clockSemantics":"io-bound","durationMs":19,"integrity":"eager","phases":{"schema":{"ms":4,"rowsRead":21958},"plugin":{"ms":4,"rowsRead":48520},"fence":{"ms":6,"rowsRead":40580},"verifies":{"ms":3,"rowsRead":19517},"checksum":{"ms":0,"rowsRead":0}},"rooms":1,"sequences":5,"projectionBytes":748,"events":5}
+{"event":"room.store_initialized","initializationMs":20,"legacyColdStartMs":19,"clockSemantics":"io-bound","cpuMeasured":false}
+{"event":"room.cold_start","clockSemantics":"io-bound","durationMs":17,"integrity":"eager","phases":{"schema":{"ms":3,"rowsRead":21958},"plugin":{"ms":4,"rowsRead":48520},"fence":{"ms":5,"rowsRead":40581},"verifies":{"ms":3,"rowsRead":19517},"checksum":{"ms":0,"rowsRead":0}},"rooms":1,"sequences":6,"projectionBytes":748,"events":6}
+{"event":"room.store_initialized","initializationMs":17,"legacyColdStartMs":17,"clockSemantics":"io-bound","cpuMeasured":false}
+{"event":"room.cold_start","clockSemantics":"io-bound","durationMs":17,"integrity":"eager","phases":{"schema":{"ms":3,"rowsRead":21961},"plugin":{"ms":5,"rowsRead":48520},"fence":{"ms":5,"rowsRead":40581},"verifies":{"ms":2,"rowsRead":19517},"checksum":{"ms":0,"rowsRead":0}},"rooms":1,"sequences":6,"projectionBytes":1337,"events":6}
+{"event":"room.store_initialized","initializationMs":18,"legacyColdStartMs":17,"clockSemantics":"io-bound","cpuMeasured":false}
+AUTHORITY_RESTART {"before":{"sequence":5,"canonical":false,"hasArray":true,"projectionBytes":1201,"bodies":["Body 0","Body 1","Body 2"],"receipts":0,"rollingWindow":null,"rollingEntities":false},"canonical":{"sequence":5,"canonical":true,"hasArray":false,"projectionBytes":748,"bodies":["Body 0","Body 1","Body 2"],"receipts":1,"rollingWindow":null,"rollingEntities":false},"afterEdit":{"sequence":6,"canonical":true,"hasArray":false,"projectionBytes":748,"bodies":["Body 0","Body 1","Saved after restart"],"receipts":1,"rollingWindow":null,"rollingEntities":false},"final":{"sequence":6,"canonical":false,"hasArray":true,"projectionBytes":1337,"bodies":["Body 0","Body 1","Saved after restart"],"receipts":2,"rollingWindow":null,"rollingEntities":false}}
+✔ actual workerd restarts preserve conversion, later edit, retry receipt and current-state reverse (1226.29675ms)
+{"event":"room.cold_start","clockSemantics":"io-bound","durationMs":48,"integrity":"eager","phases":{"schema":{"ms":11,"rowsRead":7935},"plugin":{"ms":22,"rowsRead":40258},"fence":{"ms":9,"rowsRead":40845},"verifies":{"ms":4,"rowsRead":19095},"checksum":{"ms":0,"rowsRead":0}},"rooms":0,"sequences":0,"projectionBytes":0,"events":0}
+{"event":"room.store_initialized","initializationMs":48,"legacyColdStartMs":48,"clockSemantics":"io-bound","cpuMeasured":false}
+{"event":"room.cold_start","clockSemantics":"io-bound","durationMs":16,"integrity":"eager","phases":{"schema":{"ms":3,"rowsRead":21958},"plugin":{"ms":4,"rowsRead":48520},"fence":{"ms":5,"rowsRead":40580},"verifies":{"ms":2,"rowsRead":19517},"checksum":{"ms":0,"rowsRead":0}},"rooms":1,"sequences":5,"projectionBytes":748,"events":5}
+{"event":"room.store_initialized","initializationMs":17,"legacyColdStartMs":16,"clockSemantics":"io-bound","cpuMeasured":false}
+✔ persistent canonical corruption refuses a freshly planned reverse (432.195209ms)
+{"event":"room.cold_start","clockSemantics":"io-bound","durationMs":46,"integrity":"eager","phases":{"schema":{"ms":12,"rowsRead":7935},"plugin":{"ms":21,"rowsRead":40258},"fence":{"ms":9,"rowsRead":40845},"verifies":{"ms":3,"rowsRead":19095},"checksum":{"ms":0,"rowsRead":0}},"rooms":0,"sequences":0,"projectionBytes":0,"events":0}
+{"event":"room.store_initialized","initializationMs":47,"legacyColdStartMs":46,"clockSemantics":"io-bound","cpuMeasured":false}
+✖ workerd qualifies a near-row-cap eligible conversion with bounded source inventory (1360.041833ms)
+ℹ tests 4
+ℹ suites 0
+ℹ pass 3
+ℹ fail 1
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 3268.815708
+
+✖ failing tests:
+
+test at cloudflare/operator-message-authority.check.mjs:46:1
+✖ workerd qualifies a near-row-cap eligible conversion with bounded source inventory (1360.041833ms)
+  AssertionError [ERR_ASSERTION]: {"status":409,"body":{"error":{"code":"authority_budget_exceeded","message":"Hydrated output exceeds the bounded migration budget; no conversion was attempted"}}}
+  
+  409 !== 200
+  
+      at TestContext.<anonymous> (file:///Users/johnpotter/src/pr-canonical-activation-1101/cloudflare/operator-message-authority.check.mjs:50:78)
+      at process.processTicksAndRejections (node:internal/process/task_queues:104:5)
+      at async Test.run (node:internal/test_runner/test:1409:7)
+      at async Test.processPendingSubtests (node:internal/test_runner/test:974:7) {
+    generatedMessage: false,
+    code: 'ERR_ASSERTION',
+    actual: 409,
+    expected: 200,
+    operator: 'strictEqual',
+    diff: 'simple'
+  }

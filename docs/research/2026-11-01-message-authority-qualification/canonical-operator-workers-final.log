@@ -1,0 +1,35 @@
+{"event":"room.cold_start","clockSemantics":"io-bound","durationMs":53,"integrity":"deferred","phases":{"schema":{"ms":13,"rowsRead":7935},"plugin":{"ms":24,"rowsRead":40258},"fence":{"ms":11,"rowsRead":40845},"verifies":{"ms":3,"rowsRead":19095},"checksum":{"ms":0,"rowsRead":0}},"rooms":0,"sequences":0,"projectionBytes":0,"events":0}
+{"event":"room.store_initialized","initializationMs":53,"legacyColdStartMs":53,"clockSemantics":"io-bound","cpuMeasured":false}
+[boot-config] ERROR: the agent card is UNSIGNED and no explicit opt-in was recorded at build time — members fetching /.well-known/agent-card.json will see an unsigned card (marked signed:false). To fix: set ROOM_AGENT_CARD_SIGNING_KEY and re-run scripts/sign-agent-card.mjs, or pass --allow-unsigned explicitly to record the choice.
+No magic-link mailer is configured: email-verification gates are relaxed (agent-invite escape hatch); /api/health reports emailVerification: relaxed-no-mailer
+{"event":"room.do_initialized","clockSemantics":"io-bound","cpuMeasured":false,"initializationMs":57,"storeInitializationMs":53}
+{"event":"room.cold_start","clockSemantics":"io-bound","durationMs":13,"integrity":"eager","phases":{"schema":{"ms":3,"rowsRead":21958},"plugin":{"ms":3,"rowsRead":48520},"fence":{"ms":6,"rowsRead":40580},"verifies":{"ms":1,"rowsRead":19517},"checksum":{"ms":0,"rowsRead":0}},"rooms":1,"sequences":5,"projectionBytes":748,"events":5}
+{"event":"room.store_initialized","initializationMs":13,"legacyColdStartMs":13,"clockSemantics":"io-bound","cpuMeasured":false}
+✔ Workers canonical authority survives cold reopen, corruption rollback and reverse (714.351209ms)
+{"event":"room.cold_start","clockSemantics":"io-bound","durationMs":51,"integrity":"eager","phases":{"schema":{"ms":14,"rowsRead":7935},"plugin":{"ms":22,"rowsRead":40258},"fence":{"ms":9,"rowsRead":40845},"verifies":{"ms":4,"rowsRead":19095},"checksum":{"ms":0,"rowsRead":0}},"rooms":0,"sequences":0,"projectionBytes":0,"events":0}
+{"event":"room.store_initialized","initializationMs":51,"legacyColdStartMs":51,"clockSemantics":"io-bound","cpuMeasured":false}
+{"event":"room.cold_start","clockSemantics":"io-bound","durationMs":20,"integrity":"eager","phases":{"schema":{"ms":4,"rowsRead":21958},"plugin":{"ms":5,"rowsRead":48520},"fence":{"ms":6,"rowsRead":40580},"verifies":{"ms":3,"rowsRead":19517},"checksum":{"ms":0,"rowsRead":0}},"rooms":1,"sequences":5,"projectionBytes":748,"events":5}
+{"event":"room.store_initialized","initializationMs":21,"legacyColdStartMs":20,"clockSemantics":"io-bound","cpuMeasured":false}
+{"event":"room.cold_start","clockSemantics":"io-bound","durationMs":24,"integrity":"eager","phases":{"schema":{"ms":4,"rowsRead":21958},"plugin":{"ms":6,"rowsRead":48520},"fence":{"ms":9,"rowsRead":40581},"verifies":{"ms":2,"rowsRead":19517},"checksum":{"ms":0,"rowsRead":0}},"rooms":1,"sequences":6,"projectionBytes":748,"events":6}
+{"event":"room.store_initialized","initializationMs":24,"legacyColdStartMs":24,"clockSemantics":"io-bound","cpuMeasured":false}
+{"event":"room.cold_start","clockSemantics":"io-bound","durationMs":27,"integrity":"eager","phases":{"schema":{"ms":3,"rowsRead":21961},"plugin":{"ms":6,"rowsRead":48520},"fence":{"ms":12,"rowsRead":40581},"verifies":{"ms":4,"rowsRead":19517},"checksum":{"ms":0,"rowsRead":0}},"rooms":1,"sequences":6,"projectionBytes":1337,"events":6}
+{"event":"room.store_initialized","initializationMs":28,"legacyColdStartMs":27,"clockSemantics":"io-bound","cpuMeasured":false}
+AUTHORITY_RESTART {"before":{"sequence":5,"canonical":false,"hasArray":true,"projectionBytes":1201,"bodies":["Body 0","Body 1","Body 2"],"receipts":0,"rollingWindow":null,"rollingEntities":false},"canonical":{"sequence":5,"canonical":true,"hasArray":false,"projectionBytes":748,"bodies":["Body 0","Body 1","Body 2"],"receipts":1,"rollingWindow":null,"rollingEntities":false},"afterEdit":{"sequence":6,"canonical":true,"hasArray":false,"projectionBytes":748,"bodies":["Body 0","Body 1","Saved after restart"],"receipts":1,"rollingWindow":null,"rollingEntities":false},"final":{"sequence":6,"canonical":false,"hasArray":true,"projectionBytes":1337,"bodies":["Body 0","Body 1","Saved after restart"],"receipts":2,"rollingWindow":null,"rollingEntities":false}}
+✔ actual workerd restarts preserve conversion, later edit, retry receipt and current-state reverse (1154.9215ms)
+{"event":"room.cold_start","clockSemantics":"io-bound","durationMs":48,"integrity":"eager","phases":{"schema":{"ms":11,"rowsRead":7935},"plugin":{"ms":22,"rowsRead":40258},"fence":{"ms":10,"rowsRead":40845},"verifies":{"ms":3,"rowsRead":19095},"checksum":{"ms":0,"rowsRead":0}},"rooms":0,"sequences":0,"projectionBytes":0,"events":0}
+{"event":"room.store_initialized","initializationMs":49,"legacyColdStartMs":48,"clockSemantics":"io-bound","cpuMeasured":false}
+{"event":"room.cold_start","clockSemantics":"io-bound","durationMs":18,"integrity":"eager","phases":{"schema":{"ms":4,"rowsRead":21958},"plugin":{"ms":4,"rowsRead":48520},"fence":{"ms":6,"rowsRead":40580},"verifies":{"ms":2,"rowsRead":19517},"checksum":{"ms":0,"rowsRead":0}},"rooms":1,"sequences":5,"projectionBytes":748,"events":5}
+{"event":"room.store_initialized","initializationMs":19,"legacyColdStartMs":18,"clockSemantics":"io-bound","cpuMeasured":false}
+✔ persistent canonical corruption refuses a freshly planned reverse (591.497583ms)
+{"event":"room.cold_start","clockSemantics":"io-bound","durationMs":66,"integrity":"eager","phases":{"schema":{"ms":21,"rowsRead":7935},"plugin":{"ms":25,"rowsRead":40258},"fence":{"ms":12,"rowsRead":40845},"verifies":{"ms":3,"rowsRead":19095},"checksum":{"ms":0,"rowsRead":0}},"rooms":0,"sequences":0,"projectionBytes":0,"events":0}
+{"event":"room.store_initialized","initializationMs":66,"legacyColdStartMs":66,"clockSemantics":"io-bound","cpuMeasured":false}
+AUTHORITY_BUDGET {"domains":{"events":{"rows":1002,"bytes":415742},"messages":{"rows":1000,"bytes":461780},"workItems":{"rows":0,"bytes":0},"bodies":{"rows":0,"bytes":0}},"projectionBytes":257608,"hydratedUpperBound":719388,"planWallMs":14.115125000000262,"executeWallMs":80.87258399999973,"afterBytes":751,"limitations":"Local workerd wall time, not production CPU or a bound for oversized rooms"}
+✔ workerd qualifies a near-row-cap eligible conversion with bounded source inventory (1508.237625ms)
+ℹ tests 4
+ℹ suites 0
+ℹ pass 4
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 3508.776209

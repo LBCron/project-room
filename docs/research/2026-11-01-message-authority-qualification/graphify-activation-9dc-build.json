@@ -1,0 +1,15 @@
+{
+  "revision": "9dc769a1ed8279b1925ffd46232fc3bd1367d114",
+  "sourceFiles": 438,
+  "sourceBytes": 7555639,
+  "sourceManifestSha256": "a6e79269336b32f0749bb60607eaf1d2e248845ebe848e1336f7f690cd4af626",
+  "scope": "server",
+  "engine": "graphify",
+  "graphifyVersion": "0.9.96",
+  "mode": "code-only",
+  "modelCalls": 0,
+  "builtAt": 1793513865898,
+  "out": "/Users/johnpotter/Documents/ChatGPT/project room/full-audit-20261031/evidence/graphify-activation-9dc-server.json",
+  "nodes": 8174,
+  "edges": 15127
+}

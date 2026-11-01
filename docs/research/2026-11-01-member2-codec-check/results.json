@@ -1,0 +1,24 @@
+{
+  "candidate": "f4e2e862cac2c8c048e5b9ce889554c13c787621",
+  "codecSha256": "c99bcb69ca82ba09d75a267f7b74cfbc0db76f998fb1fb5742e760fb0aaebcc0",
+  "node": "v24.22.1",
+  "at": "2026-11-01T18:17:36.123Z",
+  "status": "passed",
+  "counts": {
+    "validCases": 412,
+    "splitExecutions": 5669,
+    "steps": 560788,
+    "records": 36773,
+    "invalidCases": 17,
+    "controls": 26,
+    "maxControlBytes": 1892,
+    "maxSpanBytes": 131072,
+    "maxInputBytes": 16384
+  },
+  "limitations": [
+    "Pure offline codec and framing only; not cutover admission, trust receipts or semantic replay",
+    "Duplicate-key policy intentionally differs from JSON.parse and is enforced by caller; not treated as differential success",
+    "No production mutation, runtime edits, private corpus or broad suites",
+    "Finite deterministic corpus, not exhaustive proof"
+  ]
+}

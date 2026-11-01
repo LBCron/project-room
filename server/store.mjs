@@ -5795,6 +5795,10 @@ this.slaBreachAlerts = new SlaBreachAlertJournal(this); // Task 26: durable in-a
   // executing sessions. Legacy lastSeenAt also retains enrollment time.
   // Derived from existing data — no new tables, no people-data store.
   presence(token, roomId, watcherMemberIds, expectedSessionBinding = null) {
+    if(isCurrentRoom(this.db,roomId))return this.readTransaction(()=>withCurrentReadContext(this.db,roomId,()=>{
+      this.authenticate(token,roomId,expectedSessionBinding);
+      return{members:this.currentPresenceMembers(roomId,watcherMemberIds),coverage:{membership:'complete-current-roster',connection:'observed',execution:'not-evaluated',heldWork:'not-evaluated',queuedWakes:'not-evaluated'},next:[{action:'inspect-work',description:'Connection observations do not establish execution; inspect the selected work item.'}]};
+    },{maxRecords:512}));
     return this.readTransaction(() => {
       this.authenticate(token, roomId, expectedSessionBinding);
       const evidence = {};
@@ -5815,7 +5819,20 @@ this.slaBreachAlerts = new SlaBreachAlertJournal(this); // Task 26: durable in-a
   // exactly this code — one derivation, two surfaces. The caller supplies
   // the room's live SSE watcher member ids ([] for a read with no stream,
   // so watching reads false there).
+  currentPresenceMembers(roomId,watcherMemberIds){
+    return withCurrentReadContext(this.db,roomId,()=>{
+      const {members,ownerId}=this.roomAuthority(roomId),watching=new Set(watcherMemberIds??[]);
+      return Object.values(members).filter(m=>m.active!==false).map(m=>{
+        const link=m.kind==='agent'?this.db.prepare('SELECT identity_id FROM identity_links WHERE room_id=? AND member_id=?').get(roomId,m.id):null;
+        const host=link?this.agentHeartbeats.statusOf(link.identity_id):null,observed=host&&host.status!=='unregistered'&&Number.isFinite(host.lastSeenAt)&&host.lastSeenAt<=this.now();
+        const isWatching=watching.has(m.id),liveHost=observed&&host.status==='online';
+        return{memberId:m.id,displayName:m.displayName,kind:m.kind,watching:isWatching,lastSeenAt:observed?host.lastSeenAt:null,statusMessage:m.statusMessage??null,presence:host?{status:host.status,lastSeenAt:observed?host.lastSeenAt:null,basis:observed?'host':'registration'}:null,
+          state:isWatching||liveHost?'listening':'unknown',isOwner:m.id===ownerId,scopes:[...m.permissions],ownerIdentityId:link?.identity_id??null,coverage:{execution:'not-evaluated',heldWork:'not-evaluated',queuedWakes:'not-evaluated'}};
+      }).sort((a,b)=>a.memberId.localeCompare(b.memberId,'en'));
+    },{maxRecords:512});
+  }
   presenceMembers(roomId, watcherMemberIds, evidenceOut = null) {
+    if(isCurrentRoom(this.db,roomId))return this.currentPresenceMembers(roomId,watcherMemberIds);
     const { members, ownerId } = this.roomAuthority(roomId);
     const room = this.room(roomId);
     const now = this.now();

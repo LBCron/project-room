@@ -1,0 +1,38 @@
+{
+  "checkedAt": "2026-11-01T13:03:41.033Z",
+  "http": 200,
+  "overallStatus": "ok",
+  "jobs": [
+    {
+      "name": "retention",
+      "status": "ok",
+      "lastRunAt": "2026-11-01T13:00:42.476Z",
+      "lastSuccessAt": "2026-11-01T13:00:42.476Z",
+      "lastAttemptAt": "2026-11-01T13:00:42.476Z",
+      "attemptOutcome": "committed",
+      "uncommittedAttemptSinceAt": null,
+      "consecutiveFailures": 0,
+      "lastErrorCurrent": false,
+      "summary": {}
+    },
+    {
+      "name": "integrity",
+      "status": "ok",
+      "lastRunAt": "2026-11-01T13:00:48.092Z",
+      "lastSuccessAt": "2026-11-01T13:00:48.092Z",
+      "lastAttemptAt": "2026-11-01T13:00:48.092Z",
+      "attemptOutcome": "committed",
+      "uncommittedAttemptSinceAt": null,
+      "consecutiveFailures": 0,
+      "lastErrorCurrent": false,
+      "summary": {
+        "skipped": 0,
+        "verified": 1,
+        "verifiedRooms": 79,
+        "blockedRooms": 0,
+        "quarantinedEvents": 1
+      }
+    }
+  ],
+  "sourceLimit": "Job timestamps are not source attestations; recovered source was separately verified."
+}

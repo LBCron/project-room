@@ -1,0 +1,114 @@
+{
+  "targetSource": "e4d27fca0fc6cb420649a91ee90db5176f72b5d1",
+  "roles": [
+    {
+      "role": "canonical",
+      "inputSha256": "807db18a6f7e85ef8aefbee0c1ee6b72368d4c06eaf387f8f1424bff62a72bee",
+      "collector": {
+        "observation": "finished",
+        "at": 1793538897.180383,
+        "elapsedSeconds": 600.01,
+        "decodedEvents": 2379,
+        "outputCapReached": false,
+        "exitCode": -9
+      },
+      "events": 2379,
+      "http5xx": 0,
+      "exceptionEntries": 0,
+      "outcomes": {
+        "ok": 2015,
+        "canceled": 364
+      },
+      "httpStatuses": {
+        "200": 2166,
+        "absent": 130,
+        "429": 69,
+        "202": 5,
+        "302": 1,
+        "201": 3,
+        "405": 2,
+        "401": 2,
+        "404": 1
+      },
+      "samplingWarnings": [],
+      "readinessPhases": {
+        "worker_wait_started": 21,
+        "worker_rpc_started": 21,
+        "worker_rpc_settled": 21,
+        "worker_response": 21,
+        "do_entered": 6,
+        "sql_completed": 6,
+        "do_completed": 6
+      },
+      "readinessResponses": {
+        "ready": 21
+      },
+      "waitMs": {
+        "min": 15,
+        "max": 1976
+      },
+      "calleeObservations": {
+        "old-log": 2,
+        "absent": 6,
+        "present": 13
+      },
+      "workerSourceStamps": {
+        "absent": 11,
+        "e4d27fca0fc6cb420649a91ee90db5176f72b5d1": 91
+      },
+      "calleeSourceStamps": {
+        "absent": 8,
+        "e4d27fca0fc6cb420649a91ee90db5176f72b5d1": 13
+      }
+    },
+    {
+      "role": "entry",
+      "inputSha256": "38fbe609d7c40ee18522432e39a81352a38f3e497be52effc76e1541ff97a6c9",
+      "collector": {
+        "observation": "finished",
+        "at": 1793538897.180383,
+        "elapsedSeconds": 600.01,
+        "decodedEvents": 97,
+        "outputCapReached": false,
+        "exitCode": -9
+      },
+      "events": 97,
+      "http5xx": 0,
+      "exceptionEntries": 0,
+      "outcomes": {
+        "ok": 97
+      },
+      "httpStatuses": {
+        "200": 88,
+        "202": 2,
+        "301": 2,
+        "302": 2,
+        "400": 3
+      },
+      "samplingWarnings": [],
+      "readinessPhases": {
+        "worker_wait_started": 9,
+        "worker_rpc_started": 9,
+        "worker_rpc_settled": 9,
+        "worker_response": 9
+      },
+      "readinessResponses": {
+        "ready": 9
+      },
+      "waitMs": {
+        "min": 9,
+        "max": 365
+      },
+      "calleeObservations": {
+        "present": 9
+      },
+      "workerSourceStamps": {
+        "e4d27fca0fc6cb420649a91ee90db5176f72b5d1": 36
+      },
+      "calleeSourceStamps": {
+        "e4d27fca0fc6cb420649a91ee90db5176f72b5d1": 9
+      }
+    }
+  ],
+  "limits": "Finite possibly sampled role traces, not distinct request counts. Strict validated event/callee stamps attest only records carrying them, not header or unstamped calls. I/O clocks do not measure CPU or isolate queue/transport; zero sampling warnings does not prove complete capture."
+}

@@ -1,0 +1,16 @@
+{
+  "checkedAt": "2026-11-01T13:23:15.295Z",
+  "http": 200,
+  "source": "e4d27fca0fc6cb420649a91ee90db5176f72b5d1",
+  "buildId": "2026-11-01T13:05:45.583Z",
+  "status": "unknown",
+  "complete": false,
+  "proofsVerified": false,
+  "reason": "proof_invalid",
+  "head": 25,
+  "appliedSequence": 25,
+  "recordedCertifiedSequence": null,
+  "responseBytes": 705,
+  "mutationAttempted": false,
+  "privateStateExcluded": true
+}

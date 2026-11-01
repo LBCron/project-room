@@ -1,0 +1,50 @@
+{
+  "checkedAt": "2026-11-01T13:14:02.139Z",
+  "expectedSource": "e4d27fca0fc6cb420649a91ee90db5176f72b5d1",
+  "checks": [
+    {
+      "origin": "https://room.trydemigod.com",
+      "path": "/api/version",
+      "http": 200,
+      "sourceRevision": "e4d27fca0fc6cb420649a91ee90db5176f72b5d1",
+      "buildId": "2026-11-01T13:05:45.583Z",
+      "status": "ok"
+    },
+    {
+      "origin": "https://room.trydemigod.com",
+      "path": "/api/version/worker",
+      "http": 200,
+      "sourceRevision": "e4d27fca0fc6cb420649a91ee90db5176f72b5d1",
+      "buildId": "2026-11-01T13:05:45.583Z",
+      "status": "ok"
+    },
+    {
+      "origin": "https://room.trydemigod.com",
+      "path": "/api/ready",
+      "http": 200,
+      "status": "ready"
+    },
+    {
+      "origin": "https://www.getdasha.com/room",
+      "path": "/api/version",
+      "http": 200,
+      "sourceRevision": "e4d27fca0fc6cb420649a91ee90db5176f72b5d1",
+      "buildId": "2026-11-01T13:05:45.583Z",
+      "status": "ok"
+    },
+    {
+      "origin": "https://www.getdasha.com/room",
+      "path": "/api/version/worker",
+      "http": 200,
+      "sourceRevision": "e4d27fca0fc6cb420649a91ee90db5176f72b5d1",
+      "buildId": "2026-11-01T13:05:54.637Z",
+      "status": "ok"
+    },
+    {
+      "origin": "https://www.getdasha.com/room",
+      "path": "/api/ready",
+      "http": 200,
+      "status": "ready"
+    }
+  ]
+}

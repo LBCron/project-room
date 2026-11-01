@@ -359,7 +359,7 @@ function commandContextFromHead(store,roomId,command,head,b,{readMessage,readWor
   const wantedMessages=[command.data.messageId??command.id,`${command.data.messageId??command.id}:channel`,command.data.replyToId,
     command.data.sourceMessageId,command.data.evidenceMessageId];
   for(const id of wantedMessages)if(typeof id==='string')loadMessage(id);
-  let cursor=command.data.replyToId,childSeq=Number.MAX_SAFE_INTEGER;
+  let cursor = command . data . replyToId , childSeq = Number . MAX_SAFE_INTEGER ;
   for(let depth=0;cursor;depth++) {
     if(depth>=32)refuse('Reply ancestry exceeds bounded context');
     const source=loadMessage(cursor);if(!source)break;
@@ -739,7 +739,7 @@ export function readCurrentOverviewWindow(store,roomId,{workAfter='',limit=8}={}
   for(const {record_key:id} of rows.slice(0,limit)) {
     const scalar=db.prepare("SELECT payload_bytes FROM current_room_records WHERE room_id=? AND domain='workSummary' AND record_key=?").get(roomId,id);
     if(!scalar)corrupt('work summary payload missing');
-    if(returned&&b.bytes+scalar.payload_bytes+32768>MAX_INPUT)break;
+    if ( returned && b . bytes + scalar . payload_bytes + 32768 > MAX_INPUT ) break ;
     const summary=readCurrentRecord(db,roomId,'workSummary',id,b),ref=readCurrentRecord(db,roomId,'workItems',id,b);
     if(!summary||!isDeepStrictEqual(summary.ref,ref)||summary.work?.id!==id)corrupt('work summary membership differs');
     const current=db.prepare('SELECT revision,digest FROM work_entities WHERE room_id=? AND work_id=?').get(roomId,id);charge(b,256);

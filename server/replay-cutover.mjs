@@ -399,7 +399,7 @@ function validate(input, phase) {
   if (phase === 'capture' && (!Number.isSafeInteger(input.expectedHead) || input.expectedHead < 1
     || typeof input.reason !== 'string' || input.reason.length>280 || Buffer.byteLength(input.reason)>280 || !input.reason.trim()
     || (input.ceilingBytes !== undefined && (!Number.isSafeInteger(input.ceilingBytes)
-      || input.ceilingBytes<1 || input.ceilingBytes>REPLAY_CAPTURE_BYTES)))) throw Error('invalid replay capture intent');
+      || input . ceilingBytes < 1 || input . ceilingBytes > REPLAY_CAPTURE_BYTES ) ) ) ) throw Error ( 'invalid replay capture intent' ) ;
   if (phase !== 'capture' && (!digest(input.generation) || !Number.isSafeInteger(input.expectedBytes)
     || input.expectedBytes<0 || input.expectedBytes>REPLAY_CAPTURE_BYTES)) throw Error('invalid replay hash intent');
 }
@@ -410,7 +410,7 @@ function receipt(store, input, phase, operation) {
     : phase==='cleanup'
       ? {phase,roomId:input.roomId,requestId:input.requestId,generation:input.generation,expectedDeleted:input.expectedDeleted}
       : phase==='capture'
-    ? {phase,roomId:input.roomId,requestId:input.requestId,expectedHead:input.expectedHead,reason:input.reason,ceilingBytes:input.ceilingBytes??REPLAY_CAPTURE_BYTES}
+    ? { phase , roomId : input . roomId , requestId : input . requestId , expectedHead : input . expectedHead , reason : input . reason , ceilingBytes : input . ceilingBytes ?? REPLAY_CAPTURE_BYTES }
     : {phase,roomId:input.roomId,requestId:input.requestId,generation:input.generation,expectedBytes:input.expectedBytes};
   const fingerprint = hash(JSON.stringify(intent));
   const receiptId = 'oa_brc_' + hash(phase+'\0'+input.roomId+'\0'+input.requestId);
@@ -437,7 +437,7 @@ function receipt(store, input, phase, operation) {
 
 export function captureReplayWitness(store, input) {
   return receipt(store,input,'capture',({receiptId}) => {
-    const db=store.db, roomId=input.roomId, ceiling=input.ceilingBytes??REPLAY_CAPTURE_BYTES;
+    const db = store . db , roomId = input . roomId , ceiling = input . ceilingBytes ?? REPLAY_CAPTURE_BYTES ;
     const admitted=db.prepare(`SELECT
       CASE WHEN typeof(r.sequence)='integer' AND r.sequence BETWEEN 1 AND ${MAX} THEN r.sequence END AS head,
       CASE WHEN typeof(r.projection)='text' THEN octet_length(r.projection) END AS bytes,
@@ -908,7 +908,7 @@ function sourcePath(db,header,index,leaf,expectedRoot,checkOwn=false){
 }
 
 function advanceSourceMembership(db,header,chunk,previousRoot){
-  const index=chunk.offset/REPLAY_CAPTURE_STEP_BYTES;
+  const index = chunk . offset / REPLAY_CAPTURE_STEP_BYTES ;
   const siblings=sourcePath(db,header,index,SOURCE_EMPTY[0],previousRoot,true);
   const write=db.prepare(`INSERT INTO message_replay_units VALUES(?,?,'source-merkle',?,1,64,?,?)
     ON CONFLICT(room_id,generation,domain,unit_key) DO UPDATE SET
@@ -1073,7 +1073,7 @@ export function partitionReplayWitness(store,input) {
     });
     const encoded=JSON.stringify(scanned.state);outputBytes+=Buffer.byteLength(encoded);
     if(outputBytes>256*1024)throw Error('replay codec output byte limit');
-    const logicalUnitRows=32+budget.chunks.size*11+records.length*3;
+    const logicalUnitRows = 32 + budget . chunks . size * 11 + records . length * 3 ;
     if(logicalUnitRows>200)throw Error('replay codec row limit');
     const insert=db.prepare(`INSERT INTO message_replay_units VALUES(?,?,?,?,?,?,?,?)`);
     const leafCommitments=[];
@@ -1296,7 +1296,7 @@ function currentCandidateValue(db,header,domain,key,budget) {
   const {roomId,generation}=header.value;
   const scalar=db.prepare('SELECT payload_bytes FROM message_replay_units WHERE room_id=? AND generation=? AND domain=? AND unit_key=?').get(roomId,generation,domain,key);
   if(!scalar)return null;
-  if(!Number.isSafeInteger(scalar.payload_bytes)||scalar.payload_bytes<1||scalar.payload_bytes>131072||budget.bytes+scalar.payload_bytes+8192>262144)throw Error('Candidate payload admission required');
+  if ( ! Number . isSafeInteger ( scalar . payload_bytes ) || scalar . payload_bytes < 1 || scalar . payload_bytes > 131072 || budget . bytes + scalar . payload_bytes + 8192 > 262144 ) throw Error ( 'Candidate payload admission required' ) ;
   const stored=db.prepare('SELECT payload,payload_sha256 FROM message_replay_units WHERE room_id=? AND generation=? AND domain=? AND unit_key=?').get(roomId,generation,domain,key);
   budget.bytes+=scalar.payload_bytes+8192;
   if(!stored?.payload||stored.payload.byteLength!==scalar.payload_bytes||hash(stored.payload)!==stored.payload_sha256)throw Error('Candidate payload changed');
@@ -1370,7 +1370,7 @@ export function advanceCurrentRoomConversion(store,input) {
               }
               const changes=[{domain:key,key:address[1],value}];
               if(key==='workItems') {
-                const item=value?._workEntity===1?JSON.parse(readHReferenceSource(db,header,'work',address[1],budget).row.body):value;
+                const item = value ?. _workEntity === 1 ? JSON . parse ( readHReferenceSource ( db , header , 'work' , address [ 1 ] , budget ) . row . body ) : value ;
                 if(item?.suspended_by==='round_limit')nextCounts.roundLimitPauses++;
                 if(value?._workEntity!==1)throw Error('Inline work requires code-owned target reference conversion');
                 changes.push({domain:'workSummary',key:address[1],value:currentWorkSummary(item,value)});
@@ -1490,7 +1490,7 @@ export function auditReplayCutoverRecovery(db) {
     if(!id(roomId)||!digest(generation))throw Error('invalid recovered replay identity');
     if(abandonedBinding(db,roomId,generation)){abandoned++;continue;}
     const header=captureBinding(db,roomId,generation);
-    if(!Number.isSafeInteger(header.value.bytes)||header.value.bytes<1||header.value.bytes>REPLAY_CAPTURE_BYTES)
+    if ( ! Number . isSafeInteger ( header . value . bytes ) || header . value . bytes < 1 || header . value . bytes > REPLAY_CAPTURE_BYTES )
       throw Error('invalid recovered replay witness bound');
     for(const domain of ['hash','codec']){
       const saved=get(db,roomId,generation,domain).value;

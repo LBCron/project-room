@@ -8,12 +8,12 @@ export const WITNESS_SCHEMA = `CREATE TABLE IF NOT EXISTS replay_projection_witn
   byte_length INTEGER, ceiling_bytes INTEGER, capture_mode TEXT, projection BLOB NOT NULL,
   PRIMARY KEY(capture_id,unit_kind,part)
 )`;
-export function captureProjectionWitness(db, {captureId, roomId, expectedHead, ceilingBytes=BOOTSTRAP_CEILING, mode='whole'}) {
+export function captureProjectionWitness ( db , { captureId , roomId , expectedHead , ceilingBytes = BOOTSTRAP_CEILING , mode = 'whole' } ) {
   if (!['split','whole'].includes(mode)) throw Error('invalid witness mode');
   if (!db.isTransaction) throw Error('witness capture requires writer transaction');
   if (![captureId,roomId].every(x=>typeof x==='string'&&/^[A-Za-z0-9_-]{1,64}$/.test(x))
     || !Number.isSafeInteger(expectedHead)||expectedHead<1
-    || !Number.isSafeInteger(ceilingBytes)||ceilingBytes<1||ceilingBytes>BOOTSTRAP_CEILING) throw Error('invalid witness input');
+    || ! Number . isSafeInteger ( ceilingBytes ) || ceilingBytes < 1 || ceilingBytes > BOOTSTRAP_CEILING ) throw Error ( 'invalid witness input' ) ;
   const old=db.prepare(`SELECT
     CASE WHEN capture_mode IN ('split','whole') THEN capture_mode END AS capture_mode,
     CASE WHEN typeof(room_id)='text' AND octet_length(room_id)<=64 THEN room_id END AS room_id,

@@ -109,7 +109,7 @@ function createKeyedResume(db) {
   }
   function verify(counts,tables) {
     for(const table of tables){
-      if(table.startsWith('_cf_')||RESTORE_SKIP_TABLES.has(table)||table===CLAIM_PERMIT_TABLE||REPLAY_SKIPPED_TABLES.includes(table))continue;
+      if ( table . startsWith ( '_cf_' ) || RESTORE_SKIP_TABLES . has ( table ) || table === CLAIM_PERMIT_TABLE || REPLAY_SKIPPED_TABLES . includes ( table ) ) continue ;
       const count=db.prepare(`SELECT count(*) AS n FROM ${quoteIdent(table)}`).get().n,wanted=counts.get(table)??0;
       if(count!==wanted)throw Error('Resume target count differs from complete source: '+table);
       if(!count)continue;
@@ -124,7 +124,7 @@ function createKeyedResume(db) {
   return{match,verify};
 }
 function requireResumeSource(watermark,trailer,verification) {
-  if(!watermark||!Number.isSafeInteger(watermark.sourceSchemaVersion)||watermark.sanitizePolicy!==BACKUP_SANITIZE_POLICY||trailer?.version!==2||verification!=='full')
+  if ( ! watermark || ! Number . isSafeInteger ( watermark . sourceSchemaVersion ) || watermark . sanitizePolicy !== BACKUP_SANITIZE_POLICY || trailer ?. version !== 2 || verification !== 'full' )
     throw Error('Resume requires the original complete snapshot with source schema and full version2 table trailer');
 }
 
@@ -413,7 +413,7 @@ export function createBackupReplaySession(store, { audit = "strict", sourceSchem
       // target default for a source table that had not flushed at interruption.
       db.exec("PRAGMA defer_foreign_keys=ON");
       for(const table of [...topo].reverse()){
-        if(table.startsWith('_cf_')||RESTORE_SKIP_TABLES.has(table)||table===CLAIM_PERMIT_TABLE||REPLAY_SKIPPED_TABLES.includes(table))continue;
+        if ( table . startsWith ( '_cf_' ) || RESTORE_SKIP_TABLES . has ( table ) || table === CLAIM_PERMIT_TABLE || REPLAY_SKIPPED_TABLES . includes ( table ) ) continue ;
         if(db.prepare(`SELECT 1 FROM ${quoteIdent(table)} LIMIT 1`).get()){
           withRestoreTableRows(db,table,()=>db.prepare(`DELETE FROM ${quoteIdent(table)}`).run());
           cleared.add(table);

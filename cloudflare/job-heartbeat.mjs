@@ -171,6 +171,18 @@ export function applyOutcomes(previous, outcomes) {
     if (!outcome || !JOBS.has(outcome.job)) continue;
     const prior = next[outcome.job] ?? {};
     const at = Number.isFinite(outcome.at) ? outcome.at : Date.now();
+    // Chronology guard (inherited defect, reproduced by Codex at main
+    // c1c92c5b): the fold is monotonic. An outcome OLDER than the
+    // recorded state (at < lastRunAt) is stale — a late completion
+    // landing after a newer outcome already folded — and must not
+    // rewind that state: folding it in array order moved lastRunAt
+    // backward and let an older success reset consecutiveFailures to
+    // 0, presenting a failing job as freshly succeeded. A stale
+    // outcome therefore folds nothing; its exact-ID attempt
+    // resolution below still runs, so the attempt-ID cure's handling
+    // is unchanged. An outcome at exactly lastRunAt is not stale and
+    // keeps the pre-existing fold semantics.
+    const stale = Number.isFinite(prior.lastRunAt) && at < prior.lastRunAt;
     // An unobserved success (#3927 R2) records the run — lastRunAt, the
     // summary, the duration — and nothing else: it carries no evidence
     // about the job's health, so it must neither erase a recorded
@@ -189,13 +201,31 @@ export function applyOutcomes(previous, outcomes) {
     // (runCronJobs records null); then the prior summary stands, still
     // labelled by its own lastSummaryAt.
     const failureSummary = outcome.ok ? null : compactSummary(outcome.summary);
-    const record = outcome.ok
+    const folded = outcome.ok
       ? outcome.unobserved
         ? { ...prior, lastRunAt: at, lastDurationMs: outcome.durationMs ?? null, lastSummary: compactSummary(outcome.summary), lastSummaryAt: at }
         : { ...prior, lastRunAt: at, lastSuccessAt: at, consecutiveFailures: 0, lastDurationMs: outcome.durationMs ?? null, lastSummary: compactSummary(outcome.summary), lastSummaryAt: at, lastFailure: null }
       : { ...prior, lastRunAt: at, lastErrorAt: at, lastError: redactError(outcome.error), consecutiveFailures: (prior.consecutiveFailures ?? 0) + 1,
         lastDurationMs: outcome.durationMs ?? null, lastFailure: sanitizeFailureDetail(outcome.failure),
         ...(failureSummary ? { lastSummary: failureSummary, lastSummaryAt: at } : {}) };
+    const record = stale ? { ...prior } : folded;
+    // A committed outcome resolves the attempt recorded before its run —
+    // but ONLY on an exact attempt-ID match. The outcome fold is
+    // serialized, not instantaneous: a slow job's completion can land
+    // after the next pass has already committed a NEWER attempt, and
+    // stamping that newer attempt 'committed' would erase the trace of
+    // a run that may have died (Codex review of the attempt heartbeat,
+    // 2026-11-01). A mismatched or unthreaded outcome leaves the
+    // attempt fields exactly as they stand — lastAttemptAt keeps the
+    // current attempt's start time — while its own run/success/failure
+    // fields fold as they always have. Jobs that never carry an attempt
+    // (attempts are committed for slow jobs only) gain no attempt
+    // fields from their outcomes.
+    if (typeof outcome.attemptId === 'string' && outcome.attemptId
+      && prior.attemptOutcome === 'uncommitted' && prior.lastAttemptId === outcome.attemptId) {
+      record.attemptOutcome = 'committed';
+      record.uncommittedAttemptSinceAt = null;
+    }
     // Overdue streak (guardian census F1): track consecutive observed
     // ticks whose summary reports overdue work, and when the current
     // streak began. Only a tick that actually carried a summary speaks:
@@ -203,7 +233,7 @@ export function applyOutcomes(previous, outcomes) {
     // streak, and a job whose summary has no `overdue` field at all
     // (every job but escrow-epochs today) never gains one. A summary
     // with overdue: 0 closes the streak.
-    const summary = outcome.ok ? record.lastSummary : failureSummary;
+    const summary = stale ? null : outcome.ok ? record.lastSummary : failureSummary;
     if (summary && Number.isFinite(summary.overdue)) {
       if (summary.overdue > 0) {
         record.overdueStreak = (prior.overdueStreak ?? 0) + 1;
@@ -214,6 +244,43 @@ export function applyOutcomes(previous, outcomes) {
       }
     }
     next[outcome.job] = record;
+  }
+  return next;
+}
+
+// Attempt-before-run (integrity-staleness cure, part 1). #runDueJobsBody
+// commits an attempt for a slow job BEFORE invoking it, folded through
+// here. A run killed inside its own invocation (Durable Object reset,
+// eviction, invocation limit) never reaches recordCronTick, so without
+// the attempt the stored record keeps presenting the previous success
+// as current until the 3x-period staleness line passes — the signature
+// the integrity job showed from 2026-10-31T19:00:35Z. The attempt
+// touches nothing else: lastRunAt, lastSuccessAt, consecutiveFailures,
+// the error fields and the summaries all stand exactly as the last
+// committed outcome left them. uncommittedAttemptSinceAt keeps the
+// FIRST attempt of an unbroken uncommitted streak (the overdue-streak
+// precedent above). Later attempts do not erase an unresolved completion;
+// the view grades the streak's age, not the freshest stamp's. A missing
+// outcome alone does not establish why execution failed to commit.
+export function applyAttempts(previous, attempts) {
+  const next = { ...(previous && typeof previous === 'object' ? previous : {}) };
+  for (const attempt of attempts ?? []) {
+    if (!attempt || !JOBS.has(attempt.job)) continue;
+    const prior = next[attempt.job] ?? {};
+    const at = Number.isFinite(attempt.at) ? attempt.at : Date.now();
+    next[attempt.job] = {
+      ...prior,
+      lastAttemptAt: at,
+      // The attempt's exact ID. Only the outcome carrying this same ID
+      // may resolve the attempt (see applyOutcomes): a completion from
+      // an older run landing after a newer attempt began must not erase
+      // the newer attempt's trace. An attempt recorded without an ID
+      // can never be resolved by an outcome — fail-closed.
+      lastAttemptId: typeof attempt.attemptId === 'string' && attempt.attemptId ? attempt.attemptId : null,
+      attemptOutcome: 'uncommitted',
+      uncommittedAttemptSinceAt: prior.attemptOutcome === 'uncommitted' && Number.isFinite(prior.uncommittedAttemptSinceAt)
+        ? prior.uncommittedAttemptSinceAt : at
+    };
   }
   return next;
 }
@@ -248,7 +315,16 @@ export function jobHealthView(stored, now = Date.now(), env = null, store = null
     const recentPending = Number.isFinite(pendingSince) && pendingSince <= now
       && now - pendingSince <= staleAfterSeconds * 1000;
     const stale = enabled && !waiting && !recentPending && (ageSeconds === null || ageSeconds > staleAfterSeconds);
-    const failing = enabled && (record.consecutiveFailures ?? 0) > 0;
+    // Unresolved completion (integrity-staleness cure, part 1): the latest
+    // attempt has no committed outcome and the unbroken uncommitted
+    // streak is older than one period. Its cause is unknown; the previous
+    // success must not present as evidence of this attempt's completion.
+    // A job with no attempt fields at all is never-attempted, a different state the fields below expose; the
+    // ordinary stale rule alone grades it.
+    const attemptStuck = enabled && record.attemptOutcome === 'uncommitted'
+      && Number.isFinite(record.uncommittedAttemptSinceAt)
+      && now - record.uncommittedAttemptSinceAt > job.periodSeconds * 1000;
+    const failing = enabled && ((record.consecutiveFailures ?? 0) > 0 || attemptStuck);
     // A tick that succeeded but was held by GitHub's rate limit did no work.
     // Show it, without turning a recoverable wait into a 503.
     // Escrow overdue (guardian census F1): the keeper's own pass left due
@@ -265,6 +341,9 @@ export function jobHealthView(stored, now = Date.now(), env = null, store = null
       ...(source?.healthPendingSince ? { pendingSinceAt: iso(pendingSince) } : {}),
       lastRunAt: iso(record.lastRunAt),
       lastSuccessAt: iso(record.lastSuccessAt),
+      lastAttemptAt: iso(record.lastAttemptAt),
+      attemptOutcome: typeof record.attemptOutcome === 'string' ? record.attemptOutcome : null,
+      uncommittedAttemptSinceAt: iso(record.uncommittedAttemptSinceAt ?? null),
       secondsSinceSuccess: enabled ? ageSeconds : null,
       lastError: record.lastError ?? null,
       lastErrorAt: iso(record.lastErrorAt),

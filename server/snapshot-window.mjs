@@ -2,6 +2,8 @@
 // The default GET /api/rooms/{id} and ?messages=recent are this window.
 // ?full=1 is the retired unbounded document, and only while
 // ROOM_SNAPSHOT_FULL_COMPAT=1. Older history pages through /messages.
+import { isCurrentRoom, withCurrentReadContext } from './current-room-repository.mjs';
+import { readConversation } from './conversation-sync.mjs';
 import { messageSequences } from "./message-queries.mjs";
 import { messageRepository } from "./message-repository.mjs";
 import { messageInHistory, eventInHistory } from "./history-visibility.mjs";
@@ -124,6 +126,28 @@ export function readRoomSnapshot(store, token, roomId, fence, { view = "full", h
   if (view === "orientation") {
     if (helpContext || offerContext || auditView !== "full" || windowed) fail(422, "invalid_snapshot_view", "Orientation does not accept snapshot context options");
     return readAgentOrientation(store, token, roomId, fence);
+  }
+  if (view === "full" && isCurrentRoom(store.db, roomId)) {
+    if (!windowed || helpContext || auditView !== "full")
+      fail(409, "current_snapshot_selection_unavailable", "Use the bounded current room window and addressed detail reads");
+    return store.readTransaction(() => withCurrentReadContext(store.db, roomId, () => {
+      const auth = store.authenticate(token, roomId, fence);
+      const overview = store.currentOverview(roomId, auth.member.id);
+      const conversation = readConversation(store, token, roomId, { limit: 8, expectedSessionBinding: fence });
+      // This is explicitly a partial current view. Neither omitted counts nor
+      // absent request/work records mean that the room contains no more work.
+      return {
+        snapshotVersion: 2, representation: "normalized-current-v1", roomId,
+        sequence: overview.sequence, viewerId: auth.member.id,
+        viewerAccountId: auth.account?.id ?? null, viewerAuthEpoch: auth.account?.authEpoch ?? null,
+        viewerSessionBinding: auth.sessionBinding, viewerSessionRevision: auth.sessionRevision ?? null,
+        state: { ...overview.state, messages: conversation.messages },
+        messagesWindow: { mode: "recent", omitted: null, complete: conversation.nextCursor === null },
+        messagesPage: { cursor: conversation.nextCursor, hasMore: conversation.nextCursor !== null, contractVersion: 2, limit: 8 },
+        workWindow: overview.workWindow,
+        sections: { helpOffers: { available: false, code: "current_help_offers_unavailable" }, replyRequests: { available: false, nextRead: { tool: "room_list_requests", arguments: { direction: "incoming", status: "open" } } } }
+      };
+    }));
   }
   // #4265: the non-windowed form is the explicit full-history contract (the
   // compat ?full=1 read; the work view returns before the messages branch),

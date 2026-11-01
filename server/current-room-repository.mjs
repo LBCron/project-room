@@ -1,3 +1,4 @@
+import {currentWorkSummary} from './current-work-summary.mjs';
 import {messageRowForWrite} from './messages-store.mjs';
 import {messageProofHash} from './write-integrity.mjs';
 import { RESTORE_CONTROL_DEFINITIONS, RESTORE_CONTROL_GUARDS, RESTORE_CONTROL_SCHEMA, inRestoreContext, withExactRestoreGuards } from './restore-admission.mjs';
@@ -78,6 +79,7 @@ guardDefinitions.push(['current_room_permit_update',`CREATE TRIGGER IF NOT EXIST
   ['current_room_permit_delete',`CREATE TRIGGER IF NOT EXISTS current_room_permit_delete BEFORE DELETE ON current_room_writer_permit BEGIN
     SELECT RAISE(ABORT,'unsupported current room permit'); END`]);
 export const CURRENT_ROOM_GUARDS = [...guardDefinitions,...RESTORE_CONTROL_GUARDS].map(([,sql])=>sql+';').join('\n') + `
+CREATE INDEX IF NOT EXISTS current_work_summary_keys ON current_room_record_proofs(room_id,record_key) WHERE domain='workSummary' AND present=1;
 CREATE INDEX IF NOT EXISTS current_messages_public_seq ON messages(room_id,seq DESC,message_id DESC) WHERE to_member_id IS NULL OR to_member_id='';
 CREATE INDEX IF NOT EXISTS current_messages_channel_public_seq ON messages(room_id,channel_id,seq DESC,message_id DESC) WHERE to_member_id IS NULL OR to_member_id='';
 CREATE INDEX IF NOT EXISTS current_messages_incoming_seq ON messages(room_id,to_member_id,seq DESC,message_id DESC);
@@ -230,7 +232,9 @@ export function initializeCurrentRoom(store,state,events) {
     const insert=db.prepare('INSERT INTO events VALUES(?,?,?,?)');
     events.forEach((event,index)=>{insert.run(roomId,index+1,event.id,JSON.stringify(event));syncMessageRows(db,{roomId,sequence:index+1,event,state});});
     const referenced=referenceWorkItems(db,roomId,state,{enabled:true});
-    const fields=fieldsOf(referenced),counts={messages:state.messages.length,workItems:Object.keys(state.workItems).length,
+    const fields=fieldsOf(referenced);
+    for(const [id,item] of Object.entries(state.workItems))fields.set(JSON.stringify(['workSummary',id]),currentWorkSummary(item,referenced.workItems[id]));
+    const counts={messages:state.messages.length,workItems:Object.keys(state.workItems).length,
       replyRequests:Object.keys(state.replyRequests??{}).length,members:Object.keys(state.members).length,roundLimitPauses:0,threadParticipants:0};
     for(const message of state.messages) {
       const row=db.prepare('SELECT seq,entity_hash FROM messages WHERE room_id=? AND message_id=?').get(roomId,message.id);
@@ -388,6 +392,7 @@ export function prepareCurrentWrite(store,{roomId,previous,state,event,sequence,
     if(!isDeepStrictEqual(refs[id],prior))workWrites.push({id,item,body,digest});
   }
   const after=fieldsOf({...state,workItems:refs}),changes=[];
+  for(const {id,item} of workWrites)changes.push({domain:'workSummary',key:id,value:currentWorkSummary(item,refs[id])});
   for(const key of new Set([...current.before.keys(),...after.keys()]))if(!isDeepStrictEqual(current.before.get(key),after.get(key))) {
     const [domain,id]=JSON.parse(key);changes.push({domain,key:id,value:after.get(key)});
   }
@@ -520,7 +525,7 @@ export function readCurrentRoomForAudit(store,roomId) {
   const db=store.db;
   if(!db.isTransaction)throw Error('Current room census requires a consistent recovery transaction');
   const head=readCurrentHead(db,roomId);if(!head)return null;
-  const state=emptyRoomState(),refs=new Map(),participants=new Map(),floors=new Map(),exclusions=new Map(),messageWitnesses=new Map();let proofs=0,records=0;
+  const state=emptyRoomState(),refs=new Map(),participants=new Map(),floors=new Map(),exclusions=new Map(),messageWitnesses=new Map(),workSummaries=new Map();let proofs=0,records=0;
   const unitBudget=()=>({...budget(),schemaVerified:true});
   for(const scalar of db.prepare(`SELECT rowid,length(CAST(domain AS BLOB)) AS domain_bytes,
     length(CAST(record_key AS BLOB)) AS key_bytes FROM current_room_record_proofs WHERE room_id=? ORDER BY domain,record_key`).iterate(roomId)) {
@@ -537,7 +542,8 @@ export function readCurrentRoomForAudit(store,roomId) {
     } else if(maps.has(proof.domain)) {
       if(proof.domain==='workItems')refs.set(key,value);
       else Object.defineProperty(state[proof.domain]??={},key,{value,enumerable:true,writable:true,configurable:true});
-    } else if(proof.domain==='messageWitness')messageWitnesses.set(key,value);
+    } else if(proof.domain==='workSummary')workSummaries.set(key,value);
+    else if(proof.domain==='messageWitness')messageWitnesses.set(key,value);
     else if(proof.domain==='threadParticipants')participants.set(key,value);
     else if(proof.domain==='historyFloors')floors.set(key,value);
     else if(proof.domain==='historyExclusions')exclusions.set(key,value);
@@ -553,6 +559,7 @@ export function readCurrentRoomForAudit(store,roomId) {
     const item=JSON.parse(row.body);if(item.id!==id||item.revision!==ref.revision)corrupt('recovered work identity changed');
     Object.defineProperty(state.workItems,id,{value:item,enumerable:true,writable:true,configurable:true});
   }
+  if(workSummaries.size!==refs.size||[...refs].some(([id,ref])=>!isDeepStrictEqual(workSummaries.get(id),currentWorkSummary(state.workItems[id],ref))))corrupt('complete work summary census differs');
   for(const scalar of db.prepare('SELECT rowid,length(CAST(message_id AS BLOB)) AS bytes FROM messages WHERE room_id=? ORDER BY seq,message_id').iterate(roomId)) {
     if(scalar.bytes<1||scalar.bytes>200)corrupt('invalid recovered message identity');
     const {message_id:id}=db.prepare('SELECT message_id FROM messages WHERE rowid=?').get(scalar.rowid);
@@ -685,11 +692,38 @@ export function readCurrentSelectedWorkState(store,roomId,workId,viewerId,{inclu
   if(!room)corrupt('missing selected room authority');if(!item)return {sequence:head.sequence,state:{room,members:{},workItems:{}}};
   const ids=new Set([viewerId,room.ownerId,item.accountableMemberId,item.verifierMemberId,item.humanDecisionMakerId,item.proposedById,
     item.claim?.holderId,item.receipt?.producerId,item.receipt?.reportedById].filter(id=>typeof id==='string'));
-  const members={};for(const id of ids){const member=readCurrentRecord(db,roomId,'members',id,b);if(member!==undefined)members[id]=member;}
-  const replyRequests={};
+  const members=Object.create(null);for(const id of ids){const member=readCurrentRecord(db,roomId,'members',id,b);if(member!==undefined)members[id]=member;}
+  const replyRequests=Object.create(null);
   if(head.counts.replyRequests>8)refuse('Selected work reply metadata needs an indexed window for this room');
   const requests=db.prepare("SELECT record_key FROM current_room_record_proofs WHERE room_id=? AND domain='replyRequests' AND present=1 ORDER BY record_key LIMIT 9").all(roomId);
   charge(b,requests.length*256,requests.length);if(requests.length!==head.counts.replyRequests)corrupt('selected request census differs');
   for(const {record_key:id} of requests)replyRequests[id]=readCurrentRecord(db,roomId,'replyRequests',id,b);
   return {sequence:head.sequence,state:{room,members,workItems:{[workId]:item},replyRequests}};
+}
+
+export {currentWorkSummary} from './current-work-summary.mjs';
+export function readCurrentOverviewWindow(store,roomId,{workAfter='',limit=8}={}) {
+  const db=store.db,b=contextBudgets.get(db)??budget(),head=readCurrentHead(db,roomId,b);if(!head)return null;
+  if(typeof workAfter!=='string'||Buffer.byteLength(workAfter)>200||!Number.isInteger(limit)||limit<1||limit>8)refuse('Invalid bounded work context window');
+  const authority=currentAuthorityFromHead(db,roomId,head,b),room=readCurrentRecord(db,roomId,'metadata','room',b);
+  const state={room,members:authority.members,workItems:{},messages:[],pins:[]};
+  const pins=readCurrentRecord(db,roomId,'metadata','pins',b);if(pins!==undefined)state.pins=pins;
+  const rows=db.prepare("SELECT record_key FROM current_room_record_proofs INDEXED BY current_work_summary_keys WHERE room_id=? AND domain='workSummary' AND present=1 AND record_key>? ORDER BY record_key LIMIT ?").all(roomId,workAfter,limit+1);
+  charge(b,rows.reduce((n,row)=>n+Buffer.byteLength(row.record_key)+32,0),rows.length);
+  let after=workAfter,returned=0;
+  for(const {record_key:id} of rows.slice(0,limit)) {
+    const scalar=db.prepare("SELECT payload_bytes FROM current_room_records WHERE room_id=? AND domain='workSummary' AND record_key=?").get(roomId,id);
+    if(!scalar)corrupt('work summary payload missing');
+    if(returned&&b.bytes+scalar.payload_bytes+32768>MAX_INPUT)break;
+    const summary=readCurrentRecord(db,roomId,'workSummary',id,b),ref=readCurrentRecord(db,roomId,'workItems',id,b);
+    if(!summary||!isDeepStrictEqual(summary.ref,ref)||summary.work?.id!==id)corrupt('work summary membership differs');
+    const current=db.prepare('SELECT revision,digest FROM work_entities WHERE room_id=? AND work_id=?').get(roomId,id);charge(b,256);
+    if(!current||current.revision!==ref.revision||current.digest!==ref.digest)corrupt('work summary payload revision differs');
+    Object.defineProperty(state.workItems,id,{value:summary.work,enumerable:true,writable:true,configurable:true});after=id;returned++;
+  }
+  const hasMore=rows.length>returned;
+  if(!workAfter&&!hasMore&&returned!==head.counts.workItems)corrupt('complete work summary membership differs');
+  return {sequence:head.sequence,state,workWindow:{order:'id',after:workAfter||null,shown:returned,total:head.counts.workItems,
+    complete:!workAfter&&!hasMore,nextAfter:hasMore?after:null,
+    nextRead:hasMore?{tool:'get_room_context',arguments:{work_after:after}}:null}};
 }

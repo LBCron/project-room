@@ -1,0 +1,36 @@
+--- h5506/tests/recovery.test.js	2026-11-01 03:56:33.138441905 +0000
++++ h5562/tests/recovery.test.js	2026-11-01 03:56:34.017441922 +0000
+@@ -104,11 +104,10 @@
+       assert.equal(table.rows, 0, "a public room page stays empty until an owner opts in, the recorded receipts setting is written only when an owner opts in or out, and the backfill cursor is written by cron");
+       continue;
+     }
+-    // integrity_room_state needs no special case: since #5506 round 4
+-    // a room's row is seeded by RoomStore.initialize at creation (and
+-    // refreshed by the integrity passes thereafter), so the fixture's
+-    // rooms carry rows and the table falls through to the default
+-    // rows > 0 audit below. Same amendment as cold-start-budget.
++    if (table.table === "integrity_room_state") {
++      assert.equal(table.rows, before.rooms, "room creation seeds scoped proof; the cron later advances it");
++      continue;
++    }
+     if (table.table === "guest_link_exchanges") {
+       assert.equal(table.rows, 0, "link exchange records exist only after a guest joins via a single-use link (GA-2)");
+       continue;
+@@ -310,7 +309,7 @@
+   assert.deepEqual(objects(), [], "read-only verification is not migration");
+   // Only the additive tables are optional: a wrong schema marker still fails.
+   f.store.db.exec("PRAGMA user_version=27");
+-  assert.throws(() => new RoomStore(f.filename, { readOnly: true }), /requires schema v42/);
++  assert.throws(() => new RoomStore(f.filename, { readOnly: true }), /requires schema v44/);
+   f.store.db.exec("PRAGMA user_version=34");
+   // A true v34 file carries v34 writer triggers, not v35 ones; the doctored
+   // marker alone would leave the file self-inconsistent and the fence
+@@ -319,7 +318,7 @@
+   // the file is self-consistent; the writable migration below reinstalls the
+   // v36 set.
+   const v34Tables = new Set(f.store.db.prepare("SELECT name FROM sqlite_master WHERE type='table'").all().map(row => row.name));
+-  for (const row of f.store.db.prepare("SELECT name FROM sqlite_master WHERE type='trigger' AND (name GLOB 'writer_v3[89]_*' OR name GLOB 'writer_v4[012]_*')").all()) {
++  for (const row of f.store.db.prepare("SELECT name FROM sqlite_master WHERE type='trigger' AND (name GLOB 'writer_v3[89]_*' OR name GLOB 'writer_v4[01234]_*')").all()) {
+     f.store.db.exec(`DROP TRIGGER "${row.name}"`);
+   }
+   for (const { name, sql } of fenceDefinitions(34)) {

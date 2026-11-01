@@ -1,0 +1,29 @@
+--- h5506/server/operator-purge.mjs	2026-11-01 03:56:10.864441475 +0000
++++ h5562/server/operator-purge.mjs	2026-11-01 03:56:11.692441491 +0000
+@@ -258,15 +258,8 @@
+   return applicable.filter(entry => !entry.via?.[kind] && !late.has(entry.table));
+ }
+ 
+-function writeSnapshot(store) {
+-  // Round 4 (#5506): the purge must not recompute the snapshot over
+-  // the surviving projection bytes — that would certify any drift a
+-  // survivor carries. The store recomposes the snapshot from the
+-  // survivors' remembered integrity hashes, preserving the covered
+-  // mark, and writes nothing when a survivor has no remembered hash,
+-  // leaving the stale snapshot to force a full audit of those bytes.
+-  store.recomposeIntegritySnapshotFromState();
+-}
++// Purge removes scoped proof rows through the registry. Preserve the global
++// baseline: only the integrity pass can certify all surviving content.
+ 
+ function dropCaches(store, identityIds) {
+   if (typeof store.agentPlugin?.load === "function") store.agentPlugin.load();
+@@ -447,7 +440,7 @@
+               const planned = planAccountDeletion(store, target.id);
+               executeAccountDeletion(store, planned.plan);
+             }
+-            writeSnapshot(store);
++
+             audit(store, {
+               ...base,
+               result: "executed",

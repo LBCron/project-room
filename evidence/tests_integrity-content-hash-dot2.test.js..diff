@@ -1,0 +1,12 @@
+--- h5506/tests/integrity-content-hash-dot2.test.js	2026-11-01 03:56:36.810441976 +0000
++++ h5562/tests/integrity-content-hash-dot2.test.js	2026-11-01 03:56:37.783441995 +0000
+@@ -163,8 +163,7 @@
+     // round-1 rehydration guard to see.
+     mutateSameLength(fixture.store);
+     assert.deepEqual(fixture.store.integrityFailures(), [], "no detecting sweep has run — no drift record exists yet");
+-    const rewritten = fixture.store.rehydrateAllProjections();
+-    assert.ok(rewritten >= 1, "rehydration rewrote the slimmed projection");
++    assert.throws(()=>fixture.store.rehydrateAllProjections(),/projection_corrupt/, "rehydration refuses unverified old metadata");
+     assert.equal(roomState(fixture.store, "alpha")?.hash, baselineHash,
+       "rehydration must not refresh the baseline over bytes that no longer match it");
+     const scan = await tick(fixture.store);

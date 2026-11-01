@@ -1,0 +1,32 @@
+path	blob_5506_at_11a6060927ef	blob_5562_at_61225bed6b	relation
+server/store.mjs	16a4abff2d3fb3a6f4ce1a2fbd0287ce66c88e06	8e6c1278f54c0c8131378184a56b41cf255de530	DIFFERENT (42 hunks, see server_store.mjs..diff)
+server/jobs.mjs	f27fb7fddbe518f9ca174f73f7c16a065e121081	f27fb7fddbe518f9ca174f73f7c16a065e121081	IDENTICAL
+server/operator-purge.mjs	0c7d98f1f1195e0c75add0616532bee49aab587d	edc27aeb5fa6eb2d339e98d1e6d2f84b1b46b482	DIFFERENT (2 hunks)
+server/messages-store.mjs	3d1c0fdbcb88d4564f8ae31880d902716771700a	ef8fa03d02739d1fabfe0270aa5569762d0a8872	DIFFERENT (15 hunks; 5506 side = main, untouched by 5506)
+server/projection-at-rest.mjs	e5835f17d269e3d270c8250cfd36b5e0ac878925	b32e941843621a7e5bcf56ce3c0707afa768826d	DIFFERENT (6 hunks; 5506 side = main)
+server/writer-fence.mjs	06f6a819676e445c3ad2f5a88f6e6716a0c776fc	44100f4a9b0f26a065acd4d679080f4f603ac91b	DIFFERENT (schema 42 -> 44)
+server/write-integrity.mjs	ABSENT	971d42cea8edab09fa691dff2c709183a4866f43	NEW IN 5562
+tests/integrity-content-hash.test.js	5fba59576c77e80ca4946ee6912a97951db86274	5fba59576c77e80ca4946ee6912a97951db86274	IDENTICAL
+tests/integrity-content-hash-dot.test.js	9191efba68f100c6b0a002e6598a5d47ddfe1fcb	8ee5254a698f05bb11581006a6e0ecea9946b0b5	DIFFERENT (2 hunks, assertions inverted in both)
+tests/integrity-content-hash-dot2.test.js	ad909e0e6df289dcb68615db5343c501ede4b2a0	212bcf8c26020a743f137552874af3b60093343d	DIFFERENT (1 hunk, test 2a only)
+tests/integrity-content-hash-dot3.test.js	6b9323207f815932cd122802501d70f03b7ab1d9	6b9323207f815932cd122802501d70f03b7ab1d9	IDENTICAL
+tests/integrity-content-hash-dot4.test.js	b620f5dfda7718a770c5caf94d48e51d33904922	ABSENT	NOT CARRIED (file missing from 5562 tree)
+tests/integrity-incremental.test.js	559d3d41e938448de3c94d61bd3453974cda5c3f	559d3d41e938448de3c94d61bd3453974cda5c3f	IDENTICAL
+tests/integrity-batch-isolation.test.js	c54ca00492ebcf111ee9e0b628c708b56b84bd20	c54ca00492ebcf111ee9e0b628c708b56b84bd20	IDENTICAL
+tests/integrity-block-health.test.js	050adb46d75335741418fa4c062b1adbd02530dd	050adb46d75335741418fa4c062b1adbd02530dd	IDENTICAL
+tests/integrity-deferred-starvation.test.js	59c47ad5efac1fcb4d75d86ce70a18b6ffdf9081	59c47ad5efac1fcb4d75d86ce70a18b6ffdf9081	IDENTICAL
+tests/integrity-deleted-invitee.test.js	1fad9cb49338415d9d736163bdf827d7d768dd78	1fad9cb49338415d9d736163bdf827d7d768dd78	IDENTICAL
+tests/integrity-naming.test.js	aac337200c311e62f50acbbe0abc4a86aba95fd7	aac337200c311e62f50acbbe0abc4a86aba95fd7	IDENTICAL
+tests/integrity-observability.test.js	d1310370be07c3c217c294a034bb75f2f6c47e5e	d1310370be07c3c217c294a034bb75f2f6c47e5e	IDENTICAL
+tests/integrity-parked-corroboration.test.js	980066eb1135e4dc286b6150204b804ce13631e9	980066eb1135e4dc286b6150204b804ce13631e9	IDENTICAL
+tests/integrity-parked-summary.test.js	bd83a331b1772e953969d99352b7a0e2f372fd66	cc1305090daad44af59c9bd7ecc6257a93bff3a2	DIFFERENT (1 hunk; 5506 side = main)
+tests/seed-integrity.test.js	40fdb73fc0575f404432d10794bdd4ad485c6491	40fdb73fc0575f404432d10794bdd4ad485c6491	IDENTICAL
+tests/operator-purge.test.js	dd0269b571db9133d18cceb537250caee67777bf	fc36bb585f9f052c5dd47670766e362464d0df54	DIFFERENT (1 hunk, purge assertions inverted; 5506 side = main)
+tests/cold-start-budget.test.js	757e96c9db6be65a1ff2079240b082d558a6cb24	614b806b2854f172815fb38e547ed134efac7651	DIFFERENT (3 hunks)
+tests/recovery.test.js	65496efc25111347e1a938d14b56ceefcbc01def	63742257e929c47ca3855d138a596bead0f10369	DIFFERENT (3 hunks)
+tests/message-certification-continuity.test.js	8a5b0c91343e6eac9a624c981f49c7dacc249d36	3d2bd299116b6eca211fe407e3a234a4a46a6c37	DIFFERENT (6 hunks; 5506 side = main)
+tests/integrity-reconciliation.test.js	ABSENT	b519c9621f825b462603e3c3ce670160d102984f	NEW IN 5562 (11 cases + 2-case loop)
+tests/write-integrity.test.js	ABSENT	9b7036cd05684749e5af398458421d83b5060865	NEW IN 5562 (6 tests)
+server/operator-room-purge.mjs	ffea892c95851319b8f0b991711a79d042c638ae	ffea892c95851319b8f0b991711a79d042c638ae	IDENTICAL
+server/purge-registry.mjs	aa6d46fee9e2bf8c9609da6893156650f37d877d	aa6d46fee9e2bf8c9609da6893156650f37d877d	IDENTICAL
+server/work-claim-integrity.mjs	50d69053cc7b4f328d82fc386fe442116216baa0	50d69053cc7b4f328d82fc386fe442116216baa0	IDENTICAL

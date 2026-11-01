@@ -1,0 +1,23 @@
+--- h5506/tests/operator-purge.test.js	2026-11-01 03:56:44.406442123 +0000
++++ h5562/tests/operator-purge.test.js	2026-11-01 03:56:45.494442144 +0000
+@@ -202,7 +202,7 @@
+     assert.deepEqual(countsAfter, countsBefore);
+   });
+ 
+-  test("purging one room removes its rows, leaves the other room, and keeps integrity matched", async t => {
++  test("purging one room removes its rows, leaves the other room, and re-verifies surviving integrity", async t => {
+     const { store, call } = await serve(t);
+     assert.deepEqual(retiredTableNames(store.db), []);
+     const roomA = "qa2-authz-fixture";
+@@ -253,8 +253,9 @@
+     assert.equal(store.db.prepare("SELECT projection FROM rooms WHERE id=?").get(roomB).projection, projectionB);
+     assert.equal(store.db.prepare("SELECT count(*) AS n FROM events WHERE room_id=?").get(roomB).n, eventsB);
+     const integrity = await store.verifyRoomIntegrity();
+-    assert.equal(integrity.matched, 1);
+-    assert.equal(integrity.verified, 0);
++    assert.equal(integrity.matched, 0, 'purge cannot publish a global survivor baseline');
++    assert.equal(integrity.verified, 1);
++    assert.equal((await store.verifyRoomIntegrity()).matched, 1);
+     const gone = await call(`/api/rooms/${roomA}`, { authorization: `Bearer ${ownerA}` });
+     assert.ok(gone.status === 401 || gone.status === 404);
+     assert.equal((await call(`/api/rooms/${roomB}`, { authorization: `Bearer ${ownerB}` })).status, 200);

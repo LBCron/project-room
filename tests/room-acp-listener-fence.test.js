@@ -4,6 +4,7 @@ import { assertListenerFence } from '../server/listener-fence.mjs';
 import { Bridge } from '../room-acp/src/bridge.mjs';
 import { RoomClient } from '../room-acp/src/room.mjs';
 import { join } from '../room-acp/src/join.mjs';
+import { join as pathJoin } from 'node:path';
 import { startRoom } from './room-acp-fixture.mjs';
 
 async function setup(t) {
@@ -40,7 +41,7 @@ test('listener validation is read-only and old token cannot post after takeover'
 
 test('listener fence rejects missing leases, empty tokens and another identity token', async t => {
   const { fixture, client, token } = await setup(t);
-  const other = await join({ link: fixture.invite().link, displayName: 'Other agent', env: fixture.env });
+  const other = await join({ link: fixture.invite().link, displayName: 'Other agent', env: { ...fixture.env, ROOM_ACP_HOME: pathJoin(fixture.home, 'other-agent') } });
   const otherClient = new RoomClient(other);
   const otherToken = (await otherClient.heartbeat({ hostId: 'other' })).listener.fencingToken;
   await assert.rejects(client.post({ body: 'wrong identity', listenerToken: otherToken }), stale);

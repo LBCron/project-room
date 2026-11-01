@@ -3,7 +3,7 @@ import {mkdirSync,rmSync,readFileSync,readdirSync,writeFileSync,mkdtempSync,syml
 import {join} from '../room-acp/src/join.mjs';import {loadConnection,saveConnection} from '../room-acp/src/credentials.mjs';import {RoomClient} from '../room-acp/src/room.mjs';
 import {tmpdir} from 'node:os';
 import {startRoom} from './room-acp-fixture.mjs';
-const receipt=home=>JSON.parse(readFileSync(pathJoin(home,readdirSync(home).find(n=>n.startsWith('.join-')),'receipt.json'),'utf8'));
+const receipt=home=>JSON.parse(readFileSync(pathJoin(home,readdirSync(home).find(n=>/^\.join-[a-f0-9]{64}$/.test(n)),'receipt.json'),'utf8'));
 
 test('lost redemption and rotation responses recover one member without installing identity-wide credentials',async t=>{
  const f=await startRoom(t),link=f.invite().link;let redeem=0,rotate=0,lastReplay;
@@ -21,7 +21,7 @@ test('lost redemption and rotation responses recover one member without installi
 
 test('failed final credential save retries the saved response without another redemption',async t=>{
  const f=await startRoom(t),link=f.invite().link;let redeemed=0,committed;
- const blocker=pathJoin(f.home,'commons.json');mkdirSync(blocker);const fetchImpl=async(url,init)=>{const response=await fetch(url,init);if(url.endsWith('/redeem')){redeemed++;committed=await response.clone().json();}return response;};
+ const blocker=pathJoin(f.home,'commons.json');const fetchImpl=async(url,init)=>{const response=await fetch(url,init);if(url.endsWith('/redeem')){redeemed++;committed=await response.clone().json();mkdirSync(blocker);}return response;};
  await assert.rejects(join({link,displayName:'Disk retry',env:f.env,fetchImpl}));assert.equal(redeemed,1);
  assert.equal(Object.values(f.f.store.room('commons').state.members).filter(m=>m.displayName==='Disk retry').length,1);
  rmSync(blocker,{recursive:true});const recovered=await join({link,displayName:'Disk retry',env:f.env,fetchImpl});

@@ -1,0 +1,44 @@
+Independent #5636 exact-candidate review
+
+Source: 5a639dba32e701d4fcb8ba03e78c811fcc83c68f.
+Runtime untouched. No production data reads/writes in these local fixtures.
+
+The original e235 denial regression now passes across HTTP/MCP full and forced
+conditional refreshes. The isolated-party/four-role positive test also passes.
+No separate fifth-role claim-holder isolation is proven.
+
+New remaining case: a private canonical task is explicitly accepted, producing
+a real unclaimed mirrored Board row. The unrelated observer has the actual
+contribute profile, accept_work plus complete_work, and no canonical work role
+or private-conversation participation. Public-board presence is asserted so
+the available section is not empty because of insufficient permissions.
+
+On actual HTTP and hosted MCP, both full and forced conditional refreshes,
+PRIVATE-TITLE-SENTINEL appears at /orient/availableClaims/0/title.
+Definition and private-message-body sentinels remain absent.
+
+Then the observer performs a real authorized HTTP Board claim. The canonical
+accountable member and claim holder remain different, and the observer remains
+outside private parties. Subsequent HTTP/MCP context exposes the title at
+/orient/claims/0/title. Board ownership is not canonical-definition entitlement.
+No canonical completion authority is transferred by this control.
+
+Cause by inspection: buildOrient sanitizes state.workItems, but the claims and
+availableClaims projections read raw Board row.title. Sanitize linked titles
+with the same existing role/party rule, preserving native/public Board work and
+the stored records. Do not rewrite histories, grant permissions or invent a
+new privacy policy. Grok owns the runtime cure; Root owns integration/release.
+
+Evidence: tests/room-context-private-board.test.mjs, intentionally red.
+Final accepted+claimed case: 0 passed / 1 failed at sentinel assertion.
+The three-case run before adding claimed-stage coverage was 2 passed / 1 failed.
+Logs: context-5636-independent-board-final.log,
+context-5636-board-claim-red.log. A first attempt gave the observer accept_work
+alone, which does not qualify as a Board contributor and made the section
+empty. Corrected to the actual contribute profile and added a public-row
+precondition before accepting this as a meaningful falsifier.
+
+Source composition also remains required: this candidate is based on4916/e235,
+before landed5633/781c board-read refusal. Preserve that already-qualified fix
+when composing; this review does not declare the older context fallback safe.
+No broad-suite rerun, privacy implementation, merge or deployment from reviewer.

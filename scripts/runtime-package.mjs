@@ -446,7 +446,7 @@ optional.push("server/room-shard-route.mjs", "cloudflare/room-shard.mjs"); // RO
 optional.push("server/room-shard-copy.mjs"); // operator copy of one room's room-tables and the digest compare; not called from the command path
 // Retired UI files remain recognized only when an historical commit contains them.
 // They are not advertised or required by the current runtime.
-const historicalAssets = ["bounty-board", "referral-board", "squads-ui", "retention-ui", "open-questions-ui", "work-recipes", "land-queue-board"].map(name => `src/${name}.js`);
+const historicalAssets = ["bounty-board", "referral-board", "squads-ui", "retention-ui", "open-questions-ui", "work-recipes", "land-queue-board", "pwa-install", "push-ask"].map(name => `src/${name}.js`);
 optional.push("server/board-read.mjs"); // Shared authenticated Board reader used by HTTP and hosted MCP.
 
 optional.push("src/direct-conversation-window.js");

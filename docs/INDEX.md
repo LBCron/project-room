@@ -224,3 +224,4 @@ Dated plans, checkpoints, and working notes are in [history/](../archive/docs/hi
 - [Shipped Gmail sanitizer security repair](research/2026-11-01-sanitizer-security-repair.md): advisory scope and executable qualification.
 
 - [Native launch failure status](research/2026-11-01-native-launch-failure-status.md): safe local failure codes, terminal status and qualification limits.
+- [Normalized current event reader qualification](research/2026-11-01-current-events-reader.md)

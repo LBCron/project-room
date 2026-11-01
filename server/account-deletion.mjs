@@ -17,8 +17,9 @@ import { assertMessageWrite, recordMessageWrite } from './write-integrity.mjs';
 //      order inside one transaction.
 
 import { createHash, createHmac, randomBytes, timingSafeEqual } from "node:crypto";
-import { EVENT_TYPES, MEMBERSHIP_AUTHORITY_POLICY_VERSION, applyEvent, event, isRoomArchived, roomKind } from "../src/events.js";
+import { EVENT_TYPES, MEMBERSHIP_AUTHORITY_POLICY_VERSION, applyEvent, event, isRoomArchived, roomKind, ownMember } from "../src/events.js";
 import { commitMessageRedaction, readRedactionLog, redactRemainingMessageBodies } from "./message-redaction.mjs";
+import { isCurrentRoom,readCurrentHead,readCurrentRecord,withCurrentReadContext,chargeCurrentReadBudget } from './current-room-repository.mjs';
 import { hasMessageAuthority } from './message-authority.mjs';
 import { resyncRoomMessageRows } from "./messages-store.mjs";
 import { canonicalLane } from "./bounty-escrow.mjs";
@@ -235,6 +236,34 @@ function otherHumanOwners(store, state, roomId, accountId, ownerMemberId) {
   return heirs;
 }
 
+// The deletion inventory needs room ownership, eligible human heirs and
+// whether another active member exists. It does not need work or history bodies.
+function currentDeletionRoom(store,roomId,memberId) {
+  return store.readTransaction(()=>withCurrentReadContext(store.db,roomId,b=>{
+    const head=readCurrentHead(store.db,roomId,b),room=readCurrentRecord(store.db,roomId,'metadata','room',b);
+    if(!head||!room||room.id!==roomId)fail(409,'current_room_context_unavailable','Room ownership inventory is unavailable');
+    const members=Object.create(null),load=id=>{
+      if(Object.hasOwn(members,id))return ownMember(members,id);
+      const member=readCurrentRecord(store.db,roomId,'members',id,b);
+      if(member!==undefined){if(member.id!==id)fail(409,'current_room_context_unavailable','Room member inventory identity differs');Object.defineProperty(members,id,{value:member,enumerable:true});}return member;
+    };
+    if(!load(room.ownerId)||!load(memberId))fail(409,'current_room_context_unavailable','Room ownership inventory is unavailable');
+    if(room.ownerId===memberId){
+      const candidates=store.db.prepare('SELECT member_id FROM member_accounts WHERE room_id=? ORDER BY member_id LIMIT 101').all(roomId);
+      if(candidates.length>100)fail(409,'current_room_context_unavailable','Room account inventory exceeds bounded membership');
+      chargeCurrentReadBudget(b,candidates.reduce((n,row)=>n+Buffer.byteLength(row.member_id)+32,0),candidates.length);
+      for(const row of candidates)load(row.member_id);
+      // The complete protected key census prevents an omitted final member
+      // from turning a shared project into a disposable personal room.
+      const keys=store.db.prepare("SELECT record_key FROM current_room_record_proofs WHERE room_id=? AND domain='members' AND present=1 ORDER BY record_key LIMIT 101").all(roomId);
+      if(head.counts.members>100||keys.length!==head.counts.members)fail(409,'current_room_context_unavailable','Room member inventory is incomplete');
+      chargeCurrentReadBudget(b,keys.reduce((n,row)=>n+Buffer.byteLength(row.record_key)+32,0),keys.length);
+      if(!Object.values(members).some(member=>member.id!==memberId&&member.active!==false))for(const {record_key:id} of keys){const member=load(id);if(member&&member.id!==memberId&&member.active!==false)break;}
+    }
+    return {sequence:head.sequence,messageCount:head.counts.messages,state:{room,members}};
+  },{maxRecords:1024}));
+}
+
 // QA2 finding P2-11: rooms this account owns, classified so deletion cannot
 // leave an ownerless room full of their content.
 export function classifyOwnedRooms(store, accountId) {
@@ -244,8 +273,9 @@ export function classifyOwnedRooms(store, accountId) {
   const archive = [], transfer = [], blocked = [], retained = [];
   for (const membership of memberships) {
     let loaded;
-    try { loaded = store.room(membership.roomId); }
-    catch { continue; }
+    if(isCurrentRoom(store.db,membership.roomId))loaded=currentDeletionRoom(store,membership.roomId,membership.memberId);
+    else try { loaded = store.room(membership.roomId); }
+    catch (error) { if(error.status===404)continue;throw error; }
     const state = loaded.state;
     const ownerMemberId = state.room?.ownerId;
     const entry = {
@@ -254,7 +284,7 @@ export function classifyOwnedRooms(store, accountId) {
       kind: roomKind(state.room),
       memberId: membership.memberId,
       toMemberId: null,
-      messages: Array.isArray(state.messages) ? state.messages.length : 0,
+      messages: loaded.messageCount ?? (Array.isArray(state.messages) ? state.messages.length : 0),
       files: fileCount(store, membership.roomId),
     };
     if (ownerMemberId !== membership.memberId) {

@@ -14,6 +14,7 @@
 // The auxiliary table records creation provenance (who created which room)
 // for the pilot bound. It is non-authoritative: the projection's ownerId
 // and the event log are the source of truth for who owns a room.
+import {isCurrentRoom,readCurrentHead,readCurrentRecord,withCurrentReadContext} from './current-room-repository.mjs';
 import { randomBytes, randomUUID } from "node:crypto";
 import { EVENT_TYPES as T, PERMISSIONS, event, validId, ownMember, ROOM_KINDS, HISTORY_DEFAULTS_VERSION } from "../src/events.js";
 import { ServiceError } from "./service-error.mjs";
@@ -395,12 +396,13 @@ export class AgentRooms {
   transfer(token, roomId, { toMemberId, reason } = {}, expectedSessionBinding = null) {
     if (typeof toMemberId !== "string" || !toMemberId) fail(422, "invalid_transfer", "toMemberId is required");
     if (reason !== undefined && (typeof reason !== "string" || reason.length > 280)) fail(422, "invalid_transfer", "Transfer reason must be at most 280 characters");
-    return this.store.transaction(() => {
+    return this.store.transaction(() => withCurrentReadContext(this.store.db,roomId,() => {
       // Owner-only, checked up front so the HTTP surface answers 403
       // owner_required like the other owner-gated routes; the reducer keeps
       // its own guard for the generic command path.
       const auth = this.store.authenticate(token, roomId, expectedSessionBinding);
-      const authority = this.store.roomAuthority(roomId);
+      const current=isCurrentRoom(this.store.db,roomId);
+      const authority = this.store.roomAuthority(roomId,current?{memberId:auth.member.id}:undefined);
       // Retry of a dropped success response: the caller's transfer already
       // landed, so it is no longer the owner and the plain owner check below
       // would 403 a replay that changed nothing. The projection's
@@ -411,10 +413,10 @@ export class AgentRooms {
       // between clears previousOwnerId to someone else, so a genuine new
       // transfer never matches.
       if (authority.ownerId === toMemberId) {
-        const previousOwnerId = this.store.room(roomId).state.room?.previousOwnerId;
+        const previousOwnerId = current?readCurrentRecord(this.store.db,roomId,'metadata','room')?.previousOwnerId:this.store.room(roomId).state.room?.previousOwnerId;
         if (previousOwnerId === auth.member.id) {
           return { roomId, ownerId: toMemberId, previousOwnerId: auth.member.id,
-            sequence: this.store.room(roomId).sequence, duplicate: true };
+            sequence: current?readCurrentHead(this.store.db,roomId).sequence:this.store.room(roomId).sequence, duplicate: true };
         }
       }
       if (auth.member.id !== authority.ownerId) fail(403, "owner_required", "Only the Room owner may transfer ownership");
@@ -433,6 +435,6 @@ export class AgentRooms {
       // previous owner; the event data names the new one.
       return { roomId, ownerId: result.event.data.toMemberId, previousOwnerId: result.event.actorId,
         sequence: result.sequence, duplicate: false };
-    });
+    }));
   }
 }

@@ -30,3 +30,9 @@ A separate local workerd fixture is disposed and recreated with a persistent SQL
 The 1000-message workerd sample retains 1002 events, 257608 bytes of projection and 461780 message-row payload bytes. Conversion leaves 751 bytes of metadata with no messages array. One observed plan/execute pair took about 14/81 ms local wall time. These measurements do not establish production latency or Worker CPU/billing. A larger-body sample correctly exceeded the hydrated bound; its refusal is retained, and limits were not raised.
 
 The prior release c1c92 remains live while this change is reviewed. No production room is converted by these tests, no public Dot plugin route is qualified, and the next real hourly integrity success remains a separate requirement.
+
+## Independent admission review and cure
+
+Read-only review of 9dc769a1 found an actual malformed-storage admission gap: non-STRICT SQLite permits oversized TEXT in INTEGER-affinity fields, and the fingerprint formerly selected fields omitted by byte counts. Eight failing controls now cover the room head, event/message sequences, work revision and proof/cursor sequences. The cure sizes all explicitly materialized fields, checks proof/cursor bytes before projection reads, bounds the room sequence through SQL without returning malformed values, and replaces SELECT * fingerprints with explicit fields. The independent reviewer repeated the 2 MiB work revision probe and confirmed refusal before payload materialization.
+
+Cured qualification: 25 operator tests and four actual Worker checks pass; preflight passes. The near-cap sample remains eligible with the more conservative inventory: 1,002 events / 425,657 bytes, 1,000 message rows / 472,679 bytes, 257,608 projection bytes and 730,287 estimated hydrated bytes. Local workerd plan ~14ms / execute ~83ms is wall time, not a production CPU guarantee. No production room conversion is claimed.

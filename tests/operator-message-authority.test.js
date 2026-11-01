@@ -129,3 +129,20 @@ test('a fresh reverse plan cannot authorize corrupted canonical serving proofs',
  const done=await f.call('execute',{reverse:true,planHash:plan.body.planHash});assert.equal(done.status,409);
  assert.equal(done.body.error.code,'authority_integrity_failure');assert.deepEqual(f.raw(),before);
 });
+
+test('numeric-affinity storage corruption is refused before payload materialization',async t=>{
+ const cases=[['rooms','sequence'],['events','sequence'],['messages','seq'],['work_entities','revision'],['integrity_room_state','sequence'],['messages_backfill_cursor','applied_seq'],['messages_backfill_cursor','state_seq'],['messages_backfill_cursor','parity_at_seq']];
+ for(const [table,column] of cases)await t.test(table+'.'+column,async t=>{
+  const f=await fixture(t),db=f.store.db;
+  if(table==='work_entities')db.prepare('INSERT INTO work_entities VALUES(?,?,?,?,?)').run('commons','malformed',0,'d','{}');
+  db.prepare(`UPDATE ${table} SET ${column}=? WHERE ${table==='rooms'?'id':'room_id'}=?${table==='events'?' AND rowid=(SELECT MIN(rowid) FROM events)':''}`).run('x'.repeat(2097152),'commons');
+  // Instrument the payload read itself: rejection must happen before any
+  // JSON fingerprint/hydration read, not after loading malformed scalars.
+  const prepare=db.prepare.bind(db);
+  db.prepare=(sql)=>{
+   if(/SELECT \*|SELECT projection FROM|SELECT sequence,projection_hash|SELECT applied_seq,applied_event_id/.test(sql))throw Error('payload materialized before admission');
+   return prepare(sql);
+  };
+  assert.throws(()=>operatorMessageAuthority(f.store,{roomId:'commons',reason:'Malformed scalar admission'}),e=>e.code==='authority_budget_exceeded');
+ });
+});

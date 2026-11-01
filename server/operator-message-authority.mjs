@@ -40,16 +40,19 @@ function boundedDomain(db,roomId,table,order,columns,cap) {
 }
 function inspect(store,request) {
   const {roomId,reverse}=request,db=store.db,L=MESSAGE_AUTHORITY_LIMITS;
-  const meta=db.prepare('SELECT sequence,length(CAST(projection AS BLOB)) AS bytes FROM rooms WHERE id=?').get(roomId);
+  const meta=db.prepare("SELECT CASE WHEN typeof(sequence)='integer' THEN sequence ELSE -1 END AS sequence,length(CAST(projection AS BLOB)) AS bytes FROM rooms WHERE id=?").get(roomId);
   if(!meta)fail(404,'room_not_found','Room not found');
-  if(meta.bytes>L.projectionBytes || meta.sequence>L.events)
+  if(meta.bytes>L.projectionBytes || meta.sequence<0 || meta.sequence>L.events)
     fail(409,'authority_budget_exceeded','This room needs bounded continuation before authority migration; no conversion was attempted');
   const domains={
-    events:boundedDomain(db,roomId,'events','sequence',['id','body'],L.events),
-    messages:boundedDomain(db,roomId,'messages','message_id',['message_id','body','record_json','reducer_extras_json','reactions_json','channel_id','thread_root_id','reply_to_id','to_member_id','work_item_id','author_id','created_at','edited_at','deleted_at','entity_hash'],L.messages),
-    workItems:boundedDomain(db,roomId,'work_entities','work_id',['work_id','digest','body'],L.workItems),
-    bodies:boundedDomain(db,roomId,'projection_bodies','sha',['sha','body'],L.bodies)
+    events:boundedDomain(db,roomId,'events','sequence',['room_id','sequence','id','body'],L.events),
+    messages:boundedDomain(db,roomId,'messages','message_id',['room_id','message_id','seq','pinned','body','record_json','reducer_extras_json','reactions_json','channel_id','thread_root_id','reply_to_id','to_member_id','work_item_id','author_id','created_at','edited_at','deleted_at','entity_hash'],L.messages),
+    workItems:boundedDomain(db,roomId,'work_entities','work_id',['room_id','work_id','revision','digest','body'],L.workItems),
+    bodies:boundedDomain(db,roomId,'projection_bodies','sha',['room_id','sha','body'],L.bodies)
   };
+  const proofBytes=db.prepare('SELECT COALESCE(length(CAST(sequence AS BLOB)),0)+COALESCE(length(CAST(projection_hash AS BLOB)),0)+COALESCE(length(CAST(metadata_hash AS BLOB)),0) AS bytes FROM integrity_room_state WHERE room_id=?').get(roomId)?.bytes??0;
+  const anchorBytes=db.prepare('SELECT COALESCE(length(CAST(applied_seq AS BLOB)),0)+COALESCE(length(CAST(state_seq AS BLOB)),0)+COALESCE(length(CAST(parity_at_seq AS BLOB)),0)+COALESCE(length(CAST(applied_event_id AS BLOB)),0)+COALESCE(length(CAST(replay_event_id AS BLOB)),0) AS bytes FROM messages_backfill_cursor WHERE room_id=?').get(roomId)?.bytes??0;
+  if(proofBytes>256 || anchorBytes>256)fail(409,'authority_budget_exceeded','Proof or cursor anchors exceed the migration budget');
   const raw=db.prepare('SELECT projection FROM rooms WHERE id=?').get(roomId).projection;
   const state=JSON.parse(raw),canonical=hasMessageAuthority(state);
   if(state.messagesArchive?.count>0 || state.messagesArchive?.throughSeq>0)
@@ -63,15 +66,12 @@ function inspect(store,request) {
   if(reverseBound>L.reverseBytes)
     fail(409,'authority_budget_exceeded','Hydrated output exceeds the bounded migration budget; no conversion was attempted');
   const hash=createHash('sha256').update('room.message-authority-plan.v1\0').update(JSON.stringify({roomId,reverse,sequence:meta.sequence,raw}));
-  for(const [table,order]of [['events','sequence'],['messages','message_id'],['work_entities','work_id'],['projection_bodies','sha']]) {
+  for(const [table,order,columns]of [['events','sequence','room_id,sequence,id,body'],['messages','message_id','room_id,message_id,seq,channel_id,thread_root_id,reply_to_id,to_member_id,work_item_id,author_id,body,created_at,edited_at,deleted_at,reactions_json,pinned,record_json,reducer_extras_json,entity_hash'],['work_entities','work_id','room_id,work_id,revision,digest,body'],['projection_bodies','sha','room_id,sha,body']]) {
     hash.update('\0'+table+'\0');
-    for(const row of db.prepare(`SELECT * FROM ${table} WHERE room_id=? ORDER BY ${order}`).iterate(roomId))hash.update(JSON.stringify(row));
+    for(const row of db.prepare(`SELECT ${columns} FROM ${table} WHERE room_id=? ORDER BY ${order}`).iterate(roomId))hash.update(JSON.stringify(row));
   }
   const block=db.prepare('SELECT 1 FROM messages_backfill_blocks WHERE room_id=?').get(roomId);
   if(block)fail(409,'authority_not_ready','The room has a parked message backfill; resolve its recorded cause first');
-  const proofBytes=db.prepare('SELECT COALESCE(length(CAST(projection_hash AS BLOB)),0)+COALESCE(length(CAST(metadata_hash AS BLOB)),0) AS bytes FROM integrity_room_state WHERE room_id=?').get(roomId)?.bytes??0;
-  const anchorBytes=db.prepare('SELECT length(CAST(applied_event_id AS BLOB))+length(CAST(replay_event_id AS BLOB)) AS bytes FROM messages_backfill_cursor WHERE room_id=?').get(roomId)?.bytes??0;
-  if(proofBytes>256 || anchorBytes>256)fail(409,'authority_budget_exceeded','Proof or cursor anchors exceed the migration budget');
   const proof=db.prepare('SELECT sequence,projection_hash,metadata_hash FROM integrity_room_state WHERE room_id=?').get(roomId);
   hash.update(JSON.stringify(proof??null));
   const cursor=db.prepare('SELECT applied_seq,applied_event_id,state_seq,replay_event_id,parity_at_seq FROM messages_backfill_cursor WHERE room_id=?').get(roomId);

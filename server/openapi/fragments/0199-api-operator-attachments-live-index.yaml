@@ -1,5 +1,6 @@
   /api/operator/attachments/live-index/plan:
     post:
+      x-room-permission: operator
       summary: Plan optional database-wide attachment live index adoption
       description: >-
         Existing Operator-token management door; not a room permission or MCP tool.
@@ -30,6 +31,7 @@
         '422': { description: Invalid operator request }
   /api/operator/attachments/live-index/execute:
     post:
+      x-room-permission: operator
       summary: Execute the exact bounded attachment index plan
       description: >-
         Body {reason, reverse?, planHash, requestId}. Fresh global scalar admission

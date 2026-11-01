@@ -104,7 +104,7 @@ export class Bridge {
     this.host = host ?? new AgentHost({ candidate, cwd, env, mode, log, savedSessions: this.sessionMap, onPermission: request => this.onPermission(request) });
     this.permissionApproverId = permissionApproverId;
     this.permissionTimeoutMs = permissionTimeoutMs; this.permissionPollMs = permissionPollMs;
-    this.restartDelayMs = restartDelayMs; this.minPollIntervalMs = minPollIntervalMs; this.lastPollAt = 0; this.crashes = []; this.pausedUntil = 0; this.ready = null;
+    this.restartDelayMs = restartDelayMs; this.minPollIntervalMs = minPollIntervalMs; this.lastPollAt = 0; this.wakeCursor = null; this.crashes = []; this.pausedUntil = 0; this.ready = null;
     this.queue = new ThreadQueue({ concurrency: maxSessions, run: (threadKey, batch) => this.turn(threadKey, batch) });
     this.host.onExit?.(info => this.onAgentExit(info));
     this.approverController = new AbortController();
@@ -391,18 +391,22 @@ export class Bridge {
     // just as queued as the first page's, and a first-page signal that
     // cannot ack yet (a long turn, a parked receipt) must not hide them.
     // Later pages are already waiting, so they are read without a wait.
-    let cursor = null;
+    // A filtered source window can be empty yet have more. Carry its read
+    // position across finite cycles; restart/terminal traversal starts fresh.
+    let cursor = this.wakeCursor, refreshed = false;
     for (let page = 0; page < MAX_POLL_PAGES; page++) {
       if (this.controller.signal.aborted) return;
-      const value = await this.room.poll({ hostId: this.connection.hostId, waitMs: page === 0 ? this.waitMs : 0, signal: this.controller.signal, cursor });
+      const value = await this.room.poll({ hostId: this.connection.hostId, waitMs: page === 0 && cursor === null ? this.waitMs : 0, signal: this.controller.signal, cursor });
       const wakes = value?.pendingWakes ?? [];
-      if (wakes.length && page === 0) await this.refreshRoom();
+      if (wakes.length && !refreshed) { await this.refreshRoom(); refreshed = true; }
       for (const signal of wakes) {
         if (this.controller.signal.aborted) break;
         await this.accept(signal);
       }
-      if (!value?.more || !value?.nextCursor) return;
-      cursor = value.nextCursor;
+      if (!value?.more) { this.wakeCursor = null; return; }
+      if (typeof value.nextCursor !== "string" || !value.nextCursor || value.nextCursor.length > 1024 || value.nextCursor === cursor)
+        throw new RoomError(502, "invalid_wake_cursor", "Room returned a non-progressing wake continuation");
+      this.wakeCursor = cursor = value.nextCursor;
     }
   }
 

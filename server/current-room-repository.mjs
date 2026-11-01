@@ -571,6 +571,21 @@ export function currentConversationRows(store,roomId,{viewerId,limit,before,befo
   return {rows,continuation:!complete?last:null,examined,complete};
 }
 
+function currentAuditFieldKind(domain,key,value) {
+ if(domain==='shape'){if(!maps.has(key)||value!=='object')corrupt('invalid recovered map shape');return 'shape';}
+ if(domain==='metadata'){if(omitted.has(key)||maps.has(key)&&value!==null&&typeof value==='object'&&!Array.isArray(value))corrupt('competing recovered state');return 'metadata';}
+ if(maps.has(domain))return 'map';
+ if(['workPrivacy','workRequest','workSummary','workCapacity','messageWitness','archiveRetained','threadParticipants','historyFloors','historyExclusions'].includes(domain))return 'derived';
+ corrupt('unknown recovered metadata domain');
+}
+function readCurrentAuditWorkBody(db,roomId,id,ref) {
+ const scalar=db.prepare('SELECT length(CAST(body AS BLOB)) AS bytes FROM work_entities WHERE room_id=? AND work_id=?').get(roomId,id);
+ if(!scalar||scalar.bytes>MAX_RECORD)corrupt('recovered work payload missing/oversized');
+ const row=db.prepare('SELECT revision,digest,body FROM work_entities WHERE room_id=? AND work_id=?').get(roomId,id);
+ if(ref._workEntity!==1||ref.id!==id||ref.revision!==row.revision||ref.digest!==row.digest||hash(row.body)!==ref.digest)corrupt('recovered work reference changed');
+ const item=JSON.parse(row.body);if(item.id!==id||item.revision!==ref.revision)corrupt('recovered work identity changed');return item;
+}
+
 // Shared independent census leaf reads. One factory lives only inside the
 // current synchronous transaction; no reconstructed source state is trusted.
 export function withCurrentAuditUnits(store,roomId,operation) {
@@ -579,9 +594,10 @@ export function withCurrentAuditUnits(store,roomId,operation) {
   const head=readCurrentHead(db,roomId),auditReceipts=new Map();
   if(head)assertLegacyWorkReconciled(db,roomId);
   let active=true;
-  const unitBudget=()=>{if(!active||!db.isTransaction)throw Error('Current audit unit scope expired');return {...budget(),schemaVerified:true,auditReceipts};};
-  try {const result=operation({head,record:(domain,key)=>readCurrentRecord(db,roomId,domain,key,unitBudget()),
-    message:id=>readCurrentMessage(db,roomId,id,unitBudget())});if(result?.then)throw Error('Current census must remain synchronous');return result;}
+  const assertActive=()=>{if(!active||!db.isTransaction)throw Error('Current audit unit scope expired');};
+  const unitBudget=()=>{assertActive();return {...budget(),schemaVerified:true,auditReceipts};};
+  try {const result=operation({head,record:(domain,key)=>{const value=readCurrentRecord(db,roomId,domain,key,unitBudget());if(value!==undefined)currentAuditFieldKind(domain,key,value);return value;},
+    work:(id,ref)=>{assertActive();return readCurrentAuditWorkBody(db,roomId,id,ref);},message:id=>readCurrentMessage(db,roomId,id,unitBudget())});if(result?.then)throw Error('Current census must remain synchronous');return result;}
   finally {active=false;auditReceipts.clear();}
 }
 
@@ -622,11 +638,7 @@ export function readCurrentRoomForAudit(store,roomId) {
   const actualRecords=db.prepare('SELECT count(*) AS count FROM current_room_records WHERE room_id=?').get(roomId).count;
   if(proofs!==head.counts.metadataProofs||records!==head.counts.metadataRecords||actualRecords!==records)corrupt('complete metadata census differs');
   for(const [id,ref] of refs) {
-    const scalar=db.prepare('SELECT length(CAST(body AS BLOB)) AS bytes FROM work_entities WHERE room_id=? AND work_id=?').get(roomId,id);
-    if(!scalar||scalar.bytes>MAX_RECORD)corrupt('recovered work payload missing/oversized');
-    const row=db.prepare('SELECT revision,digest,body FROM work_entities WHERE room_id=? AND work_id=?').get(roomId,id);
-    if(ref._workEntity!==1||ref.id!==id||ref.revision!==row.revision||ref.digest!==row.digest||hash(row.body)!==ref.digest)corrupt('recovered work reference changed');
-    const item=JSON.parse(row.body);if(item.id!==id||item.revision!==ref.revision)corrupt('recovered work identity changed');
+    const item=units.work(id,ref);
     Object.defineProperty(state.workItems,id,{value:item,enumerable:true,writable:true,configurable:true});
   }
   const expectedPrivacy=deriveWorkPrivacy(state);

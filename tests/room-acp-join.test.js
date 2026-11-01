@@ -15,10 +15,34 @@ const CODE = "RM-ABCDEFGHJKMNPQRS";
 test("parseInvite: hosted link, /room prefix, bare code, and refusals", () => {
   assert.deepEqual(parseInvite(`https://room.trydemigod.com/join/${CODE}`), { apiBase: "https://room.trydemigod.com", code: CODE });
   assert.deepEqual(parseInvite(`https://getdasha.com/room/join/${CODE.toLowerCase()}`), { apiBase: "https://getdasha.com/room", code: CODE });
+  assert.deepEqual(parseInvite(`https://www.getdasha.com/room/join/${CODE}`), { apiBase: "https://www.getdasha.com/room", code: CODE });
   assert.equal(parseInvite(CODE).apiBase, "https://room.trydemigod.com");
   assert.throws(() => parseInvite(`http://evil.example/join/${CODE}`), /https/);
   assert.throws(() => parseInvite("https://room.trydemigod.com/r/abc"), /join/);
   assert.throws(() => parseInvite("hello"), /invite link/);
+});
+
+test("parseInvite: a link naming any non-issuer origin is refused (RES-0129)", () => {
+  const token = "A".repeat(43);
+  for (const link of [
+    `https://evil.example.com/join/${CODE}`, // arbitrary origin
+    `https://room.trydemigod.com@evil.example.com/join/${CODE}`, // userinfo: real host is the username
+    `https://room.trydemigod.com.evil.example.com/join/${CODE}`, // lookalike host
+    `https://room.trydemigod.com:8443/join/${CODE}`, // non-default port
+    `https://room.trydemigod.com/some/prefix/join/${CODE}`, // path prefix on the real host
+    `https://evil.example.com/steal/join/${CODE}`, // prefix + foreign origin
+    `https://evil.example.com/room/abc#join/${token}`, // share-link form, foreign origin
+    `https://room.trydemigod.com/deep/path#join/${token}`, // share-link form, deep path
+  ]) assert.throws(() => parseInvite(link), /not a Room address|credentials in the URL/, link);
+  // Controls: the legitimate share-link forms of both doors still parse.
+  assert.deepEqual(parseInvite(`https://room.trydemigod.com/#join/${token}`), { apiBase: "https://room.trydemigod.com", linkToken: token });
+  assert.deepEqual(parseInvite(`https://www.getdasha.com/room/#join/${token}`), { apiBase: "https://www.getdasha.com/room", linkToken: token });
+  // Loopback stays usable for local development and the test server.
+  assert.equal(parseInvite(`http://127.0.0.1:49152/join/${CODE}`).apiBase, "http://127.0.0.1:49152");
+  // An operator-configured deployment is trusted exactly, and only exactly.
+  assert.equal(parseInvite(`https://rooms.example.net/join/${CODE}`, { origin: "https://rooms.example.net" }).apiBase, "https://rooms.example.net");
+  assert.equal(parseInvite(CODE, { origin: "https://www.getdasha.com/room" }).apiBase, "https://www.getdasha.com/room");
+  assert.throws(() => parseInvite(`https://rooms.example.net/join/${CODE}`, { origin: "https://other.example.net" }), /not a Room address/);
 });
 
 test("redact hides credentials, codes and registered secrets", () => {

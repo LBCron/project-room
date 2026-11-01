@@ -50,12 +50,41 @@ export function candidates({ agent = null, agentCmd = null, env = process.env } 
   return out;
 }
 
+// The environment an ACP child receives: an ALLOWLIST, never the parent's
+// environment minus a denylist (RES-0151 and RES-0145 are this one site:
+// the old strip regex removed only three ROOM_* shapes, so every other
+// credential in the parent env — model keys, GH_TOKEN, AWS_*, STRIPE_*,
+// ROOM_AGENT_TOKEN, PROJECT_ROOM_SECRET — crossed verbatim). The bridge's
+// stance (README) is that the agent uses its own login under HOME and
+// room-acp never sees or passes model keys, so a child gets only what a
+// local CLI needs to run and to find its own config. Anything not named
+// here stays in the parent, including every Room credential.
+export const CHILD_ENV_KEYS = Object.freeze([
+  "PATH", "HOME", "USER", "LOGNAME", "SHELL", "TERM", "COLORTERM", "TMPDIR", "LANG",
+  "CODEX_PATH", // README: the operator's explicit override for the Codex binary
+  // Windows process basics (spawn below has a win32 path).
+  "SystemRoot", "windir", "ComSpec", "PATHEXT", "APPDATA", "LOCALAPPDATA",
+  "USERPROFILE", "TEMP", "NUMBER_OF_PROCESSORS", "PROCESSOR_ARCHITECTURE",
+]);
+export const CHILD_ENV_PREFIXES = Object.freeze([
+  "LC_", // locale settings
+  "XDG_", // config/data/cache locations the agent's own login lives under
+  "FAKE_ACP_", // the bridge's scripted test fixture (tests/room-acp-*.test.js)
+]);
+
+export function childEnvFor(env = process.env) {
+  const out = {};
+  for (const [key, value] of Object.entries(env)) {
+    if (value === undefined) continue;
+    if (CHILD_ENV_KEYS.includes(key) || CHILD_ENV_PREFIXES.some(prefix => key.startsWith(prefix))) out[key] = value;
+  }
+  return out;
+}
+
 // Spawn an agent process and wrap its stdio as a JSON-RPC peer. The Room
 // credential is never in the child's environment.
 export function spawnAgent(candidate, { cwd = process.cwd(), env = process.env, onRequest, onNotification, log = () => {} } = {}) {
-  const childEnv = { ...env };
-  for (const key of Object.keys(childEnv)) if (/^ROOM_(TOKEN|CREDENTIAL|ACP_)/.test(key)) delete childEnv[key];
-  const child = spawn(candidate.command, candidate.args, { cwd, env: childEnv, stdio: ["pipe", "pipe", "pipe"], shell: process.platform === "win32" && candidate.command === "npx" });
+  const child = spawn(candidate.command, candidate.args, { cwd, env: childEnvFor(env), stdio: ["pipe", "pipe", "pipe"], shell: process.platform === "win32" && candidate.command === "npx" });
   child.stderr.on("data", () => {});
   const peer = createPeer({ input: child.stdout, output: child.stdin, onRequest, onNotification, log });
   return { child, peer };

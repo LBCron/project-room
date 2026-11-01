@@ -1,6 +1,6 @@
 import {currentWorkSummary} from './current-work-summary.mjs';
 import {advanceCanonicalH} from './replay-canonical-h.mjs';
-import {stageCurrentCandidateRecords,currentCandidateCommandContext,applyCurrentCandidateEvent,publishCurrentCandidate,readCurrentRecord,admitCurrentCandidateBudget} from './current-room-repository.mjs';
+import {assertCurrentCandidateEmpty,cleanupCurrentCandidateRecords,stageCurrentCandidateRecords,currentCandidateCommandContext,applyCurrentCandidateEvent,publishCurrentCandidate,readCurrentRecord,admitCurrentCandidateBudget} from './current-room-repository.mjs';
 import {applyEvent,memberHistoryVisibility} from '../src/events.js';
 import {messageRowForWrite} from './messages-store.mjs';
 import {messageProofHash} from './write-integrity.mjs';
@@ -459,6 +459,7 @@ export function captureReplayWitness(store, input) {
     const active=activeCapture(db,roomId);
     if(active && db.prepare(`SELECT 1 FROM message_replay_units WHERE room_id=? AND generation=?
       AND domain='header' AND unit_key='state'`).get(roomId,active.generation))throw Error('active replay capture requires continuation');
+    assertCurrentCandidateEmpty(store,roomId);
     db.prepare(`INSERT OR IGNORE INTO message_replay_units VALUES(?,'','control','epoch',0,0,'',X'')`).run(roomId);
     db.prepare(`INSERT INTO message_replay_units VALUES(?,'','control','capture-head',?,64,?,?)
       ON CONFLICT(room_id,generation,domain,unit_key) DO UPDATE SET row_version=excluded.row_version,
@@ -534,6 +535,15 @@ export function cleanupReplayCapture(store, input) {
     if (hasProgress && (prior.roomId !== roomId || prior.generation !== generation
       || prior.lifecycle !== 'abandoned')) throw Error('independent replay cleanup binding changed');
     if (prior.deleted !== input.expectedDeleted) throw Error('replay cleanup progress changed');
+    const target=cleanupCurrentCandidateRecords(store,roomId,generation);
+    if(target.rowsDeleted||!target.done) {
+      const removedPointer=db.prepare("DELETE FROM message_replay_units WHERE room_id=? AND generation=? AND domain='control' AND unit_key='cleanup'").run(roomId,generation).changes;
+      putPointer(db,roomId,generation,'control','cleanup',{receiptId});
+      const rowsDeleted=target.rowsDeleted+removedPointer;
+      return {roomId,generation,lifecycle:'abandoned',deleted:prior.deleted+rowsDeleted,rowsDeleted,
+        targetRowsDeleted:target.rowsDeleted,phase:'target_cleanup',done:false,inputBytes:target.inputBytes,certified:false,publication:'none'};
+    }
+
     // Prefix lookup plus LIMIT stops at 194 rows; no payload/key materialization
     // or whole-generation count/sort. Three lifecycle rows, the phase receipt and two runtime writer-permit
     // writes are reserved for the final delete. Native removal of the one <=4 MiB witness is distinct from

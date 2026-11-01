@@ -212,13 +212,20 @@ function fieldsOf(state) {
 function saveTransition(db,roomId,sequence,eventId,oldHead,changes,counts,{publishHead=true}={}) {
   if(changes.length>128)refuse('Too many current metadata changes in one transition');
   const revision=(oldHead?.revision??-1)+1,head={room_id:roomId,sequence,event_id:eventId,revision,counts_json:JSON.stringify(counts)};
-  const headHash=hash(JSON.stringify(headValue(head))),receiptId='oa_current_'+hash(JSON.stringify([roomId,sequence,revision,headHash]));
-  const tuples=[];
+  const headHash=hash(JSON.stringify(headValue(head)));
+  const tuples=[],writes=[];
   for(const {domain,key,value} of changes) {
     const prior=db.prepare('SELECT revision FROM current_room_record_proofs WHERE room_id=? AND domain=? AND record_key=?').get(roomId,domain,key);
     const recordRevision=(prior?.revision??-1)+1,present=value===undefined?0:1,payload=present?JSON.stringify(value):'',digest=hash(payload);
     if(present&&(Buffer.byteLength(payload)>MAX_RECORD))refuse('Current metadata record exceeds bounded input');
-    tuples.push([domain,key,recordRevision,present,digest]);
+    tuples.push([domain,key,recordRevision,present,digest]);writes.push({domain,key,recordRevision,present,payload,digest});
+  }
+  // A cleaned, unpublished generation may be recaptured at the same source
+  // head. Bind the actual transition tuples, not only equal control counts.
+  const receiptId='oa_current_'+hash(JSON.stringify([roomId,sequence,revision,headHash,oldHead?.receipt_id??null,tuples]));
+  const saved=JSON.stringify({version:1,roomId,headHash,records:tuples});
+  if(Buffer.byteLength(saved)>MAX_RECORD)refuse('Current transition receipt exceeds bounded input');
+  for(const {domain,key,recordRevision,present,payload,digest} of writes) {
     if(present)db.prepare(`INSERT INTO current_room_records VALUES(?,?,?,?,?,?,?) ON CONFLICT(room_id,domain,record_key)
       DO UPDATE SET revision=excluded.revision,payload_bytes=excluded.payload_bytes,payload_sha256=excluded.payload_sha256,payload=excluded.payload`)
       .run(roomId,domain,key,recordRevision,Buffer.byteLength(payload),digest,payload);
@@ -227,8 +234,6 @@ function saveTransition(db,roomId,sequence,eventId,oldHead,changes,counts,{publi
       DO UPDATE SET revision=excluded.revision,present=excluded.present,payload_sha256=excluded.payload_sha256,receipt_id=excluded.receipt_id`)
       .run(roomId,domain,key,recordRevision,present,digest,receiptId);
   }
-  const saved=JSON.stringify({version:1,roomId,headHash,records:tuples});
-  if(Buffer.byteLength(saved)>MAX_RECORD)refuse('Current transition receipt exceeds bounded input');
   db.prepare('INSERT INTO operator_actions(id,at,action,target_kind,target_id,counts_json,result) VALUES(?,?,?,?,?,?,?)')
     .run(receiptId,Date.now(),'current_room_transition','room',roomId,saved,'committed');
   if(publishHead)db.prepare(`INSERT INTO current_room_head VALUES(?,1,?,?,?,?,?,?) ON CONFLICT(room_id) DO UPDATE SET
@@ -772,4 +777,49 @@ export function currentVisibleHorizon(store,roomId,viewerId,head) {
   }
   if(rows.length<16)return 0;
   refuse('Visible cursor needs a qualified bounded continuation beyond the excluded tail');
+}
+
+export function assertCurrentCandidateEmpty(store,roomId) {
+  const db=store.db;
+  if(isCurrentRoom(db,roomId))refuse('Room already has current serving authority');
+  if(db.prepare('SELECT 1 FROM current_room_records WHERE room_id=? LIMIT 1').get(roomId)
+    ||db.prepare('SELECT 1 FROM current_room_record_proofs WHERE room_id=? LIMIT 1').get(roomId))
+    refuse('Unpublished target requires completed candidate cleanup before capture');
+}
+// Abandoned candidate rows have never served. Remove a bounded source window
+// only while its independently proved migration fence names this generation.
+// Published current records and their tombstones are never eligible here.
+export function cleanupCurrentCandidateRecords(store,roomId,generation) {
+  const db=store.db;if(!db.isTransaction)throw Error('Candidate cleanup requires transaction');
+  if(isCurrentRoom(db,roomId))return {owned:false,done:true,rowsDeleted:0};
+  const b=budget();admitCurrentSchema(db,b);
+  const fence=readCurrentRecord(db,roomId,'migrationFence','active',b);
+  if(!fence) {
+    assertCurrentCandidateEmpty(store,roomId);
+    return {owned:false,done:true,rowsDeleted:0};
+  }
+  if(fence.generation!==generation)return {owned:false,done:true,rowsDeleted:0};
+  return withCurrentRoomWriter(db,roomId,()=>{
+    const keys=db.prepare("SELECT domain,record_key FROM current_room_record_proofs WHERE room_id=? AND NOT(domain='migrationFence' AND record_key='active') ORDER BY domain,record_key LIMIT 80").all(roomId);
+    let rowsDeleted=0;
+    for(const {domain,record_key:key} of keys) {
+      charge(b,Buffer.byteLength(domain)+Buffer.byteLength(key)+128);
+      rowsDeleted+=db.prepare('DELETE FROM current_room_records WHERE room_id=? AND domain=? AND record_key=?').run(roomId,domain,key).changes;
+      rowsDeleted+=db.prepare('DELETE FROM current_room_record_proofs WHERE room_id=? AND domain=? AND record_key=?').run(roomId,domain,key).changes;
+    }
+    // This separate window also removes any interrupted candidate-only payload
+    // orphan; it cannot enlarge a nonempty proof window's physical write bound.
+    if(!keys.length)for(const {domain,record_key:key} of db.prepare("SELECT domain,record_key FROM current_room_records WHERE room_id=? AND NOT(domain='migrationFence' AND record_key='active') ORDER BY domain,record_key LIMIT 80").all(roomId)) {
+      charge(b,Buffer.byteLength(domain)+Buffer.byteLength(key)+128);
+      rowsDeleted+=db.prepare('DELETE FROM current_room_records WHERE room_id=? AND domain=? AND record_key=?').run(roomId,domain,key).changes;
+    }
+    const remaining=db.prepare("SELECT 1 FROM current_room_record_proofs WHERE room_id=? AND NOT(domain='migrationFence' AND record_key='active') LIMIT 1").get(roomId)
+      ||db.prepare("SELECT 1 FROM current_room_records WHERE room_id=? AND NOT(domain='migrationFence' AND record_key='active') LIMIT 1").get(roomId);
+    if(!remaining) {
+      rowsDeleted+=db.prepare("DELETE FROM current_room_records WHERE room_id=? AND domain='migrationFence' AND record_key='active'").run(roomId).changes;
+      rowsDeleted+=db.prepare("DELETE FROM current_room_record_proofs WHERE room_id=? AND domain='migrationFence' AND record_key='active'").run(roomId).changes;
+    }
+    if(rowsDeleted>162)throw Error('Candidate cleanup row bound');
+    return {owned:true,done:!remaining,rowsDeleted,inputBytes:b.bytes};
+  });
 }

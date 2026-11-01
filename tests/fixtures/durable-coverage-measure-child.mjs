@@ -20,6 +20,14 @@ store.db.prepare=sql=>{
 };
 if(mode==='partial'){const session=createBackupReplaySession(store);session.writeText(body);emit({phase:'partial',pending:store.restoreStatus().pending});}
 if(mode==='old-budget'){const session=createBackupReplaySession(store,{resume:true});session.writeText(body);session.finish();throw Error('old budget seam missing');}
-const token='synthetic-durable-restore-00000000000000',json=mode==='step';
-const response=await operatorRestoreResponse(new Request('https://room.example/api/operator/restore'+(json?'':'?resume=1'),{method:'POST',headers:{Authorization:'Bearer '+token,...(json?{'Content-Type':'application/json'}:{})},body}),token,store);
-emit({status:response.status,result:await response.json()});
+const token='synthetic-durable-restore-00000000000000',json=mode==='step'||mode==='warmsteps';
+const steps=[];let wire=body,result,status;
+for(let n=0;n<(mode==='warmsteps'?3:1);n++){
+ const before={...metrics},started=performance.now();
+ const response=await operatorRestoreResponse(new Request('https://room.example/api/operator/restore'+(json?'':'?resume=1'),{method:'POST',headers:{Authorization:'Bearer '+token,...(json?{'Content-Type':'application/json'}:{})},body:wire}),token,store);
+ status=response.status;result=await response.json();
+ steps.push({status,elapsedMs:Number((performance.now()-started).toFixed(3)),rows:result.progress?.rows,metrics:Object.fromEntries(Object.keys(metrics).filter(key=>key!=='inputBytes').map(key=>[key,metrics[key]-before[key]]))});
+ if(status!==202)break;
+ wire=JSON.stringify({restoreId:result.restoreId,sourceSeal:result.sourceSeal,expectedRevision:result.revision,requestId:'warm_'+n});
+}
+emit({status,result,steps});

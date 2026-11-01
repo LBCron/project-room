@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {mkdtempSync,rmSync,writeFileSync,mkdirSync,symlinkSync,realpathSync} from 'node:fs';
+import {mkdtempSync,rmSync,writeFileSync,copyFileSync,mkdirSync,symlinkSync,realpathSync} from 'node:fs';
 import {tmpdir} from 'node:os';
 import {join} from 'node:path';
 import {createHash} from 'node:crypto';
@@ -49,4 +49,23 @@ test('same original snapshot measures repeated old work against durable new proc
  for(let n=0;n<2;n++){const input=f.filename+'.measure-request.json';writeFileSync(input,JSON.stringify(request(response.body,'measured_'+n)));const measured=run(process.cwd(),'step',f.filename,input);assert.equal(measured.status,202);assert.equal(measured.result.verified,false);assert.equal(measured.result.progress.rows-response.body.progress.rows,128);assert.ok(measured.metrics.payloadRows<=128);newSteps.push(measured);response={status:measured.status,body:measured.result};}
  let finalAudit,store=new RoomStore(f.filename);try{let n=2;while(response.body.phase==='coverage'){response=await post(store,request(response.body,'finish_'+n++),{json:true});assert.equal(response.status,202,JSON.stringify(response.body));assert.ok(n<100);}const finalInput=f.filename+'.final-request.json';writeFileSync(finalInput,JSON.stringify(request(response.body,'final_audit')));finalAudit=run(process.cwd(),'step',f.filename,finalInput);response={status:finalAudit.status,body:finalAudit.result};assert.equal(response.status,200);assert.equal(response.body.verified,true);store.close();store=new RoomStore(f.filename);const sourceReport=auditRecovery(f.source),targetReport=auditRecovery(store);assert.deepEqual(targetReport.tables.filter(row=>row.table!=='current_restore_admission'),sourceReport.tables.filter(row=>row.table!=='current_restore_admission'),'exact independently hashed application rows except target-owned recovery receipt/control');assert.deepEqual(Buffer.from(store.db.prepare("SELECT bytes FROM room_attachments WHERE id='durable-blob'").get().bytes),f.bytes);}finally{store.close();}
  t.diagnostic('DURABLE_COVERAGE_COMPARISON '+JSON.stringify({sourcePin:'4aa07fa84',candidatePin:'4703382a6',sameOriginalSourceSha256:createHash('sha256').update(f.text).digest('hex'),originalBytes:Buffer.byteLength(f.text),oldPartial,oldProcesses:[oldFirst,oldSecond],newPartial:partial,newSourceLoadAndSeal:sealed,newProcesses:newSteps,finalUnboundedAudit:finalAudit,oldDurableCoverageAdvance:0,newDurableCoverageAdvance:256,finalVerified:true,exactApplicationTableDigestsExceptTargetRestoreControl:true,wholeRecoveryBounded:false,metrics:'returned rows and UTF8/BLOB cell bytes after constructor, not physical SQLite reads or CPU; source load and final audit remain monolithic'}));
+});
+
+for(const externalConnection of [false,true])test('warm scalar schema admission refuses same-size DDL and requires cold readmission; external='+externalConnection,async t=>{
+ const f=setup(t,50),store=new RoomStore(f.filename);t.after(()=>store.close());let response=await post(store,f.text);assert.equal(response.status,202);response=await post(store,request(response.body,'cache_admit'),{json:true});assert.equal(response.status,202);const before=restoreProgress(store.db),external=externalConnection?new RoomStore(f.filename):store;if(externalConnection)t.after(()=>external.close());const original=external.db.prepare("SELECT sql FROM sqlite_master WHERE name='restore_frozen_credentials_update'").get().sql;
+ // Equal bytes/count defeat a schema-size-only cache; change is on a different
+ // connection after the continuation already admitted its exact tuples.
+ external.db.exec('DROP TRIGGER restore_frozen_credentials_update');external.db.exec(original.replace('restore target is sealed','restore target is healed'));
+ const input=request(response.body,'external_ddl'),denied=await post(store,input,{json:true});assert.equal(denied.status,422);assert.match(JSON.stringify(denied.body),/sealed schema changed/);assert.deepEqual(restoreProgress(store.db),before);
+ external.db.exec('DROP TRIGGER restore_frozen_credentials_update');external.db.exec(original);assert.equal((await post(store,input,{json:true})).status,422,'observed invalid admission stays poisoned until cold exact readmission');
+ const cold=new RoomStore(f.filename);try{const resumed=await post(cold,input,{json:true});assert.equal(resumed.status,202);assert.ok(resumed.body.progress.rows>response.body.progress.rows);assert.throws(()=>cold.db.prepare('UPDATE credentials SET revoked=1').run(),/restore target is sealed/);}finally{cold.close();}
+});
+
+
+test('same sealed target measures warm scalar verification against exact625b source',async t=>{
+ const f=setup(t,600),store=new RoomStore(f.filename);const sealed=await post(store,f.text);assert.equal(sealed.status,202);store.close();const oldTarget=f.filename+'.old625';copyFileSync(f.filename,oldTarget);
+ const oldRoot=f.filename+'.old625-root';mkdirSync(oldRoot);execFileSync('tar',['-xf','-','-C',oldRoot],{input:execFileSync('git',['archive','--format=tar','625b4f3d0','server','src','client','strings','cloudflare/room-backup.mjs','package.json'],{maxBuffer:64*1024*1024})});symlinkSync(realpathSync('node_modules'),join(oldRoot,'node_modules'));
+ const input=f.filename+'.warm.json';writeFileSync(input,JSON.stringify(request(sealed.body,'warm_first')));const run=(root,filename)=>{const child=spawnSync(process.execPath,['tests/fixtures/durable-coverage-measure-child.mjs',root,'warmsteps',filename,input],{encoding:'utf8',timeout:30000,maxBuffer:4*1024*1024});assert.equal(child.status,77,child.stdout+'\n'+child.stderr);return JSON.parse(child.stdout.trim().split('\n').at(-1));};
+ const old=run(oldRoot,oldTarget),candidate=run(process.cwd(),f.filename);assert.equal(old.status,202);assert.equal(candidate.status,202);assert.deepEqual(candidate.steps.map(row=>row.rows),old.steps.map(row=>row.rows));for(let n=1;n<3;n++){assert.equal(candidate.steps[n].metrics.payloadRows,old.steps[n].metrics.payloadRows);assert.ok(candidate.steps[n].metrics.metadataTextBlobBytes<old.steps[n].metrics.metadataTextBlobBytes/2);}
+ t.diagnostic('SCALAR_CATALOG_COMPARISON '+JSON.stringify({baselinePin:'625b4f3d0',sameSealedTarget:true,old:old.steps,candidate:candidate.steps,returnedMetricsOnly:true,clockOnly:true,wholeRecoveryBounded:false}));
 });

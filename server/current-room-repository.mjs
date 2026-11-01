@@ -353,7 +353,7 @@ export function readCurrentMessage(db,roomId,messageId,b=contextBudgets.get(db)?
   return {row,value:decodeMessageEntity(row)};
 }
 
-const supported = new Set(['ownership.transferred','reply_request.cancelled','work_claim.updated','message.posted','work.proposed','work.accepted','work.started','work.completed','work.handoff_recorded','work.halt_cleared','verification.recorded','owner.decision_recorded']);
+const supported = new Set(['work.superseded','ownership.transferred','reply_request.cancelled','work_claim.updated','message.posted','work.proposed','work.accepted','work.started','work.completed','work.handoff_recorded','work.halt_cleared','verification.recorded','owner.decision_recorded']);
 const contextBudgets = new WeakMap();
 export function withCurrentServingWriter(db,roomId,operation) {
   if(!isCurrentRoom(db,roomId) && !db.prepare("SELECT 1 FROM current_room_record_proofs WHERE room_id=? AND domain='migrationFence' AND record_key='active' AND present=1").get(roomId))return operation();
@@ -434,7 +434,10 @@ function commandContextFromHead(store,roomId,command,head,b,{readMessage,readWor
     }
   }
   const workId=command.data.workItemId??selectedRequest?.workItemId;
-  if(typeof workId==='string') {
+  // Supersession compares two existing canonical contracts. Load both exact
+  // protected references; the shared reducer retains all ancestry/role rules.
+  const workIds = new Set([workId, ...(command.type === 'work.superseded' ? [command.data.supersededByWorkItemId] : [])]);
+  for (const workId of workIds) if(typeof workId==='string') {
     const ref=readCurrentRecord(db,roomId,'workItems',workId,b);
     if(ref!==undefined) {
       let row;

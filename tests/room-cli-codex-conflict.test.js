@@ -64,7 +64,7 @@ test('escaped quotes and multiline closing quote variants preserve unrelated val
 
 test('config changed during login is rechecked before any tool config write',async t=>{
  const {startRoom}=await import('./room-acp-fixture.mjs');const room=await startRoom(t);
- const {home,path,env}=fixture(t,'model = "keep"\n');const changed='model = "new user value"\n["mcp_servers"."project-room"]\nurl="https://user.example/mcp"\n';
+ const {home,path,env}=fixture(t,'model = "keep"\n');seedSavedConnection(home);const changed='model = "new user value"\n["mcp_servers"."project-room"]\nurl="https://user.example/mcp"\n';
  let requests=0;
  const fetchImpl=async(url,init)=>{const response=await fetch(url,init);if(++requests===1)writeFileSync(path,changed);return response;};
  await assert.rejects(setupCommand(['codex','--room',room.invite().link,'--accept'],{env,cwd:home,fetchImpl,out:()=>{}}),/Existing Codex config conflicts/);
@@ -87,4 +87,35 @@ test('literal escaped backslash before U and nested example tables are unrelated
  for(const before of ['text="\\\\U0000002d"\n','examples = [{ mcp_servers = { other = { url="x" } } }]\n','examples = [{ mcp_servers.project-room.url="x" }]\n']) {
   const {home}=fixture(t,before);assert.ok(planTool('codex',{home,project:home,url:'https://new.example/mcp'}).files[0].contents.startsWith(before));
  }
+});
+
+function seedSavedConnection(home) {
+ const directory=join(home,'.project-room','connections','room-agent');mkdirSync(directory,{recursive:true,mode:0o700});
+ writeFileSync(join(directory,'connection.json'),JSON.stringify({version:1,origin:'https://room.example',roomId:'commons',memberId:'synthetic',token:'pri_'+'s'.repeat(43)}),{mode:0o600});
+ writeFileSync(join(directory,'pointer.json'),JSON.stringify({version:1,name:'room-agent',configDirectory:directory}),{mode:0o600});
+}
+
+test('Codex setup preserves an existing private config mode',async t=>{
+ const {home,path,env}=fixture(t,'model = "keep"\n');seedSavedConnection(home);
+ const {chmodSync,statSync}=await import('node:fs');chmodSync(path,0o600);
+ assert.equal(await setupCommand(['codex'],{env,cwd:home,out:()=>{}}),0);
+ assert.equal(statSync(path).mode&0o777,0o600);assert.match(readFileSync(path,'utf8'),/model = "keep"/);
+});
+
+test('Codex config stays intact when its directory refuses staging a replacement',async t=>{
+ if(process.getuid?.()===0 || process.platform==='win32')return t.skip('requires Unix directory permissions');
+ const before='model = "keep exact bytes"\n',f=fixture(t,before);seedSavedConnection(f.home);
+ const {chmodSync}=await import('node:fs');const directory=join(f.home,'.codex');chmodSync(directory,0o500);
+ try{await assert.rejects(setupCommand(['codex'],{env:f.env,cwd:f.home,out:()=>{}}));assert.equal(readFileSync(f.path,'utf8'),before);}finally{chmodSync(directory,0o700);}
+});
+
+test('Codex preflight targets CODEX_HOME before any login or default-config change',async t=>{
+ const f=fixture(t,'model = "untouched default"\n');const custom=join(f.home,'selected-codex');mkdirSync(custom);
+ const config=join(custom,'config.toml'),before='[mcp_servers.project-room]\nurl="https://existing.example/mcp"\n';writeFileSync(config,before);let calls=0;
+ await assert.rejects(setupCommand(['codex','--room','https://room.example/join/SYNTHETIC','--accept'],{env:{...f.env,CODEX_HOME:custom},cwd:f.home,fetchImpl:async()=>{calls++;throw Error('unexpected login');},out:()=>{}}),/project-room/i);
+ assert.equal(calls,0);assert.equal(readFileSync(config,'utf8'),before);assert.equal(readFileSync(f.path,'utf8'),'model = "untouched default"\n');
+ writeFileSync(config,'model = "selected custom"\n');seedSavedConnection(f.home);
+ assert.equal(await setupCommand(['codex'],{env:{...f.env,CODEX_HOME:custom},cwd:f.home,out:()=>{}}),0);
+ assert.match(readFileSync(config,'utf8'),/model = "selected custom"/);assert.match(readFileSync(config,'utf8'),/mcp_servers.project-room/);
+ assert.equal(readFileSync(f.path,'utf8'),'model = "untouched default"\n');
 });

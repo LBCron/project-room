@@ -2,8 +2,37 @@
 // comments so quoted keys count, but examples inside values/comments do not.
 // No config values are included in errors. Unknown syntax fails without writes.
 import { BEGIN, END, planMarked } from './files.mjs';
+import { mkdirSync, lstatSync, readFileSync, openSync, closeSync, writeFileSync, fchmodSync, fsyncSync, renameSync, unlinkSync } from 'node:fs';
+import { join, resolve, dirname } from 'node:path';
+import { randomUUID } from 'node:crypto';
 
-const conflict = () => new Error('Existing Codex config conflicts with the project-room server. Back up ~/.codex/config.toml and reconcile its existing project-room settings manually, then retry. This check does not change files.');
+export const codexConfigPath=(home,env={})=>join(env.CODEX_HOME ? resolve(env.CODEX_HOME) : join(home,'.codex'),'config.toml');
+function configFile(path) {
+  try {
+    const stat=lstatSync(path);
+    if(!stat.isFile() || stat.nlink!==1 || process.getuid && stat.uid!==process.getuid())throw Error('Codex config must be an owned regular file without links; no files changed');
+    return {stat,text:readFileSync(path,'utf8')};
+  }catch(error){if(error.code==='ENOENT')return null;throw error;}
+}
+export function writeCodexConfig(file) {
+  const prior=configFile(file.path);
+  if((prior?.text ?? null)!==file.before)throw Error('Codex config changed during setup; retry after reviewing it. No files changed');
+  const directory=dirname(file.path);mkdirSync(directory,{recursive:true,mode:0o700});
+  const temp=join(directory,'.project-room-'+randomUUID()+'.tmp');let fd;
+  try {
+    fd=openSync(temp,'wx',prior ? prior.stat.mode & 0o777 : 0o600);
+    fchmodSync(fd,prior ? prior.stat.mode & 0o777 : 0o600);
+    writeFileSync(fd,file.contents);fsyncSync(fd);closeSync(fd);fd=undefined;
+    const current=configFile(file.path);
+    if((current?.text ?? null)!==file.before || Boolean(current)!==Boolean(prior)
+      || prior && (current.stat.ino!==prior.stat.ino || current.stat.mode!==prior.stat.mode))
+      throw Error('Codex config changed during setup; retry after reviewing it. No files changed');
+    renameSync(temp,file.path);
+    const parent=openSync(directory,'r');try{fsyncSync(parent);}finally{closeSync(parent);}
+  }finally{if(fd!==undefined)closeSync(fd);try{unlinkSync(temp);}catch(error){if(error.code!=='ENOENT')throw error;}}
+}
+
+const conflict = () => new Error('Existing Codex config conflicts with the project-room server. Back up the selected Codex config.toml and reconcile its existing project-room settings manually, then retry. This check does not change files.');
 
 function tokens(text) {
   const out = [];

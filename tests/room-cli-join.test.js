@@ -92,7 +92,7 @@ for (const detected of [null, 'CODEX_HOME', 'CODEX_SANDBOX']) test(`join Codex c
   writeFileSync(path, before);
   let logins = 0, setups = 0, requests = 0;
   await assert.rejects(joinCommand(['https://room.example/join/SYNTHETIC', ...(detected ? [] : ['--tool', 'codex'])], {
-    env: { HOME: home, ...(detected ? { [detected]: 'synthetic' } : {}) },
+    env: { HOME: home, ...(detected ? { [detected]: detected==='CODEX_HOME' ? join(home,'.codex') : 'synthetic' } : {}) },
     out: () => {}, login: async () => { logins++; return 0; }, setup: async () => { setups++; return 0; },
     fetchImpl: async () => { requests++; throw Error('must not contact Room'); },
   }), /Existing Codex config conflicts/);

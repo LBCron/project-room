@@ -9,7 +9,7 @@ import { loginCommand } from "./login.mjs";
 import { planJson, planMarked, unifiedDiff } from "../files.mjs";
 import { homeOf, loadConnection, readProject, safeName, writeProject } from "../paths.mjs";
 import { commandOnPath } from "../which.mjs";
-import { assertCodexConfigSafe, planCodexConfig } from "../codex-config.mjs";
+import { assertCodexConfigSafe, planCodexConfig, codexConfigPath, writeCodexConfig } from "../codex-config.mjs";
 
 // Host config locations and shapes for gemini, copilot, opencode, grok and command-code follow the
 // per-agent setup recipes in reason-machines/reason-network (src/setup.rs), used under its MIT license:
@@ -48,7 +48,7 @@ function serverEntry(url, { type, header }) {
   return { ...(type ? { type } : {}), url, headers: { Authorization: header } };
 }
 
-export function planTool(tool, { project, home, url, platform, claude }) {
+export function planTool(tool, { project, home, url, platform, claude, env = {} }) {
   const files = [];
   let command = null;
   let next = "";
@@ -65,10 +65,11 @@ export function planTool(tool, { project, home, url, platform, claude }) {
       next = "Wrote .mcp.json. Install the claude command, or open this repo in Claude Code. Set " + SECRET_ENV + " from room token.";
     }
   } else if (tool === "codex") {
-    const path = join(home, ".codex", "config.toml");
+    const path = codexConfigPath(home,env);
     const block = `[mcp_servers.${SERVER_NAME}]\nurl = ${JSON.stringify(url)}\nbearer_token_env_var = ${JSON.stringify(SECRET_ENV)}\n`;
-    files.push({ path, contents: planCodexConfig(readOrNull(path), block) });
-    next = "Codex reads ~/.codex/config.toml. Export " + SECRET_ENV + " from room token, then start Codex.";
+    const before=readOrNull(path);
+    files.push({ path, before, kind: "codex", contents: planCodexConfig(before, block) });
+    next = "Codex reads " + path + ". Export " + SECRET_ENV + " from room token, then start Codex.";
   } else if (tool === "cursor") {
     const path = join(project, ".cursor", "mcp.json");
     files.push({ path, contents: planJson(path, readOrNull(path), data => {
@@ -142,6 +143,7 @@ function writeFiles(files) {
   for (const file of files) {
     const before = readOrNull(file.path);
     if (before === file.contents) continue;
+    if(file.kind === "codex") { writeCodexConfig(file); continue; }
     mkdirSync(join(file.path, ".."), { recursive: true });
     writeFileSync(file.path, file.contents, { mode: 0o644 });
     if (file.path.endsWith("CONVENTIONS.md") || file.path.endsWith(".json") || file.path.endsWith(".yml") || file.path.endsWith(".toml")) chmodSync(file.path, 0o644);
@@ -155,7 +157,7 @@ function alreadyApplied(project, tool, via) {
 
 // Shared with room join so its login cannot precede the Codex config check.
 export function preflightSetup(tool, { env = process.env } = {}) {
-  if (tool === "codex") assertCodexConfigSafe(readOrNull(join(homeOf(env), ".codex", "config.toml")));
+  if (tool === "codex") assertCodexConfigSafe(readOrNull(codexConfigPath(homeOf(env),env)));
 }
 
 export async function setupCommand(argv, { env = process.env, cwd = process.cwd(), fetchImpl, platform = process.platform, out = console.log, err = console.error } = {}) {
@@ -186,7 +188,7 @@ export async function setupCommand(argv, { env = process.env, cwd = process.cwd(
     }
   }
   const claude = commandOnPath("claude", env);
-  const plan = planTool(tool, { project, home, url, platform, claude });
+  const plan = planTool(tool, { project, home, url, platform, claude, env });
   if (flags["dry-run"]) {
     let text = "";
     for (const file of plan.files) text += unifiedDiff(file.path, readOrNull(file.path), file.contents);

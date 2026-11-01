@@ -5665,6 +5665,18 @@ this.slaBreachAlerts = new SlaBreachAlertJournal(this); // Task 26: durable in-a
       try { state = compact(replayEvents(emptyRoomState(), events)); }
       catch (error) { fail(422, "invalid_import", `Export does not replay: ${error.message}`); }
       if (new Set(events.map(e => e.id)).size !== events.length) fail(422, "invalid_import", "Import has duplicate event ids");
+      // RES-0126 (L05-C2): an import is a room write, so the replayed end
+      // state must satisfy the same pilot caps command() enforces — the
+      // events/member/work counts and the projection byte cap, with the
+      // same 409 pilot_limit shapes. Checked on the replayed state before
+      // anything is deleted or written, so a refused import changes no
+      // data. There is no cleanup exemption here: an import replaces the
+      // whole history rather than ending individual items, and larger
+      // restores go through database backup (see the HTTP import route),
+      // not this path.
+      if (events.length > PILOT_LIMITS.eventsPerRoom || activeMemberCount(state.members) > PILOT_LIMITS.membersPerRoom || Object.keys(state.workItems ?? {}).length > PILOT_LIMITS.workItemsPerRoom) fail(409, "pilot_limit", "Bounded pilot capacity reached; no data was changed");
+      const projection = this.storedProjection(roomId, state);
+      if (Buffer.byteLength(projection) > PILOT_LIMITS.projectionBytes) fail(409, "pilot_limit", "Room projection limit reached; no data was changed. Ask the room owner to have older messages archived to free space.");
       // Dependent rows reference event ids/sequences; a history replacement
       // drops them. Pending invitations are lost on restore (documented).
       this.db.prepare("DELETE FROM commands WHERE room_id=?").run(roomId);
@@ -5691,7 +5703,7 @@ this.slaBreachAlerts = new SlaBreachAlertJournal(this); // Task 26: durable in-a
       this.db.prepare("DELETE FROM events WHERE room_id=?").run(roomId);
       const insert = this.db.prepare("INSERT INTO events VALUES(?,?,?,?)");
       events.forEach((e, i) => insert.run(roomId, i + 1, e.id, JSON.stringify(e)));
-      this.db.prepare("UPDATE rooms SET sequence=?,projection=?,archived_at=? WHERE id=?").run(events.length, this.storedProjection(roomId, state), archivedAtOf(state), roomId);
+      this.db.prepare("UPDATE rooms SET sequence=?,projection=?,archived_at=? WHERE id=?").run(events.length, projection, archivedAtOf(state), roomId);
       this.db.prepare("INSERT INTO projection_checkpoints(room_id,sequence,projection) VALUES(?,?,?)").run(roomId, events.length, JSON.stringify(state));
       syncRoomPublication(this, { roomId, state, previous, auth: null });
       return { imported: events.length, sequence: events.length };

@@ -1,0 +1,93 @@
+--- a/client/codex-supervisor.mjs
++++ b/client/codex-supervisor.mjs
+@@ -78,7 +78,13 @@
+         const candidates = recovering.length ? recovering : assigned.filter(run => run.status === "queued" && !run.attemptId && !run.sourceDeleted);
+         candidates.sort((a, b) => String(a.createdAt).localeCompare(String(b.createdAt)) || a.id.localeCompare(b.id));
+         const run = candidates.find(row => (db.prepare("SELECT retry_at FROM codex_supervisor_retry WHERE scope=? AND run_id=?").get(scope, row.id)?.retry_at ?? 0) <= Date.now());
+-        if (!run) { if (!candidates.length) state("watching_room"); await pause(pollMs); continue; }
++        if (!run) {
++          // A live authenticated runtime can still be unselected in its room.
++          // Report the missing setup without changing claims or owned recovery.
++          if (!candidates.length) state(snapshot.assistant?.coordinatorMemberId === connection.memberId
++            ? "watching_room" : "assistant_not_selected");
++          await pause(pollMs); continue;
++        }
+         try {
+           if (!rpc) { rpc = await connect(scopedCodexThreads(db, connection)); state("protocol_qualified", { providerAuthentication: "unverified" }); }
+           if (controller.signal.aborted) break;
+--- a/client/codex-host-status.mjs
++++ b/client/codex-host-status.mjs
+@@ -2,7 +2,7 @@
+ import { isAbsolute, join } from "node:path";
+ import { WatchJournal } from "./watch-journal.mjs";
+ 
+-const phases = new Set(["watching_room", "protocol_qualified", "running", "settled", "recovery_pending", "retrying_room", "stopped"]);
++const phases = new Set(["watching_room", "assistant_not_selected", "protocol_qualified", "running", "settled", "recovery_pending", "retrying_room", "stopped"]);
+ const credentials = new Set(["unknown", "present", "login_required", "not_required"]);
+ const privatePath = (path, directory = false) => {
+   const stat = lstatSync(path);
+@@ -63,7 +63,7 @@
+         if (event.status === "protocol_qualified") record.protocol = "qualified";
+         if (event.status === "recovery_pending") record.protocol = "unverified";
+         if (typeof event.runId === "string" && event.runId.length <= 128) record.runId = event.runId;
+-        else if (["watching_room", "stopped"].includes(event.status)) delete record.runId;
++        else if (["watching_room", "assistant_not_selected", "stopped"].includes(event.status)) delete record.runId;
+       }
+       if (event.type === "host_readiness" && credentials.has(event.credentials)) {
+         record.credentials = event.credentials; record.protocol = "qualified";
+--- a/tests/codex-host-status.test.js
++++ b/tests/codex-host-status.test.js
+@@ -89,6 +89,22 @@
+   t.after(async () => { child.kill("SIGTERM"); await finished; });
+   await waitFor(() => { try { return readCodexHostStatus(f.journal).credentials === "present"; } catch { return false; } });
+   const initial = readCodexHostStatus(f.journal); assert.equal(initial.pid, child.pid); assert.equal(initial.protocol, "qualified");
++  // A healthy local runtime does not mean this agent is selected in the room.
++  // Exercise the actual CLI heartbeat and Room configuration, not a synthetic status.
++  await waitFor(() => readCodexHostStatus(f.journal).phase === "assistant_not_selected");
++  const select = async coordinatorMemberId => {
++    const response = await fetch(`${origin}/api/rooms/commons/assistant`, {
++      method: "POST", headers: { Authorization: `Bearer ${room.keys.owner}`, "Content-Type": "application/json" },
++      body: JSON.stringify({ action: "configure", requestId: crypto.randomUUID(), expectedRevision: coordinatorMemberId ? 0 : 1,
++        name: "Room", coordinatorMemberId }),
++    });
++    assert.equal(response.status, 200, await response.text());
++  };
++  await select("producer");
++  await waitFor(() => readCodexHostStatus(f.journal).phase === "watching_room");
++  await select(null);
++  await waitFor(() => readCodexHostStatus(f.journal).phase === "assistant_not_selected");
++  assert.equal(readCodexHostStatus(f.journal).credentials, "present");
+   await waitFor(() => readCodexHostStatus(f.journal).updatedAt !== initial.updatedAt);
+   const listed = spawnSync(process.execPath, [cli, "--status-watch", f.journal], { encoding: "utf8" });
+   assert.equal(listed.status, 0, listed.stderr); assert.equal(JSON.parse(listed.stdout).fresh, true);
+--- a/desktop/macos/Sources/ProjectRoomKit/LocalRoomHost.swift
++++ b/desktop/macos/Sources/ProjectRoomKit/LocalRoomHost.swift
+@@ -268,6 +268,7 @@
+                 else {
+                     switch value["phase"] as? String {
+                     case "running": text = "Working on a shared ask"
++                    case "assistant_not_selected": text = "Not selected as this room’s assistant"
+                     case "watching_room", "protocol_qualified", "settled":
+                         text = value["protocol"] as? String == "qualified" && ["present", "not_required"].contains(value["credentials"] as? String ?? "") ? "Listening · model execution not verified" : "Connecting · checking agent setup"
+                     case "recovery_pending": text = "Waiting for execution reconciliation"
+--- a/desktop/macos/Sources/ProjectRoomKit/LocalHostReadiness.swift
++++ b/desktop/macos/Sources/ProjectRoomKit/LocalHostReadiness.swift
+@@ -28,6 +28,7 @@
+         guard host["statusFresh"] as? Bool == true else { return "This Mac’s agent status is unavailable. Check My Mac." }
+         if host["credentials"] as? String == "login_required" { return "This Mac’s agent needs sign-in. Stop it in My Mac, then choose Set up agent." }
+         switch host["phase"] as? String {
++        case "assistant_not_selected": return "This Mac’s agent is not selected for its room. Ask the room owner to select it using Connect in room settings."
+         case "retrying_room": return "This Mac’s agent is reconnecting to its room. Check the connection in My Mac."
+         case "recovery_pending": return "This Mac’s agent is reconciling earlier work. Open My Mac for status."
+         case "stopped": return "This Mac’s agent is stopping. Wait before starting it again."
+--- a/desktop/macos/Sources/LocalToolsAcceptance/main.swift
++++ b/desktop/macos/Sources/LocalToolsAcceptance/main.swift
+@@ -101,6 +101,8 @@
+             LocalHostReadiness.notice(host: base.merging(changes) { _, new in new }, local: state ?? local, connection: connection)
+         }
+         expectEqual(notice([:]), nil)
++        let unselected = base.merging(["phase": "assistant_not_selected"]) { _, new in new }
++        expectEqual(LocalHostReadiness.conversationNotice(host: unselected), "This Mac’s agent is not selected for its room. Ask the room owner to select it using Connect in room settings.")
+         // Basic conversation remains available with no computer tool grant.
+         // The computer diagnostics must still explain the missing capability.
+         for mode in ["none", "unknown", "approval_required", "control"] {

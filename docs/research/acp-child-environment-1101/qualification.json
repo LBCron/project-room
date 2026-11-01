@@ -60,5 +60,41 @@
     "sourceCommit": "d274de95466bf085c0d077fb78f8547357e97d73",
     "status": "complete: initial standalone-commit test-gap objection withdrawn after full dcec-to-head review; actual-child adversarial regression is in preceding red commit",
     "finding": "No remaining blocker found within scope; exact keys/README correct, PATH and selected CODEX_HOME controls retained, filesystem/config-access limitation explicit."
+  },
+  "composition": {
+    "sourceCommit": "f2a95316d41bc311d4b2086540d16b9fcbb793b0",
+    "mergedMain": "3a091d68154efb4a2f7b1aa0b432891b53cb3a38",
+    "originalCandidate": "292eafca1e1350a480f73ffe73bfd64da3acc9ac",
+    "method": "normal merge preserving both histories; no conflicts; ACP source/README unchanged; package/manifest regenerated",
+    "affectedNode": {
+      "exitCode": 0,
+      "tests": 45,
+      "pass": 45,
+      "fail": 0,
+      "skipped": 0
+    },
+    "safetyLint": {
+      "exitCode": 0,
+      "command": "I18N_BASE_REF=3a091d68154efb4a2f7b1aa0b432891b53cb3a38 npm run lint",
+      "errors": 0,
+      "existingWarnings": 335,
+      "designTokens": "clean",
+      "reachability": "clean",
+      "i18n": "passes actual-base ratchet"
+    },
+    "ciContract": {
+      "exitCode": 0,
+      "sourceCommit": "f2a95316d41bc311d4b2086540d16b9fcbb793b0",
+      "command": "CI=1 I18N_BASE_REF=3a091d68154efb4a2f7b1aa0b432891b53cb3a38 node scripts/check.mjs",
+      "contractTests": 15,
+      "pass": 15,
+      "fail": 0
+    },
+    "logSha256": {
+      "affectedNode": "54194c0e65f8232dc2da6ba35f0763ad04ba72eaa4bb326429943499de0ce8b1",
+      "safetyLint": "13e386189f1f03d5afb52efd05350d35fb4cbd0dbf7631ee70612ce017221859",
+      "pack": "8bb4c9bcb87e4f874097bcc11235bd8e1e0a58b1e3a71e70d199660ccde165c1",
+      "ciContract": "96522b3cf06cf6cb9421c7d4d95592d0c12de80b1c2b8c6ca0f44a133c01bc39"
+    }
   }
 }

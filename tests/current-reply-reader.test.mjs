@@ -161,8 +161,8 @@ test('reactivation history floor hides the older obligation consistently across 
 });
 test('denied directional consent removes answer and reply actions without acknowledging or changing obligations',t=>{
  const {store,keys}=fixture(t);
- // Persisted consent authority fixture; normalized consent mutation is a separate unported route.
- store.transaction(()=>store.db.prepare("INSERT INTO dm_consents(room_id,requester_id,target_id,status,reason,created_at,decided_at) VALUES(?,?,?,'rejected','Fixture',?,?)").run('commons','reader','owner',Date.now(),Date.now()));
+ store.dmConsents.request('commons','reader','owner','Fixture');
+ store.dmConsents.decide('commons','owner','reader','reject');
  const before=Object.fromEntries(['events','commands','current_room_records','operator_actions'].map(table=>[table,store.db.prepare('SELECT * FROM '+table).all()]));
  const read=store.replyRequests.selected(keys.reader,'commons','question');
  assert.equal(read.current.answerBasis,null);assert.equal(read.current.actions.answer,false);assert.equal(read.current.actions.reply,false);assert.equal(read.responseActions.length,0);

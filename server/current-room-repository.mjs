@@ -352,7 +352,7 @@ export function readCurrentMessage(db,roomId,messageId,b=contextBudgets.get(db)?
   return {row,value:decodeMessageEntity(row)};
 }
 
-const supported = new Set(['reply_request.cancelled','work_claim.updated','message.posted','work.proposed','work.accepted','work.started','work.completed']);
+const supported = new Set(['reply_request.cancelled','work_claim.updated','message.posted','work.proposed','work.accepted','work.started','work.completed','work.handoff_recorded','work.halt_cleared']);
 const contextBudgets = new WeakMap();
 export function withCurrentServingWriter(db,roomId,operation) {
   if(!isCurrentRoom(db,roomId) && !db.prepare("SELECT 1 FROM current_room_record_proofs WHERE room_id=? AND domain='migrationFence' AND record_key='active' AND present=1").get(roomId))return operation();
@@ -447,7 +447,9 @@ function commandContextFromHead(store,roomId,command,head,b,{readMessage,readWor
   for(const id of channelIds)if(typeof id==='string') {
     const channel=readCurrentRecord(db,roomId,'channels',id,b);if(channel!==undefined)state.channels[id]=channel;
   }
-  for(const id of Object.keys(state.members)) {
+  const haltIds=new Set(Object.keys(state.members));
+  if(command.type==='work.halt_cleared'&&typeof command.data.memberId==='string')haltIds.add(command.data.memberId);
+  for(const id of haltIds) {
     const halt=readCurrentRecord(db,roomId,'agentHalts',id,b);
     if(halt!==undefined)(state.agentHalts??={})[id]=halt;
   }

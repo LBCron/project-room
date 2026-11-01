@@ -143,14 +143,16 @@ export function bootstrapLegacyWriteProofs(db) {
   let added = 0;
   for (const row of db.prepare('SELECT id,sequence,projection,LENGTH(projection) AS bytes FROM rooms').iterate()) {
     const proof = db.prepare('SELECT sequence,projection_hash,metadata_hash FROM integrity_room_state WHERE room_id=?').get(row.id);
-    if (proof?.projection_hash && (proof.sequence !== row.sequence
-      || projectionContentHash(db,row.id,row.sequence,row.projection) !== proof.projection_hash))
-      throw Error('projection_corrupt: legacy content does not match its baseline');
     const hash = projectionDigest(row.projection);
     if (proof?.metadata_hash) {
       if (proof.metadata_hash !== hash) throw Error('projection_corrupt: stored metadata does not match its write proof');
       continue;
     }
+    // A current metadata proof already covers legitimate writes after an
+    // older historical baseline. Consult that baseline only when bootstrapping.
+    if (proof?.projection_hash && (proof.sequence !== row.sequence
+      || projectionContentHash(db,row.id,row.sequence,row.projection) !== proof.projection_hash))
+      throw Error('projection_corrupt: legacy content does not match its baseline');
     insert.run(row.id,row.sequence,row.bytes);
     update.run(hash,row.id);
     added++;

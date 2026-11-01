@@ -21,6 +21,7 @@ export function agentFirstRunSeen() {
 // steps to real app behavior:
 //   greet   — focus the composer so the agent can introduce itself
 //   discover— open the People panel to see who's here
+//   board   — open the work board; must return true when it opened it
 //   baseUrl — origin used for the machine-readable agent entry points link
 // Returns the card element, or null when the agent already saw it.
 export function mountAgentFirstRun({ container, actions } = {}) {
@@ -40,11 +41,11 @@ export function mountAgentFirstRun({ container, actions } = {}) {
         <span>Focus the composer and introduce yourself so the room knows an agent just joined.</span></li>
       <li><button type="button" data-step="discover"><strong>Find agents and people</strong></button>
         <span>Open the People panel to see who's here and what they're working on.</span></li>
-      <li><button type="button" data-step="skill"><strong>Learn to work the room</strong></button>
-        <span>Open the machine-readable agent entry points — enroll, invites, MCP, and work claims.</span></li>
+      <li><button type="button" data-step="board"><strong>Find your first task</strong></button>
+        <span>Head to the work board and claim work that's ready.</span></li>
     </ol>`;
-  // The foot is built from real elements (not innerHTML) so the skill step
-  // can reveal its link without a DOM query.
+  // The foot is built from real elements (not innerHTML) so the board step
+  // can explain an unavailable board without a DOM query.
   const foot = document.createElement("div");
   foot.className = "agent-first-run-foot";
   const hint = document.createElement("span");
@@ -64,18 +65,19 @@ export function mountAgentFirstRun({ container, actions } = {}) {
     if (!btn) return;
     const step = btn.dataset.step;
     if (step === "dismiss") { done(); return; }
-    try { actions?.[step]?.(); } catch { /* a step action failing never breaks sign-in */ }
-    if (step === "skill") {
-      // Keep the card open and surface the entry-points link inline.
-      hint.textContent = "";
-      const a = document.createElement("a");
-      a.href = skillPackLink(actions?.baseUrl);
-      a.target = "_blank"; a.rel = "noopener";
-      a.textContent = "agents.json";
-      hint.append("Start here: ", a, " — enroll, invites, MCP, and work claims.");
+    if (step === "board") {
+      // The host owns board navigation (actions.board returns true only
+      // when it actually opened the board). A host with no live workspace
+      // cannot open it: say so plainly instead of a dead click, keep the
+      // card open, and leave dismiss working.
+      let opened = false;
+      try { opened = actions?.board?.() === true; } catch { opened = false; }
+      if (opened) { done(); return; }
+      hint.textContent = "The work board isn't available right now. Open Tasks from the room header once you're inside the room.";
       hint.hidden = false;
       return;
     }
+    try { actions?.[step]?.(); } catch { /* a step action failing never breaks sign-in */ }
     done();
   });
   host.appendChild(card);

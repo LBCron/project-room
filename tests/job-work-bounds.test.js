@@ -74,3 +74,27 @@ test("public read-model backfill stops at its batch bound under a frozen clock",
   assert.ok(batch.rooms <= 20, `one batch is bounded by rows, not time: ${batch.rooms}`);
   assert.equal(batch.done, false);
 });
+
+// Examined work, not just returned rows: count every statement step and row a
+// tick performs at growing backlogs. Bounded ticks do the same statement work
+// at any backlog; only the one-row-per-room rooms listing grows.
+function countWork(store) {
+  const prepare = store.db.prepare.bind(store.db), work = { statements: 0, rows: 0 };
+  store.db.prepare = sql => new Proxy(prepare(sql), { get(target, key) {
+    const value = target[key];
+    if (typeof value !== "function") return value;
+    return (...args) => { work.statements++; const out = value.apply(target, args);
+      if (key === "all") work.rows += out.length; else if (key === "get" && out) work.rows++; return out; };
+  } });
+  return work;
+}
+test("patrol tick statement work is constant as the backlog grows (rows grow only by the room listing)", t => {
+  const now = freezeClock(t), measured = [];
+  for (const rooms of [PATROL_TICK_ROOMS + 2, PATROL_TICK_ROOMS * 6]) {
+    const store = storeWithRooms(rooms), work = countWork(store);
+    runPatrolTick(store, { deadline: now + 5000 });
+    measured.push({ rooms, ...work });
+  }
+  assert.equal(measured[0].statements, measured[1].statements, JSON.stringify(measured));
+  assert.ok(measured[1].rows - measured[0].rows <= measured[1].rooms - measured[0].rooms + 2, JSON.stringify(measured));
+});

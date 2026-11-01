@@ -1,3 +1,4 @@
+import {readCurrentEventWindow,currentEventRedactionMessages} from './current-room-events.mjs';
 import { assertRestoreAdmitted, restorePending, verifyRestoreControl } from './restore-admission.mjs';
 import {readCurrentWorkListing} from './current-work-list.mjs';
 import { CURRENT_ROOM_SCHEMA, CURRENT_ROOM_GUARDS, initializeCurrentRoom, currentRoomAuthority, isCurrentRoom, currentCommandContext, prepareCurrentWrite, withCurrentServingWriter, readCurrentRecord, readCurrentHistoryFloor, withCurrentReadContext, readCurrentSelectedWorkState, readCurrentOverviewWindow, currentVisibleHorizon, readCurrentPrivateWorkParties } from './current-room-repository.mjs';
@@ -2379,7 +2380,8 @@ this.slaBreachAlerts = new SlaBreachAlertJournal(this); // Task 26: durable in-a
   }
 
   // The projection messages plus a lookup for archived ones, for event-log redaction.
-  redactionMessages(roomId) {
+  redactionMessages(roomId, page = null) {
+    if (isCurrentRoom(this.db,roomId)) return currentEventRedactionMessages(roomId,page);
     const messages = [...this.room(roomId).state.messages];
     Object.defineProperty(messages, "archivedLookup", { value: id => this.archivedMessage(roomId, id) });
     return messages;
@@ -6575,6 +6577,10 @@ this.slaBreachAlerts = new SlaBreachAlertJournal(this); // Task 26: durable in-a
       ? bindingOrOptions : options;
     const expectedSessionBinding = opts.expectedSessionBinding ?? (typeof bindingOrOptions === "string" || bindingOrOptions === null ? bindingOrOptions : null);
     const { actor = null, since = null, until = null, types = null, mentions = null, compact = false } = opts;
+    if (isCurrentRoom(this.db,roomId)) return this.readTransaction(() => withCurrentReadContext(this.db,roomId,() => {
+      const auth=this.authenticate(token,roomId,expectedSessionBinding);
+      return readCurrentEventWindow(this,roomId,auth.member.id,{...opts,after,limit});
+    }));
     // #658: mention timeouts are evaluated lazily on read. The flip needs a
     // write-capable transaction, so it runs before the query_only read
     // below; usually a no-op (one indexed UPDATE, zero rows touched).

@@ -1,3 +1,4 @@
+import {auditRecovery} from '../server/recovery.mjs';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {RoomStore} from '../server/store.mjs';
@@ -51,6 +52,7 @@ test('canonical archive qualifies complete content while retaining the legacy co
  f.store.command(key,'commons',{id:'after-archive',type:'message.posted',data:{messageId:'after-archive',body:'Reply to archived canonical history',replyToId:'extra-0'}});
  assert.equal(readConversation(f.store,key,'commons',{messageId:'after-archive',limit:5}).messages[0].body,'Reply to archived canonical history');
  assert.doesNotThrow(()=>f.store.readTransaction(()=>readCurrentRoomForAudit(f.store,'commons')));
+ assert.doesNotThrow(()=>auditRecovery(f.store),'full independent recovery must honor the proved archive representation');
 });
 
 test('canonical archive nested retained IDs preserve pinned early member and exact legacy order',async t=>{
@@ -71,4 +73,14 @@ test('existing canonical H work summary reaches actual context Begin and selecte
  assert.equal(buildOrient(f.store,'commons','owner').work[0].id,'existing-work');assert.equal(buildActivationPack(f.store,'commons','owner').openWork[0].id,'existing-work');
  assert.equal(f.store.workContext(key,'commons','existing-work').work.id,'existing-work');
  assert.doesNotThrow(()=>f.store.readTransaction(()=>readCurrentRoomForAudit(f.store,'commons')));
+});
+
+test('canonical H private request indexes preserve party and role boundaries after migration',t=>{
+ const initialWork=[];for(const memberId of ['producer','observer'])initialWork.push(event({roomId:'commons',actorId:'owner',type:'member.added',data:{memberId,displayName:memberId,kind:'agent',permissions:[]}}));
+ initialWork.push(event({roomId:'commons',actorId:'owner',type:'work.proposed',data:{workItemId:'private-work',title:'CANONICAL-PRIVATE-TITLE',definitionOfDone:'Private evidence',accountableMemberId:'producer'}}));
+ initialWork.push(event({roomId:'commons',actorId:'owner',type:'message.posted',data:{messageId:'private-request',toMemberId:'producer',workItemId:'private-work',requestKind:'reply',requestPolicyVersion:1,body:'Private scoped question'}}));
+ const f=setup(t,()=>{},{initialWork});qualify(f);convert(f);f.store.room=()=>{throw Error('full canonical room');};
+ for(const memberId of ['owner','producer'])assert.ok(JSON.stringify(buildOrient(f.store,'commons',memberId)).includes('CANONICAL-PRIVATE-TITLE'));
+ assert.ok(!JSON.stringify(buildOrient(f.store,'commons','observer')).includes('CANONICAL-PRIVATE-TITLE'));
+ assert.doesNotThrow(()=>auditRecovery(f.store));
 });

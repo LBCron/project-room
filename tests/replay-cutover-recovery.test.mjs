@@ -12,7 +12,7 @@ import {RoomStore} from '../server/store.mjs';
 import {initialRoom} from '../server/bootstrap.mjs';
 import {auditRecovery} from '../server/recovery.mjs';
 import {exportNdjsonText,replayNdjson,sanitizeCell} from '../server/room-export.mjs';
-import {replayCutoverSchema,captureReplayWitness,advanceReplayWitness,partitionReplayWitness,qualifyReplayHWork} from '../server/replay-cutover.mjs';
+import {replayCutoverSchema,captureReplayWitness,advanceReplayWitness,partitionReplayWitness,qualifyReplayHWork,abandonReplayCapture,cleanupReplayCapture} from '../server/replay-cutover.mjs';
 
 function fixture(t){
   const directory=mkdtempSync(join(tmpdir(),'replay-recovery-'));
@@ -69,9 +69,9 @@ test('the pinned prior recovery tool refuses the unknown extension',t=>{
     commit:'564b0438d3a1946e6d07b179112a4f7cacb158e2',destination});
   const code=`import {RoomStore} from ${JSON.stringify(pathToFileURL(join(destination,'server/store.mjs')).href)};
     import {auditRecovery} from ${JSON.stringify(pathToFileURL(join(destination,'server/recovery.mjs')).href)};
-    const s=new RoomStore(process.argv[1],{readOnly:true});
-    try{auditRecovery(s);process.exitCode=2;}catch(error){if(error.message!=='Recovery data requires operator reconciliation')throw error;}
-    finally{s.close();}`;
+    let s;
+    try{s=new RoomStore(process.argv[1],{readOnly:true});auditRecovery(s);process.exitCode=2;}catch(error){if(!['Recovery data requires operator reconciliation','Database schema is newer than this service'].includes(error.message))throw error;}
+    finally{s?.close();}`;
   assert.doesNotThrow(()=>execFileSync(process.execPath,['--input-type=module','-e',code,join(f.directory,'source.sqlite')],{stdio:'pipe'}));
 });
 
@@ -109,7 +109,8 @@ test('captured exact bytes do not authorize shadowed nested object keys',t=>{
   const state=JSON.parse(db.prepare("SELECT projection FROM rooms WHERE id='commons'").get().projection);
   state.messages=[];
   const text=JSON.stringify(state).replace('"messages":[]','"messages":['+duplicate+']');
-  db.prepare("DELETE FROM message_replay_units").run();
+  abandonReplayCapture(f.store,{roomId:'commons',generation:f.captured.generation,requestId:'discard-original-fixture',reason:'Create a distinct malformed source fixture'});
+  let cleanup={deleted:0},serial=0;do{cleanup=cleanupReplayCapture(f.store,{roomId:'commons',generation:f.captured.generation,requestId:'discard-fixture-'+serial++,expectedDeleted:cleanup.deleted});}while(!cleanup.done);
   db.prepare("UPDATE rooms SET projection=? WHERE id='commons'").run(text);
   db.prepare("UPDATE integrity_room_state SET metadata_hash=? WHERE room_id='commons'").run(createHash('sha256').update(text).digest('hex'));
   const captured=captureReplayWitness(f.store,{...f.input,requestId:'duplicate-key-capture'});

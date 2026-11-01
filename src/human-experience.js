@@ -128,6 +128,7 @@ export function installHumanExperience({ getState, getSession, getConversation, 
     finally { button.disabled = false; }
   };
   function paint() {
+    if(client.sectionAvailability?.('assistant')?.available===false){section.hidden=true;ask.hidden=true;assistantSettings.hidden=true;activity.hidden=true;return;}
     ask.hidden = !human() || !contribution;
     assistantSettings.hidden = !human();
     const context = getConversation?.();
@@ -253,6 +254,7 @@ export function installHumanExperience({ getState, getSession, getConversation, 
     ask.hidden = !human() || !contribution;
   }
   async function refresh() {
+    if(client.sectionAvailability?.('assistant')?.available===false)return;
     // Assistant configuration emits no room event, so while this tab does not
     // know a connected assistant it keeps the short poll: a stale "not
     // connected" would turn a first "@Room" ask into a plain post (Fo, C10).
@@ -374,6 +376,7 @@ export function installHumanExperience({ getState, getSession, getConversation, 
     paint,
     assistantName(id) { return human() && !document.body.classList.contains('human-advanced') && projection?.assistant.coordinatorMemberId === id ? projection.assistant.name : null; },
     sync() {
+      if(client.sectionAvailability?.('assistant')?.available===false){document.body.classList.remove('human-experience','human-single-conversation');paint();return;}
       const active = human() && Boolean(getState()); document.body.classList.toggle('human-experience', active);
       document.body.classList.toggle('human-single-conversation', active && Object.values(getState()?.channels ?? {}).filter(c => !c.archivedAt).length <= 1);
       section.hidden = !active; ask.hidden = !active || !contribution; advanced.hidden = !active; assistantSettings.hidden = !active; activity.hidden = !active;

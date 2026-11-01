@@ -52,7 +52,7 @@ export const CURRENT_ROOM_SCHEMA = definitions.map(([,sql])=>sql+';').join('\n')
   + '\nINSERT OR IGNORE INTO current_room_writer_permit VALUES(1,0,NULL,NULL);';
 const permitFor = row => `(SELECT enabled=1 AND room_id=${row}.room_id FROM current_room_writer_permit WHERE singleton=1) IS 1`;
 const guardDefinitions = [...CURRENT_LEGACY_WORK_GUARDS];
-for (const table of ['current_room_records','current_room_record_proofs','current_room_head','messages','work_entities','dm_consents','events','commands','rooms']) {
+for (const table of ['current_room_records','current_room_record_proofs','current_room_head','messages','work_entities','dm_consents','room_attachments','events','commands','rooms']) {
   for (const operation of ['INSERT','UPDATE','DELETE']) {
     const rows=operation==='UPDATE'?['OLD','NEW']:[operation==='DELETE'?'OLD':'NEW'];
     const key=row=>`${row}.${table==='rooms'?'id':'room_id'}`;
@@ -87,6 +87,7 @@ guardDefinitions.push(['current_room_permit_update',`CREATE TRIGGER IF NOT EXIST
   ['current_room_permit_delete',`CREATE TRIGGER IF NOT EXISTS current_room_permit_delete BEFORE DELETE ON current_room_writer_permit BEGIN
     SELECT RAISE(ABORT,'unsupported current room permit'); END`]);
 export const CURRENT_ROOM_GUARDS = [...guardDefinitions,...RESTORE_CONTROL_GUARDS].map(([,sql])=>sql+';').join('\n') + CURRENT_LEGACY_WORK_INDEXES + CURRENT_WORK_CAPACITY_INDEXES + CURRENT_INBOX_DISCOVERY_INDEXES + `
+CREATE INDEX IF NOT EXISTS current_room_attachments_message ON room_attachments(room_id,message_id,id);
 CREATE INDEX IF NOT EXISTS current_work_summary_keys ON current_room_record_proofs(room_id,record_key) WHERE domain='workSummary' AND present=1;
 CREATE INDEX IF NOT EXISTS current_reply_request_keys ON current_room_record_proofs(room_id,record_key) WHERE domain='replyRequests' AND present=1;
 CREATE INDEX IF NOT EXISTS current_messages_public_seq ON messages(room_id,seq DESC,message_id DESC) WHERE to_member_id IS NULL OR to_member_id='';

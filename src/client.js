@@ -547,6 +547,7 @@ export class RoomClient {
   // manual-refresh mode has no live deltas to protect and reads on demand.
   // Deliberately independent of snapshot/history overload cooldown: retain the
   // ten-second revocation bound using one small authorization probe per interval.
+  sectionAvailability(name) { if(!this.live||this.live.generation!==this.generation||this.live.session!==this.session)return {available:false,code:'fresh_room_context_required'};return this.live.snapshot.sections?.[name] ?? null; }
   scheduleLiveness(delay = this.livenessInterval) {
     if (this.livenessTimer) return;
     const generation = this.generation, session = this.session;

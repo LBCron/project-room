@@ -3910,7 +3910,7 @@ export function createRoomServer({ store, origin, assetRoot = new URL("../", imp
         if (!writing) {
           if (!["GET", "HEAD"].includes(req.method) || fileId) reject(405, "method_not_allowed", "Method not allowed", { Allow: fileId ? "POST" : "GET" });
           spendCredential("read", auth.credentialHash);
-          return json(res, 200, store.roomAttachments.list(selected.token, roomId), req.method === "HEAD");
+          return json(res, 200, store.roomAttachments.list(selected.token, roomId, {messageIds:url.searchParams.getAll("messageId"),cursor:url.searchParams.get("cursor")}), req.method === "HEAD");
         }
         if (req.method !== "POST") reject(405, "method_not_allowed", "Method not allowed", { Allow: fileId ? "POST" : "GET, POST" });
         protectWrite(req, auth, selected.bearer);

@@ -334,7 +334,7 @@ export function readCurrentMessage(db,roomId,messageId,b=contextBudgets.get(db)?
   return {row,value:decodeMessageEntity(row)};
 }
 
-const supported = new Set(['work_claim.updated','message.posted','work.proposed','work.accepted','work.started','work.completed']);
+const supported = new Set(['reply_request.cancelled','work_claim.updated','message.posted','work.proposed','work.accepted','work.started','work.completed']);
 const contextBudgets = new WeakMap();
 export function withCurrentServingWriter(db,roomId,operation) {
   if(!isCurrentRoom(db,roomId) && !db.prepare("SELECT 1 FROM current_room_record_proofs WHERE room_id=? AND domain='migrationFence' AND record_key='active' AND present=1").get(roomId))return operation();
@@ -372,7 +372,7 @@ function commandContextFromHead(store,roomId,command,head,b,{readMessage,readWor
     const source=readMessage?readMessage(id,b):readCurrentMessage(db,roomId,id,b);if(source)messages.set(id,source);return source;
   };
   const wantedMessages=[command.data.messageId??command.id,`${command.data.messageId??command.id}:channel`,command.data.replyToId,
-    command.data.sourceMessageId,command.data.evidenceMessageId];
+    command.data.sourceMessageId,command.data.evidenceMessageId,command.data.requestMessageId];
   for(const id of wantedMessages)if(typeof id==='string')loadMessage(id);
   let cursor = command . data . replyToId , childSeq = Number . MAX_SAFE_INTEGER ;
   for(let depth=0;cursor;depth++) {
@@ -387,7 +387,16 @@ function commandContextFromHead(store,roomId,command,head,b,{readMessage,readWor
     const id=command.data.responseToRequestId;
     const request=readCurrentRecord(db,roomId,'replyRequests',id,b);if(request!==undefined)(state.replyRequests??={})[id]=request;
   }
-  const workId=command.data.workItemId;
+  let selectedRequest;
+  if(command.type==='reply_request.cancelled'&&typeof command.data.requestMessageId==='string'){
+    const id=command.data.requestMessageId;selectedRequest=readCurrentRecord(db,roomId,'replyRequests',id,b);
+    if(selectedRequest!==undefined){
+      const opening=loadMessage(id);
+      if(selectedRequest.id!==id||!opening||opening.value.authorId!==selectedRequest.requesterId||opening.value.toMemberId!==selectedRequest.recipientId)corrupt('selected request opening binding differs');
+      (state.replyRequests??={})[id]=selectedRequest;
+    }
+  }
+  const workId=command.data.workItemId??selectedRequest?.workItemId;
   if(typeof workId==='string') {
     const ref=readCurrentRecord(db,roomId,'workItems',workId,b);
     if(ref!==undefined) {
@@ -404,6 +413,7 @@ function commandContextFromHead(store,roomId,command,head,b,{readMessage,readWor
       state.workItems[workId]=item;workRefs.set(workId,ref);
     }
   }
+  if(selectedRequest?.workItemId&&!workRefs.has(selectedRequest.workItemId))corrupt('selected request work reference missing');
   const channelIds=new Set(['general',command.data.channelId,...[...messages.values()].map(m=>m.value.channelId)]);
   for(const id of channelIds)if(typeof id==='string') {
     const channel=readCurrentRecord(db,roomId,'channels',id,b);if(channel!==undefined)state.channels[id]=channel;

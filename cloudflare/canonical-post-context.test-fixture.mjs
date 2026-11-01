@@ -10,6 +10,9 @@ export class CanonicalPostContextTestRoom extends HttpTestRoom {
     store.maintainMessageCertification = true;
     store.initialize(initialRoom());
     const owner = store.issueAccessKey('commons', 'owner');
+    store.command(owner, 'commons', { id: 'work', type: 'work.proposed', data: {
+      workItemId: 'review', title: 'Review patch', definitionOfDone: 'Report findings', mode: 'read', accountableMemberId: 'owner'
+    } });
     const post = id => store.command(owner, 'commons', {
       id, type: 'message.posted', data: { messageId: id, body: `Body ${id}` }
     });
@@ -18,6 +21,7 @@ export class CanonicalPostContextTestRoom extends HttpTestRoom {
     store.checkMessagesParity();
     store.migrateMessageAuthority('commons');
     store.maintainMessageCertification = false;
+    const workBefore = store.db.prepare("SELECT * FROM work_entities WHERE room_id='commons'").all();
     const room = store.room;
     let wholeRoomReads = 0;
     store.room = function(...args) { wholeRoomReads++; return room.apply(this, args); };
@@ -30,8 +34,16 @@ export class CanonicalPostContextTestRoom extends HttpTestRoom {
         runGuideStep(store, 'commons');
       });
     } catch (error) { corruptSkipRefused = error.message.includes('projection_corrupt'); }
+    const workUnchanged = JSON.stringify(store.db.prepare("SELECT * FROM work_entities WHERE room_id='commons'").all()) === JSON.stringify(workBefore);
+    let corruptWorkRefused = false;
+    try {
+      store.transaction(() => {
+        store.db.prepare("UPDATE work_entities SET body='{}' WHERE room_id='commons' AND work_id='review'").run();
+        post('must-refuse');
+      });
+    } catch (error) { corruptWorkRefused = error.message.includes('work_projection_corrupt'); }
     const cold = new RoomStore(null, { database: store.db, storagePlatform: durableStorage });
-    return Response.json({ wholeRoomReads, corruptSkipRefused, count: raw.messageAuthority.count,
+    return Response.json({ wholeRoomReads, corruptSkipRefused, corruptWorkRefused, workUnchanged, count: raw.messageAuthority.count,
       hasArray: Object.hasOwn(raw, 'messages'), bodies: cold.room('commons').state.messages.map(message => message.body) });
   }
 }

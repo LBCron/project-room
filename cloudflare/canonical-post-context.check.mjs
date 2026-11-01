@@ -4,7 +4,7 @@ import { fileURLToPath } from 'node:url';
 import { build } from 'esbuild';
 import { Miniflare } from 'miniflare';
 
-test('Workers canonical post and inactive Guide avoid full-room hydration and survive cold reopen', async () => {
+test('Workers work-ref canonical post and inactive Guide avoid full-room hydration and survive cold reopen', async () => {
   const bundle = await build({ entryPoints: [fileURLToPath(new URL('./canonical-post-context.test-fixture.mjs', import.meta.url))],
     bundle: true, write: false, format: 'esm', platform: 'neutral', external: ['node:*', 'cloudflare:*'] });
   const runtime = new Miniflare({ modules: true, script: bundle.outputFiles[0].text,
@@ -14,6 +14,6 @@ test('Workers canonical post and inactive Guide avoid full-room hydration and su
   try {
     const response = await runtime.dispatchFetch('https://room.example.test/');
     assert.equal(response.status, 200, await response.clone().text());
-    assert.deepEqual(await response.json(), { wholeRoomReads: 0, corruptSkipRefused: true, count: 2, hasArray: false, bodies: ['Body first', 'Body second'] });
+    assert.deepEqual(await response.json(), { wholeRoomReads: 0, corruptSkipRefused: true, corruptWorkRefused: true, workUnchanged: true, count: 2, hasArray: false, bodies: ['Body first', 'Body second'] });
   } finally { await runtime.dispose(); }
 });

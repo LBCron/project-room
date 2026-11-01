@@ -1,7 +1,7 @@
 // Dependency contract under review: only canonical ordinary top-level posts
 // with an explicit new message ID and body are candidates. Replies, DMs,
 // work/request/channel/crosspost/special fields retain the full command path.
-// Published/archived rooms, canonical work references, round-limit resumes and
+// Published/archived rooms, round-limit resumes and
 // a connected room assistant also retain that path until independently proved.
 // Members, room policy, channels and other bounded metadata remain available;
 // @agent mentions keep their existing permission, trust and wake contracts.
@@ -253,13 +253,17 @@ test('metadata requiring unqualified side-effect context falls back without load
   for (const change of [raw => { raw.messagesArchive = { throughSeq: 1, count: 1, retainedIds: [] }; },
     raw => { raw.room.starterSeeded = { templateSlug: 'agent-pair' }; },
     raw => { raw.room.publicReceipts = { enabled: true }; }, raw => { raw.room.publicPage = { enabled: true }; },
-    raw => { raw.workItems.w = { _workEntity: 1, id: 'w', revision: 0, digest: 'not-read' }; },
     raw => { raw.workItems.w = { id: 'w', status: 'suspended', suspended_by: 'round_limit' }; }]) {
     const raw = JSON.parse(original); change(raw);
     store.db.prepare("UPDATE rooms SET projection=? WHERE id='commons'").run(JSON.stringify(raw));
     assert.equal(store.canonicalMessagePostContext('commons', command, 'owner'), null);
   }
   store.db.prepare("UPDATE rooms SET projection=? WHERE id='commons'").run(original);
+  assert.throws(() => store.transaction(() => {
+    const raw = JSON.parse(original); raw.workItems.w = { _workEntity: 1, id: 'w', revision: 0, digest: 'not-read' };
+    store.db.prepare("UPDATE rooms SET projection=? WHERE id='commons'").run(JSON.stringify(raw));
+    store.canonicalMessagePostContext('commons', command, 'owner');
+  }), /projection_corrupt/);
   store.db.prepare('INSERT INTO room_assistant_config VALUES(?,?)').run('commons', JSON.stringify({ coordinatorMemberId: 'agent' }));
   assert.equal(store.transaction(() => store.canonicalMessagePostContext('commons', command, 'owner')), null);
 });

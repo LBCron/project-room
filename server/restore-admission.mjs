@@ -1,6 +1,7 @@
 import { Buffer } from 'node:buffer';
 import { randomUUID } from 'node:crypto';
 import { ServiceError } from './service-error.mjs';
+import { CURRENT_WRITER_FORMAT } from './current-room-format.mjs';
 
 // Target-owned operational fence. Exported source rows can never grant admission
 // to a target, and no ordinary SQL writer may clear an interrupted restore.
@@ -15,7 +16,7 @@ export const RESTORE_CONTROL_DEFINITIONS = [[RESTORE_CONTROL_TABLE, `CREATE TABL
 export const RESTORE_CONTROL_GUARDS = ['INSERT','UPDATE','DELETE'].map(operation => {
   const name='current_restore_admission_'+operation.toLowerCase();
   return [name,`CREATE TRIGGER IF NOT EXISTS ${name} BEFORE ${operation} ON current_restore_admission BEGIN
-    SELECT RAISE(ABORT,'unsupported restore admission mutation: durable-coverage-v1'); END`];
+    SELECT RAISE(ABORT,'unsupported restore admission mutation: durable-coverage-v1:${CURRENT_WRITER_FORMAT}'); END`];
 });
 export const RESTORE_CONTROL_SCHEMA=RESTORE_CONTROL_DEFINITIONS[0][1]+`;
 INSERT INTO current_restore_admission(singleton,state,restore_id) SELECT 1,'clear',NULL WHERE NOT EXISTS(SELECT 1 FROM current_restore_admission);`;

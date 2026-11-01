@@ -181,6 +181,8 @@ Dated plans, checkpoints, and working notes are in [history/](../archive/docs/hi
 
 [Bounded operator authority activation](research/2026-11-01-message-authority-activation.md) records the initial admission, recovery and refusal limits.
 
+[ACP exact child environment](research/2026-11-01-acp-child-environment.md) records the local prefix leak reproduction, exact-name compatibility contract and qualification limits.
+
 [Historical session backfill reconciliation](research/2026-11-01-legacy-session-backfill-reconciliation.md) describes the explicit operator proof boundary and derived-only repair.
 
 [Legacy wake drain removal](research/2026-11-01-legacy-wake-drain-removal.md) explains why the synthetic queue load mode was removed and distinguishes it from production wake delivery.

@@ -431,7 +431,7 @@ const viewPositions = new Map(), pendingPins = new Set(), locallyOwnedMessageIds
 const timelinePin = createTimelinePin();
 let pinScrollTop = null; // where the pin last moved the list; that scroll event is not the reader's
 let newVisibleMessages = 0, unreadAnchorId = null, mentionIndex = 0;
-let mutedThreads = new Set(), threadMuteBusy = false;
+let mutedThreads = new Set(), threadMuteBusy = false,threadMuteKnown=new Set(),threadMuteGeneration=-1;
 let roomCursor = 0, catchUpBoundary = 0, roomGeneration = -1, showAllAttention = false, returnClock = null;
 let signoutOperationId = 0, signoutLoading = false;
 let refreshOperationId = 0, submitOperationId = 0;
@@ -630,7 +630,7 @@ const client = new RoomClient({
     // JDOT-COH-NAV begin
     clearWorkNavigation(); updatesUi?.reset();
     // JDOT-COH-NAV end
-    mutedThreads = new Set(); threadMuteBusy = false;
+    mutedThreads = new Set(); threadMuteBusy = false;threadMuteKnown=new Set();threadMuteGeneration=-1;
     dmConsents = []; dmConsentSeq++;
     friendBonds = []; friendSeq++; friendBusy = false; friendDmPeerId = null;
     $("#friend-dm-dialog")?.close();
@@ -2173,11 +2173,12 @@ function render() {
     const ownedBy = serverPresence?.ownerIdentityId
       ? `<span class="member-owned-by">Agent identity: <code>${esc(serverPresence.ownerIdentityId)}</code></span>`
       : "";
+    const connectionScope=serverPresence?.coverage?.execution==='not-evaluated'?'<p class="member-observation">Connection observations; execution status is on the work item.</p>':'';
     const hostReport = Number.isFinite(serverPresence?.presence?.lastSeenAt)
       ? `<p class="member-observation">Last host report: <time datetime="${esc(new Date(serverPresence.presence.lastSeenAt).toISOString())}">${esc(new Date(serverPresence.presence.lastSeenAt).toLocaleString())}</time></p>` : "";
     const lastReport = agent && presenceStale && serverState
       ? `<p class="member-observation">Last reported availability: ${esc(presenceLabel(serverState))}</p>` : "";
-    return `<div id="${recordDomId("member", m.id)}" class="presence-member" tabindex="-1" role="group" aria-label="${esc(memberRowName(m, availability))}" data-member-record-id="${esc(m.id)}" data-presence="${esc(presence)}" data-disclosure-host="${esc(m.id)}" data-focus-key="member:${esc(m.id)}"${m.agentType ? ` data-agent-type="${esc(m.agentType)}"` : ""} ${m.active === false ? "" : `title="${esc(`Address ${m.displayName} in chat`)}"`}><div class="member-avatar ${m.kind}" aria-hidden="true"><span>${initials(m.displayName)}</span><i class="presence-dot presence-${esc(presence)}" title="${esc(availability)}"></i></div><div><div class="member-head"><strong class="member-handle${m.kind === "agent" ? " member-handle-agent" : ""}">${esc(handle)}</strong><span class="sr-only">${esc(availability)}</span>${doneChip}${agentPauses.has(m.id) && m.active !== false ? `<span class="pause-chip" data-paused-member="${esc(m.id)}" title="Queued wakes will not start; a running attempt may finish">Wakes paused</span>` : ""}${friendBondHtml(m)}</div>${agent ? `<span class="member-availability">${esc(availability)}</span>` : ""}${workingOnTitle}${agent ? `<p class="member-status member-assignment">${esc(status)}</p>` : ""}<details class="member-profile"><summary data-focus-key="member-profile:${esc(m.id)}" aria-label="Member options for ${esc(m.displayName)}" title="Member options"><span aria-hidden="true">···</span></summary><div class="member-profile-body"><p class="form-hint">Member ID: <code>${esc(m.id)}</code></p><div class="member-profile-badges">${typeChip}${stateChip}${ownerChip}</div><p class="member-status">${esc(status)}</p>${lastReport}${hostReport}${ownedBy}${agentPauses.has(m.id) && agent ? `<p class="member-pause-explanation">Queued wakes will not start; a running attempt may finish.</p>` : ""}${memberActions(m)}${workControl(m)}<details><summary data-focus-key="member-capabilities:${esc(m.id)}">Room capabilities</summary><p>${esc(m.permissions.join(", ") || "conversation only")}</p>${adminControl(m)}${muteControl(m)}</details>${dmConsentDetails(m)}${directoryCardDetails(m)}</div></details></div></div>`;
+    return `<div id="${recordDomId("member", m.id)}" class="presence-member" tabindex="-1" role="group" aria-label="${esc(memberRowName(m, availability))}" data-member-record-id="${esc(m.id)}" data-presence="${esc(presence)}" data-disclosure-host="${esc(m.id)}" data-focus-key="member:${esc(m.id)}"${m.agentType ? ` data-agent-type="${esc(m.agentType)}"` : ""} ${m.active === false ? "" : `title="${esc(`Address ${m.displayName} in chat`)}"`}><div class="member-avatar ${m.kind}" aria-hidden="true"><span>${initials(m.displayName)}</span><i class="presence-dot presence-${esc(presence)}" title="${esc(availability)}"></i></div><div><div class="member-head"><strong class="member-handle${m.kind === "agent" ? " member-handle-agent" : ""}">${esc(handle)}</strong><span class="sr-only">${esc(availability)}</span>${doneChip}${agentPauses.has(m.id) && m.active !== false ? `<span class="pause-chip" data-paused-member="${esc(m.id)}" title="Queued wakes will not start; a running attempt may finish">Wakes paused</span>` : ""}${friendBondHtml(m)}</div>${agent ? `<span class="member-availability">${esc(availability)}</span>` : ""}${workingOnTitle}${agent ? `<p class="member-status member-assignment">${esc(status)}</p>` : ""}<details class="member-profile"><summary data-focus-key="member-profile:${esc(m.id)}" aria-label="Member options for ${esc(m.displayName)}" title="Member options"><span aria-hidden="true">···</span></summary><div class="member-profile-body"><p class="form-hint">Member ID: <code>${esc(m.id)}</code></p><div class="member-profile-badges">${typeChip}${stateChip}${ownerChip}</div><p class="member-status">${esc(status)}</p>${lastReport}${hostReport}${connectionScope}${ownedBy}${agentPauses.has(m.id) && agent ? `<p class="member-pause-explanation">Queued wakes will not start; a running attempt may finish.</p>` : ""}${memberActions(m)}${workControl(m)}<details><summary data-focus-key="member-capabilities:${esc(m.id)}">Room capabilities</summary><p>${esc(m.permissions.join(", ") || "conversation only")}</p>${adminControl(m)}${muteControl(m)}</details>${dmConsentDetails(m)}${directoryCardDetails(m)}</div></details></div></div>`;
   };
   // E4: mute is the viewer's own preference; the owner (the appeal path) and yourself are never mutable.
   const muteControl = m => m.id === session?.member?.id || m.id === state.room.ownerId ? "" : `<button type="button" class="text-button mute-toggle" data-mute-member="${esc(m.id)}" data-muted="${isMutedBy(state, session?.member?.id, m.id)}" aria-pressed="${isMutedBy(state, session?.member?.id, m.id)}">${isMutedBy(state, session?.member?.id, m.id) ? `Unmute ${esc(m.displayName)}` : `Mute ${esc(m.displayName)} for me`}</button>`;
@@ -3308,6 +3309,7 @@ function switchThread(threadId, focusComposer = false, preserveWork = false) {
   if (leavingResultQuestion) renderReturnBrief();
   if (focusComposer) $("#message-input").focus();
   else (currentThreadId ? $("#thread-title") : $("#conversation-title")).focus({ preventScroll: true });
+  if(partialWorkSnapshot)void refreshMutedThreads();
 }
 function revealMessage(id) {
   if (state && !busy && !conversation.byId.has(id)) {
@@ -4916,13 +4918,19 @@ $("#thread-back").addEventListener("click", () => switchThread(null));
 // unmuting restores it on the next read. The server resolves any message id
 // to the thread root, so the local set holds root ids.
 async function refreshMutedThreads() {
-  mutedThreads = new Set();
+  if(!partialWorkSnapshot)mutedThreads=new Set();
+  if(threadMuteGeneration!==client.generation){threadMuteKnown=new Set();threadMuteGeneration=client.generation;}
   if (!session || !client.session) return;
   const generation = client.generation;
   try {
-    const result = await client.threadMutes();
+    const selected=partialWorkSnapshot?[...new Set([currentThreadId,...state.messages.map(m=>conversation.rootById.get(m.id)??m.id)].filter(Boolean))].slice(0,16):null;
+    if(selected?.length===0)return;
+    const result = await client.threadMutes(selected);
     if (generation !== client.generation || !state) return;
-    if (result && Array.isArray(result.threadIds)) mutedThreads = new Set(result.threadIds);
+    if(result&&Array.isArray(result.threadIds)){
+      if(partialWorkSnapshot){if(result.coverage?.kind!=='selected-threads'||result.coverage.complete!==true||JSON.stringify(result.coverage.selectedThreadIds)!==JSON.stringify(selected))throw Error('Mute selection could not be confirmed');for(const id of selected){threadMuteKnown.add(id);if(result.threadIds.includes(id))mutedThreads.add(id);else mutedThreads.delete(id);}}
+      else mutedThreads=new Set(result.threadIds);
+    }
   } catch {
     // The button still works; the list just starts empty until the next load.
     if (generation !== client.generation || !state) return;
@@ -4931,12 +4939,14 @@ async function refreshMutedThreads() {
 }
 function syncThreadMuteButton() {
   const button = $("#thread-mute");
+  if(partialWorkSnapshot&&currentThreadId&&(!threadMuteKnown.has(currentThreadId)||threadMuteGeneration!==client.generation)){button.removeAttribute('aria-pressed');button.textContent='Check mute state';return;}
   const muted = Boolean(currentThreadId && mutedThreads.has(currentThreadId));
   button.setAttribute("aria-pressed", String(muted));
   button.textContent = muted ? "Unmute thread" : "Mute thread";
 }
 $("#thread-mute").addEventListener("click", async () => {
   if (!state || !currentThreadId || threadMuteBusy) return;
+  if(partialWorkSnapshot&&(!threadMuteKnown.has(currentThreadId)||threadMuteGeneration!==client.generation)){await refreshMutedThreads();return;}
   threadMuteBusy = true;
   const button = $("#thread-mute");
   button.disabled = true;

@@ -5146,7 +5146,9 @@ export function createRoomServer({ store, origin, assetRoot = new URL("../", imp
       // muted thread-root ids; POST {threadId, muted} mutes or unmutes
       // (threadId may be any message in the thread; it resolves to the root).
       if (route === "thread-mutes" && req.method === "GET") {
-        return json(res, 200, store.threadMutes.list(selected.token, roomId, fence));
+        const params=url.searchParams,threadIds=params.getAll('threadId');
+        if(threadIds.length>16||[...params.keys()].some(key=>!['threadId','auth'].includes(key)))reject(422,'invalid_thread_mute_selection','Select up to16 thread ids');
+        return json(res, 200, store.threadMutes.list(selected.token, roomId, fence,{threadIds:params.has('threadId')?threadIds:null}));
       }
       if (route === "thread-mutes" && req.method === "POST") {
         const data = await body(req);

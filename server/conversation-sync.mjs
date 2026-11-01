@@ -1,4 +1,4 @@
-import { isCurrentRoom, readCurrentRecord, currentConversationRows, withCurrentReadContext } from './current-room-repository.mjs';
+import { isCurrentRoom, readCurrentHead,readCurrentMessage,readCurrentHistoryFloor,chargeCurrentReadBudget, readCurrentRecord, currentConversationRows, withCurrentReadContext } from './current-room-repository.mjs';
 import { hasMessageAuthority } from './message-authority.mjs';
 import { messageRepository } from './message-repository.mjs';
 import { createHash, createCipheriv, createDecipheriv, randomBytes } from "node:crypto";
@@ -217,6 +217,7 @@ export function readConversation(store, token, roomId, { limit = 50, cursor = nu
 // SQL applies caller visibility and history floors before grouping/pagination.
 export function readDirectConversations(store, token, roomId, { limit = 50, cursor = null, expectedSessionBinding = null } = {}) {
   if (!Number.isSafeInteger(limit) || limit < 1 || limit > 100) fail(422, 'invalid_conversation_selection', 'Choose a bounded conversation list');
+  if(isCurrentRoom(store.db,roomId))return readCurrentDirectDirectory(store,token,roomId,{limit,cursor,expectedSessionBinding});
   return store.readTransaction(() => {
     const auth = store.authenticate(token, roomId, expectedSessionBinding);
     const current = isCurrentRoom(store.db,roomId);
@@ -268,4 +269,28 @@ export function readDirectConversations(store, token, roomId, { limit = 50, curs
     const nextCursor = rows.length > limit ? signed.encode({ scope, sequence: head.sequence, anchor, after: peers.at(-1).memberId }) : null;
     return { ...base, mode: 'replace', peers, nextCursor };
   });
+}
+
+// The directory is a bounded recent source window, not a global GROUP BY.
+// Full enumeration is an explicit continuation and can include empty pages.
+function readCurrentDirectDirectory(store,token,roomId,{limit,cursor,expectedSessionBinding}){
+ return store.readTransaction(()=>withCurrentReadContext(store.db,roomId,b=>{
+  const auth=store.authenticate(token,roomId,expectedSessionBinding),head=readCurrentHead(store.db,roomId,b),db=store.db;
+  const identity={roomId,viewerId:auth.member.id,viewerAccountId:auth.account?.id??null,viewerAuthEpoch:auth.account?.authEpoch??null,viewerSessionBinding:auth.sessionBinding,viewerSessionRevision:auth.sessionRevision??null};
+  const scope=digest(['current-direct-directory-v2',identity,auth.credentialHash,head.head_sha256,limit]),codec=conversationCursorCodec(store),saved=cursor===null?null:codec.decode(cursor);
+  const base={...identity,directoryVersion:2,sequence:head.sequence,limit};
+  if(cursor!==null&&(!saved||saved.scope!==scope||!Array.isArray(saved.positions)||saved.positions.length!==2||saved.positions.some(p=>!Number.isSafeInteger(p.seq)||p.seq<0||typeof p.id!=='string'||p.id.length>200)))return{...base,mode:'reset',peers:[],nextCursor:null,sourceWindow:{complete:false,examined:0,timestampBasis:'max-encountered-createdAt'}};
+  const floor=readCurrentHistoryFloor(db,roomId,auth.member.id,b),size=Math.min(limit,8),streams=[{index:'current_messages_incoming_seq',where:'to_member_id=?'},{index:'current_messages_outgoing_seq',where:"author_id=? AND to_member_id IS NOT NULL AND to_member_id<>''"}];
+  for(let i=0;i<2;i++){const stream=streams[i],at=saved?.positions[i]??{seq:head.sequence+1,id:'\uffff'};stream.at={...at};stream.used=0;stream.rows=db.prepare(`SELECT message_id,seq,length(CAST(record_json AS BLOB)) bytes FROM messages INDEXED BY ${stream.index} WHERE room_id=? AND ${stream.where} AND (seq,message_id)<(?,?) ORDER BY seq DESC,message_id DESC LIMIT ?`).all(roomId,auth.member.id,at.seq,at.id,size);chargeCurrentReadBudget(b,stream.rows.reduce((n,r)=>n+Buffer.byteLength(r.message_id)+48,0),stream.rows.length);}
+  const peers=new Map();let examined=0;
+  while(examined<size){const pending=streams.filter(s=>s.used<s.rows.length).sort((a,z)=>z.rows[z.used].seq-a.rows[a.used].seq||Buffer.compare(Buffer.from(z.rows[z.used].message_id),Buffer.from(a.rows[a.used].message_id)));if(!pending.length)break;
+   const stream=pending[0],row=stream.rows[stream.used];if(examined&&b.bytes+row.bytes+65536>262144)break;
+   const source=readCurrentMessage(db,roomId,row.message_id,b);if(!source||source.row.seq!==row.seq)fail(409,'current_directory_integrity','Conversation source differs');
+   stream.used++;stream.at={seq:row.seq,id:row.message_id};examined++;const m=source.value;
+   if(!m.toMemberId||![m.authorId,m.toMemberId].includes(auth.member.id)||!messageInHistory(m,floor))continue;
+   const peer=m.authorId===auth.member.id?m.toMemberId:m.authorId,old=peers.get(peer);if(!old||m.createdAt>old.lastMessageAt)peers.set(peer,{memberId:peer,lastMessageAt:m.createdAt});
+  }
+  const hasMore=streams.some(s=>s.used<s.rows.length||s.rows.length===size),positions=streams.map(s=>s.at);
+  return{...base,mode:'replace',peers:[...peers.values()],nextCursor:hasMore?codec.encode({scope,positions}):null,sourceWindow:{complete:!hasMore,examined,order:'message-sequence-desc',timestampBasis:'max-encountered-createdAt'}};
+ }));
 }

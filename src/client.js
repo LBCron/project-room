@@ -878,12 +878,13 @@ export class RoomClient {
     const result = await this.request(this.path(`/conversations?${query}`));
     if (session !== this.session || generation !== this.generation || !this.ownsAccountSession()) throw new Error(uiText("error.connection_changed"));
     if (!this.ownsResponse(result, session)) { this.endAccess(); throw new Error(uiText("error.connection_changed")); }
-    if (result.directoryVersion !== 1 || !["replace", "reset"].includes(result.mode) || result.limit !== limit
+    if (![1,2].includes(result.directoryVersion) || !["replace", "reset"].includes(result.mode) || result.limit !== limit
       || !Number.isSafeInteger(result.sequence) || !(result.nextCursor === null || typeof result.nextCursor === "string")
       || !Array.isArray(result.peers) || result.peers.length > limit
       || result.peers.some(peer => !peer || !validId(peer.memberId) || typeof peer.lastMessageAt !== "string")
       || new Set(result.peers.map(peer => peer.memberId)).size !== result.peers.length)
       throw new Error(uiText("direct.invalidDirectory"));
+    if(result.directoryVersion===2&&(!result.sourceWindow||typeof result.sourceWindow.complete!=='boolean'||result.mode!=='reset'&&result.sourceWindow.complete!==(result.nextCursor===null)))throw new Error(uiText('direct.invalidDirectory'));
     return result;
   }
   async replyContext(requestMessageId) {
@@ -1039,14 +1040,14 @@ export class RoomClient {
       throw error;
     }
   }
-  async threadMutes() {
+  async threadMutes(threadIds=null) {
     // Per-thread mutes for the current member. Read-only list; 401/403 ends
     // access like the sibling reads.
     if (!this.session) return null;
     if (!this.ownsAccountSession()) { this.endAccess(); return null; }
     const generation = this.generation, session = this.session;
     try {
-      const result = await this.request(this.path("/thread-mutes"));
+      const result = await this.request(this.path('/thread-mutes'+(threadIds===null?'':'?'+new URLSearchParams(threadIds.map(id=>['threadId',id])))));
       if (generation !== this.generation || session !== this.session) return null;
       if (!this.ownsResponse(result, session)) { this.endAccess(); return null; }
       return result;

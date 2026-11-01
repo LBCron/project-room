@@ -141,10 +141,10 @@ export function createNeedsAttentionCard(options) {
   function render(report) {
     const items = report?.items ?? [];
     currentReport = report;
-    count.textContent = String(report?.itemCount ?? items.length);
+    count.textContent = report?.coverage?`${items.length}${report.coverage.complete?' in scope':' loaded'}`:String(report?.itemCount??items.length);
     pages.hidden = !report?.nextCursor && !report?.previousCursor;
-    range.textContent = items.length ? `Showing ${report.pageOffset + 1}–${report.pageOffset + items.length} of ${report.itemCount}` : "";
-    section.hidden = items.length === 0;
+    range.textContent=report?.coverage?(report.coverage.complete?'Personal work/request sources examined. Other room oversight is outside this view.':'Partial personal work/request window. Continue to inspect more.'):(items.length?`Showing ${report.pageOffset+1}–${report.pageOffset+items.length} of ${report.itemCount}`:'');
+    section.hidden = items.length === 0&&!report?.coverage;
     list.innerHTML = items.map((item, itemIndex) => `
       <li class="attention-item attention-${esc(item.kind)} attention-severity-${esc(item.severity)}" data-item-index="${itemIndex}" data-access-request-id="${item.kind === "access_request" ? esc(item.id) : ""}">
         <div class="attention-body">
@@ -249,7 +249,7 @@ export function createNeedsAttentionCard(options) {
         // Owners retain their paged rollup; admins receive only the request queue
         // their existing manage_members authority permits, never the owner rollup.
         if (!canReadOwnerRollup()) report = null;
-        report = report ? { ...report, ownerOnly: true, items: report.items.map(item => item.kind === "access_request" ? byId.get(item.id) : item).filter(Boolean) }
+        report = report ? { ...report, ownerOnly: true, items: [...requests,...report.items.filter(item=>item.kind!=='access_request')].map(item => item.kind === "access_request" ? byId.get(item.id) : item).filter(Boolean) }
           : { items: requests, itemCount: requests.length, pageOffset: 0, ownerOnly: false };
       }
       if (partial && !report?.items.some(item => item.id === partial.id)) partial = null;

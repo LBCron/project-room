@@ -196,13 +196,20 @@ export function applyOutcomes(previous, outcomes) {
       : { ...prior, lastRunAt: at, lastErrorAt: at, lastError: redactError(outcome.error), consecutiveFailures: (prior.consecutiveFailures ?? 0) + 1,
         lastDurationMs: outcome.durationMs ?? null, lastFailure: sanitizeFailureDetail(outcome.failure),
         ...(failureSummary ? { lastSummary: failureSummary, lastSummaryAt: at } : {}) };
-    // A committed outcome resolves the attempt recorded before this run:
-    // stamp it committed so only a run that never reaches this fold can
-    // leave an 'uncommitted' attempt behind. Jobs that never carry an
-    // attempt (attempts are committed for slow jobs only) gain no
-    // attempt fields from their outcomes.
-    if (Number.isFinite(prior.lastAttemptAt)) {
-      record.lastAttemptAt = at;
+    // A committed outcome resolves the attempt recorded before its run —
+    // but ONLY on an exact attempt-ID match. The outcome fold is
+    // serialized, not instantaneous: a slow job's completion can land
+    // after the next pass has already committed a NEWER attempt, and
+    // stamping that newer attempt 'committed' would erase the trace of
+    // a run that may have died (Codex review of the attempt heartbeat,
+    // 2026-11-01). A mismatched or unthreaded outcome leaves the
+    // attempt fields exactly as they stand — lastAttemptAt keeps the
+    // current attempt's start time — while its own run/success/failure
+    // fields fold as they always have. Jobs that never carry an attempt
+    // (attempts are committed for slow jobs only) gain no attempt
+    // fields from their outcomes.
+    if (typeof outcome.attemptId === 'string' && outcome.attemptId
+      && prior.attemptOutcome === 'uncommitted' && prior.lastAttemptId === outcome.attemptId) {
       record.attemptOutcome = 'committed';
       record.uncommittedAttemptSinceAt = null;
     }
@@ -250,6 +257,12 @@ export function applyAttempts(previous, attempts) {
     next[attempt.job] = {
       ...prior,
       lastAttemptAt: at,
+      // The attempt's exact ID. Only the outcome carrying this same ID
+      // may resolve the attempt (see applyOutcomes): a completion from
+      // an older run landing after a newer attempt began must not erase
+      // the newer attempt's trace. An attempt recorded without an ID
+      // can never be resolved by an outcome — fail-closed.
+      lastAttemptId: typeof attempt.attemptId === 'string' && attempt.attemptId ? attempt.attemptId : null,
       attemptOutcome: 'uncommitted',
       uncommittedAttemptSinceAt: prior.attemptOutcome === 'uncommitted' && Number.isFinite(prior.uncommittedAttemptSinceAt)
         ? prior.uncommittedAttemptSinceAt : at

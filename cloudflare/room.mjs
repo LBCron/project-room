@@ -385,12 +385,17 @@ export class ProjectRoom extends DurableObject {
   // the same tail as recordCronTick so attempt and outcome commits can
   // never interleave.
   async recordCronAttempt(jobName) {
+    // The attempt ID threads attempt -> run -> outcome: #runDueJobsBody
+    // stamps it onto this pass's outcomes, and applyOutcomes resolves
+    // the attempt only on an exact match, so a late completion from an
+    // older run can never erase a newer attempt's trace.
+    const attemptId = crypto.randomUUID();
     const persist = async () => {
       const previous = await this.ctx.storage.get(HEARTBEAT_STORAGE_KEY);
-      const next = applyAttempts(previous, [{ job: jobName, at: Date.now() }]);
+      const next = applyAttempts(previous, [{ job: jobName, at: Date.now(), attemptId }]);
       await this.ctx.storage.put(HEARTBEAT_STORAGE_KEY, next);
       this.jobHealthSnapshot = jobHealthView(next, Date.now(), this.env, this.store).jobs;
-      return { attempted: jobName };
+      return { attempted: jobName, attemptId };
     };
     const pending = (this.cronTickTail ?? Promise.resolve()).then(persist, persist);
     this.cronTickTail = pending;
@@ -629,12 +634,21 @@ export class ProjectRoom extends DurableObject {
       if (outcomes.length) await yieldToQueuedRequests();
       // Slow jobs run in their own invocation and can be killed inside it
       // before any outcome reaches recordCronTick. Commit the attempt
-      // first, so the kill leaves a trace (attempt-before-run).
-      if (job.slow) await this.recordCronAttempt(job.name);
+      // first, so the kill leaves a trace (attempt-before-run), and
+      // thread its ID onto this pass's outcomes so only they can
+      // resolve the attempt.
+      let attemptId = null;
+      if (job.slow) {
+        const attempt = await this.recordCronAttempt(job.name);
+        attemptId = attempt?.attemptId ?? null;
+      }
       const result = await runCronJobs({ [job.name]: () => this.#sqlScope('job', job.name, () => job.run(this.store, {
         deadline: Date.now() + (job.budgetMs ?? CRON_JOB_BUDGET_MS),
         env: this.env, room: this, now: () => Date.now()
       })) });
+      if (attemptId) {
+        for (const outcome of result) if (outcome.job === job.name) outcome.attemptId = attemptId;
+      }
       // A later job may reset the object. Commit completed work before
       // starting it; a failed heartbeat write must not claim a healthy tick.
       await this.recordCronTick(result);

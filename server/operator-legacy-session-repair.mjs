@@ -60,11 +60,13 @@ function currentReadView(state) {
   }
   return view;
 }
-function completeRowMatches(row, message, context) {
+function completeRowMatches(db, row, message, context) {
   if (!message) return false;
   const expected = messageRowForWrite(message, context);
   return MESSAGE_PROOF_FIELDS.every(field => ['record_json', 'reducer_extras_json'].includes(field)
-    ? isDeepStrictEqual(parse(row[field]), parse(expected[field])) : row[field] === expected[field]);
+    ? isDeepStrictEqual(parse(row[field]), parse(expected[field]))
+      && (row[field] === null || !db.prepare('SELECT 1 FROM json_tree(?) WHERE key IS NOT NULL GROUP BY parent,key HAVING count(*)>1 LIMIT 1').get(row[field]))
+    : row[field] === expected[field]);
 }
 const schema = {
   rooms: ['id', 'sequence', 'projection', 'archived_at'],
@@ -258,7 +260,7 @@ function inventory(store, input, target) {
     if (e.type === 'message.posted') for (const id of affectedMessageIds(e)) if (!positions.has(id)) positions.set(id, row.sequence);
   }
   if (messageIndex.size !== data.messages.length || (adopt && messageIndex.size !== legacy.messages.length)) fail('repair_not_exact_legacy');
-  if (adopt) for (const row of data.messages) if (!completeRowMatches(row, messageIndex.get(row.message_id), {
+  if (adopt) for (const row of data.messages) if (!completeRowMatches(db, row, messageIndex.get(row.message_id), {
     sequence: positions.get(row.message_id), pinned: pins.has(row.message_id), threadMessages: messageIndex
   })) fail('repair_not_exact_legacy');
   for (const row of data.messages) if (messageRowParityFields(row, messageIndex.get(row.message_id), {

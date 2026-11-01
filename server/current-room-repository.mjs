@@ -727,3 +727,29 @@ export function readCurrentOverviewWindow(store,roomId,{workAfter='',limit=8}={}
     complete:!workAfter&&!hasMore,nextAfter:hasMore?after:null,
     nextRead:hasMore?{tool:'get_room_context',arguments:{work_after:after}}:null}};
 }
+
+// Bound source examination before parsing event bodies. Long excluded tails
+// refuse instead of scanning history or inventing a visible cursor.
+export function currentVisibleHorizon(store,roomId,viewerId,head) {
+  const db=store.db,b=contextBudgets.get(db)??budget();
+  const rows=db.prepare('SELECT sequence,id,length(CAST(body AS BLOB)) AS bytes FROM events WHERE room_id=? AND sequence<=? ORDER BY sequence DESC LIMIT 16').all(roomId,head);
+  charge(b,rows.length*64,rows.length);
+  for(const row of rows) {
+    if(row.bytes>MAX_RECORD)refuse('Latest visible cursor requires a bounded event envelope');
+    charge(b,row.bytes);
+    const event=JSON.parse(db.prepare('SELECT body FROM events WHERE room_id=? AND sequence=?').get(roomId,row.sequence).body);
+    if(event.type==='message.posted') {
+      if(event.data?.toMemberId&&event.actorId!==viewerId&&event.data.toMemberId!==viewerId)continue;
+    } else if(['message.edited','message.deleted','message.redacted','poll.voted','message.pinned','message.unpinned'].includes(event.type)) {
+      const target=db.prepare('SELECT author_id,to_member_id FROM messages WHERE room_id=? AND message_id=?').get(roomId,event.data?.messageId);
+      charge(b,256);if(!target)refuse('Follow-up cursor requires an existing addressed message');
+      if(target.to_member_id&&target.author_id!==viewerId&&target.to_member_id!==viewerId)continue;
+    } else if(event.type==='dm.consent_changed') {
+      const room=readCurrentRecord(db,roomId,'metadata','room',b);
+      if(room.ownerId!==viewerId&&event.data?.requesterId!==viewerId&&event.data?.targetId!==viewerId)continue;
+    }
+    return row.sequence;
+  }
+  if(rows.length<16)return 0;
+  refuse('Visible cursor needs a qualified bounded continuation beyond the excluded tail');
+}

@@ -1,3 +1,4 @@
+import {isCurrentRoom} from './current-room-repository.mjs';
 import { messageRepository } from "./message-repository.mjs";
 // ACT-1a: Room Guide, a deterministic demo agent. No LLM calls.
 // After the first real agent is assigned, Guide does nothing here.
@@ -39,7 +40,7 @@ export function installGuideCommandHook(store) {
   const original = proto.command;
   proto.command = function(token, roomId, command, binding) {
     const result = original.call(this, token, roomId, command, binding);
-    if (typeof roomId === "string") {
+    if (typeof roomId === "string" && !isCurrentRoom(this.db,roomId)) {
       noteGuideRoom(this, roomId);
       try {
         runGuideStep(this, roomId, typeof this.now === "function" ? this.now() : Date.now());
@@ -59,6 +60,7 @@ export function flushRoomGuide(store) {
   const rooms = pending.get(store);
   if (!rooms || rooms.size === 0) return;
   for (const roomId of [...rooms]) {
+    if(isCurrentRoom(store.db,roomId)){rooms.delete(roomId);continue;}
     try {
       runGuideStep(store, roomId, typeof store.now === "function" ? store.now() : Date.now());
       rooms.delete(roomId);
@@ -199,6 +201,8 @@ function step(store, roomId, now) {
 
 // One stage per call: welcome and claim, or close the starter, or assign.
 export function runGuideStep(store, roomId, now = Date.now()) {
+  // Optional legacy demo automation has no role in current normalized rooms.
+  if(isCurrentRoom(store.db,roomId))return;
   if (!store?.db || typeof store.room !== "function" || typeof store.transaction !== "function") return null;
   return store.transaction(() => step(store, roomId, now));
 }

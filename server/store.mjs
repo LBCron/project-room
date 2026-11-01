@@ -1,5 +1,5 @@
 import { assertRestoreAdmitted, restorePending, verifyRestoreControl } from './restore-admission.mjs';
-import { CURRENT_ROOM_SCHEMA, CURRENT_ROOM_GUARDS, initializeCurrentRoom, currentRoomAuthority, isCurrentRoom, currentCommandContext, prepareCurrentWrite, withCurrentServingWriter, readCurrentRecord, readCurrentHistoryFloor, withCurrentReadContext, readCurrentSelectedWorkState } from './current-room-repository.mjs';
+import { CURRENT_ROOM_SCHEMA, CURRENT_ROOM_GUARDS, initializeCurrentRoom, currentRoomAuthority, isCurrentRoom, currentCommandContext, prepareCurrentWrite, withCurrentServingWriter, readCurrentRecord, readCurrentHistoryFloor, withCurrentReadContext, readCurrentSelectedWorkState, readCurrentOverviewWindow, currentVisibleHorizon } from './current-room-repository.mjs';
 import {bindReplayAppend} from './replay-cutover.mjs';
 import { bootstrapLegacyWriteProofs, configureWriteIntegrity, beginWriteProofFrame, endWriteProofFrame, publishProjectionWrites, projectionDigest, projectionContentHash, servingContentProof, servingProofDrift, assertProjectionWrite, assertMessageWrite, recordMessageWrite, withVerifiedRoomReconstruction } from './write-integrity.mjs';
 const OPERATOR_QA_ARCHIVE = Symbol("operator QA room archive");
@@ -94,7 +94,7 @@ import { QuarantineThreadSplits, quarantineThreadSplitSchema } from "./quarantin
 import { InboxCollabStore, inboxCollabSchema } from "./inbox-collab-store.mjs"; // Lane C inbox collaboration (task RC-2026-09-18-011).
 import { InboxHandoffJournal, inboxHandoffRoomSchema, inboxHandoffSchema } from "./inbox-handoff.mjs";
 import { HandoffEnvelopeJournal, handoffEnvelopeSchema } from "./work-handoff.mjs"; // RC-2026-09-19-062: typed handoff envelopes.
-import { buildRoomContext } from "./room-context.mjs";
+import { buildRoomContext, contextVersion } from "./room-context.mjs";
 import { AgentPluginStore, agentPluginSchema } from "./agent-plugin-store.mjs";
 import { accessRequestSchema } from "./access-requests.mjs";
 import { Pairing, pairingSchema } from "./pairing.mjs";
@@ -6322,16 +6322,24 @@ this.slaBreachAlerts = new SlaBreachAlertJournal(this); // Task 26: durable in-a
       return { roomId, evaluatedAt: new Date(now).toISOString(), providers };
     });
   }
+  currentOverview(roomId,viewerId,options={}) {
+    return this.readTransaction(()=>withCurrentReadContext(this.db,roomId,()=>{
+      const overview=readCurrentOverviewWindow(this,roomId,options);if(!overview)return null;
+      if(!Object.hasOwn(overview.state.members,viewerId))fail(403,'member_required','Viewer must belong to this room');
+      return {...overview,visibleSequence:currentVisibleHorizon(this,roomId,viewerId,overview.sequence)};
+    }));
+  }
   // Compact catch-up. sinceVersion equal to context_version returns
   // { not_modified: true } and no roster, work, or refs. Message and file
   // bodies are never part of either shape.
-  roomContext(token, roomId, { sinceVersion = null, expectedSessionBinding = null } = {}) {
+  roomContext(token, roomId, { sinceVersion = null, expectedSessionBinding = null, workAfter = "" } = {}) {
     return this.readTransaction(() => {
       const auth = this.authenticate(token, roomId, expectedSessionBinding);
       if (sinceVersion !== null && (typeof sinceVersion !== "string" || !/^[a-f0-9]{64}$/.test(sinceVersion))) {
         fail(422, "invalid_context_version", "since_version must be the previous context_version (64 lowercase hex characters), or omit it");
       }
-      const room = this.room(roomId);
+      const overview=this.currentOverview(roomId,auth.member.id,{workAfter});
+      const room=overview??this.room(roomId);
       const caughtUp = this.db.prepare("SELECT sequence FROM cursors WHERE room_id=? AND member_id=?").get(roomId, auth.member.id)?.sequence ?? 0;
       const builtRaw = buildRoomContext({
         state: room.state, sequence: room.sequence, viewerId: auth.member.id, caughtUp, now: this.now()
@@ -6342,7 +6350,9 @@ this.slaBreachAlerts = new SlaBreachAlertJournal(this); // Task 26: durable in-a
       // events the viewer cannot see. Participants' horizons still
       // reach their own private events, so their reads are unchanged.
       // cursors.roomSequence stays the raw head, as elsewhere.
-      const built = { ...builtRaw, evaluatedThrough: visibleSequenceHorizon(this.db, roomId, auth.member.id, room.sequence,
+      const built = overview ? { ...builtRaw, workWindow:overview.workWindow, workScope:'workWindow',
+        context_version:contextVersion({base:builtRaw.context_version,workWindow:overview.workWindow}),evaluatedThrough:overview.visibleSequence }
+        : { ...builtRaw, evaluatedThrough: visibleSequenceHorizon(this.db, roomId, auth.member.id, room.sequence,
         auth.member.id === room.state.room.ownerId) };
       const identity = {
         viewerId: auth.member.id, viewerAccountId: auth.account?.id ?? null, viewerAuthEpoch: auth.account?.authEpoch ?? null,

@@ -6,7 +6,7 @@ export function thinWorkForContext(item) {
   for(const [key,fields] of Object.entries({
     claim:'holderId repository ref paths expiresAt status',
     receipt:'eventId evidenceVersion evidenceUrl producerId producerAttribution reportedById',
-    verification:'eventId actorId result completionEventId evidenceVersion independenceConfirmed',
+    verification:'eventId actorId verifierId result completionEventId evidenceVersion independenceConfirmed',
     decision:'eventId actorId decision completionEventId evidenceVersion',
     handoff:'open eventId at actorId triageMemberId nextAction limitReason haltAll evidenceUrl evidenceVersion'
   }))if(Object.hasOwn(item,key))out[key]=pick(item[key],fields);

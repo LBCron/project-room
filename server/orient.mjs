@@ -138,6 +138,22 @@ function fleetSelfOrNull(store, roomSlug, room, viewerId, boardList = null) {
 // viewer's own claims; `work`/`openWork` still derive from Work Items.
 
 export function buildOrient(store, roomSlug, viewerId, options = {}) {
+  const overview=store.currentOverview?.(roomSlug,viewerId,{workAfter:options.workAfter??''});
+  if(overview) {
+    const query=parseOrientQuery(options);
+    if(query.q)throw new ServiceError(409,'current_room_context_unavailable','Orient text search requires an indexed query preserving its corpus semantics');
+    const {state,visibleSequence:sequence,workWindow}=overview,member=Object.getOwnPropertyDescriptor(state.members,viewerId).value,now=store.now();
+    const work=Object.values(state.workItems).filter(item=>OPEN_WORK_STATES.has(item.state));
+    return withContentTrust({contract:{name:'project-room/orient',version:1},
+      room:{slug:state.room.id,title:state.room.title,state:state.room.archivedAt?'archived':'active',kind:roomKind(state.room)},
+      member:memberOf(member),you:{member:memberOf(member),profile:{displayName:member.displayName,kind:member.kind,identityId:member.identityId??null},capabilities:[...member.permissions]},
+      instructions:{charter:charterContext(state.room)},focus:query.focus,
+      workItems:work.filter(item=>item.accountableMemberId===viewerId||item.claim?.holderId===viewerId||item.verifierMemberId===viewerId).map(item=>workOf(item,now)),
+      work:work.map(item=>workOf(item,now)),workTotal:workWindow.complete?work.length:null,workWindow,workScope:'workWindow',
+      omitted:['message_updates','board_claims','fleet','next_actions','pinned_message_bodies','full_room_orientation'],
+      cursors:{eventCursor:sequence,evaluatedThrough:sequence},evaluatedThrough:sequence,eventCursor:sequence,
+      links:{activationPack:`/api/rooms/${state.room.id}/activation-pack`},generatedAt:new Date(now).toISOString()});
+  }
   // Unknown rooms fail here with the store's 404 (room_not_found).
   const { sequence, state } = store.room(roomSlug);
   if (!state.room) throw new Error("Room projection is missing its room record");

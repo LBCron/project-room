@@ -5432,14 +5432,14 @@ export function createRoomServer({ store, origin, assetRoot = new URL("../", imp
       }
       if (route === "context" && req.method === "GET") {
         const params = url.searchParams;
-        if ([...params.keys()].some(key => !["since_version", "auth"].includes(key) || params.getAll(key).length !== 1)) {
-          reject(422, "invalid_context_version", "since_version is the only context query parameter");
+        if ([...params.keys()].some(key => !["since_version", "work_after", "auth"].includes(key) || params.getAll(key).length !== 1)) {
+          reject(422, "invalid_context_version", "Context accepts since_version and work_after");
         }
         const context = store.roomContext(selected.token, roomId, {
-          sinceVersion: params.has("since_version") ? params.get("since_version") : null, expectedSessionBinding: fence
+          workAfter:params.get("work_after")??"", sinceVersion: params.has("since_version") ? params.get("since_version") : null, expectedSessionBinding: fence
         });
         if (context.not_modified) return json(res, 200, context);
-        return json(res, 200, { ...context, orient: buildOrient(store, roomId, viewerId, { text: false, token: selected.token, binding: fence, boardList: memoizeBoardList(store) }) });
+        return json(res, 200, { ...context, orient: buildOrient(store, roomId, viewerId, { text: false, workAfter:params.get("work_after")??"", token: selected.token, binding: fence, boardList: memoizeBoardList(store) }) });
       }
       if (route === "bonds" && req.method === "GET") {
         return json(res, 200, { bonds: store.bonds.listForMember(roomId, auth.member.id) });

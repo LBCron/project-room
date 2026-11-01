@@ -156,6 +156,16 @@ const pinnedOf = ({ messageId, pinnedById, pinnedAt, message }) => ({
 // (#3222), so the cursor this pack handed out could not be used anywhere.
 
 export function buildActivationPack(store, roomSlug, viewerId = null, options = {}) {
+  const overview=store.currentOverview?.(roomSlug,viewerId,{workAfter:options.workAfter??''});
+  if(overview) {
+    const {state,visibleSequence:sequence,workWindow}=overview;
+    return withContentTrust({room:{slug:state.room.id,title:state.room.title,state:state.room.archivedAt?'archived':'active',kind:roomKind(state.room),owner:state.room.ownerId},
+      members:Object.values(state.members).filter(member=>member.active!==false).map(memberOf),
+      openWork:Object.values(state.workItems).filter(item=>OPEN_WORK_STATES.has(item.state)).map(item=>workOf(item,new Date(store.now()).toISOString())),
+      workWindow,workScope:'workWindow',participationRules:{...roomPolicy(state),trust:roomTrust(state).enabled},coordinationNorms:{...COORDINATION_NORMS},
+      omitted:['board_claims','pinned_message_bodies','full_room_orientation'],eventCursor:sequence,generatedAt:new Date(store.now()).toISOString(),
+      orient:buildOrient(store,roomSlug,viewerId,{text:false,workAfter:options.workAfter??''})});
+  }
   // Unknown rooms fail here with the store's 404 (room_not_found).
   const { sequence, state } = store.room(roomSlug);
   // PERF-10X L4: one decoded board per request, shared by the pack's

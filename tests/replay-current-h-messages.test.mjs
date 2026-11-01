@@ -40,6 +40,10 @@ import {readWorkItem} from '../server/work-repository.mjs';
 import {textVersion} from '../server/text-results.mjs';
 import {readCurrentRoomForAudit} from '../server/current-room-repository.mjs';
 import {auditRecovery} from '../server/recovery.mjs';
+import {buildOrient} from '../server/orient.mjs';
+import {buildActivationPack} from '../server/room-activation-pack.mjs';
+import {buildRoomContext} from '../server/room-context.mjs';
+import {thinWorkForContext} from '../server/current-work-summary.mjs';
 import {readConversation} from '../server/conversation-sync.mjs';
 test('existing room H plus independently bound tail activates actual normalized post/reply and useful work result',t=>{
  const f=setup(t);finish(f);
@@ -53,6 +57,10 @@ test('existing room H plus independently bound tail activates actual normalized 
  const posted=f.store.command(f.key,'commons',{id:'after-current',type:'message.posted',data:{messageId:'after-current',body:'Useful normalized reply',replyToId:'tail-message'}});assert.equal(posted.duplicate,false);
  assert.equal(readConversation(f.store,f.key,'commons',{messageId:'after-current',limit:5}).messages[0].body,'Useful normalized reply');
  const proposed=f.store.command(f.key,'commons',{id:'existing-work',type:'work.proposed',data:{workItemId:'existing-work',title:'Save useful evidence',definitionOfDone:'A saved room result',mode:'read',accountableMemberId:'owner'}});assert.equal(proposed.duplicate,false);
+ const overview=f.store.roomContext(f.key,'commons');assert.equal(overview.workWindow.complete,true);assert.equal(overview.workWindow.total,1);assert.equal(overview.focusWork[0].id,'existing-work');
+ assert.equal(f.store.roomContext(f.key,'commons',{sinceVersion:overview.context_version}).not_modified,true);
+ assert.equal(buildOrient(f.store,'commons','owner').work[0].id,'existing-work');
+ assert.equal(buildActivationPack(f.store,'commons','owner').openWork[0].id,'existing-work');
  const selected=f.store.workContext(f.key,'commons','existing-work',{includeSource:true});assert.equal(selected.work.id,'existing-work');assert.equal(selected.context.omitted.includes('other_work'),true);
  const item=()=>readWorkItem(f.store.db,'commons','existing-work');
  f.store.command(f.key,'commons',{id:'accept-existing',type:'work.accepted',data:{workItemId:'existing-work',expectedRevision:item().revision}});
@@ -60,6 +68,10 @@ test('existing room H plus independently bound tail activates actual normalized 
  const body='Existing-room migration delivered useful evidence 🧪';
  const result=f.store.command(f.key,'commons',{id:'result-existing',type:'message.posted',data:{messageId:'existing-result',workItemId:'existing-work',body}});
  const completed=f.store.command(f.key,'commons',{id:'complete-existing',type:'work.completed',data:{workItemId:'existing-work',expectedRevision:item().revision,evidenceKind:'room_text',evidenceMessageId:'existing-result',evidenceMessageEventId:result.event.id,evidenceVersion:textVersion(body),previousCompletionEventId:null,producerId:'owner',summary:'A saved result',nextAction:'Review'}});
+ const full=f.store.readTransaction(()=>readCurrentRoomForAudit(f.store,'commons').state);
+ const thin={...full,workItems:Object.fromEntries(Object.entries(full.workItems).map(([id,value])=>[id,thinWorkForContext(value)]))};
+ const contextNow=f.store.now();assert.deepEqual(buildRoomContext({state:thin,sequence:1,viewerId:'owner',caughtUp:0,now:contextNow}),buildRoomContext({state:full,sequence:1,viewerId:'owner',caughtUp:0,now:contextNow}));
+ assert.equal(f.store.roomContext(f.key,'commons').workWindow.total,1);
  const saved=f.store.workResult(f.key,'commons','existing-work');assert.equal(saved.result.text.body,body);assert.equal(saved.result.receipt.eventId,completed.event.id);
  auditRecovery(f.store);
 });

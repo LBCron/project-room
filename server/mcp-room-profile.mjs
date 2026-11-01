@@ -1,3 +1,4 @@
+import {isCurrentRoom,readCurrentRecord} from './current-room-repository.mjs';
 import { SQL_BIND_CHUNK } from "./sql-binds.mjs";
 import { pageWorkListing, validWorkPage } from "./work-list-page.mjs";
 import { resolveMcpOAuthPrincipal, runMcpOAuthRequest, mcpOAuthToolAllowed, mcpOAuthPrincipalDescriptor, authorizeMcpOAuthDescriptor } from './mcp-oauth.mjs';
@@ -211,7 +212,7 @@ function validRoomArgs(name, args) {
       && (!code || typeof args.inviteCode === "string" && args.inviteCode.length > 0 && args.inviteCode.length <= 80);
   }
   if (name === "room_merge_members") return validId(args.keepMemberId) && validId(args.retireMemberId);
-  if (name === "get_room_context") return args.since_version === undefined || typeof args.since_version === "string" && /^[a-f0-9]{64}$/.test(args.since_version);
+  if (name === "get_room_context") return (args.since_version === undefined || typeof args.since_version === "string" && /^[a-f0-9]{64}$/.test(args.since_version)) && (args.work_after === undefined || validId(args.work_after));
   if (name === "room_read_bootstrap") return true;
   if (name === "room_list_events") {
     return (args.after === undefined || Number.isSafeInteger(args.after) && args.after >= 0)
@@ -613,11 +614,11 @@ function dispatchRoomToolCall(store, secret, identity, name, args, agentRooms) {
   if (name === "squads_disband") return disbandSquad(store, secret, roomId, args.squadId);
   if (name === "get_room_context") {
     const context = store.roomContext(secret, roomId, {
-      sinceVersion: args.since_version === undefined ? null : args.since_version
+      workAfter:args.work_after??"", sinceVersion: args.since_version === undefined ? null : args.since_version
     });
     if (context.not_modified) return context;
     const auth = store.authenticate(secret, roomId);
-    return { ...stampRoomContext(context), orient: buildOrient(store, roomId, auth.member.id, { text: false, token: secret, boardList: memoizeBoardList(store) }) };
+    return { ...stampRoomContext(context), orient: buildOrient(store, roomId, auth.member.id, { text: false, workAfter:args.work_after??"", token: secret, boardList: memoizeBoardList(store) }) };
   }
   if (name === "room_read_bootstrap") {
     return withContentTrust(buildRoomBootstrap(store, secret, roomId, null, { accessRequests: new AccessRequests(store), watchers: [] }));
@@ -1217,7 +1218,8 @@ export function createHostedRoomMcp(store, { agentRooms, spendCredential, oauthP
       const options = { store, provider, token, resource: oauthResource, roomId: grant?.binding?.roomId };
       const principal = grant && resolveMcpOAuthPrincipal(options);
       if (!principal) return rpcError(message, MCP_AUTH_REQUIRED, "OAuth grant no longer grants access to this agent");
-      const identity = { identityId: principal.identityId, displayName: store.room(principal.roomId).state.members[principal.memberId].displayName };
+      const member=isCurrentRoom(store.db,principal.roomId)?readCurrentRecord(store.db,principal.roomId,'members',principal.memberId):store.room(principal.roomId).state.members[principal.memberId];
+      const identity = { identityId: principal.identityId, displayName: member.displayName };
       return runMcpOAuthRequest(options, () => {
         if (typeof nativeHandler === "function" && typeof message?.method === "string" && message.method.startsWith("events/"))
           return nativeHandler(message, { principal, descriptor: mcpOAuthPrincipalDescriptor(principal),

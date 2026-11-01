@@ -87,8 +87,8 @@ function visibilityFixture(t) {
     keys[memberId] = store.issueAccessKey("commons", memberId);
   }
   const files = store.roomAttachments;
-  const commit = (id, toMemberId) => {
-    files.stage(keys.uploader, "commons", { id, filename: `${id}.txt`, mediaType: "text/plain", data: b64(4) });
+  const commit = (id, toMemberId, bytes = 4) => {
+    files.stage(keys.uploader, "commons", { id, filename: `${id}.txt`, mediaType: "text/plain", data: b64(bytes) });
     store.command(keys.uploader, "commons", { id: `post-${id}`, type: "message.posted",
       data: { messageId: `message-${id}`, body: "File context", ...(toMemberId ? { toMemberId } : {}) } });
     return files.commit(keys.uploader, "commons", { id, messageId: `message-${id}` });
@@ -139,3 +139,61 @@ for (const operation of ["get", "discard"]) test(`hidden DM attachment ${operati
   assert.throws(() => files.get(keys.recipient, "commons", id), error => error.status === 410 && error.code === "attachment_unavailable");
   assert.equal(store.db.prepare("SELECT state FROM room_attachments WHERE room_id=? AND id=?").get("commons", id).state, "deleted");
 });
+
+// Observe actual binary SQL results, independent of SELECT spelling or
+// statement count. Public replies are metadata/base64, but reading blobs just
+// to drop or refuse them can exhaust a Worker before it returns that reply.
+function sqlPayloadCensus(db, operation) {
+  let bytes = 0;
+  const observe = value => {
+    if (ArrayBuffer.isView(value)) bytes += value.byteLength;
+    else if (value instanceof ArrayBuffer) bytes += value.byteLength;
+    else if (value && typeof value === "object") for (const child of Object.values(value)) observe(child);
+    return value;
+  };
+  const prepare = db.prepare;
+  db.prepare = (...args) => {
+    const statement = prepare.apply(db, args);
+    return new Proxy(statement, { get(target, key) {
+      const method = Reflect.get(target, key, target);
+      if (typeof method !== "function") return method;
+      return (...values) => {
+        const result = method.apply(target, values);
+        if (key === "all" || key === "get") return observe(result);
+        if (key === "iterate") return (function* () { for (const row of result) yield observe(row); })();
+        return result;
+      };
+    } });
+  };
+  try { return { result: operation(), bytes }; }
+  finally { db.prepare = prepare; }
+}
+
+for (const action of ["list", "delete", "download", "hidden download"]) {
+  test(`attachment SQL payload census: ${action} admits only authorized requested bytes`, t => {
+    const { store, keys, files, commit } = visibilityFixture(t);
+    const size = attachmentLimits.fileBytes - 64;
+    commit("large-public-one", null, size);
+    commit("large-public-two", null, size - 1);
+    commit("large-private", "recipient", size - 2);
+    const operation = () => {
+      if (action === "list") {
+        const listed = files.list(keys.owner, "commons");
+        assert.deepEqual(listed.files.map(file => file.id).sort(), ["large-public-one", "large-public-two"]);
+        return listed;
+      }
+      if (action === "delete") return files.discard(keys.owner, "commons", "large-public-one");
+      if (action === "download") return files.get(keys.observer, "commons", "large-public-two");
+      assert.throws(() => files.get(keys.owner, "commons", "large-private"), error => error.status === 404 && error.code === "attachment_not_found");
+    };
+    const census = sqlPayloadCensus(store.db, operation);
+    assert.equal(census.bytes, action === "download" ? size - 1 : 0);
+    if (action === "delete") {
+      assert.equal(census.result.status, "deleted");
+      const retry = sqlPayloadCensus(store.db, () => files.discard(keys.owner, "commons", "large-public-one"));
+      assert.equal(retry.result.duplicate, true);
+      assert.equal(retry.bytes, 0);
+    }
+    if (action === "download") assert.equal(census.result.attachment.data, b64(size - 1));
+  });
+}

@@ -40,6 +40,10 @@ export function base64LengthForBytes(byteLength) {
 export const mcpAttachmentBodyBytes = base64LengthForBytes(attachmentLimits.fileBytes) + 8192;
 
 const MEDIA_TYPE = /^[a-z0-9][a-z0-9!#$&^_.+-]{0,126}\/[a-z0-9][a-z0-9!#$&^_.+-]{0,126}$/;
+// Inventories, authorization and deletion need no byte payload. Downloads
+// admit metadata first, then read exactly one authorized blob in the same
+// transaction; SQL must not materialize hidden or unrelated file bytes.
+const FILE_METADATA = "id,uploader_id,filename,media_type,byte_length,sha256,state,created_at,expires_at,message_id";
 
 // Encoding validity ONLY (#3436): the size cap is not part of this check.
 // Folding it in made every over-cap upload report as an encoding error and
@@ -206,7 +210,7 @@ export class RoomAttachmentBytes {
       this.expire(roomId, this.store.now());
       const messages = this.messageIndex(roomId);
       const memberId = auth.member.id;
-      const files = this.db.prepare(`SELECT * FROM room_attachments
+      const files = this.db.prepare(`SELECT ${FILE_METADATA} FROM room_attachments
         WHERE room_id=? AND state IN ('staged','committed')
         ORDER BY created_at DESC, id`).all(roomId)
         .filter(row => this.visibleTo(row, messages, memberId))
@@ -220,19 +224,21 @@ export class RoomAttachmentBytes {
       const auth = this.store.authenticate(token, roomId);
       if (!validId(id)) fail(422, "invalid_attachment", "Attachment id is not valid");
       this.expire(roomId, this.store.now());
-      const row = this.db.prepare("SELECT * FROM room_attachments WHERE room_id=? AND id=?").get(roomId, id);
+      const row = this.db.prepare(`SELECT ${FILE_METADATA},bytes IS NOT NULL AS has_bytes
+        FROM room_attachments WHERE room_id=? AND id=?`).get(roomId, id);
       if (!row) fail(404, "attachment_not_found", "Attachment not found");
       // Terminal states must preserve the bound message's visibility too:
       // a 410 would reveal a hidden DM attachment's existence.
       if (!this.visibleTo(row, this.messageIndex(roomId), auth.member.id)) {
         fail(404, "attachment_not_found", "Attachment not found");
       }
-      if ((row.state !== "staged" && row.state !== "committed") || row.bytes == null) {
+      if ((row.state !== "staged" && row.state !== "committed") || !row.has_bytes) {
         fail(410, "attachment_unavailable", "Attachment bytes are no longer available");
       }
+      const payload = this.db.prepare("SELECT bytes FROM room_attachments WHERE room_id=? AND id=?").get(roomId, id);
       return {
         roomId,
-        attachment: { ...view(row), encoding: "base64", data: Buffer.from(row.bytes).toString("base64") }
+        attachment: { ...view(row), encoding: "base64", data: Buffer.from(payload.bytes).toString("base64") }
       };
     });
   }
@@ -250,7 +256,7 @@ export class RoomAttachmentBytes {
       if (!validId(id)) fail(422, "invalid_attachment", "Attachment id is not valid");
       const now = this.store.now();
       this.expire(roomId, now);
-      const row = this.db.prepare("SELECT * FROM room_attachments WHERE room_id=? AND id=?").get(roomId, id);
+      const row = this.db.prepare(`SELECT ${FILE_METADATA} FROM room_attachments WHERE room_id=? AND id=?`).get(roomId, id);
       if (!row) fail(404, "attachment_not_found", "Attachment not found");
       const ownerId = this.store.room(roomId).state.room.ownerId;
       const permitted = row.uploader_id === auth.member.id || ownerId === auth.member.id;

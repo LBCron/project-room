@@ -35,7 +35,7 @@ async function setup(t) {
   return { ...f, config, client, send, propose, state, change, read, signEvidence };
 }
 
-test('private definition redaction does not disable unrelated work discovery', async t => {
+async function privateDefinitionFixture(t) {
   const f = await setup(t);
   f.send('owner', 'member.added', { memberId: 'observer', displayName: 'Observer agent', kind: 'agent', permissions: [] });
   f.keys.observer = f.store.issueAccessKey('commons', 'observer');
@@ -45,6 +45,25 @@ test('private definition redaction does not disable unrelated work discovery', a
   f.store.dmConsents.decide('commons', 'producer', 'owner', 'approve');
   f.send('owner', 'message.posted', { messageId: 'private-question', toMemberId: 'producer',
     workItemId: 'private-brief', requestKind: 'reply', body: 'PRIVATE-BODY-SENTINEL' });
+  return f;
+}
+
+test('orientation applies the same private definition boundary as the work view', async t => {
+  const f = await privateDefinitionFixture(t);
+  for (const view of ['work', 'orientation']) for (const actor of ['observer', 'owner', 'producer']) {
+    const response = await fetch(f.config(actor).origin + '/api/rooms/commons?view=' + view, {
+      headers: { Authorization: `Bearer ${f.keys[actor]}` }
+    });
+    assert.equal(response.status, 200);
+    const packet = await response.json(), item = packet.state.workItems['private-brief'];
+    assert.equal(item.title, actor === 'observer' ? null : 'PRIVATE-TITLE-SENTINEL', `${view}/${actor}`);
+    assert.equal(item.definitionOfDone, actor === 'observer' ? null : 'PRIVATE-DONE-SENTINEL', `${view}/${actor}`);
+    assert.equal(JSON.stringify(packet).includes('PRIVATE-BODY-SENTINEL'), false);
+  }
+});
+
+test('private definition redaction does not disable unrelated work discovery', async t => {
+  const f = await privateDefinitionFixture(t);
   const response = await fetch(f.config('observer').origin + '/api/rooms/commons?view=work', {
     headers: { Authorization: `Bearer ${f.keys.observer}` }
   });

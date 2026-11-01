@@ -30,9 +30,9 @@ export class ClaimSavepointProbe extends DurableObject {
       };
       return statement;
     };
-    const payload={action:'closed',pull_request:{html_url:url,merged:true,state:'closed'}},rawBody=JSON.stringify(payload),secret='synthetic-savepoint-worker';
+    const payload={action:'closed',pull_request:{html_url:url,merged:true,state:'closed'}},rawBody=JSON.stringify(payload),fixtureSigningMaterial='synthetic-savepoint-worker';
     let out=null,error=null;
-    try{out=await applyPullRequestWebhook(s,payload,{rawBody,signature256:'sha256='+createHmac('sha256',secret).update(rawBody).digest('hex'),env:{GITHUB_PR_WEBHOOK_SECRET:secret}});}
+    try{out=await applyPullRequestWebhook(s,payload,{rawBody,signature256:'sha256='+createHmac('sha256',fixtureSigningMaterial).update(rawBody).digest('hex'),env: { GITHUB_PR_WEBHOOK_SECRET: fixtureSigningMaterial }});}
     catch(failure){error={code:failure.code??null,message:failure.message};}
     return Response.json({out,error,head,headDelta:s.headSequence('commons')-head,stampDelta:s.eventStamp('commons')-stamp,
       rowsEqual:JSON.stringify(before)===JSON.stringify(s.db.prepare("SELECT * FROM work_claims WHERE room_id='commons' ORDER BY claim_id").all()),

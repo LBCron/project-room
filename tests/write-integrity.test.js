@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { RoomStore } from '../server/store.mjs';
 import { initialRoom } from '../server/bootstrap.mjs';
-import { projectionDigest, messageProofHash, MESSAGE_PROOF_SELECT } from '../server/write-integrity.mjs';
+import { bootstrapLegacyWriteProofs, projectionDigest, messageProofHash, MESSAGE_PROOF_SELECT } from '../server/write-integrity.mjs';
 function fixture(t){const s=new RoomStore(':memory:');t.after(()=>s.close());s.initialize(initialRoom());const key=s.issueAccessKey('commons','owner');return {s,key};}
 const proof=s=>s.db.prepare("SELECT metadata_hash FROM integrity_room_state WHERE room_id='commons'").get().metadata_hash;
 test('unused serialized candidates never publish proof and expire after their transaction',t=>{
@@ -56,4 +56,23 @@ test('deferred-integrity runtime migrates before any failure journal has been cr
  const key=s.issueAccessKey('commons','owner');s.command(key,'commons',{id:'post',type:'message.posted',data:{messageId:'m',body:'Body'}});
  while(!s.backfillMessages({limit:1000}).done){}s.checkMessagesParity({roomId:'commons'});
  assert.equal(s.migrateMessageAuthority('commons').changed,true);assert.equal(s.room('commons').state.messages[0].body,'Body');
+});
+
+
+test('legacy bootstrap trusts a matching current metadata proof after a legitimate write advances an older baseline', async t => {
+ const {s,key}=fixture(t);
+ await s.verifyRoomIntegrity({yieldBetween:async()=>{}});
+ await s.verifyRoomIntegrity({yieldBetween:async()=>{}});
+ const before=s.db.prepare("SELECT sequence,projection_hash FROM integrity_room_state WHERE room_id='commons'").get();
+ assert.match(before.projection_hash,/^[a-f0-9]{64}$/);
+ s.command(key,'commons',{id:'advance-baseline',type:'message.posted',data:{messageId:'advance-baseline',body:'Legitimate newer write: café 🧪'}});
+ assert.ok(s.headSequence('commons')>before.sequence);
+ const historical=s.db.prepare("SELECT sequence,projection_hash FROM integrity_room_state WHERE room_id='commons'").get();
+ assert.deepEqual(historical,before,'ordinary writes do not invent a historical verification');
+ assert.equal(s.transaction(()=>bootstrapLegacyWriteProofs(s.db)),0);
+ assert.deepEqual(s.db.prepare("SELECT sequence,projection_hash FROM integrity_room_state WHERE room_id='commons'").get(),before);
+ const projection=s.db.prepare("SELECT projection FROM rooms WHERE id='commons'").get().projection;
+ assert.equal(proof(s),projectionDigest(projection));
+ s.db.prepare("UPDATE rooms SET projection=? WHERE id='commons'").run(projection.replace('Commons','Xommons'));
+ assert.throws(()=>s.transaction(()=>bootstrapLegacyWriteProofs(s.db)),/projection_corrupt: stored metadata does not match its write proof/);
 });

@@ -45,6 +45,7 @@ function inventory(store) {
 }
 
 export function retireQaRoom(store, input, execute = false) {
+  if (input && typeof input.roomId === 'string' && input.roomId !== ROOM) fail(403, 'operator_retirement_scope');
   if (!input || input.roomId !== ROOM || Object.keys(input).some(key => !['roomId','reason','requestId','planHash'].includes(key))) fail(422, 'invalid_retirement');
   if (typeof input.reason !== 'string' || !input.reason.trim() || input.reason.length > 280) fail(422, 'reason_required');
   if (execute && (typeof input.requestId !== 'string' || !/^[A-Za-z0-9_-]{1,57}$/.test(input.requestId) || !/^[a-f0-9]{64}$/.test(input.planHash ?? ''))) fail(422, 'plan_required');

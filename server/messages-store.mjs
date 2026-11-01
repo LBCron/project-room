@@ -1,4 +1,4 @@
-import { assertMessageWrite, recordMessageWrite } from './write-integrity.mjs';
+import { assertMessageWrite, recordMessageWrite, servingProofDrift, messageProofMatches, MESSAGE_PROOF_SELECT } from './write-integrity.mjs';
 import { writeMessageReplaySnapshot, discardMessageReplaySnapshot, decodeMessageReplaySnapshot } from './message-replay-snapshot.mjs';
 import { hydrateProjection, storedProjection } from "./projection-at-rest.mjs";
 import { hasMessageAuthority } from './message-authority.mjs';
@@ -1082,34 +1082,64 @@ function publishReplayMessages(store, roomId, sequence, anchor, state) {
   }
   const ids=[...touched], existing=new Map();
   for(let start=0;start<ids.length;start+=256) {
-    for(const row of db.prepare(`SELECT message_id,seq,body,record_json,reducer_extras_json FROM messages
+    for(const row of db.prepare(`SELECT ${MESSAGE_PROOF_SELECT},entity_hash FROM messages
       WHERE room_id=? AND message_id IN (SELECT value FROM json_each(?))`).all(roomId,JSON.stringify(ids.slice(start,start+256))))existing.set(row.message_id,row);
   }
   // References and archived entities already serve current content. Replaying
   // a changed/corrupt log must not silently replace that authority.
-  const raw=JSON.parse(db.prepare('SELECT projection FROM rooms WHERE id=?').get(roomId).projection);
+  const rawText=db.prepare('SELECT projection FROM rooms WHERE id=?').get(roomId).projection;
+  const raw=JSON.parse(rawText);
   const references=new Set((raw.messages ?? []).filter(message=>message?._entity===1).map(message=>message.id));
   const archive=archiveMarker(db,roomId), retained=new Set(archive.retainedIds);
   const canonical = hasMessageAuthority(raw);
   const authoritative=row=>canonical||references.has(row.message_id)||(archive.throughSeq&&row.seq<=archive.throughSeq&&!retained.has(row.message_id));
+  if(canonical||references.size||archive.throughSeq) {
+    if(servingProofDrift(db,roomId,rawText))throw new Error('messages serving authority requires reconciliation');
+    // An absent authoritative row cannot validate itself after replay creates
+    // it. Bind the complete reference membership before any delete/upsert.
+    for(const id of references) {
+      const row=db.prepare(`SELECT ${MESSAGE_PROOF_SELECT},entity_hash FROM messages WHERE room_id=? AND message_id=?`).get(roomId,id);
+      if(!row||!messageProofMatches(row))throw new Error('messages serving entity requires reconciliation');
+    }
+    if(archive.throughSeq) {
+      const count=db.prepare(`SELECT count(*) AS n FROM messages WHERE room_id=? AND seq<=?
+        AND message_id NOT IN (SELECT value FROM json_each(?))`).get(roomId,archive.throughSeq,archive.retainedJson).n;
+      if(count!==archive.count)throw new Error('messages archived membership requires reconciliation');
+    }
+  }
+  const pinned=new Set((state.pins??[]).map(pin=>pin.messageId)),preserved=new Set();
   const validate=row=>{
     if(!authoritative(row))return;
     const expected=index.get(row.message_id);
-    let record,extras;
-    try {record=JSON.parse(row.record_json);extras=row.reducer_extras_json===null?null:JSON.parse(row.reducer_extras_json);}catch{throw new Error('messages serving entity requires reconciliation');}
-    if(!expected || row.body!==storedBody(expected) || !isDeepStrictEqual(record,currentRecord(expected))
-      || extras!==null&&!isDeepStrictEqual(extras,reducerExtras(expected)))throw new Error('messages serving entity requires reconciliation');
+    const position=postingSequences.get(row.message_id)??(published===0?null:row.seq);
+    if(messageRowParityFields(row,expected,{sequence:position,pinned:pinned.has(row.message_id),threadMessages:index}).length)
+      throw new Error('messages serving entity requires reconciliation');
+    assertMessageWrite(db,roomId,row.message_id);
+    preserved.add(row.message_id);
   };
+  let initialRows=null;
   if(published===0&&(canonical||references.size||archive.throughSeq)) {
-    for(const row of db.prepare('SELECT message_id,seq,body,record_json,reducer_extras_json FROM messages WHERE room_id=?').all(roomId))validate(row);
+    initialRows=db.prepare(`SELECT ${MESSAGE_PROOF_SELECT},entity_hash FROM messages WHERE room_id=?`).all(roomId);
+    for(const row of initialRows)validate(row);
   } else for(const row of existing.values())validate(row);
   const sequences=new Map();
   for(const id of ids) {
+    // Proven current authority already serves these exact semantics. Preserve
+    // every stored field and proof byte, including legacy JSON representation,
+    // extras and reactions, rather than reserializing/reproofing it from replay.
+    if(preserved.has(id))continue;
     const position=postingSequences.get(id) ?? existing.get(id)?.seq;
     if(!Number.isSafeInteger(position))throw new Error('messages replay is missing posting provenance');
     sequences.set(id,position);
   }
-  if(published===0)db.prepare('DELETE FROM messages WHERE room_id=?').run(roomId);
+  if(published===0) {
+    if(!initialRows)db.prepare('DELETE FROM messages WHERE room_id=?').run(roomId);
+    else {
+      const discard=initialRows.filter(row=>!preserved.has(row.message_id)).map(row=>row.message_id);
+      for(let start=0;start<discard.length;start+=256)db.prepare(`DELETE FROM messages WHERE room_id=?
+        AND message_id IN (SELECT value FROM json_each(?))`).run(roomId,JSON.stringify(discard.slice(start,start+256)));
+    }
+  }
   writeMessageRows(db,{roomId,state,sequenceById:sequences,messageIndex:index,exactSequence:true});
   pruneMessages(db,roomId);
   db.prepare(`UPDATE messages_backfill_cursor SET applied_seq=?,applied_event_id=?,parity_at_seq=NULL WHERE room_id=?`)

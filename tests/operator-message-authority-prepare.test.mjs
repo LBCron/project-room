@@ -6,6 +6,7 @@ import { event } from '../src/events.js';
 import { operatorMessageAuthority } from '../server/operator-message-authority.mjs';
 import { createHash } from 'node:crypto';
 import { createRoomServer } from '../server/http.mjs';
+import { recordMessageWrite } from '../server/write-integrity.mjs';
 
 function fixture(t, count=300) {
   const s=new RoomStore(':memory:');t.after(()=>s.close());
@@ -175,5 +176,68 @@ for(const control of ['rooms','events','integrity_room_state','messages_backfill
     const column=control==='messages_backfill_cursor'?'state_seq':'sequence';
     f.s.db.prepare(`UPDATE ${control} SET ${column}=? WHERE ${control==='rooms'?'id':'room_id'}='commons'${control==='events'?" AND sequence=(SELECT MIN(sequence) FROM events WHERE room_id='commons')":''}`).run(9007199254740992n);
     assert.throws(f.plan,e=>['authority_budget_exceeded','authority_not_ready'].includes(e.code));
+  });
+}
+
+for(const mode of ['canonical','reference'])for(const door of ['prepare','global'])for(const damage of ['posting-sequence','missing-row']) {
+  test(`${door} preserves ${mode} serving authority against ${damage} laundering`,t=>{
+    const s=new RoomStore(':memory:',{maintainMessageCertification:true,messageProjectionWindow:mode==='reference'?20:null,messageEntityProjection:mode==='reference'});
+    t.after(()=>s.close());s.initialize(initialRoom());s.backfillMessages({limit:200});s.checkMessagesParity({roomId:'commons'});
+    const key=s.issueAccessKey('commons','owner');
+    for(let i=0;i<5;i++)s.command(key,'commons',{id:'post-'+i,type:'message.posted',data:{messageId:'m'+i,body:'Original '+i}});
+    s.checkMessagesParity({roomId:'commons'});
+    if(mode==='canonical')s.migrateMessageAuthority('commons');
+    const db=s.db;
+    db.prepare("UPDATE messages_backfill_cursor SET applied_seq=?,applied_event_id=?,state_seq=?,replay_event_id=?,parity_at_seq=NULL WHERE room_id='commons'")
+      .run(damage==='posting-sequence'?0:2,damage==='posting-sequence'?'':db.prepare("SELECT id FROM events WHERE room_id='commons' AND sequence=2").get().id,
+        damage==='posting-sequence'?0:2,damage==='posting-sequence'?'':db.prepare("SELECT id FROM events WHERE room_id='commons' AND sequence=2").get().id);
+    if(damage==='posting-sequence') {
+      db.prepare("DELETE FROM message_replay_snapshots WHERE room_id='commons'").run();
+      s.transaction(()=>{
+        // The final key set still satisfies command FKs. Defer their check
+        // while constructing the raw reordered-log corruption fixture.
+        db.exec('PRAGMA defer_foreign_keys=ON');
+        db.prepare("UPDATE events SET sequence=2000 WHERE room_id='commons' AND sequence=3").run();
+        db.prepare("UPDATE events SET sequence=3 WHERE room_id='commons' AND sequence=4").run();
+        db.prepare("UPDATE events SET sequence=4 WHERE room_id='commons' AND sequence=2000").run();
+      });
+    } else {
+      db.prepare("DELETE FROM messages WHERE room_id='commons' AND message_id='m0'").run();
+      db.prepare("UPDATE events SET body=json_set(body,'$.data.body','Forged') WHERE room_id='commons' AND sequence=3").run();
+    }
+    const before=db.prepare("SELECT * FROM messages WHERE room_id='commons' ORDER BY message_id").all();
+    if(door==='prepare') {
+      const request={roomId:'commons',reason:'Independent authority preservation negative'},plan=operatorMessageAuthority(s,request);
+      assert.throws(()=>operatorMessageAuthority(s,{...request,planHash:plan.planHash,requestId:'authority-negative'},'prepare'),
+        error=>['authority_integrity_failure','authority_not_ready'].includes(error.code));
+    } else assert.throws(()=>s.backfillMessages({limit:200}),/reconciliation|proof|corrupt|parity/);
+    assert.deepEqual(db.prepare("SELECT * FROM messages WHERE room_id='commons' ORDER BY message_id").all(),before,'all existing serving payload/proof bytes remain untouched');
+    assert.equal(db.prepare("SELECT body FROM messages WHERE room_id='commons' AND message_id='m0'").get()?.body,damage==='missing-row'?undefined:'Original 0');
+  });
+}
+
+for(const mode of ['canonical','reference'])for(const door of ['prepare','global']) {
+  test(`${door} retains all proven ${mode} row bytes during legitimate reconstruction`,t=>{
+    const s=new RoomStore(':memory:',{maintainMessageCertification:true,messageProjectionWindow:mode==='reference'?20:null,messageEntityProjection:mode==='reference'});
+    t.after(()=>s.close());s.initialize(initialRoom());s.backfillMessages({limit:200});s.checkMessagesParity({roomId:'commons'});
+    const key=s.issueAccessKey('commons','owner');
+    s.command(key,'commons',{id:'posted',type:'message.posted',data:{messageId:'kept',body:'Original'}});
+    s.checkMessagesParity({roomId:'commons'});if(mode==='canonical')s.migrateMessageAuthority('commons');
+    // Model a genuine previously code-proven representation with semantically
+    // equivalent JSON spacing in both record and reducer-extra columns.
+    // Replay must preserve these bytes, not manufacture a fresh normalized proof.
+    s.transaction(()=>{
+      const record=JSON.parse(s.db.prepare("SELECT record_json FROM messages WHERE message_id='kept'").get().record_json);
+      s.db.prepare("UPDATE messages SET record_json=?,reducer_extras_json=' { } ' WHERE message_id='kept'").run(JSON.stringify(record,null,1));
+      recordMessageWrite(s.db,'commons','kept');
+    });
+    const before=s.db.prepare("SELECT * FROM messages WHERE message_id='kept'").get();
+    s.db.prepare("UPDATE messages_backfill_cursor SET applied_seq=0,applied_event_id='',state_seq=0,replay_event_id='',parity_at_seq=NULL WHERE room_id='commons'").run();
+    s.db.prepare("DELETE FROM message_replay_snapshots WHERE room_id='commons'").run();
+    if(door==='prepare') {
+      const request={roomId:'commons',reason:'Proven representation preservation'},plan=operatorMessageAuthority(s,request);
+      assert.equal(operatorMessageAuthority(s,{...request,planHash:plan.planHash,requestId:'preserve'},'prepare').preparation.caughtUp,true);
+    } else assert.equal(s.backfillMessages({limit:200}).done,true);
+    assert.deepEqual(s.db.prepare("SELECT * FROM messages WHERE message_id='kept'").get(),before);
   });
 }

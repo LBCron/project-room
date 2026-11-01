@@ -11,7 +11,7 @@ test('actual workerd restart retains bounded targeted preparation, append progre
   const persistence=await mkdtemp(join(tmpdir(),'room-authority-prepare-'));
   const worker=()=>new Miniflare({modules:true,script:bundle.outputFiles[0].text,compatibilityDate:'2026-07-30',compatibilityFlags:['nodejs_compat'],durableObjects:{ROOM:{className:'AuthorityPrepareRoom',useSQLite:true}},durableObjectsPersist:persistence});
   let mf=worker();
-  const call=async(path,input)=>{const response=await mf.dispatchFetch('http://localhost'+path,input?{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify(input)}:{});const body=await response.json();assert.equal(response.status,200,JSON.stringify(body));return body;};
+  const call=async(path,input,status=200)=>{const response=await mf.dispatchFetch('http://localhost'+path,input?{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify(input)}:{});const body=await response.json();assert.equal(response.status,status,JSON.stringify(body));return body;};
   const request={roomId:'commons',reason:'Persistent bounded prepare qualification'};
   try {
     await call('/seed');const initial=await call('/state');
@@ -30,5 +30,19 @@ test('actual workerd restart retains bounded targeted preparation, append progre
     await mf.dispose();mf=worker();
     const final=await call('/state');assert.equal(final.canonical,true);assert.equal(final.messages,301);assert.equal(final.appended,'Appended after first prepare');assert.equal(final.executeReceipts,1);
     console.log('BOUNDED_AUTHORITY_PREPARE_RESTART '+JSON.stringify({first:first.preparation,second:second.preparation,final}));
+    await call('/reorder');
+    const altered=await call('/plan',request);
+    await call('/prepare',{...request,requestId:'altered-prefix',planHash:altered.planHash});
+    await mf.dispose();mf=worker();
+    const beforeRefusal=await call('/state'),lastPlan=await call('/plan',request);
+    const refusal=await call('/prepare',{...request,requestId:'altered-final',planHash:lastPlan.planHash},409);
+    assert.equal(refusal.error.code,'authority_not_ready');
+    const preserved=await call('/state');assert.deepEqual(preserved.provenance,final.provenance);assert.deepEqual(preserved.cursor,beforeRefusal.cursor);
+    await call('/missing-authority');
+    await mf.dispose();mf=worker();
+    const missingPlan=await call('/plan',request),missing=await call('/prepare',{...request,requestId:'missing-row',planHash:missingPlan.planHash},409);
+    assert.equal(missing.error.code,'authority_integrity_failure');
+    const absent=await call('/state');assert.equal(absent.messages,300);assert.equal(absent.provenance.some(row=>row.message_id==='m0'),false);
+    assert.equal(absent.prepareReceipts,preserved.prepareReceipts);
   } finally {await mf.dispose();await rm(persistence,{recursive:true,force:true});}
 });

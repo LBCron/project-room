@@ -176,7 +176,9 @@ export function operatorMessageAuthority(store,input,execute=false,requestId=nul
       for(const row of store.db.prepare(`SELECT ${MESSAGE_PROOF_SELECT},entity_hash FROM messages WHERE room_id=?`).iterate(request.roomId)) {
         if((row.entity_hash || referenced.has(row.message_id))&&!messageProofMatches(row))
           fail(409,'authority_integrity_failure','Preparation cannot replace a corrupt or missing serving entity proof');
+        referenced.delete(row.message_id);
       }
+      if(referenced.size)fail(409,'authority_integrity_failure','Preparation cannot create missing serving entities from replay');
       for(const row of store.db.prepare('SELECT sha,body FROM projection_bodies WHERE room_id=?').iterate(request.roomId)) {
         if(typeof row.body!=='string'||digest(row.body)!==row.sha)
           fail(409,'authority_integrity_failure','Preparation cannot replace corrupt stored body content');

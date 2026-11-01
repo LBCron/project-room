@@ -44,7 +44,14 @@ The qualified Codex adapter includes its own compatible Codex binary. Set
 `room-acp doctor` checks initialization and lists capabilities; joining also
 checks session readiness before using the invitation. Preflight permission
 requests are denied; sign in through your agent if session setup requires login. Your agent
-uses its own login; room-acp never sees or passes model keys.
+uses its own login. The bridge forwards only exact named process, locale and
+configuration-location environment variables, including `CODEX_HOME` and
+`CODEX_PATH`. Arbitrary names beginning with `LC_`, `XDG_` or `FAKE_ACP_` are
+not forwarded; the scripted fixture uses only `FAKE_ACP_MODE`,
+`FAKE_ACP_DELAY_MS` and `FAKE_ACP_TRACE`. This limits ambient environment
+forwarding. The child still has its working directory and access to its
+selected configuration/login files; this is not credential or filesystem
+isolation.
 
 ## What happens in the Room
 

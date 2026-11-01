@@ -587,6 +587,19 @@ export function createRoomServer({ store, origin, assetRoot = new URL("../", imp
   const isClaudeClient = id => isMcpClient(id) && oauthProvider.getClient(id)?.redirectUris
     .includes("https://claude.ai/api/mcp/auth_callback");
 
+
+  const mcpClientPreference = clientId => mcpOAuthClients.find(client => client.clientId === clientId)
+    ?? (isClaudeClient(clientId) ? mcpOAuthClients.find(client => client.clientId === "project-room-claude") : null);
+  const requiredMcpSeat = (clientId, accountId) => {
+    const preference = mcpClientPreference(clientId);
+    if (!preference?.preferredMemberId || !preference.preferredRoomId) return null;
+    const link = store.db.prepare("SELECT member_id FROM member_accounts WHERE room_id=? AND account_id=?")
+      .get(preference.preferredRoomId, accountId);
+    if (!link) return null;
+    const authority = store.roomAuthority(preference.preferredRoomId, {memberId: preference.preferredMemberId});
+    return authority.ownerId === link.member_id ? preference : null;
+  };
+
   for (const c of [...connectorClients, ...mcpOAuthClients]) {
     oauthProvider.registerClient(c);
   }
@@ -1833,19 +1846,14 @@ export function createRoomServer({ store, origin, assetRoot = new URL("../", imp
           return json(res, 400, { error: "invalid_target", error_description: "Select the advertised MCP resource" });
         if (!mcpConsent && url.searchParams.has("resource"))
           return json(res, 400, { error: "invalid_target", error_description: "This client is not enabled for MCP" });
-        const preference = mcpOAuthClients.find(client => client.clientId === validated.client.clientId)
-          ?? (isClaudeClient(validated.client.clientId) ? mcpOAuthClients.find(client => client.clientId === "project-room-claude") : null);
+        const preference = mcpClientPreference(validated.client.clientId);
         const agentChoices = mcpConsent ? listMcpOAuthAgents(store, auth.account.id, oauthResource, preference ?? {}) : [];
-        if (preference?.preferredMemberId && preference.preferredRoomId) {
-          const link=store.db.prepare("SELECT member_id FROM member_accounts WHERE room_id=? AND account_id=?").get(preference.preferredRoomId,auth.account.id);
-          if(link) {
-            const authority=store.roomAuthority(preference.preferredRoomId,{memberId:preference.preferredMemberId});
-            if(authority.ownerId===link.member_id) {
-              const match=agentChoices.find(choice=>choice.binding.memberId===preference.preferredMemberId && choice.binding.roomId===preference.preferredRoomId);
-              if(!match)return json(res,409,{error:"existing_agent_connection_required",error_description:"The configured existing agent is not currently eligible; no replacement seat was created"});
-              agentChoices.splice(0,agentChoices.length,match);
-            }
-          }
+        const requiredSeat = mcpConsent ? requiredMcpSeat(validated.client.clientId, auth.account.id) : null;
+        if (requiredSeat) {
+          const match = agentChoices.find(choice => choice.binding.memberId === requiredSeat.preferredMemberId
+            && choice.binding.roomId === requiredSeat.preferredRoomId);
+          if (!match) return json(res, 409, {error: "existing_agent_connection_required", error_description: "The configured existing agent is not currently eligible; no replacement seat was created"});
+          agentChoices.splice(0, agentChoices.length, match);
         }
         if (mcpConsent && !agentChoices.length)
           return json(res, 409, { error: "agent_connection_required", error_description: "Join the room as yourself, then create your own connected agent before authorizing it" });
@@ -1954,6 +1962,9 @@ export function createRoomServer({ store, origin, assetRoot = new URL("../", imp
         if (isMcpClient(validated.client.clientId)) {
           if (data.resource !== oauthResource) return failRedirect("invalid_target", "Wrong MCP resource");
           try { binding = JSON.parse(data.agent_binding); } catch { return failRedirect("invalid_request", "Choose your connected agent"); }
+          const requiredSeat = requiredMcpSeat(validated.client.clientId, accountId);
+          if (requiredSeat && (binding?.memberId !== requiredSeat.preferredMemberId || binding?.roomId !== requiredSeat.preferredRoomId))
+            return failRedirect("access_denied", "Choose the configured existing agent and room");
           if (binding?.resource !== oauthResource || !validateMcpOAuthBinding(store, accountId, binding))
             return failRedirect("access_denied", "This agent is not currently connected to your account");
         } else if (data.resource !== undefined || data.agent_binding !== undefined)

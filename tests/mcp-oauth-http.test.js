@@ -468,3 +468,19 @@ test('Claude defaults to existing-account consent while explicit invitation and 
  const init={jsonrpc:'2.0',id:1,method:'initialize',params:{protocolVersion:'2025-11-25',capabilities:{},clientInfo:{name:'Claude discovery',version:'1'}}};
  const discovery=await fetch(f.base+'/mcp?auth=discovery',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(init)});assert.equal(discovery.status,200);assert.ok((await discovery.json()).result.capabilities.tools);
 });
+
+test('Claude consent POST refuses another valid owned seat and never issues a code', async t => {
+ const f=await setup(t,{legacyOwned:true,client:CLAUDE});
+ const identity=f.store.identities.create('Other owned agent');
+ const {linkCode}=f.store.identities.mintLinkCode(identity.identityId,identity.secret,{roomId:'commons'});
+ f.store.command(f.ownerKey,'commons',{id:'other-owned-seat',type:'member.added',data:{memberId:'other-agent',displayName:'Other owned agent',kind:'agent',identityId:identity.identityId,permissions:[],accountableHumanId:'owner'}});
+ f.store.identities.link(f.ownerKey,'commons',{identityId:identity.identityId,memberId:'other-agent',permissions:[],identityLinkCode:linkCode});
+ const binding={...f.binding,memberId:'other-agent',identityId:identity.identityId,identityEpoch:mcpOAuthIdentityEpoch(f.store,identity.identityId)};
+ const before=f.store.db.prepare('SELECT count(*) n FROM oauth_provider_codes').get().n;
+ const denied=await f.consent({agent_binding:JSON.stringify(binding)});
+ const redirect=new URL(denied.headers.get('location'));
+ assert.equal(redirect.searchParams.get('error'),'access_denied');
+ assert.equal(redirect.searchParams.has('code'),false);
+ assert.equal(f.store.db.prepare('SELECT count(*) n FROM oauth_provider_codes').get().n,before);
+ const allowed=await f.consent();assert.ok(new URL(allowed.headers.get('location')).searchParams.get('code'));
+});

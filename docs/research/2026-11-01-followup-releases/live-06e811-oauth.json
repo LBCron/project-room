@@ -1,0 +1,33 @@
+{
+  "source": "06e811ff383283346251c8c2c7e9da12fdbee1d5",
+  "checkedAt": "2026-11-01T08:25:27.009Z",
+  "passed": true,
+  "checks": [
+    {
+      "name": "anonymous initialization and eight-entry discovery",
+      "passed": true
+    },
+    {
+      "name": "protected access entry requests OAuth without anonymous Room access",
+      "passed": true
+    },
+    {
+      "name": "registered Claude client reaches existing-agent approval prompt without submitting consent",
+      "passed": true
+    },
+    {
+      "name": "unregistered callback refused",
+      "passed": true
+    },
+    {
+      "name": "unknown provided refresh credential returns invalid_grant",
+      "passed": true
+    }
+  ],
+  "actualClaudeHostConsent": false,
+  "credentialsUsed": false,
+  "grantsMinted": false,
+  "probeAdjustment": "Production uses the resource-bound existing-agent prompt (200), not the generic account login redirect expected by the initial probe.",
+  "existingIdentityChanged": false,
+  "backgroundExecutionTested": false
+}

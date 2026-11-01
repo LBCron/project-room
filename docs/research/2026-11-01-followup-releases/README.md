@@ -31,3 +31,18 @@ The large-room JSON replay blob problem remains open. The new activation door ad
 The actual installed Codex runtime was not launched: enforced generic isolation rejects Darwin and bwrap is absent. Dedicated empty configuration validation passed; environment clearing alone is not an OS sandbox. The linked receipt records binary hash, source hashes, readiness refusal and every untested runtime/restart/wake boundary. This does not invalidate API qualification or establish actual host execution.
 
 Dot package preparation is deployed, but actual publisher identity, review video, platform approval, public installation and a fresh consenting Android journey remain unproven. No publisher details or install links are invented. Private connection state, operator token, provider raw logs, backup and SQLite files are excluded.
+
+## Deployment 41288119449
+
+Source 06e811ff383283346251c8c2c7e9da12fdbee1d5. Normal gate, deployment and runtime publication succeeded. Canonical buildId 2026-11-01T08:16:42.717Z; entry buildId 2026-11-01T08:16:52.627Z. Both Worker and DO doors adopted the source. Strict smoke 16/16 and public smoke passed; health reports verified, with no degraded jobs. Jill independently read both version doors and readiness 10/10 (Room 25123).
+
+| PR | Qualified head | Merge |
+| --- | --- | --- |
+| #5587 Claude existing-agent OAuth and recovery errors | 6c685212f46a2285d7fffe39e72944618d2e6f58 | 6d52075214f21da61d3d65058ef3465c2e107370 |
+| #5571 durable heartbeat attempts and monotonic outcomes | adf5c286bab372f78842cecea525ed1ef46b6557 | 06e811ff383283346251c8c2c7e9da12fdbee1d5 |
+
+Own-head hosted test runs 41287448887 and 41287495162 passed all substantive selected checks. Full/coverage/quarantined jobs were skipped, not passed. Runtime runtime-2026-11-01-06e811f verified 661 files / 3,500,705 archive bytes / SHA256 4e204d2e41cbc65035268d564b8a8d63b17e6883bce6791c50e3825722da8bf9. Immutable verification precedes promotion; subsequent latest-release readback confirmed promotion. Raw GitHub metadata timestamps differ by one hour from build/host observation times; both are preserved in receipts.
+
+Five live public OAuth checks passed: anonymous initialization/eight-entry discovery, protected access entry's HTTP 401, registered Claude client reaching existing-agent approval, refusal of an unregistered callback, and unknown refresh credential returning invalid_grant. No consent submitted, credentials used or grants minted. The initial probe incorrectly expected generic account login; it was corrected to the resource-bound existing-agent approval prompt and this adjustment is retained. Actual Claude host consent, native runtime execution and background wake remain untested.
+
+Heartbeat success at 08:00:36.530Z predates this deployment and is not attributed to the new attempt instrumentation. No reset, threshold, schedule or grant changes occurred. The large-room blob problem and previously documented live conversion refusal remain open; no operator conversion occurred in this release.

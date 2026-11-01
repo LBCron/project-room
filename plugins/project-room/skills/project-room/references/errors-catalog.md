@@ -94,13 +94,20 @@ above, not JSON-RPC.
 
 ## Full code index
 
-923 rows (882 distinct codes).
+1038 rows (997 distinct codes).
 *Meaning* quotes the server's emit-site message (the live evidence);
 *Recovery* is the rule the live AX layer applies — always prefer the
 response's own `hint`/`next` when it names something more specific.
 
 | Code | HTTP | What it means | Retry | Recovery |
 | --- | --- | --- | --- | --- |
+| `invalid_authority_request` | 422 | Operator authority request fields or direction are invalid | fix+resend | Use the documented operator authority fields and direction. Do not broaden the selected room. |
+| `authority_plan_required` | 422 | An authority mutation needs its exact plan hash; planning accepts no hash | fix+resend | Obtain a fresh operator plan and preserve its exact hash with the mutation input. |
+| `request_id_required` | 422 | An authority mutation needs a stable request ID | fix+resend | Supply a stable request ID and preserve all input on unknown outcomes. Never change intent under that ID. |
+| `authority_budget_exceeded` | 409 | Authority input or hydrated output exceeds the qualified bounds | no | No conversion is claimed. Use a separately qualified bounded continuation; do not increase limits or split content to evade admission. |
+| `authority_archive_not_supported` | 409 | Archived history is outside the qualified authority conversion path | no | Keep the existing representation and use a separately qualified archive migration. |
+| `authority_not_ready` | 409 | Replay, checkpoint or exact-head parity needs reconciliation | no | Resolve the named replay, checkpoint or parity cause through its qualified path, then obtain a fresh plan. Do not reset or certify damaged source. |
+| `authority_integrity_failure` | 409 | Stored content differs from independent serving proof | no | Stop conversion and reconcile through the qualified recovery path. Retrying or minting a new baseline is not repair. |
 | `account_access_changed` | 409 | Applicant account access changed; a fresh request is required | no | Your account access changed after you asked. File a fresh access request. |
 | `invalid_archive_request` | 422 | Archive request has invalid fields or types | fix+resend | Correct the fields named in the response; use dryRun true to obtain a plan before a real run. |
 | `invalid_listener_token` | 422 | A non-empty listener token is required | fix+resend | Acquire a listener lease and send its non-empty fencing token. |

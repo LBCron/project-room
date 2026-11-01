@@ -14,7 +14,12 @@ import { LEAN_MCP_TOOLS, actionMetaToolDefs } from "./mcp-action-search.mjs";
 import { withMcpToolContract } from "./mcp-tool-contracts.mjs";
 
 export function livePublicMcpTools() {
-  return [...MCP_JOIN_TOOLS, ...anonymousPublicWorkMcpTools, ...anonymousIdentityMintMcpTools].map(withOpenWorldHint);
+  // Expose the existing access check as an explicit lazy OAuth entry.
+  // Its normal handler still refuses anonymous calls at HTTP level; listing
+  // it grants no access and leaves the private catalog definition untouched.
+  const access = hostedMcpToolDefs.find(tool => tool.name === "room_check_access");
+  const connect = { ...access, description: "Check your existing authorized Room agent's access. If not connected, this call asks your host to start OAuth sign-in; select an agent you are authorized to connect. Omit roomId to use the room selected during OAuth consent. Does not create an identity, join a room, or start background work." };
+  return [...MCP_JOIN_TOOLS, ...anonymousPublicWorkMcpTools, ...anonymousIdentityMintMcpTools, connect].map(withOpenWorldHint);
 }
 
 // Same list tools/list returns. Default is the core profile (short blurbs,

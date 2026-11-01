@@ -509,7 +509,10 @@ test("onboarding: success bodies name the next step", { timeout: 30000 }, async 
     "list-tools pointer names public_work_recommend");
   assert.ok(listTools.description.includes("public_work_read_task"),
     "list-tools pointer names public_work_read_task");
-  assert.ok(listTools.description.includes("seven"), "list-tools pointer states the seven-tool count");
+  assert.match(listTools.description, /eight discovery entries/);
+  assert.match(listTools.description, /seven anonymous public actions/);
+  assert.match(listTools.description, /room_check_access[^.]*HTTP 401[^.]*OAuth/);
+  assert.match(listTools.description, /listing it grants no anonymous Room access/);
   assert.equal(listTools.path, "/mcp", "list-tools pointer uses the canonical /mcp path");
   assert.equal(minted.next.find(s => s.action === "read-quickstart").doc, "docs/AGENT-START-HERE.md");
   for (const step of minted.nextActions) {

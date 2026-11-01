@@ -243,7 +243,7 @@ test("account deletion also purges archived message rows that are no longer in t
   const projection = JSON.parse(db.prepare("SELECT projection FROM rooms WHERE id=?").get(roomId).projection);
   projection.messages = projection.messages.filter(message => !archivedIds.has(message.id));
   projection.messagesArchive = { throughSeq: through, count: archivedIds.size };
-  db.prepare("UPDATE rooms SET projection=? WHERE id=?").run(JSON.stringify(projection), roomId);
+  ctx.f.store.transaction(() => db.prepare("UPDATE rooms SET projection=? WHERE id=?").run(ctx.f.store.storedProjection(roomId, projection), roomId));
   assert.ok(db.prepare("SELECT record_json FROM messages WHERE room_id=? AND message_id='old-secret'").get(roomId).record_json.includes(SECRET));
 
   const planned = await (await get(ctx.origin, "/api/account/deletion/plan", ctx.creds.cookie)).json();

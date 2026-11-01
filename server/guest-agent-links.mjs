@@ -133,6 +133,7 @@ export class GuestAgentLinks {
   }
 
   sweepExpiredAsDelegate(roomId, auth) {
+    if (!this.db.isTransaction) return this.store.transaction(() => this.sweepExpiredAsDelegate(roomId, auth));
     // The event model requires member.access_changed to be actor-attributed
     // to a member with manage_members, so the mechanical expiry sweep runs
     // as the room owner whose authority the delegate exercises (exactly as

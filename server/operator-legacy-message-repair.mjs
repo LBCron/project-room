@@ -1,4 +1,4 @@
-import { assertMessageWrite, recordMessageWrite } from './write-integrity.mjs';
+import { assertProjectionWrite, recordMessageWrite } from './write-integrity.mjs';
 // Explicit, bounded repair of already-diagnosed legacy indexed message shapes.
 // Never replays events or rewrites projections, bodies, indexes, or checkpoints.
 import { createHash } from 'node:crypto';
@@ -32,6 +32,10 @@ function inventory(store, rooms) {
     const detail = diagnostic.rooms.find(room => room.roomId === target.roomId);
     if (!detail || !detail.complete || !detail.exactLegacyShapeOnly) fail('repair_not_exact_legacy');
     if (detail.head !== target.expectedHead) fail('repair_head_changed');
+    // Repair authority comes from the independently protected projection,
+    // not the corrupted index row that this explicit operator action repairs.
+    try { assertProjectionWrite(store.db,target.roomId); }
+    catch { fail('repair_projection_unavailable'); }
     const projection = store.db.prepare('SELECT projection FROM rooms WHERE id=?').get(target.roomId).projection;
     const workSize = store.db.prepare('SELECT count(*) AS n,coalesce(sum(nbytes),0) AS bytes FROM (SELECT length(CAST(body AS BLOB)) AS nbytes FROM work_entities WHERE room_id=? LIMIT 2001)').get(target.roomId);
     if (workSize.n > 2000 || workSize.bytes > 4 * 1024 * 1024) fail('repair_bound_exceeded');
@@ -89,7 +93,8 @@ export function repairLegacyMessages(store, input, execute = false) {
     const update = store.db.prepare('UPDATE messages SET record_json=?,reactions_json=CASE WHEN ? THEN NULL ELSE reactions_json END WHERE room_id=? AND message_id=?');
     wrote = true;
     for (const change of plan.changes) {
-      assertMessageWrite(store.db,change.roomId,change.messageId);
+      // Inventory proved exact canonical equality after only the named
+      // legacy-field correction; parity below must verify before commit.
       update.run(change.recordJson, change.clearReactions ? 1 : 0, change.roomId, change.messageId);
       recordMessageWrite(store.db,change.roomId,change.messageId);
     }

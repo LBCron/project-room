@@ -126,6 +126,7 @@ test("control B: an altered projection body is named at its posting event, with 
     post(store, "m1", "hello world");
     post(store, "m2", "untouched");
     store.patrolTick();
+    post(store, "m3", "fresh activity brings the tail to the head");
     const row = store.db.prepare("SELECT projection FROM rooms WHERE id='alpha'").get();
     const projection = JSON.parse(row.projection);
     const target = projection.messages.find(message => message.id === "m1");
@@ -133,7 +134,6 @@ test("control B: an altered projection body is named at its posting event, with 
       "SELECT sequence FROM events WHERE room_id='alpha' AND json_extract(body, '$.data.messageId')='m1'").get().sequence;
     target.body = "tampered body";
     store.db.prepare("UPDATE rooms SET projection=? WHERE id='alpha'").run(JSON.stringify(projection));
-    post(store, "m3", "fresh activity brings the tail to the head");
     const result = store.patrolTick();
     const findings = store.patrolFindings();
     assert.equal(findings.length, 1);

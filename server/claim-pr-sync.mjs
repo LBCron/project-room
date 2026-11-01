@@ -969,7 +969,7 @@ function applyDeployedClose(store, roomId, claimId, nowMs, skipped) {
   try {
     const closed = closeWhenLive(item, SOURCE_REVISION, nowMs);
     if (!closed) return;
-    store.transaction(() => {
+    store.workClaims.transaction(() => {
       store.workClaims.set(roomId, closed);
       emitWorkClaimEvent(store, roomId, {
         actorId: item.owner ?? "system", item: closed, action: "state_changed", atMs: nowMs

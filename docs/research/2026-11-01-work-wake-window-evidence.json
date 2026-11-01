@@ -866,5 +866,13 @@
       }
     },
     "deployment": "Not deployed. No production index plan/execute/install or activation."
+  },
+  "rootHostedSafetyNet": {
+    "head": "2228801c71b4dee0d96a9070a8358297ff8fa881",
+    "run": 41341013438,
+    "result": "FAILED",
+    "cause": "i18n hardcoded-ui-string ratchet3030->3034; four named operator recovery strings. Local CI-mode contract does not execute this separate safety-net ratchet.",
+    "logSha256": "94480fc0193ed615a360beb880c410c6ac8714d0f0ba4d362f6549aa88eb0f93",
+    "correction": "Use existing documented PR-body i18n-growth declaration with specific reason; baseline unchanged, fresh push required for new Actions payload. No failed run relabeled."
   }
 }

@@ -4241,9 +4241,9 @@ this.slaBreachAlerts = new SlaBreachAlertJournal(this); // Task 26: durable in-a
       return out;
     });
   }
-  roomAuthority(roomId, { includeHistory = false } = {}) {
+  roomAuthority(roomId, { includeHistory = false, memberId = null } = {}) {
     if(!this._restoreOpening)assertRestoreAdmitted(this.db);
-    const current = currentRoomAuthority(this.db, roomId);
+    const current = currentRoomAuthority(this.db, roomId, { memberId });
     if (current) return { sequence: current.sequence, ownerId: current.ownerId, members: current.members,
       ...(includeHistory ? {historyVisibility: current.historyVisibility, historyDefaultsVersion: current.historyDefaultsVersion} : {}) };
     // History policy travels in the same validated prefix as membership. This
@@ -4806,7 +4806,7 @@ this.slaBreachAlerts = new SlaBreachAlertJournal(this); // Task 26: durable in-a
     if (!validId(roomId)) fail(422, "invalid_room", "Invalid Room id");
     const binding = this.db.prepare("SELECT member_id FROM member_accounts WHERE room_id=? AND account_id=?").get(roomId, auth.account.id);
     if (!binding) fail(403, "access_denied", "This account has no membership in that Room");
-    const member = this.roomAuthority(roomId).members[binding.member_id];
+    const member = this.roomAuthority(roomId, { memberId: binding.member_id }).members[binding.member_id];
     if (!member || member.kind !== "human" || member.active === false) fail(403, "access_denied", "Active human Room membership required");
     this.verifyInvitedMembership(roomId, member);
     return { ...auth, member, roomId };
@@ -4840,7 +4840,7 @@ this.slaBreachAlerts = new SlaBreachAlertJournal(this); // Task 26: durable in-a
     this.db.prepare("UPDATE accounts SET ever_had_room=1 WHERE id=?").run(accountId);
   }
   ensureHumanAccountBinding(roomId, memberId, requestedAccountId = null, origin = "local-provisioning") {
-    const members = this.roomAuthority(roomId).members;
+    const members = this.roomAuthority(roomId, { memberId }).members;
     const member = validId(memberId) && Object.hasOwn(members, memberId) && members[memberId];
     if (!member || member.kind !== "human") fail(422, "invalid_account_binding", "Only a human Room member can bind to an account");
     if (requestedAccountId !== null && !validId(requestedAccountId)) fail(422, "invalid_account", "Invalid account id");
@@ -5197,7 +5197,7 @@ this.slaBreachAlerts = new SlaBreachAlertJournal(this); // Task 26: durable in-a
   }
   issueAccessKey(roomId, memberId, lifetimeMs = 7 * 86400000, accountId = null) {
     return this.transaction(() => {
-      const members = this.roomAuthority(roomId).members;
+      const members = this.roomAuthority(roomId, { memberId }).members;
       const member = validId(memberId) && Object.hasOwn(members, memberId) && members[memberId];
       if (!member || member.active === false) fail(403, "access_denied", "Active member required");
       if (!Number.isSafeInteger(lifetimeMs) || lifetimeMs <= 0 || lifetimeMs > 30 * 86400000) fail(422, "invalid_expiry", "Access keys expire within 30 days");
@@ -5215,7 +5215,7 @@ this.slaBreachAlerts = new SlaBreachAlertJournal(this); // Task 26: durable in-a
   // atomic revoke+issue ordering stays load-bearing for every other caller.
   mintAccessKey(roomId, memberId, lifetimeMs = 7 * 86400000, accountId = null) {
     return this.transaction(() => {
-      const members = this.roomAuthority(roomId).members;
+      const members = this.roomAuthority(roomId, { memberId }).members;
       const member = validId(memberId) && Object.hasOwn(members, memberId) && members[memberId];
       if (!member || member.active === false) fail(403, "access_denied", "Active member required");
       if (!Number.isSafeInteger(lifetimeMs) || lifetimeMs <= 0 || lifetimeMs > 30 * 86400000) fail(422, "invalid_expiry", "Access keys expire within 30 days");
@@ -5245,7 +5245,7 @@ this.slaBreachAlerts = new SlaBreachAlertJournal(this); // Task 26: durable in-a
     if (this.agentConnections.row(roomId, memberId)) fail(409, "managed_agent", "Replace this agent's key through its room connection");
     const count = this.db.prepare("SELECT count(*) AS n FROM credentials WHERE room_id=?").get(roomId).n;
     if (count >= 5000) fail(409, "pilot_limit", "Credential retention limit reached; administrator maintenance required");
-    const member = this.roomAuthority(roomId).members[memberId];
+    const member = this.roomAuthority(roomId, { memberId }).members[memberId];
     if (!member) fail(403, "access_denied", "Room member required");
     const account = member.kind === "human" ? this.ensureHumanAccountBinding(roomId, memberId) : null;
     if (account && !account.active) fail(403, "access_denied", "Active account required");
@@ -5330,7 +5330,7 @@ this.slaBreachAlerts = new SlaBreachAlertJournal(this); // Task 26: durable in-a
       fail(401, "unauthenticated", "Session or key expired or revoked");
     }
     if (roomId && row.room_id !== roomId) fail(403, "access_denied", "This credential does not grant access to that room");
-    const members = this.roomAuthority(row.room_id).members;
+    const members = this.roomAuthority(row.room_id, { memberId: row.member_id }).members;
     const member = Object.hasOwn(members, row.member_id) && members[row.member_id];
     if (!member || member.active === false) fail(403, "access_denied", "Room membership is inactive");
     this.verifyInvitedMembership(row.room_id, member);
@@ -5381,7 +5381,7 @@ this.slaBreachAlerts = new SlaBreachAlertJournal(this); // Task 26: durable in-a
   // so invite sessions can never mint admin rights.
   createJoinSession(roomId, memberId) {
     return this.transaction(() => {
-      const member = this.roomAuthority(roomId).members[memberId];
+      const member = this.roomAuthority(roomId, { memberId }).members[memberId];
       if (!member || member.active === false) fail(403, "access_denied", "Room member required");
       if (member.kind !== "agent") fail(403, "access_denied", "Join sessions are for agent joins");
       const expiresAt = this.now() + 8 * 3600000;

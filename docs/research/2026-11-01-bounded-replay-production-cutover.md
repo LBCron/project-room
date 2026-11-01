@@ -75,6 +75,16 @@ new reader dispatches explicitly on format and refuses unknown versions,
 missing roots or torn control/page pairs. No legacy fallback after a new-format
 failure and no cursor reset to manufacture a healthy prefix.
 
+At final format publication, the legacy `state_json` slot becomes an explicit
+non-JSON `paged:1:` discriminator so an already-open old decoder cannot mistake
+a new root for a legacy state. Before that boundary retain its old bytes and
+old published cursor while transcode is pending. An already-open raw/read-only
+SQLite connection cannot be denied ordinary unchanged serving reads by writer
+triggers; do not claim revocation of SQLite reads. Qualify the actual old
+application entry points: new opens reject schema v45, old derived decoders
+refuse the discriminator, and every old mutation is fenced. Serving metadata
+stays in its existing representation in this slice.
+
 ## Bounded operation and immutable inputs
 
 Each prepare call is one stored receipt and one transaction-scoped unit:

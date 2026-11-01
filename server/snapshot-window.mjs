@@ -2,7 +2,8 @@
 // The default GET /api/rooms/{id} and ?messages=recent are this window.
 // ?full=1 is the retired unbounded document, and only while
 // ROOM_SNAPSHOT_FULL_COMPAT=1. Older history pages through /messages.
-import { isCurrentRoom, withCurrentReadContext } from './current-room-repository.mjs';
+import { isCurrentRoom, withCurrentReadContext,readCurrentRecord,chargeCurrentReadBudget } from './current-room-repository.mjs';
+import {readCurrentEventWindow} from './current-room-events.mjs';
 import { readConversation } from './conversation-sync.mjs';
 import { messageSequences } from "./message-queries.mjs";
 import { messageRepository } from "./message-repository.mjs";
@@ -128,20 +129,31 @@ export function readRoomSnapshot(store, token, roomId, fence, { view = "full", h
     return readAgentOrientation(store, token, roomId, fence);
   }
   if (view === "full" && isCurrentRoom(store.db, roomId)) {
-    if (!windowed || helpContext || auditView !== "full")
+    if (!windowed || helpContext || !["full","activity"].includes(auditView))
       fail(409, "current_snapshot_selection_unavailable", "Use the bounded current room window and addressed detail reads");
-    return store.readTransaction(() => withCurrentReadContext(store.db, roomId, () => {
+    return store.readTransaction(() => withCurrentReadContext(store.db, roomId, b => {
       const auth = store.authenticate(token, roomId, fence);
       const overview = store.currentOverview(roomId, auth.member.id);
       const conversation = readConversation(store, token, roomId, { limit: 8, expectedSessionBinding: fence });
+      const channelKeys=store.db.prepare("SELECT record_key FROM current_room_record_proofs WHERE room_id=? AND domain='channels' AND present=1 ORDER BY record_key LIMIT 51").all(roomId);
+      if(channelKeys.length>50)fail(409,'current_channel_catalog_unavailable','Channel catalog exceeds the supported room limit');
+      chargeCurrentReadBudget(b,channelKeys.reduce((n,row)=>n+Buffer.byteLength(row.record_key)+32,0),channelKeys.length);
+      const channels=Object.create(null);for(const {record_key:id}of channelKeys){const channel=readCurrentRecord(store.db,roomId,'channels',id,b);if(!channel||channel.id!==id)throw Error('Current channel membership differs');Object.defineProperty(channels,id,{value:channel,enumerable:true});}
+      const sourceAfter=Math.max(0,overview.sequence-16),eventPage=readCurrentEventWindow(store,roomId,auth.member.id,{after:sourceAfter,limit:16});
+      const events=eventPage.events.map(row=>row.event),eventLog=auditView==='activity'?events.filter(e=>e.type==='decision.recorded'||/^(work\.|work_claim\.|verification\.|owner_decision\.)/.test(e.type)||e.data?.workItemId!==undefined):events;
+      const cursor=store.db.prepare('SELECT sequence FROM cursors WHERE room_id=? AND member_id=?').get(roomId,auth.member.id)?.sequence??0;
+
       // This is explicitly a partial current view. Neither omitted counts nor
       // absent request/work records mean that the room contains no more work.
       return {
         snapshotVersion: 2, representation: "normalized-current-v1", roomId,
-        sequence: overview.sequence, viewerId: auth.member.id,
+        sequence: overview.sequence, viewerId: auth.member.id,cursor,catchUpCursor:cursor,
+        ...(auditView==='activity'?{auditView,auditVersion:1}:{}),
         viewerAccountId: auth.account?.id ?? null, viewerAuthEpoch: auth.account?.authEpoch ?? null,
         viewerSessionBinding: auth.sessionBinding, viewerSessionRevision: auth.sessionRevision ?? null,
-        state: { ...overview.state, messages: conversation.messages },
+        state: { ...overview.state,channels,eventLog, messages: conversation.messages },
+        channelsWindow:{complete:true,shown:channelKeys.length},
+        eventsWindow:{complete:sourceAfter===0,after:sourceAfter,examinedThrough:eventPage.next,hasOlder:sourceAfter>0,olderAfter:sourceAfter>0?Math.max(0,sourceAfter-16):null,sourceLimit:16},
         messagesWindow: { mode: "recent", omitted: null, complete: conversation.nextCursor === null },
         messagesPage: { cursor: conversation.nextCursor, hasMore: conversation.nextCursor !== null, contractVersion: 2, limit: 8 },
         workWindow: overview.workWindow,

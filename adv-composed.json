@@ -1,0 +1,245 @@
+{
+ "tree": "/home/hatch/workspace/wave-2026-11-01-fifty/rc5579/repo/server",
+ "hasWarningsExport": true,
+ "s1_alwaysThrowPost": {
+  "ok": false,
+  "error": "Error: simulated authority read failure",
+  "bountyRows": 0,
+  "journalRows": 4
+ },
+ "s2_flakyPostSuccessThresholds": [
+  5,
+  6,
+  7,
+  8,
+  9,
+  10,
+  11,
+  12,
+  13,
+  14,
+  15,
+  16,
+  17,
+  18,
+  19,
+  20,
+  21,
+  22,
+  23,
+  24,
+  25,
+  26,
+  27,
+  28,
+  29,
+  30,
+  31,
+  32,
+  33,
+  34,
+  35,
+  36,
+  37,
+  38,
+  39,
+  40,
+  41,
+  42,
+  43,
+  44,
+  45,
+  46,
+  47,
+  48,
+  49,
+  50,
+  51,
+  52,
+  53,
+  54,
+  55,
+  56,
+  57,
+  58,
+  59,
+  60
+ ],
+ "s2b_flakyClaimSuccessThresholds": [
+  6,
+  7,
+  8,
+  9,
+  10,
+  11,
+  12,
+  13,
+  14,
+  15,
+  16,
+  17,
+  18,
+  19,
+  20,
+  21,
+  22,
+  23,
+  24,
+  25,
+  26,
+  27,
+  28,
+  29,
+  30,
+  31,
+  32,
+  33,
+  34,
+  35,
+  36,
+  37,
+  38,
+  39,
+  40,
+  41,
+  42,
+  43,
+  44,
+  45,
+  46,
+  47,
+  48,
+  49,
+  50,
+  51,
+  52,
+  53,
+  54,
+  55,
+  56,
+  57,
+  58,
+  59,
+  60
+ ],
+ "s3_noMembershipSource": {
+  "ok": true,
+  "warnings": [
+   "warning: this bounty can never be disputed — no dispute decider (or verifier) was named at posting. A dispute needs a decider named at posting, a third lane distinct from the poster and from the worker; name a verifier or dispute decider at posting to keep disputes possible."
+  ],
+  "state": "proposed",
+  "conservation": true
+ },
+ "s4_noDecider": {
+  "n": 1,
+  "text": "warning: this bounty can never be disputed — no dispute deci"
+ },
+ "s4_deciderIsPoster": {
+  "n": 1,
+  "text": "warning: this bounty can never be disputed — the designated "
+ },
+ "s4_deciderIsExecutor": {
+  "n": 1,
+  "text": "warning: this bounty can never be disputed — the designated "
+ },
+ "s4_deciderOverridesVerifier": {
+  "n": 0,
+  "text": ""
+ },
+ "s4_pairTrap": {
+  "n": 1,
+  "text": "warning: the designated dispute decider is the room's only o"
+ },
+ "s4_lanesNotArray": {
+  "n": 0,
+  "text": ""
+ },
+ "s4_emptyStringClaimant": {
+  "n": 0,
+  "text": ""
+ },
+ "s4_verifierZero": {
+  "n": 1,
+  "text": "warning: this bounty can never be disputed — no dispute deci"
+ },
+ "s4_deciderNumeric": {
+  "n": 0,
+  "text": ""
+ },
+ "s4_emptyInput": {
+  "n": 1,
+  "text": "warning: this bounty can never be disputed — no dispute deci"
+ },
+ "s4_lanesNullEntries": {
+  "n": 0,
+  "text": ""
+ },
+ "s4_executorBeatsPairLeg": {
+  "n": 1,
+  "text": "warning: this bounty can never be disputed — the designated "
+ },
+ "s4_ghostDecider3Room": {
+  "n": 0,
+  "text": ""
+ },
+ "s5_stringMemberRow": {
+  "ok": true,
+  "warnings": [],
+  "state": "proposed",
+  "conservation": true,
+  "bountyRows": 1
+ },
+ "s5_stringFalseActive": {
+  "ok": true,
+  "warnings": [],
+  "state": "proposed",
+  "conservation": true,
+  "bountyRows": 1
+ },
+ "s5_inactiveThird": {
+  "ok": true,
+  "warnings": [
+   "warning: the designated dispute decider is the room's only other member — if they claim this bounty it can never be disputed, because a decider cannot be the worker. Invite a third member and name them as decider to keep disputes possible."
+  ],
+  "state": "proposed",
+  "conservation": true,
+  "bountyRows": 1
+ },
+ "s5_nullMemberRow": {
+  "ok": true,
+  "warnings": [
+   "warning: the designated dispute decider is the room's only other member — if they claim this bounty it can never be disputed, because a decider cannot be the worker. Invite a third member and name them as decider to keep disputes possible."
+  ],
+  "state": "proposed",
+  "conservation": true,
+  "bountyRows": 1
+ },
+ "s5_throwingActiveGetter": {
+  "ok": false,
+  "stage": "genesis",
+  "error": "Error: poisoned member row"
+ },
+ "s5_protoKey": {
+  "ok": true,
+  "warnings": [],
+  "state": "proposed",
+  "conservation": true,
+  "bountyRows": 1,
+  "ownKeys": [
+   "id:agent/grokbot",
+   "owner",
+   "__proto__"
+  ]
+ },
+ "s6_lifecycle": {
+  "seq": [
+   "post:proposed:warn=1",
+   "fund:funded",
+   "claim:claimed",
+   "submit:submitted",
+   "accept:accepted",
+   "dispute:ERR"
+  ],
+  "conservation": true
+ }
+}

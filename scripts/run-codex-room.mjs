@@ -6,7 +6,7 @@ import { pathToFileURL } from "node:url";
 import { agentConnectionFromEnvironment } from "../client/agent-connection.mjs";
 import { RoomAgentClient } from "../client/room-agent.mjs";
 import { openRequestJournal } from "../client/request-runner.mjs";
-import { openCodexStdio, validateCodexRuntimeConfig, checkCodexProtocol, checkCodexCredentials } from "../client/codex-stdio.mjs";
+import { openCodexStdio, validateCodexRuntimeConfig, checkCodexProtocol, checkCodexCredentials, CodexRuntimeSetupError, codexRuntimeSetupFailure, CODEX_RUNTIME_FAILURE_EXITS } from "../client/codex-stdio.mjs";
 import { createCodexStatusWriter, readCodexHostStatus, stopCodexHost } from "../client/codex-host-status.mjs";
 import { superviseCodexRoom, scopedCodexThreads } from "../client/codex-supervisor.mjs";
 import { runCodexSharedAssistant } from "../client/codex-shared-assistant.mjs";
@@ -67,7 +67,9 @@ Normal invocation executes one already-created public Room assistant run assigne
     || !allowedRequestIds.every(validId))) throw new Error("Choose 1 to 20 distinct valid request IDs");
   if (singleRequest && (allowedRequesterIds?.length !== 1 || allowedRequestIds?.length !== 1))
     throw new Error("Single request mode requires exactly one requester and request ID");
-  const settings = validateCodexRuntimeConfig(JSON.parse(readFileSync(configPath, "utf8")));
+  let settings;
+  try { settings = validateCodexRuntimeConfig(JSON.parse(readFileSync(configPath, "utf8"))); }
+  catch (error) { throw error instanceof CodexRuntimeSetupError ? error : new CodexRuntimeSetupError("invalid_runtime", error.message); }
   const connection = check ? null : agentConnectionFromEnvironment();
   // Native setup pins the visible room identity. Validate the connection that
   // this child actually loaded, closing the file-replacement race at launch.
@@ -95,15 +97,20 @@ Normal invocation executes one already-created public Room assistant run assigne
       await supervise({ connection, db, directory: `${journal}.watch`, cwd: settings.cwd, policy: settings.policy, allowedRequesterIds, allowedRequestIds, singleRequest,
         signal: controller.signal, timeoutMs: settings.turnTimeoutMs, connectOnStart: true, emit,
         connect: async allowedThreadIds => {
-          const transport = openCodexStdio(settings, { allowedThreadIds, onAttention: event => console.error(JSON.stringify(event)) });
+          let transport;
           try {
+            transport = openCodexStdio(settings, { allowedThreadIds, onAttention: event => console.error(JSON.stringify(event)) });
             await checkCodexProtocol(transport, settings, { threadId: allowedThreadIds[0] });
             const readiness = await checkCodexCredentials(transport);
             emit({ type: "host_readiness", ...readiness });
-            if (readiness.credentials === "login_required") throw Object.assign(new Error("Dedicated Codex login required"), { code: "login_required" });
+            if (readiness.credentials === "login_required") throw new CodexRuntimeSetupError("login_required", "Dedicated Codex login required");
             return transport;
           }
-          catch (error) { await transport.close(); throw error; }
+          catch (error) {
+            const failureCode = codexRuntimeSetupFailure(error);
+            if (failureCode) emit({ type: "host_status", status: "recovery_pending", failureCode });
+            await transport?.close(); throw error;
+          }
         } });
       return;
     }
@@ -119,11 +126,15 @@ Normal invocation executes one already-created public Room assistant run assigne
         emit: event => console.log(JSON.stringify(event)) });
       console.log(JSON.stringify({ status: result.result.status, runId, resultMessageId: result.result.resultMessageId ?? null }));
     }
+  } catch (error) {
+    const failureCode = codexRuntimeSetupFailure(error);
+    if (failureCode) { try { statusWriter?.event({ type: "host_status", status: "stopped", failureCode }); } catch { /* exit code still carries the closed safe failure */ } }
+    throw error;
   } finally {
     statusWriter?.close();
     try { await rpc?.close(); } finally { db?.close(); process.removeListener("SIGINT", stop); process.removeListener("SIGTERM", stop); }
   }
 }
 if (process.argv[1] && import.meta.url === pathToFileURL(realpathSync(process.argv[1])).href) main().catch(error => {
-  console.error(error.message); process.exitCode = 1;
+  console.error(error.message); process.exitCode = CODEX_RUNTIME_FAILURE_EXITS[codexRuntimeSetupFailure(error)] ?? 1;
 });

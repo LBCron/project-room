@@ -26,7 +26,7 @@ const rawId = value => {
   if(typeof value!=='string'||!/^([A-F0-9]{2}){1,200}$/.test(value))throw Error('invalid replay event identity');
   return fatalText(Buffer.from(value,'hex'));
 };
-const hash = text => createHash('sha256').update(text).digest('hex');
+const hash = text => createHash('sha256').update(text instanceof ArrayBuffer?new Uint8Array(text):text).digest('hex');
 const id = value => typeof value === 'string' && /^[A-Za-z0-9_-]{1,64}$/.test(value);
 const digest = value => typeof value === 'string' && /^[a-f0-9]{64}$/.test(value);
 const sourceNode=(level,left,right)=>hash(JSON.stringify(['project-room.replay-source-node.v1',level,left,right]));

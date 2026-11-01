@@ -458,18 +458,29 @@ test('failed replay publication rolls back serving rows and staging progress tog
  for(let i=0;i<6;i++)f.post(`atomic-${i}`,`Current ${i}.`);
  f.store.db.prepare("UPDATE messages_backfill_cursor SET applied_event_id='invalid',parity_at_seq=NULL WHERE room_id='commons'").run();
  f.store.backfillMessages({limit:2});
- const cursor={...f.certificate()};
+ const cursor=f.store.db.prepare("SELECT * FROM messages_backfill_cursor WHERE room_id='commons'").get();
+ const staging=f.store.db.prepare("SELECT * FROM messages_backfill_state WHERE room_id='commons' ORDER BY part").all();
  const snapshot=f.store.db.prepare("SELECT state_json FROM message_replay_snapshots WHERE room_id='commons'").get().state_json;
  const rows=f.store.db.prepare("SELECT * FROM messages WHERE room_id='commons' ORDER BY message_id").all();
  const expected=f.read({limit:100}).messages;
- f.store.db.exec("CREATE TRIGGER reject_replay_publication BEFORE INSERT ON messages BEGIN SELECT RAISE(ABORT,'injected publication failure'); END");
+ // Current proven entity rows must be preserved, so INSERT is no longer a
+ // publication boundary. Refuse any accidental rewrite throughout both runs.
+ f.store.db.exec("CREATE TRIGGER reject_replay_rewrite BEFORE INSERT ON messages BEGIN SELECT RAISE(ABORT,'unexpected authoritative row rewrite'); END");
+ // Publication advances the serving cursor only after validating all rows.
+ f.store.db.exec("CREATE TRIGGER reject_replay_publication BEFORE UPDATE OF applied_seq ON messages_backfill_cursor WHEN NEW.applied_seq > OLD.applied_seq AND NEW.applied_seq=(SELECT sequence FROM rooms WHERE id=NEW.room_id) BEGIN SELECT RAISE(ABORT,'injected publication failure'); END");
  assert.throws(()=>f.store.backfillMessages({limit:1000}),/injected publication failure/);
- assert.deepEqual({...f.certificate()},cursor);
+ assert.deepEqual(f.store.db.prepare("SELECT * FROM messages_backfill_cursor WHERE room_id='commons'").get(),cursor);
+ assert.deepEqual(f.store.db.prepare("SELECT * FROM messages_backfill_state WHERE room_id='commons' ORDER BY part").all(),staging);
  assert.equal(f.store.db.prepare("SELECT state_json FROM message_replay_snapshots WHERE room_id='commons'").get().state_json,snapshot);
  assert.deepEqual(f.store.db.prepare("SELECT * FROM messages WHERE room_id='commons' ORDER BY message_id").all(),rows);
  assert.deepEqual(f.read({limit:100}).messages,expected);
  f.store.db.exec('DROP TRIGGER reject_replay_publication');
- f.certify();f.reopen();assert.deepEqual(f.read({limit:100}).messages,expected);
+ f.certify();
+ assert.equal(f.certificate().applied_seq,f.store.headSequence('commons'));
+ assert.equal(f.certificate().parity_at_seq,f.store.headSequence('commons'));
+ assert.deepEqual(f.store.db.prepare("SELECT * FROM messages WHERE room_id='commons' ORDER BY message_id").all(),rows);
+ f.store.db.exec('DROP TRIGGER reject_replay_rewrite');
+ f.reopen();assert.deepEqual(f.read({limit:100}).messages,expected);
 });
 
 

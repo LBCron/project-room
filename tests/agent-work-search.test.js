@@ -77,8 +77,12 @@ test('private definition redaction does not disable unrelated work discovery', a
   assert.equal(withheld.work.length, 1, 'authorized metadata is not silently dropped');
   assert.equal(withheld.work[0].title, null, 'withheld definition is not presented as an empty title');
   assert.deepEqual(withheld.work[0].nextRead, { tool: 'room_read_work', arguments: { workItemId: 'private-brief' } });
-  assert.equal((await f.client('observer').orient()).work.find(item => item.id === 'private-brief').title, null);
-  for (const value of [found, withheld]) for (const sentinel of ['PRIVATE-TITLE-SENTINEL', 'PRIVATE-DONE-SENTINEL', 'PRIVATE-BODY-SENTINEL']) {
+  const orientation = await f.client('observer').orient();
+  assert.equal(orientation.work.find(item => item.id === 'private-brief').title, null);
+  for (const hiddenQuery of ['PRIVATE-TITLE-SENTINEL', 'PRIVATE-DONE-SENTINEL']) {
+    assert.deepEqual((await f.client('observer').orient({ query: hiddenQuery })).work, []);
+  }
+  for (const value of [found, withheld, orientation]) for (const sentinel of ['PRIVATE-TITLE-SENTINEL', 'PRIVATE-DONE-SENTINEL', 'PRIVATE-BODY-SENTINEL']) {
     assert.equal(JSON.stringify(value).includes(sentinel), false);
   }
   for (const actor of ['producer']) {

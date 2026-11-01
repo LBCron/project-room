@@ -172,3 +172,40 @@ test('the original 64-event boundary can atomically adopt every justified missin
   assert.equal(plan.rooms[0].events,64);assert.equal(plan.messageProofsToAdopt,rows.length);assert.equal(execute(f,plan).messageProofsAdopted,rows.length);
   assert.equal(f.s.db.prepare('SELECT * FROM messages WHERE room_id=?').all(roomId).every(messageProofMatches),true);
 });
+
+function structuredFixture(t) {
+  const events=historicalSequence();events.at(-1).data.actions=[{claimId:'task',label:'Action'}];
+  events.push(event({id:'synthetic-edit',idempotencyKey:'synthetic-edit-key',roomId,actorId:'owner',at:'2026-09-01T00:02:00.000Z',type:'message.edited',data:{messageId:'message',expectedMessageRevision:0,body:'Edited synthetic message'}}));
+  return fixture(t,{events});
+}
+for(const field of ['record_json','reducer_extras_json'])for(const nested of [false,true])for(const escaped of [false,true])
+  test(`opt-in refuses shadowed JSON keys ${field} nested=${nested} escaped=${escaped}`,t=>{
+    const f=structuredFixture(t),row=f.s.db.prepare(`SELECT ${field} AS json FROM messages`).get(),value=JSON.parse(row.json);
+    const key=nested?(field==='record_json'?'label':'body'):(field==='record_json'?'body':'editHistory');
+    const encoded=escaped?'\\u'+key.charCodeAt(0).toString(16).padStart(4,'0')+key.slice(1):key;
+    const shadow='"'+encoded+'":'+(key==='editHistory'?'[]':'"untrusted shadow"')+',';
+    let wire;
+    if(nested){const target=field==='record_json'?value.actions[0]:value.editHistory[0];const original=JSON.stringify(target);wire=row.json.replace(original,'{'+shadow+original.slice(1));}
+    else wire='{'+shadow+row.json.slice(1);
+    assert.deepEqual(JSON.parse(wire),value,'the old JSON.parse comparison loses the shadowed field');
+    f.s.db.prepare(`UPDATE messages SET ${field}=?`).run(wire);const before=snapshot(f.s);
+    assert.throws(()=>repairLegacyMessages(f.s,f.request),error=>error.code==='repair_not_exact_legacy'&&error.status===409);
+    assert.deepEqual(snapshot(f.s),before);
+  });
+for(const field of ['record_json','reducer_extras_json'])test(`opt-in preserves normal arrays and ordered whitespace JSON ${field}`,t=>{
+  const f=structuredFixture(t),row=f.s.db.prepare(`SELECT ${field} AS json FROM messages`).get(),value=JSON.parse(row.json);
+  const reorder=v=>Array.isArray(v)?v.map(reorder):v&&typeof v==='object'?Object.fromEntries(Object.entries(v).reverse().map(([key,x])=>[key,reorder(x)])):v;
+  const wire=JSON.stringify(reorder(value),null,2);f.s.db.prepare(`UPDATE messages SET ${field}=?`).run(wire);
+  const plan=repairLegacyMessages(f.s,f.request);execute(f,plan);assert.equal(f.s.db.prepare(`SELECT ${field} AS json FROM messages`).get().json,wire);
+});
+for(const wire of ["{'body':'JSON5'}",'{"body":}'])test(`opt-in rejects nonordinary JSON before duplicate traversal ${wire.length}`,t=>{
+  const f=structuredFixture(t),db=f.s.db;db.prepare('UPDATE messages SET record_json=?').run(wire);const before=snapshot(f.s),prepare=db.prepare.bind(db);let traversals=0;
+  db.prepare=sql=>{if(sql.includes('json_tree'))traversals++;return prepare(sql);};
+  assert.throws(()=>repairLegacyMessages(f.s,f.request),error=>error.code==='repair_not_exact_legacy'&&error.status===409);assert.equal(traversals,0);db.prepare=prepare;assert.deepEqual(snapshot(f.s),before);
+});
+test('opt-in duplicate traversal storage fault remains typed and exact retry succeeds once',t=>{
+  const f=structuredFixture(t),plan=repairLegacyMessages(f.s,f.request),db=f.s.db,before=snapshot(f.s),prepare=db.prepare.bind(db),fault=Object.assign(new Error('synthetic duplicate read I/O'),{code:'EIO'});
+  db.prepare=sql=>{const statement=prepare(sql);if(sql.includes('json_tree'))statement.get=()=>{throw fault;};return statement;};
+  assert.throws(()=>execute(f,plan),error=>error.status===503&&error.code==='storage_unavailable'&&error.cause===fault);
+  db.prepare=prepare;assert.deepEqual(snapshot(f.s),before);const completed=execute(f,plan);assert.equal(completed.messageProofsAdopted,1);assert.deepEqual(execute(f,plan),{...completed,duplicate:true});
+});

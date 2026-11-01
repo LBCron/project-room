@@ -24,7 +24,7 @@
 // The token (GITHUB_TOKEN or GH_TOKEN) is never logged or stored. Public
 // repositories still answer when it is absent.
 import { emitWorkClaimEvent, enqueueClaimWake, wakeNamedReviewers } from "./work-claim-events.mjs";
-import { ACTIVE_CLAIM_STATES, STALE_SWEEP_BATCH, STALE_UNCLAIMED_DAYS, closeStaleUnclaimed, closeWhenLive, notePullMerged, recordCi, releaseExpired } from "./work-claims.mjs";
+import { ACTIVE_CLAIM_STATES, STALE_SWEEP_BATCH, STALE_UNCLAIMED_DAYS, ClaimError, closeStaleUnclaimed, closeWhenLive, notePullMerged, recordCi, releaseExpired } from "./work-claims.mjs";
 import { SOURCE_REVISION } from "./version.mjs";
 import {
   PULL_CANDIDATE_CAP, PULL_MISSING_BACKOFF_MS, holdForRateLimit, nextPullBackoff,
@@ -1397,14 +1397,15 @@ export async function applyPullRequestWebhook(store, payload, { nowMs = Date.now
         const item = store.workClaims.get(roomId, claimId);
         if (!item) continue;
         if (!pullLinks(item).some(pull => pull.url === decision.url && !pull.outcome)) continue;
-        // #3464: same per-item isolation as the poll path — one invalid
-        // linked row must not fail settlement for the rest of the room.
+        // Isolate each item before its known validation refusal can be skipped.
+        // Storage and unexpected faults must abort the surrounding room write.
         let settled = false;
         try {
-          settled = commitPullRequestLookup(store, store.workClaims, roomId, item, {
+          settled = store.transaction(() => commitPullRequestLookup(store, store.workClaims, roomId, item, {
             claimId: item.id, url: decision.url, kind: decision.outcome
-          }, nowMs);
+          }, nowMs), { isolated: true });
         } catch (error) {
+          if (!(error instanceof ClaimError) || error.code !== "invalid_claim_input") throw error;
           noteSkippedInvalidClaim(null, roomId, item.id, error);
         }
         if (settled) applied.push({ roomId, claimId: item.id, outcome: decision.outcome });

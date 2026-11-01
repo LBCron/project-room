@@ -1,3 +1,4 @@
+import {validateRecoveryHistoryEntry} from './recovery-history-entry.mjs';
 import {initialRecoveryEngine,validateRecoveryEngine,advanceRecoveryEngine} from './recovery-engine-continuation.mjs';
 // First independent audit phase: shared current-record checks plus complete
 // proof/payload membership. The remaining full audit is still REQUIRED.
@@ -13,11 +14,11 @@ import {EVENT_TYPES,memberHistoryVisibility} from '../src/events.js';
 import {validId} from '../src/events.js';
 import {isCurrentRoom,withCurrentAuditUnits,currentAuditMessageRoot} from './current-room-repository.mjs';
 import {withRestoreAuditRows,RESTORE_AUDIT_VERSION,RESTORE_AUDIT_UNIT_BYTES} from './restore-admission.mjs';
-export const initialRecoveryCensus=()=>({version:RESTORE_AUDIT_VERSION,engine:null,stage:'rooms',roomAfter:'',roomId:null,domainAfter:'',keyAfter:'',proofs:0,records:0,actualRecords:0,workAfter:'',workCount:0,workReferenceRecords:0,workSummaryRecords:0,workCapacityRecords:0,workPrivacyRecords:0,workRequestRecords:0,requestAfter:'',requestLinks:0,privacyAfter:'',privacyWork:null,privacyLinkAfter:'',privacyValue:null,privacyEntries:0,privacyLinks:0,messageAfterSeq:0,messageAfterId:'',messageCount:0,retainedMessages:0,witnessRecords:0,archiveRecords:0,participantRecords:0,expectedParticipants:0,memberRecords:0,requestRecords:0,archiveAfter:'',archiveSlots:0,historySequence:0,historyAfter:'',historyMember:null,historyJoinSequence:0,historyJoinAt:'',historyJoinFound:false,historyPart:0,historyExcluded:0,historyFloorRecords:0,historyExclusionRecords:0,expectedFloors:0,expectedExclusions:0,rooms:0,legacyRooms:0,units:0,bytes:0});
+export const initialRecoveryCensus=()=>({version:RESTORE_AUDIT_VERSION,engine:null,stage:'rooms',roomAfter:'',roomId:null,domainAfter:'',keyAfter:'',proofs:0,records:0,actualRecords:0,workAfter:'',workCount:0,workReferenceRecords:0,workSummaryRecords:0,workCapacityRecords:0,workPrivacyRecords:0,workRequestRecords:0,requestAfter:'',requestLinks:0,privacyAfter:'',privacyWork:null,privacyLinkAfter:'',privacyValue:null,privacyEntries:0,privacyLinks:0,messageAfterSeq:0,messageAfterId:'',messageCount:0,retainedMessages:0,witnessRecords:0,archiveRecords:0,participantRecords:0,expectedParticipants:0,memberRecords:0,requestRecords:0,archiveAfter:'',archiveSlots:0,historySequence:0,strictEvents:0,historyAfter:'',historyMember:null,historyJoinSequence:0,historyJoinAt:'',historyJoinFound:false,historyPart:0,historyExcluded:0,historyFloorRecords:0,historyExclusionRecords:0,expectedFloors:0,expectedExclusions:0,rooms:0,legacyRooms:0,units:0,bytes:0});
 const fail=()=>{throw Error('Independent recovery census requires reconciliation');};
 export function validateRecoveryCensus(value){
  if(!value||Object.keys(value).sort().join(',')!==Object.keys(initialRecoveryCensus()).sort().join(',')||value.version!==RESTORE_AUDIT_VERSION||!['rooms','proofs','records','work','request_links','privacy','archive','messages','history_events','history_members','history_exclusions','engine','cleanup','full_audit_pending'].includes(value.stage)
-  ||!['proofs','records','actualRecords','rooms','legacyRooms','units','bytes','workCount','workReferenceRecords','workSummaryRecords','workCapacityRecords','workPrivacyRecords','workRequestRecords','requestLinks','privacyEntries','privacyLinks','messageAfterSeq','messageCount','retainedMessages','witnessRecords','archiveRecords','participantRecords','expectedParticipants','memberRecords','requestRecords','archiveSlots','historySequence','historyJoinSequence','historyPart','historyExcluded','historyFloorRecords','historyExclusionRecords','expectedFloors','expectedExclusions'].every(key=>Number.isSafeInteger(value[key])&&value[key]>=0)
+  ||!['proofs','records','actualRecords','rooms','legacyRooms','units','bytes','workCount','workReferenceRecords','workSummaryRecords','workCapacityRecords','workPrivacyRecords','workRequestRecords','requestLinks','privacyEntries','privacyLinks','messageAfterSeq','messageCount','retainedMessages','witnessRecords','archiveRecords','participantRecords','expectedParticipants','memberRecords','requestRecords','archiveSlots','historySequence','strictEvents','historyJoinSequence','historyPart','historyExcluded','historyFloorRecords','historyExclusionRecords','expectedFloors','expectedExclusions'].every(key=>Number.isSafeInteger(value[key])&&value[key]>=0)
   ||typeof value.roomAfter!=='string'||Buffer.byteLength(value.roomAfter)>128||value.roomId!==null&&(!validId(value.roomId))
   ||typeof value.workAfter!=='string'||Buffer.byteLength(value.workAfter)>200
   ||!['requestAfter','privacyAfter','privacyLinkAfter','messageAfterId','archiveAfter','historyAfter'].every(key=>typeof value[key]==='string'&&Buffer.byteLength(value[key])<=200)||value.privacyWork!==null&&(typeof value.privacyWork!=='string'||Buffer.byteLength(value.privacyWork)>200)
@@ -33,7 +34,7 @@ function recordInputBytes(db,roomId,domain,key){
   FROM current_room_record_proofs p LEFT JOIN current_room_records r ON r.room_id=p.room_id AND r.domain=p.domain AND r.record_key=p.record_key WHERE p.room_id=? AND p.domain=? AND p.record_key=?`).get(roomId,domain,key);
  const bytes=(row?.payload_bytes??0)+(row?.receipt_bytes??0)+1024;if(!Number.isSafeInteger(bytes)||bytes<0)fail();return bytes;
 }
-export function advanceRecoveryCensus(store,restoreId,previous){
+export function advanceRecoveryCensus(store,restoreId,previous,sourceSeal){
  validateRecoveryCensus(previous);const p={...previous},db=store.db;let units=0,bytes=0;
  return withRestoreAuditRows(db,restoreId,scratch=>{
   if(p.stage==='cleanup'){
@@ -56,11 +57,14 @@ export function advanceRecoveryCensus(store,restoreId,previous){
     while(units<128){
      if(p.stage==='history_events'){
       if(scratch.remaining<2)return false;
-      const scalar=db.prepare("SELECT rowid,sequence,length(CAST(json_extract(body,'$.at') AS BLOB)) at_bytes,length(CAST(json_extract(body,'$.id') AS BLOB)) id_bytes,length(CAST(json_extract(body,'$.data.messageId') AS BLOB)) message_bytes,length(CAST(json_extract(body,'$.data.memberId') AS BLOB)) member_bytes,length(CAST(json_extract(body,'$.type') AS BLOB)) type_bytes FROM events WHERE room_id=? AND sequence>? ORDER BY sequence LIMIT 1").get(p.roomId,p.historySequence);
-      if(!scalar){p.stage='history_members';return false;}
-      if(!Number.isSafeInteger(scalar.sequence)||scalar.sequence<1||scalar.id_bytes>200||scalar.message_bytes>200||scalar.member_bytes>200||scalar.type_bytes>100)fail();
-      let estimate=Object.entries(scalar).filter(([key])=>key.endsWith('_bytes')).reduce((sum,[,value])=>sum+(value??0),0)+4096;if(units&&bytes+estimate>4*1024*1024)return false;
-      const row=db.prepare("SELECT sequence,json_extract(body,'$.at') at,json_extract(body,'$.type') type,json_extract(body,'$.data.memberId') member_id,CASE WHEN json_extract(body,'$.data.active') IN (0,1) THEN json_extract(body,'$.data.active') ELSE NULL END active,json_extract(body,'$.id') id,json_extract(body,'$.data.messageId') messageId FROM events WHERE rowid=?").get(scalar.rowid);
+      const sourceEvents=sourceSeal?.tables?.find(entry=>entry.name==='events');
+      if(!Number.isSafeInteger(sourceEvents?.maxRowBytes)||sourceEvents.maxRowBytes<0)fail();
+      const scalar=db.prepare('SELECT rowid,sequence,length(CAST(body AS BLOB)) body_bytes,length(CAST(id AS BLOB)) id_bytes FROM events WHERE room_id=?'+(p.historySequence?' AND sequence>?':'')+' ORDER BY sequence LIMIT 1').get(...(p.historySequence?[p.roomId,p.historySequence]:[p.roomId]));
+      if(!scalar){if(p.historySequence!==reader.head.sequence)fail();p.stage='history_members';return false;}
+      if(!Number.isSafeInteger(scalar.body_bytes)||scalar.body_bytes<1||scalar.body_bytes>sourceEvents.maxRowBytes||scalar.id_bytes<1||scalar.id_bytes>200)fail();
+      let estimate=scalar.body_bytes+scalar.id_bytes+4096;if(units&&bytes+estimate>4*1024*1024)return false;
+      const entry=db.prepare('SELECT sequence,id,body FROM events WHERE rowid=?').get(scalar.rowid),incoming=validateRecoveryHistoryEntry(entry,p.historySequence+1,p.roomId);
+      const row={sequence:entry.sequence,at:incoming.at,type:incoming.type,member_id:incoming.data.memberId,active:incoming.data.active,id:incoming.id,messageId:incoming.data.messageId};
       if([EVENT_TYPES.MEMBER_ADDED,EVENT_TYPES.MEMBER_JOINED_VIA_INVITATION,EVENT_TYPES.MEMBER_ACCESS_CHANGED].includes(row.type)&&typeof row.member_id==='string'){
        estimate+=recordInputBytes(db,p.roomId,'members',row.member_id)+recordInputBytes(db,p.roomId,'metadata','room');if(units&&bytes+estimate>4*1024*1024)return false;
        const member=reader.record('members',row.member_id),room=reader.record('metadata','room');
@@ -68,8 +72,8 @@ export function advanceRecoveryCensus(store,restoreId,previous){
         const previous=scratch.get('history',p.roomId,'activation',row.member_id)??{active:false,row:null},entry={sequence:row.sequence,at:row.at,type:row.type,active:row.active};scratch.set('history',p.roomId,'activation',row.member_id,advanceHistoryActivation(previous,entry));
        }
       }
-      if(typeof row.at==='string')scratch.put('history',p.roomId,'eventAt',row.at,{id:row.id,messageId:row.messageId},row.sequence);
-      p.historySequence=row.sequence;p.units++;p.bytes+=estimate;units++;bytes+=estimate;continue;
+      if(typeof row.at==='string')scratch.put('history',p.roomId,'eventAt',row.at,true,row.sequence);
+      p.historySequence=row.sequence;p.strictEvents++;p.units++;p.bytes+=estimate;units++;bytes+=estimate;continue;
      }
      if(p.stage==='history_members'){
       if(scratch.remaining<1)return false;
@@ -90,7 +94,11 @@ export function advanceRecoveryCensus(store,restoreId,previous){
        const expected={sequence:p.historyJoinSequence,at:p.historyJoinAt,sameInstantCount:p.historyExcluded};if(!isDeepStrictEqual(reader.record('historyFloors',p.historyMember),expected))fail();scratch.put('history',p.roomId,'expectedFloor',p.historyMember,expected);p.expectedFloors++;p.historyAfter=p.historyMember;p.historyMember=null;p.stage='history_members';p.units++;p.bytes+=estimate;units++;bytes+=estimate;continue;
       }
       if(scalar.bytes!==scalar.payload_bytes||scalar.bytes<1||scalar.bytes>RESTORE_AUDIT_UNIT_BYTES)fail();let estimate=scalar.bytes+4096;if(units&&bytes+estimate>4*1024*1024)return false;
-      const entry=scratch.get('history',p.roomId,'eventAt',p.historyJoinAt,scalar.part),ids=historyExclusionIds(entry);for(const id of ids)estimate+=recordInputBytes(db,p.roomId,'historyExclusions',p.historyMember+'\0'+id);if(units&&bytes+estimate>4*1024*1024)return false;
+      if(scratch.get('history',p.roomId,'eventAt',p.historyJoinAt,scalar.part)!==true)fail();
+      const sizes=db.prepare("SELECT CASE WHEN typeof(json_extract(body,'$.id'))='text' THEN length(CAST(json_extract(body,'$.id') AS BLOB)) ELSE 0 END id_bytes,CASE WHEN typeof(json_extract(body,'$.data.messageId'))='text' THEN length(CAST(json_extract(body,'$.data.messageId') AS BLOB)) ELSE 0 END message_bytes FROM events WHERE room_id=? AND sequence=?").get(p.roomId,scalar.part);
+      if(!sizes||sizes.id_bytes>200||sizes.message_bytes>200)fail();estimate+=sizes.id_bytes+sizes.message_bytes+Buffer.byteLength(p.historyJoinAt);if(units&&bytes+estimate>4*1024*1024)return false;
+      const entry=db.prepare("SELECT json_extract(body,'$.at') at,json_extract(body,'$.id') id,json_extract(body,'$.data.messageId') messageId FROM events WHERE room_id=? AND sequence=?").get(p.roomId,scalar.part);if(entry?.at!==p.historyJoinAt)fail();
+      const ids=historyExclusionIds(entry);for(const id of ids)estimate+=recordInputBytes(db,p.roomId,'historyExclusions',p.historyMember+'\0'+id);if(units&&bytes+estimate>4*1024*1024)return false;
       for(const id of ids){const key=p.historyMember+'\0'+id;if(reader.record('historyExclusions',key)!==true)fail();if(scratch.ensure('history',p.roomId,'expectedExclusion',key,true)){p.historyExcluded++;p.expectedExclusions++;}}
       p.historyPart=scalar.part;p.units++;p.bytes+=estimate;units++;bytes+=estimate;continue;
      }

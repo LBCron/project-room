@@ -1,7 +1,8 @@
+import {validateRecoveryHistoryEntry} from './recovery-history-entry.mjs';
 import { isCurrentRoom, readCurrentRoomForAudit, verifyCurrentRoomSchema } from './current-room-repository.mjs';
 // Read-only offline audit. It neither repairs data nor proves post-capture authority.
 import { createHash } from "node:crypto";
-import { EVENT_TYPES, RETIRED_REPLAY_EVENT_TYPES, validId } from "../src/events.js";
+import { validId } from "../src/events.js";
 import { auditReplayCutoverRecovery } from "./replay-cutover.mjs";
 import { terminalWork } from "../src/workflow.js";
 import { applicationTables, lazyAdditiveTables, STORE_SCHEMA_VERSION } from "./writer-fence.mjs";
@@ -169,13 +170,7 @@ export function auditRecovery(store) {
       requireState(integer(row.sequence) && row.sequence >= 0);
       const history = store.db.prepare("SELECT sequence,id,body FROM events WHERE room_id=? ORDER BY sequence").all(row.id);
       requireState(history.length === row.sequence);
-      history.forEach((entry, index) => {
-        const event = JSON.parse(entry.body);
-        requireState(entry.sequence === index + 1 && event.id === entry.id && event.roomId === row.id);
-        requireState([event.id, event.idempotencyKey, event.actorId, event.roomId].every(validId)
-          && (Object.values(EVENT_TYPES).includes(event.type) || Object.values(RETIRED_REPLAY_EVENT_TYPES).includes(event.type)) && typeof event.at === "string" && Number.isFinite(Date.parse(event.at))
-          && event.data && typeof event.data === "object" && !Array.isArray(event.data));
-      });
+      history.forEach((entry,index)=>validateRecoveryHistoryEntry(entry,index+1,row.id));
       auditTextResults(store.db, actual.state, history);
       auditCharters(actual.state, history, checkpoint);
       auditReplyRequests(actual.state, history, checkpoint, archivedMessageIds(store.db, row.id,current?(actual.state.messagesArchive??null):undefined));

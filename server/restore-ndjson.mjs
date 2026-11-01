@@ -233,7 +233,7 @@ export function continueRestoreCoverage(store,input){
   if(state.state!=='pending'||state.restore_id!==input.restoreId||state.seal?.id!==input.sourceSeal||state.revision!==input.expectedRevision)throw Error('Restore continuation is stale or source differs');
   validateCoverageState(db,state);
   if(state.phase==='audit_pending'&&state.progress.audit.stage!=='full_audit_pending'){
-   const progress={...state.progress,audit:advanceRecoveryCensus(store,state.restore_id,state.progress.audit)},next={...state,progress,revision:state.revision+1},result=coverageResponse(next);
+   const progress={...state.progress,audit:advanceRecoveryCensus(store,state.restore_id,state.progress.audit,state.seal)},next={...state,progress,revision:state.revision+1},result=coverageResponse(next);
    checkpointRestore(db,{restoreId:input.restoreId,expectedRevision:input.expectedRevision,phase:'audit_pending',seal:state.seal,progress,latest:{...input,result}});invalidateCurrentRoomSchema(db);return result;
   }
   if(state.phase==='audit_pending'){

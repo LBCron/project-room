@@ -1,0 +1,19 @@
+{
+  "version": 1,
+  "type": "human_owned_room_setup",
+  "source": "dcec4be404d0138f2a8eac9bb9610bbfc899bfb9",
+  "exampleOnly": true,
+  "requestId": "synthetic-owned-create-1101",
+  "origin": "https://room.example",
+  "resource": "https://room.example/mcp",
+  "ownership": "human_account",
+  "requested": { "roomId": "recoverable-target", "title": "Synthetic recoverable room", "purpose": "Human owns durable work; preferred agent participates", "kind": "personal", "access": "collaborate" },
+  "sourcePrincipal": { "principalType": "account-agent", "roomId": "commons", "memberId": "preferred-agent", "identityId": "fixture-derived-not-a-provider-label" },
+  "status": "holder_proof_required",
+  "approvalUrl": null,
+  "blockedBy": "Existing native room-bound bearer cannot create an account-owned room or mint the existing target-bound identity-holder proof.",
+  "next": "Reuse a suitable existing human-owned room, or obtain explicit account creation consent and the existing holder proof. Native-only request-bound enrollment consent requires a reviewed new authority contract.",
+  "permissionsChanged": false,
+  "roomCreated": false,
+  "outsideAgentStarted": false
+}

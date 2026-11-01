@@ -1,0 +1,34 @@
+{
+  "source": "dcec4be404d0138f2a8eac9bb9610bbfc899bfb9",
+  "runtimeChanged": false,
+  "liveChanged": false,
+  "schemaChanged": false,
+  "sourceTree": "/Users/johnpotter/src/pr-human-recoverable-create-contract-1101",
+  "positiveSubcontrols": 6,
+  "intentionalMvpGuardFailures": 1,
+  "nodeCounts": {
+    "tests": 8,
+    "pass": 6,
+    "fail": 2,
+    "explanation": "one intentional guard plus its containing parent"
+  },
+  "qualification": "local synthetic HTTP, actual account OAuth PKCE and existing Room API; not real host/provider",
+  "files": [
+    {
+      "path": "CONTRACT.txt",
+      "sha256": "b94b412f5ca8300f600d72c08bf7f4133bce600543ba86e9b32b60a8fb4b4498"
+    },
+    {
+      "path": "handoff.json",
+      "sha256": "ae591fc26bfa1adcf4c72374ab2778fe0dafacedebd6f552ceadc7d167b39ddb"
+    },
+    {
+      "path": "qualification-red.log",
+      "sha256": "bb7bc0dfa61335aa87f38ed42ca1c49b2893f14c757caec43bbd41dd56ff666d"
+    }
+  ],
+  "test": {
+    "path": "tests/human-recoverable-create-contract.test.mjs",
+    "sha256": "07a4c52fc59b0997a667eb17a658079e00c3df76b20f3a3bc5e96d900ff9ca50"
+  }
+}

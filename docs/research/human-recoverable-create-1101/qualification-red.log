@@ -1,0 +1,49 @@
+{"event":"room.cold_start","clockSemantics":"runtime-dependent","durationMs":37,"integrity":"eager","phases":{"schema":{"ms":10,"rowsRead":0},"plugin":{"ms":17,"rowsRead":0},"fence":{"ms":6,"rowsRead":0},"verifies":{"ms":2,"rowsRead":0},"checksum":{"ms":0,"rowsRead":0}},"cpuMs":38,"heapBytes":40261752,"rooms":0,"sequences":0,"projectionBytes":0,"events":0}
+{"event":"room.store_initialized","initializationMs":37,"legacyColdStartMs":37,"clockSemantics":"runtime-dependent","cpuMeasured":false}
+[boot-config] ERROR: the agent card is UNSIGNED and no explicit opt-in was recorded at build time — members fetching /.well-known/agent-card.json will see an unsigned card (marked signed:false). To fix: set ROOM_AGENT_CARD_SIGNING_KEY and re-run scripts/sign-agent-card.mjs, or pass --allow-unsigned explicitly to record the choice.
+ROOM_SECURITY_CONTACT is unset; /.well-known/security.txt returns 404
+No magic-link mailer is configured: email-verification gates are relaxed (agent-invite escape hatch); /api/health reports emailVerification: relaxed-no-mailer
+▶ human-recoverable create contract: existing native principal cannot create a human-owned room
+  ✔ all six supported scopes retain current room-scoped identity and do not advertise room_create (5.349334ms)
+  ✔ native MCP bearer cannot impersonate an account browser session at existing room lifecycle REST (1.333083ms)
+  ✔ existing authenticated human lifecycle creates and exactly retries one human-owned room, without enrolling the agent (3.224625ms)
+  ✔ source-room native grant cannot cross to new target and cannot mint the existing identity-holder proof (1.66775ms)
+room diagnostic op_cZbPLSvz 422 identity_link_proof_required input /api/rooms/:roomId/agent-connections
+  ✔ human session plus explicit existing holder proof can enroll same identity and native new-room consent works (9.258875ms)
+  ✔ explicit sovereign identity-owned creation still works and does not convert the human-owned room (3.093584ms)
+  ✖ RED MVP contract: an explicitly account-authenticated preferred-agent create must reach a human-owned participating room through supported native flow (0.333ms)
+✖ human-recoverable create contract: existing native principal cannot create a human-owned room (98.576542ms)
+ℹ {"source":"dcec4be404d0138f2a8eac9bb9610bbfc899bfb9","scope":"synthetic local Room HTTP; no real preferred host/provider","nativeCreateListed":false,"nativeCreate":{"jsonrpc":"2.0","id":"test","error":{"code":-32602,"message":"invalid_arguments","data":{"tool":"room_create","missing":[],"unexpected":[],"invalid":{},"reason":"invalid_arguments","hint":"This action is outside the connected agent grant","next":[{"command":"tools/list"}],"status":"action_required","operationId":"op_lsfNojZ5","category":"input"}}},"accountRestNativeStatus":401,"humanCreate":{"ownerKind":"human","accountPreserved":true,"exactRetry":true,"agentAutomaticallyEnrolled":false},"crossRoom":{"jsonrpc":"2.0","id":"test","error":{"code":-32602,"message":"invalid_arguments","data":{"tool":"room_check_access","missing":[],"unexpected":[],"invalid":{},"reason":"invalid_arguments","hint":"This connection is limited to its approved room","next":[{"command":"tools/list"}],"status":"action_required","operationId":"op_bP88xU1W","category":"input"}}},"nativeLinkCodeStatus":401,"existingHolderProofControl":{"identities":1,"newRoomOwner":"human","newNativeGrantSelected":true,"oldGrantRoomUnchanged":true},"sovereignPreserved":true}
+ℹ tests 8
+ℹ suites 0
+ℹ pass 6
+ℹ fail 2
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 256.156625
+
+✖ failing tests:
+
+test at tests/human-recoverable-create-contract.test.mjs:113:10
+✖ RED MVP contract: an explicitly account-authenticated preferred-agent create must reach a human-owned participating room through supported native flow (0.333ms)
+  AssertionError [ERR_ASSERTION]: Current native room_create is denied even with every supported scope; browser lifecycle creates only the human, and requires a separate holder proof plus new target consent to enroll the existing agent. Do not bypass these boundaries implicitly.
+  
+  true !== false
+  
+      at TestContext.<anonymous> (file:///Users/johnpotter/src/pr-human-recoverable-create-contract-1101/tests/human-recoverable-create-contract.test.mjs:114:10)
+      at Test.runInAsyncScope (node:async_hooks:227:14)
+      at Test.run (node:internal/test_runner/test:1402:25)
+      at Test.start (node:internal/test_runner/test:1262:17)
+      at TestContext.test (node:internal/test_runner/test:400:20)
+      at TestContext.<anonymous> (file:///Users/johnpotter/src/pr-human-recoverable-create-contract-1101/tests/human-recoverable-create-contract.test.mjs:113:10)
+      at process.processTicksAndRejections (node:internal/process/task_queues:104:5)
+      at async Test.run (node:internal/test_runner/test:1409:7)
+      at async startSubtestAfterBootstrap (node:internal/test_runner/harness:387:3) {
+    generatedMessage: false,
+    code: 'ERR_ASSERTION',
+    actual: true,
+    expected: false,
+    operator: 'strictEqual',
+    diff: 'simple'
+  }

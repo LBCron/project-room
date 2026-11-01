@@ -199,7 +199,19 @@ export function buildOrient(store, roomSlug, viewerId, options = {}) {
   // (agent viewers), and the next-actions snapshot (token callers) —
   // shares this per-request memo; a caller composing several reads in one
   // request (activation pack, context) passes its own memo in.
-  const boardList = options.boardList ?? memoizeBoardList(store);
+  const sharedBoardList = options.boardList ?? memoizeBoardList(store);
+  // Board rows carry their own title, so the private-definition boundary
+  // applied to state.workItems above must also cover every board consumer
+  // (availableClaims, claims, next actions, fleet badge).
+  const withheldIds = new Set(Object.keys(state.workItems ?? {})
+    .filter(id => state.workItems[id] !== rawState.workItems?.[id]));
+  const boardList = withheldIds.size === 0 ? sharedBoardList : slug => {
+    const rows = sharedBoardList(slug);
+    if (slug !== roomSlug || !Array.isArray(rows)) return rows;
+    return rows.map(row => (row && withheldIds.has(row.id)
+      ? { ...row, title: null, ...(row.definitionOfDone !== undefined ? { definitionOfDone: null } : {}) }
+      : row));
+  };
   // Internal version checks need only the structural fields. Defer transient
   // attention, fleet and action reads until a full response is actually sent.
   const structuralOnly = options.structuralOnly === true;

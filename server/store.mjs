@@ -1,4 +1,4 @@
-import { configureWriteIntegrity, beginWriteProofFrame, endWriteProofFrame, publishProjectionWrites, projectionDigest, projectionContentHash, servingContentProof, servingProofDrift, assertProjectionWrite, assertMessageWrite, recordMessageWrite, withVerifiedRoomReconstruction } from './write-integrity.mjs';
+import { bootstrapLegacyWriteProofs, configureWriteIntegrity, beginWriteProofFrame, endWriteProofFrame, publishProjectionWrites, projectionDigest, projectionContentHash, servingContentProof, servingProofDrift, assertProjectionWrite, assertMessageWrite, recordMessageWrite, withVerifiedRoomReconstruction } from './write-integrity.mjs';
 const OPERATOR_QA_ARCHIVE = Symbol("operator QA room archive");
 import { authenticateMcpOAuthRequest } from './mcp-oauth.mjs';
 import { assertListenerFence } from "./listener-fence.mjs";
@@ -1739,21 +1739,7 @@ this.slaBreachAlerts = new SlaBreachAlertJournal(this); // Task 26: durable in-a
     // historical content baseline: projection_hash deliberately stays NULL.
     // Existing strong baselines must still match; current-schema missing
     // proofs never enter this one-time format transition.
-    if (version < 44) {
-      const insert = this.db.prepare(`INSERT OR IGNORE INTO integrity_room_state(room_id,sequence,projection_bytes)
-        VALUES(?,?,?)`);
-      const update = this.db.prepare('UPDATE integrity_room_state SET metadata_hash=? WHERE room_id=? AND metadata_hash IS NULL');
-      for (const row of this.db.prepare('SELECT id,sequence,projection,LENGTH(projection) AS bytes FROM rooms').iterate()) {
-        const proof = this.db.prepare('SELECT sequence,projection_hash,metadata_hash FROM integrity_room_state WHERE room_id=?').get(row.id);
-        if (proof?.metadata_hash) continue;
-        if (proof?.projection_hash && (proof.sequence !== row.sequence
-          || projectionContentHash(this.db,row.id,row.sequence,row.projection) !== proof.projection_hash)) {
-          throw Error('projection_corrupt: legacy content does not match its baseline');
-        }
-        insert.run(row.id,row.sequence,row.bytes);
-        update.run(projectionDigest(row.projection),row.id);
-      }
-    }
+    if (version < 44) bootstrapLegacyWriteProofs(this.db);
     if (!deferIntegrity) this.repairProjectionProvenance({ upgradeV1: version === 1 });
     if (version === 1 || version === 2) this.migrateIdentityV3(version);
     if (version === 1 || version === 2 || version === 3) this.migrateInvitationsV4();

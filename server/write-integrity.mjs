@@ -132,3 +132,28 @@ export function servingContentProof(db,roomId,sequence,projection) {
 export function servingProofDrift(db,roomId,projection) {
   return protocols.has(db) && scanServingContent(db,roomId,null,projection,{verify:true,hashContent:false}).drift;
 }
+
+// Call only for a genuine older schema, or an explicitly attested legacy
+// restore after its byte/count/FK checks. This establishes future protection,
+// never historical verification. The caller owns the write transaction.
+export function bootstrapLegacyWriteProofs(db) {
+  if (!db.isTransaction) throw Error('Legacy write proofs require their write transaction');
+  const insert = db.prepare(`INSERT OR IGNORE INTO integrity_room_state(room_id,sequence,projection_bytes) VALUES(?,?,?)`);
+  const update = db.prepare('UPDATE integrity_room_state SET metadata_hash=? WHERE room_id=? AND metadata_hash IS NULL');
+  let added = 0;
+  for (const row of db.prepare('SELECT id,sequence,projection,LENGTH(projection) AS bytes FROM rooms').iterate()) {
+    const proof = db.prepare('SELECT sequence,projection_hash,metadata_hash FROM integrity_room_state WHERE room_id=?').get(row.id);
+    if (proof?.projection_hash && (proof.sequence !== row.sequence
+      || projectionContentHash(db,row.id,row.sequence,row.projection) !== proof.projection_hash))
+      throw Error('projection_corrupt: legacy content does not match its baseline');
+    const hash = projectionDigest(row.projection);
+    if (proof?.metadata_hash) {
+      if (proof.metadata_hash !== hash) throw Error('projection_corrupt: stored metadata does not match its write proof');
+      continue;
+    }
+    insert.run(row.id,row.sequence,row.bytes);
+    update.run(hash,row.id);
+    added++;
+  }
+  return added;
+}

@@ -83,7 +83,7 @@ export function canonicalMessagePostContext(db, roomId, command, { actorId, huma
   const row = db.prepare("SELECT sequence,projection FROM rooms WHERE id=? AND json_type(projection,'$.messageAuthority') IS NOT NULL").get(roomId);
   if (!row) return null;
   const raw = JSON.parse(row.projection);
-  if (!hasMessageAuthority(raw) || raw.messagesArchive || raw.room?.archivedAt
+  if (!hasMessageAuthority(raw) || raw.messagesArchive || raw.room?.archivedAt || raw.room?.starterSeeded
     || raw.room?.publicPage?.enabled || raw.room?.publicReceipts?.enabled) return null;
   if (Object.hasOwn(raw, 'messages')) throw new Error('projection_corrupt: competing canonical message array');
   const work = Object.values(raw.workItems ?? {});

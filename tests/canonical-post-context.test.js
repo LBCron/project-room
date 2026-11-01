@@ -32,6 +32,8 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { readConversation } from '../server/conversation-sync.mjs';
 import { journalActivityFanoutFailure } from '../server/activity.mjs';
+import { runGuideStep } from '../server/room-guide.mjs';
+import { seedStarter } from '../server/starter-room.mjs';
 
 function canonicalFixture(t, retained) {
   const store = new RoomStore(':memory:');
@@ -249,6 +251,7 @@ test('metadata requiring unqualified side-effect context falls back without load
   const command = { type: 'message.posted', data: { messageId: 'new', body: 'Body' } };
   const original = store.db.prepare("SELECT projection FROM rooms WHERE id='commons'").get().projection;
   for (const change of [raw => { raw.messagesArchive = { throughSeq: 1, count: 1, retainedIds: [] }; },
+    raw => { raw.room.starterSeeded = { templateSlug: 'agent-pair' }; },
     raw => { raw.room.publicReceipts = { enabled: true }; }, raw => { raw.room.publicPage = { enabled: true }; },
     raw => { raw.workItems.w = { _workEntity: 1, id: 'w', revision: 0, digest: 'not-read' }; },
     raw => { raw.workItems.w = { id: 'w', status: 'suspended', suspended_by: 'round_limit' }; }]) {
@@ -283,4 +286,25 @@ test('legacy rooms are not converted and the context probe returns no inline pro
   assert.equal(Object.hasOwn(raw, 'messageAuthority'), false);
   assert.equal(Object.hasOwn(raw, 'messages'), true);
   assert.equal(store.db.prepare("SELECT sequence,projection FROM rooms WHERE id=? AND json_type(projection,'$.messageAuthority') IS NOT NULL").get('commons'), undefined);
+});
+
+test('inactive canonical Guide verifies skip metadata and active starter Guide keeps its full path', t => {
+  const { store, token } = canonicalFixture(t, 5);
+  const room = store.room;
+  store.room = () => { throw Error('inactive Guide must not hydrate'); };
+  try { assert.equal(runGuideStep(store, 'commons'), null); } finally { store.room = room; }
+  assert.throws(() => store.transaction(() => {
+    store.db.prepare("UPDATE rooms SET projection=json_set(projection,'$.room.starterSeeded',0) WHERE id='commons'").run();
+    runGuideStep(store, 'commons');
+  }), /projection_corrupt/);
+  seedStarter(store, 'commons', { intent: 'bug', ownerMemberId: 'owner' });
+  assert.equal(store.canonicalMessagePostContext('commons', {
+    type: 'message.posted', data: { messageId: 'starter-post', body: 'Body' }
+  }, 'owner'), null);
+  let fullReads = 0;
+  store.room = function(...args) { fullReads++; return room.apply(this, args); };
+  try { runGuideStep(store, 'commons'); } finally { store.room = room; }
+  assert.ok(fullReads > 0, 'active starter Guide must retain full context');
+  post(store, token, 'starter-post');
+  assert.doesNotThrow(() => auditRecovery(store));
 });

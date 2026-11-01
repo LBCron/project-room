@@ -14,6 +14,6 @@ test('Workers canonical post and inactive Guide avoid full-room hydration and su
   try {
     const response = await runtime.dispatchFetch('https://room.example.test/');
     assert.equal(response.status, 200, await response.clone().text());
-    assert.deepEqual(await response.json(), { wholeRoomReads: 0, count: 2, hasArray: false, bodies: ['Body first', 'Body second'] });
+    assert.deepEqual(await response.json(), { wholeRoomReads: 0, corruptSkipRefused: true, count: 2, hasArray: false, bodies: ['Body first', 'Body second'] });
   } finally { await runtime.dispose(); }
 });

@@ -2,6 +2,7 @@ import { HttpTestRoom } from './http-worker.test-fixture.mjs';
 import { RoomStore } from '../server/store.mjs';
 import { durableStorage } from './storage.mjs';
 import { initialRoom } from '../server/bootstrap.mjs';
+import { runGuideStep } from '../server/room-guide.mjs';
 
 export class CanonicalPostContextTestRoom extends HttpTestRoom {
   async fetch() {
@@ -22,8 +23,15 @@ export class CanonicalPostContextTestRoom extends HttpTestRoom {
     store.room = function(...args) { wholeRoomReads++; return room.apply(this, args); };
     try { post('second'); } finally { store.room = room; }
     const raw = JSON.parse(store.db.prepare("SELECT projection FROM rooms WHERE id='commons'").get().projection);
+    let corruptSkipRefused = false;
+    try {
+      store.transaction(() => {
+        store.db.prepare("UPDATE rooms SET projection=json_set(projection,'$.room.starterSeeded',0) WHERE id='commons'").run();
+        runGuideStep(store, 'commons');
+      });
+    } catch (error) { corruptSkipRefused = error.message.includes('projection_corrupt'); }
     const cold = new RoomStore(null, { database: store.db, storagePlatform: durableStorage });
-    return Response.json({ wholeRoomReads, count: raw.messageAuthority.count,
+    return Response.json({ wholeRoomReads, corruptSkipRefused, count: raw.messageAuthority.count,
       hasArray: Object.hasOwn(raw, 'messages'), bodies: cold.room('commons').state.messages.map(message => message.body) });
   }
 }

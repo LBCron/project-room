@@ -178,18 +178,58 @@ its final hash must equal the independent proof captured at H. Storage shape,
 archive controls and retained membership are inputs that must themselves be
 proved. Do not normalize unexplained shape differences to make the hash match.
 
-There is an important bootstrap gate here: scanning a mutable live projection
-by byte offset and restarting on each append is not a solution for a busy room.
-Likewise `INSERT SELECT projection`, a JS whole-string copy or a one-time
-`json_extract` of the giant blob is not a bounded immutable snapshot. Before
-runtime wiring, prove the exact serving-codec witness at H can be reconstructed
-from the sealed checkpoint/source and independently bound archive/storage
-controls. If it cannot, the production slice must include the necessary
-prospective immutable projection-page writer cutover; it must not silently
-fall back to copying or repeatedly parsing the live blob. This is a release
-acceptance gate, not deferred optimization debt or a claim solved by the edit
-prototype. In particular the current source does not yet expose independent
-per-leaf membership proofs for a legacy arbitrary metadata blob.
+The bootstrap gate now has a measured explicit operator exception. In one
+writer transaction at H, first admit the existing projection using
+`octet_length(TEXT)` (no whole-value CAST), exact integer/head and bounded proof
+controls, then preserve the existing independent metadata/content proof and
+head event ID and SQL-copy the admitted projection once into a fixed witness
+value. Copying bytes does not certify them: incremental hashing must equal the
+preserved old proof before any candidate can qualify. No new hash of the
+current source is accepted as first-trust authority. Later witness reads use
+only the immutable captured value, never offsets into a growing live blob.
+
+This is an explicitly admitted bootstrap exception to the engineering 256 KiB
+transfer/output step target, not a quota increase or a generally permitted
+whole-string JS parse. The qualification ceiling is 8 MiB; a production
+operator default of 4 MiB leaves existing projection growth headroom, with
+any higher request explicit and still below the measured runtime value/row
+limit. At 8 MiB ordinary later append already refuses the existing projection
+limit. Therefore capture eligibility never promises later live writes will
+fit. Actual row overhead and the runtime value limit must also be admitted.
+
+The current experiment transfers 16 KiB chunks. SQLite may read/materialize
+the fixed captured value to evaluate `substr`; a bounded output does not prove
+16 KiB of native SQL work. Resource qualification includes this cost. The
+latest 8 MiB run observed a 781 ms maximum slice wall time and approximately
+2.25 process CPU seconds over 513 separate read requests; it establishes no
+strict per-request CPU guarantee. These reads never reparse JSON or copy a
+growing live projection, but the fixed native value ceiling is a distinct
+resource bound that must remain explicit at operator admission.
+
+`428aa557cca28422077b885314326bdd5e63c4e4` preserves the earlier whole-value
+experiment. Its failure on the pinned July workerd does not establish a
+production 2 MiB limit or failed INSERT SELECT: phase diagnostics established
+`length(CAST(projection AS BLOB))` failed during admission first. Replacing
+that with `octet_length` moved the older-runtime split-copy failure to the
+BLOB CAST inside page-copy. The adapter maps native SQLITE_TOOBIG to
+`pilot_limit`; it does not impose a separate 2 MiB fixture cap. Runtime builds,
+not compatibility dates, determine the SQLite value limit.
+
+The supported October binary is pinned in the witness qualification record.
+It reports 8,388,642 bytes; both 2,376,000-byte and 8,388,608-byte one-row SQL
+captures pass. The one-row Muse-sized capture is much cheaper than the split
+copy, so prospective page writers are not a prerequisite for this one-time
+bootstrap bridge. The existing legacy `(room_id,part)` staging key cannot hold
+a parallel immutable witness while preserving checkpoint part zero; the
+executable collision control demonstrates why an explicit typed unit contract
+is needed rather than invented internal part numbers or room keys.
+
+The production acceptance gate remains: portable incremental hashing and the
+exact shared serving codec, complete independently proved archive membership,
+source-epoch/head binding, replay continuation, old writer/read format fences,
+and final publication parity. Host-side streaming hash tests establish the
+captured-byte witness, not a completed portable serving certificate. No
+schema/default activation or serving rewrite is part of this experiment.
 
 For qualified representations, preserve replay progress across appends and
 coalesce dirty entity/version keys in the same typed page store using the

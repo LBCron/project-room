@@ -22,7 +22,7 @@ function fixture(t,slim=false,archive=false){
 }
 function read(s){const chunks=[];for(let offset=0;;offset+=WITNESS_SLICE){const chunk=witnessChunk(s.db,'captured-head',offset);if(!chunk?.length)break;assert.ok(chunk.byteLength<=WITNESS_SLICE);chunks.push(chunk);}return Buffer.concat(chunks).toString('utf8');}
 for(const slim of [false,true])for(const archive of [false,true])test(`captured independent proof matches shared codec: bodyRefs=${slim}, archived=${archive}`,t=>{
-  const f=fixture(t,slim,archive),before=f.authority();f.capture();const text=read(f.s),saved=f.s.db.prepare('SELECT metadata_hash FROM replay_projection_witness').get();
+  const f=fixture(t,slim,archive),before=f.authority();f.capture();const text=read(f.s),saved=f.s.db.prepare('SELECT metadata_hash FROM replay_projection_witness WHERE metadata_hash IS NOT NULL').get();
   assert.equal(sha(text),saved.metadata_hash);assert.deepEqual(f.authority(),before,'capture makes no serving writes');
   const hydrated=hydrateProjection(f.s.db,'commons',JSON.parse(text),{verifyBodyHashes:true});assert.equal(hydrated.missing.length,0);
   const shadow=new RoomStore(':memory:',{bodiesAtRest:slim});t.after(()=>shadow.close());shadow.initialize(f.events);
@@ -32,7 +32,7 @@ for(const slim of [false,true])for(const archive of [false,true])test(`captured 
 });
 
 test('capture stays immutable through repeated modern appends and an edit; duplicate cannot copy the new live blob',t=>{
-  const f=fixture(t),before=f.authority();f.capture();const captured=read(f.s),proof=f.s.db.prepare('SELECT metadata_hash FROM replay_projection_witness').get().metadata_hash;
+  const f=fixture(t),before=f.authority();f.capture();const captured=read(f.s),proof=f.s.db.prepare('SELECT metadata_hash FROM replay_projection_witness WHERE metadata_hash IS NOT NULL').get().metadata_hash;
   const key=f.s.issueAccessKey('commons','owner');
   for(let i=0;i<12;i++){f.s.command(key,'commons',{id:'append-'+i,type:'message.posted',data:{messageId:'later-'+i,body:'Later '+i}});assert.equal(f.capture().duplicate,true);assert.equal(read(f.s),captured);}
   f.s.command(key,'commons',{id:'edit-original',type:'message.edited',data:{messageId:'m0',body:'A modern edited body',expectedMessageRevision:0}});
@@ -47,7 +47,7 @@ for(const damage of ['absent-proof','changed-head','oversize'])test(`capture adm
 
 test('copied bytes are not trusted merely because a fresh hash exists',t=>{
   const f=fixture(t);f.s.db.prepare("UPDATE rooms SET projection=json_set(projection,'$.room.name','Unproved synthetic change') WHERE id='commons'").run();f.capture();
-  assert.notEqual(sha(read(f.s)),f.s.db.prepare('SELECT metadata_hash FROM replay_projection_witness').get().metadata_hash);
+  assert.notEqual(sha(read(f.s)),f.s.db.prepare('SELECT metadata_hash FROM replay_projection_witness WHERE metadata_hash IS NOT NULL').get().metadata_hash);
 });
 
 function archiveWitness(f){
@@ -85,4 +85,27 @@ test('changed ceiling is changed capture intent and an insert fault rolls back w
 test('oversized SQLite integer-affinity controls are refused before materialization',t=>{
   const f=fixture(t);f.s.db.prepare("UPDATE rooms SET sequence=? WHERE id='commons'").run('x'.repeat(2*1024*1024));
   assert.throws(()=>f.capture(),/head changed/);assert.equal(f.s.db.prepare('SELECT count(*) AS n FROM replay_projection_witness').get().n,0);
+});
+
+test('legacy part identity cannot store a second parallel witness without overwriting checkpoint bytes',t=>{
+  const f=fixture(t),db=f.s.db;db.prepare('DELETE FROM messages_backfill_state WHERE room_id=?').run('commons');
+  db.prepare('INSERT INTO messages_backfill_state(room_id,part,json) VALUES(?,?,?)').run('commons',0,'legacy checkpoint source');
+  assert.throws(()=>db.prepare('INSERT INTO messages_backfill_state(room_id,part,json) VALUES(?,?,?)').run('commons',0,'independent projection witness'),/UNIQUE/);
+  assert.equal(db.prepare('SELECT json FROM messages_backfill_state WHERE room_id=? AND part=0').get('commons').json,'legacy checkpoint source');
+  f.capture();assert.ok(db.prepare("SELECT count(*) AS n FROM replay_projection_witness WHERE unit_kind IN ('whole','page')").get().n>0);
+  assert.equal(db.prepare('SELECT json FROM messages_backfill_state WHERE room_id=? AND part=0').get('commons').json,'legacy checkpoint source');
+});
+
+for(const mode of ['whole','split'])test(`capture mode ${mode} preserves exact authority and binds duplicate intent`,t=>{
+  const f=fixture(t,false,true),before=f.authority();f.capture({mode});assert.deepEqual(f.authority(),before);
+  const proof=f.s.db.prepare("SELECT metadata_hash FROM integrity_room_state WHERE room_id='commons'").get().metadata_hash;
+  assert.equal(sha(read(f.s)),proof);assert.equal(f.capture({mode}).duplicate,true);
+  assert.throws(()=>f.capture({mode:mode==='whole'?'split':'whole'}),/intent conflict/);archiveWitness(f);
+});
+
+test('ceiling plus one is refused by byte admission before CAST or capture writes',t=>{
+  const f=fixture(t),db=f.s.db,bytes=db.prepare("SELECT octet_length(projection) AS n FROM rooms WHERE id='commons'").get().n;
+  const original=db.prepare.bind(db);db.prepare=sql=>{assert.ok(!sql.includes('INSERT INTO replay_projection_witness'),'no capture copy');return original(sql);};
+  assert.throws(()=>f.capture({ceilingBytes:bytes-1}),/byte ceiling/);db.prepare=original;
+  assert.equal(db.prepare('SELECT count(*) AS n FROM replay_projection_witness').get().n,0);
 });

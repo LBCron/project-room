@@ -230,6 +230,10 @@ are not cached. Static and discovery responses do not start these probes.
 This trades up to 1.5 seconds of additional failure-detection latency for fewer
 false timeouts under observed service latency. It does not make slow requests
 fast, retry until a check passes, or explain the original long-stall incident.
+Readiness events contain only validated static source/build stamps (a full lowercase commit SHA and exact valid UTC ISO build timestamp, otherwise null). The Worker requests an optional internal `readiness-observation-v1` result from `probeStorage`; a new authority returns its own stamps, SQL outcome and local SQL/DO elapsed observations. The existing `worker_rpc_settled` event copies only this closed validated envelope. The public readiness response is unchanged. No-argument RPC callers retain their exact legacy result; older authorities that ignore the opt-in remain usable and produce `authorityObservation: "absent"`. Malformed observational metadata produces `invalid` without changing readiness, errors or policy.
+
+This binds a successful late RPC to callee observations even when its separate tail record is missing. It does not measure CPU or distinguish queue, transport or scheduling, and durations from different I/O-driven clocks must not be subtracted to claim queue latency. Original RPC errors remain original errors and may have no returned diagnostic envelope. Missing source/observations cannot attest a deployment. The deadline, sharing, waitUntil, one-statement storage probe and lack of completed-result caching remain unchanged; this visibility change is not a demonstrated latency cure.
+
 ### Durable Object adoption grace
 
 Cloudflare changed the default on October 30, 2026: active Durable Objects can

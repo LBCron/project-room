@@ -36,11 +36,16 @@ export class BudgetProbe extends DurableObject {
   async probeStorage(request) {
     const config = await this.result(), result = { ok: config.ok !== false, emailVerification: 'enforced' };
     if (request === 'readiness-observation-v1' && config.observationPeer === 'valid') result.readinessObservation = {sourceRevision:'b'.repeat(40),buildId:'2026-11-01T12:01:00.000Z',sqlOutcome:'ok',sqlElapsedMs:1,doElapsedMs:3};
+    if (config.observationPeer === 'supplied') result.readinessObservation = config.observationValue;
     if (config.observationPeer === 'malicious') result.readinessObservation = {sourceRevision:'PRIVATE_SOURCE',buildId:'PRIVATE_BUILD',sqlOutcome:'PRIVATE_OUTCOME',sqlElapsedMs:-1,doElapsedMs:Infinity,extra:'PRIVATE_CONTENT'};
     return result;
   }
   async readJobHealth() { await this.result(); return { schema: 'room.job-health/1', status: 'ok', jobs: [] }; }
   unblock() { this.release?.(); }
+}
+// A real zero-argument RPC method models the already deployed older peer.
+export class LegacyBudgetProbe extends BudgetProbe {
+  async probeStorage() { const config = await this.result(); return { ok: config.ok !== false, emailVerification: 'enforced' }; }
 }
 export class ObservedProjectRoom extends ProjectRoom {
   exercise(mode, diagnostics) {
@@ -71,6 +76,7 @@ export class ObservedProjectRoom extends ProjectRoom {
 export default {
   async fetch(request, env, ctx) {
     const path = new URL(request.url).pathname, stub = env.ROOM.getByName('invite-only-pilot');
+    if (path === '/actual-ready') return worker.fetch(new Request(new URL('/api/ready',request.url),request),{...env,ROOM:env.ACTUAL},ctx);
     if (path === '/observations') return Response.json(observations);
     if (path === '/telemetry-failure') { failTelemetry = (await request.json()).enabled; return new Response('configured'); }
     if (path === '/actual') return Response.json(await env.ACTUAL.getByName('actual').exercise(new URL(request.url).searchParams.get('mode'),new URL(request.url).searchParams.get('diagnostics')==='1'));

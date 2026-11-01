@@ -10,8 +10,16 @@
 //   (a) LARGE NO-MATCH ROOM — scanned rows are bounded by the stated
 //       budget (256 reply rows / 512 mention rows per room per read),
 //       not by history size: the same read at 320 and at 3,200 noise
-//       replies examines exactly the budget both times, reports
+//       replies examines exactly the reply budget both times, reports
 //       scan.exhausted, and keeps hasMore=true (honest continuation).
+//       Round 2 (Codex seq 25273) amended the accounting, not the
+//       contract: the report now carries per-scan components
+//       (scan.replies / scan.mentions), and the mention component
+//       counts the events its scan steps over — the pre-round-2
+//       aggregate asserted 256 in total because the mention scan
+//       reported 0 examined rows while its SQL walked the whole
+//       range. The reply component still asserts exactly 256 at both
+//       history sizes; the aggregate is bounded by 256 + 512.
 //   (b) SPARSE-MATCH ROOM — matches spread across a large history are
 //       all reached by cursor continuation, exactly once each, and no
 //       page claims completeness (hasMore=false) before the page that
@@ -28,6 +36,7 @@ import { setTier } from '../server/autonomy-tiers.mjs';
 import { linkWithProof } from "./helpers/link-with-proof.mjs";
 
 const REPLY_ROW_BUDGET = 256; // REPLY_SCAN_ROW_BUDGET in server/needs-me.mjs
+const MENTION_ROW_BUDGET = 512; // MENTION_SCAN_ROW_BUDGET in server/needs-me.mjs
 
 function setup(t, roomId) {
   const store = new RoomStore(':memory:');
@@ -82,9 +91,13 @@ test('scan budget: a large no-match room costs the budget, not the history size'
     assert.equal(page.items.filter(item => item.kind === 'reply').length, 0, 'no matches exist to return');
     assert.ok(page.scan, 'the read reports its scan cost');
     assert.equal(page.scan.rowBudgets.replies, REPLY_ROW_BUDGET, 'the stated reply budget rides the result');
-    scannedBySize.push(page.scan.scannedRows);
-    assert.equal(page.scan.scannedRows, REPLY_ROW_BUDGET,
-      `scanned rows are the budget, not the ${replyCount}-row history (got ${page.scan.scannedRows})`);
+    scannedBySize.push(page.scan.replies.scannedRows);
+    assert.equal(page.scan.replies.scannedRows, REPLY_ROW_BUDGET,
+      `the reply scan examines exactly its budget, not the ${replyCount}-row history (got ${page.scan.replies.scannedRows})`);
+    assert.ok(page.scan.mentions.scannedRows <= MENTION_ROW_BUDGET,
+      `the mention scan stays inside its budget (got ${page.scan.mentions.scannedRows})`);
+    assert.ok(page.scan.scannedRows <= REPLY_ROW_BUDGET + MENTION_ROW_BUDGET,
+      `the aggregate examined rows stay inside the summed budgets (got ${page.scan.scannedRows})`);
     assert.equal(page.scan.exhausted, true, 'the budget stopped the scan before the range end');
     assert.equal(page.hasMore, true, 'a budget-exhausted read signals continuation, never completeness');
     if (replyCount === 320) {
@@ -98,7 +111,7 @@ test('scan budget: a large no-match room costs the budget, not the history size'
     }
   }
   assert.deepEqual(scannedBySize, [REPLY_ROW_BUDGET, REPLY_ROW_BUDGET],
-    'scanned rows stay budget-bound as history grows 10x');
+    'reply-scan examined rows stay budget-bound as history grows 10x');
 });
 
 test('scan budget: sparse matches are reached by continuation without skipping or false completeness', t => {

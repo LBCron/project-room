@@ -111,10 +111,29 @@ test('needs-me mention window is not consumed by mentions the selection discards
   // room's start) must not return a window that misses the live mention
   // newer than that cursor. At the pre-fix head this returned items=[] with
   // cursor=304 (ahead of the returned window) and hasMore=true.
-  const page = collectNeedsMe(store, ada.secret, { since: { rooms: { [roomId]: 0 }, land: {}, landIds: {} } });
-  assert.ok(page.items.some(item => item.kind === 'mention' && item.id === 'fresh-mention'),
-    `fresh mention (seq ${freshSeq} of head ${head}) is selected on the first read; got ${JSON.stringify(page.items.map(i => i.id))} cursor=${JSON.stringify(page.cursor.rooms)} hasMore=${page.hasMore}`);
-  assert.equal(page.hasMore, false, 'the read reached the head truthfully instead of paging through dead rows');
+  // Round 2 (scan stepping, Codex seq 25273): this room holds more events
+  // (257) than the reply scan's examined-row budget (256), so the first
+  // read now stops at examined ground — cursor at the last examined
+  // sequence, hasMore=true — and the continuation delivers the mention.
+  // What defect (b) pins is unchanged: the 100 dead mention rows never
+  // consume the mention window (the mention scan counts only eligible
+  // rows, so two pages suffice — the dead rows force no extra paging),
+  // the cursor never claims unscanned ground, and the chain completes.
+  const pages = [];
+  let since = { rooms: { [roomId]: 0 }, land: {}, landIds: {} };
+  for (let i = 0; i < 10; i++) {
+    const page = collectNeedsMe(store, ada.secret, { since });
+    pages.push(page);
+    since = JSON.parse(JSON.stringify(page.cursor));
+    if (!page.hasMore) break;
+  }
+  const delivered = pages.flatMap(p => p.items).filter(item => item.kind === 'mention' && item.id === 'fresh-mention');
+  assert.equal(delivered.length, 1,
+    `fresh mention (seq ${freshSeq} of head ${head}) is delivered exactly once by the chain; pages=${pages.map(p => JSON.stringify(p.items.map(i => i.id)))}`);
+  assert.equal(pages.length, 2,
+    'one budget page plus the delivery page: the dead mention rows forced no extra paging');
+  assert.equal(pages[0].hasMore, true, 'the first read admits its scan stopped at the examined-row budget');
+  assert.equal(pages.at(-1).hasMore, false, 'the chain reached the head truthfully instead of paging through dead rows');
 });
 
 test('needs-me cursor chain still enumerates a live mention backlog completely', t => {

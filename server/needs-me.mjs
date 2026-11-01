@@ -67,8 +67,25 @@ const MENTION_WINDOW = 100;
 // claims unscanned history and the caller's next read (hasMore=true)
 // resumes exactly where the scan stopped — no skipped asks, and no
 // silent truncation that looks complete.
+//
+// Round 2 (Codex's exact-SQL falsifier, room seq 25273): the first cure
+// counted only rows its SQL returned, but the queries filtered inside
+// SQLite (json_extract predicates under a LIMIT; a join the planner
+// drove from the events range), so the VM still stepped over every
+// event in the range — 9,059 VM instructions at 1k plain events growing
+// to 90,059 at 10k with zero reply rows examined on paper (mentions:
+// 11,354 → 110,354). Both scans now STEP the events primary-key range
+// themselves, in bounded windows, and count every stepped row and its
+// body bytes: the budgets bind at examined-row and byte boundaries, in
+// the units the falsifier measures, whatever the room's event mix. The
+// byte budgets bind only for rooms of very large events (at ordinary
+// message sizes the row budget stops the scan first); a scan always
+// examines at least one row per call when its range is non-empty, so
+// continuation can never stall on a single oversized event.
 export const REPLY_SCAN_ROW_BUDGET = 256;
 export const MENTION_SCAN_ROW_BUDGET = 512;
+export const REPLY_SCAN_BYTE_BUDGET = 1_048_576;
+export const MENTION_SCAN_BYTE_BUDGET = 1_048_576;
 const REPLY_SCAN_BATCH = 64;
 const MENTION_SCAN_BATCH = 128;
 
@@ -230,8 +247,16 @@ function mentionsOf(store, roomId, memberId, after, through) {
 // { exhausted: true, scannedThrough } and the caller clamps the room
 // horizon to scannedThrough, so continuation resumes mid-history
 // instead of the read silently passing over unscanned replies.
+//
+// Round 2 (Codex seq 25273): the first cure's candidate query carried
+// its type/replyToId tests as json_extract predicates under a LIMIT,
+// so SQLite stepped every event in the range while the budget counted
+// only the rows that passed the filter — the work grew with room size
+// while the report said 0 examined. The scan now steps the range
+// itself and applies the same tests per stepped row in JS: every row
+// the VM touches is a row the scan counts, in rows and in body bytes.
 function repliesOf(store, roomId, memberId, after, through, state) {
-  const scan = { items: [], scannedRows: 0, scannedThrough: after, exhausted: false };
+  const scan = { items: [], scannedRows: 0, scannedBytes: 0, scannedThrough: after, exhausted: false };
   if (!(through > after)) return scan;
   const askIds = new Set(Object.values(state.replyRequests ?? {})
     .filter(request => request?.recipientId === memberId && request.status === "open")
@@ -270,26 +295,27 @@ function repliesOf(store, roomId, memberId, after, through, state) {
   const items = scan.items;
   let cursor = after;
   while (items.length <= MAX_PER_KIND) {
-    if (scan.scannedRows >= REPLY_SCAN_ROW_BUDGET) {
+    if (scan.scannedRows >= REPLY_SCAN_ROW_BUDGET || scan.scannedBytes >= REPLY_SCAN_BYTE_BUDGET) {
       scan.exhausted = scan.scannedThrough < through;
       break;
     }
     const want = Math.min(REPLY_SCAN_BATCH, REPLY_SCAN_ROW_BUDGET - scan.scannedRows);
     const rows = store.db.prepare(
       `SELECT id, sequence, body FROM events
-       WHERE room_id=? AND sequence>? AND sequence<=? AND json_extract(body,'$.type')='message.posted'
-         AND json_extract(body,'$.data.replyToId') IS NOT NULL
+       WHERE room_id=? AND sequence>? AND sequence<=?
        ORDER BY sequence ASC LIMIT ?`
     ).all(roomId, cursor, through, want);
     if (!rows.length) break;
     const parsed = [];
+    let stoppedEarly = false;
     for (const row of rows) {
       cursor = row.sequence;
       scan.scannedRows += 1;
+      scan.scannedBytes += Buffer.byteLength(row.body);
       scan.scannedThrough = row.sequence;
       let event = null;
       try { event = JSON.parse(row.body); } catch { event = null; }
-      if (event && event.actorId !== memberId
+      if (event && event.type === "message.posted" && event.actorId !== memberId
         && typeof event.data?.replyToId === "string" && event.data.replyToId
         && !event.data.toMemberId && parentIsMine(event.data.replyToId)) {
         parsed.push({ row, event });
@@ -297,7 +323,10 @@ function repliesOf(store, roomId, memberId, after, through, state) {
       // Enough candidates to fill the kind: stop examining here. The
       // rows past the cursor in this batch were fetched, not examined;
       // they stay unscanned and a later read re-fetches from the cursor.
-      if (parsed.length > MAX_PER_KIND) break;
+      if (parsed.length > MAX_PER_KIND) { stoppedEarly = true; break; }
+      // The byte budget is a per-examined-row boundary: the row that
+      // crosses it is examined and counted, then the scan stops.
+      if (scan.scannedBytes >= REPLY_SCAN_BYTE_BUDGET) { stoppedEarly = true; break; }
     }
     const covered = coveredByMention(parsed.map(({ row }) => row.id));
     for (const { row, event } of parsed) {
@@ -320,7 +349,10 @@ function repliesOf(store, roomId, memberId, after, through, state) {
       });
       if (items.length > MAX_PER_KIND) break;
     }
-    if (rows.length < want) break;
+    // A short batch means the range end was reached only when the loop
+    // examined every fetched row; an early stop leaves unscanned rows
+    // in the batch, so fall through to the budget check instead.
+    if (!stoppedEarly && rows.length < want) break;
   }
   items.sort((a, b) => a.seq - b.seq);
   return scan;
@@ -517,20 +549,45 @@ function landChangesOf(store, roomId, memberId, after, afterId) {
 // last examined sequence — never `through` — so the caller's cursor
 // stops at scanned ground, hasMore stays true, and the next read
 // resumes the count instead of skipping the unscanned rows.
+//
+// Round 2 (Codex seq 25273): the join above was planned with the events
+// range as the driving side (the sequence range + ORDER BY win over
+// the member index), so the VM stepped every event in the range and
+// probed the mention tables per event — sparse mentions still cost
+// ~11 VM instructions per room event. The scan now steps the events
+// range itself, in bounded windows, and probes mention_states /
+// mention_observations per stepped event by (room_id, message_event_id,
+// mentioned_member_id): every row the VM touches is counted, in rows
+// and body bytes, and the examined unit — events stepped — is the unit
+// the falsifier measures. Eligibility is decided per probed mention
+// row with exactly the checks the join version made, so WHAT counts
+// toward the window is unchanged; only WHO walks the range changed.
+// scannedRows for this scan therefore counts examined events (the
+// pre-round-2 count of returned mention rows reported 0 in a room of
+// plain posts while the VM walked all of them).
 function mentionHorizon(store, roomId, memberId, after, through) {
-  const scan = { horizon: through, scannedRows: 0, exhausted: false };
+  const scan = { horizon: through, scannedRows: 0, scannedBytes: 0, exhausted: false };
   if (!(through > after)) return scan;
   try {
-    const stmt = store.db.prepare(
-      `SELECT e.sequence, e.id AS eventId, e.body, m.state AS state, m.timeout_at AS timeoutAt,
+    // Schemas from before the mention tables have no mentions to count:
+    // the horizon is the range end, as the pre-cure read behaved there.
+    const mentionTables = store.db.prepare(
+      "SELECT name FROM sqlite_master WHERE type='table' AND name IN ('mention_states','mention_observations')"
+    ).all();
+    if (mentionTables.length < 2) return scan;
+    const stepStmt = store.db.prepare(
+      `SELECT id, sequence, body FROM events
+       WHERE room_id=? AND sequence>? AND sequence<=?
+       ORDER BY sequence ASC LIMIT ?`
+    );
+    const mentionStmt = store.db.prepare(
+      `SELECT m.state AS state, m.timeout_at AS timeoutAt,
               o.acknowledged_at AS acknowledgedAt, o.late_acknowledged_at AS lateAcknowledgedAt
        FROM mention_states m
-       JOIN events e ON e.room_id=m.room_id AND e.id=m.message_event_id
        LEFT JOIN mention_observations o ON o.room_id=m.room_id AND o.message_event_id=m.message_event_id
          AND o.mentioned_member_id=m.mentioned_member_id
-       WHERE m.room_id=? AND m.mentioned_member_id=? AND e.sequence>? AND e.sequence<=?
-         AND m.state IN ('delivered','acknowledged','timed_out')
-       ORDER BY e.sequence ASC LIMIT ?`
+       WHERE m.room_id=? AND m.message_event_id=? AND m.mentioned_member_id=?
+         AND m.state IN ('delivered','acknowledged','timed_out')`
     );
     let currentById = null;
     const records = () => {
@@ -543,18 +600,18 @@ function mentionHorizon(store, roomId, memberId, after, through) {
       }
       return currentById;
     };
-    const eligible = row => {
+    const eligible = (eventRow, mention) => {
       let logged = null;
-      try { logged = JSON.parse(row.body); } catch { logged = null; }
+      try { logged = JSON.parse(eventRow.body); } catch { logged = null; }
       if (logged?.type !== "message.posted") return false;
       const toMemberId = logged.data?.toMemberId;
       if (toMemberId && toMemberId !== memberId && logged.actorId !== memberId) return false;
-      const messageId = logged.data?.messageId ?? row.eventId;
+      const messageId = logged.data?.messageId ?? eventRow.id;
       if (records().get(messageId)?.deletedAt) return false;
-      if (row.state === "timed_out") {
+      if (mention.state === "timed_out") {
         if (records().hasReply(memberId, messageId)) return false;
-        if (row.lateAcknowledgedAt != null) return false;
-        if (row.acknowledgedAt != null && row.timeoutAt != null && row.acknowledgedAt > row.timeoutAt) return false;
+        if (mention.lateAcknowledgedAt != null) return false;
+        if (mention.acknowledgedAt != null && mention.timeoutAt != null && mention.acknowledgedAt > mention.timeoutAt) return false;
       }
       return true;
     };
@@ -562,28 +619,39 @@ function mentionHorizon(store, roomId, memberId, after, through) {
     let eligibleCount = 0;
     let windowEnd = null;
     while (true) {
-      if (scan.scannedRows >= MENTION_SCAN_ROW_BUDGET) {
+      if (scan.scannedRows >= MENTION_SCAN_ROW_BUDGET || scan.scannedBytes >= MENTION_SCAN_BYTE_BUDGET) {
         scan.exhausted = cursor < through;
         scan.horizon = scan.exhausted ? cursor : through;
         return scan;
       }
       const want = Math.min(MENTION_SCAN_BATCH, MENTION_SCAN_ROW_BUDGET - scan.scannedRows);
-      const batch = stmt.all(roomId, memberId, cursor, through, want);
+      const batch = stepStmt.all(roomId, cursor, through, want);
       if (!batch.length) { scan.horizon = through; return scan; }
       let decided = false;
+      let stoppedEarly = false;
       for (const row of batch) {
         cursor = row.sequence;
         scan.scannedRows += 1;
-        if (!eligible(row)) continue;
-        eligibleCount += 1;
-        if (eligibleCount === MENTION_WINDOW) windowEnd = row.sequence;
-        if (eligibleCount > MENTION_WINDOW) { scan.horizon = windowEnd; decided = true; break; }
+        scan.scannedBytes += Buffer.byteLength(row.body);
+        const mention = mentionStmt.get(roomId, row.id, memberId);
+        if (mention && eligible(row, mention)) {
+          eligibleCount += 1;
+          if (eligibleCount === MENTION_WINDOW) windowEnd = row.sequence;
+          if (eligibleCount > MENTION_WINDOW) { scan.horizon = windowEnd; decided = true; break; }
+        }
+        // The byte budget is a per-examined-row boundary: the row that
+        // crosses it is examined and counted, then the scan stops.
+        if (scan.scannedBytes >= MENTION_SCAN_BYTE_BUDGET) { stoppedEarly = true; break; }
       }
       if (decided) return scan;
-      if (batch.length < want) { scan.horizon = through; return scan; }
+      // A short batch means the range end was reached only when the
+      // loop examined every fetched row; an early stop leaves
+      // unscanned rows in the batch, so fall through to the budget
+      // check instead of claiming the range end.
+      if (!stoppedEarly && batch.length < want) { scan.horizon = through; return scan; }
     }
   } catch (error) {
-    if (/no such table/i.test(error?.message ?? "")) return scan;
+    if (/no such table/i.test(error?.message ?? "")) return { ...scan, horizon: through, exhausted: false };
     throw error;
   }
 }
@@ -950,7 +1018,13 @@ export function collectNeedsMe(store, secret, { since, roomId: scopedRoom = null
   // and whether any scan stopped at its row budget before its range end.
   // An exhausted read never looks complete: it carries hasMore=true with
   // a cursor at scanned ground, and scan.exhausted says why.
-  const scan = { scannedRows: 0, exhausted: false };
+  // Round 2 adds the per-scan components (replies / mentions) and the
+  // examined body bytes: the aggregate scannedRows used to hide which
+  // scan spent what, and the mention component counted returned mention
+  // rows rather than the events the scan actually stepped over.
+  const scan = { scannedRows: 0, scannedBytes: 0, exhausted: false,
+    replies: { scannedRows: 0, scannedBytes: 0, exhausted: false },
+    mentions: { scannedRows: 0, scannedBytes: 0, exhausted: false } };
   for (const link of links.slice(0, MAX_ROOMS)) {
     if (allowedRooms && !allowedRooms.includes(link.roomId)) { roomAfter = link.roomId; continue; }
     if (link.archivedAt) { roomAfter = link.roomId; continue; }
@@ -983,14 +1057,22 @@ export function collectNeedsMe(store, secret, { since, roomId: scopedRoom = null
     const landAfter = landWatermark(parsed, link.roomId);
     const horizonScan = mentionHorizon(store, link.roomId, link.memberId, messageAfter, sessionWatermark(after, authority.sequence));
     scan.scannedRows += horizonScan.scannedRows;
+    scan.scannedBytes += horizonScan.scannedBytes;
     scan.exhausted = scan.exhausted || horizonScan.exhausted;
+    scan.mentions.scannedRows += horizonScan.scannedRows;
+    scan.mentions.scannedBytes += horizonScan.scannedBytes;
+    scan.mentions.exhausted = scan.mentions.exhausted || horizonScan.exhausted;
     let through = horizonScan.horizon;
     let candidates = [];
     if (authority.sequence > after) {
       const state = store.room(link.roomId).state;
       const replyScan = repliesOf(store, link.roomId, link.memberId, messageAfter, through, state);
       scan.scannedRows += replyScan.scannedRows;
+      scan.scannedBytes += replyScan.scannedBytes;
       scan.exhausted = scan.exhausted || replyScan.exhausted;
+      scan.replies.scannedRows += replyScan.scannedRows;
+      scan.replies.scannedBytes += replyScan.scannedBytes;
+      scan.replies.exhausted = scan.replies.exhausted || replyScan.exhausted;
       // Budget exhaustion clamps the window to scanned ground (see
       // repliesOf): every kind is then windowed to examined sequences,
       // `pending` below keeps hasMore true, and the reported cursor
@@ -1060,5 +1142,5 @@ export function collectNeedsMe(store, secret, { since, roomId: scopedRoom = null
     for (let i = 0; i < items.length; i++) if (held.has(items[i]?.roomId)) items[i] = { ...items[i], paused: true };
   }
   return stampNeedsMe({ identityId: identity.identityId, items, ...(pausedRooms.length ? { paused: pausedRooms } : {}), ...(openWork.length ? { openWork } : {}), ...(reviewAsks.length ? { reviewAsks } : {}), ...(myWork.length ? { myWork } : {}), ...(myClaims.length ? { myClaims } : {}), ...(actionsNeeded.length ? { actionsNeeded } : {}), cursor, hasMore,
-    scan: { scannedRows: scan.scannedRows, exhausted: scan.exhausted, rowBudgets: { replies: REPLY_SCAN_ROW_BUDGET, mentions: MENTION_SCAN_ROW_BUDGET }, ...(scan.exhausted ? { continuation: "pass the returned cursor back unchanged; the scan resumes at the first unscanned sequence" } : {}) } });
+    scan: { scannedRows: scan.scannedRows, scannedBytes: scan.scannedBytes, exhausted: scan.exhausted, replies: scan.replies, mentions: scan.mentions, rowBudgets: { replies: REPLY_SCAN_ROW_BUDGET, mentions: MENTION_SCAN_ROW_BUDGET }, byteBudgets: { replies: REPLY_SCAN_BYTE_BUDGET, mentions: MENTION_SCAN_BYTE_BUDGET }, ...(scan.exhausted ? { continuation: "pass the returned cursor back unchanged; the scan resumes at the first unscanned sequence" } : {}) } });
 }

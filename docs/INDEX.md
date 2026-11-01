@@ -181,6 +181,8 @@ Dated plans, checkpoints, and working notes are in [history/](../archive/docs/hi
 
 [Bounded operator authority activation](research/2026-11-01-message-authority-activation.md) records the initial admission, recovery and refusal limits.
 
+[ACP exact child environment](research/2026-11-01-acp-child-environment.md) records the local prefix leak reproduction, exact-name compatibility contract and qualification limits.
+
 [Historical session backfill reconciliation](research/2026-11-01-legacy-session-backfill-reconciliation.md) describes the explicit operator proof boundary and derived-only repair.
 
 [Normalized message storage migration carrier](NORMALIZED-MESSAGE-SLICE.md) describes the opt-in working set, qualification boundaries, reversal, and remaining architecture overhaul.

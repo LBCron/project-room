@@ -33,9 +33,11 @@ export class CurrentRepliesRoom extends DurableObject{
     this.store.initialize(events,{representation:'normalized-current-v1'});await this.ctx.storage.put('key',this.store.issueAccessKey('commons','reader'));return Response.json({seeded:count});
    }
    this.store.room=()=>{throw Error('legacy room hydration');};
-   const key=await this.ctx.storage.get('key'),mode=url.pathname==='/list'?'list':'selected';
-   const result=mode==='list'?this.store.replyRequests.list(key,'commons',{limit:2}):this.store.replyRequests.selected(key,'commons','zz-question',{limit:2});
-   return Response.json({result,cost:cost()});
+   const key=await this.ctx.storage.get('key'),mode=url.pathname==='/list'?'list':url.pathname==='/history'?'history':'selected';
+   const result=mode==='list'?this.store.replyRequests.list(key,'commons',{limit:2}):mode==='history'?this.store.replyRequests.history(key,'commons',{limit:2}):this.store.replyRequests.selected(key,'commons','zz-question',{limit:2});
+   const measured=cost();
+   const plans={list:this.db.prepare("EXPLAIN QUERY PLAN SELECT record_key FROM current_room_record_proofs INDEXED BY current_reply_request_keys WHERE room_id=? AND domain='replyRequests' AND present=1 AND record_key>? ORDER BY record_key LIMIT ?").all('commons','',3),selected:this.db.prepare('EXPLAIN QUERY PLAN SELECT message_id,seq FROM messages INDEXED BY messages_room_thread_seq WHERE room_id=? AND thread_root_id=? AND (seq,message_id)>(?,?) AND seq<=? ORDER BY seq,message_id LIMIT ?').all('commons','zz-question',0,'',Number.MAX_SAFE_INTEGER,3),history:this.db.prepare('EXPLAIN QUERY PLAN SELECT sequence FROM events WHERE room_id=? AND sequence>? AND sequence<=? ORDER BY sequence LIMIT ?').all('commons',0,Number.MAX_SAFE_INTEGER,2)};
+   return Response.json({result,cost:measured,plans});
   }catch(error){return Response.json({error:{code:error.code,message:error.message,stack:error.stack}},{status:500});}
  }
 }

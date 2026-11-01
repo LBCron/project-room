@@ -132,3 +132,41 @@ test('same-member active credentials cannot transfer selected, list, or history 
   assert.throws(()=>read.nextRead.tool==='room_read_request'?store.replyRequests.selected(second,'commons','question',args):read.nextRead.tool==='room_list_requests'?store.replyRequests.list(second,'commons',args):store.replyRequests.history(second,'commons',args),e=>e.code==='reply_cursor_identity_changed');
  }
 });
+import {callHostedStdioTool,validHostedStdioArgs} from '../server/mcp-full-profile.mjs';
+test('hosted MCP reply continuations include their required room and can be followed verbatim',async t=>{
+ const {store,keys}=fixture(t,(_events,add)=>{for(let i=0;i<9;i++)add('message.posted',{messageId:`a-mcp-excluded-${i}`,toMemberId:'other',requestKind:'reply',requestPolicyVersion:1,body:'Private'});});
+ store.room=()=>{throw Error('legacy hydration');};
+ let args={roomId:'commons',limit:2},ids=[];
+ for(let page=0;page<10;page++){
+  assert.equal(validHostedStdioArgs('room_list_requests',args),true);
+  const response=await callHostedStdioTool(store,keys.reader,'room_list_requests',args);assert.equal(response.isError,false);
+  ids.push(...response.value.requests.map(r=>r.id));if(!response.value.nextRead)break;
+  assert.equal(response.value.page.nextRead.arguments.roomId,'commons');args=response.value.nextRead.arguments;
+ }
+ assert.deepEqual(ids,['question']);
+ const selected=await callHostedStdioTool(store,keys.reader,'room_read_request',{roomId:'commons',requestMessageId:'question'});
+ assert.equal(selected.isError,false);assert.ok(selected.value.current.answerBasis);assert.equal(selected.value.responseActions[0].arguments.roomId,'commons');
+});
+test('reactivation history floor hides the older obligation consistently across list, selected and history',t=>{
+ const {store,keys}=fixture(t,(_events,add)=>{
+  add('room.history_visibility_set',{historyVisibility:'since_join'});
+  add('member.access_changed',{memberId:'reader',expectedMemberRevision:0,permissions:[],active:false});add('member.access_changed',{memberId:'reader',expectedMemberRevision:1,permissions:[],active:true});
+  add('message.posted',{messageId:'new-visible',toMemberId:'reader',requestKind:'reply',requestPolicyVersion:1,body:'Visible current obligation'});
+ });
+ assert.deepEqual(store.replyRequests.list(keys.reader,'commons').requests.map(r=>r.id),['new-visible']);
+ assert.throws(()=>store.replyRequests.selected(keys.reader,'commons','question'),e=>e.status===404&&e.code==='reply_request_not_found');
+ let args={limit:2},found=[];
+ for(let i=0;i<20;i++){const read=store.replyRequests.history(keys.reader,'commons',args);found.push(...read.page.items.map(r=>r.message.id));if(!read.nextRead)break;args=read.nextRead.arguments;}
+ assert.deepEqual(found,['new-visible']);
+});
+test('denied directional consent removes answer and reply actions without acknowledging or changing obligations',t=>{
+ const {store,keys}=fixture(t);
+ // Persisted consent authority fixture; normalized consent mutation is a separate unported route.
+ store.transaction(()=>store.db.prepare("INSERT INTO dm_consents(room_id,requester_id,target_id,status,reason,created_at,decided_at) VALUES(?,?,?,'rejected','Fixture',?,?)").run('commons','reader','owner',Date.now(),Date.now()));
+ const before=Object.fromEntries(['events','commands','current_room_records','operator_actions'].map(table=>[table,store.db.prepare('SELECT * FROM '+table).all()]));
+ const read=store.replyRequests.selected(keys.reader,'commons','question');
+ assert.equal(read.current.answerBasis,null);assert.equal(read.current.actions.answer,false);assert.equal(read.current.actions.reply,false);assert.equal(read.responseActions.length,0);
+ validateReplyRead(read,{name:'room_read_request',args:{requestMessageId:'question'},roomId:'commons'});
+ store.replyRequests.list(keys.reader,'commons');store.replyRequests.history(keys.reader,'commons');
+ for(const table of Object.keys(before))assert.deepEqual(store.db.prepare('SELECT * FROM '+table).all(),before[table]);
+});

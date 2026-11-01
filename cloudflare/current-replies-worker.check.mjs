@@ -7,13 +7,16 @@ test('actual Worker normalized reply list and selected source costs remain bound
   for(const [surface,count]of [['small',1000],['large',5000]])await call(`/seed?surface=${surface}&count=${count}`);
   await mf.dispose();mf=create();const samples=[];
   for(const [surface,count]of [['small',1000],['large',5000]]){
-   const cold=await call(`/list?surface=${surface}`),warm=await call(`/list?surface=${surface}`),selected=await call(`/selected?surface=${surface}`);
+   const cold=await call(`/list?surface=${surface}`),warm=await call(`/list?surface=${surface}`),selected=await call(`/selected?surface=${surface}`),history=await call(`/history?surface=${surface}`);
    assert.deepEqual(warm.result.requests,[]);assert.equal(warm.result.page.hasMore,true);assert.equal(warm.result.sourceWindow.complete,false);
    assert.equal(JSON.stringify(warm.result).includes('a-hidden-'),false);
    assert.equal(selected.result.page.items[0].message.id,'zz-question');assert.equal(selected.result.page.hasMore,true);assert.equal(selected.result.current.answerBasis,null);
-   for(const read of[cold,warm,selected]){assert.equal(read.cost.rowsWritten,0);assert.equal(read.cost.rawRuntime.rowsWritten,0);assert.equal(read.cost.unknown,0);}
-   samples.push({count,cold:cold.cost,warm:warm.cost,selected:selected.cost});
+   assert.equal(history.result.page.hasMore,true);assert.deepEqual(history.result.page.items,[]);
+   assert.match(JSON.stringify(selected.plans.list),/current_reply_request_keys/);assert.match(JSON.stringify(selected.plans.selected),/messages_room_thread_seq/);assert.match(JSON.stringify(selected.plans.history),/SEARCH events/);
+   for(const read of[cold,warm,selected,history]){assert.equal(read.cost.rowsWritten,0);assert.equal(read.cost.rawRuntime.rowsWritten,0);assert.equal(read.cost.unknown,0);}
+   samples.push({count,cold:cold.cost,warm:warm.cost,selected:selected.cost,history:history.cost,plans:selected.plans});
   }
+  assert.equal(samples[1].history.rowsRead,samples[0].history.rowsRead,JSON.stringify(samples));
   assert.equal(samples[1].warm.rowsRead,samples[0].warm.rowsRead,JSON.stringify(samples));
   // Independent immutable proof envelopes can straddle initialization receipt
   // batches differently. Each of the at-most eight admitted source candidates

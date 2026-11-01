@@ -20,12 +20,13 @@ export function openRequestJournal(filename) {
       db.exec("ALTER TABLE request_runs ADD COLUMN attempt_id TEXT");
     if (!db.prepare("PRAGMA table_info(request_runs)").all().some(column => column.name === "delivery_refused"))
       db.exec("ALTER TABLE request_runs ADD COLUMN delivery_refused INTEGER NOT NULL DEFAULT 0");
-    // reported tracks the service run report separately from local delivery, so a
-    // lost "delivered" report stays pending. Rows delivered before this column
-    // existed count as reported; they cannot be reconciled retroactively.
+    // reported tracks the service run report separately from local delivery:
+    // 0 pending, 1 reported, 2 terminally refused. Older delivered rows are not
+    // proof the service saw the report, so rows with an attempt stay pending and
+    // are reconciled by an idempotent report. Rows without an attempt have none.
     if (!db.prepare("PRAGMA table_info(request_runs)").all().some(column => column.name === "reported")) {
       db.exec("ALTER TABLE request_runs ADD COLUMN reported INTEGER NOT NULL DEFAULT 0");
-      db.exec("UPDATE request_runs SET reported=1 WHERE delivered=1");
+      db.exec("UPDATE request_runs SET reported=1 WHERE delivered=1 AND attempt_id IS NULL");
     }
     db.exec("CREATE INDEX IF NOT EXISTS request_runs_retryable_delivery ON request_runs(delivered, delivery_refused) WHERE response IS NOT NULL");
     db.exec("COMMIT");
@@ -74,11 +75,23 @@ export async function runRequestOnce({ connection, requestMessageId, db, execute
     }
     if (receipt.status !== "recorded") throw new Error("Reply delivery is unconfirmed; retain the journal and retry unchanged");
     db.prepare("UPDATE request_runs SET delivered=1, delivery_refused=0 WHERE id=?").run(id);
-    // The reply is recorded; a failed run report must not be hidden. Keep the row
-    // pending (reported=0) so a rerun or the queue reports it again.
-    const runReported = record.attempt_id ? await report(record.attempt_id, "delivered").then(() => true, () => false) : true;
-    if (runReported) db.prepare("UPDATE request_runs SET reported=1 WHERE id=?").run(id);
-    return { status: "delivered", requestId: id, receipt, hostExecuted: false, runReported };
+    return reportDelivered(record, { status: "delivered", requestId: id, receipt, hostExecuted: false });
+  };
+  // The reply is recorded; a lost run report must not be hidden. Retryable
+  // failures keep reported=0 and surface to the queue's backoff; a terminal
+  // refusal (e.g. 404/409 missing or owned run) is recorded so it stops retrying.
+  const reportDelivered = async (record, result) => {
+    if (!record.attempt_id) { db.prepare("UPDATE request_runs SET reported=1 WHERE id=?").run(id); return { ...result, runReported: true }; }
+    try { await report(record.attempt_id, "delivered"); }
+    catch (error) {
+      if ([401, 429].includes(error?.status) || error?.status >= 500 || !error?.status
+        || ["TypeError", "TimeoutError", "AbortError"].includes(error?.name))
+        throw Object.assign(error, { runReportPending: true, requestId: id });
+      db.prepare("UPDATE request_runs SET reported=2 WHERE id=?").run(id);
+      return { ...result, runReported: "refused", reportStatus: error.status };
+    }
+    db.prepare("UPDATE request_runs SET reported=1 WHERE id=?").run(id);
+    return { ...result, runReported: true };
   };
   if (savedRequestId !== undefined && savedRequestId !== id)
     throw Object.assign(new Error("Saved reply identity changed; reconcile the original attempt"), { code: "saved_reply_identity_mismatch" });
@@ -87,6 +100,10 @@ export async function runRequestOnce({ connection, requestMessageId, db, execute
     throw new Error("Saved reply is unavailable; reconcile the original attempt");
   if (prior) {
     if (!prior.response) throw new Error("Host outcome is unknown; reconcile the original attempt before proceeding");
+    // A known local delivery whose run report is pending only reports; the saved
+    // reply is not replayed again.
+    if (prior.delivered === 1 && prior.reported === 0)
+      return reportDelivered(prior, { status: "delivered", requestId: id, hostExecuted: false, reportOnly: true });
     // Even an already delivered response is reconciled through the service's
     // idempotent command path, never a stale local assertion of current access.
     return deliver(prior);

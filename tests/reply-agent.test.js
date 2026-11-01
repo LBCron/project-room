@@ -270,10 +270,21 @@ test("a lost 'delivered' run report is surfaced and retried until the service re
     return fetch(url, options);
   } };
   const execute = async () => { calls++; return { body: "Delivered while the run report was lost" }; };
-  const first = await runRequestOnce({ ...args, connection, requestMessageId, execute });
-  assert.equal(first.status, "delivered");
-  assert.equal(first.runReported, false, "a swallowed run report must not look fully delivered");
+  // A retryable report failure surfaces (for the queue's backoff) instead of
+  // looking fully delivered; the reply itself stays recorded and is not replayed.
+  await assert.rejects(runRequestOnce({ ...args, connection, requestMessageId, execute }), error => error.runReportPending === true);
   assert.equal(dropped, 1);
+  assert.deepEqual({ ...args.db.prepare("SELECT delivered, reported FROM request_runs").get() }, { delivered: 1, reported: 0 });
+  // Sustained retryable failure keeps it pending and only re-reports (no reply replay).
+  let replies = 0;
+  const counting = { ...connection, fetchImpl: async (url, options) => {
+    if (options.method === "POST" && !new URL(url).pathname.endsWith("/request-runs")) replies++;
+    return connection.fetchImpl(url, options);
+  } };
+  await assert.rejects(runRequestOnce({ ...args, connection: counting, requestMessageId, execute }), error => error.runReportPending === true);
+  assert.equal(dropped, 2);
+  assert.equal(replies, 0, "a known delivery is not replayed");
+  assert.equal(args.db.prepare("SELECT reported FROM request_runs").get().reported, 0);
   assert.equal((await f.client.requestRuns()).runs[requestMessageId].state, "result_ready");
   // The automatic queue must still treat the row as pending and finish the report.
   const controller = new AbortController(); t.after(() => controller.abort());
@@ -281,9 +292,40 @@ test("a lost 'delivered' run report is surfaced and retried until the service re
   await runRequestQueue({ ...args, signal: controller.signal, intervalMs: 1000, stream: false, execute,
     emit: result => { seen.push(result); if (result.status === "delivered") controller.abort(); } });
   assert.equal(seen.at(-1).runReported, true);
+  assert.equal(seen.at(-1).reportOnly, true, "known delivery reports without replaying the reply");
   assert.equal(seen.at(-1).hostExecuted, false);
   assert.equal((await f.client.requestRuns()).runs[requestMessageId].state, "delivered");
   assert.equal(calls, 1);
+});
+test("a terminally refused 'delivered' report is recorded and stops retrying", async t => {
+  const f = await fixture(t), args = runner(t, f), requestMessageId = f.open("host-report-refused").command.data.messageId;
+  let refused = 0;
+  const connection = { ...f.config, fetchImpl: async (url, options) => {
+    if (options.method === "POST" && new URL(url).pathname.endsWith("/request-runs")
+      && JSON.parse(options.body).action === "delivered") { refused++; return Response.json({ error: { code: "run_conflict", message: "owned" } }, { status: 409 }); }
+    return fetch(url, options);
+  } };
+  const result = await runRequestOnce({ ...args, connection, requestMessageId, execute: async () => ({ body: "Answer" }) });
+  assert.equal(result.status, "delivered");
+  assert.equal(result.runReported, "refused");
+  assert.equal(result.reportStatus, 409);
+  assert.equal(refused, 1);
+  assert.deepEqual({ ...args.db.prepare("SELECT delivered, reported FROM request_runs").get() }, { delivered: 1, reported: 2 });
+  assert.equal(args.db.prepare("SELECT count(*) AS n FROM request_runs WHERE (delivered=0 OR reported=0) AND delivery_refused=0").get().n, 0);
+});
+test("upgrading an old journal keeps delivered-but-unreported attempts pending instead of certifying them", t => {
+  const directory = realpathSync(process.env.TMPDIR ?? "/tmp"), path = join(directory, `old-journal-${process.pid}-${Date.now()}.sqlite`);
+  t.after(() => rmSync(path, { force: true }));
+  const legacy = openRequestJournal(path);
+  legacy.exec("ALTER TABLE request_runs DROP COLUMN reported");
+  legacy.prepare("INSERT INTO request_runs(id,response,delivered,attempt_id) VALUES (?,?,1,?)").run("with-attempt", '{"responseToRequestId":"q1"}', "a1");
+  legacy.prepare("INSERT INTO request_runs(id,response,delivered,attempt_id) VALUES (?,?,1,NULL)").run("no-attempt", '{"responseToRequestId":"q2"}');
+  legacy.close();
+  const upgraded = openRequestJournal(path);
+  try {
+    const rows = Object.fromEntries(upgraded.prepare("SELECT id, reported FROM request_runs").all().map(row => [row.id, row.reported]));
+    assert.deepEqual(rows, { "with-attempt": 0, "no-attempt": 1 }, "old delivered=1 is not proof the service saw the report");
+  } finally { upgraded.close(); }
 });
 test("host failure is unknown and is never automatically executed a second time", async t => {
   const f = await fixture(t), args = runner(t, f), q = f.open("host-unknown");

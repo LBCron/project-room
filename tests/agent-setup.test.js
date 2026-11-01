@@ -13,6 +13,7 @@ import { initialRoom } from "../server/bootstrap.mjs";
 import { createRoomServer } from "../server/http.mjs";
 import { openMcpTestClient } from "../scripts/mcp-test-client.mjs";
 import { connectRoom, setupTarget } from "../client/agent-setup.mjs";
+import { joinPageForAgentCode, JOIN_PAGE_AGENT_LINE } from "../server/routes/agent-connect.mjs";
 import { openSetupJournal } from "../client/setup-journal.mjs";
 import { readAgentConnection, saveAgentConnection } from "../client/agent-connection.mjs";
 import { createAgentIdentity, redeemAgentInvite } from "../client/room-agent.mjs";
@@ -28,6 +29,21 @@ async function fixture(t) {
   const connect = extra => connectRoom({ origin, directory, name: "Peer", accept: true, ...extra });
   return { root, store, keys, origin, directory, invite, connect };
 }
+test("the /a/<code> agent invite link the server emits parses and connects", async t => {
+  const f = await fixture(t), invite = f.invite();
+  // joinPageForAgentCode tells agents to read /a/<code>; the CLI must accept that same link.
+  const emitted = joinPageForAgentCode(JOIN_PAGE_AGENT_LINE, invite.code);
+  const path = /<code>(\/a\/[^<]+)<\/code>/.exec(emitted)?.[1];
+  assert.equal(path, `/a/${encodeURIComponent(invite.code)}`);
+  assert.deepEqual(setupTarget(`${f.origin}${path}`), { origin: f.origin, code: invite.code });
+  assert.deepEqual(setupTarget(`${f.origin}/room/a/${invite.code}/`), { origin: f.origin, code: invite.code });
+  assert.deepEqual(setupTarget(`${f.origin}/a/${invite.code.toLowerCase()}`), { origin: f.origin, code: invite.code });
+  assert.throws(() => setupTarget(`${f.origin}/a/${invite.code}#x`));
+  assert.throws(() => setupTarget(`${f.origin}/a/${invite.code}/extra`));
+  const result = await f.connect({ target: `${f.origin}${path}` });
+  assert.equal(result.status, "connected");
+  assert.equal(result.roomId, "commons");
+});
 test("self-serve join links parse in the CLI and connect like the old hash links", async t => {
   const f = await fixture(t), invite = f.invite();
   assert.deepEqual(setupTarget(`${f.origin}/join/${invite.code}`), { origin: f.origin, code: invite.code });

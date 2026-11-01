@@ -34,8 +34,9 @@ export function setupTarget(value, origin) {
   const shortCode = parseShareInviteCode(value);
   if (shortCode) return { origin: canonicalOrigin(url?.origin ?? origin), sharedToken: shortCode };
   if (!url) throw new Error("Choose an invite or Room URL");
-  // Self-serve join links: /join/RM-XXX (or /room/join/RM-XXX on the www door).
-  const joinPath = /^(?:\/room)?\/join\/(RM-[a-z0-9]+)\/?$/i.exec(url.pathname);
+  // Self-serve join links: /join/RM-XXX (or /room/join/RM-XXX on the www door),
+  // and the /a/RM-XXX agent steps link the join page tells agents to read.
+  const joinPath = /^(?:\/room)?\/(?:join|a)\/(RM-[a-z0-9]+)\/?$/i.exec(url.pathname);
   if (joinPath && !url.hash) {
     if (origin && canonicalOrigin(origin) !== canonicalOrigin(url.origin)) throw new Error("URL and configured origin disagree");
     return { origin: canonicalOrigin(url.origin), code: joinPath[1].toUpperCase() };

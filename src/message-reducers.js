@@ -1,3 +1,4 @@
+import {currentRecordReplyRootChannel} from './current-record-context.js';
 // Pure message-domain reducers. The event coordinator retains envelope validation,
 // event deduplication and state cloning. Shared authority guards are supplied once
 // at composition, avoiding a dependency cycle back to the event coordinator.
@@ -47,12 +48,16 @@ export function createMessageReducers({ requireMember, knownMember, requireField
     if (incoming.data.replyToId) {
       let root = state.messages.find(m => m.id === incoming.data.replyToId);
       if (!root) throw new Error("Reply must reference a message in this Room");
-      while (root.replyToId) {
-        const parent = state.messages.find(m => m.id === root.replyToId);
-        if (!parent) break;
-        root = parent;
+      const foldedChannel=currentRecordReplyRootChannel(state,incoming.data.replyToId);
+      if(foldedChannel!==undefined)channelId=foldedChannel;
+      else{
+        while(root.replyToId){
+          const parent=state.messages.find(m=>m.id===root.replyToId);
+          if(!parent)break;
+          root=parent;
+        }
+        channelId=messageChannelId(root);
       }
-      channelId = messageChannelId(root);
     }
     const channel = state.channels[channelId];
     if (!channel) throw new Error("Unknown channel");

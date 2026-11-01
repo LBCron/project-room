@@ -1,4 +1,4 @@
-import { currentRecordReplyCount } from './current-record-context.js';
+import { currentRecordReplyCount,currentRecordReplyOwner } from './current-record-context.js';
 // Shared request semantics. Deliberately independent of events, storage and UI.
 export const REPLY_CANCELLED = "reply_request.cancelled";
 export const REPLY_POLICY_VERSION = 1;
@@ -172,14 +172,19 @@ export function prepareReplyPost(state, incoming) {
 
 // Each message belongs to its nearest explicit request, until a different-work
 // branch intervenes. Descendants cannot escape an excluded branch accidentally.
+export function deriveReplyContextOwner(message,requests,parentOwner) {
+ if(own(requests,message.id))return message.id;
+ const request=parentOwner&&requests[parentOwner];
+ return request&&(!message.workItemId||message.workItemId===request.workItemId)?parentOwner:null;
+}
 export function replyContextOwners(state) {
-  const owners = new Map(), requests = state.replyRequests ?? {};
-  for (const message of state.messages) {
-    if (own(requests, message.id)) { owners.set(message.id, message.id); continue; }
-    const parent = owners.get(message.replyToId), request = parent && requests[parent];
-    if (request && (!message.workItemId || message.workItemId === request.workItemId)) owners.set(message.id, parent);
-  }
-  return owners;
+ const owners=new Map(),requests=state.replyRequests??{};
+ for(const message of state.messages){
+  const supplied=currentRecordReplyOwner(state,message.id);
+  const owner=own(requests,message.id)?message.id:supplied!==undefined?supplied:deriveReplyContextOwner(message,requests,owners.get(message.replyToId));
+  if(owner!==null&&owner!==undefined)owners.set(message.id,owner);
+ }
+ return owners;
 }
 
 export function recordReplyPost(state, incoming, mode) {

@@ -5,7 +5,7 @@ import assert from "node:assert/strict";
 import { fileURLToPath } from "node:url";
 import { parseArgs } from "../room-acp/src/args.mjs";
 import { candidates, probe, splitCommand, spawnAgent, childEnvFor, KNOWN_AGENTS } from "../room-acp/src/agents.mjs";
-import { mkdtempSync, readFileSync, rmSync } from "node:fs";
+import { mkdtempSync, readFileSync, rmSync, mkdirSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join as pathJoin } from "node:path";
 import { main } from "../room-acp/src/cli.mjs";
@@ -62,6 +62,22 @@ test("spawnAgent: child env is an allowlist — no parent credential crosses (RE
   const seen = JSON.parse(readFileSync(pathJoin(dir, "env-dump.json"), "utf8"));
   for (const key of ["PATH", "HOME", "CODEX_PATH", "FAKE_ACP_MODE"]) assert.equal(seen[key], env[key], key);
   for (const key of Object.keys(env)) if (!["PATH", "HOME", "CODEX_PATH", "FAKE_ACP_MODE"].includes(key)) assert.equal(seen[key], undefined, `${key} crossed to the child`);
+});
+
+test("spawnAgent preserves an explicitly selected Codex configuration directory", async t => {
+  const dir = mkdtempSync(pathJoin(tmpdir(), "room-acp-config-"));
+  t.after(() => rmSync(dir, { recursive: true, force: true }));
+  const home = pathJoin(dir, "home"), custom = pathJoin(dir, "custom-codex");
+  mkdirSync(pathJoin(home, ".codex"), { recursive: true });
+  mkdirSync(custom);
+  writeFileSync(pathJoin(home, ".codex", "config.toml"), "default synthetic profile");
+  writeFileSync(pathJoin(custom, "config.toml"), "selected synthetic profile");
+  const script = "const fs=require('node:fs'),p=require('node:path');fs.writeFileSync('selected-profile.txt',fs.readFileSync(p.join(process.env.CODEX_HOME||p.join(process.env.HOME,'.codex'),'config.toml')))";
+  const { child, peer } = spawnAgent({ id: "config", command: process.execPath, args: ["-e", script] },
+    { cwd: dir, env: { PATH: process.env.PATH, HOME: home, CODEX_HOME: custom } });
+  await new Promise(resolve => child.once("exit", resolve));
+  peer.close();
+  assert.equal(readFileSync(pathJoin(dir, "selected-profile.txt"), "utf8"), "selected synthetic profile");
 });
 
 test("probe: initialize against the fake agent reports capabilities", async () => {

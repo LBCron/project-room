@@ -2419,6 +2419,14 @@
     },
     {
       "method": "GET",
+      "path": "/api/rooms/{id}/receipts/{id}"
+    },
+    {
+      "method": "HEAD",
+      "path": "/api/rooms/{id}/receipts/{id}"
+    },
+    {
+      "method": "GET",
       "path": "/api/rooms/{id}/referral-invites"
     },
     {
@@ -6074,6 +6082,14 @@
     {
       "method": "HEAD",
       "path": "/api/rooms/{id}/receipts"
+    },
+    {
+      "method": "GET",
+      "path": "/api/rooms/{id}/receipts/{id}"
+    },
+    {
+      "method": "HEAD",
+      "path": "/api/rooms/{id}/receipts/{id}"
     },
     {
       "method": "GET",

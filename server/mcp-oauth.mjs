@@ -61,13 +61,13 @@ function canonicalOAuthBindingMembers(store, roomId, memberId) {
 export function validateMcpOAuthBinding(store, userId, binding) {
   if (!binding || !userId) return null;
   const direct = binding.principalType === 'account-owned-agent';
-  const fields = ['resource', 'roomId', 'identityId', 'memberId', 'humanMemberId', 'identityEpoch', ...(direct ? ['principalType'] : [])];
+  const fields = ['resource', 'roomId', 'identityId', 'memberId', 'humanMemberId', 'identityEpoch', ...(direct ? ['principalType','accountEpoch'] : [])];
   if (Object.keys(binding).length !== fields.length || fields.some(key => typeof binding[key] !== 'string' || !binding[key] || binding[key].length > 512)) return null;
   const { roomId, identityId, memberId, humanMemberId } = binding;
   const currentEpoch = mcpOAuthIdentityEpoch(store, identityId);
   if (!currentEpoch || binding.identityEpoch !== currentEpoch) return null;
-  const account = store.db.prepare('SELECT active FROM accounts WHERE id=?').get(userId);
-  if (account?.active !== 1) return null;
+  const account = store.db.prepare(direct ? 'SELECT active,auth_epoch FROM accounts WHERE id=?' : 'SELECT active FROM accounts WHERE id=?').get(userId);
+  if (account?.active !== 1 || direct && binding.accountEpoch !== String(account.auth_epoch)) return null;
   const humanLink = store.db.prepare('SELECT account_id FROM member_accounts WHERE room_id=? AND member_id=?').get(roomId, humanMemberId);
   if (humanLink?.account_id !== userId) return null;
   const identityLink = store.db.prepare('SELECT member_id FROM identity_links WHERE room_id=? AND identity_id=?').get(roomId, identityId);
@@ -173,7 +173,7 @@ export function listMcpOAuthAgents(store, userId, resource, {preferredRoomId,pre
     for (const member of Object.values(state.members ?? {})) {
       if (member.kind !== 'agent' || member.accountableHumanId !== human.member_id || !member.identityId) continue;
       const binding = { resource, roomId: human.room_id, identityId: member.identityId, memberId: member.id, humanMemberId: human.member_id, identityEpoch: mcpOAuthIdentityEpoch(store, member.identityId) };
-      const directBinding = {...binding, principalType:'account-owned-agent'};
+      const directBinding = {...binding, principalType:'account-owned-agent',accountEpoch:String(store.db.prepare('SELECT auth_epoch FROM accounts WHERE id=?').get(userId)?.auth_epoch)};
       const selected = validateMcpOAuthBinding(store,userId,directBinding) ? directBinding
         : validateMcpOAuthBinding(store,userId,binding) ? binding : null;
       if (selected) result.push({binding:selected, label:`${member.displayName || member.id} — ${state.room?.title || human.room_id}`});
@@ -213,7 +213,7 @@ export function mcpOAuthPrincipalDescriptor(principal) {
     .map(key => [key, principal[key]])), scopes: Object.freeze([...principal.scopes].sort()) });
 }
 export function authorizeMcpOAuthDescriptor({ store, accountProvider, inviteProvider, resource, descriptor, requiredScopes = ['chat:read'] }) {
-  if (!descriptor || !['account-agent', 'invited-agent'].includes(descriptor.principalType) || descriptor.resource !== resource) return null;
+  if (!descriptor || !['account-agent', 'account-owned-agent', 'invited-agent'].includes(descriptor.principalType) || descriptor.resource !== resource) return null;
   const provider = descriptor.principalType === 'invited-agent' ? inviteProvider : accountProvider;
   const grant = provider?.verifyGrantFamily(descriptor.familyId, { resource });
   if (!grant?.binding || requiredScopes.some(scope => !grant.scopes.includes(scope))
@@ -221,6 +221,6 @@ export function authorizeMcpOAuthDescriptor({ store, accountProvider, inviteProv
   const principal = descriptor.principalType === 'invited-agent'
     ? validateMcpInviteOAuthBinding(store, grant.userId, grant.binding)
     : validateMcpOAuthBinding(store, grant.userId, grant.binding);
-  if (!principal || ['roomId', 'identityId', 'memberId'].some(key => principal[key] !== descriptor[key])) return null;
+  if (!principal || (principal.principalType ?? 'account-agent') !== descriptor.principalType || ['roomId', 'identityId', 'memberId'].some(key => principal[key] !== descriptor[key])) return null;
   return Object.freeze({ ...principal, ...descriptor, clientId: grant.clientId, scopes: grant.scopes });
 }

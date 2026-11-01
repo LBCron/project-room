@@ -44,7 +44,7 @@ async function setup(t, {legacyOwned=false, client=CLIENT, database=':memory:', 
     expectedOwnerRevision: 0, expiresAt: store.now() + 3600000, keyHash: createHash('sha256').update(randomUUID()).digest('hex'), identityId: identity.identityId, identityLinkCode: linkCode }, ownerSession.session.sessionBinding);
   }
   setTier(store.db, 'commons', 'friend-dot', 't2_standard', { updatedBy: 'owner', nowMs: Date.now() });
-  const binding = { resource, roomId: 'commons', memberId: 'friend-dot', identityId: identity.identityId, humanMemberId: 'owner', identityEpoch: mcpOAuthIdentityEpoch(store, identity.identityId), ...(legacyOwned ? {principalType:'account-owned-agent'} : {}) };
+  const binding = { resource, roomId: 'commons', memberId: 'friend-dot', identityId: identity.identityId, humanMemberId: 'owner', identityEpoch: mcpOAuthIdentityEpoch(store, identity.identityId), ...(legacyOwned ? {principalType:'account-owned-agent',accountEpoch:String(store.db.prepare('SELECT auth_epoch FROM accounts WHERE id=?').get(accountId).auth_epoch)} : {}) };
   let server = createRoomServer({ store, origin, mcpOAuthClients: [client] });
   await new Promise(resolve => server.listen(0, '127.0.0.1', resolve));
   t.after(async () => { server.closeStreams(); server.closeAllConnections(); await new Promise(resolve => server.close(resolve)); store.close(); });
@@ -423,7 +423,7 @@ test('interrupted refresh saves roll back; successful refresh reuse still revoke
 });
 
 test('owned-seat consent is fenced by owner transfer, membership removal and identity rotation',async t=>{
- for(const change of ['owner','member','identity']){
+ for(const change of ['owner','member','identity','accountEpoch']){
   const f=await setup(t,{legacyOwned:true,client:CLAUDE});
   if(change==='owner'){
    f.store.command(f.ownerKey,'commons',{id:'successor',type:'member.added',data:{memberId:'successor',displayName:'Successor',kind:'human',permissions:[]}});
@@ -431,7 +431,8 @@ test('owned-seat consent is fenced by owner transfer, membership removal and ide
   }else if(change==='member'){
    const member=f.store.room('commons').state.members['friend-dot'];
    f.store.command(f.ownerKey,'commons',{id:'remove',type:'member.access_changed',data:{memberId:member.id,expectedMemberRevision:member.revision,active:false,permissions:member.permissions}});
-  }else f.store.identities.rotate(f.identity.identityId,f.identity.secret);
+  }else if(change==='accountEpoch')f.store.db.prepare('UPDATE accounts SET auth_epoch=auth_epoch+1 WHERE id=?').run(f.accountId);
+  else f.store.identities.rotate(f.identity.identityId,f.identity.secret);
   assert.equal((await f.rpc('tools/list')).response.status,401,change);
   assert.equal((await f.exchange({grant_type:'refresh_token',refresh_token:f.tokens.refresh_token,client_id:CLAUDE.clientId,resource})).status,400,change);
  }

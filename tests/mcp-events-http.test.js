@@ -176,8 +176,8 @@ test('legacy initialize advertises Events only for authenticated OAuth with a mo
   const initialization = { jsonrpc: '2.0', id: 1, method: 'initialize', params: {
     protocolVersion: '2025-11-25', capabilities: {}, clientInfo: { name: 'legacy-events', version: '1' },
   } };
-  const legacy = (message, token) => new Promise((resolve, reject) => {
-    const req = request(f.base + '/mcp', { method: 'POST', headers: { Host: 'room.example', 'Content-Type': 'application/json',
+  const legacy = (message, token, suffix="") => new Promise((resolve, reject) => {
+    const req = request(f.base + '/mcp'+suffix, { method: 'POST', headers: { Host: 'room.example', 'Content-Type': 'application/json',
       'MCP-Protocol-Version': '2025-11-25', ...(token ? { Authorization: 'Bearer ' + token } : {}) } }, res => {
       let body = ''; res.on('data', chunk => body += chunk); res.on('end', () => resolve(JSON.parse(body)));
     }); req.on('error', reject); req.end(JSON.stringify(message));
@@ -186,7 +186,8 @@ test('legacy initialize advertises Events only for authenticated OAuth with a mo
   assert.deepEqual(initialized.result.capabilities, { tools: {}, events: {} });
   assert.equal(initialized.result.protocolVersion, '2025-11-25');
   assert.equal((await legacy({ jsonrpc: '2.0', id: 2, method: 'events/list', params: {} }, f.tokens.accessToken)).result.events[0].name, 'room.requested');
-  assert.deepEqual((await legacy(initialization)).result.capabilities, { tools: {} });
+  assert.equal((await legacy(initialization)).error.code,-32001);
+  assert.deepEqual((await legacy(initialization,null,'?auth=discovery')).result.capabilities, { tools: {} });
   const disabled = createHostedRoomMcp(f.store, { inviteOAuthProvider: f.native.provider, oauthResource: resource });
   assert.deepEqual((await disabled(initialization, { authorization: 'Bearer ' + f.tokens.accessToken })).result.capabilities, { tools: {} });
   f.native.provider.revoke(f.tokens.refreshToken);

@@ -1,0 +1,18 @@
+{
+  "phase": "post-index-readiness",
+  "checkedAt": "2026-11-01T11:05:02.157Z",
+  "checks": [
+    {
+      "origin": "https://room.trydemigod.com",
+      "http": 200,
+      "status": "ready",
+      "wallMs": 491
+    },
+    {
+      "origin": "https://www.getdasha.com/room",
+      "http": 200,
+      "status": "ready",
+      "wallMs": 74
+    }
+  ]
+}

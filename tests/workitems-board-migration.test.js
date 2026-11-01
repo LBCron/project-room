@@ -237,12 +237,13 @@ test("plan: supersession lineage does not become a prerequisite on replacement c
   const existingDependency = { ...phantom, dependsOn: ["task-a"] };
   const preserved = planWorkItemBoardBackfill({ items: [source, target], events: [supersede], existing: new Map([["task-b", existingDependency]]), nowMs: NOW });
   assert.deepEqual(preserved.rows.get("task-b").dependsOn, ["task-a"]);
-  // Handoff: "-next" phantom titled by the FIRST handoff's nextAction.
+  // Handoff: partial-progress lineage points to the original canonical task.
   const handed = item({ id: "task-c", state: "working", claim: liveClaimFields(), handoff: { nextAction: "Second step" } });
   const handoff1 = ev("work.handoff_recorded", 5 * H, "worker", { workItemId: "task-c", nextAction: "First step" });
   const handoffPlan = planWorkItemBoardBackfill({ items: [handed], events: [handoff1], existing: new Map(), nowMs: NOW });
-  assert.equal(handoffPlan.rows.get("task-c-next").title, "First step");
-  assert.deepEqual(handoffPlan.rows.get("task-c-next").dependsOn, ["task-c"]);
+  assert.equal(handoffPlan.rows.has("task-c-next"), false);
+  assert.equal(handoffPlan.rows.get("task-c").chain[0].targetId, "task-c");
+  assert.equal(handoffPlan.rows.get("task-c").chain[0].note, "First step");
   assert.equal(handoffPlan.rows.get("task-c").chain[0].kind, "handoff");
 });
 
@@ -590,7 +591,7 @@ test("sync: release returns the card to unclaimed and renew extends it, with the
   assert.equal(diffRoomWorkItems(f.store, "commons").converged, true);
 });
 
-test("sync: handoff leaves a -next phantom and supersede closes the source, like the mirror did", async (t) => {
+test("sync: handoff keeps the original task and supersede closes the source", async (t) => {
   const f = fixture(t);
   f.send(f.ownerKey, "propose", "work.proposed", {
     workItemId: "task-hand", title: "Handoff task", definitionOfDone: "x",
@@ -607,8 +608,8 @@ test("sync: handoff leaves a -next phantom and supersede closes the source, like
     nextAction: "Finish it", limitReason: "time",
   });
   const next = f.store.workClaims.get("commons", "task-hand-next");
-  assert.equal(next.title, "Finish it");
-  assert.deepEqual(next.dependsOn, ["task-hand"]);
+  assert.equal(next, null);
+  assert.equal(f.store.workClaims.get("commons", "task-hand").chain[0].targetId, "task-hand");
   assert.equal(f.store.workClaims.get("commons", "task-hand").chain[0].kind, "handoff");
 
   f.send(f.ownerKey, "propose-2", "work.proposed", {
@@ -622,7 +623,7 @@ test("sync: handoff leaves a -next phantom and supersede closes the source, like
   assert.equal(diffRoomWorkItems(f.store, "commons").converged, true);
 });
 
-test("sync: the mirror's caps and occupied-successor refusal still roll commands back", async (t) => {
+test("sync: claim caps roll back and handoff does not touch an unrelated next-id card", async (t) => {
   const f = fixture(t);
   f.store.workClaims.configure("commons", { maxOpenClaims: 2, maxMemberOpenClaims: 1 });
   const propose = (id, n) => f.send(f.ownerKey, `propose-${n}`, "work.proposed", {
@@ -643,16 +644,17 @@ test("sync: the mirror's caps and occupied-successor refusal still roll commands
     error => error.code === "too_many_open_claims");
   assert.equal(f.item("task-cap-b").claim, null); // the command rolled back, projection included
 
-  // Occupied successor: a live board-native claim sits at the -next id.
+  // A matching suffix grants no lineage or authority over unrelated work.
   const { createWork, claimWork } = await import("../server/work-claims.mjs");
   const foreign = claimWork(createWork({ id: "task-cap-a-next", title: "Someone else's" }, { now: Date.now(), agentId: "owner" }), "owner", { now: Date.now() });
   f.store.workClaims.set("commons", foreign);
-  assert.throws(
-    () => f.mutate(f.workerKey, "handoff", "work.handoff_recorded", "task-cap-a", {
-      doneSummary: "Part", evidenceUrl: "https://example.com/e", evidenceVersion: "v1", nextAction: "Next", limitReason: "time",
-    }),
-    error => error.code === "work_claim_conflict");
-  assert.ok(!f.item("task-cap-a").handoff); // rolled back (no handoff recorded)
+  const before = f.store.workClaims.get("commons", foreign.id);
+  f.mutate(f.workerKey, "handoff", "work.handoff_recorded", "task-cap-a", {
+    doneSummary: "Part", evidenceUrl: "https://example.com/e", evidenceVersion: "v1", nextAction: "Next", limitReason: "time",
+  });
+  assert.ok(f.item("task-cap-a").handoff);
+  assert.deepEqual(f.store.workClaims.get("commons", foreign.id), before);
+
 });
 
 test("work fact read uses the type index and excludes unrelated conversation events", t => {

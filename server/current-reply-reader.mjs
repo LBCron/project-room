@@ -43,8 +43,8 @@ export function readCurrentReplies(store,token,roomId,mode,args,shape){
    if(eventCache.has(sequence))return eventCache.get(sequence);
    const scalar=db.prepare('SELECT id,length(CAST(body AS BLOB)) AS bytes FROM events WHERE room_id=? AND sequence=?').get(roomId,sequence);
    if(!scalar||!validId(scalar.id)||scalar.bytes>131072)changed();chargeCurrentReadBudget(b,scalar.bytes+128);
-   const row=db.prepare("SELECT sequence,id,json_extract(body,'$.id') AS eventId,json_extract(body,'$.type') AS type,json_extract(body,'$.actorId') AS actorId,json_extract(body,'$.at') AS at,json_extract(body,'$.data.messageId') AS messageId,json_extract(body,'$.data.requestMessageId') AS requestMessageId,json_extract(body,'$.data.responseToRequestId') AS responseToRequestId FROM events WHERE room_id=? AND sequence=?").get(roomId,sequence);
-   if(row.id!==row.eventId)changed();eventCache.set(sequence,row);return row;
+   const row=db.prepare("SELECT sequence,id,json_extract(body,'$.id') AS eventId,json_extract(body,'$.roomId') AS roomId,json_type(body,'$.data') AS dataType,json_extract(body,'$.type') AS type,json_extract(body,'$.actorId') AS actorId,json_extract(body,'$.at') AS at,json_extract(body,'$.data.messageId') AS messageId,json_extract(body,'$.data.requestMessageId') AS requestMessageId,json_extract(body,'$.data.responseToRequestId') AS responseToRequestId,json_extract(body,'$.data.reason') AS reason FROM events WHERE room_id=? AND sequence=?").get(roomId,sequence);
+   if(row.id!==row.eventId||row.roomId!==roomId||typeof row.type!=='string'||!row.type||!validId(row.actorId)||typeof row.at!=='string'||!Number.isFinite(Date.parse(row.at))||row.dataType!=='object')changed();eventCache.set(sequence,row);return row;
   };
   const created=eventAt(1);if(created.type!=='room.created')changed();
   const binding={v:2,mode,roomId,viewerId:auth.member.id,accountId:auth.account?.id??null,authEpoch:auth.account?.authEpoch??null,roomCreatedEventId:created.id,direction,status,requestMessageId};
@@ -63,25 +63,6 @@ export function readCurrentReplies(store,token,roomId,mode,args,shape){
     const row=db.prepare('SELECT sequence FROM events WHERE room_id=? AND id=?').get(roomId,id);chargeCurrentReadBudget(b,128);if(!row)changed();evaluatedThrough=Math.max(evaluatedThrough,row.sequence);
    }
   };
-  if(mode==='list'){
-   const saved=args.cursor==null?null:decodeBound(crypto,args.cursor,binding);
-   if(saved&&typeof saved.after!=='string')fail('invalid_reply_cursor','Invalid request source continuation');
-   const source=readCurrentReplyRequestWindow(store,roomId,{after:saved?.after??'',limit:Math.min(limit,WINDOW)});
-   const selected=source.requests.filter(r=>directionMatches(r,auth.member.id,direction)&&messageInHistory({id:r.id,createdAt:r.createdAt},floor)&&(status==='all'||r.status===status));
-   for(const request of selected)noteRequest(request);
-   const nextCursor=source.hasMore?crypto.encode({...binding,after:source.examinedAfter}):null;
-   const nextRead=nextCursor?{tool:'room_list_requests',arguments:{direction,status,limit,cursor:nextCursor}}:null;
-   return {...base,evaluatedThrough,selection:{direction,status},requests:selected.map(shape.compactRequest),nextReads:selected.map(r=>({requestMessageId:r.id,http:{method:'GET',path:`/api/rooms/${encodeURIComponent(roomId)}/reply-context?requestMessageId=${encodeURIComponent(r.id)}`},nextRead:{tool:'room_read_request',arguments:{requestMessageId:r.id}}})),sourceWindow:{complete:!source.hasMore,consistency:'current-per-page'},page:{cursor:args.cursor??null,limit,hasMore:source.hasMore,nextCursor,nextRead},nextRead};
-  }
-  if(mode!=='selected')fail('current_reply_context_unavailable','Normalized request history requires its qualified bounded reader');
-  const request=loadRequest(requestMessageId);
-  if(!request||!directionMatches(request,auth.member.id,'both')||!messageInHistory({id:request.id,createdAt:request.createdAt},floor))fail('reply_request_not_found','Request not found in this Room',404);
-  const opening=loadMessage(request.id),context=loadMessage(request.contextMessageId);
-  if(!opening||!context)changed();
-  const openingEvent=eventAt(opening.row.seq),contextEvent=eventAt(context.row.seq);
-  if(openingEvent.type!=='message.posted'||openingEvent.id!==request.openingEventId||openingEvent.messageId!==request.id||opening.value.authorId!==request.requesterId||opening.value.toMemberId!==request.recipientId||openingEvent.actorId!==opening.value.authorId||openingEvent.at!==opening.value.createdAt||opening.value.createdAt!==request.createdAt||contextEvent.type!=='message.posted'||contextEvent.id!==request.contextEventId||contextEvent.messageId!==request.contextMessageId||contextEvent.actorId!==context.value.authorId||contextEvent.at!==context.value.createdAt)changed();
-  if(!visible(context.value,auth.member.id,floor))fail('reply_context_unavailable','Latest request context is outside the visible conversation; ask for a new request');
-  evaluatedThrough=Math.max(opening.row.seq,context.row.seq);
   const ownerCache=new Map();
   const ownerOf=id=>{
    if(ownerCache.has(id))return ownerCache.get(id);
@@ -96,10 +77,89 @@ export function readCurrentReplies(store,token,roomId,mode,args,shape){
    for(const message of path.reverse()){if(owner&&message.workItemId&&message.workItemId!==owner.workItemId)owner=null;ownerCache.set(message.id,owner);}
    return owner;
   };
+  if(mode==='list'){
+   const saved=args.cursor==null?null:decodeBound(crypto,args.cursor,binding);
+   if(saved&&typeof saved.after!=='string')fail('invalid_reply_cursor','Invalid request source continuation');
+   const source=readCurrentReplyRequestWindow(store,roomId,{after:saved?.after??'',limit:Math.min(limit,WINDOW)});
+   for(const r of source.requests){if(!validId(r.id)||!validId(r.requesterId)||!validId(r.recipientId)||r.requesterId===r.recipientId||!['open','answered','declined','cancelled'].includes(r.status)||r.revision!==(r.status==='open'?0:1)||typeof r.createdAt!=='string'||!Number.isFinite(Date.parse(r.createdAt)))changed();requests.set(r.id,r);}
+   const selected=source.requests.filter(r=>directionMatches(r,auth.member.id,direction)&&messageInHistory({id:r.id,createdAt:r.createdAt},floor)&&(status==='all'||r.status===status));
+   for(const request of selected)noteRequest(request);
+   const nextCursor=source.hasMore?crypto.encode({...binding,after:source.examinedAfter}):null;
+   const nextRead=nextCursor?{tool:'room_list_requests',arguments:{direction,status,limit,cursor:nextCursor}}:null;
+   return {...base,evaluatedThrough,selection:{direction,status},requests:selected.map(shape.compactRequest),nextReads:selected.map(r=>({requestMessageId:r.id,http:{method:'GET',path:`/api/rooms/${encodeURIComponent(roomId)}/reply-context?requestMessageId=${encodeURIComponent(r.id)}`},nextRead:{tool:'room_read_request',arguments:{requestMessageId:r.id}}})),sourceWindow:{complete:!source.hasMore,consistency:'current-per-page'},page:{cursor:args.cursor??null,limit,hasMore:source.hasMore,nextCursor,nextRead},nextRead};
+  }
+  if(mode==='history'){
+   const saved=args.cursor!=null?decodeBound(crypto,args.cursor,binding):null;
+   const checkpoint=args.checkpoint!=null?decodeBound(crypto,args.checkpoint,binding):null;
+   if(saved?.kind!=='page'&&saved||checkpoint?.kind!=='checkpoint'&&checkpoint)fail('invalid_reply_cursor','Choose the matching history continuation');
+   const horizon=saved?.horizon??head.sequence,anchor=saved?.anchor??eventAt(horizon).id,after=saved?.after??checkpoint?.through??0;
+   if(!Number.isSafeInteger(horizon)||horizon>head.sequence||!Number.isSafeInteger(after)||after<0||after>horizon||eventAt(horizon).id!==anchor)changed();
+   if(checkpoint&&(checkpoint.through>head.sequence||eventAt(checkpoint.through).id!==checkpoint.anchor))changed();
+   const source=db.prepare('SELECT sequence FROM events WHERE room_id=? AND sequence>? AND sequence<=? ORDER BY sequence LIMIT ?').all(roomId,after,horizon,Math.min(limit,WINDOW));
+   chargeCurrentReadBudget(b,source.length*32,source.length);const items=[];let rowBytes=0,last=after;
+   for(const point of source){
+    const e=eventAt(point.sequence);let owner,message,kind;
+    if(e.type==='message.posted'){
+     message=loadMessage(e.messageId);if(!message||message.row.seq!==point.sequence)changed();owner=ownerOf(e.messageId);
+     if(owner)kind=e.id===owner.openingEventId?'opened':e.id===owner.terminalEventId?owner.status:'context';
+    }else if(e.type==='reply_request.cancelled'){owner=loadRequest(e.requestMessageId);kind='cancelled';}
+    let item=null;
+    if(owner&&directionMatches(owner,auth.member.id,direction)&&messageInHistory({id:owner.id,createdAt:owner.createdAt},floor)){
+     if(kind==='cancelled'){
+      if(owner.status!=='cancelled'||e.id!==owner.terminalEventId||e.actorId!==owner.terminalActorId||e.reason!==owner.reason||e.at!==owner.closedAt)changed();
+      item={sequence:point.sequence,eventId:e.id,requestMessageId:owner.id,kind,requesterId:owner.requesterId,recipientId:owner.recipientId,workItemId:owner.workItemId,actorId:e.actorId,at:e.at,reason:owner.reason};
+     }else if(visible(message.value,auth.member.id,floor)){
+      if(e.actorId!==message.value.authorId||e.at!==message.value.createdAt)changed();
+      item={sequence:point.sequence,eventId:e.id,requestMessageId:owner.id,kind,requesterId:owner.requesterId,recipientId:owner.recipientId,workItemId:owner.workItemId,actorId:e.actorId,at:e.at,message:shape.readMessage({...message.value,body:message.value.deletedAt?null:message.value.body})};
+     }
+    }
+    if(item){const bytes=Buffer.byteLength(JSON.stringify(item));if(rowBytes+bytes>PAGE_BYTES){if(!items.length)fail('reply_entry_too_large','One request entry exceeds the page budget',413);break;}items.push(item);rowBytes+=bytes;evaluatedThrough=Math.max(evaluatedThrough,point.sequence);}
+    last=point.sequence;
+   }
+   if(last===after&&after<horizon&&!source.length)changed();
+   const hasMore=last<horizon,nextCursor=hasMore?crypto.encode({...binding,kind:'page',horizon,anchor,after:last}):null;
+   const completedCheckpoint=hasMore?null:crypto.encode({...binding,kind:'checkpoint',through:horizon,anchor});
+   const nextRead=nextCursor?{tool:'room_request_history',arguments:{direction,limit,cursor:nextCursor}}:null;
+   return stampReplyRead({...base,evaluatedThrough,selection:{direction,requestMessageId:null},roomCreatedEventId:created.id,sourceWindow:{complete:!hasMore,consistency:'frozen-history-current-bodies'},page:{cursor:args.cursor??null,checkpoint:args.checkpoint??null,items,rowBytes,limit,hasMore,nextCursor,completedCheckpoint,nextRead},nextRead},auth.member.id);
+  }
+
+  const request=loadRequest(requestMessageId);
+  if(!request||!directionMatches(request,auth.member.id,'both')||!messageInHistory({id:request.id,createdAt:request.createdAt},floor))fail('reply_request_not_found','Request not found in this Room',404);
+  const opening=loadMessage(request.id),context=loadMessage(request.contextMessageId);
+  if(!opening||!context)changed();
+  const openingEvent=eventAt(opening.row.seq),contextEvent=eventAt(context.row.seq);
+  if(openingEvent.type!=='message.posted'||openingEvent.id!==request.openingEventId||openingEvent.messageId!==request.id||opening.value.authorId!==request.requesterId||opening.value.toMemberId!==request.recipientId||openingEvent.actorId!==opening.value.authorId||openingEvent.at!==opening.value.createdAt||opening.value.createdAt!==request.createdAt||contextEvent.type!=='message.posted'||contextEvent.id!==request.contextEventId||contextEvent.messageId!==request.contextMessageId||contextEvent.actorId!==context.value.authorId||contextEvent.at!==context.value.createdAt)changed();
+  if(!visible(context.value,auth.member.id,floor))fail('reply_context_unavailable','Latest request context is outside the visible conversation; ask for a new request');
+  evaluatedThrough=Math.max(opening.row.seq,context.row.seq);
   if(ownerOf(context.value.id)?.id!==request.id)changed();
-  // Required prior constraints must not be silently dropped from actionable preparation.
-  if(opening.value.replyToId){const parent=loadMessage(opening.value.replyToId),prior=parent?.value.replyToId&&loadRequest(parent.value.replyToId);
-   if(prior?.status==='answered'&&prior.responseMessageId===parent.value.id&&prior.requesterId===request.requesterId&&prior.recipientId===request.recipientId&&prior.workItemId===request.workItemId)fail('reply_follow_up_unavailable','Earlier exchange preparation requires qualified normalized context; start a new request with the relevant context');}
+  // Follow-up preparation keeps the established eight-exchange/100-message
+  // contract. Both source admission and addressed proof reads stay bounded;
+  // unavailable/withdrawn required context is a refusal, never an empty array.
+  const previousExchanges=[],seen=new Set([request.id]);let previous=request,priorCount=0;
+  while(true){
+   const currentOpening=loadMessage(previous.id),parent=currentOpening?.value.replyToId&&loadMessage(currentOpening.value.replyToId);
+   const prior=parent?.value.replyToId&&loadRequest(parent.value.replyToId);
+   if(!prior||prior.status!=='answered'||prior.responseMessageId!==parent.value.id||prior.requesterId!==request.requesterId||prior.recipientId!==request.recipientId||prior.workItemId!==request.workItemId)break;
+   if(seen.has(prior.id))changed();seen.add(prior.id);
+   if(previousExchanges.length===8)fail('reply_follow_up_too_large','Earlier exchange exceeds bounded preparation; start a new request with the relevant context',413);
+   if(!messageInHistory({id:prior.id,createdAt:prior.createdAt},floor))fail('reply_follow_up_unavailable','Earlier exchange is outside visible history');
+   const priorOpening=loadMessage(prior.id);if(!priorOpening||eventAt(parent.row.seq).id!==prior.terminalEventId||ownerOf(parent.value.id)?.id!==prior.id)changed();
+   const rows=db.prepare('SELECT message_id,seq FROM messages INDEXED BY messages_room_thread_seq WHERE room_id=? AND thread_root_id=? AND seq>=? AND seq<=? ORDER BY seq,message_id LIMIT 101').all(roomId,priorOpening.row.thread_root_id??prior.id,priorOpening.row.seq,parent.row.seq);
+   if(priorOpening.row.thread_root_id===null)rows.unshift({message_id:prior.id,seq:priorOpening.row.seq});
+   if(rows.length>100)fail('reply_follow_up_too_large','Earlier exchange exceeds bounded preparation; start a new request with the relevant context',413);
+   chargeCurrentReadBudget(b,rows.reduce((n,row)=>n+Buffer.byteLength(row.message_id)+32,0),rows.length);
+   const priorMessages=[];
+   for(const row of rows){
+    const message=loadMessage(row.message_id);if(!message||message.row.seq!==row.seq)changed();
+    if(ownerOf(row.message_id)?.id!==prior.id||message.value.toMemberId&&![prior.requesterId,prior.recipientId].every(id=>id===message.value.authorId||id===message.value.toMemberId))continue;
+    if(!messageInHistory(message.value,floor)||message.value.deletedAt||message.value.body===null)fail('reply_follow_up_unavailable','Earlier exchange contains unavailable or withdrawn context');
+    priorMessages.push(shape.readMessage(message.value));
+   }
+   if(!priorMessages.some(m=>m.id===prior.id)||!priorMessages.some(m=>m.id===prior.responseMessageId))changed();
+   previousExchanges.unshift({requestMessageId:prior.id,responseMessageId:prior.responseMessageId,messages:priorMessages});priorCount+=priorMessages.length;
+   if(priorCount>100||Buffer.byteLength(JSON.stringify(previousExchanges))>PAGE_BYTES)fail('reply_follow_up_too_large','Earlier exchange exceeds bounded preparation',413);
+   previous=prior;
+  }
   const saved=args.cursor==null?null:decodeBound(crypto,args.cursor,binding);
   if(saved&&saved.requestRevision!==request.revision)fail('reply_history_changed','Request revision changed; reconcile before resuming');
   const horizon=saved?.horizon??head.sequence,anchor=saved?.anchor??eventAt(horizon).id;
@@ -110,10 +170,18 @@ export function readCurrentReplies(store,token,roomId,mode,args,shape){
   // Root posts have NULL thread_root_id; descendants name that root. Merge
   // the one addressed root with its bounded indexed descendant stream.
   const root=opening.row.thread_root_id===null&&(opening.row.seq>after.sequence||opening.row.seq===after.sequence&&opening.value.id>after.id)&&opening.row.seq<=horizon?[{message_id:opening.value.id,seq:opening.row.seq}]:[];
-  const source=[...root,...indexed].sort((a,c)=>a.seq-c.seq||Buffer.compare(Buffer.from(a.message_id),Buffer.from(c.message_id))).slice(0,count+1);
+  const cancelled=request.status==='cancelled'?db.prepare('SELECT id,sequence FROM events WHERE room_id=? AND id=?').get(roomId,request.terminalEventId):null;
+  if(request.status==='cancelled'&&!cancelled)changed();
+  const cancelledSource=cancelled&&cancelled.sequence<=horizon&&(cancelled.sequence>after.sequence||cancelled.sequence===after.sequence&&cancelled.id>after.id)?[{message_id:cancelled.id,seq:cancelled.sequence,cancelled:true}]:[];
+  const source=[...root,...indexed,...cancelledSource].sort((a,c)=>a.seq-c.seq||Buffer.compare(Buffer.from(a.message_id),Buffer.from(c.message_id))).slice(0,count+1);
   chargeCurrentReadBudget(b,source.reduce((n,row)=>n+Buffer.byteLength(row.message_id)+32,0),source.length);
   const items=[];let rowBytes=0,last=after,examined=0;
   for(const row of source.slice(0,count)){
+   if(row.cancelled){
+    const event=eventAt(row.seq);if(event.type!=='reply_request.cancelled'||event.requestMessageId!==request.id||event.actorId!==request.terminalActorId||event.reason!==request.reason||event.at!==request.closedAt)changed();
+    const item={sequence:row.seq,eventId:event.id,requestMessageId:request.id,kind:'cancelled',requesterId:request.requesterId,recipientId:request.recipientId,workItemId:request.workItemId,actorId:event.actorId,at:event.at,reason:request.reason},bytes=Buffer.byteLength(JSON.stringify(item));
+    if(rowBytes+bytes>PAGE_BYTES)break;items.push(item);rowBytes+=bytes;evaluatedThrough=Math.max(evaluatedThrough,row.seq);last={sequence:row.seq,id:row.message_id};examined++;continue;
+   }
    const message=loadMessage(row.message_id);if(!message||message.row.seq!==row.seq)changed();
    const owner=ownerOf(row.message_id);let item=null;
    if(owner?.id===request.id&&visible(message.value,auth.member.id,floor)){
@@ -127,8 +195,17 @@ export function readCurrentReplies(store,token,roomId,mode,args,shape){
   const hasMore=source.length>examined;
   const nextCursor=hasMore?crypto.encode({...binding,requestRevision:request.revision,horizon,anchor,after:last}):null;
   const nextRead=nextCursor?{tool:'room_read_request',arguments:{requestMessageId,limit,cursor:nextCursor}}:null;
-  if(request.status==='cancelled')fail('current_reply_context_unavailable','Cancelled request context requires its qualified terminal reader');
-  if(request.terminalEventId){const terminal=loadMessage(request.responseMessageId);if(!terminal||eventAt(terminal.row.seq).id!==request.terminalEventId||request.responseContextSequence!==context.row.seq)changed();evaluatedThrough=Math.max(evaluatedThrough,terminal.row.seq);}
+  if(request.terminalEventId){
+   if(request.status==='cancelled'){
+    const point=db.prepare('SELECT sequence FROM events WHERE room_id=? AND id=?').get(roomId,request.terminalEventId);if(!point)changed();
+    const terminal=eventAt(point.sequence);if(terminal.type!=='reply_request.cancelled'||terminal.requestMessageId!==request.id||terminal.actorId!==request.terminalActorId||terminal.reason!==request.reason||terminal.at!==request.closedAt)changed();
+    evaluatedThrough=Math.max(evaluatedThrough,point.sequence);
+   }else{
+    const terminal=loadMessage(request.responseMessageId);if(!terminal)changed();const terminalEvent=eventAt(terminal.row.seq);
+    if(terminalEvent.id!==request.terminalEventId||terminalEvent.type!=='message.posted'||terminalEvent.responseToRequestId!==request.id||terminalEvent.actorId!==request.recipientId||terminal.value.authorId!==request.recipientId||terminal.value.toMemberId!==request.requesterId||terminal.value.replyToId!==request.id||terminal.value.workItemId!==request.workItemId||request.responseContextSequence!==context.row.seq)changed();
+    evaluatedThrough=Math.max(evaluatedThrough,terminal.row.seq);
+   }
+  }
   const requester=ownMember(authority.members,request.requesterId),recipient=ownMember(authority.members,request.recipientId),room=readCurrentRecord(db,roomId,'metadata','room',b);
   const denied=store.dmConsents.deniedDirection(roomId,auth.member.id,auth.member.id===request.requesterId?request.recipientId:request.requesterId);
   const canReply=!denied&&requester?.active===true&&recipient?.active===true;
@@ -136,7 +213,7 @@ export function readCurrentReplies(store,token,roomId,mode,args,shape){
   const instructions=charterContext(room),work=request.workItemId?readCurrentWorkItem(db,roomId,request.workItemId):null;
   return stampReplyRead({...base,evaluatedThrough,selection:{direction:null,requestMessageId},request:structuredClone(request),roomCreatedEventId:created.id,sourceWindow:{complete:!hasMore,consistency:'frozen-conversation-current-preparation'},page:{cursor:args.cursor??null,checkpoint:null,items,rowBytes,limit,hasMore,nextCursor,completedCheckpoint:null,nextRead},nextRead,
    ...shape.responseTemplates(roomId,auth.member.id,request,answerBasis),
-   current:{evaluatedThrough,requesterAvailable:requester?.active===true,recipientAvailable:recipient?.active===true,contextEventId:contextEvent.id,contextSequence:context.row.seq,answerBasis,actions:{reply:canReply,answer:Boolean(answerBasis),decline:Boolean(answerBasis),cancel:false},blockedBy:[...(denied?[denied]:[]),'normalized_cancel_unavailable'],workItemId:request.workItemId,instructionsRevision:room.charter?.revision??0},
-   preparation:{version:1,evaluatedThrough,room:{id:room.id,title:room.title,purpose:instructions.charter?.purpose??room.purpose??''},instructions,previousExchanges:[],work:work?currentWorkRecord(work):null,omitted:['other_work','other_messages','private_inbox','external_resources'],externalExecution:false}},auth.member.id);
+   current:{evaluatedThrough,requesterAvailable:requester?.active===true,recipientAvailable:recipient?.active===true,contextEventId:contextEvent.id,contextSequence:context.row.seq,answerBasis,actions:{reply:canReply,answer:Boolean(answerBasis),decline:Boolean(answerBasis),cancel:request.status==='open'&&(auth.member.id===request.requesterId||auth.member.kind==='human'&&auth.member.id===room.ownerId)},blockedBy:denied?[denied]:[],workItemId:request.workItemId,instructionsRevision:room.charter?.revision??0},
+   preparation:{version:1,evaluatedThrough,room:{id:room.id,title:room.title,purpose:instructions.charter?.purpose??room.purpose??''},instructions,previousExchanges,work:work?currentWorkRecord(work):null,omitted:['other_work','other_messages','private_inbox','external_resources'],externalExecution:false}},auth.member.id);
  }));
 }

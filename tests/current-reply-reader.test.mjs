@@ -65,3 +65,55 @@ test('selected continuation binds viewer and request, rejects tampering and carr
  }while(true);
  assert.equal(ids.length,13);assert.equal(new Set(ids).size,13);
 });
+test('requester cancellation is exposed only after supported command and remains readable to its parties',t=>{
+ const {store,keys}=fixture(t);
+ const before=store.replyRequests.selected(keys.owner,'commons','question');assert.equal(before.current.actions.cancel,true);
+ const cancelled=store.command(keys.owner,'commons',{id:'cancel-question',type:'reply_request.cancelled',data:{requestMessageId:'question',expectedRequestRevision:0,reason:'No longer needed'}});
+ const read=store.replyRequests.selected(keys.reader,'commons','question');
+ assert.equal(read.request.status,'cancelled');assert.equal(read.current.answerBasis,null);
+ assert.equal(read.page.items.at(-1).eventId,cancelled.event.id);assert.equal(read.page.items.at(-1).reason,'No longer needed');
+ validateReplyRead(read,{name:'room_read_request',args:{requestMessageId:'question'},roomId:'commons'});
+});
+
+import {createRoomServer} from '../server/http.mjs';
+import {RoomAgentClient} from '../client/room-agent.mjs';
+test('actual HTTP and SDK consume normalized list continuation and selected answer without legacy hydration',async t=>{
+ const {store,keys}=fixture(t,(_events,add)=>{for(let i=0;i<9;i++)add('message.posted',{messageId:`a-excluded-${i}`,toMemberId:'other',requestKind:'reply',requestPolicyVersion:1,body:'Private'});});
+ const server=createRoomServer({store});await new Promise(resolve=>server.listen(0,'127.0.0.1',resolve));
+ t.after(async()=>{server.closeStreams();server.closeAllConnections();await new Promise(resolve=>server.close(resolve));});
+ const origin=`http://127.0.0.1:${server.address().port}`,client=new RoomAgentClient({version:1,origin,roomId:'commons',memberId:'reader',token:keys.reader});
+ store.room=()=>{throw Error('unexpected legacy room hydration');};
+ let args={limit:2},ids=[];
+ for(let page=0;page<10;page++){
+  const read=await client.replyRead('room_list_requests',args);ids.push(...read.requests.map(r=>r.id));if(!read.nextRead)break;args=read.nextRead.arguments;
+ }
+ assert.deepEqual(ids,['question']);
+ const selected=await client.replyContext('question');assert.ok(selected.current.answerBasis);assert.equal(selected.page.items[0].message.body,'Please save useful work');
+});
+test('normalized same-pair follow-up prepares the earlier useful answer without hydrating the room',t=>{
+ const {store,keys}=fixture(t,(_events,add)=>{
+  // Legacy policy1 marked response records carry the exact inspected context.
+  const opening=_events.find(e=>e.data.messageId==='question');
+  add('message.posted',{messageId:'answer',replyToId:'question',responseToRequestId:'question',expectedRequestRevision:0,responseOutcome:'answered',requestPolicyVersion:1,contextEventId:opening.id,contextSequence:_events.indexOf(opening)+1,toMemberId:'owner',workItemId:null,body:'A useful saved answer'},'reader');
+  add('message.posted',{messageId:'follow-up',replyToId:'answer',toMemberId:'reader',requestKind:'reply',requestPolicyVersion:1,body:'Build on that answer'});
+ });
+ store.room=()=>{throw Error('legacy hydration');};
+ const read=store.replyRequests.selected(keys.reader,'commons','follow-up');
+ assert.equal(read.preparation.previousExchanges[0].messages.at(-1).body,'A useful saved answer');
+ assert.ok(read.current.answerBasis);validateReplyRead(read,{name:'room_read_request',args:{requestMessageId:'follow-up'},roomId:'commons'});
+});
+test('normalized history drains excluded source windows and resumes checkpoint for a late obligation',t=>{
+ const {store,keys}=fixture(t,(_events,add)=>{for(let i=0;i<18;i++)add('message.posted',{messageId:`private-background-${i}`,toMemberId:'other',body:'Do not disclose'});});
+ let args={limit:2},ids=[],checkpoint=null,emptyMore=false;
+ for(let page=0;page<30;page++){
+  const read=store.replyRequests.history(keys.reader,'commons',args);validateReplyRead(read,{name:'room_request_history',args,roomId:'commons'});
+  ids.push(...read.page.items.map(r=>r.message.id));emptyMore ||=read.page.items.length===0&&read.page.hasMore;
+  assert.equal(JSON.stringify(read).includes('private-background'),false);
+  if(!read.nextRead){checkpoint=read.page.completedCheckpoint;break;}args=read.nextRead.arguments;
+ }
+ assert.deepEqual(ids,['question']);assert.ok(checkpoint);assert.equal(emptyMore,true);
+ store.command(keys.owner,'commons',{id:'late-request',type:'message.posted',data:{messageId:'late-question',toMemberId:'reader',requestKind:'reply',body:'New useful work'}});
+ args={limit:2,checkpoint};const late=store.replyRequests.history(keys.reader,'commons',args);
+ validateReplyRead(late,{name:'room_request_history',args,roomId:'commons'});assert.deepEqual(late.page.items.map(r=>r.message.id),['late-question']);
+ assert.throws(()=>store.replyRequests.history(keys.owner,'commons',args),e=>e.code==='reply_cursor_identity_changed');
+});

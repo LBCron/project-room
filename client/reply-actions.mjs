@@ -376,7 +376,7 @@ function validateCurrentReplyRead(result,{name,args,roomId}) {
     &&result.scope?.membership==='room'&&result.scope.targetedMessages==='participants-only'
     &&result.scope.externalExecution===false&&result.scope.acknowledges===false
     &&result.scope.coverage==='bounded-source-window'&&result.evaluationScope==='visible-encountered-anchors');
-  const page=result.page,listed=name==='room_list_requests';
+  const page=result.page,listed=name==='room_list_requests',history=name==='room_request_history';
   assert(page&&page.cursor===(args.cursor??null)&&page.limit===(args.limit??20)
     &&typeof page.hasMore==='boolean'&&result.sourceWindow?.complete===!page.hasMore);
   const opaque=value=>typeof value==='string'&&value.length<=4096&&/^[A-Za-z0-9_-]+$/.test(value);
@@ -385,7 +385,7 @@ function validateCurrentReplyRead(result,{name,args,roomId}) {
       &&result.nextRead.tool===name&&page.nextRead?.tool===name
       &&JSON.stringify(page.nextRead)===JSON.stringify(result.nextRead));
     const expected=listed?{direction:args.direction??'incoming',status:args.status??'open',limit:page.limit,cursor:page.nextCursor}
-      :{requestMessageId:args.requestMessageId,limit:page.limit,cursor:page.nextCursor};
+      :history?{direction:args.direction??'incoming',limit:page.limit,cursor:page.nextCursor}:{requestMessageId:args.requestMessageId,limit:page.limit,cursor:page.nextCursor};
     assert(keys(result.nextRead.arguments,Object.keys(expected))&&Object.entries(expected).every(([key,value])=>result.nextRead.arguments[key]===value));
   }else assert(page.nextCursor===null&&page.nextRead===null&&result.nextRead===null);
   if(listed){
@@ -394,12 +394,41 @@ function validateCurrentReplyRead(result,{name,args,roomId}) {
     assert(result.sourceWindow.consistency==='current-per-page'&&result.requests.length<=Math.min(page.limit,8));
     return {...checked,contractVersion:2};
   }
+  if(history){
+    assert(result.selection?.direction===(args.direction??'incoming')&&result.selection.requestMessageId===null
+      &&validId(result.roomCreatedEventId)&&result.contentTrust===CONTENT_TRUST
+      &&result.sourceWindow.consistency==='frozen-history-current-bodies'&&page.checkpoint===(args.checkpoint??null)
+      &&Array.isArray(page.items)&&page.items.length<=Math.min(page.limit,8)
+      &&(page.hasMore?page.completedCheckpoint===null:opaque(page.completedCheckpoint)));
+    let sequence=0,bytes=0;const ids=new Set();
+    for(const row of page.items){
+      assert(integer(row.sequence)&&row.sequence>sequence&&row.sequence<=result.evaluatedThrough&&validId(row.eventId)&&!ids.has(row.eventId)
+        &&validId(row.requestMessageId)&&validId(row.requesterId)&&validId(row.recipientId)&&row.requesterId!==row.recipientId&&nullableId(row.workItemId)
+        &&validId(row.actorId)&&date(row.at)&&['opened','context','answered','declined','cancelled'].includes(row.kind)
+        &&(result.selection.direction==='incoming'?row.recipientId===result.viewerId:result.selection.direction==='outgoing'?row.requesterId===result.viewerId:[row.requesterId,row.recipientId].includes(result.viewerId)));
+      if(row.kind==='cancelled'){
+        assert(body(row.reason)&&(row.actorId===result.viewerId?!Object.hasOwn(row,'untrusted'):row.untrusted===true));bytes+=Buffer.byteLength(JSON.stringify(withoutUntrusted(row)));
+      }else{
+        const message=withoutUntrusted(row.message);
+        assert(message&&validId(message.id)&&message.authorId===row.actorId&&message.createdAt===row.at
+          &&(message.body===null||typeof message.body==='string'&&message.body.length<=MAX_MESSAGE_BODY_CHARS)
+          &&['workItemId','replyToId','toMemberId'].every(key=>nullableId(message[key]))
+          &&(!message.toMemberId||[message.authorId,message.toMemberId].includes(result.viewerId))
+          &&(message.authorId===result.viewerId?!Object.hasOwn(row.message,'untrusted'):row.message.untrusted===true)
+          &&(row.kind!=='opened'||message.id===row.requestMessageId&&row.actorId===row.requesterId&&message.toMemberId===row.recipientId)
+          &&(!['answered','declined'].includes(row.kind)||message.replyToId===row.requestMessageId&&row.actorId===row.recipientId&&message.toMemberId===row.requesterId));
+        bytes+=Buffer.byteLength(JSON.stringify({...row,message}));
+      }
+      sequence=row.sequence;ids.add(row.eventId);
+    }
+    assert(page.rowBytes===bytes&&bytes<=65536);return result;
+  }
   assert(name==='room_read_request'&&result.selection?.direction===null&&result.selection.requestMessageId===args.requestMessageId
     &&result.contentTrust===CONTENT_TRUST&&validId(result.roomCreatedEventId)
     &&result.sourceWindow.consistency==='frozen-conversation-current-preparation'
     &&page.checkpoint===null&&page.completedCheckpoint===null&&Array.isArray(page.items)&&page.items.length<=Math.min(page.limit,8));
   const request=result.request,current=result.current;
-  assert(validRequest(request)&&request.id===args.requestMessageId&&validId(request.contextMessageId)
+  assert(keys(request,[...requestFields,'contextMessageId','terminalActorId','responseMessageId','responseContextSequence','reason',...(Object.hasOwn(request??{},'answerCredential')?['answerCredential']:[])])&&validRequest(request)&&request.id===args.requestMessageId&&validId(request.contextMessageId)
     &&[request.requesterId,request.recipientId].includes(result.viewerId)
     &&current?.evaluatedThrough===result.evaluatedThrough&&current.contextEventId===request.contextEventId
     &&integer(current.contextSequence)&&current.contextSequence>0&&current.contextSequence<=result.evaluatedThrough
@@ -443,6 +472,16 @@ function validateCurrentReplyRead(result,{name,args,roomId}) {
   try{validateCharterContext(preparation.instructions);}catch{invalid();}
   assert(preparation.instructions.revision===current.instructionsRevision&&Array.isArray(preparation.previousExchanges)
     &&(preparation.work===null||preparation.work?.id===request.workItemId&&integer(preparation.work.revision)&&typeof preparation.work.title==='string'));
+  let priorMessages=0;
+  assert(preparation.previousExchanges.length<=8);
+  for(const exchange of preparation.previousExchanges){
+    assert(keys(exchange,['requestMessageId','responseMessageId','messages'])&&validId(exchange.requestMessageId)&&validId(exchange.responseMessageId)&&Array.isArray(exchange.messages)
+      &&exchange.messages.some(m=>m.id===exchange.requestMessageId)&&exchange.messages.some(m=>m.id===exchange.responseMessageId));
+    for(const raw of exchange.messages){const message=withoutUntrusted(raw);assert(message&&validId(message.id)&&validId(message.authorId)&&body(message.body)&&date(message.createdAt)
+      &&(!message.toMemberId||[message.authorId,message.toMemberId].includes(result.viewerId))
+      &&(message.authorId===result.viewerId?!Object.hasOwn(raw,'untrusted'):raw.untrusted===true));priorMessages++;}
+  }
+  assert(priorMessages<=100);
   // Keep action templates byte-exact with the independently checked current basis.
   assert(Array.isArray(result.responseActions)&&result.responseActions.length===(current.answerBasis?2:0)
     &&Array.isArray(result.responseHttpActions)&&result.responseHttpActions.length===result.responseActions.length);

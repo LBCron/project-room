@@ -1,3 +1,4 @@
+const PARTITIONED_MAPS=new Set(['members','channels','workItems','replyRequests']);
 // Bounded byte scanner for the immutable captured at-rest JSON. It partitions
 // existing bytes; record semantics remain in projection-at-rest and applyEvent.
 export const REPLAY_CODEC_TOKEN_BYTES = 128 * 1024;
@@ -59,7 +60,7 @@ export function scanProjectionChunk(current,input,{maximumRecords=32}={}){
     }
     if(state.phase==='colon'){
       if(whitespace(byte)){take();continue;}if(byte!==58)fail();take();
-      state.phase=state.key==='messages'?'messages-start':state.key==='replyRequests'?'map-start':'value';state.kind='metadata';state.tokenStart=state.offset;continue;
+      state.phase=state.key==='messages'?'messages-start':PARTITIONED_MAPS.has(state.key)?'map-start':'value';state.kind='metadata';state.tokenStart=state.offset;continue;
     }
     if(state.phase==='map-start'){
       if(whitespace(byte)){take();continue;}if(byte!==123)fail();state.mapStart=state.offset;state.mapIndex=0;take();state.phase='map-key-or-end';state.canEnd=true;continue;
@@ -138,7 +139,7 @@ export function decodeProjectionSpan(bytes,record){
 // This small descriptor preserves exact parent boundaries and entry membership
 // count. It is a framing record, never a substitute for the parent's value.
 export function projectionMapFrame(record){
-  if(record?.kind!=='metadata-map'||record.key!=='replyRequests'
+  if(record?.kind!=='metadata-map'||!PARTITIONED_MAPS.has(record.key)
     ||!Number.isSafeInteger(record.offset)||record.offset<0||!Number.isSafeInteger(record.length)||record.length<2
     ||record.offset+record.length>4*1024*1024||!Number.isSafeInteger(record.entries)||record.entries<0||record.entries>1000000)fail();
   return {version:1,kind:'entry-map',parent:record.key,offset:record.offset,length:record.length,entries:record.entries};

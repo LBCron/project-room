@@ -31,7 +31,7 @@ test('Muse-shaped replyRequests partition by addressed entry without raising tok
   assert.ok(Buffer.byteLength(JSON.stringify(replyRequests))>223420);
   const f=fixture(t,{replyRequests}),result=partition(f);
   assert.equal(result.certified,false);assert.equal(result.publication,'pending');
-  assert.equal(f.store.db.prepare("SELECT count(*) AS n FROM message_replay_units WHERE domain='metadata-entry'").get().n,305);
+  assert.equal(f.store.db.prepare("SELECT count(*) AS n FROM message_replay_units WHERE domain='metadata-entry' AND json_extract(unit_key,'$[0]')='replyRequests'").get().n,305);
   assert.deepEqual(cutover.readReplayWitnessLeaf(f.store,{roomId:'commons',generation:f.captured.generation,domain:'metadata-entry',key:JSON.stringify(['replyRequests','request-17'])}).value,replyRequests['request-17']);
 });
 

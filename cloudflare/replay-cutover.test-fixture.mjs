@@ -14,6 +14,22 @@ export class ReplayCutoverRoom extends ReplayWitnessRoom {
   async fetch(request){
     const url=new URL(request.url);
     try{
+      if(url.pathname==='/h-page-seed'){
+        const count=Number(url.searchParams.get('count'));
+        if(![1000,17405].includes(count))throw Error('invalid synthetic H member count');
+        this.s.initialize([...initialRoom(),...Array.from({length:count},(_,i)=>event({id:'post-'+i,roomId:'commons',actorId:'owner',
+          type:'message.posted',at:'2026-01-01T00:00:00.000Z',data:{messageId:'member-'+String(i).padStart(5,'0'),body:'H'}}))]);
+        while(!this.s.backfillMessages({limit:200}).done){}
+        this.s.checkMessagesParity({roomId:'commons'});
+        const capture=captureReplayWitness(this.s,{roomId:'commons',requestId:'h-members',expectedHead:count+2,reason:'Synthetic complete H membership'});
+        return Response.json({capture,count});
+      }
+      if(url.pathname==='/h-page'){
+        const before={...this.stats};
+        const result=cutover.readReplayHMessagePage(this.s,{roomId:'commons',generation:url.searchParams.get('generation'),
+          after:url.searchParams.get('after')??'',limit:16});
+        return Response.json({result,cost:Object.fromEntries(Object.keys(before).map(k=>[k,this.stats[k]-before[k]]))});
+      }
       if(url.pathname==='/reference-seed'){
         this.s.bodiesAtRest=true;
         this.s.initialize([...initialRoom(),event({id:'ref-work',roomId:'commons',actorId:'owner',type:'work.proposed',
@@ -103,7 +119,7 @@ export class ReplayCutoverRoom extends ReplayWitnessRoom {
       if(url.pathname==='/durable-codec')return Response.json(partitionReplayWitness(this.s,{roomId:'commons',generation:url.searchParams.get('generation'),requestId:'codec-'+url.searchParams.get('step'),expectedBytes:Number(url.searchParams.get('bytes'))}));
       if(url.pathname==='/codec-census')return Response.json({
         ...this.db.prepare("SELECT count(*) AS messages,MAX(payload_bytes) AS maxLeafBytes FROM message_replay_units WHERE domain='message'").get(),
-        entries:this.db.prepare("SELECT count(*) AS n FROM message_replay_units WHERE domain='metadata-entry'").get().n,
+        entries:this.db.prepare("SELECT count(*) AS n FROM message_replay_units WHERE domain='metadata-entry' AND json_extract(unit_key,'$[0]')='replyRequests'").get().n,
         maxReceiptBytes:this.db.prepare("SELECT MAX(octet_length(counts_json)) AS n FROM operator_actions WHERE action LIKE 'replay_cutover_%'").get().n});
       if(url.pathname==='/codec-leaf')return Response.json(readReplayWitnessLeaf(this.s,{roomId:'commons',generation:url.searchParams.get('generation'),domain:'metadata-entry',key:JSON.stringify(['replyRequests','request-17'])}));
       if(url.pathname==='/codec-leaf-tamper'){
@@ -175,5 +191,5 @@ export class ReplayCutoverRoom extends ReplayWitnessRoom {
   }
 }
 export default {fetch(request,env){const surface=new URL(request.url).searchParams.get('surface')??'cutover';
-  if(!/^(?:cutover|cow-baseline|cow-idle|cow-active|cow-fault|references)$/.test(surface))return new Response('invalid fixture surface',{status:400});
+  if(!/^(?:cutover|cow-baseline|cow-idle|cow-active|cow-fault|references|h-small|h-large)$/.test(surface))return new Response('invalid fixture surface',{status:400});
   return env.ROOM.getByName(surface).fetch(request);}};

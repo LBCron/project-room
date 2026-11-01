@@ -53,3 +53,16 @@ test('explicit message deletion purges H work, body, witness and all shared raw 
   assert.equal(f.store.db.prepare('SELECT 1 FROM message_replay_units WHERE generation=?').get(f.capture.generation),undefined);
   assert.equal(f.store.db.prepare("SELECT 1 FROM message_replay_units WHERE domain='control' AND unit_key='capture-head'").get(),undefined);
 });
+
+test('untouched H work and body use only existing admitted source digests',t=>{
+  const f=fixture(t);
+  for(const [kind,key,expected] of [['work','task',f.work],['body',f.body.sha,f.body]]){
+    const read=cutover.readReplayHReference(f.store,{roomId:'commons',generation:f.capture.generation,kind,key});
+    assert.equal(read.unchanged,true);assert.deepEqual(read.row,{...expected});assert.ok(read.inputBytes<=262144);
+  }
+});
+test('missing first-H work copy cannot fall back to valid changed current work',t=>{
+  const f=fixture(t);f.command('accept','work.accepted',{workItemId:'task',expectedRevision:0});
+  f.store.db.prepare("DELETE FROM message_replay_units WHERE domain='h-work'").run();
+  assert.throws(()=>cutover.readReplayHReference(f.store,{roomId:'commons',generation:f.capture.generation,kind:'work',key:'task'}),/missing independently bound H reference/);
+});

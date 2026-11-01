@@ -187,3 +187,27 @@ test('actual Worker preserves H work and released body across restart and explic
     console.log('DURABLE_REPLAY_REFERENCE_COW '+JSON.stringify({cost:edit.cost,oldWorkAndBodySurviveRestart:true,privacyRemovedAllRawUnits:true,certified:false}));
   }finally{await mf.dispose();await rm(directory,{recursive:true,force:true});}
 });
+
+
+test('actual Worker H member keyset pages stay bounded with 1,000 and 17,405 proved rows',async()=>{
+  const built=await build({entryPoints:[fileURLToPath(new URL('./replay-cutover.test-fixture.mjs',import.meta.url))],bundle:true,write:false,format:'esm',platform:'neutral',external:['node:*','cloudflare:*']});
+  const directory=await mkdtemp(join(tmpdir(),'h-member-page-'));
+  const create=()=>new Miniflare({modules:true,script:built.outputFiles[0].text,compatibilityDate:'2026-07-30',compatibilityFlags:['nodejs_compat'],durableObjectsPersist:directory,durableObjects:{ROOM:{className:'ReplayCutoverRoom',useSQLite:true}}});
+  let mf=create();const call=async(surface,path)=>{const response=await mf.dispatchFetch('http://localhost'+path+(path.includes('?')?'&':'?')+'surface='+surface),value=await response.json();assert.equal(response.status,200,JSON.stringify(value));return value;};
+  try{
+    const costs={};
+    for(const [surface,count] of [['h-small',1000],['h-large',17405]]){
+      const seed=await call(surface,'/h-page-seed?count='+count);
+      await call(surface,'/readmit');
+      const page=await call(surface,'/h-page?generation='+seed.capture.generation);
+      assert.equal(page.result.rows.length,16);assert.equal(page.result.examined,16);assert.equal(page.result.done,false);
+      assert.ok(page.result.inputBytes<=262144);assert.ok(page.result.logicalUnitRows<=200);
+      costs[count]=page.cost;
+      await mf.dispose();mf=create();
+      const next=await call(surface,'/h-page?generation='+seed.capture.generation+'&after='+page.result.after);
+      assert.equal(next.result.rows[0].key,'member-00016');assert.equal(next.result.certified,false);
+    }
+    assert.ok(costs[17405].rowsRead<=costs[1000].rowsRead+16,JSON.stringify(costs));
+    console.log('DURABLE_H_MEMBER_PAGE '+JSON.stringify({costs,historyProvenance:'unknown',certified:false}));
+  }finally{await mf.dispose();await rm(directory,{recursive:true,force:true});}
+});

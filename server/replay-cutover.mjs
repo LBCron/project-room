@@ -565,16 +565,52 @@ function pointer(db,roomId,generation,domain,key){
   if(!row?.payload)throw Error('missing or invalid replay proof pointer');
   return JSON.parse(fatalText(row.payload));
 }
-export function readReplayHMessage(store, input) {
-  if (!input || !id(input.roomId) || !digest(input.generation)
-    || typeof input.messageId !== 'string' || Buffer.byteLength(input.messageId) < 1
-    || Buffer.byteLength(input.messageId) > 200
-    || Object.keys(input).some(key => !['roomId','generation','messageId'].includes(key)))
-    throw Error('invalid replay H-row intent');
+function readUntouchedHMessage(db,header,messageId,budget) {
+  const {roomId,generation,head}=header.value;
+  // A missing shadow whose immutable mutation/absence receipt still exists is
+  // corruption, never evidence that the later current row remained unchanged.
+  for(const prefix of ['hm','ha'])if(db.prepare('SELECT 1 FROM operator_actions WHERE id=?')
+    .get(`oa_brc_${prefix}_${generation}_${Buffer.from(messageId).toString('hex')}`))
+    throw Error('missing independently bound H row');
+  const textFields=MESSAGE_PROOF_FIELDS.filter(f=>!['seq','pinned'].includes(f));
+  const payload=`json_object(${[...MESSAGE_PROOF_FIELDS,'entity_hash'].map(f=>`'${f}',${f}`).join(',')})`;
+  const admission=`${textFields.map(f=>`typeof(${f}) IN ('text','null')`).join(' AND ')}
+    AND typeof(message_id)='text' AND octet_length(message_id) BETWEEN 1 AND 200
+    AND typeof(seq)='integer' AND seq BETWEEN 1 AND ? AND typeof(pinned)='integer' AND pinned IN (0,1)
+    AND typeof(entity_hash)='text' AND octet_length(entity_hash)=64 AND entity_hash NOT GLOB '*[^a-f0-9]*'
+    AND (${[...textFields,'entity_hash'].map(f=>`coalesce(octet_length(${f}),0)`).join('+')})<=131072`;
+  const size=db.prepare(`SELECT CASE WHEN ${admission} THEN octet_length(${payload}) END AS bytes
+    FROM messages WHERE room_id=? AND message_id=?`).get(head,roomId,messageId)?.bytes;
+  if(!Number.isSafeInteger(size)||size<1||size>131072)throw Error('unchanged H row admission required');
+  if(budget.bytes+size+4096>262144)throw replayReadBudget();
+  const saved=db.prepare(`SELECT ${payload} AS json FROM messages WHERE room_id=? AND message_id=?`).get(roomId,messageId);
+  const row=JSON.parse(saved.json);
+  if(row.message_id!==messageId||!messageProofMatches(row))throw Error('unchanged H row proof changed');
+  budget.bytes+=size+4096;
+  return {absent:false,row,unchanged:true,inputBytes:budget.bytes,
+    schemaDefinitionBindingBytes:schemaContract(db).bindingBytes,certified:false};
+}
+
+export function readReplayHMessage(store,input) {
+  if(!input||!id(input.roomId)||!digest(input.generation)||typeof input.messageId!=='string'
+    ||Buffer.byteLength(input.messageId)<1||Buffer.byteLength(input.messageId)>200
+    ||Object.keys(input).some(k=>!['roomId','generation','messageId'].includes(k)))throw Error('invalid replay H-row intent');
   return store.readTransaction(()=>{
-  const db = store.db, {roomId,generation,messageId} = input;
-  verifyReplayCutoverSchema(db);
-  const header = captureBinding(db,roomId,generation);
+    verifyReplayCutoverSchema(store.db);
+    const header=captureBinding(store.db,input.roomId,input.generation),budget={bytes:hReadControlBytes(store.db,header)};
+    return readHMessageSource(store.db,header,input.messageId,budget);
+  });
+}
+function replayReadBudget(){const error=Error('replay H-page byte budget exhausted');error.code='replay_read_budget';return error;}
+function hReadControlBytes(db,header){return schemaContract(db).bindingBytes+header.inputBytes+header.captureReceiptInputBytes+8192;}
+function readHMessageSource(db,header,messageId,budget){
+  const {roomId,generation}=header.value;
+  const maximumPayloadBytes=Math.min(131072,262144-budget.bytes-8192);
+  const scalar=db.prepare(`SELECT CASE WHEN typeof(payload_bytes)='integer' AND payload_bytes BETWEEN 1 AND 131072
+    THEN payload_bytes END AS bytes FROM message_replay_units
+    WHERE room_id=? AND generation=? AND domain IN ('h-message','h-message-absent') AND unit_key=?`)
+    .all(roomId,generation,messageId);
+  if(scalar.some(row=>Number.isSafeInteger(row.bytes)&&row.bytes>maximumPayloadBytes))throw replayReadBudget();
   const rows = db.prepare(`SELECT domain,CASE WHEN typeof(row_version)='integer' AND row_version=0 AND typeof(payload)='blob'
     AND typeof(payload_bytes)='integer' AND payload_bytes BETWEEN 1 AND 131072
     AND octet_length(payload)=payload_bytes AND typeof(payload_sha256)='text'
@@ -582,6 +618,7 @@ export function readReplayHMessage(store, input) {
     FROM message_replay_units WHERE room_id=? AND generation=?
       AND domain IN ('h-message','h-message-absent') AND unit_key=?`)
     .all(roomId,generation,messageId);
+  if(rows.length===0)return readUntouchedHMessage(db,header,messageId,budget);
   if (rows.length !== 1 || !rows[0].payload) throw Error('missing or invalid captured H row');
   const source = rows[0], absent = source.domain === 'h-message-absent';
   const receiptId = `oa_brc_${absent?'ha':'hm'}_${generation}_${Buffer.from(messageId).toString('hex')}`;
@@ -589,9 +626,9 @@ export function readReplayHMessage(store, input) {
   if (independent.roomId !== roomId || independent.generation !== generation
     || independent.headerHash !== header.hash || independent.domain !== source.domain
     || independent.key !== messageId) throw Error('independent replay H-row binding changed');
-  const inputBytes=source.payload.byteLength+header.inputBytes+header.captureReceiptInputBytes
-    +receiptInputBytes.get(independent)+schemaContract(db).bindingBytes+8192;
-  if(inputBytes>262144)throw Error('replay H-row aggregate byte limit');
+  budget.bytes+=source.payload.byteLength+receiptInputBytes.get(independent)+4096;
+  if(budget.bytes>262144)throw Error('replay H-row aggregate byte limit');
+  const inputBytes=budget.bytes;
   const value = JSON.parse(fatalText(source.payload));
   if (absent) {
     if (value !== null || independent.entityHash !== null)
@@ -604,6 +641,40 @@ export function readReplayHMessage(store, input) {
     || independent.entityHash !== value.entity_hash || !messageProofMatches(value))
     throw Error('independent replay H-row proof changed');
   return {absent:false,row:value,receiptId,inputBytes,schemaDefinitionBindingBytes:schemaContract(db).bindingBytes};
+}
+
+
+// Merge three separately indexed keyset ranges. Never UNION-sort a growing
+// current/shadow domain, and never treat a post-H insert as an H member.
+export function readReplayHMessagePage(store,input) {
+  if(!input||!id(input.roomId)||!digest(input.generation)||typeof input.after!=='string'
+    ||Buffer.byteLength(input.after)>200||!Number.isInteger(input.limit)||input.limit<1||input.limit>16
+    ||Object.keys(input).some(k=>!['roomId','generation','after','limit'].includes(k)))throw Error('invalid replay H-page intent');
+  return store.readTransaction(()=>{
+    const db=store.db;verifyReplayCutoverSchema(db);
+    const header=captureBinding(db,input.roomId,input.generation),budget={bytes:hReadControlBytes(db,header)},rows=[];
+    let after=input.after,examined=0,done=false;
+    while(examined<input.limit){
+      const current=db.prepare(`SELECT CASE WHEN typeof(message_id)='text' AND octet_length(message_id) BETWEEN 1 AND 200
+        THEN message_id END AS key FROM messages WHERE room_id=? AND message_id>? COLLATE BINARY ORDER BY message_id LIMIT 1`)
+        .get(input.roomId,after);
+      const candidates=current?[current]:[];
+      for(const domain of ['h-message','h-message-absent']){
+        const shadow=db.prepare(`SELECT CASE WHEN typeof(unit_key)='text' AND octet_length(unit_key) BETWEEN 1 AND 200 THEN unit_key END AS key
+          FROM message_replay_units WHERE room_id=? AND generation=? AND domain=? AND unit_key>? COLLATE BINARY ORDER BY unit_key LIMIT 1`)
+          .get(input.roomId,input.generation,domain,after);
+        if(shadow)candidates.push(shadow);
+      }
+      if(candidates.some(row=>typeof row.key!=='string'))throw Error('replay H membership key admission required');
+      if(!candidates.length){done=true;break;}
+      const key=candidates.map(row=>row.key).sort((a,b)=>Buffer.compare(Buffer.from(a),Buffer.from(b)))[0];
+      let source;
+      try{source=readHMessageSource(db,header,key,budget);}catch(error){if(error.code==='replay_read_budget')break;throw error;}
+      after=key;examined++;
+      if(!source.absent)rows.push({key,row:source.row});
+    }
+    return {rows,after,examined,done,inputBytes:budget.bytes,logicalUnitRows:64+8*examined,
+      basis:'protected-current-state',historyProvenance:'unknown',certified:false};
   });
 }
 
@@ -670,6 +741,29 @@ export function readReplayTailEvent(store,input) {
 
 // This verifies only the captured dependency bytes and existing digest. The
 // protected H reference/member must separately match before candidate use.
+function readUntouchedHReference(db,header,kind,key) {
+  const {roomId,generation}=header.value,work=kind==='work',prefix=work?'hw':'hb';
+  for(const suffix of ['', 'a'])if(db.prepare('SELECT 1 FROM operator_actions WHERE id=?')
+    .get(`oa_brc_${prefix}${suffix}_${generation}_${Buffer.from(key).toString('hex')}`))
+    throw Error('missing independently bound H reference');
+  const table=work?'work_entities':'projection_bodies',keyColumn=work?'work_id':'sha',proof=work?'digest':'sha';
+  const fields=work?['work_id','revision','digest','body']:['sha','body'];
+  const payload=`json_object(${fields.map(f=>`'${f}',${f}`).join(',')})`;
+  const admitted=`typeof(${keyColumn})='text' AND octet_length(${keyColumn}) BETWEEN 1 AND 200
+    AND typeof(body)='text' AND octet_length(body)<=131072
+    AND typeof(${proof})='text' AND octet_length(${proof})=64 AND ${proof} NOT GLOB '*[^a-f0-9]*'
+    ${work?`AND typeof(revision)='integer' AND revision BETWEEN 0 AND ${MAX}`:''}`;
+  const bytes=db.prepare(`SELECT CASE WHEN ${admitted} THEN octet_length(${payload}) END AS bytes
+    FROM ${table} WHERE room_id=? AND ${keyColumn}=?`).get(roomId,key)?.bytes;
+  const inputBytes=hReadControlBytes(db,header)+4096+(Number.isSafeInteger(bytes)?bytes:0);
+  if(!Number.isSafeInteger(bytes)||bytes<1||bytes>131072||inputBytes>262144)
+    throw Error('unchanged H reference admission required');
+  const value=JSON.parse(db.prepare(`SELECT ${payload} AS json FROM ${table} WHERE room_id=? AND ${keyColumn}=?`).get(roomId,key).json);
+  if(value[keyColumn]!==key||hash(value.body)!==value[proof])throw Error('unchanged H reference digest changed');
+  if(work){const item=JSON.parse(value.body);if(item.id!==key||item.revision!==value.revision)throw Error('unchanged H work identity changed');}
+  return {absent:false,row:value,unchanged:true,inputBytes,certified:false};
+}
+
 export function readReplayHReference(store,input) {
   if(!input||!id(input.roomId)||!digest(input.generation)||!['work','body'].includes(input.kind)
     ||typeof input.key!=='string'||Buffer.byteLength(input.key)<1||Buffer.byteLength(input.key)>200
@@ -683,6 +777,7 @@ export function readReplayHReference(store,input) {
       AND row_version=0 AND payload_sha256='' THEN payload END AS payload
       FROM message_replay_units WHERE room_id=? AND generation=? AND domain IN (?,?) AND unit_key=?`)
       .all(input.roomId,input.generation,domain,domain+'-absent',input.key);
+    if(rows.length===0)return readUntouchedHReference(db,header,input.kind,input.key);
     if(rows.length!==1||!rows[0].payload)throw Error('missing or invalid captured H reference');
     const source=rows[0],absent=source.domain.endsWith('-absent');
     const receiptId=`oa_brc_h${input.kind==='work'?'w':'b'}${absent?'a':''}_${input.generation}_${Buffer.from(input.key).toString('hex')}`;

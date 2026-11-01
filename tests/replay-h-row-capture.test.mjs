@@ -4,7 +4,7 @@ import { RoomStore } from '../server/store.mjs';
 import { initialRoom } from '../server/bootstrap.mjs';
 import { event } from '../src/events.js';
 import { MESSAGE_PROOF_SELECT, messageProofMatches } from '../server/write-integrity.mjs';
-import { replayCutoverSchema, captureReplayWitness, readReplayHMessage } from '../server/replay-cutover.mjs';
+import { replayCutoverSchema, captureReplayWitness, readReplayHMessage, readReplayHMessagePage } from '../server/replay-cutover.mjs';
 
 function fixture(t, body = 'Independently proved original', beforeCapture = () => {}) {
   const store = new RoomStore(':memory:', { maintainMessageCertification: true });
@@ -183,4 +183,37 @@ test('malformed two-MiB numeric control is refused before H payload capture', t 
   const receipt = f.store.db.prepare(`SELECT counts_json FROM operator_actions
     WHERE action='replay_cutover_abandon'`).get().counts_json;
   assert.ok(Buffer.byteLength(receipt) < 1024);
+});
+
+test('an untouched H row uses its existing proof and indexed source admission',t=>{
+  const f=fixture(t);const read=readH(f);assert.equal(read.unchanged,true);
+  assert.deepEqual(read.row,{...f.original});assert.ok(read.inputBytes<=262144);assert.equal(read.certified,false);
+});
+test('a missing copied H row never falls back to its valid later current row',t=>{
+  const f=fixture(t);f.edit(0,'Valid current T');
+  f.store.db.prepare("DELETE FROM message_replay_units WHERE domain='h-message'").run();
+  assert.equal(messageProofMatches(f.current()),true);
+  assert.throws(()=>readH(f),/missing independently bound H row/);
+});
+test('untouched H source with missing proof refuses instead of deriving a new proof',t=>{
+  const f=fixture(t,'Legacy unproved current row',store=>store.db.prepare("UPDATE messages SET entity_hash=NULL WHERE room_id='commons'").run());
+  assert.throws(()=>readH(f),/unchanged H row admission required/);
+});
+
+test('bounded H membership merges current and first-H ranges without post-H IDs or duplicate keys',t=>{
+  const f=fixture(t);const original=f.original;
+  f.edit(0,'Current value differs');
+  for(let i=0;i<24;i++)f.store.command(f.key,'commons',{id:'new-'+i,type:'message.posted',data:{messageId:'new-'+String(i).padStart(2,'0'),body:'Post H'}});
+  f.store.db.prepare("UPDATE messages SET message_id='moved' WHERE message_id='existing'").run();
+  const all=[];let after='',done=false,pages=0,examined=0;
+  while(!done&&pages++<20){
+    const page=readReplayHMessagePage(f.store,{roomId:'commons',generation:f.captured.generation,after,limit:7});
+    assert.ok(page.inputBytes<=262144);assert.ok(page.logicalUnitRows<=200);assert.ok(page.examined<=7);
+    assert.ok(page.after>after||page.done);after=page.after;done=page.done;examined+=page.examined;all.push(...page.rows);
+  }
+  assert.equal(done,true);assert.equal(examined,26);assert.deepEqual(all,[{key:'existing',row:{...original}}]);
+});
+test('bounded H membership refuses oversized corrupt keys before returning row payload',t=>{
+  const f=fixture(t);f.store.db.prepare("INSERT INTO messages(room_id,message_id,seq,author_id,created_at) VALUES('commons',?,3,'owner','now')").run(Buffer.alloc(2*1024*1024,97));
+  assert.throws(()=>readReplayHMessagePage(f.store,{roomId:'commons',generation:f.captured.generation,after:'',limit:16}),/key admission required/);
 });

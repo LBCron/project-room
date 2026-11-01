@@ -300,8 +300,18 @@ test('reply-only resume retains old open requests independently of delta observa
   }
   for (const failure of ['unavailable', 'wrong-viewer', 'malformed']) {
     const snapshot = await resumeAgent({ ...options, fetchImpl: async (url, init) => {
+      const fallback = failure.startsWith('fallback-');
+      if (fallback && String(url).endsWith('/agent-work')) return Response.json({ error: { code: 'not_found', message: 'old server' } }, { status: 404 });
+      if (fallback && new URL(url).pathname.endsWith('/request-runs')) {
+        const value = await (await fetch(url, init)).json();
+        if (failure === 'fallback-missing-runs') delete value.runs; else value.runs['old-open'] = { state: 'bogus', updatedAt: 1 };
+        return Response.json(value);
+      }
       if (!String(url).endsWith('/agent-work')) return fetch(url, init);
       if (failure === 'unavailable') return Response.json({}, { status: 503 });
+      if (failure === 'unauthorized') return Response.json({ error: { code: 'unauthorized' } }, { status: 401 });
+      if (failure === 'forbidden') return Response.json({ error: { code: 'forbidden' } }, { status: 403 });
+      if (failure === 'throttled') return Response.json({ error: { code: 'rate_limited' } }, { status: 429, headers: { 'retry-after': '1' } });
       const value = await (await fetch(url, init)).json();
       if (failure === 'wrong-viewer') value.viewerId = owner.identityId;
       else value.runs['old-open'].updatedAt = 'invalid';
@@ -311,8 +321,12 @@ test('reply-only resume retains old open requests independently of delta observa
     // One combined read: a failed or invalid /agent-work answer withholds both the
     // open requests and their runs rather than reporting requests without runs.
     assert.deepEqual(snapshot.openRequests, []);
-    assert.deepEqual(snapshot.pendingReconciliations, { status: 'not_read' });
+    assert.equal(snapshot.pendingReconciliations.status, 'unavailable', failure);
+    assert.equal(snapshot.pendingReconciliations.items, undefined, 'withheld runs are not observed-empty');
+    assert.equal(snapshot.observedThroughBySource.openRequests, undefined, failure);
     assert.ok(snapshot.incompleteSources.some(source => source.source === 'openRequests'));
+    assert.ok(snapshot.incompleteSources.some(source => source.source === 'pendingReconciliations'));
+    if (failure === 'throttled') assert.equal(snapshot.pendingReconciliations.httpStatus, 429);
   }
   assert.deepEqual((resumed.openRequests ?? []).map(request => request.id), ['old-open']);
   assert.equal(resumed.attention.some(item => item.id === 'old-open'), false);
@@ -381,3 +395,47 @@ test('reply-only resume retains old open requests independently of delta observa
   assert.deepEqual(ended.pendingReconciliations, { status: 'not_read' });
   assert.deepEqual(ended.nextReads, []); assert.deepEqual(ended.observedThroughBySource, {});
 });
+
+test('failed or old-server agent-work reads withhold requests and runs as unavailable, never observed-empty', async t => {
+  const store = new RoomStore(':memory:');
+  const owner = store.identities.create('Owen'), worker = store.identities.create('Worker');
+  new AgentRooms(store).create(owner.secret, { roomId: 'commons', title: 'Replies', purpose: 'Reply fixture', kind: 'personal' });
+  linkWithProof(store, owner.secret, 'commons', worker, { memberId: 'reply-worker', displayName: 'Worker', permissions: [] });
+  store.dmConsents.request('commons', owner.identityId, 'reply-worker', 'Fixture');
+  store.dmConsents.decide('commons', 'reply-worker', owner.identityId, 'approve');
+  store.command(owner.secret, 'commons', { id: 'old-open', type: 'message.posted', data: {
+    messageId: 'old-open', body: 'private-question-sentinel', toMemberId: 'reply-worker', requestKind: 'reply' } });
+  store.command(owner.secret, 'commons', { id: 'reply-work', type: 'work.proposed', data: { workItemId: 'reply-work', title: 'Private work', definitionOfDone: 'Review', accountableMemberId: 'reply-worker', mode: 'read' } });
+  const server = createRoomServer({ store }); await new Promise(resolve => server.listen(0, '127.0.0.1', resolve));
+  t.after(async () => { server.closeAllConnections(); await new Promise(resolve => server.close(resolve)); store.close(); });
+  const config = { origin: `http://127.0.0.1:${server.address().port}`, roomId: 'commons', memberId: 'reply-worker', token: worker.secret };
+  for (const failure of ['unauthorized', 'forbidden', 'throttled', 'fallback-malformed-runs', 'fallback-missing-runs']) {
+    const snapshot = await resumeAgent({ connection: config, focus: 'replies', fetchImpl: async (url, init) => {
+      const fallback = failure.startsWith('fallback-');
+      if (fallback && String(url).endsWith('/agent-work')) return Response.json({ error: { code: 'not_found', message: 'old server' } }, { status: 404 });
+      if (fallback && new URL(url).pathname.endsWith('/request-runs')) {
+        const value = await (await fetch(url, init)).json();
+        if (failure === 'fallback-missing-runs') delete value.runs; else value.runs['old-open'] = { state: 'bogus', updatedAt: 1 };
+        return Response.json(value);
+      }
+      if (!String(url).endsWith('/agent-work')) return fetch(url, init);
+      if (failure === 'unavailable') return Response.json({}, { status: 503 });
+      if (failure === 'unauthorized') return Response.json({ error: { code: 'unauthorized' } }, { status: 401 });
+      if (failure === 'forbidden') return Response.json({ error: { code: 'forbidden' } }, { status: 403 });
+      if (failure === 'throttled') return Response.json({ error: { code: 'rate_limited' } }, { status: 429, headers: { 'retry-after': '1' } });
+      const value = await (await fetch(url, init)).json();
+      if (failure === 'wrong-viewer') value.viewerId = owner.identityId;
+      else value.runs['old-open'].updatedAt = 'invalid';
+      return Response.json(value);
+    } });
+    assert.equal(snapshot.connection.status, 'credential_accepted');
+    // One combined read: a failed or invalid /agent-work answer withholds both the
+    // open requests and their runs rather than reporting requests without runs.
+    assert.deepEqual(snapshot.openRequests, []);
+    assert.equal(snapshot.pendingReconciliations.status, 'unavailable', failure);
+    assert.equal(snapshot.pendingReconciliations.items, undefined, 'withheld runs are not observed-empty');
+    assert.equal(snapshot.observedThroughBySource.openRequests, undefined, failure);
+    assert.ok(snapshot.incompleteSources.some(source => source.source === 'openRequests'));
+    assert.ok(snapshot.incompleteSources.some(source => source.source === 'pendingReconciliations'));
+    if (failure === 'throttled') assert.equal(snapshot.pendingReconciliations.httpStatus, 429);
+  }});

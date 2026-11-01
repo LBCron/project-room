@@ -413,7 +413,7 @@ test("an item with no authoritative proposal envelope stays honestly unknown aft
   const owner = store.issueAccessKey("commons", "owner");
   // Inject an imported legacy item with NO proposal envelope anywhere in the log.
   const state = structuredClone(store.room("commons").state);
-  state.workItems["w-imported"] = { id: "w-imported", title: "Imported", state: "proposed", accountableMemberId: "owner" };
+  state.workItems["w-imported"] = { id: "w-imported", revision: 0, title: "Imported", state: "proposed", accountableMemberId: "owner" };
   store.transaction(() => store.db.prepare("UPDATE rooms SET projection=? WHERE id=?")
     .run(store.storedProjection("commons", state), "commons"));
   store.close();

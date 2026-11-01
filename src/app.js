@@ -1966,7 +1966,9 @@ function syncWorkForm() {
     $("#assignee-hint").hidden = waiting.length === 0;
     $("#assignee-hint").textContent = waiting.length ? `${waiting.map(m => m.displayName).join(", ")} can't take work yet. Change that in People.` : "";
   }
-  const reviewers = active.filter(member => member.permissions.includes("verify") && member.id !== $("#assignee-select").value);
+  const decisionMaker = $("#require-decision").checked ? state.room.ownerId : null;
+  const reviewers = active.filter(member => member.permissions.includes("verify")
+    && member.id !== $("#assignee-select").value && member.id !== decisionMaker);
   selectOptions("#verifier-select", reviewers, "Choose reviewer");
   $("#reviewer-unavailable").hidden = !reviewing || !$("#assignee-select").value || reviewers.length > 0;
   $("#verifier-field").hidden = !reviewing;

@@ -159,6 +159,10 @@ for (const [label, viewport] of [["desktop", { width: 1440, height: 1000 }], ["m
     await page.locator("#work-title-input").fill("Pick our first book");
     await page.locator("#work-done-input").fill("A shared reading choice with its original discussion.");
     await page.locator("#assignee-select").selectOption("maya");
+    assert.equal(await page.locator('#verifier-select option[value="owner"]:not([disabled])').count(), 0,
+      "the final approver cannot also be the independent verifier");
+    if (!await page.locator("#require-decision").isVisible()) await page.locator("#work-options > summary").click();
+    await page.locator("#require-decision").uncheck();
     await page.locator("#verifier-select").selectOption("owner");
     await page.locator('#new-work-form button[type="submit"]').click();
     await page.locator("#new-work-form").waitFor({ state: "hidden" });

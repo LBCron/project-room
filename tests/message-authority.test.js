@@ -120,3 +120,31 @@ test('archived rooms retain their write refusal after authority conversion',t=>{
  assert.throws(()=>f.send('message.deleted',{messageId:'first',expectedMessageRevision:0,reason:'cleanup'}),error=>error.code==='room_archived');
  assert.equal(f.s.headSequence('commons'),head);assert.equal(f.s.room('commons').state.messages[0].body,'Body first');
 });
+
+test('retained top-level edit loads no unrelated room messages and preserves global count',t=>{
+ const f=fixture(t);f.s.roomFlood={consume(){}};for(let i=0;i<100;i++)f.post(`m${i}`);f.certify();f.s.migrateMessageAuthority('commons');
+ const original=f.s.room;let reads=0;f.s.room=()=>{reads++;throw Error('unbounded room read');};
+ try{f.send('message.edited',{messageId:'m99',body:'Bounded edit',expectedMessageRevision:0});}
+ finally{f.s.room=original;}
+ assert.equal(reads,0);assert.equal(f.raw().messageAuthority.count,100);
+ assert.equal(f.s.room('commons').state.messages.length,100);
+ assert.equal(f.s.room('commons').state.messages.at(-1).body,'Bounded edit');
+ f.certify();assert.doesNotThrow(()=>auditRecovery(f.s));
+});
+test('bounded edit agrees with the full command pipeline for records, history, indexes and refusals',t=>{
+ const f=fixture(t);for(let i=0;i<12;i++)f.post(`m${i}`);f.certify();f.s.migrateMessageAuthority('commons');
+ const full=new RoomStore(':memory:',{maintainMessageCertification:true});t.after(()=>full.close());
+ replayNdjsonInto(exportNdjsonText(f.s.db),full);full.canonicalMessageEditContext=()=>null;
+ const key1=f.s.issueAccessKey('commons','owner'),key2=full.issueAccessKey('commons','owner');
+ f.s.now=full.now=()=>Date.UTC(2026,10,1);
+ const commands=[{id:'edit1',type:'message.edited',data:{messageId:'m9',body:'改訂 🪷',expectedMessageRevision:0}},
+ {id:'edit2',type:'message.edited',data:{messageId:'m9',body:'Second revision',expectedMessageRevision:1}}];
+ for(const command of commands){f.s.command(key1,'commons',command);full.command(key2,'commons',command);}
+ assert.deepEqual(f.s.room('commons').state,full.room('commons').state);
+ const rows=s=>s.db.prepare("SELECT * FROM messages WHERE room_id='commons' ORDER BY seq,message_id").all();assert.deepEqual(rows(f.s),rows(full));
+ for(const revision of [0,3]){
+  const cmd={id:crypto.randomUUID(),type:'message.edited',data:{messageId:'m9',body:'Refused',expectedMessageRevision:revision}};
+  const outcome=(s,key)=>{try{s.command(key,'commons',cmd);return null;}catch(e){return[e.status,e.code,e.message];}};
+  assert.deepEqual(outcome(f.s,key1),outcome(full,key2));
+ }
+});

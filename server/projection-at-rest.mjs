@@ -177,14 +177,14 @@ function releaseUnreferencedBodies(db, roomId, referenced) {
 export function storedProjection(db, roomId, state, options = {}) {
   return serializeProjection(db, roomId, referenceWorkItems(db, roomId, state, { enabled: options.workEntities }), options);
 }
-function serializeProjection(db, roomId, state, { enabled = false, messageEntities = false, pendingMessageIds = [], retainedMessageIds = [] } = {}) {
+function serializeProjection(db, roomId, state, { enabled = false, messageEntities = false, pendingMessageIds = [], retainedMessageIds = [], messageAuthorityCount } = {}) {
   // A nonmemoizing rewrite (deletion, inline rollback or entity cutover) must
   // not retain the old plaintext. Keep the previous memo only for this call;
   // publish the newly referenced set below if serialization uses it.
   const previousMemo = hashMemo.get(db)?.get(roomId);
   hashMemo.get(db)?.delete(roomId);
   if (hasMessageAuthority(state)) {
-    const projection = JSON.stringify(messageAuthorityProjection(state));
+    const projection = JSON.stringify(messageAuthorityProjection(state, messageAuthorityCount));
     if (markedRooms(db).has(roomId)) releaseUnreferencedBodies(db, roomId, new Set());
     return projection;
   }

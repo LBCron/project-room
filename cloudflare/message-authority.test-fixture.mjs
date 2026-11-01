@@ -11,6 +11,7 @@ export class MessageAuthorityTestRoom extends HttpTestRoom {
   const post=(id)=>s.command(owner,'commons',{id,type:'message.posted',data:{messageId:id,body:`Body ${id}`}});
   post('first');while(!s.backfillMessages({limit:1000}).done){};s.checkMessagesParity();
   s.migrateMessageAuthority('commons');post('second');
+  s.command(owner,'commons',{id:'edit-second',type:'message.edited',data:{messageId:'second',body:'Bounded Worker edit',expectedMessageRevision:0}});
   const cold=new RoomStore(null,{database:s.db,storagePlatform:durableStorage});
   const read=readConversation(cold,owner,'commons',{});
   const raw=JSON.parse(s.db.prepare("SELECT projection FROM rooms WHERE id='commons'").get().projection);

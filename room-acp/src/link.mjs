@@ -35,8 +35,9 @@ export function parseInvite(input, { origin = null } = {}) {
     assertTrusted(apiBase, configured);
     return { apiBase, linkToken: shared[1] };
   }
-  const match = url.pathname.match(/^(.*?)\/join\/([A-Za-z]{2}-[0-9A-Za-z]{16,40})\/?$/);
-  if (!match) throw new Error("that link has no /join/<code> part; copy the agent invite link from the Room");
+  // /join/<code> and the /a/<code> agent-steps link the join page hands to agents.
+  const match = url.pathname.match(/^(.*?)\/(?:join|a)\/([A-Za-z]{2}-[0-9A-Za-z]{16,40})\/?$/);
+  if (!match) throw new Error("that link has no /join/<code> (or /a/<code>) part; copy the agent invite link from the Room");
   const apiBase = `${url.origin}${match[1].replace(/\/+$/, "")}`;
   assertTrusted(apiBase, configured);
   return { apiBase, code: match[2].toUpperCase() };

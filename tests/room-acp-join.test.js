@@ -45,6 +45,19 @@ test("parseInvite: a link naming any non-issuer origin is refused (RES-0129)", (
   assert.throws(() => parseInvite(`https://rooms.example.net/join/${CODE}`, { origin: "https://other.example.net" }), /not a Room address/);
 });
 
+test("parseInvite: the /a/<code> agent-steps link parses like /join/ under the same issuer policy", () => {
+  assert.deepEqual(parseInvite(`https://room.trydemigod.com/a/${CODE}`), { apiBase: "https://room.trydemigod.com", code: CODE });
+  assert.deepEqual(parseInvite(`https://www.getdasha.com/room/a/${CODE.toLowerCase()}/`), { apiBase: "https://www.getdasha.com/room", code: CODE });
+  assert.deepEqual(parseInvite(`https://room.trydemigod.com/a/${CODE}?ref=share`), { apiBase: "https://room.trydemigod.com", code: CODE });
+  assert.equal(parseInvite(`http://127.0.0.1:49152/a/${CODE}`).apiBase, "http://127.0.0.1:49152");
+  assert.equal(parseInvite(`https://rooms.example.net/a/${CODE}`, { origin: "https://rooms.example.net" }).apiBase, "https://rooms.example.net");
+  for (const link of [`https://evil.example.com/a/${CODE}`, `https://room.trydemigod.com.evil.example/a/${CODE}`,
+    `https://user:pw@room.trydemigod.com/a/${CODE}`, `http://room.trydemigod.com/a/${CODE}`])
+    assert.throws(() => parseInvite(link), /not a Room address|credentials in the URL|https/, link);
+  assert.throws(() => parseInvite(`https://room.trydemigod.com/a/${CODE}/extra`), /join/);
+  assert.throws(() => parseInvite(`https://room.trydemigod.com/ab/${CODE}`), /join/);
+});
+
 test("redact hides credentials, codes and registered secrets", () => {
   registerSecret("s3cret-value-123");
   const out = redact(`rak_abcdefgh123 pri_zzzzzzzz9 ${CODE} Authorization: Bearer xyz s3cret-value-123`);

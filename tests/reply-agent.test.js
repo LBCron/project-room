@@ -313,11 +313,37 @@ test("a terminally refused 'delivered' report is recorded and stops retrying", a
   assert.deepEqual({ ...args.db.prepare("SELECT delivered, reported FROM request_runs").get() }, { delivered: 1, reported: 2 });
   assert.equal(args.db.prepare("SELECT count(*) AS n FROM request_runs WHERE (delivered=0 OR reported=0) AND delivery_refused=0").get().n, 0);
 });
+for (const [label, respond] of [
+  ["HTTP 408", () => Response.json({ error: { code: "request_timeout", message: "slow" } }, { status: 408 })],
+  ["a malformed HTTP 200", () => new Response("{not json", { status: 200, headers: { "content-type": "application/json" } })],
+]) test(`an unconfirmed 'delivered' report (${label}) stays pending and later reconciles without replaying the host or reply`, async t => {
+  const f = await fixture(t), args = runner(t, f), requestMessageId = f.open(`host-report-unconfirmed-${label.length}`).command.data.messageId;
+  let failing = true, reports = 0, replies = 0, calls = 0;
+  const connection = { ...f.config, fetchImpl: async (url, options) => {
+    const path = new URL(url).pathname;
+    if (options.method === "POST" && path.endsWith("/request-runs") && JSON.parse(options.body).action === "delivered") { reports++; if (failing) return respond(); }
+    if (options.method === "POST" && path.endsWith("/messages")) replies++;
+    return fetch(url, options);
+  } };
+  const execute = async () => { calls++; return { body: "Answer" }; };
+  await assert.rejects(runRequestOnce({ ...args, connection, requestMessageId, execute }), error => error.runReportPending === true);
+  assert.deepEqual({ ...args.db.prepare("SELECT delivered, reported FROM request_runs").get() }, { delivered: 1, reported: 0 }, "not a definite refusal");
+  assert.equal(args.db.prepare("SELECT count(*) AS n FROM request_runs WHERE (delivered=0 OR reported=0) AND delivery_refused=0").get().n, 1, "automatic scans still see it");
+  const repliesAfterFirst = replies;
+  failing = false;
+  const result = await runRequestOnce({ ...args, connection, requestMessageId, execute });
+  assert.equal(result.reportOnly, true);
+  assert.equal(result.runReported, true);
+  assert.equal(calls, 1, "host never re-executed");
+  assert.equal(replies, repliesAfterFirst, "reply never replayed");
+  assert.equal(reports, 2);
+  assert.deepEqual({ ...args.db.prepare("SELECT delivered, reported FROM request_runs").get() }, { delivered: 1, reported: 1 });
+});
 test("upgrading an old journal keeps delivered-but-unreported attempts pending instead of certifying them", t => {
   const directory = realpathSync(process.env.TMPDIR ?? "/tmp"), path = join(directory, `old-journal-${process.pid}-${Date.now()}.sqlite`);
   t.after(() => rmSync(path, { force: true }));
   const legacy = openRequestJournal(path);
-  legacy.exec("ALTER TABLE request_runs DROP COLUMN reported");
+  legacy.exec("DROP INDEX request_runs_unsettled; ALTER TABLE request_runs DROP COLUMN reported");
   legacy.prepare("INSERT INTO request_runs(id,response,delivered,attempt_id) VALUES (?,?,1,?)").run("with-attempt", '{"responseToRequestId":"q1"}', "a1");
   legacy.prepare("INSERT INTO request_runs(id,response,delivered,attempt_id) VALUES (?,?,1,NULL)").run("no-attempt", '{"responseToRequestId":"q2"}');
   legacy.close();

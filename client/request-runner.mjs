@@ -29,6 +29,9 @@ export function openRequestJournal(filename) {
       db.exec("UPDATE request_runs SET reported=1 WHERE delivered=1 AND attempt_id IS NULL");
     }
     db.exec("CREATE INDEX IF NOT EXISTS request_runs_retryable_delivery ON request_runs(delivered, delivery_refused) WHERE response IS NOT NULL");
+    // The recovery scan's real predicate includes reported=0 rows; the partial
+    // index above cannot serve the OR, so give the scan its own matching index.
+    db.exec("CREATE INDEX IF NOT EXISTS request_runs_unsettled ON request_runs(delivery_refused) WHERE response IS NOT NULL AND (delivered=0 OR reported=0)");
     db.exec("COMMIT");
   } catch (error) { db.exec("ROLLBACK"); db.close(); throw error; }
   return db;
@@ -84,9 +87,12 @@ export async function runRequestOnce({ connection, requestMessageId, db, execute
     if (!record.attempt_id) { db.prepare("UPDATE request_runs SET reported=1 WHERE id=?").run(id); return { ...result, runReported: true }; }
     try { await report(record.attempt_id, "delivered"); }
     catch (error) {
-      if ([401, 429].includes(error?.status) || error?.status >= 500 || !error?.status
-        || ["TypeError", "TimeoutError", "AbortError"].includes(error?.name))
-        throw Object.assign(error, { runReportPending: true, requestId: id });
+      // Only a definite 4xx refusal is terminal. Timeouts (408), throttling, auth,
+      // 5xx, transport errors and an unreadable 2xx leave the outcome unconfirmed:
+      // keep it pending so the next pass reconciles the same attempt.
+      const definite = error?.status >= 400 && error.status < 500 && ![401, 408, 425, 429].includes(error.status)
+        && !["TypeError", "TimeoutError", "AbortError"].includes(error?.name);
+      if (!definite) throw Object.assign(error, { runReportPending: true, requestId: id });
       db.prepare("UPDATE request_runs SET reported=2 WHERE id=?").run(id);
       return { ...result, runReported: "refused", reportStatus: error.status };
     }

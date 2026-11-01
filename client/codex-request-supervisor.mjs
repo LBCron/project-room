@@ -80,8 +80,11 @@ export async function superviseCodexRequests({ connection, db, directory, connec
       try {
         const result = await runRequestOnce({ connection, db, requestMessageId, execute,
           allowRequest: requesterAllowed, selectRequest, signal: controller.signal });
-        state("settled", { runId: requestMessageId });
-        const receipt = { ...result, requestMessageId };
+        // A refused run report is not settled: the reply is saved but the
+        // service never accepted the outcome, so it needs reconciliation.
+        const refused = result?.runReported === "refused";
+        state(refused ? "recovery_pending" : "settled", { runId: requestMessageId });
+        const receipt = { ...result, requestMessageId, ...(refused ? { reply: "saved", report: "needs_reconciliation" } : {}) };
         emit(receipt);
         return receipt;
       } catch (error) {
@@ -100,7 +103,9 @@ export async function superviseCodexRequests({ connection, db, directory, connec
       }, emit: event => {
         if (event.status === "connection_unavailable") { owner.health("retrying"); state("retrying_room"); }
         else if (event.status === "delivered") {
-          state("settled", { runId: event.requestId }); emit(event);
+          const refused = event.runReported === "refused";
+          state(refused ? "recovery_pending" : "settled", { runId: event.requestId });
+          emit(refused ? { ...event, reply: "saved", report: "needs_reconciliation" } : event);
         } else if (event.status === "needs_attention") {
           state("recovery_pending", { runId: event.requestMessageId }); emit(event);
         }

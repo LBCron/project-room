@@ -50,3 +50,32 @@ for(const mutation of ['leaf-with-new-self-hash','pointer-index'])test(`point le
   }
   assert.throws(()=>cutover.readReplayWitnessLeaf(f.store,input),/leaf|binding/);
 });
+
+test('a spanning token cannot reread changed bytes from an earlier verified chunk',t=>{
+  const f=fixture(t,{messages:[{id:'large',body:'x'.repeat(50000)}]}),db=f.store.db;
+  let step=cutover.partitionReplayWitness(f.store,{roomId:'commons',generation:f.captured.generation,expectedBytes:0,requestId:'partial-0'});
+  assert.equal(step.phase,'codec_partitioning');
+  const row=db.prepare("SELECT payload FROM message_replay_units WHERE domain='witness'").get();
+  const bytes=Buffer.from(row.payload),at=bytes.indexOf(Buffer.from('xxxxxxxx'));assert.ok(at>=0&&at<step.bytes);bytes[at]=121;
+  db.prepare("UPDATE message_replay_units SET payload=? WHERE domain='witness'").run(bytes);
+  assert.throws(()=>{for(let i=1;i<5;i++)step=cutover.partitionReplayWitness(f.store,{roomId:'commons',generation:f.captured.generation,expectedBytes:step.bytes,requestId:'partial-'+i});},/source chunk changed/);
+  assert.notEqual(step.phase,'codec_partitioned');
+});
+
+test('changed chunk receipt pointer refuses independently of pointer self hashes',t=>{
+  const f=fixture(t,{messages:[{id:'large',body:'x'.repeat(50000)}]}),db=f.store.db;
+  const other=db.prepare("SELECT payload FROM message_replay_units WHERE domain='source-chunk' AND unit_key='16384'").get();
+  db.prepare("UPDATE message_replay_units SET payload=? WHERE domain='source-chunk' AND unit_key='0'").run(other.payload);
+  assert.throws(()=>partition(f),/source chunk binding/);
+});
+
+test('receipt vectors and charged repeated source reads stay within admitted unit limits',t=>{
+  const f=fixture(t,{messages:[{id:'large',body:'x'.repeat(128*1024-200)},...Array.from({length:100},(_,i)=>({id:'m'+i,body:'small'}))]});
+  let step={bytes:0},n=0,maxInput=0;
+  while(step.phase!=='codec_partitioned'){
+    step=cutover.partitionReplayWitness(f.store,{roomId:'commons',generation:f.captured.generation,expectedBytes:step.bytes,requestId:'bound-'+n++});
+    assert.ok(step.leafCommitments.length<=32);assert.ok(Buffer.byteLength(JSON.stringify(step))<=4096);
+    maxInput=Math.max(maxInput,step.inputBytes);assert.ok(step.inputBytes<=256*1024);
+  }
+  assert.ok(maxInput>128*1024,'spanning reads are included, not just the current chunk');
+});

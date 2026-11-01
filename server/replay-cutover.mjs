@@ -1,7 +1,7 @@
 // Explicit, unwired replay cutover. Exported DDL is not registered on store
 // open. Capturing bytes never certifies replay or publishes serving rows.
 import {createHash} from 'node:crypto';
-import {initialProjectionScan,scanProjectionChunk,decodeProjectionSpan} from './replay-projection-codec.mjs';
+import {initialProjectionScan,scanProjectionChunk,decodeProjectionSpan,projectionMapFrame} from './replay-projection-codec.mjs';
 import {sqliteValueLimit} from './storage-limits.mjs';
 import {STORE_SCHEMA_VERSION} from './writer-fence.mjs';
 import {initialReplayHash, advanceReplayHash, finishReplayHash,
@@ -11,7 +11,7 @@ export const REPLAY_CAPTURE_BYTES = 4 * 1024 * 1024;
 export const REPLAY_CAPTURE_STEP_BYTES = 16 * 1024;
 const CONTROL_BYTES = 4096;
 const MAX = Number.MAX_SAFE_INTEGER;
-const fatalText = bytes => new TextDecoder('utf-8',{fatal:true}).decode(new Uint8Array(bytes));
+const fatalText = bytes => new TextDecoder('utf-8',{fatal:true,ignoreBOM:true}).decode(new Uint8Array(bytes));
 const rawId = value => {
   if(typeof value!=='string'||!/^([A-F0-9]{2}){1,200}$/.test(value))throw Error('invalid replay event identity');
   return fatalText(Buffer.from(value,'hex'));
@@ -31,7 +31,7 @@ export function replayCutoverSchema({durable = false} = {}) {
     row_version INTEGER NOT NULL, payload_bytes INTEGER NOT NULL,
     payload_sha256 TEXT NOT NULL, payload BLOB NOT NULL,
     PRIMARY KEY(room_id,generation,domain,unit_key),
-    CHECK(domain IN ('control','header','witness','hash','codec','message','metadata','replay-message','replay-metadata','semantic'))
+    CHECK(domain IN ('control','header','witness','hash','codec','message','metadata','replay-message','replay-metadata','semantic','source-chunk','leaf-proof','metadata-entry'))
   );
   ${['INSERT','UPDATE','DELETE'].map(operation => `CREATE TRIGGER replay_units_writer_${operation.toLowerCase()}
     BEFORE ${operation} ON message_replay_units BEGIN
@@ -144,7 +144,7 @@ function validate(input, phase) {
     : ['roomId','requestId','generation','expectedBytes'];
   if (Object.keys(input).some(key => !keys.includes(key))) throw Error('invalid replay capture intent');
   if (phase === 'capture' && (!Number.isSafeInteger(input.expectedHead) || input.expectedHead < 1
-    || typeof input.reason !== 'string' || !input.reason.trim() || Buffer.byteLength(input.reason)>280
+    || typeof input.reason !== 'string' || input.reason.length>280 || Buffer.byteLength(input.reason)>280 || !input.reason.trim()
     || (input.ceilingBytes !== undefined && (!Number.isSafeInteger(input.ceilingBytes)
       || input.ceilingBytes<1 || input.ceilingBytes>REPLAY_CAPTURE_BYTES)))) throw Error('invalid replay capture intent');
   if (phase !== 'capture' && (!digest(input.generation) || !Number.isSafeInteger(input.expectedBytes)
@@ -169,6 +169,7 @@ function receipt(store, input, phase, operation) {
     }
     verifyReplayCutoverSchema(store.db);
     const value = {...operation({receiptId}),fingerprint,duplicate:false};
+    if(Buffer.byteLength(JSON.stringify(value))>4096)throw Error('replay receipt byte limit');
     store.db.prepare(`INSERT INTO operator_actions
       (id,at,action,target_kind,target_id,reason,plan_hash,counts_json,result,request_id)
       VALUES(?,?,?,?,?,?,?,?,?,?)`).run(receiptId,store.now(),'replay_cutover_'+phase,
@@ -234,6 +235,84 @@ function captureBinding(db,roomId,generation) {
   return header;
 }
 
+function putPointer(db,roomId,generation,domain,key,value){
+  const bytes=Buffer.from(JSON.stringify(value));
+  if(bytes.length>512)throw Error('replay pointer byte limit');
+  db.prepare('INSERT INTO message_replay_units VALUES(?,?,?,?,1,?,?,?)')
+    .run(roomId,generation,domain,key,bytes.length,hash(bytes),bytes);
+}
+function pointer(db,roomId,generation,domain,key){
+  const row=db.prepare(`SELECT CASE WHEN typeof(payload)='blob' AND typeof(payload_bytes)='integer'
+    AND payload_bytes BETWEEN 1 AND 512 AND octet_length(payload)=payload_bytes
+    THEN payload END AS payload FROM message_replay_units
+    WHERE room_id=? AND generation=? AND domain=? AND unit_key=?`).get(roomId,generation,domain,key);
+  if(!row?.payload)throw Error('missing or invalid replay proof pointer');
+  return JSON.parse(fatalText(row.payload));
+}
+const leafCommitment=(headerHash,generation,domain,key,offset,sourceLength,bytes,sha256,keyFrame=null)=>hash(JSON.stringify(
+  ['project-room.replay-leaf.v1',headerHash,generation,domain,key,offset,sourceLength,bytes,sha256,keyFrame]));
+
+// Every read is charged before fetching. Cache fixed chunks only for this
+// transaction, including repeated/span reads; neither a self-hash nor a later
+// changed witness can replace the immutable completed-hash receipt evidence.
+function readSourceRange(db,header,offset,length,budget){
+  if(!Number.isSafeInteger(offset)||!Number.isSafeInteger(length)||offset<0||length<1
+    ||length>128*1024||offset+length>header.value.bytes)throw Error('invalid replay source range');
+  const {roomId,generation}=header.value,out=new Uint8Array(length);
+  for(let start=Math.floor(offset/REPLAY_CAPTURE_STEP_BYTES)*REPLAY_CAPTURE_STEP_BYTES;start<offset+length;start+=REPLAY_CAPTURE_STEP_BYTES){
+    let bytes=budget.chunks.get(start);
+    if(!bytes){
+      const size=Math.min(REPLAY_CAPTURE_STEP_BYTES,header.value.bytes-start);
+      if(budget.bytes+size+4096+512>256*1024)throw Error('replay source input byte limit');
+      budget.bytes+=size+4096+512;
+      const saved=pointer(db,roomId,generation,'source-chunk',String(start));
+      const prior=auditBinding(db,saved.receiptId),chunk=prior.sourceChunk;
+      if(prior.generation!==generation||prior.bindingHash!==header.hash||!chunk
+        ||chunk.offset!==start||chunk.length!==size||!digest(chunk.sha256))throw Error('replay source chunk binding changed');
+      const row=db.prepare(`SELECT substr(payload,?,?) AS chunk FROM message_replay_units
+        WHERE room_id=? AND generation=? AND domain='witness' AND unit_key='state'
+        AND typeof(payload)='blob' AND octet_length(payload)=?`)
+        .get(start+1,size,roomId,generation,header.value.bytes);
+      if(!row?.chunk)throw Error('replay source chunk missing');
+      bytes=new Uint8Array(row.chunk);
+      if(bytes.length!==size||hash(bytes)!==chunk.sha256)throw Error('replay source chunk changed');
+      budget.chunks.set(start,bytes);
+    }
+    const lo=Math.max(offset,start),hi=Math.min(offset+length,start+bytes.length);
+    out.set(bytes.subarray(lo-start,hi-start),lo-offset);
+  }
+  return out;
+}
+
+export function readReplayWitnessLeaf(store,input){
+  if(!input||!id(input.roomId)||!digest(input.generation)
+    ||!['message','metadata','metadata-entry'].includes(input.domain)||typeof input.key!=='string'
+    ||Buffer.byteLength(input.key)>512||Object.keys(input).some(k=>!['roomId','generation','domain','key'].includes(k)))throw Error('invalid replay leaf intent');
+  return store.readTransaction(()=>{
+    const db=store.db;verifyReplayCutoverSchema(db);
+    const header=captureBinding(db,input.roomId,input.generation);
+    const saved=pointer(db,input.roomId,input.generation,'leaf-proof',JSON.stringify([input.domain,input.key]));
+    const prior=auditBinding(db,saved.receiptId);
+    if(!Number.isInteger(saved.index)||saved.index<0||saved.index>=32||prior.bindingHash!==header.hash
+      ||prior.generation!==input.generation||!Array.isArray(prior.leafCommitments)||prior.leafCommitments.length>32)
+      throw Error('replay leaf receipt binding changed');
+    const row=db.prepare(`SELECT CASE WHEN typeof(payload)='blob' AND typeof(payload_bytes)='integer'
+      AND payload_bytes BETWEEN 1 AND 131072 AND octet_length(payload)=payload_bytes THEN payload END AS payload,
+      CASE WHEN typeof(row_version)='integer' AND row_version BETWEEN 1 AND ? THEN row_version END AS position
+      FROM message_replay_units WHERE room_id=? AND generation=? AND domain=? AND unit_key=?`)
+      .get(header.value.bytes,input.roomId,input.generation,input.domain,input.key);
+    if(!row?.payload||!row.position||!Number.isSafeInteger(saved.sourceLength)||saved.sourceLength<1
+      ||row.position-1+saved.sourceLength>header.value.bytes)throw Error('invalid replay leaf source binding');
+    const bytes=new Uint8Array(row.payload);
+    if(input.domain==='metadata-entry' && (!Array.isArray(saved.keyFrame)||saved.keyFrame.length!==3
+      ||saved.keyFrame.some(n=>!Number.isSafeInteger(n)||n<0)||saved.keyFrame[1]<2
+      ||saved.keyFrame[0]+saved.keyFrame[1]>row.position-1))throw Error('invalid replay leaf key framing');
+    const commitment=leafCommitment(header.hash,input.generation,input.domain,input.key,row.position-1,saved.sourceLength,bytes.length,hash(bytes),saved.keyFrame??null);
+    if(prior.leafCommitments[saved.index]!==commitment)throw Error('independent replay leaf binding changed');
+    return {value:JSON.parse(fatalText(bytes)),offset:row.position-1,bytes:bytes.length,certified:false};
+  });
+}
+
 export function advanceReplayWitness(store, input) {
   return receipt(store,input,'hash',({receiptId}) => {
     const db=store.db, {roomId,generation}=input;
@@ -250,18 +329,21 @@ export function advanceReplayWitness(store, input) {
       FROM message_replay_units WHERE room_id=? AND generation=? AND domain='witness' AND unit_key='state'`)
       .get(header.value.bytes,header.value.bytes,header.value.metadataHash,roomId,generation);
     if (!witness?.admitted || state.bytes>header.value.bytes) throw Error('replay witness changed');
-    let next=state;
+    let next=state,sourceChunk=null;
     if (state.bytes<header.value.bytes) {
       const row=db.prepare(`SELECT substr(payload,?,?) AS chunk FROM message_replay_units
         WHERE room_id=? AND generation=? AND domain='witness' AND unit_key='state'`)
         .get(state.bytes+1,REPLAY_CAPTURE_STEP_BYTES,roomId,generation);
-      next=advanceReplayHash(state,new Uint8Array(row.chunk));
+      const bytes=new Uint8Array(row.chunk);
+      next=advanceReplayHash(state,bytes);
+      sourceChunk={offset:state.bytes,length:bytes.length,sha256:hash(bytes)};
+      putPointer(db,roomId,generation,'source-chunk',String(state.bytes),{receiptId});
     }
     const complete=next.bytes===header.value.bytes;
     if (complete && finishReplayHash(next)!==header.value.metadataHash) throw Error('independent replay witness mismatch');
     const encoded=encodeReplayHash(next);
     put(db,roomId,generation,'hash',{version:1,headerHash:header.hash,state:encoded,receiptId});
-    return {generation,bindingHash:header.hash,hashStateHash:hash(encoded),head:header.value.head,bytes:next.bytes,phase:complete?'witness_verified':'hashing',
+    return {generation,bindingHash:header.hash,hashStateHash:hash(encoded),sourceChunk,head:header.value.head,bytes:next.bytes,phase:complete?'witness_verified':'hashing',
       publication:'pending',certified:false};
   });
 }
@@ -280,39 +362,43 @@ export function partitionReplayWitness(store,input) {
     const state=JSON.parse(saved.state);
     if(state.offset!==input.expectedBytes)throw Error('replay codec cursor changed');
     if(state.phase==='done' && state.offset===header.value.bytes)return {generation,bindingHash:header.hash,codecStateHash:hash(saved.state),bytes:state.offset,head:header.value.head,records:0,phase:'codec_partitioned',publication:'pending',certified:false};
-    const chunkRow=db.prepare(`SELECT substr(payload,?,?) AS chunk FROM message_replay_units
-      WHERE room_id=? AND generation=? AND domain='witness' AND unit_key='state'
-      AND typeof(payload)='blob' AND payload_bytes=? AND octet_length(payload)=? AND payload_sha256=?`)
-      .get(state.offset+1,REPLAY_CAPTURE_STEP_BYTES,roomId,generation,header.value.bytes,header.value.bytes,header.value.metadataHash);
-    if(!chunkRow)throw Error('replay witness changed');
-    const chunk=new Uint8Array(chunkRow.chunk),scanned=scanProjectionChunk(state,chunk);
+    const budget={bytes:64*1024,chunks:new Map()};
+    const chunk=readSourceRange(db,header,state.offset,Math.min(REPLAY_CAPTURE_STEP_BYTES-state.offset%REPLAY_CAPTURE_STEP_BYTES,header.value.bytes-state.offset),budget);
+    const scanned=scanProjectionChunk(state,chunk);
     if(scanned.state.offset>header.value.bytes || (!scanned.complete && scanned.state.offset===header.value.bytes))throw Error('incomplete replay projection codec');
     let outputBytes=8192;
     const records=scanned.records.map(record=>{
       const relative=record.offset-state.offset;
-      const bytes=relative>=0 && relative+record.length<=chunk.length
+      const frame=record.kind==='metadata-map'?projectionMapFrame(record):null;
+      const bytes=frame?Buffer.from(JSON.stringify(frame)):relative>=0 && relative+record.length<=chunk.length
         ? chunk.subarray(relative,relative+record.length)
-        : new Uint8Array(db.prepare(`SELECT substr(payload,?,?) AS chunk FROM message_replay_units
-          WHERE room_id=? AND generation=? AND domain='witness' AND unit_key='state'`)
-          .get(record.offset+1,record.length,roomId,generation).chunk);
-      const value=decodeProjectionSpan(bytes,record);
+        : readSourceRange(db,header,record.offset,record.length,budget);
+      const value=frame??decodeProjectionSpan(bytes,record);
       // JSON.parse validates syntax but shadows duplicate keys. SQLite's
       // bounded tree walk sees every nested/escaped-equivalent object key.
-      if(db.prepare(`SELECT 1 FROM json_tree(?) WHERE key IS NOT NULL
+      if(!frame&&db.prepare(`SELECT 1 FROM json_tree(?) WHERE key IS NOT NULL
         GROUP BY parent,key HAVING count(*)>1 LIMIT 1`).get(fatalText(bytes)))
         throw Error('duplicate replay projection object key');
-      outputBytes+=bytes.length+512;
+      outputBytes+=bytes.length+1024;
       return {record,bytes,value};
     });
     const encoded=JSON.stringify(scanned.state);outputBytes+=Buffer.byteLength(encoded);
     if(outputBytes>256*1024)throw Error('replay codec output byte limit');
     const insert=db.prepare(`INSERT INTO message_replay_units VALUES(?,?,?,?,?,?,?,?)`);
-    for(const {record,bytes,value} of records)insert.run(roomId,generation,
-      record.kind==='message'?'message':'metadata',record.kind==='message'?value.id:record.key,
-      record.offset+1,bytes.length,hash(bytes),bytes);
+    const leafCommitments=[];
+    for(const {record,bytes,value} of records){
+      const domain=record.kind==='message'?'message':record.kind==='metadata-entry'?'metadata-entry':'metadata';
+      const key=record.kind==='message'?value.id:record.kind==='metadata-entry'?JSON.stringify([record.key,record.entryKey]):record.key;
+      if(db.prepare('SELECT 1 FROM message_replay_units WHERE room_id=? AND generation=? AND domain=? AND unit_key=?').get(roomId,generation,domain,key))
+        throw Error('duplicate replay projection leaf key');
+      insert.run(roomId,generation,domain,key,record.offset+1,bytes.length,hash(bytes),bytes);
+      const keyFrame=record.kind==='metadata-entry'?[record.keyOffset,record.keyLength,record.index]:null;
+      putPointer(db,roomId,generation,'leaf-proof',JSON.stringify([domain,key]),{receiptId,index:leafCommitments.length,sourceLength:record.length,keyFrame});
+      leafCommitments.push(leafCommitment(header.hash,generation,domain,key,record.offset,record.length,bytes.length,hash(bytes),keyFrame));
+    }
     put(db,roomId,generation,'codec',{version:1,headerHash:header.hash,state:encoded,receiptId});
     return {generation,bindingHash:header.hash,codecStateHash:hash(encoded),head:header.value.head,
-      bytes:scanned.state.offset,records:records.length,messages:scanned.state.messageIndex,
+      bytes:scanned.state.offset,records:records.length,messages:scanned.state.messageIndex,leafCommitments,inputBytes:budget.bytes,
       phase:scanned.complete&&scanned.state.offset===header.value.bytes?'codec_partitioned':'codec_partitioning',publication:'pending',certified:false};
   });
 }

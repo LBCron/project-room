@@ -42,16 +42,20 @@ test('actual Worker partitions 17,405 captured messages through bounded codec st
     const seed=await call('/seed-codec');assert.ok(seed.bytes>2376000&&seed.bytes<4194304);
     const capture=await call('/durable-capture');let progress={bytes:0};
     for(let i=0;progress.phase!=='witness_verified'&&i<300;i++)progress=await call(`/durable-step?generation=${capture.generation}&bytes=${progress.bytes}&step=${i}`);
-    assert.equal(progress.phase,'witness_verified');progress={bytes:0};let first,maxRecords=0,steps=0;
+    assert.equal(progress.phase,'witness_verified');progress={bytes:0};let first,maxRecords=0,maxInputBytes=0,steps=0;
     while(progress.phase!=='codec_partitioned'&&steps<1000){
       progress=await call(`/durable-codec?generation=${capture.generation}&bytes=${progress.bytes}&step=${steps}`);
-      first??=progress;maxRecords=Math.max(maxRecords,progress.records);steps++;
+      first??=progress;maxRecords=Math.max(maxRecords,progress.records);assert.ok(progress.inputBytes<=262144);maxInputBytes=Math.max(maxInputBytes,progress.inputBytes);assert.ok(progress.leafCommitments.length<=32);steps++;
       if(steps===2){await mf.dispose();mf=create();}
       if(steps===4)await call('/append-cost?i=33');
     }
     assert.equal(progress.phase,'codec_partitioned');assert.equal(progress.bytes,seed.bytes);assert.equal(progress.certified,false);assert.ok(maxRecords<=32);
-    const census=await call('/codec-census');assert.equal(census.messages,17405);assert.ok(census.maxLeafBytes<1000);
+    const census=await call('/codec-census');assert.equal(census.messages,17405);assert.ok(census.maxLeafBytes<1000);assert.equal(census.entries,305);assert.ok(census.maxReceiptBytes<=4096);
+    const leaf=await call('/codec-leaf?generation='+capture.generation);assert.equal(leaf.value.id,'request-17');assert.equal(leaf.value.body,'x'.repeat(720));
     const original=await call(`/durable-codec?generation=${capture.generation}&bytes=0&step=0`);assert.deepEqual({...original,duplicate:false},first);
-    console.log('DURABLE_REPLAY_CODEC_WORKER '+JSON.stringify({bytes:seed.bytes,steps,maxRecords,census,head:progress.head,certified:false,publication:progress.publication}));
+    await call('/codec-leaf-tamper');await mf.dispose();mf=create();
+    const refused=await mf.dispatchFetch('http://localhost/codec-leaf?generation='+capture.generation);assert.equal(refused.status,500);
+    assert.match((await refused.json()).message,/independent replay leaf binding changed/);
+    console.log('DURABLE_REPLAY_CODEC_WORKER '+JSON.stringify({bytes:seed.bytes,steps,maxRecords,maxInputBytes,census,head:progress.head,certified:false,publication:progress.publication}));
   }finally{await mf.dispose();await rm(directory,{recursive:true,force:true});}
 });

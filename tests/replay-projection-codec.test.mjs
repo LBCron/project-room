@@ -3,13 +3,16 @@ import assert from 'node:assert/strict';
 import {RoomStore} from '../server/store.mjs';
 import {initialRoom} from '../server/bootstrap.mjs';
 import {projectionMessageAtRest} from '../server/projection-at-rest.mjs';
-import {initialProjectionScan,scanProjectionChunk,decodeProjectionSpan,REPLAY_CODEC_INPUT_BYTES,REPLAY_CODEC_CONTROL_BYTES} from '../server/replay-projection-codec.mjs';
+import {initialProjectionScan,scanProjectionChunk,decodeProjectionSpan,projectionMapFrame,REPLAY_CODEC_INPUT_BYTES,REPLAY_CODEC_CONTROL_BYTES} from '../server/replay-projection-codec.mjs';
 function scan(text,size=REPLAY_CODEC_INPUT_BYTES,maximumRecords=32){
   const bytes=Buffer.from(text),out=[];let state=initialProjectionScan(),steps=0,maxControl=0,maxFetched=0;
   while(state.offset<bytes.length){
     const step=scanProjectionChunk(JSON.parse(JSON.stringify(state)),bytes.subarray(state.offset,state.offset+size),{maximumRecords});
     assert.ok(step.consumed>0||step.records.length>0,'must make honest bounded progress');
-    for(const span of step.records){assert.ok(span.length<=128*1024);maxFetched=Math.max(maxFetched,span.length);out.push({...span,value:decodeProjectionSpan(bytes.subarray(span.offset,span.offset+span.length),span)});}
+    for(const span of step.records){
+      if(span.kind==='metadata-map'){out.push({...span,value:projectionMapFrame(span)});continue;}
+      assert.ok(span.length<=128*1024);maxFetched=Math.max(maxFetched,span.length);out.push({...span,value:decodeProjectionSpan(bytes.subarray(span.offset,span.offset+span.length),span)});
+    }
     assert.ok(step.records.length<=maximumRecords);state=step.state;steps++;maxControl=Math.max(maxControl,Buffer.byteLength(JSON.stringify(state)));
   }
   assert.equal(state.phase,'done','incomplete captured JSON refuses completion');return{state,out,steps,maxControl,maxFetched};
@@ -62,4 +65,25 @@ for(const enabled of [false,true])test('pure shared message-at-rest transform ex
   const normal=s.transaction(()=>JSON.parse(s.storedProjection('commons',state)).messages);
   const pure=templates.map(message=>projectionMessageAtRest(message,{enabled}));
   assert.equal(JSON.stringify(pure),JSON.stringify(normal));assert.deepEqual(state.messages,templates);
+});
+
+
+test('reply map preserves exact parent and escaped child key framing across byte boundaries',()=>{
+  const text='{"replyRequests": { "a\\u0062": {"nested":"🦉"}, "other": {"open":true} },"messages":[]}';
+  const bytes=Buffer.from(text);
+  for(const size of [1,2,3,7,63]){
+    const result=scan(text,size,1),entries=result.out.filter(x=>x.kind==='metadata-entry');
+    assert.deepEqual(entries.map(x=>x.entryKey),['ab','other']);
+    assert.deepEqual(entries.map(x=>JSON.parse(bytes.subarray(x.keyOffset,x.keyOffset+x.keyLength).toString())),['ab','other']);
+    const parent=result.out.find(x=>x.kind==='metadata-map');assert.equal(parent.entries,2);
+    assert.equal(bytes.subarray(parent.offset,parent.offset+parent.length).toString(),'{ "a\\u0062": {"nested":"🦉"}, "other": {"open":true} }');
+    assert.ok(result.maxControl<2048);
+  }
+});
+
+test('fatal span decoding preserves a BOM inside a string but refuses one outside JSON',()=>{
+  const valid=Buffer.from('{"body":"\ufeffinside"}');
+  assert.equal(decodeProjectionSpan(valid,{kind:'metadata',length:valid.length}).body,'\ufeffinside');
+  const invalid=Buffer.concat([Buffer.from([239,187,191]),Buffer.from('{"body":"outside"}')]);
+  assert.throws(()=>decodeProjectionSpan(invalid,{kind:'metadata',length:invalid.length}),/JSON|Unexpected/);
 });

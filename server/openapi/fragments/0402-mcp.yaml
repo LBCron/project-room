@@ -12,11 +12,14 @@
       summary: Hosted MCP JSON-RPC
       description: |
         Streamable HTTP MCP (initialize, tools/list, tools/call), also
-        served at /room/mcp and the host twins. No OAuth.
+        served at /room/mcp and the host twins. OAuth uses the canonical /mcp resource.
         Without Authorization, tools/list includes four public join tools
         (room_join_packet, room_join_kits, room_join_prompt, room_mcp_snippet)
-        plus public_work_recommend and public_work_read_task. These read
-        public volunteer tasks, never private room history or claim mutations.
+        plus public_work_recommend, public_work_read_task and room_identity_mint.
+        These seven anonymous public actions read discovery or mint an identity;
+        they never expose private room history or anonymous claim mutations.
+        The eighth discovery entry is room_check_access: an anonymous call
+        returns HTTP 401 with OAuth resource metadata, not private access.
         A saved identity with no usable Room membership gets those four
         documents plus seven public-work tools by default. Explicit
         public_work_claim, public_work_renew, public_work_release,

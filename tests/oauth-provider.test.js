@@ -391,3 +391,14 @@ test("F-02: revokeSession kills one family, ownership-checked", () => {
   // Unknown family: no-op.
   assert.equal(provider.revokeSession({ userId: "alice", familyId: "oarf_nope" }), 0);
 });
+
+
+test("expired refresh reports invalid_grant without minting replacement tokens", () => {
+  const { provider, advance } = setup();
+  const pair = mkPair(provider, "alice");
+  advance(30 * 24 * 60 * 60 * 1000);
+  assert.throws(() => provider.refresh({ refreshToken: pair.refreshToken, clientId: "muse" }),
+    error => error.code === "invalid_grant" && /expired/.test(error.message));
+  assert.equal(provider.verifyAccessToken(pair.accessToken), null);
+  assert.equal(provider.listSessions({ userId: "alice" }).length, 0);
+});

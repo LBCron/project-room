@@ -2659,6 +2659,17 @@ export class BountyEscrow {
   }
 
   _settleDispute(bounty, { outcome, terminal, reasonCodes = [], bondSnapshot, forfeitedBond, actor, bondToChallenger = false }) {
+    // L01-C4: a settlement is a decision. An outcome-less dispute (a
+    // withdrawn challenge, or a legacy terminal record whose resolution
+    // never carried a verdict) has no decision to settle on — the null
+    // outcome used to fall through to the release branch below, vesting
+    // the full award with the worker, compensating the worker from the
+    // challenger's bond, and stamping the settlement verified-complete
+    // while emitting no bounty.decided event. Refuse before any verdict
+    // is recorded or any money moves; the timeout-default path is
+    // unaffected (it passes the explicit outcome "timeout-default").
+    check(typeof outcome === "string" && outcome.length > 0, "invalid_state",
+      `dispute settlement requires a decided outcome, got ${outcome === null ? "null" : String(outcome)} (terminal: ${String(terminal)})`);
     const roomId = bounty.roomId, bountyId = bounty.bountyId;
     const at = isoNow(this.nowMs());
     const amount = bounty.amountMillis;
@@ -3029,11 +3040,21 @@ export class BountyEscrow {
     }
     if (bounty.state === "disputed" && bounty.disputeId && !bounty.resolution) {
       const dispute = this._disputes.get(bounty.disputeId);
-      const terminal = dispute.state === "resolved" || dispute.state === "withdrawn";
-      if (terminal) {
+      // L01-C4: a withdrawn dispute is terminal in the machine's legacy
+      // shape but carries NO verdict (resolution is null by construction).
+      // It must never settle — not as a release here, and not via the
+      // timeout default below once 14 days pass. Leave the bounty disputed
+      // and unsettled (finalizeBounty reports nothing to finalize; the
+      // epoch due-scan keeps the row visible as overdue) until a human
+      // dispositions the legacy record. The same applies to any terminal
+      // record whose resolution carries no outcome.
+      if (dispute.state === "withdrawn") return null;
+      if (dispute.state === "resolved") {
+        const outcome = dispute.resolution?.outcome ?? null;
+        if (typeof outcome !== "string" || outcome.length === 0) return null;
         // The onDisputeFinalized callback already ran inline; if the bounty
         // is still unsettled the handler must have thrown — retry now.
-        const signed = this._settleDispute(bounty, { outcome: dispute.resolution?.outcome ?? null, terminal: dispute.state,
+        const signed = this._settleDispute(bounty, { outcome, terminal: dispute.state,
           reasonCodes: dispute.resolution?.reasonCodes ?? [],
           bondSnapshot: dispute.bondSnapshot, forfeitedBond: dispute.forfeitedBond, actor });
         return { action: bounty.state === "refunded" ? "refunded" : "released", signed };

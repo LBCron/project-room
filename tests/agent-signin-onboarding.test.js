@@ -176,3 +176,10 @@ test("skillPackLink points at the served machine-readable entry points", () => {
   assert.equal(skillPackLink("https://room.trydemigod.com/"), "https://room.trydemigod.com/agents.json");
   assert.equal(skillPackLink(""), "/agents.json");
 });
+
+test("first-run: task action is primary before either dismissing social action", (t) => {
+  installDom(t);
+  const card = mountAgentFirstRun({ container: globalThis.document.body });
+  const actions = [...card.innerHTML.matchAll(/data-step="([^"]+)"/g)].map(match => match[1]);
+  assert.deepEqual(actions, ["board", "greet", "discover"], "the first useful-work action must precede actions that dismiss the card");
+});

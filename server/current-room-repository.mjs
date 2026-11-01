@@ -52,7 +52,7 @@ export const CURRENT_ROOM_SCHEMA = definitions.map(([,sql])=>sql+';').join('\n')
   + '\nINSERT OR IGNORE INTO current_room_writer_permit VALUES(1,0,NULL,NULL);';
 const permitFor = row => `(SELECT enabled=1 AND room_id=${row}.room_id FROM current_room_writer_permit WHERE singleton=1) IS 1`;
 const guardDefinitions = [...CURRENT_LEGACY_WORK_GUARDS];
-for (const table of ['current_room_records','current_room_record_proofs','current_room_head','messages','work_entities','events','commands','rooms']) {
+for (const table of ['current_room_records','current_room_record_proofs','current_room_head','messages','work_entities','dm_consents','events','commands','rooms']) {
   for (const operation of ['INSERT','UPDATE','DELETE']) {
     const rows=operation==='UPDATE'?['OLD','NEW']:[operation==='DELETE'?'OLD':'NEW'];
     const key=row=>`${row}.${table==='rooms'?'id':'room_id'}`;
@@ -341,6 +341,17 @@ export function withCurrentServingWriter(db,roomId,operation) {
   if(!isCurrentRoom(db,roomId) && !db.prepare("SELECT 1 FROM current_room_record_proofs WHERE room_id=? AND domain='migrationFence' AND record_key='active' AND present=1").get(roomId))return operation();
   const previous=contextBudgets.get(db);if(!previous)contextBudgets.set(db,budget());
   try{return withCurrentRoomWriter(db,roomId,operation);}finally{if(!previous)contextBudgets.delete(db);}
+}
+// This existing side-table event is a reducer no-op except legacy default
+// channel normalization. Consent authority stays in dm_consents, atomically
+// committed with its sequenced receipt and the protected current head.
+export function currentDmConsentEventContext(store,roomId) {
+  const db=store.db,b=contextBudgets.get(db)??budget(),head=readCurrentHead(db,roomId,b);if(!head)return null;
+  const authority=currentAuthorityFromHead(db,roomId,head,b),state=emptyRoomState();
+  state.room=readCurrentRecord(db,roomId,'metadata','room',b);state.members=authority.members;
+  const general=readCurrentRecord(db,roomId,'channels','general',b);if(general!==undefined)state.channels.general=general;
+  bindCurrentRecordContext(state,{replyRequestCount:head.counts.replyRequests});
+  return {room:{sequence:head.sequence,state},current:{head,before:fieldsOf(state),workRefs:new Map(),budget:b,messageRows:new Map()}};
 }
 export function currentCommandContext(store,roomId,command) {
   const db=store.db,b=contextBudgets.get(db)??budget(),head=readCurrentHead(db,roomId,b);if(!head)return null;

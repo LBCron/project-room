@@ -2,7 +2,7 @@ import {readCurrentNativeInbox} from './current-native-inbox.mjs';
 import {readCurrentEventWindow,currentEventRedactionMessages} from './current-room-events.mjs';
 import { assertRestoreAdmitted, restorePending, verifyRestoreControl } from './restore-admission.mjs';
 import {readCurrentWorkListing} from './current-work-list.mjs';
-import { CURRENT_ROOM_SCHEMA, CURRENT_ROOM_GUARDS, initializeCurrentRoom, currentRoomAuthority, isCurrentRoom, currentCommandContext, prepareCurrentWrite, withCurrentServingWriter, readCurrentRecord, readCurrentHistoryFloor, withCurrentReadContext, readCurrentSelectedWorkState, readCurrentOverviewWindow, currentVisibleHorizon, readCurrentPrivateWorkParties } from './current-room-repository.mjs';
+import { CURRENT_ROOM_SCHEMA, CURRENT_ROOM_GUARDS, initializeCurrentRoom, currentRoomAuthority, isCurrentRoom, currentDmConsentEventContext, currentCommandContext, prepareCurrentWrite, withCurrentServingWriter, readCurrentRecord, readCurrentHistoryFloor, withCurrentReadContext, readCurrentSelectedWorkState, readCurrentOverviewWindow, currentVisibleHorizon, readCurrentPrivateWorkParties } from './current-room-repository.mjs';
 import {bindReplayAppend} from './replay-cutover.mjs';
 import { savedHistoricalReplayCheckpoint } from './historical-replay-contract.mjs';
 import { bootstrapLegacyWriteProofs, configureWriteIntegrity, beginWriteProofFrame, endWriteProofFrame, publishProjectionWrites, projectionDigest, projectionContentHash, servingContentProof, servingProofDrift, assertProjectionWrite, assertMessageWrite, recordMessageWrite, withVerifiedRoomReconstruction } from './write-integrity.mjs';
@@ -4124,7 +4124,31 @@ this.slaBreachAlerts = new SlaBreachAlertJournal(this); // Task 26: durable in-a
   // guards, same transaction as the caller's row write, so a throw rolls the
   // consent change back with the event. Also the MSG-2/integrity replay rail:
   // dm.consent_changed has a reducer no-op, so checkpoints replay clean.
+  currentDmConsentTransaction(roomId,operation){
+    return this.transaction(()=>withCurrentServingWriter(this.db,roomId,operation));
+  }
+  currentDmConsentAuthority(roomId) {
+    if(!isCurrentRoom(this.db,roomId))return null;
+    return this.readTransaction(()=>withCurrentReadContext(this.db,roomId,()=>{
+      const authority=this.roomAuthority(roomId);
+      return {room:{id:roomId,ownerId:authority.ownerId},members:authority.members};
+    }));
+  }
   appendSideTableEvent(roomId, event) {
+    if(isCurrentRoom(this.db,roomId)){
+      if(event.type!==T.DM_CONSENT_CHANGED)fail(409,'current_room_context_unavailable','This side-table event has no qualified current writer');
+      return this.transaction(()=>withCurrentReadContext(this.db,roomId,()=>withCurrentServingWriter(this.db,roomId,()=>{
+        const context=currentDmConsentEventContext(this,roomId),room=context.room;
+        refuseArchivedWrite(room.state);
+        if(room.sequence>=PILOT_LIMITS.eventsPerRoom)fail(409,'pilot_limit','Bounded pilot capacity reached; no data was changed');
+        let state;try{state=compact(applyEvent(room.state,event));}catch(error){fail(422,'invalid_side_table_event',error.message);}
+        const sequence=room.sequence+1,write=prepareCurrentWrite(this,{roomId,previous:room,state,event,sequence,current:context.current});
+        if(Buffer.byteLength(write.projection)>PILOT_LIMITS.projectionBytes)fail(409,'pilot_limit','Room projection limit reached; no data was changed');
+        this.db.prepare('INSERT INTO events VALUES(?,?,?,?)').run(roomId,sequence,event.id,JSON.stringify(event));
+        this.db.prepare('UPDATE rooms SET sequence=?,projection=? WHERE id=?').run(sequence,write.projection,roomId);
+        write.persistEntities();return sequence;
+      })));
+    }
     const room = this.room(roomId);
     refuseArchivedWrite(room.state);
     if (room.sequence >= PILOT_LIMITS.eventsPerRoom) fail(409, "pilot_limit", "Bounded pilot capacity reached; no data was changed");

@@ -18,10 +18,13 @@
 //   double-counts against the projections it replaces.
 // - `bodiesOmitted` is present exactly when message bodies in the window were
 //   not reproduced (value = how many), and absent when none were.
-// - `coverage.attentionIncomplete` is present exactly when the bounded
-//   attention scans stopped at a budget before the window's end, with
-//   `coverage.attentionThrough` naming the evaluated-through sequence
-//   and `followUps.attention` carrying the continuation read.
+// - `coverage.attentionIncomplete` is present exactly when the attention
+//   section does not list every attention item the window holds for the
+//   viewer — a bounded scan stopped at its budget, a per-kind overflow
+//   clamp capped the slice, or the section cap left rows unlisted —
+//   with `coverage.attentionThrough` naming the sequence the listing
+//   is complete through and `followUps.attention` carrying the
+//   continuation read that pages the listing forward from there.
 // - Sections are capped by caps that already exist in-repo (140-char clip,
 //   80-char board title, needs-me per-kind discipline) plus a total per-section
 //   cap, and the whole document carries a hard byte budget: if the serialized
@@ -36,7 +39,7 @@ export const DIGEST_MAX_BYTES = 4096;
 export const DIGEST_CAPS = Object.freeze({
   messages: 3,      // latest message summaries in the window
   work: 4,          // latest changed work items in the window (deduped by claim)
-  attention: 5,     // latest needs-me attention items for the caller in the window
+  attention: 5,     // earliest needs-me attention items for the caller in the window (the section pages forward via coverage.attentionThrough; it never silently takes the latest)
   decisions: 2      // latest decision events in the window
 });
 
@@ -55,13 +58,16 @@ const byteSize = value => Buffer.byteLength(JSON.stringify(value), "utf8");
 // - attention: needs-me-shaped items { kind, seq, id, summary }, any order
 // - attentionCoverage: { through, complete } from the attention slice —
 //   the bounded needs-me scans may stop at their budgets before the
-//   window's end; when they do, coverage names the sequence attention
-//   was actually evaluated through (attentionThrough) and marks
-//   attentionIncomplete, so an attention total of 0 over a partially
-//   scanned window never reads as "nothing needs you" and the reader
-//   can continue the attention slice with the followUps.attention read
-//   instead of advancing past unscanned replies. Absent when complete:
-//   a fully scanned window keeps the exact pre-marker shape.
+//   window's end and the slice's per-kind overflow clamps may cap the
+//   listing; the section cap below may leave rows unlisted too. When
+//   the composed section is not the whole listing, coverage names the
+//   sequence the listing is complete through (attentionThrough) and
+//   marks attentionIncomplete, so an attention total of 0 over a
+//   partially scanned window never reads as "nothing needs you" and
+//   the reader can continue the attention listing with the
+//   followUps.attention read instead of advancing past unlisted
+//   items. Absent when complete: a fully listed window keeps the
+//   exact pre-marker shape.
 // - messages: latest-first visible message rows { seq, id, actorId, summary }
 // - decisions: decision-event rows { seq, type, actorId }, any order
 // - actionable: { total, byKind } standing counts from the updates projection
@@ -95,9 +101,14 @@ export function buildRoomDigest({
       ...(row.action ? { action: row.action } : {}),
       ...(row.state ? { state: row.state } : {})
     }));
-  const attentionRows = [...(attention ?? [])]
-    .sort((a, b) => a.seq - b.seq)
-    .slice(-DIGEST_CAPS.attention)
+  // Attention pages chronologically — earliest first, unlike the
+  // latest-first state sections — because the listing is cursor
+  // machinery: rows past the section cap are reached by continuing
+  // from coverage.attentionThrough, never skipped by taking the
+  // latest rows and advancing the window cursor past the rest.
+  const sortedAttention = [...(attention ?? [])].sort((a, b) => a.seq - b.seq);
+  const attentionRows = sortedAttention
+    .slice(0, DIGEST_CAPS.attention)
     .map(item => ({ kind: item.kind, seq: item.seq, id: item.id, summary: clip(item.summary) }));
   const decisionRows = [...(decisions ?? [])]
     .sort((a, b) => a.seq - b.seq)
@@ -108,6 +119,28 @@ export function buildRoomDigest({
     .slice(-DIGEST_CAPS.messages)
     .map(row => ({ seq: row.seq, id: row.id, actorId: row.actorId ?? null, summary: clip(row.summary) }));
   const encodedRoom = encodeURIComponent(roomId);
+  // The attention listing is partial when the slice stopped short
+  // (scan budget or per-kind overflow clamp) or when the section cap
+  // left rows unlisted; it is complete through the tighter of the
+  // slice's evaluated ground and the ground the cap leaves fully
+  // listed (the sequence just before the first unlisted row).
+  const attentionTotal = sortedAttention.length;
+  const sliceIncomplete = Boolean(attentionCoverage && attentionCoverage.complete === false);
+  const capDropped = attentionTotal - attentionRows.length;
+  const attentionIncomplete = sliceIncomplete || capDropped > 0;
+  let attentionThrough;
+  if (attentionIncomplete) {
+    attentionThrough = sliceIncomplete ? attentionCoverage.through : undefined;
+    if (capDropped > 0) {
+      // Complete through the sequence just before the first unlisted
+      // row: a sequence group is advanced past only when returned in
+      // full, so a row sharing the last listed row's sequence is
+      // re-listed by the continuation rather than skipped.
+      const listedThrough = sortedAttention[attentionRows.length].seq - 1;
+      attentionThrough = attentionThrough === undefined ? listedThrough : Math.min(attentionThrough, listedThrough);
+    }
+    if (!Number.isSafeInteger(attentionThrough) || attentionThrough < since) attentionThrough = since;
+  }
   const digest = {
     contractVersion: 1,
     roomId,
@@ -124,9 +157,9 @@ export function buildRoomDigest({
       eventsInWindow,
       byType: counts,
       workChangedTotal: workChangedTotal ?? work.length,
-      attentionTotal: (attention ?? []).length,
-      ...(attentionCoverage && attentionCoverage.complete === false
-        ? { attentionThrough: attentionCoverage.through, attentionIncomplete: true }
+      attentionTotal,
+      ...(attentionIncomplete
+        ? { attentionThrough, attentionIncomplete: true }
         : {}),
       messagesTotal
     },
@@ -149,8 +182,8 @@ export function buildRoomDigest({
       work: `GET /api/rooms/${encodedRoom}/work-claims/{id}`,
       context: `GET /api/rooms/${encodedRoom}/context`,
       updates: `GET /api/rooms/${encodedRoom}/updates`,
-      ...(attentionCoverage && attentionCoverage.complete === false
-        ? { attention: `GET /api/rooms/${encodedRoom}/digest?since=${attentionCoverage.through}` }
+      ...(attentionIncomplete
+        ? { attention: `GET /api/rooms/${encodedRoom}/digest?since=${attentionThrough}` }
         : {})
     },
     untrusted: true

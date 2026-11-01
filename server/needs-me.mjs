@@ -724,11 +724,15 @@ function mentionHorizon(store, roomId, memberId, after, through) {
 // catch-up read (the digest) used to advertise the room head as its
 // cursor with an attention total of 0 — a visible reply beyond the
 // clamp vanished with no marker. attentionThrough is the sequence the
-// attention scans actually evaluated through (before the per-kind
-// overflow clamps, which cap what is LISTED, not what was scanned),
-// and attentionComplete is false exactly when a scan's budget stopped
-// it short of the window's end. The digest propagates both; the scans
-// themselves stay bounded — no full-history scan is restored.
+// attention listing is complete through: the ground the scans actually
+// evaluated, lowered by any per-kind overflow clamp — the clamps cap
+// what is LISTED, and a listing stopped at a kind's cap is not
+// complete past the clamped sequence (the digest listed 5 of an
+// attention total of 8 with no marker, Codex seq 25449).
+// attentionComplete is false exactly when a scan's budget or a
+// per-kind overflow clamp stopped the listing short of the window's
+// end. The digest propagates both; the scans themselves stay
+// bounded — no full-history scan is restored.
 export function roomAttentionSlice(store, roomId, memberId, identityId, after) {
   const authority = store.roomAuthority(roomId);
   const member = authority.members?.[memberId];
@@ -743,8 +747,7 @@ export function roomAttentionSlice(store, roomId, memberId, identityId, after) {
   // the same rule the per-kind overflow clamp below applies.
   const replyScan = repliesOf(store, roomId, memberId, messageAfter, through, state);
   if (replyScan.exhausted) through = Math.min(through, replyScan.scannedThrough);
-  const attentionThrough = through;
-  const attentionComplete = !horizonScan.exhausted && !replyScan.exhausted;
+  const scanThrough = through;
   const pendingBonds = identityId ? store.bonds.pendingProposalsFor(identityId) : [];
   const kinds = [
     mentionsOf(store, roomId, memberId, messageAfter, through),
@@ -760,6 +763,12 @@ export function roomAttentionSlice(store, roomId, memberId, identityId, after) {
     if (kind.length > MAX_PER_KIND) through = Math.min(through, kind[MAX_PER_KIND].seq - 1);
     for (const item of kind) push(candidates, item);
   }
+  // Coverage reports the ground the listing is complete through: an
+  // engaged per-kind overflow clamp lowers it below scanThrough, and
+  // the slice is incomplete exactly then (or when a scan budget
+  // stopped it) — never silently (see the header note).
+  const attentionThrough = through;
+  const attentionComplete = !horizonScan.exhausted && !replyScan.exhausted && through === scanThrough;
   const retired = retiredNeedsMeKeys(store, roomId, memberId);
   const items = candidates
     .filter(item => item.seq <= through && !retired.has(`${item.kind}:${item.id}`))

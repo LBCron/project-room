@@ -726,5 +726,35 @@
     "All-source traversal remains linear across finite pages; ACP carries observation progress across capped cycles. Restart starts a fresh observation, with existing effect/receipt recovery unchanged.",
     "Index installation is linear within fixed admission; actual production fit is unverified. No threshold reset, constructor/read DDL, new queue, schema floor, permission, host opt-in or live installation.",
     "No actual native model turn, physical laptop/mobile background wake, public plugin install or production timing claim follows from these local checks."
-  ]
+  ],
+  "composition": {
+    "sourceCommit": "e71c34261c9da65c39f768737d1606b84f742593",
+    "mergedMain": "c52db58787467390042295b181b152ef3ba4de12",
+    "originalCandidate": "2694effc0d6db9b48dd52aea492232e25d021dc0",
+    "method": "merge preserving both histories; no conflicts; generated ACP archive/manifest rebuilt; truthful legacy-wake removal INDEX link added",
+    "preservedMainPaths": [
+      "room-acp/src/agents.mjs",
+      "room-acp/src/link.mjs"
+    ],
+    "node": {
+      "tests": 73,
+      "pass": 73,
+      "fail": 0,
+      "skipped": 0
+    },
+    "actualWorker": {
+      "checks": 2,
+      "pass": 2,
+      "fail": 0
+    },
+    "ciContract": "CI=1 scripts/check.mjs passed, I18N_BASE_REF=c52db58787467390042295b181b152ef3ba4de12; affected tests only, no second full Node suite",
+    "logSha256": {
+      "node": "c0e043dbb81cb65958830f146bed7b5ded21def904c4b60bd530730a85d534b9",
+      "worker": "f863b793f915569a444bb7e2f3b28511e9b5134c87338c4f8262b42b169ad42b",
+      "acpPack": "8bb4c9bcb87e4f874097bcc11235bd8e1e0a58b1e3a71e70d199660ccde165c1",
+      "ciContract": "931b97eca51a94ac2e0e7ae310cfa402c4d7cfff85c1c4e6dc06fb8b79db2e29",
+      "runtimePreflight": "0460502a76704df9d0f119833e02d2fd4f21eab3e1070524360063be86debe80"
+    },
+    "runtimePreflightFiles": 669
+  }
 }

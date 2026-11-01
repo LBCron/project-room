@@ -370,18 +370,23 @@ export function currentDmConsentEventContext(store,roomId) {
   bindCurrentRecordContext(state,{replyRequestCount:head.counts.replyRequests});
   return {room:{sequence:head.sequence,state},current:{head,before:fieldsOf(state),workRefs:new Map(),budget:b,messageRows:new Map()}};
 }
-export function currentCommandContext(store,roomId,command) {
+export function currentCommandContext(store,roomId,command,{actorId}={}) {
   const db=store.db,b=contextBudgets.get(db)??budget(),head=readCurrentHead(db,roomId,b);if(!head)return null;
-  return commandContextFromHead(store,roomId,command,head,b);
+  return commandContextFromHead(store,roomId,command,head,b,{actorId});
 }
-function commandContextFromHead(store,roomId,command,head,b,{readMessage,readWork}={}) {
+function commandContextFromHead(store,roomId,command,head,b,{readMessage,readWork,actorId}={}) {
   const db=store.db;
   if(!supported.has(command.type))refuse('This command has no qualified current-record dependency plan');
   if(head.counts.roundLimitPauses!==0)refuse('Round-limit resume dependencies require qualification');
   if(store.messageProjectionWindow!==null)refuse('Legacy automatic archive mode is not a current-record writer');
   if(db.prepare('SELECT 1 FROM activity_fanout_failures WHERE room_id=? AND recovered_at IS NULL LIMIT 1').get(roomId))
     refuse('Pending activity recovery requires an addressed recovery context');
-  const authority=currentAuthorityFromHead(db,roomId,head,b),state=emptyRoomState();state.members=authority.members;
+  // Mention labels include display/identity aliases and longest-match ties.
+  // Only that semantic path needs the full roster; never infer its actor from
+  // caller-supplied command fields. Live and durable replay pass trusted actors.
+  const fullRoster=command.type==='message.posted'&&typeof command.data.body==='string'&&command.data.body.includes('@');
+  const state=emptyRoomState();
+  state.members=fullRoster?currentAuthorityFromHead(db,roomId,head,b).members:currentMemberAuthorityFromHead(db,roomId,head,b,actorId).members;
   const keys=db.prepare("SELECT domain,record_key FROM current_room_record_proofs WHERE room_id=? AND domain IN ('metadata','shape') AND present=1 ORDER BY domain,record_key LIMIT 33").all(roomId);
   if(keys.length>32)refuse('Current metadata shape exceeds bounded context');charge(b,keys.length*256,keys.length);
   for(const {domain,record_key:key} of keys) {
@@ -447,7 +452,19 @@ function commandContextFromHead(store,roomId,command,head,b,{readMessage,readWor
   for(const id of channelIds)if(typeof id==='string') {
     const channel=readCurrentRecord(db,roomId,'channels',id,b);if(channel!==undefined)state.channels[id]=channel;
   }
-  const haltIds=new Set(Object.keys(state.members));
+  if(!fullRoster) {
+    const ids=new Set([actorId,state.room.ownerId,command.data.memberId,command.data.toMemberId,
+      command.data.accountableMemberId,command.data.verifierMemberId,command.data.humanDecisionMakerId,command.data.producerId]);
+    for(const source of messages.values()){ids.add(source.value.authorId);ids.add(source.value.toMemberId);}
+    for(const request of Object.values(state.replyRequests??{})){ids.add(request.requesterId);ids.add(request.recipientId);}
+    for(const item of Object.values(state.workItems))for(const id of [item.accountableMemberId,item.verifierMemberId,item.humanDecisionMakerId,
+      item.proposedById,item.claim?.holderId,item.receipt?.producerId,item.receipt?.reportedById,item.handoff?.triageMemberId])ids.add(id);
+    for(const id of ids)if(typeof id==='string'&&validId(id)&&!Object.hasOwn(state.members,id)){
+      const member=readCurrentRecord(db,roomId,'members',id,b);
+      if(member!==undefined){if(member?.id!==id)corrupt('command member identity differs');Object.defineProperty(state.members,id,{value:member,enumerable:true,writable:true,configurable:true});}
+    }
+  }
+  const haltIds=new Set([actorId]);
   if(command.type==='work.halt_cleared'&&typeof command.data.memberId==='string')haltIds.add(command.data.memberId);
   for(const id of haltIds) {
     const halt=readCurrentRecord(db,roomId,'agentHalts',id,b);
@@ -770,12 +787,12 @@ export function stageCurrentCandidateRecords(store,{head=null,changes,counts,inp
     return saveTransition(db,roomId,head?.sequence??counts.sequence,head?.event_id??counts.eventId,head,changes,next,{publishHead:false});
   });
 }
-export function currentCandidateCommandContext(store,roomId,command,{head,readMessage,readWork,inputBudget=budget()}) {
+export function currentCandidateCommandContext(store,roomId,command,{head,readMessage,readWork,actorId,inputBudget=budget()}) {
   if(!store.db.isTransaction||store.db.prepare('SELECT 1 FROM current_room_head WHERE room_id=?').get(roomId))throw Error('Candidate replay requires an unpublished room');
   const b=inputBudget;admitCurrentSchema(store.db,b);
   if(head.room_id!==roomId||hash(JSON.stringify(headValue(head)))!==head.head_sha256)corrupt('candidate control differs');
   const saved=receipt(store.db,head.receipt_id,b);if(saved.headHash!==head.head_sha256||saved.roomId!==roomId)corrupt('candidate control receipt differs');
-  return commandContextFromHead(store,roomId,command,head,b,{readMessage,readWork});
+  return commandContextFromHead(store,roomId,command,head,b,{readMessage,readWork,actorId});
 }
 export function applyCurrentCandidateEvent(store,context,incoming,callbacks) {
   const current=context.current;current.candidate=callbacks;

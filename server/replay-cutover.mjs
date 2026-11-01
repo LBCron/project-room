@@ -1453,7 +1453,7 @@ export function advanceCurrentRoomConversion(store,input) {
           return source.absent?undefined:{row:source.row,value:decodeMessageEntity(source.row)};
         };
         const context=currentCandidateCommandContext(store,input.roomId,{type:incoming.type,id:incoming.id,data:incoming.data},
-          {head:state.candidateHead,readMessage,inputBudget:budget,readWork:(id,b)=>{
+          {head:state.candidateHead,actorId:incoming.actorId,readMessage,inputBudget:budget,readWork:(id,b)=>{
             const source=currentCandidateValue(db,header,'replay-metadata',id,b);return source??readHReferenceSource(db,header,'work',id,b).row;
           }});
         const applied=applyCurrentCandidateEvent(store,context,incoming,{sequence:state.tailSequence+1,apply:(previous,event)=>{

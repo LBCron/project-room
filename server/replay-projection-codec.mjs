@@ -34,7 +34,7 @@ export function scanProjectionChunk(current,input,{maximumRecords=32}={}){
   // Old non-nested continuation states acquire only fixed zero controls.
   current={...current,...(!Object.hasOwn(current??{},'arrayStart')?{arrayStart:0}:{}),...(!Object.hasOwn(current??{},'arrayIndex')?{arrayIndex:0}:{})};
   validate(current);
-  if(!(input instanceof Uint8Array)||input.length>REPLAY_CODEC_INPUT_BYTES
+  if ( ! ( input instanceof Uint8Array ) || input . length > REPLAY_CODEC_INPUT_BYTES
     || !Number.isInteger(maximumRecords)||maximumRecords<1||maximumRecords>32)fail();
   const state=structuredClone(current),records=[];let i=0;
   const take=()=>{i++;state.offset++;};
@@ -124,7 +124,7 @@ export function scanProjectionChunk(current,input,{maximumRecords=32}={}){
       const empty=state.offset===state.tokenStart;
       if(empty&&whitespace(byte)){take();state.tokenStart=state.offset;continue;}
       if(!state.string && state.depth===0 && !empty && (whitespace(byte)||byte===44||byte===93||byte===125)){
-        const length=state.offset-state.tokenStart;if(length<1||length>REPLAY_CODEC_TOKEN_BYTES)fail();
+        const length = state . offset - state . tokenStart ; if ( length < 1 || length > REPLAY_CODEC_TOKEN_BYTES ) fail ( ) ;
         records.push({kind:state.kind,key:state.key,index:state.kind==='message'?state.messageIndex++:state.kind==='metadata-entry'?state.mapIndex++:state.kind==='metadata-index'?state.arrayIndex++:null,offset:state.tokenStart,length,
           ...(['metadata-entry','metadata-index'].includes(state.kind)?{entryKey:state.entryKey}:{ }),
           ...(state.kind==='metadata-entry'?{keyOffset:state.entryKeyOffset,keyLength:state.entryKeyLength}:{})});
@@ -156,7 +156,7 @@ export function scanProjectionChunk(current,input,{maximumRecords=32}={}){
 }
 
 export function decodeProjectionSpan(bytes,record){
-  if(!(bytes instanceof Uint8Array)||bytes.length!==record.length||bytes.length>REPLAY_CODEC_TOKEN_BYTES)fail();
+  if ( ! ( bytes instanceof Uint8Array ) || bytes . length !== record . length || bytes . length > REPLAY_CODEC_TOKEN_BYTES ) fail ( ) ;
   const value=JSON.parse(decode(bytes));
   if(record.kind==='message' && (!value||typeof value!=='object'||Array.isArray(value)
     || typeof value.id!=='string'||new TextEncoder().encode(value.id).length>200))fail();
@@ -169,7 +169,7 @@ export function decodeProjectionSpan(bytes,record){
 export function projectionMapFrame(record){
   if(record?.kind!=='metadata-map'||!PARTITIONED_MAPS.has(record.key)
     ||!Number.isSafeInteger(record.offset)||record.offset<0||!Number.isSafeInteger(record.length)||record.length<2
-    ||record.offset+record.length>4*1024*1024||!Number.isSafeInteger(record.entries)||record.entries<0||record.entries>1000000)fail();
+    || record . offset + record . length > 4 * 1024 * 1024 || ! Number . isSafeInteger ( record . entries ) || record . entries < 0 || record . entries > 1000000 ) fail ( ) ;
   return {version:1,kind:'entry-map',parent:record.key,offset:record.offset,length:record.length,entries:record.entries};
 }
 
@@ -177,6 +177,6 @@ export function projectionMapFrame(record){
 export function projectionArrayFrame(record){
   if(record?.kind!=='metadata-array'||record.key!=='messagesArchive'||record.entryKey!=='retainedIds'
     ||!Number.isSafeInteger(record.offset)||record.offset<0||!Number.isSafeInteger(record.length)||record.length<2
-    ||record.offset+record.length>4*1024*1024||!Number.isSafeInteger(record.entries)||record.entries<0||record.entries>1000000)fail();
+    || record . offset + record . length > 4 * 1024 * 1024 || ! Number . isSafeInteger ( record . entries ) || record . entries < 0 || record . entries > 1000000 ) fail ( ) ;
   return {version:1,kind:'entry-array',parent:record.key,member:record.entryKey,offset:record.offset,length:record.length,entries:record.entries};
 }

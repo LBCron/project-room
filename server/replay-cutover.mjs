@@ -84,31 +84,40 @@ function schemaContract(db){
   }
   return schemaContracts.get(durable);
 }
-function schemaVersion(db){
-  const version=db.prepare('PRAGMA schema_version').get()?.schema_version;
-  if(!Number.isSafeInteger(version)||version<0)throw Error('invalid replay schema version');
-  return version;
+// sqlite_master exposes indexed rowids in both adapters. Durable SQLite does
+// not authorize schema_version. These tuples prove current definitions only;
+// they do not prove that no identical drop/recreate interval occurred.
+function catalogDefinition(db,definition,catalogId=null){
+  const [,sql,name]=definition,table=sql.startsWith('CREATE TABLE')?name:/\bON ([a-z_]+)/.exec(sql)?.[1];
+  const type=sql.startsWith('CREATE TABLE')?'table':'trigger',text=sql.trim();
+  if(!table)throw Error('invalid replay schema object framing');
+  const selector=catalogId===null?'name=?':'rowid=?';
+  return db.prepare(`SELECT rowid AS catalog_id,CASE WHEN type=? AND name=? AND tbl_name=?
+    AND typeof(sql)='text' AND octet_length(sql)=? THEN sql END AS sql
+    FROM sqlite_master WHERE ${selector}`).get(type,name,table,Buffer.byteLength(text),catalogId??name);
 }
-// Exact verification is explicit admission/cold-start work, not a repeated
-// data-step scan. A committed schema change stays invalid until re-admission.
 export function admitReplayCutoverSchema(db){
   schemaAdmissions.set(db,{invalid:true});
-  const contract=schemaContract(db),version=schemaVersion(db);
-  for(const [,sql,name] of contract.definitions){
-    const row=db.prepare(`SELECT CASE WHEN typeof(sql)='text' AND octet_length(sql)<=8192
-      THEN sql END AS sql FROM sqlite_master WHERE name=?`).get(name);
-    if(row?.sql!==sql.trim())throw Error('replay schema requires reconciliation');
+  const contract=schemaContract(db),objects=[];
+  for(const definition of contract.definitions){
+    const row=catalogDefinition(db,definition);
+    if(!Number.isSafeInteger(row?.catalog_id)||row.catalog_id<1||row.sql!==definition[1].trim())
+      throw Error('replay schema requires reconciliation');
+    objects.push(row.catalog_id);
   }
-  if(schemaVersion(db)!==version)throw Error('replay schema requires reconciliation before readmission');
-  schemaAdmissions.set(db,{version,contract:contract.hash,invalid:false});
+  schemaAdmissions.set(db,{objects,contract:contract.hash,invalid:false});
 }
 export function verifyReplayCutoverSchema(db){
   const admitted=schemaAdmissions.get(db);
   if(!admitted)return admitReplayCutoverSchema(db);
-  const version=schemaVersion(db);
-  if(admitted.invalid||admitted.version!==version||admitted.contract!==schemaContract(db).hash){
-    admitted.invalid=true;
-    throw Error('replay schema requires reconciliation and exact readmission');
+  const contract=schemaContract(db);
+  if(admitted.invalid||admitted.contract!==contract.hash)throw Error('replay schema requires reconciliation and exact readmission');
+  for(let i=0;i<contract.definitions.length;i++){
+    const row=catalogDefinition(db,contract.definitions[i],admitted.objects[i]);
+    if(row?.catalog_id!==admitted.objects[i]||row.sql!==contract.definitions[i][1].trim()){
+      admitted.invalid=true;
+      throw Error('replay schema requires reconciliation and exact readmission');
+    }
   }
 }
 

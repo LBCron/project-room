@@ -35,6 +35,11 @@ export class ReplayCutoverRoom extends ReplayWitnessRoom {
       }
       if(url.pathname==='/durable-capture')return Response.json(captureReplayWitness(this.s,{roomId:'commons',requestId:'durable-capture',expectedHead:2,reason:'Synthetic durable capture'}));
       if(url.pathname==='/durable-step')return Response.json(advanceReplayWitness(this.s,{roomId:'commons',generation:url.searchParams.get('generation'),requestId:'step-'+url.searchParams.get('step'),expectedBytes:Number(url.searchParams.get('bytes'))}));
+      if(url.pathname==='/durable-step-cost'){
+        const before={...this.stats};
+        const result=advanceReplayWitness(this.s,{roomId:'commons',generation:url.searchParams.get('generation'),requestId:'step-'+url.searchParams.get('step'),expectedBytes:Number(url.searchParams.get('bytes'))});
+        return Response.json({result,cost:Object.fromEntries(Object.keys(before).map(k=>[k,this.stats[k]-before[k]]))});
+      }
       if(url.pathname==='/seed-derived'){
         const count=Number(url.searchParams.get('count')),generation=url.searchParams.get('generation');
         if(![0,17405].includes(count)||!/^[a-f0-9]{64}$/.test(generation))throw Error('invalid synthetic unit count');

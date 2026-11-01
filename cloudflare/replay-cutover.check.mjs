@@ -17,7 +17,7 @@ test('actual Worker durable Muse-sized witness progresses across restart with co
     await call('/seed?bytes=2376000');const captured=await call('/durable-capture');
     const baseline=await call('/append-cost?i=90&baseline=1');const before=await call('/append-cost?i=0');await call('/seed-derived?count=17405&generation='+captured.generation);
     const after=await call('/append-cost?i=1');assert.deepEqual(after.eventStatementCosts,before.eventStatementCosts,'derived history must not grow the ordinary append guard');
-    let progress={bytes:0};const first=await call(`/durable-step?generation=${captured.generation}&bytes=0&step=0`);progress=first;
+    let progress={bytes:0};const measured=await call(`/durable-step-cost?generation=${captured.generation}&bytes=0&step=0`),first=measured.result;progress=first;
     await mf.dispose();mf=create();
     for(let step=1;progress.phase!=='witness_verified'&&step<200;step++){
       progress=await call(`/durable-step?generation=${captured.generation}&bytes=${progress.bytes}&step=${step}`);
@@ -27,7 +27,7 @@ test('actual Worker durable Muse-sized witness progresses across restart with co
     const historical=await call(`/durable-step?generation=${captured.generation}&bytes=0&step=0`);
     assert.deepEqual({...historical,duplicate:false},first,'old phase receipt remains historical after later advances');
     const duplicateCapture=await call('/durable-capture');assert.deepEqual({...duplicateCapture,duplicate:false},captured);
-    console.log('DURABLE_REPLAY_CAPTURE_WORKER '+JSON.stringify({runtime,head:progress.head,bytes:progress.bytes,phase:progress.phase,certified:false,derivedLeaves:17405,withoutGuard:baseline.eventStatementCosts,guardBefore:before.eventStatementCosts,guardAfter:after.eventStatementCosts,originalStepBytes:historical.bytes}));
+    console.log('DURABLE_REPLAY_CAPTURE_WORKER '+JSON.stringify({runtime,head:progress.head,bytes:progress.bytes,phase:progress.phase,certified:false,derivedLeaves:17405,withoutGuard:baseline.eventStatementCosts,guardBefore:before.eventStatementCosts,guardAfter:after.eventStatementCosts,hashStepCost:measured.cost,originalStepBytes:historical.bytes}));
   }finally{await mf.dispose();await rm(directory,{recursive:true,force:true});}
 });
 
@@ -45,7 +45,7 @@ test('actual Worker partitions 17,405 captured messages through bounded codec st
     assert.equal(progress.phase,'witness_verified');progress={bytes:0};let first,maxRecords=0,maxInputBytes=0,steps=0;
     while(progress.phase!=='codec_partitioned'&&steps<1000){
       progress=await call(`/durable-codec?generation=${capture.generation}&bytes=${progress.bytes}&step=${steps}`);
-      first??=progress;maxRecords=Math.max(maxRecords,progress.records);assert.ok(progress.inputBytes<=262144);maxInputBytes=Math.max(maxInputBytes,progress.inputBytes);assert.ok(progress.leafCommitments.length<=32);steps++;
+      first??=progress;maxRecords=Math.max(maxRecords,progress.records);assert.ok(progress.inputBytes<=262144);assert.ok(progress.logicalUnitRows<=200);maxInputBytes=Math.max(maxInputBytes,progress.inputBytes);assert.ok(progress.leafCommitments.length<=32);steps++;
       if(steps===2){await mf.dispose();mf=create();}
       if(steps===4)await call('/append-cost?i=33');
     }

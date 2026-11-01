@@ -76,6 +76,7 @@ test('receipt vectors and charged repeated source reads stay within admitted uni
   while(step.phase!=='codec_partitioned'){
     step=cutover.partitionReplayWitness(f.store,{roomId:'commons',generation:f.captured.generation,expectedBytes:step.bytes,requestId:'bound-'+n++});
     assert.ok(step.leafCommitments.length<=32);assert.ok(Buffer.byteLength(JSON.stringify(step))<=4096);
+    assert.ok(step.logicalUnitRows<=200);
     maxInput=Math.max(maxInput,step.inputBytes);assert.ok(step.inputBytes<=256*1024);
   }
   assert.ok(maxInput>128*1024,'spanning reads are included, not just the current chunk');
@@ -93,4 +94,18 @@ test('a partial fork receipt cannot masquerade as inclusion in an older complete
   assert.equal(partial.phase,'hashing','the fork never passed the independent full digest');
   restore(completed);
   assert.throws(()=>partition(f),/source.*(inclusion|root|binding)/);
+});
+
+for(const mutation of ['root-control','sibling-self-hash','oversized-sibling'])test(`source membership refuses ${mutation}`,t=>{
+  const f=fixture(t,{messages:[{id:'large',body:'x'.repeat(50000)}]}),db=f.store.db;
+  if(mutation==='root-control'){
+    const row=db.prepare("SELECT payload FROM message_replay_units WHERE domain='hash'").get();
+    const value=JSON.parse(Buffer.from(row.payload).toString());value.sourceRoot='0'.repeat(64);
+    const bytes=Buffer.from(JSON.stringify(value));
+    db.prepare("UPDATE message_replay_units SET payload=?,payload_bytes=?,payload_sha256=? WHERE domain='hash'").run(bytes,bytes.length,sha(bytes));
+  }else{
+    const bytes=Buffer.from(mutation==='oversized-sibling'?'x'.repeat(2*1024*1024):'0'.repeat(64));
+    db.prepare("UPDATE message_replay_units SET payload=?,payload_bytes=?,payload_sha256=? WHERE domain='source-merkle' AND unit_key='0:1'").run(bytes,bytes.length,sha(bytes));
+  }
+  assert.throws(()=>partition(f),/checkpoint binding|hash binding|source inclusion/);
 });

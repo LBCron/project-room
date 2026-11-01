@@ -1,3 +1,4 @@
+import { withCurrentServingWriter } from './current-room-repository.mjs';
 import {purgeReplayCapturesForPrivacy} from './replay-cutover.mjs';
 import { assertMessageWrite, recordMessageWrite } from './write-integrity.mjs';
 import { readMessageReplaySnapshot, writeMessageReplaySnapshot, discardMessageReplaySnapshot } from './message-replay-snapshot.mjs';
@@ -165,9 +166,9 @@ export function commitMessageRedaction(db, { roomId, state, actorId, at, message
     if (!/no such table/i.test(error?.message ?? "")) throw error;
   }
   try {
-    db.prepare(
+    withCurrentServingWriter(db, roomId, () => db.prepare(
       "UPDATE room_attachments SET state='deleted', bytes=NULL, filename='purged' WHERE room_id=? AND message_id=? AND state IN ('staged','committed')"
-    ).run(roomId, messageId);
+    ).run(roomId, messageId));
   } catch (error) {
     if (!/no such (table|column)/i.test(error?.message ?? "")) throw error;
   }

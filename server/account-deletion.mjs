@@ -19,7 +19,7 @@ import { assertMessageWrite, recordMessageWrite } from './write-integrity.mjs';
 import { createHash, createHmac, randomBytes, timingSafeEqual } from "node:crypto";
 import { EVENT_TYPES, MEMBERSHIP_AUTHORITY_POLICY_VERSION, applyEvent, event, isRoomArchived, roomKind, ownMember } from "../src/events.js";
 import { commitMessageRedaction, readRedactionLog, redactRemainingMessageBodies } from "./message-redaction.mjs";
-import { isCurrentRoom,readCurrentHead,readCurrentRecord,withCurrentReadContext,chargeCurrentReadBudget } from './current-room-repository.mjs';
+import { isCurrentRoom,readCurrentHead,readCurrentRecord,withCurrentReadContext,chargeCurrentReadBudget,withCurrentServingWriter } from './current-room-repository.mjs';
 import { hasMessageAuthority } from './message-authority.mjs';
 import { resyncRoomMessageRows } from "./messages-store.mjs";
 import { canonicalLane } from "./bounty-escrow.mjs";
@@ -398,10 +398,13 @@ function redactRoomMessages(store, roomId, actorId) {
   }
   let files = 0;
   try {
-    files = store.db.prepare(
+    files = withCurrentServingWriter(store.db, roomId, () => store.db.prepare(
       "UPDATE room_attachments SET state='deleted', bytes=NULL, filename='purged' WHERE room_id=? AND state IN ('staged','committed')"
-    ).run(roomId).changes;
-  } catch { files = 0; }
+    ).run(roomId).changes);
+  } catch (error) {
+    if (!/no such (table|column)/i.test(error?.message ?? "")) throw error;
+    files = 0;
+  }
   try {
     store.db.prepare("DELETE FROM room_code_checks WHERE room_id=?").run(roomId);
     files += store.db.prepare("DELETE FROM room_code_drops WHERE room_id=?").run(roomId).changes;

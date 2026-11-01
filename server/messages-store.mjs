@@ -524,8 +524,8 @@ export function archivedMessageRow(db, roomId, messageId, marker = archiveMarker
 
 // Ids of the room's archived messages (no longer in the projection), for audits
 // that compare the projection with a full replay.
-export function archivedMessageIds(db, roomId) {
-  const { throughSeq, retainedJson } = archiveMarker(db, roomId);
+export function archivedMessageIds(db, roomId, qualifiedArchive = undefined) {
+  const { throughSeq, retainedJson } = recoveryArchiveMarker(db, roomId, qualifiedArchive);
   if (!throughSeq) return new Set();
   return new Set(db.prepare("SELECT message_id FROM messages WHERE room_id=? AND seq<=? AND message_id NOT IN (SELECT value FROM json_each(?))")
     .all(roomId, throughSeq, retainedJson).map(row => row.message_id));
@@ -1720,8 +1720,24 @@ export function archiveRoomMessages(store, roomId, { keepNewest = 2000, dryRun =
 // Apply a room's archive marker to a fully replayed state, so a replay can be
 // compared with the compacted stored projection. Messages at or below the
 // marker and not retained leave the state; the marker is rebuilt from the table.
-export function compactReplayLikeArchive(db, roomId, state) {
-  const marker = archiveMarker(db, roomId);
+function recoveryArchiveMarker(db,roomId,qualifiedArchive) {
+  // Normalized recovery supplies its independently censused archive metadata;
+  // its closed rooms carrier deliberately contains no legacy archive marker.
+  // Ordinary legacy callers continue to read the existing carrier marker.
+  let marker;
+  if(qualifiedArchive===undefined)marker=archiveMarker(db,roomId);
+  else if(qualifiedArchive===null)marker={throughSeq:0,count:0,retainedIds:[],retainedJson:'[]'};
+  else {
+    const {throughSeq,count,retainedIds}=qualifiedArchive;
+    if(!Number.isSafeInteger(throughSeq)||throughSeq<1||!Number.isSafeInteger(count)||count<0
+      ||!Array.isArray(retainedIds)||retainedIds.some(id=>typeof id!=='string')||new Set(retainedIds).size!==retainedIds.length)
+      throw Error('projection_corrupt: qualified recovery archive marker differs');
+    marker={throughSeq,count,retainedIds,retainedJson:JSON.stringify(retainedIds)};
+  }
+  return marker;
+}
+export function compactReplayLikeArchive(db, roomId, state, qualifiedArchive = undefined) {
+  const marker=recoveryArchiveMarker(db,roomId,qualifiedArchive);
   const raw = JSON.parse(db.prepare('SELECT projection FROM rooms WHERE id=?').get(roomId).projection);
   const canonical = hasMessageAuthority(raw);
   if (!marker.throughSeq) {

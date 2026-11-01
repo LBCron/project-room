@@ -1,3 +1,4 @@
+import {auditRecovery} from '../server/recovery.mjs';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {RoomStore} from '../server/store.mjs';
@@ -51,6 +52,7 @@ test('canonical archive qualifies complete content while retaining the legacy co
  f.store.command(key,'commons',{id:'after-archive',type:'message.posted',data:{messageId:'after-archive',body:'Reply to archived canonical history',replyToId:'extra-0'}});
  assert.equal(readConversation(f.store,key,'commons',{messageId:'after-archive',limit:5}).messages[0].body,'Reply to archived canonical history');
  assert.doesNotThrow(()=>f.store.readTransaction(()=>readCurrentRoomForAudit(f.store,'commons')));
+ assert.doesNotThrow(()=>auditRecovery(f.store),'full independent recovery must honor the proved archive representation');
 });
 
 test('canonical archive nested retained IDs preserve pinned early member and exact legacy order',async t=>{

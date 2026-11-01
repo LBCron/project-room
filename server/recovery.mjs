@@ -77,9 +77,11 @@ export function auditRecovery(store) {
     const drift = [];
     let eventCount = 0, checkpointCount = 0, checkpointEvents = 0;
     for (const row of store.db.prepare("SELECT id,sequence FROM rooms ORDER BY id").all()) {
-      const actual = isCurrentRoom(store.db,row.id) ? readCurrentRoomForAudit(store,row.id) : store.room(row.id), rebuilt = store.rebuildProjection(row.id);
-      // An archived room's stored projection is compacted; compare the replay compacted the same way.
-      compactReplayLikeArchive(store.db, row.id, rebuilt.state);
+      const current=isCurrentRoom(store.db,row.id);
+      const actual = current ? readCurrentRoomForAudit(store,row.id) : store.room(row.id), rebuilt = store.rebuildProjection(row.id);
+      // The full current census proved the marker and complete retained-ID map.
+      // A closed current carrier cannot supply that legacy metadata itself.
+      compactReplayLikeArchive(store.db, row.id, rebuilt.state,current?(actual.state.messagesArchive??null):undefined);
       // Phase 2 channels: old stored projections may lack channels while the
       // replay backfills them. Messages in old projections also lack channelId
       // (new code adds it). Compare ignoring channels and message channelIds,
@@ -176,7 +178,7 @@ export function auditRecovery(store) {
       });
       auditTextResults(store.db, actual.state, history);
       auditCharters(actual.state, history, checkpoint);
-      auditReplyRequests(actual.state, history, checkpoint, archivedMessageIds(store.db, row.id));
+      auditReplyRequests(actual.state, history, checkpoint, archivedMessageIds(store.db, row.id,current?(actual.state.messagesArchive??null):undefined));
       auditWorkHelp(actual.state, history, checkpoint);
       eventCount += history.length;
       rooms.set(row.id, actual.state);

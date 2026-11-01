@@ -9,6 +9,7 @@ import { loginCommand } from "./login.mjs";
 import { planJson, planMarked, unifiedDiff } from "../files.mjs";
 import { homeOf, loadConnection, readProject, safeName, writeProject } from "../paths.mjs";
 import { commandOnPath } from "../which.mjs";
+import { assertCodexConfigSafe, planCodexConfig } from "../codex-config.mjs";
 
 // Host config locations and shapes for gemini, copilot, opencode, grok and command-code follow the
 // per-agent setup recipes in reason-machines/reason-network (src/setup.rs), used under its MIT license:
@@ -66,7 +67,7 @@ export function planTool(tool, { project, home, url, platform, claude }) {
   } else if (tool === "codex") {
     const path = join(home, ".codex", "config.toml");
     const block = `[mcp_servers.${SERVER_NAME}]\nurl = ${JSON.stringify(url)}\nbearer_token_env_var = ${JSON.stringify(SECRET_ENV)}\n`;
-    files.push({ path, contents: planMarked(readOrNull(path), block) });
+    files.push({ path, contents: planCodexConfig(readOrNull(path), block) });
     next = "Codex reads ~/.codex/config.toml. Export " + SECRET_ENV + " from room token, then start Codex.";
   } else if (tool === "cursor") {
     const path = join(project, ".cursor", "mcp.json");
@@ -152,12 +153,19 @@ function alreadyApplied(project, tool, via) {
   return saved?.tool === tool && saved.via === via;
 }
 
+// Shared with room join so its login cannot precede the Codex config check.
+export function preflightSetup(tool, { env = process.env } = {}) {
+  if (tool === "codex") assertCodexConfigSafe(readOrNull(join(homeOf(env), ".codex", "config.toml")));
+}
+
 export async function setupCommand(argv, { env = process.env, cwd = process.cwd(), fetchImpl, platform = process.platform, out = console.log, err = console.error } = {}) {
   const { tool, extra, flags } = parse(argv);
   if (!tool || extra.length) throw new Error("Use room setup <" + SETUP_TOOLS.join("|") + "> [--room <url>] [--name <agent name>] [--project <dir>] [--dry-run].");
   if (!SETUP_TOOLS.includes(tool)) throw new Error("Use room setup <" + SETUP_TOOLS.join("|") + ">.");
   const project = flags.project ?? cwd;
   const home = homeOf(env);
+  // Refuse conflicting user config before login can consume an invitation.
+  preflightSetup(tool, { env });
   let url = HOSTED_MCP_URL;
   if (flags.room) {
     try { url = mcpUrl(new URL(flags.room).origin); }

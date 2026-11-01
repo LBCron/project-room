@@ -1,5 +1,8 @@
 import test from "node:test";
 import assert from "node:assert/strict";
+import { mkdtempSync, mkdirSync, writeFileSync, readFileSync, rmSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import { detectTool, joinCommand, oneLinePrompt, roomPageUrl, scrub } from "../cli/commands/join.mjs";
 import { main } from "../cli/main.mjs";
 
@@ -42,10 +45,12 @@ test("a join that is not connected prints why, with no invite line and no code",
   assert.doesNotMatch(lines[0], new RegExp(CODE));
 });
 
-test("setup failure keeps the join and still prints the invite line", async () => {
+test("setup failure keeps the join and still prints the invite line", async t => {
+  const home = mkdtempSync(join(tmpdir(), "join-codex-home-"));
+  t.after(() => rmSync(home, { recursive: true, force: true }));
   const lines = [];
   const code = await joinCommand(["https://room.example/r/open", "--tool", "codex"], {
-    env: {}, out: line => lines.push(line),
+    env: { HOME: home }, out: line => lines.push(line),
     login: fakeLogin({ status: "connected", origin: "https://room.example", roomId: "open" }, []),
     setup: async () => { throw new Error("boom"); },
   });
@@ -77,4 +82,36 @@ test("room --help lists join", async () => {
   const lines = [];
   await main(["--help"], { out: l => lines.push(l) });
   assert.match(lines.join("\n"), /room join <invite-or-room-url>/);
+});
+
+for (const detected of [null, 'CODEX_HOME', 'CODEX_SANDBOX']) test(`join Codex conflict prevents login and setup (${detected ?? 'explicit'})`, async t => {
+  const home = mkdtempSync(join(tmpdir(), 'join-codex-conflict-'));
+  t.after(() => rmSync(home, { recursive: true, force: true }));
+  mkdirSync(join(home, '.codex'));
+  const path = join(home, '.codex/config.toml'), before = '["mcp_servers"."project-room"]\nurl="https://existing.example/mcp"\n';
+  writeFileSync(path, before);
+  let logins = 0, setups = 0, requests = 0;
+  await assert.rejects(joinCommand(['https://room.example/join/SYNTHETIC', ...(detected ? [] : ['--tool', 'codex'])], {
+    env: { HOME: home, ...(detected ? { [detected]: 'synthetic' } : {}) },
+    out: () => {}, login: async () => { logins++; return 0; }, setup: async () => { setups++; return 0; },
+    fetchImpl: async () => { requests++; throw Error('must not contact Room'); },
+  }), /Existing Codex config conflicts/);
+  assert.equal(logins, 0); assert.equal(setups, 0); assert.equal(requests, 0); assert.equal(readFileSync(path, 'utf8'), before);
+});
+
+test('join --no-setup and explicit non-Codex override bypass Codex config preflight', async t => {
+  const home = mkdtempSync(join(tmpdir(), 'join-codex-bypass-'));
+  t.after(() => rmSync(home, { recursive: true, force: true }));
+  mkdirSync(join(home, '.codex'));
+  const path = join(home, '.codex/config.toml'), before = '[mcp_servers.project-room]\n'; writeFileSync(path, before);
+  for (const args of [['--tool', 'codex', '--no-setup'], ['--no-setup'], ['--tool', 'generic']]) {
+    const calls = [], setups = [];
+    assert.equal(await joinCommand(['https://room.example/r/open', ...args], {
+      env: { HOME: home, CODEX_HOME: 'synthetic' }, out: () => {},
+      login: fakeLogin({ status: 'connected', origin: 'https://room.example', roomId: 'open' }, calls),
+      setup: async argv => { setups.push(argv); return 0; },
+    }), 0);
+    assert.equal(calls.length, 1); assert.equal(setups.length, args.includes('--no-setup') ? 0 : 1);
+    assert.equal(readFileSync(path, 'utf8'), before);
+  }
 });

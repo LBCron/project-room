@@ -45,8 +45,7 @@ export function readWakeIndexReceipt(db) {
     FROM operator_actions WHERE id=?`).get(WAKE_INDEX_RECEIPT); }
   catch (error) { if (/no such table: (?:main\.)?operator_actions\b/.test(String(error?.message))) return null; throw error; }
   if (!row) return null;
-  // An unreceipted complete pair, partial pair or malformed receipt is never
-  // silently treated as activated. Leave an operator-visible refusal.
+  // A present malformed receipt cannot authorize bounded reads.
   if (row.action !== 'wake_delivery_indexes_execute' || row.target_kind !== 'database'
     || row.target_id !== 'wake_delivery' || row.result !== 'ok' || !/^[a-f0-9]{64}$/.test(row.plan_hash ?? '')
     || typeof row.request_id !== 'string' || !row.request_id || row.counts_json === null) unavailable();
@@ -67,9 +66,11 @@ export function readWakeIndexReceipt(db) {
   return { row, saved };
 }
 export function boundedWakeDeliveryActive(db) {
-  const state = wakeIndexState(db), original = readWakeIndexReceipt(db);
-  if (!original && state === 'absent') return false;
-  if (original && state === 'installed') return true;
+  const original = readWakeIndexReceipt(db);
+  // Support deployment alone keeps legacy reads without optional catalog work.
+  // Unreceipted indexes are never adopted; the explicit operator plan diagnoses them.
+  if (!original) return false;
+  if (wakeIndexState(db) === 'installed') return true;
   unavailable();
 }
 const fields = Object.freeze({

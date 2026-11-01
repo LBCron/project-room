@@ -31,13 +31,15 @@ test('all four indexes plus their exact original immutable receipt activate; sta
   assert.equal(f.store.db.prepare('SELECT counts_json FROM operator_actions WHERE id=?').get(WAKE_INDEX_RECEIPT).counts_json, bytes);
   assert.throws(() => f.execute(plan, { requestId: 'other' }), { code: 'idempotency_conflict' });
 });
-test('unreceipted, partial or later missing pair refuses activation without fallback', t => {
+test('unreceipted optional indexes preserve legacy staging and operator rejects adoption', t => {
   const f = fixture(t);
   f.store.db.exec(WAKE_INDEXES[0].sql);
-  assert.throws(() => boundedWakeDeliveryActive(f.store.db), { code: 'storage_unavailable' });
+  assert.equal(boundedWakeDeliveryActive(f.store.db), false);
   assert.throws(f.plan, { code: 'wake_index_conflict' });
-  f.store.db.exec(WAKE_INDEXES[1].sql);
-  assert.throws(() => boundedWakeDeliveryActive(f.store.db), { code: 'storage_unavailable' });
+  for (const index of WAKE_INDEXES.slice(1)) f.store.db.exec(index.sql);
+  assert.equal(boundedWakeDeliveryActive(f.store.db), false);
+  const unreceipted = f.plan(); assert.equal(unreceipted.installed, true);
+  assert.throws(() => f.execute(unreceipted), { code: 'wake_index_conflict' });
 });
 test('installation rollback includes all four indexes and success receipt; retry uses original plan', t => {
   const f = fixture(t); f.seed(1); const plan = f.plan();

@@ -47,3 +47,17 @@ test('actual Worker cold restart preserves activation and oversized pointer refu
     console.log(JSON.stringify({ coldRowsRead: cold.value.rowsRead, warmRowsRead: warm.value.rowsRead, catalogRows: cold.value.catalogRows, oversized: oversized.value }));
   } finally { await mf.dispose(); await rm(persistence, { recursive: true, force: true }); }
 });
+
+test('actual Worker inactive repeated polls preserve legacy delivery without catalog scans', async t => {
+  const bundle = await build({ entryPoints: [fileURLToPath(new URL('./work-wake-input-budget.test-fixture.mjs', import.meta.url))], bundle: true, write: false, format: 'esm', platform: 'neutral', external: ['node:*', 'cloudflare:*'] });
+  const mf = new Miniflare({ modules: true, script: bundle.outputFiles[0].text, compatibilityDate: '2026-07-30', compatibilityFlags: ['nodejs_compat'], durableObjects: { ROOM: { className: 'WorkWakeBudgetProbe', useSQLite: true } } });
+  t.after(() => mf.dispose());
+  const response = await mf.dispatchFetch('http://localhost/inactive', { method: 'POST', body: JSON.stringify({ count: 0, kind: 'inactive' }) });
+  const result = await response.json(); assert.equal(response.status, 200); console.log(JSON.stringify({ inactive: result }));
+  for (const poll of result.polls) {
+    assert.equal(poll.page.signals.length, 1); assert.equal(poll.page.signals[0].workItemId, 'task');
+    assert.equal(poll.page.more, false); assert.equal(poll.page.nextCursor, null);
+    assert.equal(poll.catalogStatements, 0, 'support-only polling must not inspect optional indexes');
+    assert.equal(poll.catalogReads, 0);
+  }
+});

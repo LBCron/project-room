@@ -60,6 +60,27 @@ export class WorkWakeBudgetProbe extends DurableObject {
           'synthetic-backlog-' + n, original.actor_id, original.pointer, this.at - 100);
       }
     });
+    if (kind === 'inactive') {
+      const catalogRows = db.prepare('SELECT count(*) n FROM sqlite_master').get().n;
+      const polls = []; let catalogReads = 0, catalogStatements = 0;
+      const prepare = db.prepare.bind(db);
+      db.prepare = sql => {
+        const statement = prepare(sql);
+        if (/sqlite_master/.test(sql)) for (const method of ['all', 'get']) {
+          const original = statement[method].bind(statement);
+          statement[method] = (...args) => { const before = db.rowsRead; const value = original(...args); catalogStatements++; catalogReads += db.rowsRead - before; return value; };
+        }
+        return statement;
+      };
+      for (let n = 0; n < 3; n++) {
+        const before = db.rowsRead, beforeCatalog = catalogReads, beforeStatements = catalogStatements;
+        const page = s.transaction(() => s.agentHeartbeats.pendingWakePage(identity.identityId, { hostId: 'host' }));
+        polls.push({ rowsRead: db.rowsRead - before, catalogReads: catalogReads - beforeCatalog,
+          catalogStatements: catalogStatements - beforeStatements, page });
+      }
+      db.prepare = prepare;
+      return Response.json({ catalogRows, polls });
+    }
     const installation = { rowsRead: 0, rowsWritten: 0, statements: 0, unknownWriteCounters: 0 };
     db.observeStatement = () => result => { installation.statements++; installation.rowsRead += result.rowsRead ?? 0; installation.rowsWritten += result.rowsWritten ?? 0; if (result.rowsWritten === null) installation.unknownWriteCounters++; };
     const plan = operatorWakeIndex(s, { reason: 'Synthetic Worker qualification' });

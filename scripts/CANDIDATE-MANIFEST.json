@@ -71,7 +71,7 @@
     "room-acp/src/credentials.mjs": "sha256:45762c8b7264c154b50942ae8c24a9f202ff962524feafd32df65e3afdca10cc",
     "room-acp/src/join.mjs": "sha256:8c599b0be18d9f010884f2843e6ff7e3a992e45dfd5560322377080e5da90e02",
     "room-acp/src/jsonrpc.mjs": "sha256:c0b743ee019241ed331326bf002a929ac2b26e0dc49dbca0ca5628d88df0172b",
-    "room-acp/src/link.mjs": "sha256:ebf4e950d66cd11ed7be89f03fd3dbe0c5a009d1d1c7886ae0b552ecff3702a7",
+    "room-acp/src/link.mjs": "sha256:b245c16371e2edf5e0c01c50f3d6464add2a818382a9b010d19d2a35a20cdcf7",
     "room-acp/src/permission.mjs": "sha256:c2ad07f92dc0897e7c8d32f0dcfdc63e4f400d92fab6d117473a5be2c253b25c",
     "room-acp/src/private-state.mjs": "sha256:033bb02767812d5072a69edcd1ab699afba4e9d1279605749aba66a7c8224a07",
     "room-acp/src/prompt.mjs": "sha256:247f834d088a4ea9a789233d237a457c46a0abc6314430f815a2e42e255fbbc8",

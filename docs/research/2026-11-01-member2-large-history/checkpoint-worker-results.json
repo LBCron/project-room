@@ -1,0 +1,235 @@
+{
+  "sourceRevision": "513d3ee8471464803fd3c70dea2fe9ce30f27ad0",
+  "node": "v24.22.1",
+  "measuredAt": "2026-11-01T18:12:22.227Z",
+  "limitations": [
+    "Actual local workerd codec calls and process disposal/restart, not full Room backfill",
+    "Wall times include request overhead; not production CPU limits",
+    "SQL rowsRead is distinct from payload-byte transfer",
+    "Synthetic data only; no deployment or private corpus"
+  ],
+  "results": [
+    {
+      "count": 1000,
+      "seed": {
+        "status": 200,
+        "wallMs": 208.41045800000003,
+        "body": {
+          "count": 1000,
+          "encodedBytes": 293930,
+          "digest": "6fb155d27ca473a45a03690c7635267fdd29da36930933fd0c9e8240fd667609",
+          "meter": {
+            "readBytes": 0,
+            "readRows": 0,
+            "writeBytes": 293948,
+            "rowsRead": 1,
+            "rowsWritten": 2
+          }
+        }
+      },
+      "coldAfterWorkerdRestart": {
+        "status": 200,
+        "wallMs": 27.225791000000015,
+        "body": {
+          "count": 1000,
+          "digest": "6fb155d27ca473a45a03690c7635267fdd29da36930933fd0c9e8240fd667609",
+          "readMeter": {
+            "readBytes": 293930,
+            "readRows": 1,
+            "writeBytes": 0,
+            "rowsRead": 1,
+            "rowsWritten": 0
+          },
+          "meter": {
+            "readBytes": 293930,
+            "readRows": 1,
+            "writeBytes": 0,
+            "rowsRead": 1,
+            "rowsWritten": 0
+          }
+        }
+      },
+      "append": {
+        "status": 200,
+        "wallMs": 3.914957999999956,
+        "body": {
+          "count": 1001,
+          "digest": "2fbd828b7ccc1d856e541ed6d8112044b6a8c82440d94a1471f6c5b8f69a1590",
+          "readMeter": {
+            "readBytes": 293930,
+            "readRows": 1,
+            "writeBytes": 0,
+            "rowsRead": 1,
+            "rowsWritten": 0
+          },
+          "meter": {
+            "readBytes": 293930,
+            "readRows": 1,
+            "writeBytes": 294045,
+            "rowsRead": 3,
+            "rowsWritten": 1
+          }
+        }
+      },
+      "corruptionAfterWorkerdRestart": null
+    },
+    {
+      "count": 10000,
+      "seed": {
+        "status": 200,
+        "wallMs": 49.58562499999999,
+        "body": {
+          "count": 10000,
+          "encodedBytes": 2948930,
+          "digest": "351ba9dc246aa8fb22f53ddc2c38e410b872be0c416a1e1ef68ffdd9f34a7271",
+          "meter": {
+            "readBytes": 0,
+            "readRows": 0,
+            "writeBytes": 2949065,
+            "rowsRead": 1,
+            "rowsWritten": 12
+          }
+        }
+      },
+      "coldAfterWorkerdRestart": {
+        "status": 200,
+        "wallMs": 43.510290999999995,
+        "body": {
+          "count": 10000,
+          "digest": "351ba9dc246aa8fb22f53ddc2c38e410b872be0c416a1e1ef68ffdd9f34a7271",
+          "readMeter": {
+            "readBytes": 2949002,
+            "readRows": 6,
+            "writeBytes": 0,
+            "rowsRead": 6,
+            "rowsWritten": 0
+          },
+          "meter": {
+            "readBytes": 2949002,
+            "readRows": 6,
+            "writeBytes": 0,
+            "rowsRead": 6,
+            "rowsWritten": 0
+          }
+        }
+      },
+      "append": {
+        "status": 200,
+        "wallMs": 30.917333000000042,
+        "body": {
+          "count": 10001,
+          "digest": "1ffbc9dbd324cf16a1f005cb0cbc504dc0eb0875232cb02c003dbb29ccd27d82",
+          "readMeter": {
+            "readBytes": 2949002,
+            "readRows": 6,
+            "writeBytes": 0,
+            "rowsRead": 6,
+            "rowsWritten": 0
+          },
+          "meter": {
+            "readBytes": 2949002,
+            "readRows": 6,
+            "writeBytes": 2949162,
+            "rowsRead": 13,
+            "rowsWritten": 6
+          }
+        }
+      },
+      "corruptionAfterWorkerdRestart": {
+        "status": 500,
+        "wallMs": 36.06095800000003,
+        "body": {
+          "error": {
+            "message": "messages backfill state for synthetic is torn"
+          },
+          "meter": {
+            "readBytes": 2949099,
+            "readRows": 6,
+            "writeBytes": 0,
+            "rowsRead": 6,
+            "rowsWritten": 0
+          }
+        }
+      }
+    },
+    {
+      "count": 30000,
+      "seed": {
+        "status": 200,
+        "wallMs": 104.64745799999992,
+        "body": {
+          "count": 30000,
+          "encodedBytes": 8868930,
+          "digest": "1387cb9056c59b040767d51ad88992fd650ce2db78861b5465e5198eedc2c1d0",
+          "meter": {
+            "readBytes": 0,
+            "readRows": 0,
+            "writeBytes": 8869138,
+            "rowsRead": 1,
+            "rowsWritten": 28
+          }
+        }
+      },
+      "coldAfterWorkerdRestart": {
+        "status": 200,
+        "wallMs": 82.80975000000001,
+        "body": {
+          "count": 30000,
+          "digest": "1387cb9056c59b040767d51ad88992fd650ce2db78861b5465e5198eedc2c1d0",
+          "readMeter": {
+            "readBytes": 8869003,
+            "readRows": 14,
+            "writeBytes": 0,
+            "rowsRead": 14,
+            "rowsWritten": 0
+          },
+          "meter": {
+            "readBytes": 8869003,
+            "readRows": 14,
+            "writeBytes": 0,
+            "rowsRead": 14,
+            "rowsWritten": 0
+          }
+        }
+      },
+      "append": {
+        "status": 200,
+        "wallMs": 91.29100000000005,
+        "body": {
+          "count": 30001,
+          "digest": "da7d5479d0d8d45d1c597dfbbc5f175d39fd07bddf7f4788bedbb8c031d47eb1",
+          "readMeter": {
+            "readBytes": 8869003,
+            "readRows": 14,
+            "writeBytes": 0,
+            "rowsRead": 14,
+            "rowsWritten": 0
+          },
+          "meter": {
+            "readBytes": 8869003,
+            "readRows": 14,
+            "writeBytes": 8869235,
+            "rowsRead": 29,
+            "rowsWritten": 14
+          }
+        }
+      },
+      "corruptionAfterWorkerdRestart": {
+        "status": 500,
+        "wallMs": 53.979416000000015,
+        "body": {
+          "error": {
+            "message": "messages backfill state for synthetic is torn"
+          },
+          "meter": {
+            "readBytes": 8869100,
+            "readRows": 14,
+            "writeBytes": 0,
+            "rowsRead": 14,
+            "rowsWritten": 0
+          }
+        }
+      }
+    }
+  ]
+}

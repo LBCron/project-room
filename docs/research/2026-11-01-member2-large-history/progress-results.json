@@ -1,0 +1,949 @@
+{
+  "sourceRevision": "513d3ee8471464803fd3c70dea2fe9ce30f27ad0",
+  "inputs": {
+    "steps": [
+      "share_links",
+      "agent_connections",
+      "inbox",
+      "email",
+      "channel_updates",
+      "quarantine_splits",
+      "room_lifecycle",
+      "identity_expiry",
+      "referral_depth",
+      "messages_backfill",
+      "messages_parity"
+    ],
+    "stepsPerVisit": 2,
+    "eventsPerBackfillVisit": 200,
+    "cadenceHours": 1,
+    "initialLag": 1799,
+    "sourceHashes": {
+      "store": "84591fdf0037e64c29b2f425251e57b1ef6e9f642827aef2b71a13a5cd56848e",
+      "messages": "a8e351b79fb40e227dba0aee1ccf8f55c7b5f03b1b0a6c57036f806dfb700907",
+      "jobs": "f4f1fe5d4ea01a90065e549e9775db8db517439b09e8ab62943eb6200645fc6a"
+    }
+  },
+  "optimisticLongRunEventsPerHour": 36.36363636363637,
+  "scenarios": [
+    {
+      "arrivalsPerHour": 0,
+      "hours": 72,
+      "allocation": 1,
+      "initialLag": 1799,
+      "services": 13,
+      "processed": 1799,
+      "finalLag": 0,
+      "maxLag": 1799,
+      "firstCaughtUpHour": 49,
+      "samples": [
+        {
+          "hour": 1,
+          "lag": 1799,
+          "capacityThisVisit": 0
+        },
+        {
+          "hour": 2,
+          "lag": 1799,
+          "capacityThisVisit": 0
+        },
+        {
+          "hour": 3,
+          "lag": 1799,
+          "capacityThisVisit": 0
+        },
+        {
+          "hour": 4,
+          "lag": 1799,
+          "capacityThisVisit": 0
+        },
+        {
+          "hour": 5,
+          "lag": 1599,
+          "capacityThisVisit": 200
+        },
+        {
+          "hour": 6,
+          "lag": 1599,
+          "capacityThisVisit": 0
+        },
+        {
+          "hour": 7,
+          "lag": 1599,
+          "capacityThisVisit": 0
+        },
+        {
+          "hour": 8,
+          "lag": 1599,
+          "capacityThisVisit": 0
+        },
+        {
+          "hour": 9,
+          "lag": 1599,
+          "capacityThisVisit": 0
+        },
+        {
+          "hour": 10,
+          "lag": 1599,
+          "capacityThisVisit": 0
+        },
+        {
+          "hour": 11,
+          "lag": 1399,
+          "capacityThisVisit": 200
+        },
+        {
+          "hour": 12,
+          "lag": 1399,
+          "capacityThisVisit": 0
+        },
+        {
+          "hour": 24,
+          "lag": 999,
+          "capacityThisVisit": 0
+        },
+        {
+          "hour": 48,
+          "lag": 199,
+          "capacityThisVisit": 0
+        },
+        {
+          "hour": 72,
+          "lag": 0,
+          "capacityThisVisit": 0
+        }
+      ]
+    },
+    {
+      "arrivalsPerHour": 20,
+      "hours": 72,
+      "allocation": 1,
+      "initialLag": 1799,
+      "services": 13,
+      "processed": 2600,
+      "finalLag": 639,
+      "maxLag": 1899,
+      "firstCaughtUpHour": null,
+      "samples": [
+        {
+          "hour": 1,
+          "lag": 1819,
+          "capacityThisVisit": 0
+        },
+        {
+          "hour": 2,
+          "lag": 1839,
+          "capacityThisVisit": 0
+        },
+        {
+          "hour": 3,
+          "lag": 1859,
+          "capacityThisVisit": 0
+        },
+        {
+          "hour": 4,
+          "lag": 1879,
+          "capacityThisVisit": 0
+        },
+        {
+          "hour": 5,
+          "lag": 1699,
+          "capacityThisVisit": 200
+        },
+        {
+          "hour": 6,
+          "lag": 1719,
+          "capacityThisVisit": 0
+        },
+        {
+          "hour": 7,
+          "lag": 1739,
+          "capacityThisVisit": 0
+        },
+        {
+          "hour": 8,
+          "lag": 1759,
+          "capacityThisVisit": 0
+        },
+        {
+          "hour": 9,
+          "lag": 1779,
+          "capacityThisVisit": 0
+        },
+        {
+          "hour": 10,
+          "lag": 1799,
+          "capacityThisVisit": 0
+        },
+        {
+          "hour": 11,
+          "lag": 1619,
+          "capacityThisVisit": 200
+        },
+        {
+          "hour": 12,
+          "lag": 1639,
+          "capacityThisVisit": 0
+        },
+        {
+          "hour": 24,
+          "lag": 1479,
+          "capacityThisVisit": 0
+        },
+        {
+          "hour": 48,
+          "lag": 1159,
+          "capacityThisVisit": 0
+        },
+        {
+          "hour": 72,
+          "lag": 639,
+          "capacityThisVisit": 0
+        }
+      ]
+    },
+    {
+      "arrivalsPerHour": 36,
+      "hours": 72,
+      "allocation": 1,
+      "initialLag": 1799,
+      "services": 13,
+      "processed": 2600,
+      "finalLag": 1791,
+      "maxLag": 1995,
+      "firstCaughtUpHour": null,
+      "samples": [
+        {
+          "hour": 1,
+          "lag": 1835,
+          "capacityThisVisit": 0
+        },
+        {
+          "hour": 2,
+          "lag": 1871,
+          "capacityThisVisit": 0
+        },
+        {
+          "hour": 3,
+          "lag": 1907,
+          "capacityThisVisit": 0
+        },
+        {
+          "hour": 4,
+          "lag": 1943,
+          "capacityThisVisit": 0
+        },
+        {
+          "hour": 5,
+          "lag": 1779,
+          "capacityThisVisit": 200
+        },
+        {
+          "hour": 6,
+          "lag": 1815,
+          "capacityThisVisit": 0
+        },
+        {
+          "hour": 7,
+          "lag": 1851,
+          "capacityThisVisit": 0
+        },
+        {
+          "hour": 8,
+          "lag": 1887,
+          "capacityThisVisit": 0
+        },
+        {
+          "hour": 9,
+          "lag": 1923,
+          "capacityThisVisit": 0
+        },
+        {
+          "hour": 10,
+          "lag": 1959,
+          "capacityThisVisit": 0
+        },
+        {
+          "hour": 11,
+          "lag": 1795,
+          "capacityThisVisit": 200
+        },
+        {
+          "hour": 12,
+          "lag": 1831,
+          "capacityThisVisit": 0
+        },
+        {
+          "hour": 24,
+          "lag": 1863,
+          "capacityThisVisit": 0
+        },
+        {
+          "hour": 48,
+          "lag": 1927,
+          "capacityThisVisit": 0
+        },
+        {
+          "hour": 72,
+          "lag": 1791,
+          "capacityThisVisit": 0
+        }
+      ]
+    },
+    {
+      "arrivalsPerHour": 40,
+      "hours": 72,
+      "allocation": 1,
+      "initialLag": 1799,
+      "services": 13,
+      "processed": 2600,
+      "finalLag": 2079,
+      "maxLag": 2239,
+      "firstCaughtUpHour": null,
+      "samples": [
+        {
+          "hour": 1,
+          "lag": 1839,
+          "capacityThisVisit": 0
+        },
+        {
+          "hour": 2,
+          "lag": 1879,
+          "capacityThisVisit": 0
+        },
+        {
+          "hour": 3,
+          "lag": 1919,
+          "capacityThisVisit": 0
+        },
+        {
+          "hour": 4,
+          "lag": 1959,
+          "capacityThisVisit": 0
+        },
+        {
+          "hour": 5,
+          "lag": 1799,
+          "capacityThisVisit": 200
+        },
+        {
+          "hour": 6,
+          "lag": 1839,
+          "capacityThisVisit": 0
+        },
+        {
+          "hour": 7,
+          "lag": 1879,
+          "capacityThisVisit": 0
+        },
+        {
+          "hour": 8,
+          "lag": 1919,
+          "capacityThisVisit": 0
+        },
+        {
+          "hour": 9,
+          "lag": 1959,
+          "capacityThisVisit": 0
+        },
+        {
+          "hour": 10,
+          "lag": 1999,
+          "capacityThisVisit": 0
+        },
+        {
+          "hour": 11,
+          "lag": 1839,
+          "capacityThisVisit": 200
+        },
+        {
+          "hour": 12,
+          "lag": 1879,
+          "capacityThisVisit": 0
+        },
+        {
+          "hour": 24,
+          "lag": 1959,
+          "capacityThisVisit": 0
+        },
+        {
+          "hour": 48,
+          "lag": 2119,
+          "capacityThisVisit": 0
+        },
+        {
+          "hour": 72,
+          "lag": 2079,
+          "capacityThisVisit": 0
+        }
+      ]
+    },
+    {
+      "arrivalsPerHour": 100,
+      "hours": 72,
+      "allocation": 1,
+      "initialLag": 1799,
+      "services": 13,
+      "processed": 2600,
+      "finalLag": 6399,
+      "maxLag": 6499,
+      "firstCaughtUpHour": null,
+      "samples": [
+        {
+          "hour": 1,
+          "lag": 1899,
+          "capacityThisVisit": 0
+        },
+        {
+          "hour": 2,
+          "lag": 1999,
+          "capacityThisVisit": 0
+        },
+        {
+          "hour": 3,
+          "lag": 2099,
+          "capacityThisVisit": 0
+        },
+        {
+          "hour": 4,
+          "lag": 2199,
+          "capacityThisVisit": 0
+        },
+        {
+          "hour": 5,
+          "lag": 2099,
+          "capacityThisVisit": 200
+        },
+        {
+          "hour": 6,
+          "lag": 2199,
+          "capacityThisVisit": 0
+        },
+        {
+          "hour": 7,
+          "lag": 2299,
+          "capacityThisVisit": 0
+        },
+        {
+          "hour": 8,
+          "lag": 2399,
+          "capacityThisVisit": 0
+        },
+        {
+          "hour": 9,
+          "lag": 2499,
+          "capacityThisVisit": 0
+        },
+        {
+          "hour": 10,
+          "lag": 2599,
+          "capacityThisVisit": 0
+        },
+        {
+          "hour": 11,
+          "lag": 2499,
+          "capacityThisVisit": 200
+        },
+        {
+          "hour": 12,
+          "lag": 2599,
+          "capacityThisVisit": 0
+        },
+        {
+          "hour": 24,
+          "lag": 3399,
+          "capacityThisVisit": 0
+        },
+        {
+          "hour": 48,
+          "lag": 4999,
+          "capacityThisVisit": 0
+        },
+        {
+          "hour": 72,
+          "lag": 6399,
+          "capacityThisVisit": 0
+        }
+      ]
+    },
+    {
+      "arrivalsPerHour": 1000,
+      "hours": 72,
+      "allocation": 1,
+      "initialLag": 1799,
+      "services": 13,
+      "processed": 2600,
+      "finalLag": 71199,
+      "maxLag": 71199,
+      "firstCaughtUpHour": null,
+      "samples": [
+        {
+          "hour": 1,
+          "lag": 2799,
+          "capacityThisVisit": 0
+        },
+        {
+          "hour": 2,
+          "lag": 3799,
+          "capacityThisVisit": 0
+        },
+        {
+          "hour": 3,
+          "lag": 4799,
+          "capacityThisVisit": 0
+        },
+        {
+          "hour": 4,
+          "lag": 5799,
+          "capacityThisVisit": 0
+        },
+        {
+          "hour": 5,
+          "lag": 6599,
+          "capacityThisVisit": 200
+        },
+        {
+          "hour": 6,
+          "lag": 7599,
+          "capacityThisVisit": 0
+        },
+        {
+          "hour": 7,
+          "lag": 8599,
+          "capacityThisVisit": 0
+        },
+        {
+          "hour": 8,
+          "lag": 9599,
+          "capacityThisVisit": 0
+        },
+        {
+          "hour": 9,
+          "lag": 10599,
+          "capacityThisVisit": 0
+        },
+        {
+          "hour": 10,
+          "lag": 11599,
+          "capacityThisVisit": 0
+        },
+        {
+          "hour": 11,
+          "lag": 12399,
+          "capacityThisVisit": 200
+        },
+        {
+          "hour": 12,
+          "lag": 13399,
+          "capacityThisVisit": 0
+        },
+        {
+          "hour": 24,
+          "lag": 24999,
+          "capacityThisVisit": 0
+        },
+        {
+          "hour": 48,
+          "lag": 48199,
+          "capacityThisVisit": 0
+        },
+        {
+          "hour": 72,
+          "lag": 71199,
+          "capacityThisVisit": 0
+        }
+      ]
+    }
+  ],
+  "finiteCatchup": [
+    {
+      "arrivalsPerHour": 0,
+      "hours": 11000,
+      "allocation": 1,
+      "initialLag": 1799,
+      "services": 2000,
+      "processed": 1799,
+      "finalLag": 0,
+      "maxLag": 1799,
+      "firstCaughtUpHour": 49,
+      "samples": [
+        {
+          "hour": 1,
+          "lag": 1799,
+          "capacityThisVisit": 0
+        },
+        {
+          "hour": 2,
+          "lag": 1799,
+          "capacityThisVisit": 0
+        },
+        {
+          "hour": 3,
+          "lag": 1799,
+          "capacityThisVisit": 0
+        },
+        {
+          "hour": 4,
+          "lag": 1799,
+          "capacityThisVisit": 0
+        },
+        {
+          "hour": 5,
+          "lag": 1599,
+          "capacityThisVisit": 200
+        },
+        {
+          "hour": 6,
+          "lag": 1599,
+          "capacityThisVisit": 0
+        },
+        {
+          "hour": 7,
+          "lag": 1599,
+          "capacityThisVisit": 0
+        },
+        {
+          "hour": 8,
+          "lag": 1599,
+          "capacityThisVisit": 0
+        },
+        {
+          "hour": 9,
+          "lag": 1599,
+          "capacityThisVisit": 0
+        },
+        {
+          "hour": 10,
+          "lag": 1599,
+          "capacityThisVisit": 0
+        },
+        {
+          "hour": 11,
+          "lag": 1399,
+          "capacityThisVisit": 200
+        },
+        {
+          "hour": 12,
+          "lag": 1399,
+          "capacityThisVisit": 0
+        }
+      ]
+    },
+    {
+      "arrivalsPerHour": 20,
+      "hours": 11000,
+      "allocation": 1,
+      "initialLag": 1799,
+      "services": 2000,
+      "processed": 221799,
+      "finalLag": 0,
+      "maxLag": 1899,
+      "firstCaughtUpHour": 110,
+      "samples": [
+        {
+          "hour": 1,
+          "lag": 1819,
+          "capacityThisVisit": 0
+        },
+        {
+          "hour": 2,
+          "lag": 1839,
+          "capacityThisVisit": 0
+        },
+        {
+          "hour": 3,
+          "lag": 1859,
+          "capacityThisVisit": 0
+        },
+        {
+          "hour": 4,
+          "lag": 1879,
+          "capacityThisVisit": 0
+        },
+        {
+          "hour": 5,
+          "lag": 1699,
+          "capacityThisVisit": 200
+        },
+        {
+          "hour": 6,
+          "lag": 1719,
+          "capacityThisVisit": 0
+        },
+        {
+          "hour": 7,
+          "lag": 1739,
+          "capacityThisVisit": 0
+        },
+        {
+          "hour": 8,
+          "lag": 1759,
+          "capacityThisVisit": 0
+        },
+        {
+          "hour": 9,
+          "lag": 1779,
+          "capacityThisVisit": 0
+        },
+        {
+          "hour": 10,
+          "lag": 1799,
+          "capacityThisVisit": 0
+        },
+        {
+          "hour": 11,
+          "lag": 1619,
+          "capacityThisVisit": 200
+        },
+        {
+          "hour": 12,
+          "lag": 1639,
+          "capacityThisVisit": 0
+        }
+      ]
+    },
+    {
+      "arrivalsPerHour": 36,
+      "hours": 11000,
+      "allocation": 1,
+      "initialLag": 1799,
+      "services": 2000,
+      "processed": 397783,
+      "finalLag": 16,
+      "maxLag": 1995,
+      "firstCaughtUpHour": 4900,
+      "samples": [
+        {
+          "hour": 1,
+          "lag": 1835,
+          "capacityThisVisit": 0
+        },
+        {
+          "hour": 2,
+          "lag": 1871,
+          "capacityThisVisit": 0
+        },
+        {
+          "hour": 3,
+          "lag": 1907,
+          "capacityThisVisit": 0
+        },
+        {
+          "hour": 4,
+          "lag": 1943,
+          "capacityThisVisit": 0
+        },
+        {
+          "hour": 5,
+          "lag": 1779,
+          "capacityThisVisit": 200
+        },
+        {
+          "hour": 6,
+          "lag": 1815,
+          "capacityThisVisit": 0
+        },
+        {
+          "hour": 7,
+          "lag": 1851,
+          "capacityThisVisit": 0
+        },
+        {
+          "hour": 8,
+          "lag": 1887,
+          "capacityThisVisit": 0
+        },
+        {
+          "hour": 9,
+          "lag": 1923,
+          "capacityThisVisit": 0
+        },
+        {
+          "hour": 10,
+          "lag": 1959,
+          "capacityThisVisit": 0
+        },
+        {
+          "hour": 11,
+          "lag": 1795,
+          "capacityThisVisit": 200
+        },
+        {
+          "hour": 12,
+          "lag": 1831,
+          "capacityThisVisit": 0
+        }
+      ]
+    }
+  ],
+  "twoEqualRoomShare": {
+    "arrivalsPerHour": 20,
+    "hours": 72,
+    "allocation": 0.5,
+    "initialLag": 1799,
+    "services": 13,
+    "processed": 1300,
+    "finalLag": 1939,
+    "maxLag": 2019,
+    "firstCaughtUpHour": null,
+    "samples": [
+      {
+        "hour": 1,
+        "lag": 1819,
+        "capacityThisVisit": 0
+      },
+      {
+        "hour": 2,
+        "lag": 1839,
+        "capacityThisVisit": 0
+      },
+      {
+        "hour": 3,
+        "lag": 1859,
+        "capacityThisVisit": 0
+      },
+      {
+        "hour": 4,
+        "lag": 1879,
+        "capacityThisVisit": 0
+      },
+      {
+        "hour": 5,
+        "lag": 1799,
+        "capacityThisVisit": 100
+      },
+      {
+        "hour": 6,
+        "lag": 1819,
+        "capacityThisVisit": 0
+      },
+      {
+        "hour": 7,
+        "lag": 1839,
+        "capacityThisVisit": 0
+      },
+      {
+        "hour": 8,
+        "lag": 1859,
+        "capacityThisVisit": 0
+      },
+      {
+        "hour": 9,
+        "lag": 1879,
+        "capacityThisVisit": 0
+      },
+      {
+        "hour": 10,
+        "lag": 1899,
+        "capacityThisVisit": 0
+      },
+      {
+        "hour": 11,
+        "lag": 1819,
+        "capacityThisVisit": 100
+      },
+      {
+        "hour": 12,
+        "lag": 1839,
+        "capacityThisVisit": 0
+      },
+      {
+        "hour": 24,
+        "lag": 1879,
+        "capacityThisVisit": 0
+      },
+      {
+        "hour": 48,
+        "lag": 1959,
+        "capacityThisVisit": 0
+      },
+      {
+        "hour": 72,
+        "lag": 1939,
+        "capacityThisVisit": 0
+      }
+    ]
+  },
+  "consumerSensitivity": [
+    {
+      "arrivalsPerHour": 100,
+      "successfulBatchesPerHour": 1,
+      "capacityPerHour": 200,
+      "netDrainPerHour": 100,
+      "canCloseLag": true,
+      "fluidEstimateHoursToClose1799": 17.99
+    },
+    {
+      "arrivalsPerHour": 100,
+      "successfulBatchesPerHour": 6,
+      "capacityPerHour": 1200,
+      "netDrainPerHour": 1100,
+      "canCloseLag": true,
+      "fluidEstimateHoursToClose1799": 1.6354545454545455
+    },
+    {
+      "arrivalsPerHour": 100,
+      "successfulBatchesPerHour": 60,
+      "capacityPerHour": 12000,
+      "netDrainPerHour": 11900,
+      "canCloseLag": true,
+      "fluidEstimateHoursToClose1799": 0.1511764705882353
+    },
+    {
+      "arrivalsPerHour": 1000,
+      "successfulBatchesPerHour": 1,
+      "capacityPerHour": 200,
+      "netDrainPerHour": -800,
+      "canCloseLag": false,
+      "fluidEstimateHoursToClose1799": null
+    },
+    {
+      "arrivalsPerHour": 1000,
+      "successfulBatchesPerHour": 6,
+      "capacityPerHour": 1200,
+      "netDrainPerHour": 200,
+      "canCloseLag": true,
+      "fluidEstimateHoursToClose1799": 8.995
+    },
+    {
+      "arrivalsPerHour": 1000,
+      "successfulBatchesPerHour": 60,
+      "capacityPerHour": 12000,
+      "netDrainPerHour": 11000,
+      "canCloseLag": true,
+      "fluidEstimateHoursToClose1799": 0.16354545454545455
+    },
+    {
+      "arrivalsPerHour": 10000,
+      "successfulBatchesPerHour": 1,
+      "capacityPerHour": 200,
+      "netDrainPerHour": -9800,
+      "canCloseLag": false,
+      "fluidEstimateHoursToClose1799": null
+    },
+    {
+      "arrivalsPerHour": 10000,
+      "successfulBatchesPerHour": 6,
+      "capacityPerHour": 1200,
+      "netDrainPerHour": -8800,
+      "canCloseLag": false,
+      "fluidEstimateHoursToClose1799": null
+    },
+    {
+      "arrivalsPerHour": 10000,
+      "successfulBatchesPerHour": 60,
+      "capacityPerHour": 12000,
+      "netDrainPerHour": 2000,
+      "canCloseLag": true,
+      "fluidEstimateHoursToClose1799": 0.8995
+    }
+  ],
+  "limitations": [
+    "Conditional model: hourly integrity is the only effective driver",
+    "Every visit finishes both steps; no deadlines, failures, other work or starvation",
+    "Real global backfill room selection does not promise equal share",
+    "Other callers or continuations may change actual throughput; measure rather than infer",
+    "Consumer sensitivity uses full 200-event batches; byte caps can reduce actual service",
+    "No timers, jobs, schedules or production changes are created"
+  ]
+}

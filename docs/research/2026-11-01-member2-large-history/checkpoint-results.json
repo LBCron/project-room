@@ -1,0 +1,98 @@
+{
+  "sourceRevision": "513d3ee8471464803fd3c70dea2fe9ce30f27ad0",
+  "codecSha256": "bd08776ce2a8490133954714a153668c5022355d233893e156af780902f956af",
+  "node": "v24.22.1",
+  "measuredAt": "2026-11-01T18:10:58.296Z",
+  "limitations": [
+    "Synthetic codec calls with real local SQLite; not the complete backfill or workerd",
+    "SQL bytes returned/bound count application payload only, not engine page reads or WAL",
+    "Connection reopen is not a Worker/process restart",
+    "Wall time is local observation, not production CPU admission"
+  ],
+  "measurements": [
+    {
+      "messages": 1000,
+      "encodedBytes": 293960,
+      "parts": 0,
+      "largestPartBytes": 0,
+      "initialWrite": {
+        "readBytes": 0,
+        "readRows": 0,
+        "writeBytes": 293978,
+        "writeCalls": 2
+      },
+      "readAfterSqliteReopen": {
+        "readBytes": 293960,
+        "readRows": 1,
+        "writeBytes": 0,
+        "writeCalls": 0
+      },
+      "oneMessageAppendWrite": {
+        "readBytes": 0,
+        "readRows": 0,
+        "writeBytes": 294072,
+        "writeCalls": 2
+      },
+      "corruptionRefused": null,
+      "missingPartRefused": null,
+      "writeWallMs": 1.1423750000000013,
+      "readWallMs": 0.938167
+    },
+    {
+      "messages": 10000,
+      "encodedBytes": 2948960,
+      "parts": 5,
+      "largestPartBytes": 716801,
+      "initialWrite": {
+        "readBytes": 0,
+        "readRows": 0,
+        "writeBytes": 2949095,
+        "writeCalls": 7
+      },
+      "readAfterSqliteReopen": {
+        "readBytes": 2949032,
+        "readRows": 6,
+        "writeBytes": 0,
+        "writeCalls": 0
+      },
+      "oneMessageAppendWrite": {
+        "readBytes": 0,
+        "readRows": 0,
+        "writeBytes": 2949190,
+        "writeCalls": 7
+      },
+      "corruptionRefused": true,
+      "missingPartRefused": true,
+      "writeWallMs": 10.340417000000002,
+      "readWallMs": 11.562999999999995
+    },
+    {
+      "messages": 50000,
+      "encodedBytes": 14788960,
+      "parts": 21,
+      "largestPartBytes": 716801,
+      "initialWrite": {
+        "readBytes": 0,
+        "readRows": 0,
+        "writeBytes": 14789240,
+        "writeCalls": 23
+      },
+      "readAfterSqliteReopen": {
+        "readBytes": 14789033,
+        "readRows": 22,
+        "writeBytes": 0,
+        "writeCalls": 0
+      },
+      "oneMessageAppendWrite": {
+        "readBytes": 0,
+        "readRows": 0,
+        "writeBytes": 14789335,
+        "writeCalls": 23
+      },
+      "corruptionRefused": true,
+      "missingPartRefused": true,
+      "writeWallMs": 44.56474999999999,
+      "readWallMs": 54.77241699999999
+    }
+  ]
+}

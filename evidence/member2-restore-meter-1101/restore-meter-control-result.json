@@ -1,0 +1,117 @@
+{
+  "at": "2026-11-01T20:53:01.304Z",
+  "scope": "Test-meter calibration only; no Room source/candidate executed",
+  "node": "v24.22.1",
+  "runtime": "actual local workerd via Miniflare SQLite Durable Object",
+  "results": {
+    "baselineOneRead": {
+      "rowsRead": 2
+    },
+    "passiveSnapshot": {
+      "statements": 1,
+      "failedStatements": 0,
+      "rowsRead": 2,
+      "rowsWritten": 0,
+      "unknownCounters": 0,
+      "returnedRows": 1,
+      "returnedTextBytes": 10,
+      "returnedBlobBytes": 3,
+      "numericCells": 0,
+      "returnedPayloadBytes": 13
+    },
+    "nativeProperties": {
+      "originalDatabaseSize": 8192,
+      "meterDatabaseSize": 8192
+    },
+    "passiveSnapshotAgain": {
+      "statements": 1,
+      "failedStatements": 0,
+      "rowsRead": 2,
+      "rowsWritten": 0,
+      "unknownCounters": 0,
+      "returnedRows": 1,
+      "returnedTextBytes": 10,
+      "returnedBlobBytes": 3,
+      "numericCells": 0,
+      "returnedPayloadBytes": 13
+    },
+    "remainingArray": {
+      "statements": 1,
+      "failedStatements": 0,
+      "rowsRead": 32,
+      "rowsWritten": 0,
+      "unknownCounters": 0,
+      "returnedRows": 32,
+      "returnedTextBytes": 320,
+      "returnedBlobBytes": 96,
+      "numericCells": 0,
+      "returnedPayloadBytes": 416
+    },
+    "scanToOne": {
+      "statements": 1,
+      "failedStatements": 0,
+      "rowsRead": 32,
+      "rowsWritten": 0,
+      "unknownCounters": 0,
+      "returnedRows": 1,
+      "returnedTextBytes": 10,
+      "returnedBlobBytes": 3,
+      "numericCells": 0,
+      "returnedPayloadBytes": 13
+    },
+    "breakAfterOne": {
+      "statements": 1,
+      "failedStatements": 0,
+      "rowsRead": 2,
+      "rowsWritten": 0,
+      "unknownCounters": 0,
+      "returnedRows": 1,
+      "returnedTextBytes": 10,
+      "returnedBlobBytes": 3,
+      "numericCells": 0,
+      "returnedPayloadBytes": 13
+    },
+    "rawArray": {
+      "statements": 1,
+      "failedStatements": 0,
+      "rowsRead": 32,
+      "rowsWritten": 0,
+      "unknownCounters": 0,
+      "returnedRows": 32,
+      "returnedTextBytes": 320,
+      "returnedBlobBytes": 96,
+      "numericCells": 0,
+      "returnedPayloadBytes": 416
+    },
+    "oneLargeCell": {
+      "statements": 1,
+      "failedStatements": 0,
+      "rowsRead": 1,
+      "rowsWritten": 0,
+      "unknownCounters": 0,
+      "returnedRows": 1,
+      "returnedTextBytes": 40960,
+      "returnedBlobBytes": 3,
+      "numericCells": 0,
+      "returnedPayloadBytes": 40963
+    },
+    "failedStatement": {
+      "statements": 1,
+      "failedStatements": 1,
+      "rowsRead": 0,
+      "rowsWritten": 0,
+      "unknownCounters": 2,
+      "returnedRows": 0,
+      "returnedTextBytes": 0,
+      "returnedBlobBytes": 0,
+      "numericCells": 0,
+      "returnedPayloadBytes": 0
+    }
+  },
+  "limits": [
+    "Returned payload bytes count UTF-8 string values and BLOB bytes only; exclude column names, numeric encodings and SQL wire/storage overhead.",
+    "Physical rowsRead is the native cursor counter, distinct from yielded rows.",
+    "Local workerd timing is not production CPU qualification.",
+    "No normalization/restore candidate, deployment, private data or network pairing tested."
+  ]
+}

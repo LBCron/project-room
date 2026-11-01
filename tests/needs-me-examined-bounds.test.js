@@ -129,8 +129,17 @@ test('examined bounds: the byte budget stops a scan of very large events before 
   const bigBody = 'x'.repeat(60_000);
   for (let i = 0; i < 20; i++) post(bob.secret, `big-${i}`, { body: `${bigBody} ${i}` });
   const page = collectNeedsMe(store, maya.secret, { since: { rooms: { [roomId]: 0 }, land: {}, landIds: {} } });
-  assert.ok(page.scan.replies.scannedBytes >= REPLY_SCAN_BYTE_BUDGET,
-    `the reply scan reports the examined bytes that stopped it (got ${page.scan.replies.scannedBytes})`);
+  // Round 3 amendment (Codex seq 25331): this assertion used to pin
+  // scannedBytes >= the byte budget — the crossing row was examined
+  // and counted, so the total landed OVER the budget. The admission
+  // falsifier refuted that semantics (payload crossed before the
+  // count bound it), so the scan now stops BEFORE the crossing row:
+  // the examined total never crosses the budget, and lands within one
+  // big row of it — every row that fits was admitted.
+  assert.ok(page.scan.replies.scannedBytes <= REPLY_SCAN_BYTE_BUDGET,
+    `admission never transfers past the byte budget (got ${page.scan.replies.scannedBytes})`);
+  assert.ok(page.scan.replies.scannedBytes + 60_011 > REPLY_SCAN_BYTE_BUDGET,
+    `the reply scan admitted every row that fits — one more ~60KB row could not (got ${page.scan.replies.scannedBytes})`);
   assert.ok(page.scan.replies.scannedRows < REPLY_SCAN_ROW_BUDGET,
     `the byte budget bound before the row budget (examined ${page.scan.replies.scannedRows} rows)`);
   assert.ok(page.scan.replies.scannedRows > 0, 'the scan still made progress — no zero-progress stall on oversized events');

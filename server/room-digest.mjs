@@ -18,6 +18,10 @@
 //   double-counts against the projections it replaces.
 // - `bodiesOmitted` is present exactly when message bodies in the window were
 //   not reproduced (value = how many), and absent when none were.
+// - `coverage.attentionIncomplete` is present exactly when the bounded
+//   attention scans stopped at a budget before the window's end, with
+//   `coverage.attentionThrough` naming the evaluated-through sequence
+//   and `followUps.attention` carrying the continuation read.
 // - Sections are capped by caps that already exist in-repo (140-char clip,
 //   80-char board title, needs-me per-kind discipline) plus a total per-section
 //   cap, and the whole document carries a hard byte budget: if the serialized
@@ -49,6 +53,15 @@ const byteSize = value => Buffer.byteLength(JSON.stringify(value), "utf8");
 // - byType: { type: count } for the whole window (uncapped, from the journal)
 // - workChanged: latest row per changed claim, any order
 // - attention: needs-me-shaped items { kind, seq, id, summary }, any order
+// - attentionCoverage: { through, complete } from the attention slice —
+//   the bounded needs-me scans may stop at their budgets before the
+//   window's end; when they do, coverage names the sequence attention
+//   was actually evaluated through (attentionThrough) and marks
+//   attentionIncomplete, so an attention total of 0 over a partially
+//   scanned window never reads as "nothing needs you" and the reader
+//   can continue the attention slice with the followUps.attention read
+//   instead of advancing past unscanned replies. Absent when complete:
+//   a fully scanned window keeps the exact pre-marker shape.
 // - messages: latest-first visible message rows { seq, id, actorId, summary }
 // - decisions: decision-event rows { seq, type, actorId }, any order
 // - actionable: { total, byKind } standing counts from the updates projection
@@ -57,7 +70,7 @@ const byteSize = value => Buffer.byteLength(JSON.stringify(value), "utf8");
 export function buildRoomDigest({
   roomId, viewerId, since, through, now, requestedSince = since,
   context, byType, workChanged, workChangedTotal,
-  attention, messages, decisions, actionable
+  attention, attentionCoverage, messages, decisions, actionable
 }) {
   if (typeof roomId !== "string" || typeof viewerId !== "string"
     || !Number.isSafeInteger(since) || since < 0
@@ -112,6 +125,9 @@ export function buildRoomDigest({
       byType: counts,
       workChangedTotal: workChangedTotal ?? work.length,
       attentionTotal: (attention ?? []).length,
+      ...(attentionCoverage && attentionCoverage.complete === false
+        ? { attentionThrough: attentionCoverage.through, attentionIncomplete: true }
+        : {}),
       messagesTotal
     },
     context: {
@@ -132,7 +148,10 @@ export function buildRoomDigest({
       events: `GET /api/rooms/${encodedRoom}/events?after=${since}&limit=100`,
       work: `GET /api/rooms/${encodedRoom}/work-claims/{id}`,
       context: `GET /api/rooms/${encodedRoom}/context`,
-      updates: `GET /api/rooms/${encodedRoom}/updates`
+      updates: `GET /api/rooms/${encodedRoom}/updates`,
+      ...(attentionCoverage && attentionCoverage.complete === false
+        ? { attention: `GET /api/rooms/${encodedRoom}/digest?since=${attentionCoverage.through}` }
+        : {})
     },
     untrusted: true
   };

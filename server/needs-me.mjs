@@ -79,15 +79,73 @@ const MENTION_WINDOW = 100;
 // body bytes: the budgets bind at examined-row and byte boundaries, in
 // the units the falsifier measures, whatever the room's event mix. The
 // byte budgets bind only for rooms of very large events (at ordinary
-// message sizes the row budget stops the scan first); a scan always
-// examines at least one row per call when its range is non-empty, so
-// continuation can never stall on a single oversized event.
+// message sizes the row budget stops the scan first).
+//
+// Round 3 (Codex's Worker admission falsifier, room seq 25331): the
+// round-2 stepper fetched a whole batch's bodies and only then counted
+// them, so the byte budget bound AFTER transfer — 3 legal escaped
+// events totalling 1,179,969B crossed into JS before the count stopped
+// the scan, a single >1MiB imported event crossed whole (1,048,684B)
+// under the at-least-one-row rule, and covered replies refetched
+// overlapping batches after the candidate break (1,625 payload rows
+// fetched for 256 reported examined). The scans now ADMIT before they
+// fetch: a scalar prefix pass reads only (sequence, stored octet
+// length) for the next window and admits the longest prefix that fits
+// the remaining row and byte budgets; only admitted bodies are fetched
+// (one contiguous range), and every fetched row is examined and
+// charged — fetched and examined are the same rows again. A row that
+// would cross the remaining byte budget stops the scan before its body
+// moves (exhausted, scannedThrough at the last admitted row; the next
+// read admits it under a fresh budget, so progress never stalls). A
+// single event whose stored size exceeds the WHOLE byte budget can
+// never be admitted by any read: when the walk reaches it, the scan
+// refuses with a typed 503 storage_unavailable before its payload
+// crosses and before the cursor passes it.
 export const REPLY_SCAN_ROW_BUDGET = 256;
 export const MENTION_SCAN_ROW_BUDGET = 512;
 export const REPLY_SCAN_BYTE_BUDGET = 1_048_576;
 export const MENTION_SCAN_BYTE_BUDGET = 1_048_576;
 const REPLY_SCAN_BATCH = 64;
 const MENTION_SCAN_BATCH = 128;
+
+// Scalar prefix admission for one stepping window (round 3, above).
+// Reads only (sequence, octet length) scalars for up to `want` events
+// after `cursor`, admits the longest prefix fitting the scan's
+// remaining byte budget, fetches exactly those bodies as one contiguous
+// range, and charges scan.scannedRows / scan.scannedBytes for exactly
+// the rows returned — the rows that crossed into JS are the rows the
+// report counts. Returns { rows, rangeEnd, budgetStop }: rangeEnd when
+// the window reached the end of (cursor, through] with every fetched
+// row admitted; budgetStop when the next row would cross the remaining
+// byte budget and was left unfetched. Throws the typed 503 when the
+// next row to examine exceeds the whole byte budget (see above).
+function admittedEvents(store, roomId, cursor, through, want, scan, byteBudget) {
+  const scalars = store.db.prepare(
+    `SELECT sequence, length(CAST(body AS BLOB)) AS octets FROM events
+     WHERE room_id=? AND sequence>? AND sequence<=?
+     ORDER BY sequence ASC LIMIT ?`
+  ).all(roomId, cursor, through, want);
+  if (!scalars.length) return { rows: [], rangeEnd: true, budgetStop: false };
+  let admitted = 0;
+  let budgetStop = false;
+  for (const scalar of scalars) {
+    if (scalar.octets > byteBudget) {
+      fail(503, "storage_unavailable",
+        `Event at sequence ${scalar.sequence} in room ${roomId} is larger than the attention scan byte budget; refusing before its payload is fetched`);
+    }
+    if (scan.scannedBytes + scalar.octets > byteBudget) { budgetStop = true; break; }
+    scan.scannedBytes += scalar.octets;
+    admitted += 1;
+  }
+  if (!admitted) return { rows: [], rangeEnd: false, budgetStop: true };
+  const rows = store.db.prepare(
+    `SELECT id, sequence, body FROM events
+     WHERE room_id=? AND sequence>? AND sequence<=?
+     ORDER BY sequence ASC`
+  ).all(roomId, cursor, scalars[admitted - 1].sequence);
+  scan.scannedRows += rows.length;
+  return { rows, rangeEnd: !budgetStop && scalars.length < want, budgetStop };
+}
 
 const fail = (status, code, message) => { throw new ServiceError(status, code, message); };
 
@@ -300,18 +358,23 @@ function repliesOf(store, roomId, memberId, after, through, state) {
       break;
     }
     const want = Math.min(REPLY_SCAN_BATCH, REPLY_SCAN_ROW_BUDGET - scan.scannedRows);
-    const rows = store.db.prepare(
-      `SELECT id, sequence, body FROM events
-       WHERE room_id=? AND sequence>? AND sequence<=?
-       ORDER BY sequence ASC LIMIT ?`
-    ).all(roomId, cursor, through, want);
-    if (!rows.length) break;
+    // Round 3: admission precedes the payload fetch, and every fetched
+    // row is examined below — the round-2 loop stopped examining a
+    // fetched batch at the candidate break and then refetched the
+    // unexamined tail under the next batch, so covered replies paid
+    // the transfer again on every pass (1,625 payload rows fetched for
+    // 256 reported examined, Codex seq 25331). Candidates are now
+    // collected across the whole admitted batch; the kind cap binds
+    // what is KEPT (the caller's overflow clamp owns the horizon), not
+    // what is examined.
+    const batch = admittedEvents(store, roomId, cursor, through, want, scan, REPLY_SCAN_BYTE_BUDGET);
+    if (!batch.rows.length) {
+      if (batch.budgetStop) scan.exhausted = scan.scannedThrough < through;
+      break;
+    }
     const parsed = [];
-    let stoppedEarly = false;
-    for (const row of rows) {
+    for (const row of batch.rows) {
       cursor = row.sequence;
-      scan.scannedRows += 1;
-      scan.scannedBytes += Buffer.byteLength(row.body);
       scan.scannedThrough = row.sequence;
       let event = null;
       try { event = JSON.parse(row.body); } catch { event = null; }
@@ -320,13 +383,6 @@ function repliesOf(store, roomId, memberId, after, through, state) {
         && !event.data.toMemberId && parentIsMine(event.data.replyToId)) {
         parsed.push({ row, event });
       }
-      // Enough candidates to fill the kind: stop examining here. The
-      // rows past the cursor in this batch were fetched, not examined;
-      // they stay unscanned and a later read re-fetches from the cursor.
-      if (parsed.length > MAX_PER_KIND) { stoppedEarly = true; break; }
-      // The byte budget is a per-examined-row boundary: the row that
-      // crosses it is examined and counted, then the scan stops.
-      if (scan.scannedBytes >= REPLY_SCAN_BYTE_BUDGET) { stoppedEarly = true; break; }
     }
     const covered = coveredByMention(parsed.map(({ row }) => row.id));
     for (const { row, event } of parsed) {
@@ -349,10 +405,8 @@ function repliesOf(store, roomId, memberId, after, through, state) {
       });
       if (items.length > MAX_PER_KIND) break;
     }
-    // A short batch means the range end was reached only when the loop
-    // examined every fetched row; an early stop leaves unscanned rows
-    // in the batch, so fall through to the budget check instead.
-    if (!stoppedEarly && rows.length < want) break;
+    if (batch.budgetStop) { scan.exhausted = scan.scannedThrough < through; break; }
+    if (batch.rangeEnd) break;
   }
   items.sort((a, b) => a.seq - b.seq);
   return scan;
@@ -575,11 +629,6 @@ function mentionHorizon(store, roomId, memberId, after, through) {
       "SELECT name FROM sqlite_master WHERE type='table' AND name IN ('mention_states','mention_observations')"
     ).all();
     if (mentionTables.length < 2) return scan;
-    const stepStmt = store.db.prepare(
-      `SELECT id, sequence, body FROM events
-       WHERE room_id=? AND sequence>? AND sequence<=?
-       ORDER BY sequence ASC LIMIT ?`
-    );
     const mentionStmt = store.db.prepare(
       `SELECT m.state AS state, m.timeout_at AS timeoutAt,
               o.acknowledged_at AS acknowledgedAt, o.late_acknowledged_at AS lateAcknowledgedAt
@@ -625,30 +674,37 @@ function mentionHorizon(store, roomId, memberId, after, through) {
         return scan;
       }
       const want = Math.min(MENTION_SCAN_BATCH, MENTION_SCAN_ROW_BUDGET - scan.scannedRows);
-      const batch = stepStmt.all(roomId, cursor, through, want);
-      if (!batch.length) { scan.horizon = through; return scan; }
+      // Round 3: the same scalar prefix admission as the reply scan —
+      // a batch's bodies are fetched only after the batch is admitted
+      // under the remaining budgets, and every fetched row is stepped
+      // and charged below.
+      const batch = admittedEvents(store, roomId, cursor, through, want, scan, MENTION_SCAN_BYTE_BUDGET);
+      if (!batch.rows.length) {
+        if (batch.budgetStop) {
+          scan.exhausted = cursor < through;
+          scan.horizon = scan.exhausted ? cursor : through;
+        } else {
+          scan.horizon = through;
+        }
+        return scan;
+      }
       let decided = false;
-      let stoppedEarly = false;
-      for (const row of batch) {
+      for (const row of batch.rows) {
         cursor = row.sequence;
-        scan.scannedRows += 1;
-        scan.scannedBytes += Buffer.byteLength(row.body);
         const mention = mentionStmt.get(roomId, row.id, memberId);
         if (mention && eligible(row, mention)) {
           eligibleCount += 1;
           if (eligibleCount === MENTION_WINDOW) windowEnd = row.sequence;
           if (eligibleCount > MENTION_WINDOW) { scan.horizon = windowEnd; decided = true; break; }
         }
-        // The byte budget is a per-examined-row boundary: the row that
-        // crosses it is examined and counted, then the scan stops.
-        if (scan.scannedBytes >= MENTION_SCAN_BYTE_BUDGET) { stoppedEarly = true; break; }
       }
       if (decided) return scan;
-      // A short batch means the range end was reached only when the
-      // loop examined every fetched row; an early stop leaves
-      // unscanned rows in the batch, so fall through to the budget
-      // check instead of claiming the range end.
-      if (!stoppedEarly && batch.length < want) { scan.horizon = through; return scan; }
+      if (batch.budgetStop) {
+        scan.exhausted = cursor < through;
+        scan.horizon = scan.exhausted ? cursor : through;
+        return scan;
+      }
+      if (batch.rangeEnd) { scan.horizon = through; return scan; }
     }
   } catch (error) {
     if (/no such table/i.test(error?.message ?? "")) return { ...scan, horizon: through, exhausted: false };
@@ -661,19 +717,34 @@ function mentionHorizon(store, roomId, memberId, after, through) {
 // the same horizon and retired-mark rules, restricted to seq > after in one
 // room. Items keep the collectNeedsMe shape ({ kind, roomId, seq, id,
 // summary, next }); the digest strips `next` when it composes its rows.
-export function roomAttention(store, roomId, memberId, identityId, after) {
+//
+// The slice also reports its attention coverage (round 3, Codex seq
+// 25334): when a bounded scan stopped at its budget, the window was
+// clamped to scanned ground internally, and a caller composing a
+// catch-up read (the digest) used to advertise the room head as its
+// cursor with an attention total of 0 — a visible reply beyond the
+// clamp vanished with no marker. attentionThrough is the sequence the
+// attention scans actually evaluated through (before the per-kind
+// overflow clamps, which cap what is LISTED, not what was scanned),
+// and attentionComplete is false exactly when a scan's budget stopped
+// it short of the window's end. The digest propagates both; the scans
+// themselves stay bounded — no full-history scan is restored.
+export function roomAttentionSlice(store, roomId, memberId, identityId, after) {
   const authority = store.roomAuthority(roomId);
   const member = authority.members?.[memberId];
-  if (!member || member.active === false) return [];
-  if (!(authority.sequence > after)) return [];
+  if (!member || member.active === false) return { items: [], attentionThrough: after, attentionComplete: true };
+  if (!(authority.sequence > after)) return { items: [], attentionThrough: after, attentionComplete: true };
   const state = store.room(roomId).state;
   const floor = store.historyFloor(roomId, memberId, authority.sequence);
   const messageAfter = Math.max(after, floor ? floor.sequence - 1 : 0);
-  let through = mentionHorizon(store, roomId, memberId, messageAfter, sessionWatermark(after, authority.sequence)).horizon;
+  const horizonScan = mentionHorizon(store, roomId, memberId, messageAfter, sessionWatermark(after, authority.sequence));
+  let through = horizonScan.horizon;
   // A budget-exhausted reply scan clamps the window to scanned ground,
   // the same rule the per-kind overflow clamp below applies.
   const replyScan = repliesOf(store, roomId, memberId, messageAfter, through, state);
   if (replyScan.exhausted) through = Math.min(through, replyScan.scannedThrough);
+  const attentionThrough = through;
+  const attentionComplete = !horizonScan.exhausted && !replyScan.exhausted;
   const pendingBonds = identityId ? store.bonds.pendingProposalsFor(identityId) : [];
   const kinds = [
     mentionsOf(store, roomId, memberId, messageAfter, through),
@@ -690,9 +761,14 @@ export function roomAttention(store, roomId, memberId, identityId, after) {
     for (const item of kind) push(candidates, item);
   }
   const retired = retiredNeedsMeKeys(store, roomId, memberId);
-  return candidates
+  const items = candidates
     .filter(item => item.seq <= through && !retired.has(`${item.kind}:${item.id}`))
     .sort((a, b) => a.seq - b.seq);
+  return { items, attentionThrough, attentionComplete };
+}
+
+export function roomAttention(store, roomId, memberId, identityId, after) {
+  return roomAttentionSlice(store, roomId, memberId, identityId, after).items;
 }
 
 // One read of the claim board, shared by a room's work sections. Each used

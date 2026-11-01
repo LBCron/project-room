@@ -1,3 +1,4 @@
+import {advanceCanonicalH} from './replay-canonical-h.mjs';
 import {stageCurrentCandidateRecords,currentCandidateCommandContext,applyCurrentCandidateEvent,publishCurrentCandidate,readCurrentRecord,admitCurrentCandidateBudget} from './current-room-repository.mjs';
 import {applyEvent,memberHistoryVisibility} from '../src/events.js';
 import {messageRowForWrite} from './messages-store.mjs';
@@ -631,6 +632,16 @@ export function readReplayHMessage(store,input) {
 }
 function replayReadBudget(){const error=Error('replay H-page byte budget exhausted');error.code='replay_read_budget';return error;}
 function hReadControlBytes(db,header){return schemaContract(db).bindingBytes+header.inputBytes+header.captureReceiptInputBytes+8192;}
+function nextHCanonicalKey(db,header,kind,after){
+  const {roomId,generation}=header.value,candidates=[];
+  const table=kind==='message'?'messages':'work_entities',column=kind==='message'?'message_id':'work_id';
+  const current=db.prepare(`SELECT ${column} AS key FROM ${table} WHERE room_id=? AND ${column}>? COLLATE BINARY ORDER BY ${column} LIMIT 1`).get(roomId,after);
+  if(current)candidates.push(current.key);
+  for(const domain of ['h-'+kind,'h-'+kind+'-absent']){const row=db.prepare('SELECT unit_key AS key FROM message_replay_units WHERE room_id=? AND generation=? AND domain=? AND unit_key>? COLLATE BINARY ORDER BY unit_key LIMIT 1').get(roomId,generation,domain,after);if(row)candidates.push(row.key);}
+  if(!candidates.length)return null;
+  if(candidates.some(key=>typeof key!=='string'||Buffer.byteLength(key)<1||Buffer.byteLength(key)>200))throw Error('H canonical identity admission required');
+  return candidates.sort((a,b)=>Buffer.compare(Buffer.from(a),Buffer.from(b)))[0];
+}
 function readHMessageSource(db,header,messageId,budget){
   const {roomId,generation}=header.value;
   const maximumPayloadBytes=Math.min(131072,262144-budget.bytes-8192);
@@ -1115,6 +1126,7 @@ export function qualifyReplayHWork(store,input){
         ||typeof address[1]!=='string'||Buffer.byteLength(address[1])>200)throw Error('work qualification identity changed');
       let item=readWitnessLeafSource(db,header,'metadata-entry',next.key,budget).value;
       if(item?._workEntity===1){
+        state={...state,hHasWorkReferences:true};
         if(Object.keys(item).length!==4||item.id!==address[1]||!digest(item.digest)||!Number.isSafeInteger(item.revision)||item.revision<0)
           throw Error('protected H work reference changed');
         const dependency=readHReferenceSource(db,header,'work',address[1],budget);
@@ -1155,7 +1167,6 @@ export function qualifyReplayHMessages(store,input) {
     if(codec.value.headerHash!==header.hash||codecReceipt.bindingHash!==header.hash
       ||codecReceipt.codecStateHash!==hash(codec.value.state)||scan.phase!=='done'||scan.offset!==header.value.bytes)
       throw Error('completed protected codec required for H message qualification');
-    if(scan.keys.includes('messageAuthority'))throw Error('Canonical-authority H content digest qualification is required before conversion');
     const semantic=get(db,input.roomId,input.generation,'semantic'),prior=auditBinding(db,semantic.value.receiptId);
     budget.bytes+=semantic.inputBytes+receiptInputBytes.get(prior)+4096;
     let state=semantic.value.state;
@@ -1165,7 +1176,39 @@ export function qualifyReplayHMessages(store,input) {
     state={hMessageSteps:0,hMessageCursor:'',hMessageCount:0,hCanonicalCursor:'',hCanonicalCount:0,hMessagePhase:'projection',...state};
     if(state.hMessageSteps!==input.expectedSteps)throw Error('H message qualification cursor changed');
     if(state.hMessagesQualified!==true) {
-      if(state.hMessagePhase==='projection') {
+      if(scan.keys.includes('messageAuthority')) {
+        if(scan.keys.includes('messages'))throw Error('Competing canonical H inline messages');
+        const protectedHash=get(db,input.roomId,input.generation,'hash');
+        budget.chunks=new Map();budget.sourceRoot=protectedHash.value.sourceRoot;
+        const archiveInfo=()=>{
+          if(!scan.keys.includes('messagesArchive'))return null;
+          const frame=readWitnessLeafSource(db,header,'metadata','messagesArchive',budget).value;
+          if(frame===null)return null;
+          if(frame?.kind!=='entry-map'||frame.parent!=='messagesArchive'||frame.entries!==3)throw Error('Canonical archive frame changed');
+          const entry=key=>readWitnessLeafSource(db,header,'metadata-entry',JSON.stringify(['messagesArchive',key]),budget).value;
+          const throughSeq=entry('throughSeq'),count=entry('count'),retained=entry('retainedIds');
+          if(!Number.isSafeInteger(throughSeq)||throughSeq<0||throughSeq>header.value.head||!Number.isSafeInteger(count)||count<0
+            ||retained?.kind!=='entry-array'||retained.parent!=='messagesArchive'||retained.member!=='retainedIds'||!Number.isSafeInteger(retained.entries)||retained.entries<0)throw Error('Canonical archive scalar binding invalid');
+          return {throughSeq,count,retainedCount:retained.entries};
+        };
+        let archiveHead=state.hArchiveHead;
+        const archiveAdmission=()=>{if(!budget.receipts){budget.records=0;budget.receipts=new Map();admitCurrentCandidateBudget(db,budget);}};
+        const hasRetained=key=>{archiveAdmission();return readCurrentRecord(db,input.roomId,'archiveRetained',key,budget)!==undefined;};
+        state=advanceCanonicalH({state:{...state,hCanonicalAuthority:true},header:header.value,
+          archiveInfo,hasRetained,
+          readRetained:index=>readWitnessLeafSource(db,header,'metadata-index',JSON.stringify(['messagesArchive','retainedIds',index]),budget).value,
+          stageRetained:(key,index)=>{
+            const previous=archiveHead??auditBinding(db,header.value.captureReceiptId).targetHead;
+            archiveHead=stageCurrentCandidateRecords(store,{head:previous,changes:[{domain:'archiveRetained',key,value:index}],counts:previous.counts,inputBudget:budget});
+          },
+          readMetadata:key=>readWitnessLeafSource(db,header,'metadata',key,budget).value,
+          readRange:(offset,length)=>readSourceRange(db,header,offset,length,budget),
+          nextMessage:after=>nextHCanonicalKey(db,header,'message',after),
+          readMessage:key=>readHMessageSource(db,header,key,budget),
+          nextWork:after=>nextHCanonicalKey(db,header,'work',after),
+          readWork:key=>readHReferenceSource(db,header,'work',key,budget)});
+        if(archiveHead)state={...state,hArchiveHead:archiveHead};
+      } else if(state.hMessagePhase==='projection') {
         const next=db.prepare("SELECT unit_key AS key FROM message_replay_units WHERE room_id=? AND generation=? AND domain='message' AND unit_key>? ORDER BY unit_key LIMIT 1")
           .get(input.roomId,input.generation,state.hMessageCursor);
         if(next) {
@@ -1270,7 +1313,7 @@ export function advanceCurrentRoomConversion(store,input) {
     const codec=get(db,input.roomId,input.generation,'codec'),codecReceipt=auditBinding(db,codec.value.receiptId);budget.bytes+=codec.inputBytes+receiptInputBytes.get(codecReceipt);
     const scan=JSON.parse(codec.value.state);
     if(codecReceipt.codecStateHash!==hash(codec.value.state)||state.codecStateHash!==hash(codec.value.state)||scan.phase!=='done')throw Error('Current conversion codec binding differs');
-    state={currentSteps:0,currentPhase:'metadata',metadataIndex:0,metadataEntry:'',participantCursor:'',candidateHead:auditBinding(db,header.value.captureReceiptId).targetHead,tailSequence:header.value.head,tailEventId:header.value.eventId,...state};
+    state={currentSteps:0,currentPhase:'metadata',metadataIndex:0,metadataEntry:'',participantCursor:'',candidateHead:state.hArchiveHead??auditBinding(db,header.value.captureReceiptId).targetHead,tailSequence:header.value.head,tailEventId:header.value.eventId,...state};
     if(state.currentSteps!==input.expectedSteps)throw Error('Current conversion cursor changed');
     const effects=[];
     const counts=state.candidateHead?{...state.candidateHead.counts,...(state.currentSteps===0?{messages:state.hMessageCount}:{})}:{roomId:input.roomId,sequence:header.value.head,eventId:header.value.eventId,messages:state.hMessageCount,
@@ -1283,7 +1326,11 @@ export function advanceCurrentRoomConversion(store,input) {
       if(key===undefined)state={...state,currentPhase:'participants'};
       else if(omitted.has(key))state={...state,metadataIndex:state.metadataIndex+1};
       else {
-        if(key==='messagesArchive')throw Error('Existing archived room needs qualified nested retained-ID target conversion');
+        if(key==='messagesArchive'){
+          const archive=state.canonicalH?.archive;
+          if(!state.hCanonicalAuthority)throw Error('Existing archived room needs qualified nested retained-ID target conversion');
+          stage([{domain:'metadata',key,value:archive?{version:1,...archive}:null}]);state={...state,metadataIndex:state.metadataIndex+1};
+        }else{
         const source=readWitnessLeafSource(db,header,'metadata',key,budget).value;
         const partitioned=source?.kind==='entry-map'&&source.parent===key;
         const map=partitioned||maps.has(key)&&source!==null&&typeof source==='object'&&!Array.isArray(source);
@@ -1323,15 +1370,20 @@ export function advanceCurrentRoomConversion(store,input) {
           }
         } else {stage([{domain:'metadata',key,value:source}]);state={...state,metadataIndex:state.metadataIndex+1};}
       }
+    }
     } else if(state.currentPhase==='participants') {
-      const next=db.prepare("SELECT unit_key AS key FROM message_replay_units WHERE room_id=? AND generation=? AND domain='message' AND unit_key>? ORDER BY unit_key LIMIT 1").get(input.roomId,input.generation,state.participantCursor);
+      const canonicalKey=state.hCanonicalAuthority?nextHCanonicalKey(db,header,'message',state.participantCursor):null;
+      const next=state.hCanonicalAuthority?(canonicalKey===null?null:{key:canonicalKey}):db.prepare("SELECT unit_key AS key FROM message_replay_units WHERE room_id=? AND generation=? AND domain='message' AND unit_key>? ORDER BY unit_key LIMIT 1").get(input.roomId,input.generation,state.participantCursor);
       if(next) {
-        const row=readHMessageSource(db,header,next.key,budget).row,rootId=row.thread_root_id??row.message_id,key=rootId+'\0'+row.author_id;
+        const source=readHMessageSource(db,header,next.key,budget);
+        if(source.absent){state={...state,participantCursor:next.key};}else{
+        const row=source.row,rootId=row.thread_root_id??row.message_id,key=rootId+'\0'+row.author_id;
         const previous=readCurrentRecord(db,input.roomId,'threadParticipants',key,budget);
         const changes=[{domain:'messageWitness',key:next.key,value:{sequence:row.seq,entityHash:row.entity_hash}}];
-        if(previous===undefined)changes.push({domain:'threadParticipants',key,value:{threadRootId:rootId,memberId:row.author_id}});
-        stage(changes,{...counts,threadParticipants:counts.threadParticipants+(previous===undefined?1:0)});
-        state={...state,participantCursor:next.key};
+        const retained=!state.canonicalH?.archive||row.seq>state.canonicalH.archive.throughSeq||readCurrentRecord(db,input.roomId,'archiveRetained',next.key,budget)!==undefined;
+        if(retained&&previous===undefined)changes.push({domain:'threadParticipants',key,value:{threadRootId:rootId,memberId:row.author_id}});
+        stage(changes,{...counts,threadParticipants:counts.threadParticipants+(retained&&previous===undefined?1:0)});
+        state={...state,participantCursor:next.key};}
       } else state={...state,currentPhase:'tail'};
     } else if(state.currentPhase==='tail') {
       const sourceHead=db.prepare('SELECT sequence FROM rooms WHERE id=?').get(input.roomId)?.sequence;

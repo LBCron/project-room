@@ -1,4 +1,5 @@
 import {currentWorkSummary} from './current-work-summary.mjs';
+import {archiveRetains,recoverArchiveMarker} from './current-room-archive.mjs';
 import {messageRowForWrite} from './messages-store.mjs';
 import {messageProofHash} from './write-integrity.mjs';
 import { RESTORE_CONTROL_DEFINITIONS, RESTORE_CONTROL_GUARDS, RESTORE_CONTROL_SCHEMA, inRestoreContext, withExactRestoreGuards } from './restore-admission.mjs';
@@ -538,7 +539,7 @@ export function readCurrentRoomForAudit(store,roomId) {
   const db=store.db;
   if(!db.isTransaction)throw Error('Current room census requires a consistent recovery transaction');
   const head=readCurrentHead(db,roomId);if(!head)return null;
-  const state=emptyRoomState(),refs=new Map(),participants=new Map(),floors=new Map(),exclusions=new Map(),messageWitnesses=new Map(),workSummaries=new Map();let proofs=0,records=0;
+  const state=emptyRoomState(),refs=new Map(),participants=new Map(),floors=new Map(),exclusions=new Map(),messageWitnesses=new Map(),workSummaries=new Map(),archiveRetained=new Map(),canonicalMessages=[];let proofs=0,records=0;
   const auditReceipts=new Map();
   const unitBudget=()=>({...budget(),schemaVerified:true,auditReceipts});
   for(const scalar of db.prepare(`SELECT rowid,length(CAST(domain AS BLOB)) AS domain_bytes,
@@ -558,6 +559,7 @@ export function readCurrentRoomForAudit(store,roomId) {
       else Object.defineProperty(state[proof.domain]??={},key,{value,enumerable:true,writable:true,configurable:true});
     } else if(proof.domain==='workSummary')workSummaries.set(key,value);
     else if(proof.domain==='messageWitness')messageWitnesses.set(key,value);
+    else if(proof.domain==='archiveRetained')archiveRetained.set(key,value);
     else if(proof.domain==='threadParticipants')participants.set(key,value);
     else if(proof.domain==='historyFloors')floors.set(key,value);
     else if(proof.domain==='historyExclusions')exclusions.set(key,value);
@@ -577,14 +579,18 @@ export function readCurrentRoomForAudit(store,roomId) {
   for(const scalar of db.prepare('SELECT rowid,length(CAST(message_id AS BLOB)) AS bytes FROM messages WHERE room_id=? ORDER BY seq,message_id').iterate(roomId)) {
     if(scalar.bytes<1||scalar.bytes>200)corrupt('invalid recovered message identity');
     const {message_id:id}=db.prepare('SELECT message_id FROM messages WHERE rowid=?').get(scalar.rowid);
-    state.messages.push(readCurrentMessage(db,roomId,id,unitBudget()).value);
+    const source=readCurrentMessage(db,roomId,id,unitBudget());canonicalMessages.push(source.value);
+    if(archiveRetains(state.messagesArchive,source.row.seq,archiveRetained.get(id)))state.messages.push(source.value);
   }
-  if(messageWitnesses.size!==head.counts.messages||state.messages.length!==head.counts.messages||Object.keys(state.workItems).length!==head.counts.workItems
+  if(messageWitnesses.size!==head.counts.messages||canonicalMessages.length!==head.counts.messages||state.messages.length+(state.messagesArchive?.count??0)!==head.counts.messages||Object.keys(state.workItems).length!==head.counts.workItems
     ||Object.keys(state.members).length!==head.counts.members||Object.keys(state.replyRequests??{}).length!==head.counts.replyRequests)
     corrupt('complete domain census differs');
+  if(state.messagesArchive)state.messagesArchive=recoverArchiveMarker(state.messagesArchive,archiveRetained);
+  else if(archiveRetained.size)corrupt('orphan archive retained membership');
   const expected=new Map(),roots=new Map();
+  for(const message of canonicalMessages){const root=message.replyToId?roots.get(message.replyToId):message.id;if(!root)corrupt('recovered canonical reply ancestry incomplete');roots.set(message.id,root);}
   for(const message of state.messages) {
-    const root=message.replyToId?roots.get(message.replyToId):message.id;
+    const root=roots.get(message.id);
     if(!root)corrupt('recovered reply ancestry incomplete');roots.set(message.id,root);
     expected.set(root+'\0'+message.authorId,{threadRootId:root,memberId:message.authorId});
   }

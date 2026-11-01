@@ -165,3 +165,20 @@ test('message persistence failure rolls back work-ref post count, events, receip
   store.db.exec('DROP TRIGGER refuse_agent_post');
   assert.equal(store.command(token, 'commons', command()).duplicate, false);
 });
+
+test('work size admission storage failure rolls back and an exact retry commits once', t => {
+  const { store, token } = fixture(t);
+  const before = store.db.prepare("SELECT sequence,projection FROM rooms WHERE id='commons'").get();
+  const prepare = store.db.prepare;
+  store.db.prepare = function(sql) {
+    if (sql.includes('AS id_bytes')) throw Object.assign(Error('injected work admission EIO'), { code: 'EIO' });
+    return prepare.call(this, sql);
+  };
+  try { assert.throws(() => store.command(token, 'commons', command()), error => error.message === 'Storage is unavailable; no success is claimed' && error.cause?.code === 'EIO'); }
+  finally { store.db.prepare = prepare; }
+  assert.deepEqual(store.db.prepare("SELECT sequence,projection FROM rooms WHERE id='commons'").get(), before);
+  assert.equal(store.db.prepare("SELECT count(*) AS n FROM commands WHERE id='command-update'").get().n, 0);
+  assert.equal(store.command(token, 'commons', command()).duplicate, false);
+  assert.equal(store.command(token, 'commons', command()).duplicate, true);
+  assert.equal(store.headSequence('commons'), before.sequence + 1);
+});

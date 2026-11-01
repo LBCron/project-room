@@ -105,7 +105,7 @@ test("online capture preserves all application tables, identity boundaries and e
       continue;
     }
     if (table.table === "integrity_room_state") {
-      assert.equal(table.rows, 0, "per-room integrity state is written by the cron, not on open");
+      assert.equal(table.rows, before.rooms, "room creation seeds scoped proof; the cron later advances it");
       continue;
     }
     if (table.table === "guest_link_exchanges") {

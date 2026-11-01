@@ -506,6 +506,7 @@ const client = new RoomClient({
   onSnapshot(snapshot, identity) {
     snapshotAuditView = snapshot.auditView ?? "full";
     const firstSnapshot = !state;
+    const priorWorkDetailsOpen = activeWorkNavigationId ? workRecord(activeWorkNavigationId)?.querySelector(".work-details")?.open : false;
     const presenceBoundary = firstSnapshot || state.room?.id !== snapshot.state.room?.id || roomGeneration !== client.generation;
     if (presenceBoundary) { selectedMessage.clear(); directDirectory.clear(); }
     if (presenceBoundary) { recordLoading = null; recordLoadFailed = false; }
@@ -594,6 +595,7 @@ const client = new RoomClient({
     }
     if (!briefView.owns(briefView.chain)) loadReturnBrief();
     if (firstSnapshot) revealLocationHash();
+    else if (partialWorkSnapshot && !presenceBoundary && activeWorkNavigationId) void revealWork(activeWorkNavigationId, Boolean(priorWorkDetailsOpen));
     retryPendingHashReveal();
     resumeConfirmedWorkNavigation();
   },
@@ -3399,7 +3401,8 @@ async function readSelectedWorkRecord(id, expandDetails) {
     const item = selected?.work;
     if (!selected || !client.ownsResponse(selected, identity) || selected.roomId !== identity.roomId
       || selected.viewerId !== identity.member.id || item?.id !== id || typeof item.title !== "string"
-      || typeof item.definitionOfDone !== "string" || !Number.isSafeInteger(item.revision) || item.revision < 0) {
+      || typeof item.definitionOfDone !== "string" || !Number.isSafeInteger(item.revision) || item.revision < 0
+      || Number.isSafeInteger(held.workItems[id]?.revision) && item.revision < held.workItems[id].revision) {
       notice(SOURCE_UNAVAILABLE_NOTICE, true); return null;
     }
     // Mount only this independently selected current record. The room's
@@ -3686,6 +3689,12 @@ $("#work-navigation-return").addEventListener("click", () => {
 });
 // JDOT-COH-NAV end
 function revealDrafts(id) {
+  if (partialWorkSnapshot && inspectedWorkRecord !== state?.workItems?.[id]) {
+    const epoch = workNavigationEpoch, url = location.href;
+    return Promise.resolve(readSelectedWorkRecord(id, false)).then(card => {
+      if (card && epoch === workNavigationEpoch && url === location.href) return revealDrafts(id);
+    });
+  }
   const card = revealWorkTimeline(id);
   if (!card) return;
   const choices = card.querySelector('.work-drafts');
@@ -4063,7 +4072,7 @@ function timelineWorkEntries(onlyId) {
       const mostRecent = proposals[0];
       return { item, channelId: mostRecent ? messageChannelId(mostRecent) : DEFAULT_CHANNEL_ID,
         ts: Date.parse(item.updatedAt) || 0, html: partialWorkSnapshot && item !== inspectedWorkRecord
-          ? `<article class="work-card" data-work-summary-id="${esc(item.id)}"><h3>${esc(item.title)}</h3><a class="source-link" href="${esc(workHref(item.id))}" data-open-work="${esc(item.id)}">Open details</a></article>`
+          ? `<article class="work-card" data-work-summary-id="${esc(item.id)}"><h3><a class="source-link" href="${esc(workHref(item.id))}" data-open-work="${esc(item.id)}">${esc(item.title)}</a></h3></article>`
           : workCard(item, now, proposals, state.messages) };
     })
     .sort((a, b) => a.ts - b.ts);

@@ -8,6 +8,7 @@ test('real room-cookie browser session reads normalized selected native work abs
  client.session={...created.session,authMode:'room',csrf:null};await client.refresh();
  assert.equal(seen[0].snapshotVersion,2);assert.equal(Object.hasOwn(seen[0].state.workItems,'task-8'),false);
  const read=await client.workContext('task-8');assert.equal(read.work.definitionOfDone,'Exact definition 8');assert.equal(read.viewerId,'owner');assert.notEqual(client.session,null);client.disconnect();
+
 });
 const source=readFileSync(new URL('../src/app.js',import.meta.url),'utf8');
 function harness({held={}}={}){
@@ -20,4 +21,41 @@ test('normalized missing native id reads and mounts the selected record instead 
 });
 test('normalized held thin summary also needs full selected details before rendering',async()=>{
  const h=harness({held:{late:{id:'late',title:'Summary',revision:1}}});await h.reveal('late',true);assert.equal(h.calls[0][0],'read');assert.equal(h.state.workItems.late.definitionOfDone,'Complete selected definition');
+});
+test('late selected work never mounts after navigation, snapshot replacement, or session replacement',async()=>{
+ for(const change of [h=>h.workNavigationEpoch++,h=>h.state={...h.state},h=>h.session={...h.session},h=>h.location.href+='-elsewhere',h=>h.client.generation++]){
+  const h=harness();let resolve;h.client.workContext=()=>new Promise(done=>resolve=done);const pending=h.reveal('late',true);change(h);
+  resolve({roomId:'commons',viewerId:'owner',work:{id:'late',title:'Late private work',definitionOfDone:'Must not mount',revision:1}});await pending;
+  assert.equal(h.state.workItems.late,undefined);assert.equal(h.calls.some(([kind])=>kind==='mount'||kind==='notice'),false);
+ }
+});
+test('mismatched and unavailable selected responses preserve summaries without a legacy fallback',async()=>{
+ for(const value of [null,{roomId:'elsewhere',viewerId:'owner',work:{id:'late',title:'Wrong',definitionOfDone:'No',revision:1}},{roomId:'commons',viewerId:'intruder',work:{id:'late',title:'Wrong',definitionOfDone:'No',revision:1}},{roomId:'commons',viewerId:'owner',work:{id:'other',title:'Wrong',definitionOfDone:'No',revision:1}},{roomId:'commons',viewerId:'owner',work:{id:'late',title:'Thin',revision:1}}]){
+  const h=harness({held:{late:{id:'late',title:'Held summary',revision:1}}});h.client.workContext=async()=>value;await h.reveal('late',true);
+  assert.equal(h.state.workItems.late.title,'Held summary');assert.equal(h.calls.some(([kind])=>kind==='mount'||kind==='legacy-board'),false);assert.equal(h.calls.at(-1)[0],'notice');
+ }
+});
+test('a selected response older than the already held summary cannot replace it',async()=>{
+ const h=harness({held:{late:{id:'late',title:'Revision2 summary',revision:2}}});await h.reveal('late',true);assert.equal(h.state.workItems.late.revision,2);assert.equal(h.calls.some(([kind])=>kind==='mount'),false);
+});
+test('legacy missing records still use the existing board fallback',async()=>{
+ const h=harness();h.partialWorkSnapshot=false;await h.reveal('legacy-claim');assert.deepEqual(h.calls.map(x=>Array.from(x)),[['legacy-board','legacy-claim']]);
+});
+test('partial timeline renders a summary link until the full selected record is mounted',async()=>{
+ const h=harness({held:{late:{id:'late',title:'Summary',revision:1}}});Object.assign(h,{DEFAULT_CHANNEL_ID:'general',esc:String,workHref:id=>'#work-'+id,messageChannelId:()=> 'general',workCard:item=>{assert.equal(typeof item.definitionOfDone,'string');return 'FULL:'+item.definitionOfDone;}});h.state.messages=[];
+ const start=source.indexOf('function timelineWorkEntries(onlyId)'),end=source.indexOf('function makeTimelineWorkNode',start);vm.runInContext(source.slice(start,end)+'this.timeline=timelineWorkEntries;',h);
+ assert.match(h.timeline('late')[0].html,/data-open-work="late"/);assert.doesNotMatch(h.timeline('late')[0].html,/FULL:/);
+ await h.reveal('late',true);assert.equal(h.timeline('late')[0].html,'FULL:Complete selected definition');
+});
+test('selected work preserves account-session ownership refusal before any request',async()=>{
+ let requests=0,ended=0;const client=new RoomClient({fetcher:async()=>{requests++;throw Error('must not request');},onAccessEnded:()=>ended++});client.session={authMode:'account',account:{id:'account-owner',authEpoch:0},member:{id:'owner'},roomId:'commons',sessionBinding:'old-binding'};
+ assert.equal(await client.workContext('task-8'),null);assert.equal(requests,0);assert.equal(ended,1);assert.equal(client.session,null);
+});
+
+test('actual accountless agent join-cookie session reads selected normalized work',async t=>{
+ const store=new RoomStore(':memory:');t.after(()=>store.close());store.initialize([...initialRoom(),event({roomId:'commons',actorId:'owner',type:'member.added',data:{memberId:'joined-agent',displayName:'Joined agent',kind:'agent',permissions:[]}}),event({roomId:'commons',actorId:'owner',type:'work.proposed',data:{workItemId:'joined-task',title:'Useful task',definitionOfDone:'Saved output',accountableMemberId:'owner'}})],{representation:'normalized-current-v1'});
+ const server=createRoomServer({store});await new Promise(resolve=>server.listen(0,'127.0.0.1',resolve));t.after(async()=>{server.closeStreams();server.closeAllConnections();await new Promise(resolve=>server.close(resolve));});
+ const origin=`http://127.0.0.1:${server.address().port}`,joined=store.createJoinSession('commons','joined-agent'),joinedAuth=store.authenticate(joined.token,'commons');assert.equal(joinedAuth.account,null);
+ const client=new RoomClient({fetcher:(path,options)=>fetch(origin+path,{...options,headers:{...options.headers,Cookie:'room_session='+joined.token}})});client.session={...joinedAuth,authMode:'room',csrf:null};
+ assert.equal((await client.workContext('joined-task')).work.definitionOfDone,'Saved output');assert.notEqual(client.session,null);client.disconnect();
 });

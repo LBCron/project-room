@@ -15,3 +15,11 @@ test('durable independent-census cursor rejects unknown protocol, claimed admiss
   {...initial,privacyValue:{version:1,requests:1,parties:{}}}
  ])assert.throws(()=>validateRecoveryCensus(invalid),/reconciliation|corrupt/);
 });
+
+// Import-order regression: recovery must load without initializing Store first.
+import {boardStateForWorkItem,liveClaim} from '../server/work-item-state.mjs';
+import * as board from '../server/work-item-board.mjs';
+test('repository-free work selectors remain the canonical board exports',()=>{
+ assert.equal(board.boardStateForWorkItem,boardStateForWorkItem);
+ assert.equal(board.liveClaim,liveClaim);
+});

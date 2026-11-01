@@ -1,3 +1,4 @@
+import {initialRecoveryCheckpointSeed,validateRecoveryCheckpointSeed,advanceRecoveryCheckpointSeed} from './recovery-checkpoint-seed.mjs';
 import {validateRecoveryHistoryEntry} from './recovery-history-entry.mjs';
 import {savedHistoricalReplayCheckpoint} from './historical-replay-contract.mjs';
 import {applyRecoveryReplayStep} from './recovery-replay-step.mjs';
@@ -5,24 +6,29 @@ import {planRecoveryReplayValue,readRecoveryReplayValue,writeRecoveryReplayValue
 // Transitional independent fold over the frozen original source. Unsupported
 // dependency/basis plans remain explicit and the original FULL oracle remains
 // required for every room, including a room whose addressed fold completes.
-export const initialRecoveryReplay=()=>({version:1,stage:'basis',sequence:0,counts:{members:0,channels:0,workItems:0,replyRequests:0,messages:0},reason:null});
+export const initialRecoveryReplay=()=>({version:2,checkpoint:null,stage:'basis',sequence:0,counts:{members:0,channels:0,workItems:0,replyRequests:0,messages:0,replyRequestsPresent:false},reason:null});
 export function validateRecoveryReplay(cursor){
- if(!cursor||Object.keys(cursor).sort().join(',')!=='counts,reason,sequence,stage,version'||cursor.version!==1||!['basis','events','complete','deferred'].includes(cursor.stage)||!Number.isSafeInteger(cursor.sequence)||cursor.sequence<0||!cursor.counts||Object.keys(cursor.counts).sort().join(',')!=='channels,members,messages,replyRequests,workItems'||Object.values(cursor.counts).some(value=>!Number.isSafeInteger(value)||value<0)||cursor.reason!==null&&(typeof cursor.reason!=='string'||cursor.reason.length>128)||((cursor.stage==='deferred')!==(cursor.reason!==null)))throw Error('Recovery replay cursor requires reconciliation');
+ if(!cursor||Object.keys(cursor).sort().join(',')!=='checkpoint,counts,reason,sequence,stage,version'||cursor.version!==2||!['basis','checkpoint','events','complete','deferred'].includes(cursor.stage)||!Number.isSafeInteger(cursor.sequence)||cursor.sequence<0||!cursor.counts||Object.keys(cursor.counts).sort().join(',')!=='channels,members,messages,replyRequests,replyRequestsPresent,workItems'||!['members','channels','messages','workItems','replyRequests'].every(key=>Number.isSafeInteger(cursor.counts[key])&&cursor.counts[key]>=0)||typeof cursor.counts.replyRequestsPresent!=='boolean'||cursor.reason!==null&&(typeof cursor.reason!=='string'||cursor.reason.length>128)||((cursor.stage==='deferred')!==(cursor.reason!==null)))throw Error('Recovery replay cursor requires reconciliation');
+ if(cursor.checkpoint!==null)validateRecoveryCheckpointSeed(cursor.checkpoint);
+ if(cursor.stage==='checkpoint'&&cursor.checkpoint===null)throw Error('Recovery checkpoint cursor missing');
 }
 export function advanceRecoveryReplay(db,scratch,roomId,previous,seal){
  validateRecoveryReplay(previous);const cursor=structuredClone(previous);let units=0,bytes=0;
  const defer=reason=>{cursor.stage='deferred';cursor.reason=reason;return{cursor,units,bytes,done:true};};
  const events=seal?.tables?.find(table=>table.name==='events'),checkpoint=seal?.tables?.find(table=>table.name==='projection_checkpoints');
  if(!events||!Number.isSafeInteger(events.maxRowBytes)||events.maxRowBytes<0)throw Error('Recovery replay source admission differs');
- const maximumValueBytes=4096+[events,checkpoint].filter(Boolean).reduce((sum,table)=>sum+table.maxRowBytes*table.expected.rows,0);if(!Number.isSafeInteger(maximumValueBytes)||maximumValueBytes<1)throw Error('Recovery replay source budget differs');
+ const maximumValueBytes=4096+9*[events,checkpoint].filter(Boolean).reduce((sum,table)=>sum+table.maxRowBytes*table.expected.rows,0);if(!Number.isSafeInteger(maximumValueBytes)||maximumValueBytes<1)throw Error('Recovery replay source budget differs');
  const head=db.prepare('SELECT sequence FROM rooms WHERE id=?').get(roomId);if(!Number.isSafeInteger(head?.sequence)||head.sequence<0)throw Error('Recovery replay head differs');
  if(cursor.stage==='basis'){
-  if(db.prepare('SELECT sequence FROM projection_checkpoints WHERE room_id=?').get(roomId))return defer('retained_checkpoint_seed_pending');
-  // This existing exact contract admits at most64events/256KiB and independently
-  // checks its immutable receipt. Do not replace its basis with full history.
-  if(savedHistoricalReplayCheckpoint(db,roomId,head.sequence))return defer('saved_historical_checkpoint_seed_pending');
-  cursor.stage='events';
+  const held=db.prepare('SELECT sequence,length(CAST(projection AS BLOB)) bytes FROM projection_checkpoints WHERE room_id=?').get(roomId);
+  if(!held||held.sequence===0){
+   // Existing exact64event/256KiB historical proof takes precedence atzero.
+   if(savedHistoricalReplayCheckpoint(db,roomId,head.sequence))return defer('saved_historical_checkpoint_seed_pending');
+  }
+  if(held){if(!Number.isSafeInteger(held.sequence)||held.sequence<0||held.sequence>head.sequence||!Number.isSafeInteger(held.bytes)||held.bytes<2||held.bytes>(checkpoint?.maxRowBytes??0))throw Error('Recovery checkpoint source admission differs');cursor.checkpoint=initialRecoveryCheckpointSeed(held.sequence,held.bytes);cursor.stage='checkpoint';}
+  else cursor.stage='events';
  }
+ if(cursor.stage==='checkpoint'){const result=advanceRecoveryCheckpointSeed(db,scratch,roomId,cursor.checkpoint,maximumValueBytes);cursor.checkpoint=result.cursor;units=result.units;bytes=result.bytes;if(result.cursor.stage==='deferred')return defer(result.cursor.reason);if(result.cursor.stage==='complete'){cursor.sequence=result.cursor.sequence;cursor.counts=result.cursor.counts;cursor.stage='events';}return{cursor,units:result.units,bytes:result.bytes,done:false};}
  if(['complete','deferred'].includes(cursor.stage))return{cursor,units,bytes,done:true};
  while(units<128){
   const scalar=db.prepare('SELECT rowid,sequence,length(CAST(body AS BLOB)) bytes FROM events WHERE room_id=? AND sequence>? ORDER BY sequence LIMIT 1').get(roomId,cursor.sequence);

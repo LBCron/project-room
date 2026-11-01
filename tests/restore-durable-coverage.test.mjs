@@ -178,3 +178,14 @@ for(const unsupported of [false,true])test('actual operator addressed replay pro
  assert.equal(sawReplay,true);assert.equal(sawAdvanced||unsupported,true);assert.deepEqual(response.body.replayContinuation,{rooms:1,deferred:unsupported?1:0,originalFullOracleRequired:true});assert.equal(response.body.recovery.checks.projectionReplay,true);assert.equal(response.body.verified,true);if(unsupported)assert.equal(sawReason,'event_dependency_plan_incomplete');
  t.diagnostic(JSON.stringify({unsupported,steps,pointFoldDeferred:response.body.replayContinuation.deferred,requiredOriginalOracle:true,wholeRecoveryBounded:false}));
 });
+
+test('actual operator seeds retained checkpoint through original spans and resumes strict tail across cold stores',async t=>{
+ const {emptyRoomState,replayEvents}=await import('../src/events.js'),f=setup(t,70),prefix=19,history=f.source.db.prepare('SELECT body FROM events ORDER BY sequence').all().map(row=>JSON.parse(row.body)),checkpoint=replayEvents(emptyRoomState(),history.slice(0,prefix));
+ f.source.transaction(()=>f.source.db.prepare('INSERT INTO projection_checkpoints(room_id,sequence,projection) VALUES(?,?,?)').run('commons',prefix,JSON.stringify(checkpoint)));auditRecovery(f.source);f.text=exportNdjsonText(f.source.db);
+ let store=new RoomStore(f.filename);t.after(()=>store.close());let response=await post(store,f.text),steps=0,sawSeed=false,sawTail=false;
+ while(response.body.pending){const input=request(response.body,'checkpoint_wired_'+steps++);response=await post(store,input,{json:true});assert.ok([200,202].includes(response.status),JSON.stringify(response.body));assert.deepEqual(await post(store,input,{json:true}),response);
+  const cursor=response.body.auditProgress?.replay?.cursor;if(cursor?.checkpoint!==null&&cursor?.checkpoint!==undefined)sawSeed=true;if(cursor?.stage==='events'&&cursor.sequence>=prefix)sawTail=true;assert.ok(steps<250);if(steps%5===0){store.close();store=new RoomStore(f.filename);}
+ }
+ assert.equal(sawSeed,true);assert.equal(sawTail,true);assert.deepEqual(response.body.replayContinuation,{rooms:1,deferred:0,originalFullOracleRequired:true});assert.equal(response.body.recovery.legacyCheckpoints,1);assert.equal(response.body.recovery.replay.checkpointEvents,prefix);assert.equal(response.body.recovery.replay.replayedEvents,history.length-prefix);assert.equal(response.body.recovery.checks.projectionReplay,true);assert.equal(response.body.verified,true);
+ t.diagnostic(JSON.stringify({checkpointSequence:prefix,tailEvents:history.length-prefix,steps,coldSeed:true,requiredOriginalOracle:true,wholeRecoveryBounded:false}));
+});

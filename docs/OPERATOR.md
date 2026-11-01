@@ -131,3 +131,31 @@ measurements end at response headers and exclude subsequent streaming work.
 Store totals cover the code through successful initialization, but cannot
 measure synchronous CPU on the hosted clock. Local Node timings must not be
 interpreted as hosted timing measurements.
+
+## Optional attachment live index
+
+`POST /api/operator/attachments/live-index/plan` accepts `{reason, reverse?}`.
+This is a database-wide operation under the existing Operator credential, not a
+room grant. It admits every attachment row, including tombstones in every room,
+using SQL scalar types and lengths before reading bounded key text or changing
+an index. Initial limits are 32,768 rows, four MiB of room/id/state key bytes and
+64 MiB of all variable-column bytes, including blob lengths. These are optional
+maintenance bounds, not new upload or lifetime quotas. An over-budget store
+keeps the existing attachment path. Scalar bounds do not fully describe physical
+I/O, and local measurements are not a production CPU SLA.
+
+Execute at `/api/operator/attachments/live-index/execute` with the same reason,
+direction, exact `planHash` and stable `requestId`. Admission and the dependency
+hash are checked again in the writer transaction. The optional partial live-state
+index and immutable operator receipt commit together. Resolve an unknown response
+by retrying the exact input; a changed request under that ID conflicts. An old
+receipt describes its original effect, not current installation state: use a new
+plan to inspect actual state. The hash binds keys, states, scalar lengths and
+schema/index identities; it does not certify payload contents.
+
+`reverse: true` explicitly removes only the exact optional index under the same
+bounded plan/execute contract. If later growth exceeds admission, reversal
+refuses and leaves the index working. No tombstones, file bytes, primary keys,
+owner indexes, visibility rules or quotas change. Runtime live predicates remain
+valid without the index. No constructor or schema-stamp update automatically
+builds it; a matching startup stamp alone is never proof of installation.

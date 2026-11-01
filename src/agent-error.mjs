@@ -37,6 +37,16 @@ const BOND_DM_DATA_SHAPES = {
 // migrates surface by surface under the tracking issue filed with this PR.
 // ---------------------------------------------------------------------------
 export const ERROR_REGISTRY = {
+  attachment_index_budget_exceeded: {
+    status: "action_required", hint: uiText("agentError.attachment_index_budget_exceeded.hint"),
+    next: [{ command: uiText("agentError.attachment_index_budget_exceeded.recovery") }],
+    catalog: { http: 409, retry: "no", recovery: uiText("agentError.attachment_index_budget_exceeded.recovery") }
+  },
+  attachment_index_conflict: {
+    status: "action_required", hint: uiText("agentError.attachment_index_conflict.hint"),
+    next: [{ command: uiText("agentError.attachment_index_conflict.recovery") }],
+    catalog: { http: 409, retry: "no", recovery: uiText("agentError.attachment_index_conflict.recovery") }
+  },
   // Bounded operator authority: no reset, limit increase or automatic retry.
   invalid_authority_request: {
     "status": "action_required",

@@ -93,7 +93,10 @@ SQL scalar type/octet/count admission precedes transferred audit/event payloads:
 at most 64 events and a 256 KiB combined admitted input/output unit, including
 bounded lookup metadata. A producer-eligible prefix can still exceed this
 consumer envelope and refuse; the limits are admission limits, not heap or CPU
-ceilings. Malformed, ambiguous, missing referenced or changed evidence refuses
+ceilings. This envelope does not bound the whole operation: existing torn-snapshot
+reads and stale-part cleanup, outer projection hydration and modern suffix replay
+retain their existing behavior and costs. Malformed, ambiguous, missing referenced
+or changed evidence refuses
 without rewriting staging, quarantine, current serving state or proofs.
 
 The historical adapter ends at the proved prefix. Later posts, edits and work

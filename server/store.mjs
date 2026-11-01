@@ -1,4 +1,5 @@
 import {readCurrentNativeInbox} from './current-native-inbox.mjs';
+import {ensureDefaultChannelState} from '../src/default-channel-state.js';
 import {readCurrentEventWindow,currentEventRedactionMessages} from './current-room-events.mjs';
 import { assertRestoreAdmitted, restorePending, verifyRestoreControl } from './restore-admission.mjs';
 import {readCurrentWorkListing} from './current-work-list.mjs';
@@ -257,19 +258,7 @@ export const STORAGE_FAILURE_THRESHOLD = 3;
 // checkpoint replay did not, and a room whose checkpoint predated channels
 // therefore rebuilt without one while its stored projection had one. That
 // disagreement fails auditRecovery, which gates backupRoom across every room.
-function ensureDefaultChannelState(state) {
-  if (!state?.room) return false;
-  state.channels ??= {};
-  if (state.channels[DEFAULT_CHANNEL_ID]) return false;
-  state.channels[DEFAULT_CHANNEL_ID] = {
-    id: DEFAULT_CHANNEL_ID,
-    name: DEFAULT_CHANNEL_ID,
-    createdBy: state.room.ownerId,
-    createdAt: state.room.createdAt ?? null,
-    archivedAt: null
-  };
-  return true;
-}
+
 
 // Provenance repair reads only these envelopes. Chat messages are the bulk of
 // the log and are not an input to proposer, receipt, verification, decision,

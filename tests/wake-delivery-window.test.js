@@ -108,3 +108,22 @@ test('UTF8 byte ordering matches SQLite BINARY and leading BOM source text is pr
   assert.deepEqual(page.rows.map(row => row.signal_id), ['\uE000', '\u{10000}']);
   assert.equal(page.rows[0].message_id, '\uFEFFkept');
 });
+for (const table of ['agent_wake_signals', 'agent_work_wakes']) test('installation plan binds same-byte room moves in ' + table, t => {
+  const f = fixture(t); f.store.initialize(initialRoom('outside'));
+  f.store.transaction(() => {
+    if (table === 'agent_wake_signals') f.store.db.prepare("INSERT INTO agent_wake_signals VALUES('signal','agent','mention','commons','message',1,NULL)").run();
+    else f.store.db.prepare("INSERT INTO agent_work_wakes VALUES('signal','agent','commons','worker','task',0,'event','owner','{}',1,NULL,NULL)").run();
+  });
+  const plan = f.plan();
+  f.store.transaction(() => f.store.db.prepare(`UPDATE ${table} SET room_id='outside' WHERE signal_id='signal'`).run());
+  assert.throws(() => f.execute(plan), { code: 'plan_changed' });
+  assert.equal(wakeIndexState(f.store.db), 'absent');
+});
+test('installation plan distinguishes nullable room key from empty TEXT', t => {
+  const f = fixture(t);
+  f.store.transaction(() => f.store.db.prepare("INSERT INTO agent_wake_signals VALUES('signal','agent','mention',NULL,'message',1,NULL)").run());
+  const plan = f.plan();
+  f.store.transaction(() => f.store.db.prepare("UPDATE agent_wake_signals SET room_id='' WHERE signal_id='signal'").run());
+  assert.throws(() => f.execute(plan), { code: 'plan_changed' });
+  assert.equal(wakeIndexState(f.store.db), 'absent');
+});

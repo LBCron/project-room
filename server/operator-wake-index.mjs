@@ -44,7 +44,7 @@ function inspect(store, repair = null) {
     }
     if (admitted.rows > WAKE_INDEX_LIMITS.rows || admitted.keyBytes > WAKE_INDEX_LIMITS.keyBytes || admitted.storedBytes > WAKE_INDEX_LIMITS.storedBytes)
       fail('wake_index_budget_exceeded', 'Wake index installation exceeds fixed admission; nothing was built');
-    const keys = store.db.prepare(`SELECT hex(CAST(agent_id AS BLOB)) AS agentKey,hex(CAST(signal_id AS BLOB)) AS signalKey,created_at,delivered_at${index.table === 'agent_work_wakes' ? ',invalidated_at' : ''} FROM ${index.table} INDEXED BY sqlite_autoindex_${index.table}_1 ORDER BY signal_id LIMIT ?`).all(WAKE_INDEX_LIMITS.rows + 1);
+    const keys = store.db.prepare(`SELECT hex(CAST(agent_id AS BLOB)) AS agentKey,hex(CAST(signal_id AS BLOB)) AS signalKey,CASE WHEN room_id IS NULL THEN NULL ELSE hex(CAST(room_id AS BLOB)) END AS roomKey,created_at,delivered_at${index.table === 'agent_work_wakes' ? ',invalidated_at' : ''} FROM ${index.table} INDEXED BY sqlite_autoindex_${index.table}_1 ORDER BY signal_id LIMIT ?`).all(WAKE_INDEX_LIMITS.rows + 1);
     if (keys.length !== rows.length) fail('plan_changed', 'Wake index dependencies changed');
     keys.forEach((key, at) => hash.update(JSON.stringify([index.table, key, rows[at]])));
   }

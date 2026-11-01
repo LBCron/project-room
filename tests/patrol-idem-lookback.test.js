@@ -104,3 +104,71 @@ test("an export taken after patrol ticks restores, keeping rotation and key-inde
     assert.deepEqual(rows(restored.db), before);
   } finally { restored.close(); store.close(); }
 });
+
+const cursorOf = store => store.db.prepare("SELECT sequence FROM patrol_cursor WHERE room_id='idem'").get()?.sequence ?? 0;
+const coverageOf = store => store.db.prepare("SELECT through FROM patrol_idem_coverage WHERE room_id='idem'").get()?.through;
+const dupsOf = store => store.db.prepare("SELECT sequence, detail FROM patrol_findings WHERE kind='idempotency_duplicate' ORDER BY sequence").all()
+  .map(row => [row.sequence, JSON.parse(row.detail).firstSequence]);
+
+// Dot 25528: legacy catch-up interrupted mid-backfill (store closed and
+// reopened) resumes from the persisted coverage, and a key first used in
+// the not-yet-indexed part of history but reused in the tail is still found.
+test("legacy catch-up survives a reopen mid-backfill and finds a duplicate spanning the backfill/tail boundary", () => {
+  const { store, path, base } = roomWithEvents(7 * PATROL_BATCH, { keyAt: (b, s) => (s === b + 6 * PATROL_BATCH + 4 ? `k-${b + 650}` : null) });
+  for (let i = 0; i < 4; i++) runPatrolTick(store, { roomId: "idem" });
+  ensurePatrolSchema(store);
+  store.db.exec("DELETE FROM patrol_idem_keys; DELETE FROM patrol_idem_coverage;");
+  runPatrolTick(store, { roomId: "idem" });
+  const partial = coverageOf(store);
+  assert.ok(partial < cursorOf(store) - PATROL_BATCH, `first slice is bounded (${partial})`);
+  assert.ok(partial < base + 650, "the reused key's first use is not yet indexed");
+  store.close();
+  const reopened = new RoomStore(path);
+  assert.equal(coverageOf(reopened), partial, "coverage persisted across the reopen");
+  steady(reopened);
+  assert.deepEqual(dupsOf(reopened), [[base + 6 * PATROL_BATCH + 4, base + 650]]);
+  assert.equal(coverageOf(reopened), cursorOf(reopened), "coverage reaches the cursor");
+  reopened.close();
+});
+
+// Stale coverage must never certify absence: a replaced log (the cursor's
+// event id no longer matches) resets the key index and coverage with the
+// other shadows, so a duplicate in the new history is found.
+test("a replaced log invalidates coverage; the rebuilt index finds the new history's duplicate", () => {
+  const { store, base } = roomWithEvents(3 * PATROL_BATCH);
+  steady(store);
+  assert.equal(coverageOf(store), cursorOf(store));
+  // Replace the log: same sequences, new ids, and a key reused across batches.
+  store.db.exec("BEGIN");
+  const rewrite = store.db.prepare("UPDATE events SET id=?, body=? WHERE room_id='idem' AND sequence=?");
+  for (let s = base + 1; s <= base + 3 * PATROL_BATCH; s++) {
+    const id = `new-${s}`, key = s === base + 2 * PATROL_BATCH + 3 ? `n-${base + 11}` : `n-${s}`;
+    rewrite.run(id, JSON.stringify({ id, roomId: "idem", sequence: s, type: "test.noop", idempotencyKey: key }), s);
+  }
+  store.db.exec("COMMIT");
+  runPatrolTick(store, { roomId: "idem" });
+  assert.ok(!store.db.prepare("SELECT 1 FROM patrol_idem_keys WHERE room_id='idem' AND idem_key LIKE 'k-%'").get(), "old keys dropped on reset");
+  steady(store);
+  assert.ok(dupsOf(store).some(([seq, first]) => seq === base + 2 * PATROL_BATCH + 3 && first === base + 11));
+  assert.equal(coverageOf(store), cursorOf(store));
+  store.close();
+});
+
+// The key index, coverage and cursor commit together: a failure at the
+// cursor write leaves none of them advanced, and the retry completes.
+test("a failed commit leaves keys, coverage and cursor exactly as before", () => {
+  const { store } = roomWithEvents(3 * PATROL_BATCH);
+  runPatrolTick(store, { roomId: "idem" });
+  const snap = () => [cursorOf(store), coverageOf(store), store.db.prepare("SELECT COUNT(*) AS n, MAX(first_sequence) AS m FROM patrol_idem_keys").get()];
+  const before = snap();
+  const real = store.db.prepare.bind(store.db);
+  let injected = 0;
+  store.db.prepare = sql => { if (/INSERT INTO patrol_cursor/.test(sql)) { injected++; throw new Error("injected"); } return real(sql); };
+  try { runPatrolTick(store, { roomId: "idem" }); } catch (error) { assert.match(String(error), /injected/); } finally { store.db.prepare = real; }
+  assert.equal(injected, 1, "the commit reached the cursor write");
+  assert.deepEqual(snap(), before);
+  runPatrolTick(store, { roomId: "idem" });
+  assert.equal(cursorOf(store), before[0] + PATROL_BATCH);
+  assert.equal(coverageOf(store), cursorOf(store));
+  store.close();
+});

@@ -107,7 +107,6 @@ test("first-run: card mounts once, is dismissible, and never shows again", (t) =
   } });
   assert.ok(card, "mounts on first sight");
   assert.match(card.innerHTML, /You're in the room/);
-  assert.match(card.innerHTML, /DMs are open by default/);
   assert.match(card.innerHTML, /data-step="greet"/);
   assert.match(card.innerHTML, /data-step="discover"/);
   assert.match(card.innerHTML, /data-step="board"/);

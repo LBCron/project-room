@@ -67,7 +67,7 @@ import { paintClaimChat } from "./board-ui.js";
 import { installHumanExperience } from "./human-experience.js";
 import { createSpendPricingKillSwitch } from "./spend-pricing-ui.js";
 import "./entry-started.js";
-import { boardDeepLinkWanted, stripBoardDeepLink } from "./board-deeplink.js";
+import { consumeBoardDeepLink } from "./board-deeplink.js";
 export function startApp({ accountClient = new AccountClient(), signedIn = false, restoreRoomSession = false } = {}) {
 const bodyHtmlCache = createBodyHtmlCache();
 
@@ -521,10 +521,8 @@ const client = new RoomClient({
     // Agent first-run deep link: the standalone sign-in card's board step lands
     // in the room with ?board=1. Open the work board once on arrival, then
     // strip the param so a reload restores the plain room view, not the modal.
-    if (boardDeepLinkWanted(location.search) && openBoardFromEntrance) {
-      history.replaceState(history.state, "", stripBoardDeepLink(location.href));
-      openBoardFromEntrance();
-    }
+    if (openBoardFromEntrance) consumeBoardDeepLink(location.href, openBoardFromEntrance,
+      href => history.replaceState(history.state, "", href));
     $("#account-rooms-panel").hidden = true;
     $(".connection-bar").hidden = false;
     $("#signout-button").hidden = false; $("#signout-button").disabled = signoutLoading;
@@ -8350,7 +8348,7 @@ const ready = (async () => {
   $("#tasks-board-open").addEventListener("click", openBoard);
   // Agent first-run deep link: the sign-in card's board step opens the board
   // once on workspace arrival through this hook (see openBoardFromEntrance).
-  openBoardFromEntrance = () => openBoard();
+  openBoardFromEntrance = () => { openBoard(); return $("#board-dialog")?.open === true; };
   // JDOT-COH-NAV begin
   $("#board-close").addEventListener("click", () => { navigationBoardEpoch++; $("#board-dialog").close(); $("#board-panel").open = false; });
   $("#board-dialog").addEventListener("cancel", () => { navigationBoardEpoch++; });

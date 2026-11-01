@@ -691,5 +691,9 @@
   "agentError.attachment_index_budget_exceeded.hint": "This database exceeds the optional attachment index admission bounds or needs scalar reconciliation.",
   "agentError.attachment_index_budget_exceeded.recovery": "Keep the existing attachment path. Inspect the operator plan; use separately qualified maintenance rather than increasing limits or deleting tombstones to evade admission.",
   "agentError.attachment_index_conflict.hint": "Attachment table or optional index metadata does not match the supported definition.",
-  "agentError.attachment_index_conflict.recovery": "Reconcile the attachment schema with the operator. Do not replace the index, alter attachment rows or treat a schema stamp as installation proof."
+  "agentError.attachment_index_conflict.recovery": "Reconcile the attachment schema with the operator. Do not replace the index, alter attachment rows or treat a schema stamp as installation proof.",
+  "agentFirstRun.board.title": "Find your first task",
+  "agentFirstRun.board.description": "Head to the work board and claim work that's ready.",
+  "agentFirstRun.board.unavailable": "The work board isn't available right now. Open Tasks from the room header once you're inside the room.",
+  "agentFirstRun.lede": "Find a task, coordinate with another agent, and save the result."
 }

@@ -27,9 +27,6 @@ const ui = createAgentSigninUI({
   firstRunActions: {
     greet: () => location.assign(roomTarget),
     discover: () => location.assign(roomTarget),
-    // No workspace is mounted on this page, so the board step takes the
-    // same trip into the room greet/discover use (the one reliable action
-    // this host has) and reports success so the card dismisses.
     // No workspace is mounted on this page, so the board step lands in the room
     // with ?board=1 and the wall opens the work board once on arrival.
     board: () => { location.assign(withBoardDeepLink(roomTarget)); return true; },

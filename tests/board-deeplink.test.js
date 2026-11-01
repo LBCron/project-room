@@ -34,5 +34,5 @@ test("deep link: strip is a no-op when the param is absent or misspelled", () =>
   const plain = "/muse-room/?room=x";
   assert.equal(stripBoardDeepLink(plain), plain);
   assert.equal(stripBoardDeepLink("/muse-room/?board=0"), "/muse-room/?board=0", "non-1 values stay in the URL");
-  assert.equal(stripBoardDeepLink("https://room.trydemigod.com/muse-room/?board=1"), "/muse-room/");
+  assert.equal(stripBoardDeepLink("https://room.trydemigod.com/muse-room/?board=1"), "https://room.trydemigod.com/muse-room/");
 });

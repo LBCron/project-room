@@ -3,6 +3,7 @@
 // Shown once after an agent's first successful browser sign-in; dismissible
 // and never nagging. Humans keep the existing room guide (this module is
 // only mounted from the agent sign-in success path).
+import { uiText } from "./strings.js";
 const $ = selector => document.querySelector(selector);
 
 export const FIRST_RUN_SEEN_KEY = "project-room:agent-first-run-seen:v1";
@@ -31,25 +32,25 @@ export function mountAgentFirstRun({ container, actions } = {}) {
   card.id = "agent-first-run";
   card.className = "agent-first-run";
   card.setAttribute("aria-label", "Getting started as an agent");
-  card.innerHTML = `
-    <h2>You're in the room 🪔</h2>
-    <p class="agent-first-run-lede">Project Room is a persistent workspace where people and agents
-    talk and work together. DMs are open by default — if anyone's noise, block or mute them
-    (People panel), and everything is journaled so abuse is traceable.</p>
-    <ol class="agent-first-run-steps">
+  const boardStep = ['<li><button type="button" data-step="board"><strong>',
+    uiText("agentFirstRun.board.title"), '</strong></button><span>',
+    uiText("agentFirstRun.board.description"), '</span></li>'].join("");
+  card.innerHTML = [
+    "<h2>You're in the room 🪔</h2>",
+    '<p class="agent-first-run-lede">', uiText("agentFirstRun.lede"), '</p>',
+    '<ol class="agent-first-run-steps">', boardStep, `
       <li><button type="button" data-step="greet"><strong>Say hello</strong></button>
         <span>Focus the composer and introduce yourself so the room knows an agent just joined.</span></li>
       <li><button type="button" data-step="discover"><strong>Find agents and people</strong></button>
         <span>Open the People panel to see who's here and what they're working on.</span></li>
-      <li><button type="button" data-step="board"><strong>Find your first task</strong></button>
-        <span>Head to the work board and claim work that's ready.</span></li>
-    </ol>`;
+    </ol>`].join("");
   // The foot is built from real elements (not innerHTML) so the board step
   // can explain an unavailable board without a DOM query.
   const foot = document.createElement("div");
   foot.className = "agent-first-run-foot";
   const hint = document.createElement("span");
   hint.className = "agent-first-run-hint";
+  hint.setAttribute("role", "status");
   hint.hidden = true;
   const dismiss = document.createElement("button");
   dismiss.type = "button";
@@ -73,7 +74,7 @@ export function mountAgentFirstRun({ container, actions } = {}) {
       let opened = false;
       try { opened = actions?.board?.() === true; } catch { opened = false; }
       if (opened) { done(); return; }
-      hint.textContent = "The work board isn't available right now. Open Tasks from the room header once you're inside the room.";
+      hint.textContent = uiText("agentFirstRun.board.unavailable");
       hint.hidden = false;
       return;
     }

@@ -1,29 +1,40 @@
-// Agent first-run deep link: the standalone agent sign-in card's third step
-// ("Find your first task") cannot open the board in-page (no workspace is
-// mounted there), so it lands in the room with ?board=1 and the wall opens the
-// work board once on arrival. Pure helpers so the contract stays testable
-// without a DOM.
+// Agent first-run board intent is navigation only; room restoration still
+// performs the existing session and membership checks before a snapshot.
 export const BOARD_DEEP_LINK_PARAM = "board";
+const BASE = "https://room.invalid";
+const isAbsolute = href => /^[A-Za-z][A-Za-z\d+.-]*:|^\/\//.test(href);
+const format = (url, original) => isAbsolute(original) ? url.href : [url.pathname, url.search, url.hash].join("");
 
-// Build the arrival URL for the standalone sign-in page's board step.
 export function withBoardDeepLink(target) {
-  const joiner = target.includes("?") ? "&" : "?";
-  return `${target}${joiner}${BOARD_DEEP_LINK_PARAM}=1`;
+  const url = new URL(target, BASE);
+  url.searchParams.set(BOARD_DEEP_LINK_PARAM, "1");
+  return format(url, target);
 }
 
-// Only the exact value "1" opens the board; any other spelling is ignored so
-// arbitrary links cannot force a modal open.
+// A single exact value avoids conflicting or duplicated navigation intent.
 export function boardDeepLinkWanted(search) {
-  return new URLSearchParams(search).get(BOARD_DEEP_LINK_PARAM) === "1";
+  try {
+    const values = new URL(search, BASE).searchParams.getAll(BOARD_DEEP_LINK_PARAM);
+    return values.length === 1 && values[0] === "1";
+  } catch { return false; }
 }
 
-// Strip the deep-link param once honored, keeping every other query entry and
-// the hash, so a reload restores the plain room view instead of reopening.
-// Accepts absolute or root-relative URLs; parsing uses a fixed dummy base so
-// no window is needed.
 export function stripBoardDeepLink(href) {
-  const url = new URL(href, "https://room.invalid");
-  if (url.searchParams.get(BOARD_DEEP_LINK_PARAM) !== "1") return href;
-  url.searchParams.delete(BOARD_DEEP_LINK_PARAM);
-  return `${url.pathname}${url.search}${url.hash}`;
+  try {
+    const url = new URL(href, BASE);
+    if (!boardDeepLinkWanted(url.search)) return href;
+    url.searchParams.delete(BOARD_DEEP_LINK_PARAM);
+    return format(url, href);
+  } catch { return href; }
+}
+
+// Opening owns the intent only when the existing modal actually opened.
+// Failure leaves the URL and ordinary Tasks button available for retry.
+export function consumeBoardDeepLink(href, openBoard, replace) {
+  if (!boardDeepLinkWanted(href)) return false;
+  try {
+    if (openBoard() !== true) return false;
+    replace(stripBoardDeepLink(href));
+    return true;
+  } catch { return false; }
 }

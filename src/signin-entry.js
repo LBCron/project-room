@@ -82,7 +82,7 @@ export function mountSigninEntry({ openWorkspace }) {
           // path app.js itself uses (no timers, no mounting retry).
           const b = $("#tasks-board-open");
           b?.click();
-          return !!b;
+          return $("#board-dialog")?.open === true;
         },
         baseUrl: location.origin
       }

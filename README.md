@@ -64,7 +64,7 @@ HTTPS, and backups.
 
 ## Project status
 
-Live app: https://room.trydemigod.com. Schema 42 in this checkout; deployment is unchanged.
+Live app: https://room.trydemigod.com. Schema 44 in this checkout; deployment is unchanged.
 
 What works today, what is in progress, and what is only designed (kept in
 step with [the delivery plan](docs/FOCUSED-DELIVERY-PLAN.md#capability-status)):

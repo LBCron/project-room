@@ -1,3 +1,4 @@
+import { Buffer } from 'node:buffer';
 import { randomUUID } from 'node:crypto';
 import { ServiceError } from './service-error.mjs';
 
@@ -6,14 +7,18 @@ import { ServiceError } from './service-error.mjs';
 export const RESTORE_CONTROL_TABLE = 'current_restore_admission';
 export const RESTORE_CONTROL_DEFINITIONS = [[RESTORE_CONTROL_TABLE, `CREATE TABLE IF NOT EXISTS current_restore_admission (
   singleton INTEGER PRIMARY KEY CHECK(singleton=1), state TEXT NOT NULL CHECK(state IN ('clear','pending')),
-  restore_id TEXT, CHECK((state='clear' AND restore_id IS NULL) OR (state='pending' AND length(restore_id)>0)))`]];
+  restore_id TEXT, phase TEXT NOT NULL DEFAULT 'clear' CHECK(phase IN ('clear','loading','coverage','audit_pending')),
+  revision INTEGER NOT NULL DEFAULT 0 CHECK(revision>=0), source_seal TEXT, coverage TEXT, latest_receipt TEXT,
+  CHECK((state='clear' AND restore_id IS NULL AND phase='clear' AND revision=0 AND source_seal IS NULL AND coverage IS NULL)
+    OR (state='pending' AND length(restore_id)>0 AND phase='loading' AND source_seal IS NULL AND coverage IS NULL AND latest_receipt IS NULL)
+    OR (state='pending' AND length(restore_id)>0 AND phase IN ('coverage','audit_pending') AND source_seal IS NOT NULL AND coverage IS NOT NULL)))`]];
 export const RESTORE_CONTROL_GUARDS = ['INSERT','UPDATE','DELETE'].map(operation => {
   const name='current_restore_admission_'+operation.toLowerCase();
   return [name,`CREATE TRIGGER IF NOT EXISTS ${name} BEFORE ${operation} ON current_restore_admission BEGIN
-    SELECT RAISE(ABORT,'unsupported restore admission mutation'); END`];
+    SELECT RAISE(ABORT,'unsupported restore admission mutation: durable-coverage-v1'); END`];
 });
 export const RESTORE_CONTROL_SCHEMA=RESTORE_CONTROL_DEFINITIONS[0][1]+`;
-INSERT INTO current_restore_admission SELECT 1,'clear',NULL WHERE NOT EXISTS(SELECT 1 FROM current_restore_admission);`;
+INSERT INTO current_restore_admission(singleton,state,restore_id) SELECT 1,'clear',NULL WHERE NOT EXISTS(SELECT 1 FROM current_restore_admission);`;
 const scopes=new WeakSet();
 const normalize=sql=>sql?.trim().replace(/;$/,'').replace(/IF NOT EXISTS /g,'').replace(/\s+/g,' ');
 export function restorePending(db) {
@@ -60,8 +65,8 @@ export function withExactRestoreGuards(db,definitions,operation) {
       throw Error('Restore guard reinstall failed: '+name);
   }
 }
-function setRestoreState(db,state,id) {
-  withExactRestoreGuards(db,RESTORE_CONTROL_GUARDS,()=>db.prepare('UPDATE current_restore_admission SET state=?,restore_id=? WHERE singleton=1').run(state,id));
+function setRestoreState(db,state,id,receipt=null) {
+  withExactRestoreGuards(db,RESTORE_CONTROL_GUARDS,()=>db.prepare('UPDATE current_restore_admission SET state=?,restore_id=?,phase=?,revision=0,source_seal=NULL,coverage=NULL,latest_receipt=? WHERE singleton=1').run(state,id,state==='clear'?'clear':'loading',receipt===null?null:JSON.stringify(receipt)));
 }
 export function beginRestore(store) {
   return withRestoreTransaction(store,()=>{
@@ -70,7 +75,31 @@ export function beginRestore(store) {
     const id='restore_'+randomUUID();setRestoreState(store.db,'pending',id);return id;
   });
 }
-export function completeRestore(db) {
+export function completeRestore(db,receipt=null) {
   if(!restorePending(db))throw Error('Restore has no pending census');
-  setRestoreState(db,'clear',null);
+  if(db.prepare('SELECT phase FROM current_restore_admission WHERE singleton=1').get().phase==='coverage')throw Error('Restore coverage has not completed');
+  setRestoreState(db,'clear',null,receipt);
+}
+
+// Bounded operational metadata, never a source row or an imported grant.
+export const RESTORE_PROGRESS_MAX_BYTES=1024*1024;
+export function restoreProgress(db) {
+  verifyRestoreControl(db);
+  const scalar=db.prepare('SELECT length(CAST(source_seal AS BLOB)) AS seal_bytes,length(CAST(coverage AS BLOB)) AS coverage_bytes,length(CAST(latest_receipt AS BLOB)) AS receipt_bytes FROM current_restore_admission WHERE singleton=1').get();
+  if(!scalar||Object.values(scalar).some(value=>value!==null&&(!Number.isSafeInteger(value)||value<0||value>RESTORE_PROGRESS_MAX_BYTES)))throw Error('Restore progress scalar bytes require reconciliation');
+  const row=db.prepare('SELECT state,restore_id,phase,revision,source_seal,coverage,latest_receipt FROM current_restore_admission WHERE singleton=1').get();
+  if(!Number.isSafeInteger(row.revision)||row.revision<0)throw Error('Restore progress revision requires reconciliation');
+  return {...row,seal:row.source_seal===null?null:JSON.parse(row.source_seal),progress:row.coverage===null?null:JSON.parse(row.coverage),latest:row.latest_receipt===null?null:JSON.parse(row.latest_receipt)};
+}
+export function checkpointRestore(db,{restoreId,expectedRevision,phase,seal,progress,latest}) {
+  if(!db.isTransaction||!scopes.has(db))throw Error('Restore checkpoint requires its privileged transaction');
+  const before=restoreProgress(db);
+  if(before.state!=='pending'||before.restore_id!==restoreId||before.revision!==expectedRevision)throw Error('Restore checkpoint is stale');
+  if(!['coverage','audit_pending'].includes(phase)||(before.phase==='audit_pending'&&phase!=='audit_pending'))throw Error('Invalid restore checkpoint phase');
+  if(before.phase!=='loading'&&JSON.stringify(before.seal)!==JSON.stringify(seal))throw Error('Restore source seal cannot change');
+  const encoded=[seal,progress,latest].map(value=>value===null?null:JSON.stringify(value));
+  if(encoded.some(value=>value!==null&&Buffer.byteLength(value)>RESTORE_PROGRESS_MAX_BYTES))throw Error('Restore progress exceeds its code-owned metadata bound');
+  withExactRestoreGuards(db,RESTORE_CONTROL_GUARDS,()=>db.prepare("UPDATE current_restore_admission SET phase=?,revision=revision+1,source_seal=?,coverage=?,latest_receipt=? WHERE singleton=1 AND state='pending' AND restore_id=? AND revision=?").run(phase,...encoded,restoreId,expectedRevision));
+  const after=restoreProgress(db);if(after.revision!==expectedRevision+1)throw Error('Restore checkpoint did not advance atomically');
+  return after;
 }

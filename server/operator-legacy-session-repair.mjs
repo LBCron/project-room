@@ -4,15 +4,15 @@ import { createHash } from 'node:crypto';
 import { isDeepStrictEqual } from 'node:util';
 import { applyEvent, emptyRoomState, messageChannelId } from '../src/events.js';
 import { ensureWorkControlDefaults } from '../src/work-item-session.js';
-import { HISTORICAL_REPLAY_CONTRACT_VERSION, HISTORICAL_REPLAY_KIND, PRE749_ADAPTER_VERSION, pre749PrefixDigest, decodeHistoricalEventRows } from './historical-replay-contract.mjs';
+import { HISTORICAL_REPAIR_KIND, HISTORICAL_REPAIR_ACTION, HISTORICAL_PROOF_MODE, validateHistoricalRepairInput, historicalRepairFingerprint, historicalRepairReceiptId, appendHistoricalReplayLookup, HISTORICAL_REPLAY_CONTRACT_VERSION, HISTORICAL_REPLAY_KIND, PRE749_ADAPTER_VERSION, pre749PrefixDigest, decodeHistoricalEventRows } from './historical-replay-contract.mjs';
 import { replayPre749Sessions } from './legacy-session-replay.mjs';
 import { ServiceError } from './service-error.mjs';
 import { appendOperatorAction } from './operator-actions.mjs';
 import { hydrateProjection } from './projection-at-rest.mjs';
 import { projectionDigest, projectionContentHash, servingProofDrift, messageProofMatches, messageProofHash, assertMessageWrite, MESSAGE_PROOF_SELECT, MESSAGE_PROOF_FIELDS } from './write-integrity.mjs';
 import { messageRowParityFields, affectedMessageIds, reconcileLegacySessionBackfill, messageRowForWrite } from './messages-store.mjs';
-const PROOF_MODE = 'adopt-absent-inline-v1';
-const KIND = 'pre749-session-backfill', ACTION = 'legacy_session_backfill_reconciled', LIMIT = 64, BYTES = 256 * 1024;
+const PROOF_MODE = HISTORICAL_PROOF_MODE;
+const KIND = HISTORICAL_REPAIR_KIND, ACTION = HISTORICAL_REPAIR_ACTION, LIMIT = 64, BYTES = 256 * 1024;
 const hash = x => createHash('sha256').update(typeof x === 'string' ? x : JSON.stringify(x)).digest('hex');
 const fail = (code, status = 409) => {
   throw new ServiceError(status, code, 'Historical session repair refused; inspect fresh plan and independent serving proofs');
@@ -80,20 +80,7 @@ const schema = {
   message_replay_snapshots: ['room_id', 'state_json'],
   messages_backfill_state: ['room_id', 'part', 'json']
 };
-function validate(input, execute) {
-  if (!input || Object.keys(input).some(k => !['repairKind', 'rooms', 'reason', 'planHash', 'requestId', 'messageProofMode'].includes(k))
-  || (input.messageProofMode !== undefined && input.messageProofMode !== PROOF_MODE)
-  || input.repairKind !== KIND || !Array.isArray(input.rooms) || input.rooms.length !== 1
-  || !input.rooms[0] || Object.keys(input.rooms[0]).some(k => !['roomId', 'expectedHead'].includes(k))
-  || typeof input.rooms[0].roomId !== 'string' || !/^[A-Za-z0-9][A-Za-z0-9_-]{0,63}$/.test(input.rooms[0].roomId)
-  || !Number.isSafeInteger(input.rooms[0].expectedHead) || input.rooms[0].expectedHead < 1
-  || input.rooms[0].expectedHead > LIMIT || typeof input.reason !== 'string'
-  || !input.reason.trim() || Buffer.byteLength(input.reason) > 280 || Buffer.byteLength(JSON.stringify(input)) > 1024) fail('invalid_legacy_repair', 422);
-  if (execute && (typeof input.planHash !== 'string' || !/^[a-f0-9]{64}$/.test(input.planHash)
-  || typeof input.requestId !== 'string' || !/^[A-Za-z0-9_-]{1,64}$/.test(input.requestId))) fail('repair_plan_required', 422);
-  if (!execute && (input.planHash !== undefined || input.requestId !== undefined)) fail('invalid_legacy_repair', 422);
-  return input.rooms[0];
-}
+
 function inventory(store, input, target) {
   const db = store.db, roomId = target.roomId, anchor = roomId + '\0anchor', domains = { }, where = { };
   const adopt = input.messageProofMode === PROOF_MODE;
@@ -328,16 +315,9 @@ function inventory(store, input, target) {
   };
 }
 export function repairLegacySessionBackfill(store, input, execute = false) {
-  const target = validate(input, execute);
+  const target = validateHistoricalRepairInput(input, execute);
   if (store.readOnly) fail('read_only');
-  const fingerprint = hash({
-      repairKind: KIND,
-      ...(input.messageProofMode === PROOF_MODE ? { messageProofMode: PROOF_MODE } : {}),
-      target,
-      reason: input.reason,
-      planHash: input.planHash ?? null,
-      requestId: input.requestId ?? null
-    }), receiptId = execute ? 'oa_lsr_' + hash(target.roomId + '\0' + input.requestId) : null;
+  const fingerprint = historicalRepairFingerprint(input,target), receiptId = execute ? historicalRepairReceiptId(target.roomId,input.requestId) : null;
   return store.transaction(() => {
     if (execute) {
       const old = store.db.prepare("SELECT CASE WHEN typeof(counts_json)='text' AND length(CAST(counts_json AS BLOB))<=4096 THEN counts_json ELSE NULL END AS json FROM operator_actions WHERE id=? AND action=?").get(receiptId, ACTION);
@@ -391,6 +371,8 @@ export function repairLegacySessionBackfill(store, input, execute = false) {
       receiptId, store.now(), ACTION, 'room', target.roomId, input.reason,
       plan.planHash, JSON.stringify(completed), 'verified', input.requestId
     );
+    try { appendHistoricalReplayLookup(store.db,target.roomId,plan.head,receiptId,plan.replayContract,store.now()); }
+    catch (error) { if (error instanceof ServiceError && error.code === 'projection_corrupt') fail('repair_not_exact_legacy'); throw error; }
     return completed;
   });
 }

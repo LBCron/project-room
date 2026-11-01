@@ -38,10 +38,22 @@ export class LegacySessionRepairRoom extends DurableObject {
         return Response.json({installed:true});
       }
       if(path==='/clear-fault') {db.exec('DROP TRIGGER fail_repair');return Response.json({removed:true});}
-      if(path==='/append') {
+      if(path==='/lose-replay-checkpoints') {
+        s.transaction(()=>{
+          db.prepare("DELETE FROM message_replay_snapshots WHERE room_id='legacy-room'").run();
+          db.prepare('DELETE FROM messages_backfill_state WHERE room_id IN (?,?)').run('legacy-room','legacy-room\0anchor');
+          db.prepare("DELETE FROM projection_checkpoints WHERE room_id='legacy-room'").run();
+        });
+        return Response.json({removed:true});
+      }
+      if(path==='/recover-saved') {
+        const replay=s.rebuildProjection('legacy-room'),result=s.backfillMessages({limit:64});
+        return Response.json({replay,result,parity:s.checkMessagesParity({roomId:'legacy-room'})});
+      }
+      if(path==='/append'||path==='/append-only') {
         const key=s.issueAccessKey('legacy-room','owner');
         s.command(key,'legacy-room',{id:'after-repair',type:'message.posted',data:{messageId:'after-repair',body:'Synthetic later message'}});
-        s.backfillMessages({limit:64});
+        if(path==='/append')s.backfillMessages({limit:64});
         return Response.json({appended:true});
       }
       if(path==='/state') {

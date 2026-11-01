@@ -258,7 +258,7 @@ test('metadata requiring unqualified side-effect context falls back without load
   }
   store.db.prepare("UPDATE rooms SET projection=? WHERE id='commons'").run(original);
   store.db.prepare('INSERT INTO room_assistant_config VALUES(?,?)').run('commons', JSON.stringify({ coordinatorMemberId: 'agent' }));
-  assert.equal(store.canonicalMessagePostContext('commons', command, 'owner'), null);
+  assert.equal(store.transaction(() => store.canonicalMessagePostContext('commons', command, 'owner')), null);
 });
 
 test('existing pending fanout recovery and human push retain the full path', t => {
@@ -266,7 +266,7 @@ test('existing pending fanout recovery and human push retain the full path', t =
   const command = { type: 'message.posted', data: { messageId: 'new', body: 'Body' } };
   journalActivityFanoutFailure(store, { roomId: 'commons', senderId: 'owner', command,
     incoming: { id: 'pending-recovery' }, error: Error('fixture failure') });
-  assert.equal(store.canonicalMessagePostContext('commons', command, 'owner'), null);
+  assert.equal(store.transaction(() => store.canonicalMessagePostContext('commons', command, 'owner')), null);
   store.db.prepare("DELETE FROM activity_fanout_failures WHERE room_id='commons'").run();
   store.humanPush.vapid = { publicKey: 'fixture', privateKey: 'fixture', subject: 'fixture' };
   assert.equal(store.canonicalMessagePostContext('commons', {

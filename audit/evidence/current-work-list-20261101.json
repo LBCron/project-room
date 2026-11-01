@@ -70,5 +70,5 @@
     "Cold constructor and credential storage work are separate from measured read-page SQL.",
     "No history certification or live deployment."
   ],
-  "cursor": "AES-256-GCM, credential-derived domain-specific key, random96-bit nonce; excluded private request source keys are encrypted, not readable signed JSON."
+  "cursor": "CORRECTION: this receipt did not prove cursor secrecy from the credential holder. Its credential-derived AES key allowed that holder to decrypt excluded private source IDs. Payload title/body redaction controls passed; cursor secrecy claim was false. Superseded by server-owned per-store random-key cure and explicit adversarial reproduction in current-work-cursor-privacy-20261101.json."
 }

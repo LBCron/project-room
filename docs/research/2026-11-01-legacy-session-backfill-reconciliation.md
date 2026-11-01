@@ -109,7 +109,7 @@ Successful new execute receipts also carry `replayContract` version 1, kind
 `pre749-sessions`, adapter version 1, the room, exact prefix boundary and event
 ID, the independently matched snapshot hash and an exact event-prefix digest.
 The shared `historical-replay-contract.mjs` frames the versioned domain, room,
-and each contiguous sequence/ID/raw-body value by UTF-8 byte length. A future
+and each contiguous sequence/ID/raw-body value by UTF-8 byte length. An ordinary replay
 consumer must revalidate that exact prefix, apply the named historical adapter
 only through that boundary, then use modern rules. The receipt is evidence,
 not a global replay override. Old receipts do not acquire a contract on retry;
@@ -128,3 +128,6 @@ and exact roundtrip validation refuse invalid TEXT bytes; driver-decoded TEXT
 cannot supply provenance. Valid UTF-8 keeps the same version-1 digest framing.
 The 256 KiB bound is the admitted input/output/receipt unit, not a total heap
 ceiling: raw buffers and decoded strings coexist during this bounded check.
+
+Ordinary saved-contract recovery and its bounded room/head receipt discovery are
+documented in [the existing operator runbook](../OPERATOR-LEGACY-MESSAGE-REPAIR.md#saved-contract-recovery-after-checkpoint-loss).

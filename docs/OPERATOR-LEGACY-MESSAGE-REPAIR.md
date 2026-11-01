@@ -72,3 +72,39 @@ a retry uses exactly that input and returns the original receipt even after
 later room writes. Planning records its standard operator audit only. A plan
 must establish actual current eligibility; historical backup comparisons are
 not current serving authority.
+
+### Saved contract recovery after checkpoint loss
+
+New successful historical executes atomically append a room/head lookup in the
+existing append-only `operator_actions` table. Its version-1 key is
+`oa_lsr_lookup_v1_<sha256(roomId)>_<head padded to two digits>` (heads 01–64).
+The lookup references the original success receipt; it is discovery, not proof.
+Same-head reuse requires the exact same validated contract. The original saved
+receipt and exact-input retry remain unchanged. A lookup insert failure rolls
+back the repair and original receipt together. Old receipts without a lookup
+retain strict default replay; this change does not scan global audit history or
+retroactively create lookup rows on retry.
+
+Ordinary projection replay and message staging reconstruction can consume the
+highest available saved prefix at or below their boundary. They validate the
+lookup, original successful receipt and request fingerprint, adapter version,
+room/head event ID, exact raw UTF-8 prefix digest and reconstructed snapshot hash.
+SQL scalar type/octet/count admission precedes transferred audit/event payloads:
+at most 64 events and a 256 KiB combined admitted input/output unit, including
+bounded lookup metadata. A producer-eligible prefix can still exceed this
+consumer envelope and refuse; the limits are admission limits, not heap or CPU
+ceilings. This envelope does not bound the whole operation: existing torn-snapshot
+reads and stale-part cleanup, outer projection hydration and modern suffix replay
+retain their existing behavior and costs. Malformed, ambiguous, missing referenced
+or changed evidence refuses
+without rewriting staging, quarantine, current serving state or proofs.
+
+The historical adapter ends at the proved prefix. Later posts, edits and work
+transitions use the modern reducer. Message backfill spends the prefix length
+against its existing event budget before loading prefix payloads; an insufficient
+budget makes zero progress. The default batch of 200 covers the maximum 64-event
+prefix. Recovery restores only derived staging/applied progress and invalidates
+parity; it does not republish prefix message rows, certify current parity, adopt
+proofs, clear quarantine, or perform an explicit repair. Existing valid staging
+checkpoints keep their original path. Recovery requires the append-only audit
+receipts as well as the source journal to survive backup/restore.

@@ -25,7 +25,17 @@ test('actual workerd historical derived repair rolls back audit faults and retai
     assert.deepEqual(after.authority,before.authority);
     await mf.dispose();mf=worker();
     assert.deepEqual(await call('/execute',input),{...completed,duplicate:true});
-    await call('/append');const appended=await call('/state');assert.equal(appended.head,before.head+1);assert.equal(appended.blocks,0);
+    await call('/lose-replay-checkpoints');
+    await mf.dispose();mf=worker();
+    const recovered=await call('/recover-saved');assert.equal(recovered.replay.sequence,before.head);assert.equal(recovered.parity.ok,true);
+    assert.deepEqual((await call('/state')).authority,after.authority);
+    assert.deepEqual(await call('/execute',input),{...completed,duplicate:true});
+    await call('/append-only');let appended=await call('/state');assert.equal(appended.head,before.head+1);assert.equal(appended.blocks,0);
+    await call('/lose-replay-checkpoints');
+    await mf.dispose();mf=worker();
+    const suffix=await call('/recover-saved');assert.equal(suffix.replay.sequence,appended.head);assert.equal(suffix.parity.ok,true);
+    assert.equal(suffix.result.events,before.head+1);
+    assert.deepEqual((await call('/state')).authority,appended.authority);appended=await call('/state');
     await mf.dispose();mf=worker();
     assert.deepEqual(await call('/execute',input),{...completed,duplicate:true});assert.deepEqual(await call('/state'),appended);
   } finally {await mf.dispose();await rm(persistence,{recursive:true,force:true});}
@@ -52,6 +62,10 @@ test('actual workerd adopts only independently matched absent proofs atomically 
     assert.equal(after.cursor.parity_at_seq,before.head);assert.equal(after.authority.messages.every(messageProofMatches),true);
     assert.deepEqual(withoutHashes(after.authority),withoutHashes(before.authority));
     assert.equal(completed.replayContract.version,1);assert.equal(completed.replayContract.adapterVersion,1);assert.equal(completed.replayContract.throughSequence,before.head);
+    await call('/lose-replay-checkpoints');
+    await mf.dispose();mf=worker();
+    const adoptedRecovery=await call('/recover-saved');assert.equal(adoptedRecovery.parity.ok,true);assert.equal(adoptedRecovery.replay.sequence,before.head);
+    assert.deepEqual((await call('/state')).authority,after.authority);
     await mf.dispose();mf=worker();assert.deepEqual(await call('/execute',input),{...completed,duplicate:true});
     await call('/append');const appended=await call('/state');assert.equal(appended.head,before.head+1);
     await mf.dispose();mf=worker();assert.deepEqual(await call('/execute',input),{...completed,duplicate:true});assert.deepEqual(await call('/state'),appended);

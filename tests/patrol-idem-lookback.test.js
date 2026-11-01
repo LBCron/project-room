@@ -172,3 +172,32 @@ test("a failed commit leaves keys, coverage and cursor exactly as before", () =>
   assert.equal(coverageOf(store), cursorOf(store));
   store.close();
 });
+
+// Dot 25563: importEvents is the supported way history changes under a
+// patrolled room, and it may keep the cursor's event id. An earlier key
+// edited by the import, then reused, must be found exactly as the legacy
+// look-back finds it: the import invalidates the key index and coverage.
+test("importEvents that edits an earlier key under the cursor invalidates coverage; the reuse is found", () => {
+  const store = new RoomStore(join(mkdtempSync(join(tmpdir(), "project-room-idem-import-")), "room.sqlite"));
+  store.initialize(initialRoom("idem"));
+  const key = store.issueAccessKey("idem", "owner");
+  for (let i = 0; i < 6; i++) store.command(key, "idem", { id: `c-${i}`, type: "message.posted", data: { body: "b", messageId: `m-${i}` } });
+  steady(store);
+  assert.equal(coverageOf(store), cursorOf(store), "coverage is trusted before the import");
+  const lines = store.db.prepare("SELECT sequence, body FROM events WHERE room_id='idem' ORDER BY sequence").all()
+    .map(row => ({ sequence: row.sequence, event: JSON.parse(row.body) }));
+  const edited = lines.find(line => typeof line.event.idempotencyKey === "string" && line.sequence > 1 && line.sequence < lines.length - 1);
+  assert.ok(edited, "fixture has a keyed event below the cursor");
+  edited.event.idempotencyKey = "edited-key";
+  const cursorEventId = store.db.prepare("SELECT event_id FROM patrol_cursor WHERE room_id='idem'").get().event_id;
+  store.importEvents(key, "idem", lines);
+  assert.equal(store.db.prepare("SELECT id FROM events WHERE room_id='idem' AND sequence=?").get(cursorOf(store))?.id, cursorEventId,
+    "the import kept the cursor's event id, so the cursor rule alone would not reset");
+  const head = store.db.prepare("SELECT sequence FROM rooms WHERE id='idem'").get().sequence + 1;
+  store.db.prepare("INSERT INTO events VALUES(?,?,?,?)").run("idem", head, `ev-${head}`,
+    JSON.stringify({ id: `ev-${head}`, roomId: "idem", sequence: head, type: "test.noop", idempotencyKey: "edited-key" }));
+  store.db.prepare("UPDATE rooms SET sequence=? WHERE id='idem'").run(head);
+  steady(store);
+  assert.ok(dupsOf(store).some(([seq, first]) => seq === head && first === edited.sequence), JSON.stringify(dupsOf(store)));
+  store.close();
+});

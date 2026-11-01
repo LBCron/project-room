@@ -19,6 +19,7 @@ import { initialRoom } from "../server/bootstrap.mjs";
 import { handleWorkClaims } from "../server/work-claim-routes.mjs";
 import { applyPullRequestWebhook } from "../server/claim-pr-sync.mjs";
 import { handlePrWebhookPayload, PR_WEBHOOK_SECRET_ENV } from "../server/claim-autolink.mjs";
+import { ClaimError } from "../server/work-claims.mjs";
 
 const URL_A = "https://github.com/Uuriko/project-room/pull/7";
 const SECRET = "res-0140-fixture-secret";
@@ -188,3 +189,63 @@ test("unsupported stored record shapes cannot poison unrelated signed settlement
   assert.deepEqual(out.applied, [{ roomId: "commons", claimId: "target", outcome: "merged" }]);
   assert.deepEqual(store.db.prepare("SELECT * FROM work_claims WHERE room_id='room-b' ORDER BY claim_id").all(), before);
 });
+
+for (const stage of ["selector", "event-write", "unexpected-event-write"]) {
+  test(`autolink commit survives ${stage} failure and exact retry settles once`, async t => {
+    const { store } = await fixture(t);
+    const target = store.workClaims.get("commons", "target");
+    store.workClaims.set("commons", { ...target, repo: "Uuriko/project-room", branch: "target", pullRequest: null, pullRequests: [] });
+    const payload = { ...PAYLOAD, repository: { full_name: "Uuriko/project-room" },
+      pull_request: { ...PAYLOAD.pull_request, head: { ref: "target" }, title: "target" } };
+    const options = { webhook: sign(payload) }, before = store.headSequence("commons");
+    const prepare = store.db.prepare.bind(store.db);
+    const fault = stage === "unexpected-event-write" ? new Error("unexpected event implementation failure")
+      : Object.assign(new Error("synthetic event storage fault"), { code: "EIO" });
+    let armed = true, settlement = false, injected = false;
+    store.db.prepare = sql => {
+      if (sql.includes("SELECT room_id AS roomId, claim_id AS claimId") && sql.includes("WHERE CASE WHEN json_valid(item_json)")) {
+        settlement = true;
+        if (stage === "selector" && armed) { armed = false; injected = true; throw fault; }
+      }
+      if (stage !== "selector" && settlement && armed && /INSERT INTO events\b/.test(sql)) {
+        armed = false; injected = true; throw fault;
+      }
+      return prepare(sql);
+    };
+    await assert.rejects(handlePrWebhookPayload(store, payload, options), error => error === fault || error.cause === fault);
+    assert.ok(injected);
+    const linked = store.workClaims.get("commons", "target");
+    assert.equal(linked.state, "claimed");
+    assert.equal(linked.pullRequest.outcome, null);
+    assert.equal(linked.history.filter(entry => entry.action === "pr_autolinked").length, 1);
+    assert.equal(store.headSequence("commons"), before + 1, "only the committed autolink event remains");
+    const retry = await handlePrWebhookPayload(store, payload, options);
+    assert.equal(retry.linked, null);
+    assert.deepEqual(retry.settled, [{ roomId: "commons", claimId: "target", outcome: "merged" }]);
+    assert.equal(store.headSequence("commons"), before + 2);
+    const done = store.workClaims.get("commons", "target");
+    assert.equal(done.state, "done");
+    assert.deepEqual((await handlePrWebhookPayload(store, payload, options)).settled, []);
+    assert.deepEqual(store.workClaims.get("commons", "target"), done);
+    assert.equal(store.headSequence("commons"), before + 2);
+  });
+}
+
+for (const lateFailure of [false, true]) {
+  test(`known invalid claim is skipped without partial mutation (late=${lateFailure})`, async t => {
+    const { store } = await fixture(t), target = store.workClaims.get("commons", "target");
+    store.workClaims.set("commons", { ...target, id: "bad", ...(lateFailure ? {} : { kind: "land", repo: "https://github.com/Uuriko/project-room" }) });
+    const before = store.workClaims.get("commons", "bad");
+    if (lateFailure) {
+      const set = store.workClaims.set.bind(store.workClaims);
+      store.workClaims.set = (roomId, item) => {
+        set(roomId, item);
+        if (item.id === "bad" && item.state === "done") throw new ClaimError("invalid_claim_input", "late claim validation refusal");
+      };
+    }
+    const out = await applyPullRequestWebhook(store, PAYLOAD, sign(PAYLOAD));
+    assert.deepEqual(out.applied, [{ roomId: "commons", claimId: "target", outcome: "merged" }]);
+    assert.deepEqual(store.workClaims.get("commons", "bad"), before, "skipped item never commits a partial outcome");
+    assert.equal(store.workClaims.get("commons", "target").state, "done");
+  });
+}

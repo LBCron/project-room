@@ -1104,10 +1104,13 @@ export class RoomAgentClient {
   // Compact catch-up. sinceVersion is the previous context_version. An exact
   // match returns { not_modified: true } and no room projection. This read
   // never returns message or file bodies.
-  roomContext({ sinceVersion, signal } = {}) {
+  roomContext({ sinceVersion, workAfter, signal } = {}) {
     if (sinceVersion !== undefined && !/^[a-f0-9]{64}$/.test(sinceVersion)) throw new RoomClientError(0, "invalid_context_version", "since_version must be the 64-character context_version");
-    const query = sinceVersion === undefined ? "" : `?since_version=${sinceVersion}`;
-    return this.#request(`/context${query}`, undefined, signal);
+    if (workAfter !== undefined && !validId(workAfter)) throw new RoomClientError(0, "invalid_context_cursor", "Use the workWindow.nextAfter pointer from this room, or omit workAfter for its first page");
+    const query = new URLSearchParams();
+    if (sinceVersion !== undefined) query.set("since_version", sinceVersion);
+    if (workAfter !== undefined) query.set("work_after", workAfter);
+    return this.#request(`/context${query.size ? `?${query}` : ""}`, undefined, signal);
   }
   returnBrief({ limit = 50, horizon, after, cursor } = {}) {
     const query = new URLSearchParams({ limit });

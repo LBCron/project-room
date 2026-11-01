@@ -1,0 +1,33 @@
+{
+  "checkedAt": "2026-11-01T09:24:13.986Z",
+  "binarySha256": "50ac633af64851511f9bbc71032cdae7f1ba20b3234c189687d61ba846c354c5",
+  "installedVersion": "codex-cli 0.159.2",
+  "adapterProtocolPin": "rust-v0.162.1",
+  "profileInitiallyEmpty": true,
+  "dedicatedFileCredentialStore": true,
+  "inheritedCredentials": false,
+  "metadataInitializeProcesses": [
+    {
+      "attempt": 1,
+      "initializeObserved": true,
+      "exitCode": 0,
+      "userAgent": "project_room_metadata_probe/0.159.2 (Mac OS 26.5.1; arm64) unknown (project_room_metadata_probe; 0.1.0)"
+    },
+    {
+      "attempt": 2,
+      "initializeObserved": true,
+      "exitCode": 0,
+      "userAgent": "project_room_metadata_probe/0.159.2 (Mac OS 26.5.1; arm64) unknown (project_room_metadata_probe; 0.1.0)"
+    }
+  ],
+  "sameDedicatedProfile": true,
+  "gracefulExitAndReinitialize": true,
+  "threadStarted": false,
+  "modelTurnStarted": false,
+  "roomContextSent": false,
+  "roomPublicationTested": false,
+  "threadRecoveryTested": false,
+  "osIsolationQualified": false,
+  "genericDarwinIsolationBlockerUnchanged": true,
+  "privateRawProtocolExcluded": true
+}

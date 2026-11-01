@@ -56,6 +56,9 @@ test("parseInvite: the /a/<code> agent-steps link parses like /join/ under the s
     assert.throws(() => parseInvite(link), /not a Room address|credentials in the URL|https/, link);
   assert.throws(() => parseInvite(`https://room.trydemigod.com/a/${CODE}/extra`), /join/);
   assert.throws(() => parseInvite(`https://room.trydemigod.com/ab/${CODE}`), /join/);
+  // Code links carry only the share-analytics ?ref=; any other query or a fragment is refused.
+  for (const path of ["a", "join"]) for (const suffix of ["?token=x", "?ref=a&token=x", "#x", "?ref=a#frag"])
+    assert.throws(() => parseInvite(`https://room.trydemigod.com/${path}/${CODE}${suffix}`), /query|fragment/, `${path}${suffix}`);
 });
 
 test("redact hides credentials, codes and registered secrets", () => {

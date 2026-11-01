@@ -1,5 +1,7 @@
+import { assertMessageWrite, recordMessageWrite } from './write-integrity.mjs';
 import { writeMessageReplaySnapshot, discardMessageReplaySnapshot, decodeMessageReplaySnapshot } from './message-replay-snapshot.mjs';
 import { hydrateProjection, storedProjection } from "./projection-at-rest.mjs";
+import { hasMessageAuthority } from './message-authority.mjs';
 import { closeKeepSet } from "./open-questions.mjs";
 export { closeKeepSet };
 // MSG-1: the messages table, double-written with the room event log.
@@ -41,6 +43,7 @@ CREATE TABLE IF NOT EXISTS messages (
   pinned INTEGER NOT NULL DEFAULT 0 CHECK (pinned IN (0, 1)),
   record_json TEXT,
   reducer_extras_json TEXT,
+  entity_hash TEXT,
   PRIMARY KEY (room_id, message_id)
 );
 CREATE INDEX IF NOT EXISTS messages_room_seq ON messages(room_id, seq);
@@ -290,6 +293,7 @@ function writeMessageRows(db, {roomId,state,sequenceById,messageIndex=null,exact
   for (const messageId of affected) {
     const message = byId.get(messageId);
     if (!message || typeof message.authorId !== "string" || typeof message.createdAt !== "string") continue;
+    assertMessageWrite(db,roomId,message.id);
     upsert.run(
       roomId, message.id, sequenceById.get(message.id),
       textOrNull(message.channelId),
@@ -307,6 +311,7 @@ function writeMessageRows(db, {roomId,state,sequenceById,messageIndex=null,exact
       JSON.stringify(currentRecord(message)),
       JSON.stringify(reducerExtras(message))
     );
+    recordMessageWrite(db,roomId,message.id);
     written += 1;
   }
   return written;
@@ -318,8 +323,20 @@ function writeMessageRows(db, {roomId,state,sequenceById,messageIndex=null,exact
 const CERTIFIED_MESSAGE_TRANSITIONS = new Set([
   "message.posted", "message.edited", "poll.voted", "message.pinned", "message.unpinned"
 ]);
-export function captureMessageCertification(db, { roomId, sequence, event }) {
-  if (!db.isTransaction || !CERTIFIED_MESSAGE_TRANSITIONS.has(event?.type)) return null;
+// Deliberately narrow: adding a member does not rewrite message records. Do not
+// infer neutrality from the event name alone: a hook may replace a record or
+// alter pins/archive metadata. Frozen prior records and reference identity give
+// an O(retained records) witness without serializing or comparing message bodies.
+function unchangedMemberMessages(event, previous, next) {
+  return event?.type === "member.added" && Object.isFrozen(previous?.messages)
+    && Array.isArray(next?.messages) && previous.messages.length === next.messages.length
+    && previous.messages.every((message, index) => Object.isFrozen(message) && message === next.messages[index])
+    && isDeepStrictEqual(previous.pins, next.pins)
+    && isDeepStrictEqual(previous.messagesArchive, next.messagesArchive);
+}
+export function captureMessageCertification(db, { roomId, sequence, event, state, nextState }) {
+  const neutral = unchangedMemberMessages(event, state, nextState);
+  if (!db.isTransaction || (!CERTIFIED_MESSAGE_TRANSITIONS.has(event?.type) && !neutral)) return null;
   const row = db.prepare(`SELECT c.applied_event_id AS anchor FROM messages_backfill_cursor c
     JOIN rooms r ON r.id=c.room_id JOIN events e ON e.room_id=r.id AND e.sequence=r.sequence
     WHERE r.id=? AND r.sequence=? AND c.applied_seq=r.sequence
@@ -329,15 +346,16 @@ export function captureMessageCertification(db, { roomId, sequence, event }) {
   if (!row) return null;
   const positions = new Map(affectedMessageIds(event).map(id => [id,
     db.prepare("SELECT seq FROM messages WHERE room_id=? AND message_id=?").get(roomId, id)?.seq ?? null]));
-  return { roomId, sequence, anchor: row.anchor, positions };
+  return { roomId, sequence, anchor: row.anchor, positions, ...(neutral ? { neutralState: state } : {}) };
 }
 
 export function advanceMessageCertification(db, certificate, { sequence, event, state }) {
-  if (!certificate || !db.isTransaction || !CERTIFIED_MESSAGE_TRANSITIONS.has(event?.type)
+  const neutral = certificate?.neutralState && unchangedMemberMessages(event, certificate.neutralState, state);
+  if (!certificate || !db.isTransaction || (!CERTIFIED_MESSAGE_TRANSITIONS.has(event?.type) && !neutral)
     || sequence !== certificate.sequence + 1) return false;
   const { roomId } = certificate;
   const ids = affectedMessageIds(event);
-  if (!ids.length) return false;
+  if (!ids.length && !neutral) return false;
   const messages = state.messages ?? [];
   const pinned = new Set((state.pins ?? []).map(pin => pin.messageId));
   for (const id of ids) {
@@ -402,6 +420,7 @@ export function resyncRoomMessageRows(db, roomId, state) {
     if (typeof message.authorId !== "string" || typeof message.createdAt !== "string") continue;
     const reactions = message.reactions && typeof message.reactions === "object" && Object.keys(message.reactions).length
       ? JSON.stringify(message.reactions) : null;
+    assertMessageWrite(db,roomId,message.id);
     upsert.run(
       roomId, message.id, seq,
       textOrNull(message.channelId),
@@ -419,6 +438,7 @@ export function resyncRoomMessageRows(db, roomId, state) {
       JSON.stringify(currentRecord(message)),
       JSON.stringify(reducerExtras(message))
     );
+    recordMessageWrite(db,roomId,message.id);
     written += 1;
   }
   return written;
@@ -440,9 +460,11 @@ function cursorMatches(db, roomId, cursor, sequence) {
   if (!Number.isInteger(cursor.applied_seq) || cursor.applied_seq < 0 || cursor.applied_seq > sequence) return false;
   if (cursor.applied_seq === 0 && cursor.applied_event_id !== "") return false;
   if (cursor.applied_seq > 0 && db.prepare("SELECT id FROM events WHERE room_id=? AND sequence=?").get(roomId,cursor.applied_seq)?.id !== cursor.applied_event_id) return false;
-  if (cursor.state_seq > cursor.applied_seq) {
-    if (cursor.state_seq > sequence || db.prepare("SELECT id FROM events WHERE room_id=? AND sequence=?").get(roomId,cursor.state_seq)?.id !== cursor.replay_event_id) return false;
-  }
+  // Reconstruction can legitimately stage behind already published rows.
+  // Every positive staging checkpoint still needs its exact event anchor.
+  if (!Number.isInteger(cursor.state_seq) || cursor.state_seq < 0 || cursor.state_seq > sequence) return false;
+  if (cursor.state_seq === 0 && cursor.replay_event_id !== "") return false;
+  if (cursor.state_seq > 0 && db.prepare("SELECT id FROM events WHERE room_id=? AND sequence=?").get(roomId,cursor.state_seq)?.id !== cursor.replay_event_id) return false;
   return true;
 }
 
@@ -531,6 +553,10 @@ export function archivedMatchingRecords(db, roomId, needle) {
 }
 
 function pruneMessages(db, roomId) {
+  const raw = JSON.parse(db.prepare('SELECT projection FROM rooms WHERE id=?').get(roomId).projection);
+  // A canonical room has no legacy array. Its rows cannot be pruned by an
+  // absent mirror; replay validates their content before publishing instead.
+  if (hasMessageAuthority(raw)) return;
   db.prepare(`DELETE FROM messages WHERE room_id=? AND seq>? AND message_id NOT IN (
     SELECT json_extract(value, '$.id') FROM rooms, json_each(rooms.projection, '$.messages') WHERE rooms.id=?
   )`).run(roomId, archiveMarker(db, roomId).throughSeq, roomId);
@@ -987,43 +1013,15 @@ function refreshStaleBlocks(store, freshRooms = new Map(), { deadline = Infinity
 }
 
 function loadState(db, roomId, cursor) {
-  if (!cursor) return { state: emptyRoomState(), seq: 0 };
-  const replayFrom = (start, state) => {
-    const skip = new Set();
-    try {
-      const quarantined = db.prepare("SELECT event_id FROM messages_backfill_blocks WHERE room_id=? AND skipped=1 AND event_id IS NOT NULL").get(roomId);
-      if (quarantined?.event_id) skip.add(quarantined.event_id);
-    } catch { /* no blocks table yet */ }
-    const rows = db.prepare("SELECT id, body FROM events WHERE room_id=? AND sequence>? AND sequence<=? ORDER BY sequence")
-      .all(roomId, start, cursor.applied_seq);
-    let current = state;
-    for (const row of rows) {
-      let incoming;
-      try { incoming = JSON.parse(row.body); }
-      catch (error) {
-        if (skip.has(row.id)) continue;
-        throw error;
-      }
-      try { current = compactState(applyEvent(current, incoming)); }
-      catch (error) {
-        // The named quarantine is retried once here. A repaired event joins
-        // the state; a still-rejected one is skipped so this resume cannot
-        // park the room again. Any other failure still propagates.
-        if (skip.has(row.id) && isRoomDataError(error)) continue;
-        throw error;
-      }
-    }
-    return current;
-  };
-  if (typeof cursor.state_json === "string" && cursor.state_seq >= cursor.applied_seq) {
+  if (cursor && typeof cursor.state_json === "string" && Number.isInteger(cursor.state_seq) && cursor.state_seq >= 0) {
     try { return { state: decodeMessageReplaySnapshot(db, roomId, cursor.state_json), seq: cursor.state_seq }; }
-    catch { /* a torn snapshot replays from the log */ }
+    catch { /* Rebuild a damaged staging snapshot through bounded chunks below. */ }
   }
-  if (typeof cursor.state_json === "string" && Number.isInteger(cursor.state_seq) && cursor.state_seq >= 0 && cursor.state_seq < cursor.applied_seq) {
-    try { return { state: replayFrom(cursor.state_seq, decodeMessageReplaySnapshot(db, roomId, cursor.state_json)), seq: cursor.applied_seq }; }
-    catch { /* fall through to a full replay */ }
-  }
-  return { state: replayFrom(0, emptyRoomState()), seq: cursor.applied_seq };
+  // Never eagerly replay to applied_seq here. That prefix can contain years of
+  // history and previously ran before fillRoom's event/deadline budget. Keep
+  // serving rows and applied_seq intact; saveCursor publishes only staging
+  // progress until the reconstructed fold reaches and validates the room head.
+  return { state: emptyRoomState(), seq: 0 };
 }
 
 // Parked rooms are excluded by the messages_backfill_blocks clause below, so
@@ -1092,7 +1090,8 @@ function publishReplayMessages(store, roomId, sequence, anchor, state) {
   const raw=JSON.parse(db.prepare('SELECT projection FROM rooms WHERE id=?').get(roomId).projection);
   const references=new Set((raw.messages ?? []).filter(message=>message?._entity===1).map(message=>message.id));
   const archive=archiveMarker(db,roomId), retained=new Set(archive.retainedIds);
-  const authoritative=row=>references.has(row.message_id)||(archive.throughSeq&&row.seq<=archive.throughSeq&&!retained.has(row.message_id));
+  const canonical = hasMessageAuthority(raw);
+  const authoritative=row=>canonical||references.has(row.message_id)||(archive.throughSeq&&row.seq<=archive.throughSeq&&!retained.has(row.message_id));
   const validate=row=>{
     if(!authoritative(row))return;
     const expected=index.get(row.message_id);
@@ -1101,7 +1100,7 @@ function publishReplayMessages(store, roomId, sequence, anchor, state) {
     if(!expected || row.body!==storedBody(expected) || !isDeepStrictEqual(record,currentRecord(expected))
       || extras!==null&&!isDeepStrictEqual(extras,reducerExtras(expected)))throw new Error('messages serving entity requires reconciliation');
   };
-  if(published===0&&(references.size||archive.throughSeq)) {
+  if(published===0&&(canonical||references.size||archive.throughSeq)) {
     for(const row of db.prepare('SELECT message_id,seq,body,record_json,reducer_extras_json FROM messages WHERE room_id=?').all(roomId))validate(row);
   } else for(const row of existing.values())validate(row);
   const sequences=new Map();
@@ -1377,7 +1376,8 @@ function nextParityRoom(db, after) {
 }
 
 function parityNumbers(db, roomId) {
-  const projectionCount = db.prepare("SELECT COALESCE(json_array_length(projection, '$.messages'), 0) AS n FROM rooms WHERE id=?").get(roomId).n;
+  const raw = JSON.parse(db.prepare('SELECT projection FROM rooms WHERE id=?').get(roomId).projection);
+  const projectionCount = hasMessageAuthority(raw) ? raw.messageAuthority.count : (raw.messages?.length ?? 0);
   const table = db.prepare("SELECT COUNT(*) AS n, COALESCE(MAX(seq), 0) AS lastSeq FROM messages WHERE room_id=?").get(roomId);
   const posted = db.prepare(`SELECT COALESCE(MAX(sequence), 0) AS lastSeq FROM events
     WHERE room_id=? AND json_extract(body, '$.type')=?`).get(roomId, POSTED);
@@ -1510,7 +1510,13 @@ function retainedByState(state) {
     if (typeof item?.receipt?.nativeText?.messageId === "string") keep.add(item.receipt.nativeText.messageId);
     if (typeof item?.receipt?.evidenceMessageId === "string") keep.add(item.receipt.evidenceMessageId);
   }
-  for (const id of Object.keys(state.replyRequests ?? {})) keep.add(id);
+  for (const [id, request] of Object.entries(state.replyRequests ?? {})) {
+    keep.add(id);
+    // Follow-up drafts read the recorded answer from state.messages. A formal
+    // request need not contain a question mark, so open-question retention alone
+    // cannot keep its response. The existing request cap bounds these extra IDs.
+    if (typeof request?.responseMessageId === "string") keep.add(request.responseMessageId);
+  }
   for (const message of state.messages ?? []) if (typeof message?.workItemId === "string" && message.workItemId) keep.add(message.id);
   return keep;
 }
@@ -1623,7 +1629,11 @@ export function archiveRoomMessages(store, roomId, { keepNewest = 2000, dryRun =
     // Fill reducer-only history for pre-v39 rows at the migration boundary.
     // These bytes are never returned by current-message repository reads.
     const extras = db.prepare('UPDATE messages SET reducer_extras_json=? WHERE room_id=? AND message_id=?');
-    for (const message of moving) extras.run(JSON.stringify(reducerExtras(message)), roomId, message.id);
+    for (const message of moving) {
+      assertMessageWrite(db,roomId,message.id);
+      extras.run(JSON.stringify(reducerExtras(message)), roomId, message.id);
+      recordMessageWrite(db,roomId,message.id);
+    }
     const next = { ...state, messages: inProjection.filter(message => !movingIds.has(message.id)) };
     // The marker must never claim a message that is still in the projection.
     const overlaps = db.prepare(`SELECT 1 FROM messages WHERE room_id=? AND seq<=?
@@ -1642,11 +1652,17 @@ export function archiveRoomMessages(store, roomId, { keepNewest = 2000, dryRun =
 // marker and not retained leave the state; the marker is rebuilt from the table.
 export function compactReplayLikeArchive(db, roomId, state) {
   const marker = archiveMarker(db, roomId);
-  if (!marker.throughSeq) return state;
+  const raw = JSON.parse(db.prepare('SELECT projection FROM rooms WHERE id=?').get(roomId).projection);
+  const canonical = hasMessageAuthority(raw);
+  if (!marker.throughSeq) {
+    if (canonical) state.messageAuthority = { ...raw.messageAuthority };
+    return state;
+  }
   const archived = new Set(db.prepare("SELECT message_id FROM messages WHERE room_id=? AND seq<=? AND message_id NOT IN (SELECT value FROM json_each(?))")
     .all(roomId, marker.throughSeq, marker.retainedJson).map(row => row.message_id));
   state.messages = (state.messages ?? []).filter(message => !archived.has(message.id));
   state.messagesArchive = { throughSeq: marker.throughSeq, count: archived.size, retainedIds: marker.retainedIds };
+  if (canonical) state.messageAuthority = { ...raw.messageAuthority };
   return state;
 }
 

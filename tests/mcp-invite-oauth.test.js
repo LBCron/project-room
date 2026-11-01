@@ -134,10 +134,14 @@ test('accountless native agent discovers work, submits, revises and reads exact 
     return reply.body.result.structuredContent;
   };
   const { memberId } = await call('room_check_access');
+  // The producer, verifier and human decision-maker occupy distinct seats.
+  f.store.command(f.owner, 'commons', { id: 'native-reviewer-seat', type: 'member.added',
+    data: { memberId: 'native-reviewer', displayName: 'Independent reviewer', kind: 'agent', permissions: ['verify'] } });
+  const reviewer = f.store.issueAccessKey('commons', 'native-reviewer');
   f.store.command(f.owner, 'commons', { id: 'first-native-task', type: 'work.proposed', data: {
     workItemId: 'native-first-task', title: 'Suggest a useful first step',
     definitionOfDone: 'One concrete step and why it helps', accountableMemberId: memberId,
-    mode: 'read', verifierMemberId: 'owner', independentVerificationRequired: true,
+    mode: 'read', verifierMemberId: 'native-reviewer', independentVerificationRequired: true,
     ownerDecisionRequired: true, humanDecisionMakerId: 'owner',
   } });
   const discovered = await call('room_list_work', { focus: 'needs_me' });
@@ -168,9 +172,9 @@ test('accountless native agent discovers work, submits, revises and reads exact 
   assert.equal(f.store.room('commons').state.workItems['native-first-task'].state, 'completed');
   const workItemId = 'native-first-task';
   const read = () => call('room_read_work', { workItemId });
-  const ownerCommand = async (type, data) => {
+  const ownerCommand = async (type, data, credential = f.owner) => {
     const response = await fetch(f.base + '/api/rooms/commons/commands', { method: 'POST',
-      headers: { Authorization: 'Bearer ' + f.owner, 'Content-Type': 'application/json' },
+      headers: { Authorization: 'Bearer ' + credential, 'Content-Type': 'application/json' },
       body: JSON.stringify({ id: crypto.randomUUID(), type, data }) });
     assert.equal(response.status, 201, await response.clone().text());
     return response.json();
@@ -178,7 +182,7 @@ test('accountless native agent discovers work, submits, revises and reads exact 
   const review = async (result, exact, summary) => {
     const response = await fetch(f.base + '/api/rooms/commons/work-result?' + new URLSearchParams({
       workItemId, completionEventId: exact.result.receipt.eventId,
-    }), { headers: { Authorization: 'Bearer ' + f.owner } });
+    }), { headers: { Authorization: 'Bearer ' + reviewer } });
     assert.equal(response.status, 200);
     const inspected = await response.json();
     assert.equal(inspected.result.text.body, exact.result.text.body);
@@ -186,11 +190,11 @@ test('accountless native agent discovers work, submits, revises and reads exact 
       workItemId, expectedRevision: (await read()).work.revision, result,
       completionEventId: inspected.result.receipt.eventId, evidenceVersion: inspected.result.text.evidenceVersion,
       summary, nextAction: 'Add a reconnect check',
-    });
+    }, reviewer);
   };
   const first = await call('room_read_result', { workItemId });
   assert.equal((await read()).next.action, 'verify');
-  assert.equal((await read()).next.memberId, 'owner');
+  assert.equal((await read()).next.memberId, 'native-reviewer');
   const selfReview = await f.rpc(tokens.access_token, 'room_record_verification', {
     workItemId, result: 'pass', completionEventId: first.result.receipt.eventId,
     evidenceVersion: first.result.text.evidenceVersion, summary: 'Self approval must be refused',

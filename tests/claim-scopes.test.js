@@ -270,7 +270,7 @@ test('an ownerless room refuses a handoff without a claim profile but admits a b
   const row = f.store.db.prepare('SELECT projection FROM rooms WHERE id=?').get('commons');
   const projection = JSON.parse(row.projection);
   projection.room.ownerId = '';
-  f.store.db.prepare('UPDATE rooms SET projection=? WHERE id=?').run(JSON.stringify(projection), 'commons');
+  f.store.transaction(() => f.store.db.prepare('UPDATE rooms SET projection=? WHERE id=?').run(f.store.storedProjection('commons', projection), 'commons'));
   f.propose('job', 'narrow', 'read');
   f.store.command(narrowKey, 'commons', command(T.WORK_STARTED, { workItemId: 'job', expectedRevision: 1 }));
   assert.throws(

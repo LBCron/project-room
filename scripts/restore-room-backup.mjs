@@ -76,8 +76,11 @@ const restoreOutcome = { promoted: false, cleanupFailed: false };
 async function main() {
   const { values } = parseArgs({ options: {
     from: { type: "string" }, kv: { type: "string" }, "namespace-id": { type: "string" },
-    to: { type: "string" }, room: { type: "string", multiple: true }, save: { type: "string" }, audit: { type: "string" }
+    to: { type: "string" }, room: { type: "string", multiple: true }, save: { type: "string" }, audit: { type: "string" }, "source-schema-version": { type: "string" }
   } });
+  const sourceParam = values["source-schema-version"];
+  const sourceSchemaVersion = sourceParam === undefined ? null : sourceParam === "42" ? 42 : sourceParam === "43" ? 43 : NaN;
+  if (Number.isNaN(sourceSchemaVersion)) throw new Error("--source-schema-version must be 42 or 43");
   process.umask(0o077);
   if (!values.to) throw new Error("Pass --to <new sqlite path>");
   if (existsSync(values.to)) throw new Error("Refusing to restore over an existing file");
@@ -100,7 +103,7 @@ async function main() {
   const stagedFile = join(staging, "room.sqlite");
   let result, rooms, replayError;
   try {
-    result = replayNdjson(ndjson, stagedFile, { audit: values.audit ?? "strict" });
+    result = replayNdjson(ndjson, stagedFile, { audit: values.audit ?? "strict", sourceSchemaVersion });
     rooms = (values.room ?? []).map(roomId => summarizeRoom(stagedFile, roomId));
     if (["-wal", "-shm"].some(suffix => existsSync(`${values.to}${suffix}`)))
       throw new Error("Refusing to restore beside existing SQLite sidecars");
@@ -118,7 +121,7 @@ async function main() {
     }
   }
   process.stdout.write(`${JSON.stringify({
-    verified: result.verified, events: result.events, trailer: result.trailer, contentVerification: result.contentVerification, audit: result.audit, skippedTables: result.skippedTables, sanitizedCells: result.sanitizedCells, roomsInBackup: watermark.rooms?.length ?? null,
+    verified: result.verified, events: result.events, trailer: result.trailer, contentVerification: result.contentVerification, writeProofs: result.writeProofs, audit: result.audit, skippedTables: result.skippedTables, sanitizedCells: result.sanitizedCells, roomsInBackup: watermark.rooms?.length ?? null,
     backedUpAt: watermark.backedUpAt ? new Date(watermark.backedUpAt).toISOString() : null,
     manifest: manifest && { key: manifest.key, bytes: manifest.bytes, parts: manifest.parts.length, sha256: manifest.sha256 },
     rooms

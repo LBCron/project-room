@@ -6,6 +6,8 @@
 import { createHash, timingSafeEqual } from "node:crypto";
 import { chmodSync, existsSync, mkdirSync } from "node:fs";
 import { dirname } from "node:path";
+import { bootstrapLegacyWriteProofs } from "./write-integrity.mjs";
+import { STORE_SCHEMA_VERSION } from "./writer-fence.mjs";
 import { RoomStore, INTEGRITY_FAILURES_SCHEMA } from "./store.mjs";
 import { wakeListenerLeaseSchema, wakeRoomActivitySchema } from "./agent-heartbeats.mjs";
 import { PATROL_SCHEMA } from "./patrol.mjs";
@@ -175,7 +177,11 @@ function* exportTableRows(db, table, columns, pageRows) {
 export function* exportNdjsonLines(db, { pageRows = EXPORT_PAGE_ROWS } = {}) {
   const rooms = db.prepare("SELECT id, sequence FROM rooms ORDER BY id").all();
   const events = db.prepare("SELECT count(*) AS n FROM events").get().n;
-  yield JSON.stringify({ kind: "watermark", version: 1, sanitizePolicy: BACKUP_SANITIZE_POLICY, backedUpAt: Date.now(), rooms, events }) + "\n";
+  const durable = db.prepare("SELECT 1 FROM sqlite_master WHERE type='table' AND name='room_runtime_version'").get();
+  const sourceSchemaVersion = durable ? db.prepare('SELECT version FROM room_runtime_version WHERE singleton=1').get()?.version
+    : db.prepare('PRAGMA user_version').get().user_version;
+  if (!Number.isSafeInteger(sourceSchemaVersion) || sourceSchemaVersion < 1) throw new Error('Export has no source schema version');
+  yield JSON.stringify({ kind: "watermark", version: 1, sourceSchemaVersion, sanitizePolicy: BACKUP_SANITIZE_POLICY, backedUpAt: Date.now(), rooms, events }) + "\n";
   // #3325: pin every loadable table's content in the trailer, accumulated
   // over the sanitized rows exactly as they are yielded below.
   const digests = createTableDigests();
@@ -560,11 +566,54 @@ export function ensureNativeAgentRestoreSchema(db, names) {
   if (names.has("mcp_event_subscriptions") || names.has("mcp_event_outbox")) db.exec(mcpEventSubscriptionsSchema);
 }
 
-export function replayNdjson(ndjson, filename, { audit = "strict", retainTables = null } = {}) {
+// Restored grants already carry their original journal/pending rows. Replaying
+// an INSERT must not invent a second, unjournaled grant transition. Suspend only
+// this derivative trigger inside the caller's synchronous restore transaction;
+// writer fences and deletion guards stay active. Real exported pending evidence
+// is loaded unchanged, and the target's original trigger is restored on failure.
+export function withRestoreTableRows(db, table, insert) {
+  if (table !== "membership_delegation_grants") return insert();
+  const trigger = db.prepare("SELECT sql FROM sqlite_master WHERE type='trigger' AND name='membership_delegation_pending_insert'").get();
+  if (!trigger?.sql) throw new Error("Restore requires the membership delegation insertion trigger");
+  db.exec("DROP TRIGGER membership_delegation_pending_insert");
+  try { return insert(); }
+  finally { db.exec(trigger.sql); }
+}
+
+// Older exports have no schema marker. Only an operator's explicit legacy
+// attestation can authorize prospective proof adoption for those exports.
+export function restoreSourceSchemaVersion(watermark, attested = null) {
+  if (attested !== null && attested !== 42 && attested !== 43)
+    throw new Error('Restore sourceSchemaVersion attestation must be 42 or 43');
+  const marked = watermark?.sourceSchemaVersion;
+  if (marked !== undefined && (!Number.isSafeInteger(marked) || marked < 1 || marked > STORE_SCHEMA_VERSION))
+    throw new Error('Export sourceSchemaVersion is invalid or newer than this store');
+  if (attested !== null && marked !== undefined && marked !== attested)
+    throw new Error('Restore sourceSchemaVersion attestation conflicts with export marker');
+  return marked ?? attested;
+}
+
+export function verifyRestoredTableCounts(db, byTable) {
+  for (const [table, rows] of byTable) {
+    const expected = rows.filter(row => Object.keys(row).length).length;
+    const actual = db.prepare(`SELECT count(*) AS n FROM ${quoteIdent(table)}`).get().n;
+    if (actual !== expected) throw new Error(`Export watermark does not match the restored table ${table}: expected ${expected} rows, got ${actual}`);
+  }
+}
+
+export function restoreLegacyWriteProofs(store, watermark, attested = null) {
+  const sourceSchemaVersion = restoreSourceSchemaVersion(watermark, attested);
+  const legacy = sourceSchemaVersion === 42 || sourceSchemaVersion === 43;
+  const metadataProofsAdded = legacy ? store.transaction(() => bootstrapLegacyWriteProofs(store.db)) : 0;
+  return { sourceSchemaVersion, metadataProofsAdded, historicalVerification: 'unchanged' };
+}
+
+export function replayNdjson(ndjson, filename, { audit = "strict", retainTables = null, sourceSchemaVersion = null } = {}) {
   if (audit !== "strict" && audit !== "report") throw new Error("audit must be strict or report");
   if (retainTables != null && typeof retainTables !== "function") throw new Error("retainTables must be a function");
   if (!filename) throw new Error("Missing replay paths");
   const { watermark, byTable, trailer } = parseExport(ndjson);
+  restoreSourceSchemaVersion(watermark, sourceSchemaVersion);
   // Fail fast on a torn export, before any store is created: a mid-stream
   // write the watermark could not see must never verify. #3325: the
   // trailer's per-table content digests are computed over the complete
@@ -612,15 +661,17 @@ export function replayNdjson(ndjson, filename, { audit = "strict", retainTables 
         if (table === "credentials") rows.sort((a, b) => Number(a.parent_hash != null) - Number(b.parent_hash != null));
         const columns = tableColumns(store.db, table);
         const known = new Set(columns);
-        for (const row of rows) {
-          const keys = Object.keys(row);
-          if (keys.some(key => !known.has(key))) throw new Error("Export row does not match the store schema");
-          if (!keys.length) continue;
-          const cells = Object.fromEntries(keys.map(key => [key, tracker.resolve(table, key, cellOf(row[key]))]));
-          checkStoredBytes(table, cells);
-          store.db.prepare(`INSERT INTO ${quoteIdent(table)} (${keys.map(quoteIdent).join(", ")}) VALUES (${keys.map(() => "?").join(", ")})`)
-            .run(...keys.map(key => cells[key]));
-        }
+        withRestoreTableRows(store.db, table, () => {
+          for (const row of rows) {
+            const keys = Object.keys(row);
+            if (keys.some(key => !known.has(key))) throw new Error("Export row does not match the store schema");
+            if (!keys.length) continue;
+            const cells = Object.fromEntries(keys.map(key => [key, tracker.resolve(table, key, cellOf(row[key]))]));
+            checkStoredBytes(table, cells);
+            store.db.prepare(`INSERT INTO ${quoteIdent(table)} (${keys.map(quoteIdent).join(", ")}) VALUES (${keys.map(() => "?").join(", ")})`)
+              .run(...keys.map(key => cells[key]));
+          }
+        });
       }
       if (claimPermit) store.db.prepare(`UPDATE ${CLAIM_PERMIT_TABLE} SET enabled=0 WHERE singleton=1`).run();
     });
@@ -636,6 +687,8 @@ export function replayNdjson(ndjson, filename, { audit = "strict", retainTables 
     // (the #3325 probe) loads cleanly and is refused here, before the
     // audits and before verified is ever returned.
     const contentVerification = contentVerificationLevel(trailer, computedDigests);
+    verifyRestoredTableCounts(store.db, byTable);
+    const writeProofs = restoreLegacyWriteProofs(store, watermark, sourceSchemaVersion);
     let recovery = null, invitations = {}, auditResult = { ok: true };
     try {
       recovery = auditRecovery(store);
@@ -645,6 +698,6 @@ export function replayNdjson(ndjson, filename, { audit = "strict", retainTables 
       auditResult = { ok: false, error: String(error?.message ?? error).split("\n")[0].slice(0, 200) };
     }
     chmodSync(filename, 0o600);
-    return { verified: true, events, trailer: trailerState, contentVerification, ...invitations, recovery, audit: auditResult, skippedTables: skipped, sanitizedCells: tracker.report() };
+    return { verified: true, events, trailer: trailerState, contentVerification, writeProofs, ...invitations, recovery, audit: auditResult, skippedTables: skipped, sanitizedCells: tracker.report() };
   } finally { store.close(); }
 }

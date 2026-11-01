@@ -1,6 +1,6 @@
 # Follow-up production releases, 2026-11-01
 
-Current checkpoint at 13:24Z: main and production are `e4d27fca0fc6cb420649a91ee90db5176f72b5d1`. Deployment `41309512011` completed successfully: strict 16/16, public smoke, immutable runtime publication and root's six-door readback at 13:14:02.139Z passed. Canonical build `2026-11-01T13:05:45.583Z`; entry build `2026-11-01T13:05:54.637Z`. This includes selected read-only parity #5604, cleanup #5605 and readiness RPC observation #5606. Both finite rollout traces observed zero HTTP 5xx or exception entries; they do not establish a causal latency fix. A fresh selected read at 13:23:15.295Z correctly refuses to verify the quarantined room (`unknown/proof_invalid`, head/applied 25, no recorded certification). No v3 historical plan or repair execute has run. Checkpoint-loss replay-consumer qualification, Jill's bounded attention cure and large-room blob replacement remain open.
+Current checkpoint at18:53Z: main is `c52db58787467390042295b181b152ef3ba4de12`; production is the schema-gated recovery `513d3ee8471464803fd3c70dea2fe9ce30f27ad0` from deployment `41336903930`. Strict16/16, public smoke and runtime publication passed; canonical build `2026-11-01T18:30:36.961Z`, entry Worker build `2026-11-01T18:30:47.705Z`. However the subsequent finite recovery trace captured another readiness503, so latency is unresolved and new deployments/historical repair remain held for diagnosis. New main landings5619,5620 and5574 are not deployed. No historical v3 plan or execute has run. Large-room blob removal, bounded wake activation, actual native runtime execution and fresh-account Android qualification remain incomplete. See [use-driven design](use-driven-design.md) and [recovery trace](513d-r2-recovery-trace-summary.json).
 
 The sections below are dated checkpoint history. Later receipts supersede earlier limitations explicitly; failed attempts remain preserved. Exact head qualification, merge, deployment and live checks are distinct. No skipped or cancelled job is called passed.
 
@@ -223,3 +223,20 @@ The [dual-role finite trace summary](production-e4d-dual-readiness-summary.json)
 [Natural job evidence](natural-jobs-1300-committed-1101.json) records retention and integrity committed at 13:00:42/48Z with zero consecutive failures, 79 verified rooms and one quarantined event. Those timestamps are not direct source attestations. The earlier 13:00:18 pre-tick read is not evidence of the 13:00 job.
 
 [Selected read before repair](selected-parity-before-repair-1101.json) is an authenticated GET against the newly deployed bounded endpoint. It reports unknown/proof_invalid, not clean. Raw target and response remain private. Historical mutation is held until saved repair contracts survive derived-checkpoint loss through the ordinary replay consumer. No quarantine row, proof baseline, grant, health counter or schedule was changed. Large-room sidecar preparation is not serving activation and does not remove the blob.
+
+
+### Recovery and qualified landings,18:53UTC
+
+Source `ef583ba81eeeb284c8b743829aa4a0555752a0e8` (#5608 saved historical contract consumer) deployed in41335150323 with strict/public smoke and verified runtime, canonical build18:10:23.342Z and entry18:10:33.112Z. Fresh both-door readiness503s at18:28:58.616Z caused normal same-floor recovery41336903930 to513d-r2. This is not proof5608 caused the incident; its consumer is now off production and no historical plan or execute occurred.
+
+Recovery runtime `runtime-2026-11-01-513d3ee-r2` was verified before promotion:667files,3,532,148bytes,SHA256 `bfb64fd02d82b19222fdfb8f4267a1a91355c3a1d6fd950af8907233aa39852e`. Both finite600-second recovery traces completed within their2MiB output caps. Canonical sampled39 readiness response observations, including one timeout2500ms followed by successful same-source/build RPC settlement2519ms. Entry sampled12 successful readiness responses. The0ms authority SQL/DO fields use IO-bound clocks, not CPU measurement. Canonical2606 and entry66 log records are not distinct requests or a complete population. The trace establishes recurrence on prior code, not incident causality.
+
+Integrated, not deployed:
+
+| PR | Qualified head | Merge | Validation |
+| --- | --- | --- | --- |
+|5619 remove misleading dormant wake-load mode|a4e154c16ae474411ccf6d6302a9f9e028f9be38|839a642fc5eb2e5b8a05b962671fc1e2bc2b7cb3|50localchecks;headmechanical/safety-net/verdict passed,broadCI skipped|
+|5620 rejected auth fixture placeholder|d55e1b120da99aa047212e5d76dcafa8747cb9c1|82de0f8b42f7bbcb1fd3e92368b43d18280a319a|exactscheduleddiff red/green;43tests;headmechanical/safety-net/verdict passed,broadCI skipped|
+|5574 ACP trusted issuer/environment|c0d91dc43fa2dd1b5630243f7cf2206bd72ec997|c52db58787467390042295b181b152ef3ba4de12|ownhead41337799280 success, including contract/lint/unit/Worker/browser/friendjourney|
+
+The first local5574 check completed13,800tests:13,765passed,1failed due two stale ACP manifest pins,34skipped. The exact pins were refreshed and manifest8/8passed afterward; hosted final-head checks passed. Original shadow-import contract failure and manifest failure are preserved. No skipped test is a pass; child environment hygiene does not establish native model execution or an OS sandbox.

@@ -1,0 +1,122 @@
+{
+  "kind": "room.readiness-recovery-observation.v1",
+  "recordedAt": "2026-11-01T18:52:20.795515+00:00",
+  "source": "513d3ee8471464803fd3c70dea2fe9ce30f27ad0",
+  "deployRun": 41336903930,
+  "canonicalBuild": "2026-11-01T18:30:36.961Z",
+  "entryBuild": "2026-11-01T18:30:47.705Z",
+  "limits": [
+    "Finite future-only sampled trace, not full population",
+    "Timing is IO-bound, not CPU measurement",
+    "Events/log records are not distinct requests",
+    "No outage-cause attribution or latency-cure claim"
+  ],
+  "collectors": {
+    "canonical": {
+      "sha256": "69d47b9d9104a4e34a0c386e06395defd309c8dc445585bc6dddf57f4c3c970b",
+      "records": 2606,
+      "finished": {
+        "observation": "finished",
+        "at": 1793558886.5168629,
+        "elapsedSeconds": 600.01,
+        "decodedEvents": 2604,
+        "outputCapReached": false,
+        "exitCode": -9
+      },
+      "readinessResponses": 39,
+      "readinessTimeouts": 1,
+      "http5xxRecords": 1,
+      "exceptionRecords": 0,
+      "failures": [
+        {
+          "outcome": "ok",
+          "kind": "request",
+          "exceptions": [],
+          "logs": [
+            {
+              "event": "room.readiness_probe",
+              "stage": "worker_wait_started",
+              "outcome": "pending",
+              "epochMs": 1793558522424,
+              "sourceRevision": "513d3ee8471464803fd3c70dea2fe9ce30f27ad0",
+              "buildId": "2026-11-01T18:30:36.961Z",
+              "clockSemantics": "io-bound",
+              "cpuMeasured": false
+            },
+            {
+              "event": "room.readiness_probe",
+              "stage": "worker_rpc_started",
+              "outcome": "pending",
+              "epochMs": 1793558522424,
+              "sourceRevision": "513d3ee8471464803fd3c70dea2fe9ce30f27ad0",
+              "buildId": "2026-11-01T18:30:36.961Z",
+              "clockSemantics": "io-bound",
+              "cpuMeasured": false
+            },
+            {
+              "event": "room.readiness_probe",
+              "stage": "worker_response",
+              "outcome": "timeout",
+              "elapsedMs": 2500,
+              "timeoutMs": 2500,
+              "epochMs": 1793558524924,
+              "probeWaitMs": 2500,
+              "sourceRevision": "513d3ee8471464803fd3c70dea2fe9ce30f27ad0",
+              "buildId": "2026-11-01T18:30:36.961Z",
+              "clockSemantics": "io-bound",
+              "cpuMeasured": false,
+              "probeRole": "leader"
+            },
+            {
+              "event": "room.request",
+              "routeClass": "ready",
+              "method": "GET",
+              "totalMs": 2500,
+              "status": 503,
+              "servedBy": "worker"
+            },
+            {
+              "event": "room.readiness_probe",
+              "stage": "worker_rpc_settled",
+              "outcome": "ok",
+              "elapsedMs": 2519,
+              "epochMs": 1793558524943,
+              "sourceRevision": "513d3ee8471464803fd3c70dea2fe9ce30f27ad0",
+              "buildId": "2026-11-01T18:30:36.961Z",
+              "authoritySourceRevision": "513d3ee8471464803fd3c70dea2fe9ce30f27ad0",
+              "authorityBuildId": "2026-11-01T18:30:36.961Z",
+              "authoritySqlOutcome": "ok",
+              "authoritySqlElapsedMs": 0,
+              "authorityDoElapsedMs": 0,
+              "authorityObservation": "present",
+              "clockSemantics": "io-bound",
+              "cpuMeasured": false
+            }
+          ],
+          "workerRole": "canonical",
+          "eventTimestamp": 1793558522172,
+          "routeClass": "ready",
+          "method": "GET",
+          "httpStatus": 503
+        }
+      ]
+    },
+    "entry": {
+      "sha256": "79dd32baa0bb3ec9a712cba16f9ca14557029b17f1be410782f4b5d484494a2e",
+      "records": 66,
+      "finished": {
+        "observation": "finished",
+        "at": 1793558886.514339,
+        "elapsedSeconds": 600.0,
+        "decodedEvents": 64,
+        "outputCapReached": false,
+        "exitCode": -9
+      },
+      "readinessResponses": 12,
+      "readinessTimeouts": 0,
+      "http5xxRecords": 0,
+      "exceptionRecords": 0,
+      "failures": []
+    }
+  }
+}

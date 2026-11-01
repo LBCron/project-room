@@ -203,3 +203,12 @@ Dated plans, checkpoints, and working notes are in [history/](../archive/docs/hi
 - [ARCHIVED-WORK.md](ARCHIVED-WORK.md): closed PRs from the 2026-10-25 cleanup, with head SHAs for restore
 
 - [Shipped Gmail sanitizer security repair](research/2026-11-01-sanitizer-security-repair.md): advisory scope and executable qualification.
+
+### November1 release qualification and design evidence
+
+- [Initial restored release qualification](research/2026-11-01-c1c92-release/README.md)
+- [Dependency security qualification](research/2026-11-01-dependency-security/README.md)
+- [Follow-up releases and recovery](research/2026-11-01-followup-releases/README.md)
+- [Attention SQL census](research/2026-11-01-followup-releases/needs-me-5582-sql-census.md)
+- [Legacy wake-load removal](research/2026-11-01-legacy-wake-drain-removal.md)
+- [Message authority qualification](research/2026-11-01-message-authority-qualification/README.md)

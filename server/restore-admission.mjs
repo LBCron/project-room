@@ -6,19 +6,27 @@ import { CURRENT_WRITER_FORMAT } from './current-room-format.mjs';
 // Target-owned operational fence. Exported source rows can never grant admission
 // to a target, and no ordinary SQL writer may clear an interrupted restore.
 export const RESTORE_CONTROL_TABLE = 'current_restore_admission';
+export const RESTORE_AUDIT_TABLE='current_restore_audit_scratch';
+export const RESTORE_AUDIT_VERSION=1,RESTORE_REPORT_VERSION=2;
+export const RESTORE_AUDIT_UNIT_BYTES=131072+2048;
 export const RESTORE_CONTROL_DEFINITIONS = [[RESTORE_CONTROL_TABLE, `CREATE TABLE IF NOT EXISTS current_restore_admission (
   singleton INTEGER PRIMARY KEY CHECK(singleton=1), state TEXT NOT NULL CHECK(state IN ('clear','pending')),
   restore_id TEXT, phase TEXT NOT NULL DEFAULT 'clear' CHECK(phase IN ('clear','loading','coverage','audit_pending')),
   revision INTEGER NOT NULL DEFAULT 0 CHECK(revision>=0), source_seal TEXT, coverage TEXT, latest_receipt TEXT,
   CHECK((state='clear' AND restore_id IS NULL AND phase='clear' AND revision=0 AND source_seal IS NULL AND coverage IS NULL)
     OR (state='pending' AND length(restore_id)>0 AND phase='loading' AND source_seal IS NULL AND coverage IS NULL AND latest_receipt IS NULL)
-    OR (state='pending' AND length(restore_id)>0 AND phase IN ('coverage','audit_pending') AND source_seal IS NOT NULL AND coverage IS NOT NULL)))`]];
-export const RESTORE_CONTROL_GUARDS = ['INSERT','UPDATE','DELETE'].map(operation => {
-  const name='current_restore_admission_'+operation.toLowerCase();
-  return [name,`CREATE TRIGGER IF NOT EXISTS ${name} BEFORE ${operation} ON current_restore_admission BEGIN
-    SELECT RAISE(ABORT,'unsupported restore admission mutation: durable-coverage-v1:${CURRENT_WRITER_FORMAT}'); END`];
-});
-export const RESTORE_CONTROL_SCHEMA=RESTORE_CONTROL_DEFINITIONS[0][1]+`;
+    OR (state='pending' AND length(restore_id)>0 AND phase IN ('coverage','audit_pending') AND source_seal IS NOT NULL AND coverage IS NOT NULL)))`],
+  [RESTORE_AUDIT_TABLE,`CREATE TABLE IF NOT EXISTS current_restore_audit_scratch (
+    restore_id TEXT NOT NULL,lane TEXT NOT NULL CHECK(lane IN ('actual','replay','history','report')),room_id TEXT NOT NULL,
+    domain TEXT NOT NULL,unit_key TEXT NOT NULL,part INTEGER NOT NULL CHECK(part>=0),
+    payload_bytes INTEGER NOT NULL CHECK(payload_bytes BETWEEN 1 AND ${RESTORE_AUDIT_UNIT_BYTES}),payload TEXT NOT NULL,
+    PRIMARY KEY(restore_id,lane,room_id,domain,unit_key,part))`]];
+export const RESTORE_CONTROL_GUARDS = [RESTORE_CONTROL_TABLE,RESTORE_AUDIT_TABLE].flatMap(table=>['INSERT','UPDATE','DELETE'].map(operation => {
+  const name=table+'_'+operation.toLowerCase();
+  return [name,`CREATE TRIGGER IF NOT EXISTS ${name} BEFORE ${operation} ON ${table} BEGIN
+    SELECT RAISE(ABORT,'unsupported restore admission mutation: durable-coverage-v1:${CURRENT_WRITER_FORMAT}:audit-scratch-${RESTORE_AUDIT_VERSION}:report-${RESTORE_REPORT_VERSION}'); END`];
+}));
+export const RESTORE_CONTROL_SCHEMA=RESTORE_CONTROL_DEFINITIONS.map(([,sql])=>sql).join(';\n')+`;
 INSERT INTO current_restore_admission(singleton,state,restore_id) SELECT 1,'clear',NULL WHERE NOT EXISTS(SELECT 1 FROM current_restore_admission);`;
 const scopes=new WeakSet();
 const normalize=sql=>sql?.trim().replace(/;$/,'').replace(/IF NOT EXISTS /g,'').replace(/\s+/g,' ');
@@ -67,7 +75,7 @@ export function withExactRestoreGuards(db,definitions,operation) {
   }
 }
 function setRestoreState(db,state,id,receipt=null) {
-  withExactRestoreGuards(db,RESTORE_CONTROL_GUARDS,()=>db.prepare('UPDATE current_restore_admission SET state=?,restore_id=?,phase=?,revision=0,source_seal=NULL,coverage=NULL,latest_receipt=? WHERE singleton=1').run(state,id,state==='clear'?'clear':'loading',receipt===null?null:JSON.stringify(receipt)));
+  withExactRestoreGuards(db,RESTORE_CONTROL_GUARDS.filter(([name])=>name.startsWith(RESTORE_CONTROL_TABLE+'_')),()=>db.prepare('UPDATE current_restore_admission SET state=?,restore_id=?,phase=?,revision=0,source_seal=NULL,coverage=NULL,latest_receipt=? WHERE singleton=1').run(state,id,state==='clear'?'clear':'loading',receipt===null?null:JSON.stringify(receipt)));
 }
 export function beginRestore(store) {
   return withRestoreTransaction(store,()=>{
@@ -100,7 +108,27 @@ export function checkpointRestore(db,{restoreId,expectedRevision,phase,seal,prog
   if(before.phase!=='loading'&&JSON.stringify(before.seal)!==JSON.stringify(seal))throw Error('Restore source seal cannot change');
   const encoded=[seal,progress,latest].map(value=>value===null?null:JSON.stringify(value));
   if(encoded.some(value=>value!==null&&Buffer.byteLength(value)>RESTORE_PROGRESS_MAX_BYTES))throw Error('Restore progress exceeds its code-owned metadata bound');
-  withExactRestoreGuards(db,RESTORE_CONTROL_GUARDS,()=>db.prepare("UPDATE current_restore_admission SET phase=?,revision=revision+1,source_seal=?,coverage=?,latest_receipt=? WHERE singleton=1 AND state='pending' AND restore_id=? AND revision=?").run(phase,...encoded,restoreId,expectedRevision));
+  withExactRestoreGuards(db,RESTORE_CONTROL_GUARDS.filter(([name])=>name.startsWith(RESTORE_CONTROL_TABLE+'_')),()=>db.prepare("UPDATE current_restore_admission SET phase=?,revision=revision+1,source_seal=?,coverage=?,latest_receipt=? WHERE singleton=1 AND state='pending' AND restore_id=? AND revision=?").run(phase,...encoded,restoreId,expectedRevision));
   const after=restoreProgress(db);if(after.revision!==expectedRevision+1)throw Error('Restore checkpoint did not advance atomically');
   return after;
+}
+
+// Only target-owned reducer working values; imported source rows cannot seed it.
+export function withRestoreAuditRows(db,restoreId,operation){
+ if(!db.isTransaction||!scopes.has(db))throw Error('Restore scratch requires its privileged transaction');
+ verifyRestoreControl(db);
+ const state=db.prepare('SELECT state,restore_id,phase FROM current_restore_admission WHERE singleton=1').get();
+ if(state?.state!=='pending'||state.restore_id!==restoreId||state.phase!=='audit_pending')throw Error('Restore scratch authority differs');
+ const guards=RESTORE_CONTROL_GUARDS.filter(([name])=>name.startsWith(RESTORE_AUDIT_TABLE+'_')),pending=[];let pendingBytes=0;
+ const result=operation({deletePage(limit){return withExactRestoreGuards(db,guards,()=>{
+   let deleted=0;while(deleted<limit){const row=db.prepare('SELECT rowid,restore_id FROM current_restore_audit_scratch ORDER BY rowid LIMIT 1').get();if(!row)break;if(row.restore_id!==restoreId)throw Error('Restore scratch ownership differs');db.prepare('DELETE FROM current_restore_audit_scratch WHERE rowid=? AND restore_id=?').run(row.rowid,restoreId);deleted++;}
+   return {deleted,done:!db.prepare('SELECT 1 FROM current_restore_audit_scratch LIMIT 1').get()};
+  });},put(lane,roomId,domain,key,value,part=0){
+   const payload=JSON.stringify(value),bytes=Buffer.byteLength(payload);
+   if(bytes<1||bytes>RESTORE_AUDIT_UNIT_BYTES||pending.length>=128||pendingBytes+bytes>4*1024*1024+RESTORE_AUDIT_UNIT_BYTES)throw Error('Restore scratch unit exceeds admitted representation');
+   pending.push([restoreId,lane,roomId,domain,key,part,bytes,payload]);pendingBytes+=bytes;
+  }});
+ if(result?.then)throw Error('Restore scratch must remain synchronous');
+ if(pending.length)withExactRestoreGuards(db,guards,()=>{const insert=db.prepare('INSERT INTO current_restore_audit_scratch(restore_id,lane,room_id,domain,unit_key,part,payload_bytes,payload) VALUES(?,?,?,?,?,?,?,?)');for(const row of pending)insert.run(...row);});
+ return result;
 }

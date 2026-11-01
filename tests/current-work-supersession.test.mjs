@@ -27,3 +27,25 @@ test('supersession does not grant authority, accept stale source revision, or lo
  assert.throws(()=>s.command(keys.owner,'commons',{...request,data:{...request.data,expectedRevision:0}}),/revision/i);assert.deepEqual(rows(s),before);
  s.command(keys.owner,'commons',request);assert.deepEqual(item('original').receipt,receipt);assert.equal(item('original').accountableMemberId,'departed');
 });
+test('supersession interruption rolls back both canonical contracts, head, receipts and capacity',t=>{
+ const{s,keys,command}=setup(t),request=command(),before=rows(s),prepare=s.db.prepare.bind(s.db);let fired=false;
+ s.db.prepare=sql=>new Proxy(prepare(sql),{get(target,key){const fn=Reflect.get(target,key,target);if(key!=='run')return typeof fn==='function'?fn.bind(target):fn;return(...args)=>{const result=fn.apply(target,args);if(/^INSERT INTO current_room_head/.test(sql.trim())){fired=true;throw Error('synthetic supersession interrupted');}return result;};}});
+ assert.throws(()=>s.command(keys.owner,'commons',request),/synthetic supersession interrupted/);s.db.prepare=prepare;assert.equal(fired,true);assert.deepEqual(rows(s),before);assert.equal(s.command(keys.owner,'commons',request).duplicate,false);assert.doesNotThrow(()=>auditRecovery(s));
+});
+test('different replacement principal gains no access to original private source message',t=>{
+ const{s,keys,command}=setup(t,{privateSource:true});s.command(keys.owner,'commons',command());
+ const context=s.workContext(keys.replacement,'commons','original',{includeSource:true});
+ assert.doesNotMatch(JSON.stringify(context),/Private previous contract/);
+});
+test('missing/self/already-superseded replacement rejects with no partial effects',t=>{
+ const{s,keys,item,command}=setup(t),request=command(),before=rows(s);
+ for(const id of ['missing','original']){assert.throws(()=>s.command(keys.owner,'commons',{...request,id:'bad-'+id,data:{...request.data,supersededByWorkItemId:id}}),/Unknown Work Item|supersede itself/);assert.deepEqual(rows(s),before);}
+ s.command(keys.owner,'commons',request);const after=rows(s);
+ assert.throws(()=>s.command(keys.owner,'commons',{id:'reverse',type:'work.superseded',data:{workItemId:'successor',expectedRevision:item('successor').revision,supersededByWorkItemId:'original',reason:'Must not form a cycle'}}),/already be superseded/);assert.deepEqual(rows(s),after);
+});
+import {withCurrentServingWriter} from '../server/current-room-repository.mjs';
+test('replacement must retain its exact protected membership/body proof',t=>{
+ const{s,keys,command}=setup(t),request=command();
+ s.transaction(()=>withCurrentServingWriter(s.db,'commons',()=>s.db.prepare("UPDATE work_entities SET digest=? WHERE room_id='commons' AND work_id='successor'").run('synthetic-corrupt-digest')));
+ const before=rows(s);assert.throws(()=>s.command(keys.owner,'commons',request),/work membership reference differs/);assert.deepEqual(rows(s),before);
+});

@@ -6695,7 +6695,7 @@ this.slaBreachAlerts = new SlaBreachAlertJournal(this); // Task 26: durable in-a
   // Additive and room-scoped; the human /api/inbox/* account-session gate
   // is untouched. The HTTP layer additionally requires agent membership
   // and, for API-key callers, the inbox:read scope.
-  agentInbox(token, roomId, { limit = 50, after = 0, expectedSessionBinding = null } = {}) {
+  agentInbox(token, roomId, { limit = 50, after, olderCursor, expectedSessionBinding = null } = {}) {
     if (!Number.isSafeInteger(limit) || limit < 1 || limit > 200) fail(422, "invalid_inbox_limit", "Limit must be an integer 1..200");
     // B4 agent read-path: `after` is a sequence cursor over the two
     // event-log lists (directMessages, directMentions). A polling agent
@@ -6703,8 +6703,10 @@ this.slaBreachAlerts = new SlaBreachAlertJournal(this); // Task 26: durable in-a
     // head of both lists; the standing lists (assignments, routed mentions,
     // bond proposals, peer messages, DM requests) are current state, not a
     // log, and always ride in full. after=0 keeps the legacy response.
-    if (!Number.isSafeInteger(after) || after < 0) fail(422, "invalid_inbox_cursor", "After must be a sequence number of 0 or more");
-    if(isCurrentRoom(this.db,roomId))return readCurrentNativeInbox(this,token,roomId,{limit,after,expectedSessionBinding});
+    if (after!==undefined&&(!Number.isSafeInteger(after) || after < 0)) fail(422, "invalid_inbox_cursor", "After must be a sequence number of 0 or more");
+    if(isCurrentRoom(this.db,roomId))return readCurrentNativeInbox(this,token,roomId,{limit,after,olderCursor,expectedSessionBinding});
+    if(olderCursor!==undefined)fail(422,"invalid_inbox_cursor","Older inbox continuation requires a native room");
+    after??=0;
     // RC-2026-09-18-013: the first per-room collab access lazily replays the
     // persisted journal inside a WRITE transaction. That replay cannot run
     // inside the readTransaction below ("Cannot write inside a read-only

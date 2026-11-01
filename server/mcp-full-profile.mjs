@@ -390,7 +390,7 @@ async function dispatchHostedStdioTool(store, secret, name, args) {
     }), isError: false };
   }
   if (name === "room_read_inbox") {
-    const inbox = store.agentInbox(secret, roomId, { limit: rest.limit ?? 50, after: rest.after ?? 0 });
+    const inbox = store.agentInbox(secret, roomId, { limit: rest.limit ?? 50, after: rest.after, olderCursor:rest.olderCursor });
     if(inbox.coverage?.mode==='native_bounded')return {value:{...inbox,boardAssignments:[],boardAssignmentsHasMore:false,boardReviewRequests:[],boardReviewRequestsHasMore:false},isError:false};
     // Dispatch and agentInbox already authenticate; OAuth also requires work:read.
     // Read fresh membership without materializing the full formal-work snapshot.

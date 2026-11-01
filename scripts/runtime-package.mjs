@@ -462,6 +462,8 @@ optional.push("room-acp.tgz");
 optional.push("server/claim-thread.mjs"); // Shared claimer thread receipt in the hosted MCP profile.
 optional.push("server/current-room-events.mjs"); // bounded normalized event windows and page-selected redaction
 
+optional.push("server/current-native-inbox.mjs", "server/current-inbox-indexes.mjs", "server/current-inbox-discovery.mjs"); // bounded indexed native inbox composition
+optional.push("server/current-work-list.mjs", "server/current-room-format.mjs", "server/current-work-capacity.mjs", "server/current-legacy-work-gate.mjs", "server/replay-mirror-retirement.mjs"); // current storage additions; exact import closure remains checked
 export const allowed = new Set([...required, ...optional, ...historicalAssets]);
 const sha256 = bytes => createHash("sha256").update(bytes).digest("hex");
 // The contract stays exact: any mismatch fails. Each failure now names the

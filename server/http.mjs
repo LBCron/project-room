@@ -5521,13 +5521,14 @@ export function createRoomServer({ store, origin, assetRoot = new URL("../", imp
           if (!granted) reject(403, "insufficient_scope", "API key lacks the inbox:read scope");
         }
         const params = url.searchParams;
-        if ([...params.keys()].some(key => !["limit", "after", "auth"].includes(key) || params.getAll(key).length !== 1)
+        if ([...params.keys()].some(key => !["limit", "after", "olderCursor", "auth"].includes(key) || params.getAll(key).length !== 1)
           || params.has("limit") && (!/^[1-9]\d*$/.test(params.get("limit")) || Number(params.get("limit")) > 200)
           || params.has("after") && !/^(0|[1-9]\d*)$/.test(params.get("after")))
           reject(422, "invalid_inbox_selection", "Choose a limit of 1..200 and an after of 0 or more");
         return json(res, 200, store.agentInbox(selected.token, roomId, {
           limit: params.has("limit") ? Number(params.get("limit")) : 50,
-          after: params.has("after") ? Number(params.get("after")) : 0,
+          after: params.has("after") ? Number(params.get("after")) : undefined,
+          ...(params.has("olderCursor")?{olderCursor:params.get("olderCursor")} : {}),
           expectedSessionBinding: fence }));
       }
       if (route === "stream" && req.method === "GET") return stream(req, res, selected.token, roomId, Number(req.headers["last-event-id"] ?? url.searchParams.get("after") ?? 0), auth, operationId);

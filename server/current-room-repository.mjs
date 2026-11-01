@@ -1,3 +1,4 @@
+import {CURRENT_INBOX_DISCOVERY_INDEXES} from './current-inbox-indexes.mjs';
 import {emptyWorkPrivacy,validateWorkPrivacy,applyWorkPrivacyRequest,deriveWorkPrivacy,workRequestPrefix,workRequestKey,workRequestValue} from './current-work-privacy.mjs';
 import {CURRENT_LEGACY_WORK_INDEXES,CURRENT_LEGACY_WORK_GUARDS,assertLegacyWorkReconciled} from './current-legacy-work-gate.mjs';
 import {currentWorkCapacity,assertCurrentWorkCapacity,CURRENT_WORK_CAPACITY_INDEXES} from './current-work-capacity.mjs';
@@ -85,7 +86,7 @@ guardDefinitions.push(['current_room_permit_update',`CREATE TRIGGER IF NOT EXIST
       THEN RAISE(ABORT,'unsupported current room permit') END; END`],
   ['current_room_permit_delete',`CREATE TRIGGER IF NOT EXISTS current_room_permit_delete BEFORE DELETE ON current_room_writer_permit BEGIN
     SELECT RAISE(ABORT,'unsupported current room permit'); END`]);
-export const CURRENT_ROOM_GUARDS = [...guardDefinitions,...RESTORE_CONTROL_GUARDS].map(([,sql])=>sql+';').join('\n') + CURRENT_LEGACY_WORK_INDEXES + CURRENT_WORK_CAPACITY_INDEXES + `
+export const CURRENT_ROOM_GUARDS = [...guardDefinitions,...RESTORE_CONTROL_GUARDS].map(([,sql])=>sql+';').join('\n') + CURRENT_LEGACY_WORK_INDEXES + CURRENT_WORK_CAPACITY_INDEXES + CURRENT_INBOX_DISCOVERY_INDEXES + `
 CREATE INDEX IF NOT EXISTS current_work_summary_keys ON current_room_record_proofs(room_id,record_key) WHERE domain='workSummary' AND present=1;
 CREATE INDEX IF NOT EXISTS current_reply_request_keys ON current_room_record_proofs(room_id,record_key) WHERE domain='replyRequests' AND present=1;
 CREATE INDEX IF NOT EXISTS current_messages_public_seq ON messages(room_id,seq DESC,message_id DESC) WHERE to_member_id IS NULL OR to_member_id='';
@@ -129,11 +130,11 @@ export function isCurrentRoom(db,roomId) {
     corrupt('closed current marker lacks its independent head');
   return false;
 }
-const budget = () => ({bytes:0,records:0,receipts:new Map()});
+const budget = (maxRecords=200) => ({bytes:0,records:0,maxRecords,receipts:new Map()});
 function charge(b,n,rows=1) {
   if(!Number.isSafeInteger(n)||n<0)corrupt('invalid scalar size');
   b.bytes+=n;b.records+=rows;
-  if(b.bytes>MAX_INPUT||b.records>200)refuse('Current record context exceeds bounded input; use a smaller addressed request');
+  if(b.bytes>MAX_INPUT||b.records>(b.maxRecords??200))refuse('Current record context exceeds bounded input; use a smaller addressed request');
 }
 export const chargeCurrentReadBudget=(b,bytes,records=1)=>charge(b,bytes,records);
 function receipt(db,id,b) {
@@ -661,9 +662,10 @@ export function readCurrentRoomForAudit(store,roomId) {
   return {sequence:head.sequence,state};
 }
 
-export function withCurrentReadContext(db,roomId,operation) {
+export function withCurrentReadContext(db,roomId,operation,{maxRecords=200}={}) {
+  if(![200,512].includes(maxRecords))throw Error('Unsupported internal current read reservation');
   if(!isCurrentRoom(db,roomId))return operation();
-  const previous=contextBudgets.get(db);if(!previous)contextBudgets.set(db,budget());
+  const previous=contextBudgets.get(db);if(!previous)contextBudgets.set(db,budget(maxRecords));
   try{return operation(contextBudgets.get(db));}finally{if(!previous)contextBudgets.delete(db);}
 }
 export function readCurrentHistoryFloor(db,roomId,memberId) {
@@ -810,17 +812,22 @@ export function readCurrentOverviewWindow(store,roomId,{workAfter='',limit=8,vie
     const scalar=db.prepare("SELECT payload_bytes FROM current_room_records WHERE room_id=? AND domain='workSummary' AND record_key=?").get(roomId,id);
     if(!scalar)corrupt('work summary payload missing');
     if ( returned && b . bytes + scalar . payload_bytes + 32768 > MAX_INPUT ) break ;
-    const summary=readCurrentRecord(db,roomId,'workSummary',id,b),ref=readCurrentRecord(db,roomId,'workItems',id,b);
-    if(!summary||!isDeepStrictEqual(summary.ref,ref)||summary.work?.id!==id)corrupt('work summary membership differs');
-    const current=db.prepare('SELECT revision,digest FROM work_entities WHERE room_id=? AND work_id=?').get(roomId,id);charge(b,256);
-    if(!current||current.revision!==ref.revision||current.digest!==ref.digest)corrupt('work summary payload revision differs');
-    Object.defineProperty(state.workItems,id,{value:privateWorkForViewer(db,roomId,id,summary.work,viewerId,b),enumerable:true,writable:true,configurable:true});after=id;returned++;
+    Object.defineProperty(state.workItems,id,{value:readCurrentWorkSummaryForViewer(db,roomId,id,viewerId,b),enumerable:true,writable:true,configurable:true});after=id;returned++;
   }
   const hasMore=rows.length>returned;
   if(!workAfter&&!hasMore&&returned!==head.counts.workItems)corrupt('complete work summary membership differs');
   return {sequence:head.sequence,state,workWindow:{order:'id',after:workAfter||null,shown:returned,total:head.counts.workItems,
     complete:!workAfter&&!hasMore,nextAfter:hasMore?after:null,
     nextRead:hasMore?{tool:'get_room_context',arguments:{roomId,work_after:after}}:null}};
+}
+
+export function readCurrentWorkSummaryForViewer(db,roomId,id,viewerId,b=contextBudgets.get(db)??budget()){
+  if(!b.schemaVerified&&!readCurrentHead(db,roomId,b))corrupt('work namespace is not initialized');
+  const summary=readCurrentRecord(db,roomId,'workSummary',id,b),ref=readCurrentRecord(db,roomId,'workItems',id,b);
+  if(!summary||!isDeepStrictEqual(summary.ref,ref)||summary.work?.id!==id)corrupt('work summary membership differs');
+  const current=db.prepare('SELECT revision,digest FROM work_entities WHERE room_id=? AND work_id=?').get(roomId,id);charge(b,256);
+  if(!current||current.revision!==ref.revision||current.digest!==ref.digest)corrupt('work summary payload revision differs');
+  return privateWorkForViewer(db,roomId,id,summary.work,viewerId,b);
 }
 
 // Bound source examination before parsing event bodies. Long excluded tails

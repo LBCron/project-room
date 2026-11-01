@@ -1,3 +1,4 @@
+import { operatorMessageAuthority } from './operator-message-authority.mjs';
 import { repairLegacyMessages } from './operator-legacy-message-repair.mjs';
 import { retireQaRoom } from "./operator-qa-retirement.mjs";
 // Operator HTTP surface. Mounted from createRoomServer. When the operator
@@ -21,6 +22,8 @@ const GET = "GET";
 const ROOM_EXPORT_ROUTE = "/api/operator/rooms/{roomId}/export";
 const ROOM_EXPORT_PATH = /^\/api\/operator\/rooms\/([^/]+)\/export$/;
 const ROUTES = Object.freeze({
+  "/api/operator/messages/authority/plan": POST,
+  "/api/operator/messages/authority/execute": POST,
   "/api/operator/messages/legacy-repair/plan": POST,
   "/api/operator/messages/legacy-repair/execute": POST,
   "/api/operator/purge/plan": POST,
@@ -113,6 +116,10 @@ export function createOperatorRoutes({ store, json, reject, body, rate }) {
     }
     if (path === "/api/operator/purge/execute") {
       json(res, 200, purge.execute(await body(req), requestId));
+      return true;
+    }
+    if (path === "/api/operator/messages/authority/plan" || path === "/api/operator/messages/authority/execute") {
+      json(res, 200, operatorMessageAuthority(store, await body(req), path.endsWith("/execute"), requestId));
       return true;
     }
     if (path === "/api/operator/archive") {

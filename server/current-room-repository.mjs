@@ -480,6 +480,32 @@ function commandContextFromHead(store,roomId,command,head,b,{readMessage,readWor
   const before=fieldsOf({...state,workItems:Object.fromEntries(workRefs)});
   return {room:{sequence:head.sequence,state},current:{head,before,workRefs,budget:b,messageRows:messages},count:head.counts.messages};
 }
+// Trusted invitation/referral writers use the same protected current facts and
+// transition writer. A name/capacity decision admits the bounded full roster;
+// ordinary invitation reads and retries need only their exact principals.
+export function currentInviteContext(store, roomId, { memberIds = [], census = false } = {}) {
+  return store.readTransaction(() => withCurrentReadContext(store.db, roomId, b => {
+    const db = store.db, head = readCurrentHead(db, roomId, b);
+    if (!head) return null;
+    const state = emptyRoomState();
+    state.members = census ? currentAuthorityFromHead(db, roomId, head, b).members : {};
+    const keys = db.prepare("SELECT domain,record_key FROM current_room_record_proofs WHERE room_id=? AND domain IN ('metadata','shape') AND present=1 ORDER BY domain,record_key LIMIT 33").all(roomId);
+    if (keys.length > 32) refuse('Current metadata shape exceeds bounded context');
+    charge(b, keys.length * 256, keys.length);
+    for (const { domain, record_key: key } of keys) {
+      const value = readCurrentRecord(db, roomId, domain, key, b);
+      if (domain === 'metadata') state[key] = value;
+      else { if (!maps.has(key) || value !== 'object') corrupt('unsupported map shape'); state[key] ??= {}; }
+    }
+    if (!state.room || state.room.id !== roomId) corrupt('missing room singleton');
+    for (const id of new Set([state.room.ownerId, ...memberIds])) {
+      if (typeof id !== 'string' || !validId(id) || Object.hasOwn(state.members, id)) continue;
+      const member = readCurrentRecord(db, roomId, 'members', id, b);
+      if (member !== undefined) { if (member.id !== id) corrupt('invitation member identity differs'); state.members[id] = member; }
+    }
+    return { room: { sequence: head.sequence, state }, current: { head, before: fieldsOf(state), workRefs: new Map(), budget: b, messageRows: new Map() } };
+  }, { maxRecords: census ? 1024 : 200 }));
+}
 export function prepareCurrentWrite(store,{roomId,previous,state,event,sequence,current}) {
   const db=store.db,refs={},workWrites=[];
   for(const [id,item] of Object.entries(state.workItems)) {

@@ -129,11 +129,24 @@ function charge(b,n,rows=1) {
 }
 function receipt(db,id,b) {
   if(b.receipts.has(id))return b.receipts.get(id);
+  // Audit units retain independent input accounting while reusing at most four
+  // bounded immutable envelopes inside this one consistent census transaction.
+  const cached=b.auditReceipts?.get(id);
+  if(cached){
+    charge(b,cached.bytes+256);b.receipts.set(id,cached.value);
+    b.auditReceipts.delete(id);b.auditReceipts.set(id,cached);
+    return cached.value;
+  }
   const size=db.prepare('SELECT length(CAST(counts_json AS BLOB)) AS bytes FROM operator_actions WHERE id=? AND action=?')
     .get(id,'current_room_transition');
   if(!size||size.bytes>MAX_RECORD)corrupt('missing transition receipt');charge(b,size.bytes+256);
   const row=db.prepare('SELECT counts_json FROM operator_actions WHERE id=? AND action=?').get(id,'current_room_transition');
-  const value=JSON.parse(row.counts_json);b.receipts.set(id,value);return value;
+  const value=JSON.parse(row.counts_json);b.receipts.set(id,value);
+  if(b.auditReceipts){
+    b.auditReceipts.set(id,{bytes:size.bytes,value});
+    if(b.auditReceipts.size>4)b.auditReceipts.delete(b.auditReceipts.keys().next().value);
+  }
+  return value;
 }
 const headValue = row => [1,row.room_id,row.sequence,row.event_id,row.revision,JSON.parse(row.counts_json)];
 function admitCurrentSchema(db,b) {
@@ -526,7 +539,8 @@ export function readCurrentRoomForAudit(store,roomId) {
   if(!db.isTransaction)throw Error('Current room census requires a consistent recovery transaction');
   const head=readCurrentHead(db,roomId);if(!head)return null;
   const state=emptyRoomState(),refs=new Map(),participants=new Map(),floors=new Map(),exclusions=new Map(),messageWitnesses=new Map(),workSummaries=new Map();let proofs=0,records=0;
-  const unitBudget=()=>({...budget(),schemaVerified:true});
+  const auditReceipts=new Map();
+  const unitBudget=()=>({...budget(),schemaVerified:true,auditReceipts});
   for(const scalar of db.prepare(`SELECT rowid,length(CAST(domain AS BLOB)) AS domain_bytes,
     length(CAST(record_key AS BLOB)) AS key_bytes FROM current_room_record_proofs WHERE room_id=? ORDER BY domain,record_key`).iterate(roomId)) {
     if(scalar.domain_bytes<1||scalar.domain_bytes>64||scalar.key_bytes<1||scalar.key_bytes>200)corrupt('invalid recovery membership identity');

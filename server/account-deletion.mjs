@@ -17,7 +17,7 @@ import { assertMessageWrite, recordMessageWrite } from './write-integrity.mjs';
 //      order inside one transaction.
 
 import { createHash, createHmac, randomBytes, timingSafeEqual } from "node:crypto";
-import { EVENT_TYPES, MEMBERSHIP_AUTHORITY_POLICY_VERSION, applyEvent, event, isRoomArchived, roomKind } from "../src/events.js";
+import { EVENT_TYPES, MEMBERSHIP_AUTHORITY_POLICY_VERSION, applyEvent, event, isRoomArchived, roomKind, ownMember } from "../src/events.js";
 import { commitMessageRedaction, readRedactionLog, redactRemainingMessageBodies } from "./message-redaction.mjs";
 import { isCurrentRoom,readCurrentHead,readCurrentRecord,withCurrentReadContext,chargeCurrentReadBudget } from './current-room-repository.mjs';
 import { hasMessageAuthority } from './message-authority.mjs';
@@ -243,9 +243,9 @@ function currentDeletionRoom(store,roomId,memberId) {
     const head=readCurrentHead(store.db,roomId,b),room=readCurrentRecord(store.db,roomId,'metadata','room',b);
     if(!head||!room||room.id!==roomId)fail(409,'current_room_context_unavailable','Room ownership inventory is unavailable');
     const members=Object.create(null),load=id=>{
-      if(Object.hasOwn(members,id))return members[id];
+      if(Object.hasOwn(members,id))return ownMember(members,id);
       const member=readCurrentRecord(store.db,roomId,'members',id,b);
-      if(member!==undefined){if(member.id!==id)fail(409,'current_room_context_unavailable','Room member inventory identity differs');members[id]=member;}return member;
+      if(member!==undefined){if(member.id!==id)fail(409,'current_room_context_unavailable','Room member inventory identity differs');Object.defineProperty(members,id,{value:member,enumerable:true});}return member;
     };
     if(!load(room.ownerId)||!load(memberId))fail(409,'current_room_context_unavailable','Room ownership inventory is unavailable');
     if(room.ownerId===memberId){

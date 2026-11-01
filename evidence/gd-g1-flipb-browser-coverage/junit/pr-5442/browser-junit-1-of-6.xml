@@ -1,0 +1,67 @@
+<?xml version="1.0" encoding="utf-8"?>
+<testsuites>
+	<testcase name="login/join entry points are axe-clean (serious/critical)" time="11.996823" classname="test" file="/home/hatch/workspace/wave-2026-10-31-grok-dot-tasking/scratch/gd-g1/wt-5442/scripts/a11y-login-browser-check.mjs"/>
+	<testcase name="Delete account requires the email, posts with CSRF, and confirms on the landing page" time="7.763333" classname="test" file="/home/hatch/workspace/wave-2026-10-31-grok-dot-tasking/scratch/gd-g1/wt-5442/scripts/account-deletion-browser-check.mjs"/>
+	<testcase name="account settings: methods render, disable/enable/remove, recovery codes, honest provider states" time="7.509968" classname="test" file="/home/hatch/workspace/wave-2026-10-31-grok-dot-tasking/scratch/gd-g1/wt-5442/scripts/account-settings-browser-check.mjs"/>
+	<testcase name="email sign-in is not offered when delivery is unconfigured" time="4.669418" classname="test" file="/home/hatch/workspace/wave-2026-10-31-grok-dot-tasking/scratch/gd-g1/wt-5442/scripts/account-settings-browser-check.mjs"/>
+	<testcase name="sign-in UI: email link returns to the existing account with a configured mailer" time="6.598132" classname="test" file="/home/hatch/workspace/wave-2026-10-31-grok-dot-tasking/scratch/gd-g1/wt-5442/scripts/account-settings-browser-check.mjs"/>
+	<testcase name="Profile opens directly from chat and saves account name without changing room identity or draft at 1280px" time="6.550699" classname="test" file="/home/hatch/workspace/wave-2026-10-31-grok-dot-tasking/scratch/gd-g1/wt-5442/scripts/account-settings-browser-check.mjs"/>
+	<testcase name="Profile opens directly from chat and saves account name without changing room identity or draft at 390px" time="6.386273" classname="test" file="/home/hatch/workspace/wave-2026-10-31-grok-dot-tasking/scratch/gd-g1/wt-5442/scripts/account-settings-browser-check.mjs"/>
+	<testcase name="Profile ignores a held GET response after switching accounts" time="7.596102" classname="test" file="/home/hatch/workspace/wave-2026-10-31-grok-dot-tasking/scratch/gd-g1/wt-5442/scripts/account-settings-browser-check.mjs"/>
+	<testcase name="Profile ignores a held POST response after switching accounts" time="8.806858" classname="test" file="/home/hatch/workspace/wave-2026-10-31-grok-dot-tasking/scratch/gd-g1/wt-5442/scripts/account-settings-browser-check.mjs"/>
+	<testcase name="owner lets a link-joined agent take work, then assigns it" time="12.605551" classname="test" file="/home/hatch/workspace/wave-2026-10-31-grok-dot-tasking/scratch/gd-g1/wt-5442/scripts/agent-work-access-browser-check.mjs"/>
+	<testcase name="cold-load deep link to a pre-window message reveals it when the fill lands" time="35.549663" classname="test" file="/home/hatch/workspace/wave-2026-10-31-grok-dot-tasking/scratch/gd-g1/wt-5442/scripts/deep-link-reveal-browser-check.mjs"/>
+	<testcase name="legacy #message- link to a pre-window message reveals it when the fill lands" time="35.155770" classname="test" file="/home/hatch/workspace/wave-2026-10-31-grok-dot-tasking/scratch/gd-g1/wt-5442/scripts/deep-link-reveal-browser-check.mjs"/>
+	<testcase name="a reader scroll before the fill lands cancels the pending reveal" time="40.295469" classname="test" file="/home/hatch/workspace/wave-2026-10-31-grok-dot-tasking/scratch/gd-g1/wt-5442/scripts/deep-link-reveal-browser-check.mjs"/>
+	<testcase name="navigating to another message before the fill lands cancels the pending reveal" time="36.947499" classname="test" file="/home/hatch/workspace/wave-2026-10-31-grok-dot-tasking/scratch/gd-g1/wt-5442/scripts/deep-link-reveal-browser-check.mjs"/>
+	<testcase name="a deep link inside the first window reveals immediately, before the fill" time="42.838438" classname="test" file="/home/hatch/workspace/wave-2026-10-31-grok-dot-tasking/scratch/gd-g1/wt-5442/scripts/deep-link-reveal-browser-check.mjs"/>
+	<testcase name="a guest can reopen their original full invitation" time="11.700608" classname="test" file="/home/hatch/workspace/wave-2026-10-31-grok-dot-tasking/scratch/gd-g1/wt-5442/scripts/dogfood-return-browser-check.mjs"/>
+	<testcase name="a guest can reopen their original cancelled invitation" time="10.752192" classname="test" file="/home/hatch/workspace/wave-2026-10-31-grok-dot-tasking/scratch/gd-g1/wt-5442/scripts/dogfood-return-browser-check.mjs"/>
+	<testcase name="a guest can reopen their original expired invitation" time="13.546313" classname="test" file="/home/hatch/workspace/wave-2026-10-31-grok-dot-tasking/scratch/gd-g1/wt-5442/scripts/dogfood-return-browser-check.mjs"/>
+	<testcase name="contextual email creation signs in using the actual password signup API" time="9.725141" classname="test" file="/home/hatch/workspace/wave-2026-10-31-grok-dot-tasking/scratch/gd-g1/wt-5442/scripts/email-password-browser-check.mjs"/>
+	<testcase name="password signup opens one personal room without optional setup, with profile editing available later" time="9.118847" classname="test" file="/home/hatch/workspace/wave-2026-10-31-grok-dot-tasking/scratch/gd-g1/wt-5442/scripts/email-password-browser-check.mjs" failure="locator.waitFor: Timeout 3000ms exceeded.&#10;Call log:&#10;  - waiting for locator('#main') to be visible&#10;    7 × locator resolved to hidden &lt;main id=&quot;main&quot; hidden=&quot;&quot; class=&quot;community-shell&quot;>…&lt;/main>&#10;">
+		<failure type="testCodeFailure" message="locator.waitFor: Timeout 3000ms exceeded.&#10;Call log:&#10;  - waiting for locator('#main') to be visible&#10;    7 × locator resolved to hidden &lt;main id=&quot;main&quot; hidden=&quot;&quot; class=&quot;community-shell&quot;>…&lt;/main>">
+[Error [ERR_TEST_FAILURE]: locator.waitFor: Timeout 3000ms exceeded.
+Call log:
+  - waiting for locator('#main') to be visible
+    7 × locator resolved to hidden &lt;main id="main" hidden="" class="community-shell">…&lt;/main>
+] {
+  code: 'ERR_TEST_FAILURE',
+  failureType: 'testCodeFailure',
+  cause: locator.waitFor: Timeout 3000ms exceeded.
+  Call log:
+    - waiting for locator('#main') to be visible
+      7 × locator resolved to hidden &lt;main id="main" hidden="" class="community-shell">…&lt;/main>
+  
+      at TestContext.&lt;anonymous> (/home/hatch/workspace/wave-2026-10-31-grok-dot-tasking/scratch/gd-g1/wt-5442/scripts/email-password-browser-check.mjs:63:31) {
+    name: 'TimeoutError',
+    log: [ "  - waiting for locator('#main') to be visible", '    7 × locator resolved to hidden &lt;main id="main" hidden="" class="community-shell">…&lt;/main>' ]
+  }
+}
+		</failure>
+	</testcase>
+	<testcase name="contextual email login reports a rejected password then signs into the existing account" time="9.436869" classname="test" file="/home/hatch/workspace/wave-2026-10-31-grok-dot-tasking/scratch/gd-g1/wt-5442/scripts/email-password-browser-check.mjs"/>
+	<testcase name="signup guidance, password visibility and pending-write controls work before native browser consent resumes" time="9.400629" classname="test" file="/home/hatch/workspace/wave-2026-10-31-grok-dot-tasking/scratch/gd-g1/wt-5442/scripts/email-password-browser-check.mjs"/>
+	<testcase name="first-result journey desktop: join, discover work, offer help, contribute, see the outcome" time="10.271036" classname="test" file="/home/hatch/workspace/wave-2026-10-31-grok-dot-tasking/scratch/gd-g1/wt-5442/scripts/first-result-journey-check.mjs"/>
+	<testcase name="first-result journey phone: join, discover work, offer help, contribute, see the outcome" time="12.271554" classname="test" file="/home/hatch/workspace/wave-2026-10-31-grok-dot-tasking/scratch/gd-g1/wt-5442/scripts/first-result-journey-check.mjs"/>
+	<testcase name="People Friend control proposes without scopes, accepts, messages, and refuses until active" time="15.714857" classname="test" file="/home/hatch/workspace/wave-2026-10-31-grok-dot-tasking/scratch/gd-g1/wt-5442/scripts/friend-bond-browser-check.mjs"/>
+	<testcase name="Enter on Friend does not revoke a bond the peer just accepted" time="8.685937" classname="test" file="/home/hatch/workspace/wave-2026-10-31-grok-dot-tasking/scratch/gd-g1/wt-5442/scripts/friend-bond-browser-check.mjs"/>
+	<testcase name="Google sign-in returns from a committed cross-site account chooser with Strict cookies" time="13.295912" classname="test" file="/home/hatch/workspace/wave-2026-10-31-grok-dot-tasking/scratch/gd-g1/wt-5442/scripts/google-callback-browser-check.mjs"/>
+	<testcase name="Google link returns from a committed cross-site account chooser with Strict cookies" time="4.918259" classname="test" file="/home/hatch/workspace/wave-2026-10-31-grok-dot-tasking/scratch/gd-g1/wt-5442/scripts/google-callback-browser-check.mjs"/>
+	<testcase name="Muse co-owner invite dark 1280" time="11.943099" classname="test" file="/home/hatch/workspace/wave-2026-10-31-grok-dot-tasking/scratch/gd-g1/wt-5442/scripts/muse-invite-browser-check.mjs"/>
+	<testcase name="Muse co-owner invite dark 390" time="9.822258" classname="test" file="/home/hatch/workspace/wave-2026-10-31-grok-dot-tasking/scratch/gd-g1/wt-5442/scripts/muse-invite-browser-check.mjs"/>
+	<testcase name="Muse co-owner invite light 1280" time="16.604270" classname="test" file="/home/hatch/workspace/wave-2026-10-31-grok-dot-tasking/scratch/gd-g1/wt-5442/scripts/muse-invite-browser-check.mjs"/>
+	<testcase name="Muse co-owner invite light 390" time="20.840950" classname="test" file="/home/hatch/workspace/wave-2026-10-31-grok-dot-tasking/scratch/gd-g1/wt-5442/scripts/muse-invite-browser-check.mjs"/>
+	<testcase name="hosted discovery supports a zero-Room outside contributor through lost submission and own feedback" time="3.069710" classname="test" file="/home/hatch/workspace/wave-2026-10-31-grok-dot-tasking/scratch/gd-g1/wt-5442/scripts/public-work-mcp-journey-check.mjs"/>
+	<!-- {"advertisedEndpoint":"https://room.trydemigod.com/mcp","fixtureEndpoint":"http://127.0.0.1:39451/mcp","journey":[{"method":"initialize","status":200,"authenticated":false},{"method":"tools/list","status":200,"authenticated":false},{"method":"tools/call","tool":"public_work_recommend","status":200,"authenticated":false},{"method":"tools/call","tool":"public_work_read_task","status":200,"authenticated":false},{"method":"tools/call","tool":"public_work_recommend","status":200,"authenticated":false},{"method":"tools/list","status":200,"authenticated":true},{"method":"tools/call","tool":"public_work_claim","status":200,"authenticated":true},{"method":"tools/call","tool":"public_work_finish","status":200,"authenticated":true},{"method":"tools/call","tool":"public_work_finish","status":200,"authenticated":true},{"method":"tools/call","tool":"public_work_finish","status":200,"authenticated":true},{"method":"tools/call","tool":"public_work_my_review","status":200,"authenticated":true},{"method":"tools/call","tool":"public_work_my_review","status":200,"authenticated":true}]} -->
+	<testcase name="thread options desktop: mute button and also-send-to-channel" time="8.963560" classname="test" file="/home/hatch/workspace/wave-2026-10-31-grok-dot-tasking/scratch/gd-g1/wt-5442/scripts/thread-options-browser-check.mjs"/>
+	<testcase name="thread options narrow: mute button and also-send-to-channel" time="8.534997" classname="test" file="/home/hatch/workspace/wave-2026-10-31-grok-dot-tasking/scratch/gd-g1/wt-5442/scripts/thread-options-browser-check.mjs"/>
+	<!-- tests 35 -->
+	<!-- suites 0 -->
+	<!-- pass 34 -->
+	<!-- fail 1 -->
+	<!-- cancelled 0 -->
+	<!-- skipped 0 -->
+	<!-- todo 0 -->
+	<!-- duration_ms 549589.912906 -->
+</testsuites>

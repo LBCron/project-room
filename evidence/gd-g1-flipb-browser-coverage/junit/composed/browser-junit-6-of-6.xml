@@ -1,0 +1,284 @@
+<?xml version="1.0" encoding="utf-8"?>
+<testsuites>
+	<testcase name="activity feed desktop: badge, filters, open-and-read, save/unsave, mark unread divider" time="9.033508" classname="test" file="/home/hatch/workspace/wave-2026-10-31-grok-dot-tasking/scratch/gd-g1/repo/scripts/activity-feed-browser-check.mjs"/>
+	<testcase name="activity feed mobile: badge, filters, open-and-read, save/unsave, mark unread divider" time="8.509532" classname="test" file="/home/hatch/workspace/wave-2026-10-31-grok-dot-tasking/scratch/gd-g1/repo/scripts/activity-feed-browser-check.mjs"/>
+	<testcase name="activity shortcuts desktop: keyboard open, mark-unread key, room-actions entries" time="3.733479" classname="test" file="/home/hatch/workspace/wave-2026-10-31-grok-dot-tasking/scratch/gd-g1/repo/scripts/activity-feed-browser-check.mjs"/>
+	<testcase name="activity shortcuts mobile: keyboard open, mark-unread key, room-actions entries" time="3.561100" classname="test" file="/home/hatch/workspace/wave-2026-10-31-grok-dot-tasking/scratch/gd-g1/repo/scripts/activity-feed-browser-check.mjs"/>
+	<testcase name="Invite reveals agent setup independently of the People disclosure" time="4.625142" classname="test" file="/home/hatch/workspace/wave-2026-10-31-grok-dot-tasking/scratch/gd-g1/repo/scripts/agent-connect-browser-check.mjs"/>
+	<testcase name="Invite reveals agent setup from the mobile sidebar" time="5.728520" classname="test" file="/home/hatch/workspace/wave-2026-10-31-grok-dot-tasking/scratch/gd-g1/repo/scripts/agent-connect-browser-check.mjs"/>
+	<testcase name="browser owner issues digest-only setup; a real external client imports, reads, rotates and loses access" time="9.148381" classname="test" file="/home/hatch/workspace/wave-2026-10-31-grok-dot-tasking/scratch/gd-g1/repo/scripts/agent-connect-browser-check.mjs"/>
+	<testcase name="agent type catalog renders and click fills the same join path" time="6.663001" classname="test" file="/home/hatch/workspace/wave-2026-10-31-grok-dot-tasking/scratch/gd-g1/repo/scripts/agent-connect-browser-check.mjs"/>
+	<testcase name="named roster fills Muse and Grok Build; Grok Build shows import checklist" time="6.789634" classname="test" file="/home/hatch/workspace/wave-2026-10-31-grok-dot-tasking/scratch/gd-g1/repo/scripts/agent-connect-browser-check.mjs"/>
+	<testcase name="unknown enrollment survives close and retries the original digest and identity" time="4.742351" classname="test" file="/home/hatch/workspace/wave-2026-10-31-grok-dot-tasking/scratch/gd-g1/repo/scripts/agent-connect-browser-check.mjs"/>
+	<testcase name="mobile disclosure stays lightweight, fits the viewport and conceals setup on close" time="4.833216" classname="test" file="/home/hatch/workspace/wave-2026-10-31-grok-dot-tasking/scratch/gd-g1/repo/scripts/agent-connect-browser-check.mjs"/>
+	<testcase name="owned list access denial clears previously revealed setup" time="6.252336" classname="test" file="/home/hatch/workspace/wave-2026-10-31-grok-dot-tasking/scratch/gd-g1/repo/scripts/agent-connect-browser-check.mjs"/>
+	<testcase name="snapshot access changes conceal a held private key" time="4.859204" classname="test" file="/home/hatch/workspace/wave-2026-10-31-grok-dot-tasking/scratch/gd-g1/repo/scripts/agent-connect-browser-check.mjs"/>
+	<testcase name="retained setup warns before sign-out; expiry prevents reveal or copy" time="5.983576" classname="test" file="/home/hatch/workspace/wave-2026-10-31-grok-dot-tasking/scratch/gd-g1/repo/scripts/agent-connect-browser-check.mjs"/>
+	<testcase name="a rotation ahead of an older inactive snapshot keeps the new private setup" time="4.466750" classname="test" file="/home/hatch/workspace/wave-2026-10-31-grok-dot-tasking/scratch/gd-g1/repo/scripts/agent-connect-browser-check.mjs"/>
+	<testcase name="incomplete 2xx enrollment metadata preserves the exact pending retry" time="3.250545" classname="test" file="/home/hatch/workspace/wave-2026-10-31-grok-dot-tasking/scratch/gd-g1/repo/scripts/agent-connect-browser-check.mjs"/>
+	<testcase name="a delayed enrollment receipt cannot restore setup after owner access ends" time="3.156914" classname="test" file="/home/hatch/workspace/wave-2026-10-31-grok-dot-tasking/scratch/gd-g1/repo/scripts/agent-connect-browser-check.mjs"/>
+	<testcase name="a just-created connection reads as ready, not as a missing member, without a reload (R29-1)" time="3.729827" classname="test" file="/home/hatch/workspace/wave-2026-10-31-grok-dot-tasking/scratch/gd-g1/repo/scripts/agent-connect-browser-check.mjs"/>
+	<testcase name="signed-in friend connects own agent without room-owner permission" time="3.205610" classname="test" file="/home/hatch/workspace/wave-2026-10-31-grok-dot-tasking/scratch/gd-g1/repo/scripts/agent-connect-browser-check.mjs"/>
+	<testcase name="agent invitation clipboard handoff keeps 1 canonical links and optional local setup" time="2.968890" classname="test" file="/home/hatch/workspace/wave-2026-10-31-grok-dot-tasking/scratch/gd-g1/repo/scripts/agent-connect-browser-check.mjs"/>
+	<testcase name="agent invitation clipboard handoff keeps 5 canonical links and optional local setup" time="3.639923" classname="test" file="/home/hatch/workspace/wave-2026-10-31-grok-dot-tasking/scratch/gd-g1/repo/scripts/agent-connect-browser-check.mjs"/>
+	<testcase name="Board route cleanup drains a held callback and preserves the original failure" time="0.641950" classname="test" file="/home/hatch/workspace/wave-2026-10-31-grok-dot-tasking/scratch/gd-g1/repo/scripts/board-browser-check.mjs"/>
+	<testcase name="board columns, keyboard claim, linked work returns, chat line, 390px, and axe" time="23.323049" classname="test" file="/home/hatch/workspace/wave-2026-10-31-grok-dot-tasking/scratch/gd-g1/repo/scripts/board-browser-check.mjs"/>
+	<testcase name="waiting prerequisites stay visible, link by keyboard, and become claimable only when ready" time="7.376158" classname="test" file="/home/hatch/workspace/wave-2026-10-31-grok-dot-tasking/scratch/gd-g1/repo/scripts/board-browser-check.mjs"/>
+	<testcase name="owners link a draft PR, reconcile held responses, and refresh a changed claim without resending" time="7.503954" classname="test" file="/home/hatch/workspace/wave-2026-10-31-grok-dot-tasking/scratch/gd-g1/repo/scripts/board-browser-check.mjs"/>
+	<testcase name="held Board reads and mutations retire on room switch and sign-out" time="29.688400" classname="test" file="/home/hatch/workspace/wave-2026-10-31-grok-dot-tasking/scratch/gd-g1/repo/scripts/board-browser-check.mjs"/>
+	<testcase name="first board open requests at most two list pages when most claims are old" time="18.206189" classname="test" file="/home/hatch/workspace/wave-2026-10-31-grok-dot-tasking/scratch/gd-g1/repo/scripts/board-browser-check.mjs"/>
+	<testcase name="a read-only member does not see the new item form" time="3.289162" classname="test" file="/home/hatch/workspace/wave-2026-10-31-grok-dot-tasking/scratch/gd-g1/repo/scripts/board-browser-check.mjs"/>
+	<testcase name="held Board reads keep Save cap focus and announce Done only after fresh claims" time="3.893379" classname="test" file="/home/hatch/workspace/wave-2026-10-31-grok-dot-tasking/scratch/gd-g1/repo/scripts/board-browser-check.mjs"/>
+	<testcase name="board close returns focus to the opener, else the conversation title" time="3.156349" classname="test" file="/home/hatch/workspace/wave-2026-10-31-grok-dot-tasking/scratch/gd-g1/repo/scripts/board-browser-check.mjs"/>
+	<testcase name="criteria delivery, send-back, redelivery and owner verification work from the board" time="4.212545" classname="test" file="/home/hatch/workspace/wave-2026-10-31-grok-dot-tasking/scratch/gd-g1/repo/scripts/board-browser-check.mjs"/>
+	<testcase name="a claim on already-claimed paths shows who else holds them" time="3.957772" classname="test" file="/home/hatch/workspace/wave-2026-10-31-grok-dot-tasking/scratch/gd-g1/repo/scripts/claim-overlap-browser-check.mjs"/>
+	<testcase name="shared tokens, focus, and settings sections render together" time="8.160224" classname="test" file="/home/hatch/workspace/wave-2026-10-31-grok-dot-tasking/scratch/gd-g1/repo/scripts/design-cohesion-browser-check.mjs"/>
+	<testcase name="message, pinned and work-fact text stays readable through light/dark changes" time="10.073011" classname="test" file="/home/hatch/workspace/wave-2026-10-31-grok-dot-tasking/scratch/gd-g1/repo/scripts/design-cohesion-browser-check.mjs"/>
+	<testcase name="direct conversations 1440: keyboard navigation, audience, drafts and reload" time="26.123170" classname="test" file="/home/hatch/workspace/wave-2026-10-31-grok-dot-tasking/scratch/gd-g1/repo/scripts/direct-conversation-browser-check.mjs"/>
+	<testcase name="direct conversations 320: keyboard navigation, audience, drafts and reload" time="15.568237" classname="test" file="/home/hatch/workspace/wave-2026-10-31-grok-dot-tasking/scratch/gd-g1/repo/scripts/direct-conversation-browser-check.mjs"/>
+	<testcase name="entry recovery and room search at 1280" time="8.751039" classname="test" file="/home/hatch/workspace/wave-2026-10-31-grok-dot-tasking/scratch/gd-g1/repo/scripts/entry-simplification-browser-check.mjs"/>
+	<testcase name="entry recovery and room search at 390" time="7.781081" classname="test" file="/home/hatch/workspace/wave-2026-10-31-grok-dot-tasking/scratch/gd-g1/repo/scripts/entry-simplification-browser-check.mjs"/>
+	<testcase name="startup at 390: scripting delayed" time="4.658842" classname="test" file="/home/hatch/workspace/wave-2026-10-31-grok-dot-tasking/scratch/gd-g1/repo/scripts/entry-simplification-browser-check.mjs"/>
+	<testcase name="startup at 390: scripting disabled" time="2.397817" classname="test" file="/home/hatch/workspace/wave-2026-10-31-grok-dot-tasking/scratch/gd-g1/repo/scripts/entry-simplification-browser-check.mjs"/>
+	<testcase name="startup at 1280: scripting delayed" time="3.664130" classname="test" file="/home/hatch/workspace/wave-2026-10-31-grok-dot-tasking/scratch/gd-g1/repo/scripts/entry-simplification-browser-check.mjs"/>
+	<testcase name="startup at 1280: scripting disabled" time="2.922396" classname="test" file="/home/hatch/workspace/wave-2026-10-31-grok-dot-tasking/scratch/gd-g1/repo/scripts/entry-simplification-browser-check.mjs"/>
+	<testcase name="a failed entry.js can recover after its download resumes" time="2.146166" classname="test" file="/home/hatch/workspace/wave-2026-10-31-grok-dot-tasking/scratch/gd-g1/repo/scripts/entry-simplification-browser-check.mjs"/>
+	<testcase name="a failed browser-session.js can recover after its download resumes" time="2.531212" classname="test" file="/home/hatch/workspace/wave-2026-10-31-grok-dot-tasking/scratch/gd-g1/repo/scripts/entry-simplification-browser-check.mjs"/>
+	<testcase name="a failed signin-entry.js can recover after its download resumes" time="3.712435" classname="test" file="/home/hatch/workspace/wave-2026-10-31-grok-dot-tasking/scratch/gd-g1/repo/scripts/entry-simplification-browser-check.mjs"/>
+	<testcase name="module startup recovery after entry.js fails" time="2.840786" classname="test" file="/home/hatch/workspace/wave-2026-10-31-grok-dot-tasking/scratch/gd-g1/repo/scripts/entry-simplification-browser-check.mjs"/>
+	<testcase name="module startup recovery after browser-session.js fails" time="2.410056" classname="test" file="/home/hatch/workspace/wave-2026-10-31-grok-dot-tasking/scratch/gd-g1/repo/scripts/entry-simplification-browser-check.mjs"/>
+	<testcase name="slow module startup can finish after the bounded warning without reloading" time="18.031438" classname="test" file="/home/hatch/workspace/wave-2026-10-31-grok-dot-tasking/scratch/gd-g1/repo/scripts/entry-simplification-browser-check.mjs"/>
+	<testcase name="packaged browser fallback desktop: drafts survive and sign-out clears private state" time="56.449426" classname="test" file="/home/hatch/workspace/wave-2026-10-31-grok-dot-tasking/scratch/gd-g1/repo/scripts/fallback-draft-browser-check.mjs"/>
+	<!-- {"candidateCommit":"d2c346cda020187b522a0a57a0a5fc5a9e37f6b5","fallbackCommit":"d2c346cda020187b522a0a57a0a5fc5a9e37f6b5","issues":[],"boundary":"Local simulated human browser/package switch only"} -->
+	<testcase name="packaged browser fallback touch: drafts survive and sign-out clears private state" time="59.504048" classname="test" file="/home/hatch/workspace/wave-2026-10-31-grok-dot-tasking/scratch/gd-g1/repo/scripts/fallback-draft-browser-check.mjs"/>
+	<!-- {"candidateCommit":"d2c346cda020187b522a0a57a0a5fc5a9e37f6b5","fallbackCommit":"d2c346cda020187b522a0a57a0a5fc5a9e37f6b5","issues":[],"boundary":"Local simulated human browser/package switch only"} -->
+	<testcase name="growth invite: copy kit, inviter landing, dead link" time="11.688573" classname="test" file="/home/hatch/workspace/wave-2026-10-31-grok-dot-tasking/scratch/gd-g1/repo/scripts/growth-invite-browser-check.mjs"/>
+	<testcase name="compact login and signup remain usable in both themes and small windows" time="36.276347" classname="test" file="/home/hatch/workspace/wave-2026-10-31-grok-dot-tasking/scratch/gd-g1/repo/scripts/login-polish-browser-check.mjs"/>
+	<testcase name="a real virtual-authenticator passkey can be enrolled, used after logout, and replay is refused" time="9.799703" classname="test" file="/home/hatch/workspace/wave-2026-10-31-grok-dot-tasking/scratch/gd-g1/repo/scripts/login-polish-browser-check.mjs"/>
+	<testcase name="signup reconciles a committed account when its response body is interrupted" time="6.981101" classname="test" file="/home/hatch/workspace/wave-2026-10-31-grok-dot-tasking/scratch/gd-g1/repo/scripts/login-polish-browser-check.mjs"/>
+	<testcase name="sign-in offers email recovery only after invalid credentials and keeps no-room joining discoverable" time="11.884246" classname="test" file="/home/hatch/workspace/wave-2026-10-31-grok-dot-tasking/scratch/gd-g1/repo/scripts/login-polish-browser-check.mjs"/>
+	<testcase name="magic link: fresh visit with ?magic= signs straight in" time="5.349321" classname="test" file="/home/hatch/workspace/wave-2026-10-31-grok-dot-tasking/scratch/gd-g1/repo/scripts/magic-link-browser-check.mjs"/>
+	<testcase name="magic link: replay of a consumed link does not sign in" time="6.682512" classname="test" file="/home/hatch/workspace/wave-2026-10-31-grok-dot-tasking/scratch/gd-g1/repo/scripts/magic-link-browser-check.mjs"/>
+	<testcase name="a basic member requests by keyboard at 390px, the owner approves, and the member can claim work" time="10.164933" classname="test" file="/home/hatch/workspace/wave-2026-10-31-grok-dot-tasking/scratch/gd-g1/repo/scripts/member-perms-browser-check.mjs"/>
+	<testcase name="a basic member requests by keyboard at 1280px, the owner approves, and the member can claim work" time="9.819945" classname="test" file="/home/hatch/workspace/wave-2026-10-31-grok-dot-tasking/scratch/gd-g1/repo/scripts/member-perms-browser-check.mjs"/>
+	<testcase name="an admin can cancel partial review, approve only selected permissions, and decline the remainder" time="10.325355" classname="test" file="/home/hatch/workspace/wave-2026-10-31-grok-dot-tasking/scratch/gd-g1/repo/scripts/member-perms-browser-check.mjs"/>
+	<testcase name="permission request recovery: lost response retains one request and its grants" time="4.168900" classname="test" file="/home/hatch/workspace/wave-2026-10-31-grok-dot-tasking/scratch/gd-g1/repo/scripts/member-perms-browser-check.mjs"/>
+	<testcase name="permission request recovery: lost response then 429 retains one request and its grants" time="3.469237" classname="test" file="/home/hatch/workspace/wave-2026-10-31-grok-dot-tasking/scratch/gd-g1/repo/scripts/member-perms-browser-check.mjs"/>
+	<testcase name="permission request recovery: confirmed pending then 429 retains one request and its grants" time="2.712274" classname="test" file="/home/hatch/workspace/wave-2026-10-31-grok-dot-tasking/scratch/gd-g1/repo/scripts/member-perms-browser-check.mjs"/>
+	<testcase name="a late permission-request response cannot move request state into a different member's session" time="5.872686" classname="test" file="/home/hatch/workspace/wave-2026-10-31-grok-dot-tasking/scratch/gd-g1/repo/scripts/member-perms-browser-check.mjs"/>
+	<testcase name="ownership transfer closes a partial review and clears the owner-only rollup before the admin queue returns" time="4.007537" classname="test" file="/home/hatch/workspace/wave-2026-10-31-grok-dot-tasking/scratch/gd-g1/repo/scripts/member-perms-browser-check.mjs"/>
+	<testcase name="stream-driven request refresh preserves action focus but never takes it back from the composer" time="4.392734" classname="test" file="/home/hatch/workspace/wave-2026-10-31-grok-dot-tasking/scratch/gd-g1/repo/scripts/member-perms-browser-check.mjs"/>
+	<testcase name="own messages can be edited and deleted from the overflow menu" time="7.899690" classname="test" file="/home/hatch/workspace/wave-2026-10-31-grok-dot-tasking/scratch/gd-g1/repo/scripts/message-edit-delete-browser-check.mjs"/>
+	<testcase name="edit and delete dialogs: long edits are bounded by the server limit, Delete is destructive, previews do not split emoji" time="8.700551" classname="test" file="/home/hatch/workspace/wave-2026-10-31-grok-dot-tasking/scratch/gd-g1/repo/scripts/message-edit-delete-browser-check.mjs"/>
+	<testcase name="long message preview desktop: accessible expansion, complete safe text and retained reading state" time="8.421071" classname="test" file="/home/hatch/workspace/wave-2026-10-31-grok-dot-tasking/scratch/gd-g1/repo/scripts/message-preview-browser-check.mjs"/>
+	<testcase name="long message preview mobile: accessible expansion, complete safe text and retained reading state" time="6.359781" classname="test" file="/home/hatch/workspace/wave-2026-10-31-grok-dot-tasking/scratch/gd-g1/repo/scripts/message-preview-browser-check.mjs"/>
+	<testcase name="selected helper to reviewed native result desktop" time="15.393496" classname="test" file="/home/hatch/workspace/wave-2026-10-31-grok-dot-tasking/scratch/gd-g1/repo/scripts/native-draft-browser-check.mjs"/>
+	<testcase name="selected helper to reviewed native result mobile" time="16.277967" classname="test" file="/home/hatch/workspace/wave-2026-10-31-grok-dot-tasking/scratch/gd-g1/repo/scripts/native-draft-browser-check.mjs"/>
+	<testcase name="native drafts and copied AI returns keep separate private drafts and original basis across reopening" time="8.628263" classname="test" file="/home/hatch/workspace/wave-2026-10-31-grok-dot-tasking/scratch/gd-g1/repo/scripts/native-draft-browser-check.mjs"/>
+	<testcase name="native unknown save retains exact input through scope changes and retry" time="5.491515" classname="test" file="/home/hatch/workspace/wave-2026-10-31-grok-dot-tasking/scratch/gd-g1/repo/scripts/native-draft-browser-check.mjs"/>
+	<testcase name="draft feedback and revised result desktop" time="23.006307" classname="test" file="/home/hatch/workspace/wave-2026-10-31-grok-dot-tasking/scratch/gd-g1/repo/scripts/native-draft-browser-check.mjs"/>
+	<testcase name="draft feedback and revised result mobile" time="17.526933" classname="test" file="/home/hatch/workspace/wave-2026-10-31-grok-dot-tasking/scratch/gd-g1/repo/scripts/native-draft-browser-check.mjs"/>
+	<testcase name="notification feed desktop: badge counts unread items, list opens the message, Mark read moves only the cursor" time="12.372666" classname="test" file="/home/hatch/workspace/wave-2026-10-31-grok-dot-tasking/scratch/gd-g1/repo/scripts/notification-feed-browser-check.mjs"/>
+	<testcase name="notification feed mobile: badge counts unread items, list opens the message, Mark read moves only the cursor" time="10.536034" classname="test" file="/home/hatch/workspace/wave-2026-10-31-grok-dot-tasking/scratch/gd-g1/repo/scripts/notification-feed-browser-check.mjs"/>
+	<testcase name="older notification paging finds a buried mention without acknowledging unseen history" time="24.951877" classname="test" file="/home/hatch/workspace/wave-2026-10-31-grok-dot-tasking/scratch/gd-g1/repo/scripts/notification-feed-browser-check.mjs"/>
+	<testcase name="returning Google member keeps a friend's join link through sign-in" time="7.596461" classname="test" file="/home/hatch/workspace/wave-2026-10-31-grok-dot-tasking/scratch/gd-g1/repo/scripts/oauth-return-invite-browser-check.mjs"/>
+	<testcase name="returning Google member keeps a friend's invite link through sign-in" time="7.372128" classname="test" file="/home/hatch/workspace/wave-2026-10-31-grok-dot-tasking/scratch/gd-g1/repo/scripts/oauth-return-invite-browser-check.mjs"/>
+	<testcase name="returning Google member keeps a friend's code link through sign-in" time="6.697530" classname="test" file="/home/hatch/workspace/wave-2026-10-31-grok-dot-tasking/scratch/gd-g1/repo/scripts/oauth-return-invite-browser-check.mjs"/>
+	<testcase name="returning Google member keeps a friend's code-stale link through sign-in" time="9.112812" classname="test" file="/home/hatch/workspace/wave-2026-10-31-grok-dot-tasking/scratch/gd-g1/repo/scripts/oauth-return-invite-browser-check.mjs"/>
+	<testcase name="section summaries share one anatomy: chevron, label, flex row, 44px target" time="5.395851" classname="test" file="/home/hatch/workspace/wave-2026-10-31-grok-dot-tasking/scratch/gd-g1/repo/scripts/progressive-disclosure-check.mjs"/>
+	<testcase name="chevron direction reflects open state identically across sections" time="7.602301" classname="test" file="/home/hatch/workspace/wave-2026-10-31-grok-dot-tasking/scratch/gd-g1/repo/scripts/progressive-disclosure-check.mjs"/>
+	<testcase name="keyboard toggling never moves focus off the summary" time="5.439643" classname="test" file="/home/hatch/workspace/wave-2026-10-31-grok-dot-tasking/scratch/gd-g1/repo/scripts/progressive-disclosure-check.mjs"/>
+	<testcase name="trailing chips align to the summary's right edge" time="8.725775" classname="test" file="/home/hatch/workspace/wave-2026-10-31-grok-dot-tasking/scratch/gd-g1/repo/scripts/progressive-disclosure-check.mjs"/>
+	<testcase name="the same anatomy holds on mobile" time="7.511614" classname="test" file="/home/hatch/workspace/wave-2026-10-31-grok-dot-tasking/scratch/gd-g1/repo/scripts/progressive-disclosure-check.mjs"/>
+	<testcase name="owner enables scoped public work and anonymous visitor finds it at 1280px" time="14.645019" classname="test" file="/home/hatch/workspace/wave-2026-10-31-grok-dot-tasking/scratch/gd-g1/repo/scripts/public-work-matching-browser-check.mjs"/>
+	<testcase name="owner enables scoped public work and anonymous visitor finds it at 320px" time="12.606102" classname="test" file="/home/hatch/workspace/wave-2026-10-31-grok-dot-tasking/scratch/gd-g1/repo/scripts/public-work-matching-browser-check.mjs"/>
+	<testcase name="an empty bounded recommendation page recovers failed fresh and continuation searches" time="27.335526" classname="test" file="/home/hatch/workspace/wave-2026-10-31-grok-dot-tasking/scratch/gd-g1/repo/scripts/public-work-matching-browser-check.mjs"/>
+	<testcase name="edge-host copied instructions use the real prefixed API without inventing an offers mount" time="8.349864" classname="test" file="/home/hatch/workspace/wave-2026-10-31-grok-dot-tasking/scratch/gd-g1/repo/scripts/public-work-matching-browser-check.mjs"/>
+	<testcase name="editing preferences fences an older real match response and starts a fresh search without its cursor" time="6.047624" classname="test" file="/home/hatch/workspace/wave-2026-10-31-grok-dot-tasking/scratch/gd-g1/repo/scripts/public-work-matching-browser-check.mjs"/>
+	<testcase name="a completed native clipboard write cannot restore old match feedback after interests change" time="6.632003" classname="test" file="/home/hatch/workspace/wave-2026-10-31-grok-dot-tasking/scratch/gd-g1/repo/scripts/public-work-matching-browser-check.mjs"/>
+	<testcase name="quiet design desktop: disclosure, keyboard sending, modal focus and reflow" time="10.111289" classname="test" file="/home/hatch/workspace/wave-2026-10-31-grok-dot-tasking/scratch/gd-g1/repo/scripts/quiet-design-check.mjs"/>
+	<testcase name="quiet design touch: disclosure, keyboard sending, modal focus and reflow" time="10.364401" classname="test" file="/home/hatch/workspace/wave-2026-10-31-grok-dot-tasking/scratch/gd-g1/repo/scripts/quiet-design-check.mjs"/>
+	<testcase name="a public receipt fits a 390px viewport" time="2.613369" classname="test" file="/home/hatch/workspace/wave-2026-10-31-grok-dot-tasking/scratch/gd-g1/repo/scripts/receipts-browser-check.mjs"/>
+	<testcase name="actual Node entrypoint pauses without touching populated data, then resumes the same Room in a browser" time="17.657414" classname="test" file="/home/hatch/workspace/wave-2026-10-31-grok-dot-tasking/scratch/gd-g1/repo/scripts/recovery-browser-check.mjs" failure="Expected values to be strictly deep-equal:&#10;+ actual - expected&#10;... Skipped lines&#10;&#10;  [&#10;    {&#10;      rows: 2,&#10;      sha256: 'd90d8489441c9526dd9d471960452c9b3494949db6963cb4af53b3c27331811b',&#10;      table: 'rooms'&#10;...&#10;    {&#10;+     rows: 1,&#10;+     sha256: '7c9e769c399e2ddd713fac8564444bf5bce69cbdef6c727b7ff1a664a4d24de5',&#10;-     rows: 0,&#10;-     sha256: '4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945',&#10;      table: 'integrity_snapshot'&#10;    },&#10;    {&#10;      rows: 1,&#10;      sha256: '4f71d1c188fdedd802ac2438cea8fc7b3e23efedc15df94bf51e6ecc88c0b542',&#10;...&#10;    {&#10;+     rows: 1,&#10;+     sha256: '0f0fbd957b1a360b5faabfb66e9c4c8bb4ef2cc75d8eb6e2dcfd5dd2548e3ed8',&#10;-     rows: 0,&#10;-     sha256: '4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945',&#10;      table: 'integrity_job_cursor'&#10;    },&#10;    {&#10;      rows: 0,&#10;      sha256: '4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945',&#10;...&#10;    {&#10;+     rows: 1,&#10;+     sha256: '0615d1d5eeb8285e3072f538f28d74ddd0f84418ada88916ed919be2edecc92d',&#10;-     rows: 0,&#10;-     sha256: '4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945',&#10;      table: 'public_read_model_backfill'&#10;    },&#10;    {&#10;      rows: 0,&#10;      sha256: '4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945',&#10;...&#10;    {&#10;+     rows: 2,&#10;+     sha256: '7df836a4ffbbc6b31ecd8f2f7f6b0f6ea80ce161d53648210caf837702b4a1b8',&#10;-     rows: 0,&#10;-     sha256: '4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945',&#10;      table: 'integrity_room_state'&#10;    },&#10;    {&#10;      rows: 0,&#10;      sha256: '4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945',&#10;">
+		<failure type="testCodeFailure" message="Expected values to be strictly deep-equal:&#10;+ actual - expected&#10;... Skipped lines&#10;&#10;  [&#10;    {&#10;      rows: 2,&#10;      sha256: 'd90d8489441c9526dd9d471960452c9b3494949db6963cb4af53b3c27331811b',&#10;      table: 'rooms'&#10;...&#10;    {&#10;+     rows: 1,&#10;+     sha256: '7c9e769c399e2ddd713fac8564444bf5bce69cbdef6c727b7ff1a664a4d24de5',&#10;-     rows: 0,&#10;-     sha256: '4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945',&#10;      table: 'integrity_snapshot'&#10;    },&#10;    {&#10;      rows: 1,&#10;      sha256: '4f71d1c188fdedd802ac2438cea8fc7b3e23efedc15df94bf51e6ecc88c0b542',&#10;...&#10;    {&#10;+     rows: 1,&#10;+     sha256: '0f0fbd957b1a360b5faabfb66e9c4c8bb4ef2cc75d8eb6e2dcfd5dd2548e3ed8',&#10;-     rows: 0,&#10;-     sha256: '4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945',&#10;      table: 'integrity_job_cursor'&#10;    },&#10;    {&#10;      rows: 0,&#10;      sha256: '4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945',&#10;...&#10;    {&#10;+     rows: 1,&#10;+     sha256: '0615d1d5eeb8285e3072f538f28d74ddd0f84418ada88916ed919be2edecc92d',&#10;-     rows: 0,&#10;-     sha256: '4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945',&#10;      table: 'public_read_model_backfill'&#10;    },&#10;    {&#10;      rows: 0,&#10;      sha256: '4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945',&#10;...&#10;    {&#10;+     rows: 2,&#10;+     sha256: '7df836a4ffbbc6b31ecd8f2f7f6b0f6ea80ce161d53648210caf837702b4a1b8',&#10;-     rows: 0,&#10;-     sha256: '4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945',&#10;      table: 'integrity_room_state'&#10;    },&#10;    {&#10;      rows: 0,&#10;      sha256: '4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945',">
+[Error [ERR_TEST_FAILURE]: Expected values to be strictly deep-equal:
++ actual - expected
+... Skipped lines
+
+  [
+    {
+      rows: 2,
+      sha256: 'd90d8489441c9526dd9d471960452c9b3494949db6963cb4af53b3c27331811b',
+      table: 'rooms'
+...
+    {
++     rows: 1,
++     sha256: '7c9e769c399e2ddd713fac8564444bf5bce69cbdef6c727b7ff1a664a4d24de5',
+-     rows: 0,
+-     sha256: '4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945',
+      table: 'integrity_snapshot'
+    },
+    {
+      rows: 1,
+      sha256: '4f71d1c188fdedd802ac2438cea8fc7b3e23efedc15df94bf51e6ecc88c0b542',
+...
+    {
++     rows: 1,
++     sha256: '0f0fbd957b1a360b5faabfb66e9c4c8bb4ef2cc75d8eb6e2dcfd5dd2548e3ed8',
+-     rows: 0,
+-     sha256: '4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945',
+      table: 'integrity_job_cursor'
+    },
+    {
+      rows: 0,
+      sha256: '4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945',
+...
+    {
++     rows: 1,
++     sha256: '0615d1d5eeb8285e3072f538f28d74ddd0f84418ada88916ed919be2edecc92d',
+-     rows: 0,
+-     sha256: '4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945',
+      table: 'public_read_model_backfill'
+    },
+    {
+      rows: 0,
+      sha256: '4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945',
+...
+    {
++     rows: 2,
++     sha256: '7df836a4ffbbc6b31ecd8f2f7f6b0f6ea80ce161d53648210caf837702b4a1b8',
+-     rows: 0,
+-     sha256: '4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945',
+      table: 'integrity_room_state'
+    },
+    {
+      rows: 0,
+      sha256: '4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945',
+] {
+  code: 'ERR_TEST_FAILURE',
+  failureType: 'testCodeFailure',
+  cause: AssertionError [ERR_ASSERTION]: Expected values to be strictly deep-equal:
+  + actual - expected
+  ... Skipped lines
+  
+    [
+      {
+        rows: 2,
+        sha256: 'd90d8489441c9526dd9d471960452c9b3494949db6963cb4af53b3c27331811b',
+        table: 'rooms'
+  ...
+      {
+  +     rows: 1,
+  +     sha256: '7c9e769c399e2ddd713fac8564444bf5bce69cbdef6c727b7ff1a664a4d24de5',
+  -     rows: 0,
+  -     sha256: '4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945',
+        table: 'integrity_snapshot'
+      },
+      {
+        rows: 1,
+        sha256: '4f71d1c188fdedd802ac2438cea8fc7b3e23efedc15df94bf51e6ecc88c0b542',
+  ...
+      {
+  +     rows: 1,
+  +     sha256: '0f0fbd957b1a360b5faabfb66e9c4c8bb4ef2cc75d8eb6e2dcfd5dd2548e3ed8',
+  -     rows: 0,
+  -     sha256: '4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945',
+        table: 'integrity_job_cursor'
+      },
+      {
+        rows: 0,
+        sha256: '4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945',
+  ...
+      {
+  +     rows: 1,
+  +     sha256: '0615d1d5eeb8285e3072f538f28d74ddd0f84418ada88916ed919be2edecc92d',
+  -     rows: 0,
+  -     sha256: '4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945',
+        table: 'public_read_model_backfill'
+      },
+      {
+        rows: 0,
+        sha256: '4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945',
+  ...
+      {
+  +     rows: 2,
+  +     sha256: '7df836a4ffbbc6b31ecd8f2f7f6b0f6ea80ce161d53648210caf837702b4a1b8',
+  -     rows: 0,
+  -     sha256: '4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945',
+        table: 'integrity_room_state'
+      },
+      {
+        rows: 0,
+        sha256: '4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945',
+  
+      at TestContext.&lt;anonymous> (file:///home/hatch/workspace/wave-2026-10-31-grok-dot-tasking/scratch/gd-g1/repo/scripts/recovery-browser-check.mjs:48:10)
+      at async Test.run (node:internal/test_runner/test:1409:7)
+      at async startSubtestAfterBootstrap (node:internal/test_runner/harness:387:3) {
+    generatedMessage: true,
+    code: 'ERR_ASSERTION',
+    actual: [
+      [Object], [Object], [Object], [Object], [Object], [Object],
+      [Object], [Object], [Object], [Object], [Object], [Object],
+      [Object], [Object], [Object], [Object], [Object], [Object],
+      [Object], [Object], [Object], [Object], [Object], [Object],
+      [Object], [Object], [Object], [Object], [Object], [Object],
+      [Object], [Object], [Object], [Object], [Object], [Object],
+      [Object], [Object], [Object], [Object], [Object], [Object],
+      [Object], [Object], [Object], [Object], [Object], [Object],
+      [Object], [Object], [Object], [Object], [Object], [Object],
+      [Object], [Object], [Object], [Object], [Object], [Object],
+      [Object], [Object], [Object], [Object], [Object], [Object],
+      [Object], [Object], [Object], [Object], [Object], [Object],
+      [Object], [Object], [Object], [Object], [Object], [Object],
+      [Object], [Object], [Object], [Object], [Object], [Object],
+      [Object], [Object], [Object], [Object], [Object], [Object],
+      [Object], [Object], [Object], [Object], [Object], [Object],
+      [Object], [Object], [Object], [Object],
+      ... 115 more items
+    ],
+    expected: [
+      [Object], [Object], [Object], [Object], [Object], [Object],
+      [Object], [Object], [Object], [Object], [Object], [Object],
+      [Object], [Object], [Object], [Object], [Object], [Object],
+      [Object], [Object], [Object], [Object], [Object], [Object],
+      [Object], [Object], [Object], [Object], [Object], [Object],
+      [Object], [Object], [Object], [Object], [Object], [Object],
+      [Object], [Object], [Object], [Object], [Object], [Object],
+      [Object], [Object], [Object], [Object], [Object], [Object],
+      [Object], [Object], [Object], [Object], [Object], [Object],
+      [Object], [Object], [Object], [Object], [Object], [Object],
+      [Object], [Object], [Object], [Object], [Object], [Object],
+      [Object], [Object], [Object], [Object], [Object], [Object],
+      [Object], [Object], [Object], [Object], [Object], [Object],
+      [Object], [Object], [Object], [Object], [Object], [Object],
+      [Object], [Object], [Object], [Object], [Object], [Object],
+      [Object], [Object], [Object], [Object], [Object], [Object],
+      [Object], [Object], [Object], [Object],
+      ... 115 more items
+    ],
+    operator: 'deepStrictEqual',
+    diff: 'simple'
+  }
+}
+		</failure>
+	</testcase>
+	<testcase name="room lifecycle desktop: create from Rooms, archive as owner, archived rooms are read-only switcher entries" time="8.600749" classname="test" file="/home/hatch/workspace/wave-2026-10-31-grok-dot-tasking/scratch/gd-g1/repo/scripts/room-lifecycle-browser-check.mjs"/>
+	<testcase name="room lifecycle mobile: create from Rooms, archive as owner, archived rooms are read-only switcher entries" time="7.982921" classname="test" file="/home/hatch/workspace/wave-2026-10-31-grok-dot-tasking/scratch/gd-g1/repo/scripts/room-lifecycle-browser-check.mjs"/>
+	<testcase name="room lifecycle: a member leaves from About, the room leaves the switcher, and a conversation-only account cannot create rooms" time="6.417550" classname="test" file="/home/hatch/workspace/wave-2026-10-31-grok-dot-tasking/scratch/gd-g1/repo/scripts/room-lifecycle-browser-check.mjs"/>
+	<testcase name="unified guest entry, account-bound draft recovery, catch-up and agent handoff share one room" time="11.160676" classname="test" file="/home/hatch/workspace/wave-2026-10-31-grok-dot-tasking/scratch/gd-g1/repo/scripts/unified-journey-check.mjs"/>
+	<testcase name="attempt ledger: a work card shows attributable attempts with environment and outcome" time="7.169003" classname="test" file="/home/hatch/workspace/wave-2026-10-31-grok-dot-tasking/scratch/gd-g1/repo/scripts/work-attempts-browser-check.mjs"/>
+	<testcase name="discovery to contribution desktop: reuse, fresh authority and changed evidence" time="18.881950" classname="test" file="/home/hatch/workspace/wave-2026-10-31-grok-dot-tasking/scratch/gd-g1/repo/scripts/discovery-contribution-browser-check.mjs"/>
+	<testcase name="discovery to contribution touch: reuse, fresh authority and changed evidence" time="13.901372" classname="test" file="/home/hatch/workspace/wave-2026-10-31-grok-dot-tasking/scratch/gd-g1/repo/scripts/discovery-contribution-browser-check.mjs"/>
+	<testcase name="work search desktop: return to outcomes without losing context" time="14.760126" classname="test" file="/home/hatch/workspace/wave-2026-10-31-grok-dot-tasking/scratch/gd-g1/repo/scripts/work-search-browser-check.mjs"/>
+	<testcase name="work search touch: return to outcomes without losing context" time="14.361575" classname="test" file="/home/hatch/workspace/wave-2026-10-31-grok-dot-tasking/scratch/gd-g1/repo/scripts/work-search-browser-check.mjs"/>
+	<testcase name="workflow desktop: lighter checks, exact retries, truthful status and later findings" time="14.458008" classname="test" file="/home/hatch/workspace/wave-2026-10-31-grok-dot-tasking/scratch/gd-g1/repo/scripts/workflow-browser-check.mjs"/>
+	<testcase name="workflow mobile: lighter checks, exact retries, truthful status and later findings" time="19.822480" classname="test" file="/home/hatch/workspace/wave-2026-10-31-grok-dot-tasking/scratch/gd-g1/repo/scripts/workflow-browser-check.mjs"/>
+	<!-- tests 109 -->
+	<!-- suites 0 -->
+	<!-- pass 108 -->
+	<!-- fail 1 -->
+	<!-- cancelled 0 -->
+	<!-- skipped 0 -->
+	<!-- todo 0 -->
+	<!-- duration_ms 1154877.388028 -->
+</testsuites>

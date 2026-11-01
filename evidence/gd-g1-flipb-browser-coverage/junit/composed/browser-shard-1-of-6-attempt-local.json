@@ -1,0 +1,26 @@
+{
+  "index": 1,
+  "total": 6,
+  "files": [
+    "scripts/a11y-login-browser-check.mjs",
+    "scripts/account-deletion-browser-check.mjs",
+    "scripts/account-settings-browser-check.mjs",
+    "scripts/agent-work-access-browser-check.mjs",
+    "scripts/deep-link-reveal-browser-check.mjs",
+    "scripts/dogfood-return-browser-check.mjs",
+    "scripts/email-password-browser-check.mjs",
+    "scripts/first-result-journey-check.mjs",
+    "scripts/friend-bond-browser-check.mjs",
+    "scripts/google-callback-browser-check.mjs",
+    "scripts/muse-invite-browser-check.mjs",
+    "scripts/public-work-mcp-journey-check.mjs",
+    "scripts/thread-options-browser-check.mjs"
+  ],
+  "planHash": "3d8258f67a5e4e1c4b428522f5c7366816d83232c08f3d7a1fcd98642f07a59f",
+  "status": 1,
+  "signal": null,
+  "revision": "d2c346cda020187b522a0a57a0a5fc5a9e37f6b5",
+  "runId": "local",
+  "runAttempt": "local",
+  "elapsedMs": 604504
+}

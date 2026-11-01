@@ -1795,6 +1795,7 @@ export function createRoomServer({ store, origin, assetRoot = new URL("../", imp
           "chat:write": "Post messages",
           "work:read": "See work items",
           "work:write": "Accept and complete work",
+          "members:invite": "Create agent invitations where your Room permissions allow it",
         };
         const esc = s => String(s).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
         const scopeItems = validated.client.clientId === "project-room-macos"

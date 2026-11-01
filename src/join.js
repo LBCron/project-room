@@ -669,7 +669,12 @@ async function boot() {
   const copySecret = $("join-copy-secret");
   const syncCopyButtons = () => {
     if (copyAgent) copyAgent.disabled = clipboard.busy;
-    if (copySecret) copySecret.disabled = clipboard.busy;
+    if (copySecret) {
+      // An older OS write may never settle. Keep the newly minted key
+      // reachable through manual selection without starting another write.
+      copySecret.textContent = clipboard.busy ? "Select key" : "Copy";
+      copySecret.setAttribute("aria-label", clipboard.busy ? "Select agent access key for manual copying" : "Copy agent access key");
+    }
   };
   clipboard.subscribe(syncCopyButtons);
   syncCopyButtons();

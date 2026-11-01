@@ -1,6 +1,6 @@
 # Follow-up production releases, 2026-11-01
 
-Current observation, 10:08 UTC: production is `d3e73bf53972993905411d78df9e6560b5794aae` (canonical build `2026-11-01T09:58:00.832Z`, entry build `2026-11-01T09:58:09.665Z`). Deployment `41295314517` passed strict smoke 16/16, public smoke and runtime publication. Main also contains historical repair landing `21891d44372c7d24006ea37e312853517f5f9d73`, which is not deployed at this observation. Controlled live post/retry QA is still running; no final pass claimed yet.
+Current observation, 10:08 UTC: production is `d3e73bf53972993905411d78df9e6560b5794aae` (canonical build `2026-11-01T09:58:00.832Z`, entry build `2026-11-01T09:58:09.665Z`). Deployment `41295314517` passed strict smoke 16/16, public smoke and runtime publication. Main also contains historical repair landing `21891d44372c7d24006ea37e312853517f5f9d73`, which is not deployed at this observation. Corrected controlled live post/retry/reversal QA passed at 10:10:43 UTC; its earlier harness failures remain preserved.
 
 The sections below are dated checkpoint history. Later receipts supersede earlier limitations explicitly; failed attempts remain preserved. Exact head qualification, merge, deployment and live checks are distinct. No skipped or cancelled job is called passed.
 
@@ -96,3 +96,11 @@ Source `3d22e0944ad8dbc82d1084b2cc54b5b62b07c6c7` deployed successfully in `4129
 Source `d3e73bf53972993905411d78df9e6560b5794aae` then deployed successfully in `41295314517`, adding qualified work-reference post admission. Strict smoke 16/16, public smoke, all source doors and runtime publication passed. Runtime: 661 files, 3,507,747 bytes, SHA256 `618e366b499024777804d6624923d4fce55910027f63340f447f7747f706ece2`. The isolated earlier 2.5-second readiness timeout did not recur in these checkpoints; its production cause remains unresolved.
 
 Historical repair PR #5594 passed its own head checks and landed at `21891d44372c7d24006ea37e312853517f5f9d73`. Its initial size gate failed because the body lacked the repository-required large-diff justification. The body now explains the atomic admission/repair/test slice; an edited-event gate passed with unchanged source. No live repair or quarantine clearance is claimed.
+
+### Corrected live canonical posting qualification
+
+At `d3e73bf`, seven separate Node processes completed bounded preparation, canonical conversion, cancellation of the initial HTTP 201 posting response, exact-input recovery, and reversal in the dedicated QA room. Exactly one new message persisted; changed input under the same operation ID was refused. The saved work result, edited probe and posted message survived reversal. This is intentional response-body cancellation and interrupted local acknowledgment qualification, not physical network loss, process crash, Worker restart or a live SQL cost measurement. Authority markers remain hidden from public snapshots.
+
+The first harness incorrectly intercepted only HTTP 200 and stopped after the new post returned 201. Its original intent stayed saved; exact retry resolved it, and safe reversal completed after a final readback hit the unchanged Operator rate limit. The corrected harness uses separate IDs/journal, records the actual 201 cancellation and paces Operator requests. Earlier failures and receipts were not overwritten or treated as product failures.
+
+A separate future-only, sanitized canonical Worker observation decoded 617 events over ten minutes, with no exceptions and two readiness log samples (maximum total 511 ms, no failure). This limited sample does not establish the prior timeout's cause or fleet-wide latency. Raw provider events, URLs, bindings and private identifiers are excluded.

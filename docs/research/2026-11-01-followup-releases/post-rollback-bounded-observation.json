@@ -1,0 +1,13 @@
+{
+  "observation": "bounded future-only canonical Worker tail",
+  "durationSeconds": 600,
+  "decodedEvents": 617,
+  "exceptionRecords": 0,
+  "readyLogSamples": 2,
+  "maximumReadyTotalMs": 511,
+  "readyFailures": 0,
+  "historicalTimeoutCauseEstablished": false,
+  "samplingAndLogAbsenceAreLimits": true,
+  "rawProviderEventsExcluded": true,
+  "normalDeadlineTerminationUsedKill": true
+}

@@ -127,3 +127,15 @@ test('healthy selected room is checked even when five other failures fill the gl
   assert.equal(sample.rooms.length,5);assert.equal(sample.truncated,true);assert.ok(sample.rooms.every(room=>room.roomId!=='commons'));
   assert.equal(selected(store).status,'clean');
 });
+
+test('coherent message-row tamper with valid row hash and plausible cursor still mismatches protected snapshot',async t=>{
+  const {messageProofHash}=await import('../server/write-integrity.mjs');
+  const store=fixture(t),proof=store.db.prepare("SELECT metadata_hash FROM integrity_room_state WHERE room_id='commons'").get().metadata_hash;
+  const row={...store.db.prepare("SELECT * FROM messages WHERE room_id='commons'").get(),body:'PRIVATE_COHERENT_CORRUPTION'};
+  store.db.prepare('UPDATE messages SET body=?,entity_hash=? WHERE room_id=? AND message_id=?').run(row.body,messageProofHash(row),'commons',row.message_id);
+  const head=store.db.prepare("SELECT sequence FROM rooms WHERE id='commons'").get().sequence;
+  const eventId=store.db.prepare("SELECT id FROM events WHERE room_id='commons' AND sequence=?").get(head).id;
+  store.db.prepare("UPDATE messages_backfill_cursor SET applied_seq=?,applied_event_id=?,parity_at_seq=? WHERE room_id='commons'").run(head,eventId,head);
+  const result=selected(store);assert.equal(result.status,'mismatch');assert.equal(result.complete,true);assert.equal(result.proofsVerified,true);assert.ok(result.fields.includes('body'));assert.equal(result.mismatchedRows,1);
+  assert.equal(store.db.prepare("SELECT metadata_hash FROM integrity_room_state WHERE room_id='commons'").get().metadata_hash,proof);
+});

@@ -48,7 +48,7 @@ test('composed context preserves the same private definition boundary as default
   assert.notEqual(conditional.not_modified, true);
   assert.notEqual(mcpConditional.not_modified, true);
   const pathsOf = (value, sentinel, path = '') => {
-    if (value === sentinel) return [path];
+    if (typeof value === 'string' && value.includes(sentinel)) return [path];
     if (!value || typeof value !== 'object') return [];
     return Object.entries(value).flatMap(([key, child]) => pathsOf(child, sentinel, path + '/' + key));
   };

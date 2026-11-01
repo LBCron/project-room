@@ -15,7 +15,7 @@ const keys = new WeakMap();
 const MAX_BYTES = 512 * 1024;
 const digest = value => createHash("sha256").update(JSON.stringify(value)).digest("base64url");
 const fail = (status, code, message) => { throw new ServiceError(status, code, message); };
-function signer(store) {
+export function conversationCursorCodec(store) {
   // Continuations are hints, never authority. A store restart invalidates them
   // explicitly instead of silently mixing pre-recovery and post-recovery pages.
   if (!keys.has(store)) keys.set(store, randomBytes(32));
@@ -92,7 +92,7 @@ export function readConversation(store, token, roomId, { limit = 50, cursor = nu
       viewerAuthEpoch: auth.account?.authEpoch ?? null, viewerSessionBinding: auth.sessionBinding,
       viewerSessionRevision: auth.sessionRevision ?? null };
     const scope = digest([identity, auth.credentialHash, limit, channelId, peerMemberId]);
-    const signed = signer(store), saved = cursor !== null || since !== null ? signed.decode(cursor ?? since) : null;
+    const signed = conversationCursorCodec(store), saved = cursor !== null || since !== null ? signed.decode(cursor ?? since) : null;
     const base = { ...identity, conversationVersion: 1, sequence: head.sequence, limit, messageId,
       ...(channelId !== null ? { channelId } : {}), ...(peerMemberId !== null ? { peerMemberId } : {}) };
     const reset = () => ({ ...base, mode: "reset", messages: [], nextCursor: null, checkpoint: null });
@@ -227,7 +227,7 @@ export function readDirectConversations(store, token, roomId, { limit = 50, curs
       viewerAuthEpoch: auth.account?.authEpoch ?? null, viewerSessionBinding: auth.sessionBinding,
       viewerSessionRevision: auth.sessionRevision ?? null };
     const scope = digest(['direct-directory', identity, auth.credentialHash, limit]);
-    const signed = signer(store), saved = cursor === null ? null : signed.decode(cursor);
+    const signed = conversationCursorCodec(store), saved = cursor === null ? null : signed.decode(cursor);
     const base = { ...identity, directoryVersion: 1, sequence: head.sequence, limit };
     if (cursor !== null && (!saved || saved.scope !== scope || saved.sequence !== head.sequence || saved.anchor !== anchor || typeof saved.after !== 'string'))
       return { ...base, mode: 'reset', peers: [], nextCursor: null };

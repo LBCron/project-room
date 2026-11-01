@@ -587,6 +587,11 @@ function readCurrentAuditWorkBody(db,roomId,id,ref) {
  const item=JSON.parse(row.body);if(item.id!==id||item.revision!==ref.revision)corrupt('recovered work identity changed');return item;
 }
 
+export function currentAuditMessageRoot(message,lookup){
+ const root=message.replyToId?lookup(message.replyToId):message.id;
+ if(!root)corrupt('recovered canonical reply ancestry incomplete');return root;
+}
+
 // Shared independent census leaf reads. One factory lives only inside the
 // current synchronous transaction; no reconstructed source state is trusted.
 export function withCurrentAuditUnits(store,roomId,operation) {
@@ -651,7 +656,7 @@ export function readCurrentRoomForAudit(store,roomId) {
   if(state.messagesArchive)state.messagesArchive=recoverArchiveMarker(state.messagesArchive,archiveRetained);
   else if(archiveRetained.size)corrupt('orphan archive retained membership');
   const expected=new Map(),roots=new Map();
-  for(const message of canonicalMessages){const root=message.replyToId?roots.get(message.replyToId):message.id;if(!root)corrupt('recovered canonical reply ancestry incomplete');roots.set(message.id,root);}
+  for(const message of canonicalMessages){const root=currentAuditMessageRoot(message,id=>roots.get(id));roots.set(message.id,root);}
   for(const message of state.messages) {
     const root=roots.get(message.id);
     if(!root)corrupt('recovered reply ancestry incomplete');roots.set(message.id,root);

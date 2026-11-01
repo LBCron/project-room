@@ -1,4 +1,4 @@
-import { assertMessageWrite, recordMessageWrite, servingProofDrift, messageProofMatches, MESSAGE_PROOF_SELECT } from './write-integrity.mjs';
+import { assertMessageWrite, recordMessageWrite, servingProofDrift, messageProofMatches, MESSAGE_PROOF_SELECT, MESSAGE_PROOF_FIELDS } from './write-integrity.mjs';
 import { writeMessageReplaySnapshot, discardMessageReplaySnapshot, decodeMessageReplaySnapshot } from './message-replay-snapshot.mjs';
 import { hydrateProjection, storedProjection } from "./projection-at-rest.mjs";
 import { hasMessageAuthority } from './message-authority.mjs';
@@ -9,7 +9,7 @@ export { closeKeepSet };
 // same transaction as the event insert. MSG-2 replays events that landed
 // before the table, and events from importEvents and initialize, which still
 // do not double-write. The integrity cron runs that replay.
-import { applyEvent, emptyRoomState } from "../src/events.js";
+import { applyEvent, emptyRoomState, messageChannelId } from "../src/events.js";
 import { isDeepStrictEqual } from "node:util";
 
 export const MESSAGE_ROW_TYPES = Object.freeze([
@@ -213,8 +213,42 @@ function currentRecord(message) {
   return { ...record, body: storedBody(message) };
 }
 
+// Exact current writer projection, shared with explicit independent validation.
+// This encodes existing reducer values; it does not upgrade legacy state.
+export function messageRowForWrite(message, { sequence, pinned, threadMessages }) {
+  return {
+    message_id: message.id,
+    seq: sequence,
+    channel_id: textOrNull(message.channelId),
+    thread_root_id: threadRootId(threadMessages, message),
+    reply_to_id: textOrNull(message.replyToId),
+    to_member_id: textOrNull(message.toMemberId),
+    work_item_id: textOrNull(message.workItemId),
+    author_id: message.authorId,
+    body: storedBody(message),
+    created_at: message.createdAt,
+    edited_at: textOrNull(message.editedAt),
+    deleted_at: textOrNull(message.deletedAt),
+    reactions_json: null, // Reactions were removed; the column stays for old rows.
+    pinned: pinned ? 1 : 0,
+    record_json: JSON.stringify(currentRecord(message)),
+    reducer_extras_json: JSON.stringify(reducerExtras(message))
+  };
+}
+
 // Shared, pure comparison: diagnostics must use the same fields as certification.
-export function messageRowParityFields(row, message, { sequence, pinned, threadMessages }) {
+// Preserve the literal representation first. Only a completely coherent
+// reader-defaulted representation may additionally satisfy an absent channel.
+export function messageRowParityFields(row, message, context) {
+  const differences = strictMessageRowParityFields(row, message, context);
+  if (differences.length && message && !Object.hasOwn(message, 'channelId')) {
+    const view = { ...message, channelId: messageChannelId(message) };
+    if (!strictMessageRowParityFields(row, view, context).length) return [];
+  }
+  return differences;
+}
+
+function strictMessageRowParityFields(row, message, { sequence, pinned, threadMessages }) {
   let record, extras;
   try { record = JSON.parse(row.record_json); } catch { /* invalid records fail parity */ }
   try { extras = row.reducer_extras_json === null ? null : JSON.parse(row.reducer_extras_json); }
@@ -244,6 +278,18 @@ export function messageRowParityFields(row, message, { sequence, pinned, threadM
 }
 
 export function messageRecordParityDetail(row, message, receiptId = null) {
+  const detail = strictMessageRecordParityDetail(row, message, receiptId);
+  if (detail.keys.length && message && !Object.hasOwn(message, 'channelId')) {
+    const view = { ...message, channelId: messageChannelId(message) };
+    if (row.channel_id === view.channelId) {
+      const alias = strictMessageRecordParityDetail(row, view, receiptId);
+      if (!alias.keys.length) return alias;
+    }
+  }
+  return detail;
+}
+
+function strictMessageRecordParityDetail(row, message, receiptId) {
   let record;
   try { record = JSON.parse(row.record_json); } catch { return { keys: ['invalid_json'], legacyShapeOnly: false }; }
   const expected = currentRecord(message);
@@ -294,23 +340,10 @@ function writeMessageRows(db, {roomId,state,sequenceById,messageIndex=null,exact
     const message = byId.get(messageId);
     if (!message || typeof message.authorId !== "string" || typeof message.createdAt !== "string") continue;
     assertMessageWrite(db,roomId,message.id);
-    upsert.run(
-      roomId, message.id, sequenceById.get(message.id),
-      textOrNull(message.channelId),
-      threadRootId(byId, message),
-      textOrNull(message.replyToId),
-      textOrNull(message.toMemberId),
-      textOrNull(message.workItemId),
-      message.authorId,
-      storedBody(message),
-      message.createdAt,
-      textOrNull(message.editedAt),
-      textOrNull(message.deletedAt),
-      null, // reactions_json: reactions were removed; the column stays for old rows
-      pinned.has(message.id) ? 1 : 0,
-      JSON.stringify(currentRecord(message)),
-      JSON.stringify(reducerExtras(message))
-    );
+    const row = messageRowForWrite(message, {
+      sequence: sequenceById.get(message.id), pinned: pinned.has(message.id), threadMessages: byId
+    });
+    upsert.run(roomId, ...MESSAGE_PROOF_FIELDS.map(field => row[field]));
     recordMessageWrite(db,roomId,message.id);
     written += 1;
   }

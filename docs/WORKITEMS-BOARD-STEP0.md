@@ -59,7 +59,7 @@ signed evidence or checks (§4.4).
 ## 2. Census — every live reader and writer
 
 Method: full-text scan for `workItems` over the shipped tree at the Step 0
-base, pinned file-by-file in the Step 0 census test (63 files under
+base, pinned file-by-file in the Step 0 census test (65 files under
 `server/` + `src/`; outside those trees: `client/` 2, `machine/` 1,
 `cloudflare/` 4 check/fixture files, `scripts/` ≈60 operational and
 browser-check scripts that consume the client/store shapes).
@@ -83,7 +83,7 @@ test). Work-mutating events **not** synced: `work.proposed` (deliberate,
 §1), `work.help_updated`, `work.public_set`, `work.halt_cleared` — the
 last three carry state with no board field (§4.5).
 
-### Readers, by family (63 pinned sites)
+### Readers, by family (65 pinned sites)
 
 - **Kernel/reducer:** `src/events.js`, `src/workflow.js`,
   `src/work-item-session.js`, `server/claim-scopes.mjs`.
@@ -96,6 +96,11 @@ last three carry state with no board field (§4.5).
   caps normalized `work_entities` rows and bytes before preparing or converting
   message authority (2026-11-01). This is a bounded dependency census, not a new
   work-item writer, board mapping or sync event.
+- **Explicit historical-session reconciliation:** `server/legacy-session-replay.mjs`
+  reuses the public reducer while restoring only the three documented pre749
+  session/lifecycle effects; `server/operator-legacy-session-repair.mjs` compares
+  the result with independently proved current work records before changing only
+  derived backfill artifacts. Neither writes work entities or serving metadata.
 - **Discovery:** `server/available-work.mjs`, `server/opportunities.mjs`,
   `server/orient.mjs`, `server/room-activation-pack.mjs`,
   `server/needs-me.mjs`, `server/public-read-model.mjs`.

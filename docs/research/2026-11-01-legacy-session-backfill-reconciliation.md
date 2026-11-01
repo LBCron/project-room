@@ -39,14 +39,12 @@ bootstrap, global backfill, opaque repair helper or fallback hydration runs.
 Inventory must prove all of the following inside an exact-head transaction:
 
 - Healthy independent current metadata proof and complete work/message
-  membership/proofs, including missing references and canonical counts.
+  membership/proofs, including missing references. Canonical message authority and archives refuse in this initial mode.
 - Current replay's first rejection is the recorded board quarantine caused by
   the named pre749 coupling; the explicit historical adapter strictly replays
   all admitted events without weakening any other reducer check.
 - Historical output equals full current hydrated metadata, work records,
-  message records/index fields/posting sequences and current grants. Only
-  existing individually verified deterministic legacy defaults may be
-  considered; a missing proof or unexplained mismatch refuses.
+  message records/index fields/posting sequences and current grants. No shape/default normalization is performed; a missing proof or any mismatch refuses.
 - All source, serving proof, cursor, quarantine and snapshot bytes are bound in
   the plan hash. A changed head, source or current proof invalidates the plan.
 

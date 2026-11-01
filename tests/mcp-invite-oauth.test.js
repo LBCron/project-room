@@ -338,6 +338,18 @@ test('hosted Claude public client is registered with the published callback and 
   assert.deepEqual(client.redirectUris, ['https://claude.ai/api/mcp/auth_callback']);
   assert.ok(clients.find(c => c.clientId === 'project-room-chatgpt'), 'existing ChatGPT client is kept');
   const f = await setup(t, { client, clients });
+  for (const changes of [
+    { redirect_uri: 'https://example.invalid/callback' },
+    { code_challenge_method: 'plain' },
+    { resource: 'https://example.invalid/mcp' },
+  ]) {
+    const response = await fetch(f.base + '/oauth/authorize?' + new URLSearchParams({
+      client_id: client.clientId, redirect_uri: client.redirectUris[0], scope: 'rooms:read',
+      code_challenge: challenge, code_challenge_method: 'S256', resource, ...changes,
+    }));
+    assert.equal(response.status, 400, JSON.stringify(changes));
+    assert.equal(response.headers.get('location'), null, 'invalid authorization must not redirect to an untrusted callback');
+  }
   const allowed = await f.submit('allow');
   assert.ok([302, 303].includes(allowed.status), 'Claude rejects 307; the authorization response must be 302 or 303');
   const redirect = new URL(allowed.headers.get('location'));

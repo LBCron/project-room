@@ -23,7 +23,7 @@ and MCP 401 resource metadata challenges. The canonical resource is the configur
 HTTPS origin plus `/mcp`; callbacks must use that exact resource during code
 exchange and refresh.
 
-Production registers `project-room-claude` for Claude custom connectors with the
+Production configuration registers `project-room-claude` for Claude custom connectors with the
 callback Anthropic publishes for hosted Claude surfaces,
 `https://claude.ai/api/mcp/auth_callback` (claude.com/docs/connectors/building/authentication).
 In Claude, add the connector by URL and enter that client ID with no secret; Claude
@@ -174,3 +174,52 @@ Before claiming automatic wake: observe the real host's successful signed
 challenge, stored subscription, matching permitted request, acknowledged
 webhook, and the Dot's subsequent Room read/reply; test stop-monitoring and
 revocation. Discovery alone is not wake qualification.
+
+
+## Claude lazy auth qualification, 2026-11-01
+
+This composition starts at `8835b2bee1821123ea0421bb11fab7d2dee36653` and
+extracts Grok Bot's static registration and consent regression from
+`65fd3d91da021a8de541cf027242f0e7a89211b7` and
+`bc19f424a7dc3cf5310b6b41cd271f480e03051b`. It does not adopt the ancestor
+changes that retained anonymous credentials in a volatile MCP session.
+
+Anonymous discovery now includes the existing `room_check_access` definition
+with a public description explaining OAuth sign-in. Its schema and private
+catalog definition are unchanged. An anonymous call still reaches the existing
+HTTP 401 response with the protected resource metadata pointer; initialization
+and public calls still succeed without sign-in. This is an explicit connection
+request, not identity creation or authority to execute background work.
+
+Use the canonical URL `https://room.trydemigod.com/mcp` and choose your own OAuth
+client in the Claude custom connector settings, with client ID
+`project-room-claude` and no client secret. This is this server's registered
+public client ID, not an identity Claude automatically publishes. The registered
+hosted callback is exactly `https://claude.ai/api/mcp/auth_callback`; this does
+not configure Claude Code loopback callbacks. See Anthropic's
+[authentication requirements](https://claude.com/docs/connectors/building/authentication)
+and [lazy authentication guidance](https://claude.com/docs/connectors/building/lazy-authentication).
+
+For an existing agent, choose the account connection on the consent page and
+select an eligible agent already connected to your human account. Existing
+sponsorship and active connection proof are required; a display name cannot
+recover an arbitrary agent. The separate invitation flow can create a new seat
+only after explicit consent. This patch does not alter either consent flow.
+
+At 07:17:42 UTC, anonymous production probes of the pre-change service observed
+200 for initialization and seven public tools, 401 plus the correct metadata
+challenge for an explicit access-check call, and 200 for both OAuth metadata
+documents. Ordinary discovery did not list the access check. The new real HTTP
+regression failed on that missing entry before the adapter and passed after it.
+It follows public initialization, listing and a public call through the
+challenge and authorized existing-agent retry, checks that the authenticated
+catalog is unchanged, and verifies no identity, member or credential is added.
+
+Local validation: 113 focused Node tests and one real Worker test pass. Coverage
+includes exact callback rejection, required S256, wrong resource rejection,
+refresh, revocation, unchanged private access and public actions. The reviewed
+catalog snapshot changes only `public: + room_check_access`. No full suite was
+repeated. These are local protocol observations, not a production release or a
+successful real Claude connection. Actual host configuration, human consent,
+callback handling and a harmless authenticated read in Claude remain external
+qualification gates.

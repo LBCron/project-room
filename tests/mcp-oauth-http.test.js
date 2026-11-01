@@ -258,3 +258,43 @@ test('native invitation issuance needs new consent and current room authority wi
  f.store.command(f.ownerKey,'commons',{id:'remove-native-invite',type:'member.access_changed',data:{memberId:member.id,expectedMemberRevision:member.revision,active:true,permissions:member.permissions.filter(p=>p!=='invite_member')}});
  const revoked=await call({profile:'chat'});assert.ok(revoked.body.error || revoked.body.result?.isError);assert.equal(inviteCount(),before+1);
 });
+
+// Protect the real host discovery -> challenge -> existing-agent retry path.
+// Previously a host could initialize and list only public tools, so no listed
+// action could reach the already-correct OAuth challenge on room_check_access.
+test('anonymous discovery offers existing access check and challenges without creating an identity or seat', async t => {
+  const f = await setup(t);
+  const counts = () => ({
+    identities: f.store.db.prepare('SELECT count(*) n FROM agent_identities').get().n,
+    members: Object.keys(f.store.room('commons').state.members).length,
+    credentials: f.store.db.prepare('SELECT count(*) n FROM credentials').get().n,
+  });
+  const before = counts();
+  const initialized = await f.rpc('initialize', { protocolVersion: '2025-11-25', capabilities: {}, clientInfo: { name: 'lazy-auth-host', version: '1' } }, null);
+  assert.equal(initialized.response.status, 200);
+  assert.equal(initialized.response.headers.get('www-authenticate'), null);
+  const authedBefore = await f.rpc('tools/list');
+  const listed = await f.rpc('tools/list', {}, null);
+  assert.equal(listed.response.status, 200);
+  const entry = listed.body.result.tools.find(tool => tool.name === 'room_check_access');
+  assert.ok(entry, 'a public host must discover the existing protected access check');
+  assert.deepEqual(entry.inputSchema.required, [], 'OAuth consent selects the room; no guessed room id is needed');
+  assert.match(entry.description, /existing/i);
+  const publicRead = await f.rpc('tools/call', { name: 'room_join_kits', arguments: {} }, null);
+  assert.equal(publicRead.response.status, 200);
+  assert.ok(publicRead.body.result);
+  const denied = await f.rpc('tools/call', { name: entry.name, arguments: {} }, null);
+  assert.equal(denied.response.status, 401);
+  assert.equal(denied.response.headers.get('www-authenticate'), `Bearer resource_metadata="${origin}/.well-known/oauth-protected-resource/mcp"`);
+  assert.equal(denied.body.error.code, -32001);
+  const metadata = await fetch(f.base + '/.well-known/oauth-protected-resource/mcp');
+  const metadataBody = await metadata.json();
+  assert.equal(metadataBody.resource, resource);
+  assert.deepEqual(metadataBody.authorization_servers, [origin]);
+  const admitted = await f.rpc('tools/call', { name: entry.name, arguments: {} });
+  assert.equal(admitted.response.status, 200);
+  assert.equal(admitted.body.result.structuredContent.memberId, 'friend-dot');
+  assert.equal(admitted.body.result.structuredContent.roomId, 'commons');
+  assert.deepEqual((await f.rpc('tools/list')).body.result.tools, authedBefore.body.result.tools, 'public discovery does not change the authenticated catalog');
+  assert.deepEqual(counts(), before, 'discovery, refusal and access read create no identity, seat or credential');
+});

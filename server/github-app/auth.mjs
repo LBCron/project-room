@@ -132,13 +132,36 @@ function clockOf(now) {
   return Number.isFinite(value) ? value : Date.now();
 }
 
-export async function installationToken(installationId, { env = process.env, fetchFn = globalThis.fetch, now = Date.now, cache = processCache } = {}) {
+// A caller that needs less than the App's full grant can narrow the mint:
+// GitHub accepts a permissions object on the access_tokens POST and issues
+// a token carrying only that subset (each name at or below the level the
+// App itself holds). The body is deterministic — names sorted — and the
+// cache key carries the subset, so a narrowed token never answers an
+// un-narrowed caller or the reverse. Omitting the option mints exactly as
+// before: no body, the installation's full granted set.
+function narrowedMint(permissions) {
+  if (permissions === undefined) return null;
+  if (!permissions || typeof permissions !== "object" || Array.isArray(permissions)) {
+    throw new GitHubAppError("invalid_permissions", "installation token permissions must be an object of permission levels");
+  }
+  const names = Object.keys(permissions).sort();
+  if (names.length === 0 || names.some(name => !["read", "write", "admin"].includes(permissions[name]))) {
+    throw new GitHubAppError("invalid_permissions", "installation token permissions must name read, write, or admin levels");
+  }
+  const subset = {};
+  for (const name of names) subset[name] = permissions[name];
+  return { key: names.map(name => `${name}:${subset[name]}`).join(","), body: JSON.stringify({ permissions: subset }) };
+}
+
+export async function installationToken(installationId, { env = process.env, fetchFn = globalThis.fetch, now = Date.now, cache = processCache, permissions = undefined } = {}) {
+  const narrowed = narrowedMint(permissions);
   const credentials = githubAppCredentials(env);
   if (!credentials) throw new GitHubAppError("not_configured", "GitHub App credentials are not set");
   const id = String(installationId ?? "");
   if (!/^\d{1,20}$/.test(id)) throw new GitHubAppError("invalid_installation", "installation id must be numeric");
   const clock = clockOf(now);
-  const hit = cache.get(id);
+  const cacheKey = narrowed ? `${id}|${narrowed.key}` : id;
+  const hit = cache.get(cacheKey);
   if (hit && clock < hit.refreshAt) return hit.token;
   const jwt = await appJwt({ appId: credentials.appId, privateKeyPem: credentials.privateKeyPem, now: clock });
   let response;
@@ -151,7 +174,9 @@ export async function installationToken(installationId, { env = process.env, fet
         Accept: "application/vnd.github+json",
         "User-Agent": "project-room",
         "X-GitHub-Api-Version": "2022-11-28",
+        ...(narrowed ? { "Content-Type": "application/json" } : {}),
       },
+      ...(narrowed ? { body: narrowed.body } : {}),
     });
   } catch {
     throw new GitHubAppError("token_failed", "GitHub installation token request failed");
@@ -163,6 +188,6 @@ export async function installationToken(installationId, { env = process.env, fet
   if (typeof body?.token !== "string" || body.token.length === 0) throw new GitHubAppError("token_failed", "GitHub installation token response had no token");
   const expiresAt = Date.parse(body.expires_at ?? "");
   const refreshAt = Number.isFinite(expiresAt) ? expiresAt - TOKEN_SKEW_MS : clock;
-  cache.set(id, { token: body.token, refreshAt });
+  cache.set(cacheKey, { token: body.token, refreshAt });
   return body.token;
 }

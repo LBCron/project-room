@@ -125,7 +125,31 @@ export { githubToken as githubTokenFromEnv };
 // unauthenticated, exactly as before: a missing credential does not
 // fail the tick. The returned source name ("github_app" | "env_token" |
 // "none") rides the tick summary so the job health view can say which
-// credential the poll used.
+// credential the poll used. The App token is minted narrowed to the read
+// permissions the sync's own calls need (CLAIM_PR_SYNC_TOKEN_PERMISSIONS
+// below), so the job never holds the grant's write capability.
+
+// The sync's GitHub calls are all reads, so the installation token it
+// mints is narrowed to the read permissions those calls need:
+//   pull_requests: read — GET /repos/{owner}/{repo}/pulls/{number}, and
+//     the pull-request hits of GET /search/issues (the settlement path)
+//   checks: read — GET /repos/{owner}/{repo}/commits/{sha}/check-runs
+//   contents: read — GET /repos/{owner}/{repo}/commits/main (deploy status)
+//   metadata: read — the baseline every installation token carries
+// One call sits outside the set because the grant itself lacks the
+// permission, not because of the narrowing: GET .../commits/{sha}/status
+// needs the Commit statuses permission, which the App manifest does not
+// hold at any level, so no token from this grant — narrowed or full —
+// can serve it. That leg already fails soft (the CI cursor stays on
+// "status" and the next tick retries it); growing the grant is an
+// App-settings act, named in the PR body beside the landing gate.
+const CLAIM_PR_SYNC_TOKEN_PERMISSIONS = Object.freeze({
+  pull_requests: "read",
+  checks: "read",
+  contents: "read",
+  metadata: "read"
+});
+
 export async function resolveGithubAccess(env, { fetchImpl = fetch, nowMs = Date.now(), deadline = Infinity, appTokenCache = undefined } = {}) {
   const installationId = githubAppInstallationId(env);
   const credentials = githubAppCredentials(env);
@@ -136,7 +160,8 @@ export async function resolveGithubAccess(env, { fetchImpl = fetch, nowMs = Date
       try {
         const mintFetch = (url, init) => fetchImpl(url, { ...init, signal: AbortSignal.timeout(budgetMs) });
         const token = await installationToken(installationId, {
-          env, fetchFn: mintFetch, now: nowMs, ...(appTokenCache ? { cache: appTokenCache } : {})
+          env, fetchFn: mintFetch, now: nowMs, permissions: CLAIM_PR_SYNC_TOKEN_PERMISSIONS,
+          ...(appTokenCache ? { cache: appTokenCache } : {})
         });
         return { token, source: "github_app" };
       } catch (error) {

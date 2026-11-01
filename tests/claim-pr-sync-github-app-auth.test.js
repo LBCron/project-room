@@ -13,7 +13,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import { generateKeyPairSync } from "node:crypto";
 import { DatabaseSync } from "node:sqlite";
-import { githubAppCredentials, githubAppInstallationId } from "../server/github-app/auth.mjs";
+import { githubAppCredentials, githubAppInstallationId, installationToken } from "../server/github-app/auth.mjs";
 import { resolveGithubAccess, syncClaimPullRequests } from "../server/claim-pr-sync.mjs";
 import { createWork, claimWork, appendWorkPullRequest, claimHistoryLength } from "../server/work-claims.mjs";
 import { createDurableWorkClaimRegistry, workClaimSchema } from "../server/work-claim-sqlite.mjs";
@@ -50,7 +50,7 @@ function jsonResponse({ status = 200, body = {} } = {}) {
 function mintOnlyFetch(calls, { failStatus = 0 } = {}) {
   let mints = 0;
   return async (url, init = {}) => {
-    calls.push({ url: String(url), authorization: init.headers?.Authorization ?? null });
+    calls.push({ url: String(url), authorization: init.headers?.Authorization ?? null, body: init.body ?? null });
     if (!String(url).startsWith("https://api.github.com/app/installations/")) {
       throw new Error(`unexpected fetch in mint stub: ${url}`);
     }
@@ -94,6 +94,57 @@ test("resolution prefers the App path when both the App and a static token are c
   const jwt = calls[0].authorization.replace(/^Bearer /, "");
   assert.equal(jwt.split(".").length, 3, "the mint authenticates with a three-part App JWT");
   assert.equal(jwt.includes(FIXTURE_PEM), false, "no key material rides the request");
+});
+
+test("the mint asks GitHub to narrow the token to the sync's read-only permission set", async () => {
+  const calls = [];
+  const resolved = await resolveGithubAccess(roomAppEnv(), {
+    fetchImpl: mintOnlyFetch(calls), nowMs: NOW, appTokenCache: new Map()
+  });
+  assert.equal(resolved.source, "github_app");
+  assert.equal(calls.length, 1, "exactly one mint call");
+  assert.equal(typeof calls[0].body, "string", "the narrowed mint carries a permissions body");
+  assert.deepEqual(JSON.parse(calls[0].body), {
+    permissions: { checks: "read", contents: "read", metadata: "read", pull_requests: "read" }
+  }, "exactly the read set the sync's calls need — no write or admin level anywhere in the set");
+});
+
+test("the narrowed cache entry never answers a caller that asked for the full grant", async () => {
+  const calls = [];
+  const cache = new Map();
+  const fetchImpl = mintOnlyFetch(calls);
+  const narrowed = await resolveGithubAccess(roomAppEnv(), { fetchImpl, nowMs: NOW, appTokenCache: cache });
+  assert.equal(calls.length, 1);
+  const full = await installationToken(INSTALLATION_ID, { env: roomAppEnv(), fetchFn: fetchImpl, now: NOW, cache });
+  assert.equal(calls.length, 2, "the full-grant caller mints its own token instead of reusing the narrowed one");
+  assert.equal(calls[1].body, null, "the full-grant mint sends no permissions body, exactly as before the narrowing existed");
+  assert.notEqual(full, narrowed.token);
+});
+
+test("a mint refused for its narrowing falls back to the static token, reported by code only", async () => {
+  let sawNarrowing = false;
+  const fetchImpl = async (url, init = {}) => {
+    if (!String(url).startsWith("https://api.github.com/app/installations/")) {
+      throw new Error(`unexpected fetch in narrowing stub: ${url}`);
+    }
+    if (typeof init.body === "string" && init.body.includes("permissions")) {
+      sawNarrowing = true;
+      return jsonResponse({ status: 403, body: { message: "permissions narrowing refused" } });
+    }
+    return jsonResponse({
+      status: 201,
+      body: { token: "fixture-full-grant", expires_at: new Date(NOW + 3_600_000).toISOString() }
+    });
+  };
+  const resolved = await resolveGithubAccess(roomAppEnv({ GITHUB_TOKEN: "static-token" }), {
+    fetchImpl, nowMs: NOW, appTokenCache: new Map()
+  });
+  assert.equal(sawNarrowing, true, "the refusal was triggered by the narrowed mint, not a generic mint failure");
+  assert.equal(resolved.source, "env_token");
+  assert.equal(resolved.token, "static-token");
+  assert.equal(resolved.appError, "token_failed");
+  assert.equal(JSON.stringify({ source: resolved.source, appError: resolved.appError }).includes("static-token"), false,
+    "the reportable fields name the source and the failure code, never a credential value");
 });
 
 test("the minted token is cached across ticks and re-minted inside the expiry skew", async () => {
@@ -172,7 +223,7 @@ const OPEN_PULL = number => ({
 function githubRouter(calls) {
   return async (url, init = {}) => {
     const target = String(url);
-    calls.push({ url: target, authorization: init.headers?.Authorization ?? null });
+    calls.push({ url: target, authorization: init.headers?.Authorization ?? null, body: init.body ?? null });
     if (target.startsWith("https://api.github.com/app/installations/")) {
       return jsonResponse({ status: 201, body: { token: "fixture-inst-1", expires_at: new Date(NOW + 3_600_000).toISOString() } });
     }
@@ -191,6 +242,11 @@ test("a sync tick mints through the App and polls with the installation token, n
   const out = await syncClaimPullRequests(store, { env: roomAppEnv(), fetchImpl: githubRouter(calls), nowMs: NOW });
   assert.equal(out.githubAuthSource, "github_app");
   assert.equal(out.checked, 1);
+  const mint = calls.find(call => call.url.includes("/app/installations/"));
+  assert.ok(mint, "the tick minted through the App");
+  assert.deepEqual(JSON.parse(mint.body), {
+    permissions: { checks: "read", contents: "read", metadata: "read", pull_requests: "read" }
+  }, "the tick's token was minted narrowed to read-only, and the tick still completed with it");
   const poll = calls.find(call => call.url.includes("/pulls/2479"));
   assert.ok(poll, "the pull lookup ran");
   assert.equal(poll.authorization, "Bearer fixture-inst-1", "the poll carries the minted installation token");

@@ -62,3 +62,34 @@ test('RoomClient.poll sends the cursor when one is given, and omits it otherwise
   assert.ok(!urls[0].includes('cursor='));
   assert.ok(urls[1].includes(`cursor=${encodeURIComponent('cur sor/1')}`));
 });
+
+test('filtered source windows carry traversal across bounded cycles, then reset for new work', async () => {
+  const cursors = []; let finished = false;
+  const { bridge, accepted } = fixture(async ({ cursor, waitMs }) => {
+    cursors.push(cursor);
+    if (finished) { assert.equal(cursor, null); return { pendingWakes: [sig('new-after-terminal')], more: false, nextCursor: null }; }
+    const page = cursor === null ? 0 : Number(cursor.slice(1));
+    if (page > 0) assert.equal(waitMs, 0, 'carried traversal never starts another long wait');
+    if (page < 85) return { pendingWakes: [], more: true, nextCursor: 'c' + (page + 1) };
+    finished = true; return { pendingWakes: [sig('late-useful')], more: false, nextCursor: null };
+  });
+  bridge.minPollIntervalMs = 0;
+  for (let cycle = 0; cycle < 5; cycle++) { const before = cursors.length; await bridge.pollOnce(); assert.ok(cursors.length - before <= MAX_POLL_PAGES); }
+  assert.deepEqual(accepted, ['late-useful']); assert.equal(cursors.length, 86);
+  assert.deepEqual(cursors.slice(0, 3), [null, 'c1', 'c2']);
+  await bridge.pollOnce(); assert.deepEqual(accepted, ['late-useful', 'new-after-terminal']);
+});
+
+test('traversal retry retains progress, while a fresh bridge restarts a cursorless observation', async () => {
+  let calls = 0, failOnce = true;
+  const { bridge } = fixture(async ({ cursor }) => {
+    calls++;
+    if (calls === MAX_POLL_PAGES + 1 && failOnce) { failOnce = false; throw Error('synthetic network failure'); }
+    return { pendingWakes: [], more: true, nextCursor: 'c' + (Number(cursor?.slice(1) ?? 0) + 1) };
+  });
+  bridge.minPollIntervalMs = 0; await bridge.pollOnce();
+  assert.equal(bridge.wakeCursor, 'c20'); await assert.rejects(bridge.pollOnce(), /synthetic network failure/); assert.equal(bridge.wakeCursor, 'c20');
+  await bridge.pollOnce(); assert.equal(bridge.wakeCursor, 'c40');
+  const { bridge: fresh } = fixture(async ({ cursor }) => { assert.equal(cursor, null); return { pendingWakes: [], more: false, nextCursor: null }; });
+  await fresh.pollOnce(); assert.equal(fresh.wakeCursor, null);
+});

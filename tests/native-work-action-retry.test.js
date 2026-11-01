@@ -101,12 +101,12 @@ for (const mode of ['missing','redacted','different-member','different-room','wr
   if(mode==='truncated-bound')return {events:[],next:after+100,hasMore:true};
   if(mode==='malformed-page')return {events:[],next:1,hasMore:'false'};
   if(mode==='nonadvancing-page')return {events:[],next:after,hasMore:true};
-  const event=structuredClone(f.event);
-  if(mode==='redacted')delete event.data.expectedRevision;
-  if(mode==='different-member')event.actorId='other';
-  if(mode==='different-room')event.roomId='elsewhere';
-  if(mode==='wrong-key')event.idempotencyKey='0'.repeat(64);
-  return {events:[{sequence:1,event}],next:1,hasMore:false};
+  const receiptEvent=structuredClone(f.event);
+  if(mode==='redacted')delete receiptEvent.data.expectedRevision;
+  if(mode==='different-member')receiptEvent.actorId='other';
+  if(mode==='different-room')receiptEvent.roomId='elsewhere';
+  if(mode==='wrong-key')receiptEvent.idempotencyKey='0'.repeat(64);
+  return {events:[{sequence:1,event:receiptEvent}],next:1,hasMore:false};
  };
  await assert.rejects(submitWorkAction(f.client,f.identity,f.action,f.input),{code:mode==='read-error'?'unavailable':'idempotency_conflict'});
  assert.equal(f.commands.length,1);if(mode==='truncated-bound')assert.equal(calls,5);

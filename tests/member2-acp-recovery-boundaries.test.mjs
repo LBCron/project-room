@@ -63,8 +63,8 @@ test('independent boundary: process exits immediately after final connection ren
   // Fault injection stays in the child process. Production source is unchanged.
   const code = `import fs from 'node:fs';import {syncBuiltinESMExports} from 'node:module';
     const rename=fs.renameSync;fs.renameSync=(a,b)=>{rename(a,b);if(b===${JSON.stringify(finalPath)})process.exit(73);};syncBuiltinESMExports();
-    const {join}=await import(${JSON.stringify(joinUrl)});
-    await join({link:${JSON.stringify(link)},displayName:'Interrupted final save',env:{ROOM_ACP_HOME:${JSON.stringify(f.home)}}});`;
+    const {join: joinInvitation}=await import(${JSON.stringify(joinUrl)});
+    await joinInvitation({link:${JSON.stringify(link)},displayName:'Interrupted final save',env:{ROOM_ACP_HOME:${JSON.stringify(f.home)}}});`;
   const child = spawn(process.execPath, ['--input-type=module', '-e', code], { stdio: ['ignore', 'ignore', 'pipe'] });
   const timer = setTimeout(() => child.kill('SIGTERM'), 15000);
   let error = '';

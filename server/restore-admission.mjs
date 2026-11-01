@@ -7,7 +7,7 @@ import { CURRENT_WRITER_FORMAT } from './current-room-format.mjs';
 // to a target, and no ordinary SQL writer may clear an interrupted restore.
 export const RESTORE_CONTROL_TABLE = 'current_restore_admission';
 export const RESTORE_AUDIT_TABLE='current_restore_audit_scratch';
-export const RESTORE_AUDIT_VERSION=1,RESTORE_REPORT_VERSION=2;
+export const RESTORE_AUDIT_VERSION=2,RESTORE_REPORT_VERSION=2;
 export const RESTORE_AUDIT_UNIT_BYTES=131072+2048;
 export const RESTORE_CONTROL_DEFINITIONS = [[RESTORE_CONTROL_TABLE, `CREATE TABLE IF NOT EXISTS current_restore_admission (
   singleton INTEGER PRIMARY KEY CHECK(singleton=1), state TEXT NOT NULL CHECK(state IN ('clear','pending')),

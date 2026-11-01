@@ -571,11 +571,12 @@ export function currentConversationRows(store,roomId,{viewerId,limit,before,befo
   return {rows,continuation:!complete?last:null,examined,complete};
 }
 
+const auditDerivedDomains=Object.freeze(['workPrivacy','workRequest','workSummary','workCapacity','messageWitness','archiveRetained','threadParticipants','historyFloors','historyExclusions']);
 function currentAuditFieldKind(domain,key,value) {
  if(domain==='shape'){if(!maps.has(key)||value!=='object')corrupt('invalid recovered map shape');return 'shape';}
  if(domain==='metadata'){if(omitted.has(key)||maps.has(key)&&value!==null&&typeof value==='object'&&!Array.isArray(value))corrupt('competing recovered state');return 'metadata';}
  if(maps.has(domain))return 'map';
- if(['workPrivacy','workRequest','workSummary','workCapacity','messageWitness','archiveRetained','threadParticipants','historyFloors','historyExclusions'].includes(domain))return 'derived';
+ if(auditDerivedDomains.includes(domain))return 'derived';
  corrupt('unknown recovered metadata domain');
 }
 function readCurrentAuditWorkBody(db,roomId,id,ref) {
@@ -608,7 +609,8 @@ export function readCurrentRoomForAudit(store,roomId) {
   if(!db.isTransaction)throw Error('Current room census requires a consistent recovery transaction');
   return withCurrentAuditUnits(store,roomId,units=>{
   const head=units.head;if(!head)return null;
-  const state=emptyRoomState(),refs=new Map(),participants=new Map(),floors=new Map(),exclusions=new Map(),messageWitnesses=new Map(),workSummaries=new Map(),workCapacities=new Map(),workPrivacy=new Map(),workRequests=new Map(),archiveRetained=new Map(),canonicalMessages=[];let proofs=0,records=0;
+  const state=emptyRoomState(),refs=new Map(),derived=new Map(auditDerivedDomains.map(domain=>[domain,new Map()])),canonicalMessages=[];let proofs=0,records=0;
+  const {threadParticipants:participants,historyFloors:floors,historyExclusions:exclusions,messageWitness:messageWitnesses,workSummary:workSummaries,workCapacity:workCapacities,workPrivacy,workRequest:workRequests,archiveRetained}=Object.fromEntries(derived);
   for(const scalar of db.prepare(`SELECT rowid,length(CAST(domain AS BLOB)) AS domain_bytes,
     length(CAST(record_key AS BLOB)) AS key_bytes FROM current_room_record_proofs WHERE room_id=? ORDER BY domain,record_key`).iterate(roomId)) {
     if(scalar.domain_bytes<1||scalar.domain_bytes>64||scalar.key_bytes<1||scalar.key_bytes>200)corrupt('invalid recovery membership identity');
@@ -624,15 +626,7 @@ export function readCurrentRoomForAudit(store,roomId) {
     } else if(maps.has(proof.domain)) {
       if(proof.domain==='workItems')refs.set(key,value);
       else Object.defineProperty(state[proof.domain]??={},key,{value,enumerable:true,writable:true,configurable:true});
-    } else if(proof.domain==='workPrivacy')workPrivacy.set(key,value);
-    else if(proof.domain==='workRequest')workRequests.set(key,value);
-    else if(proof.domain==='workSummary')workSummaries.set(key,value);
-    else if(proof.domain==='workCapacity')workCapacities.set(key,value);
-    else if(proof.domain==='messageWitness')messageWitnesses.set(key,value);
-    else if(proof.domain==='archiveRetained')archiveRetained.set(key,value);
-    else if(proof.domain==='threadParticipants')participants.set(key,value);
-    else if(proof.domain==='historyFloors')floors.set(key,value);
-    else if(proof.domain==='historyExclusions')exclusions.set(key,value);
+    } else if(derived.has(proof.domain))derived.get(proof.domain).set(key,value);
     else corrupt('unknown recovered metadata domain');
   }
   const actualRecords=db.prepare('SELECT count(*) AS count FROM current_room_records WHERE room_id=?').get(roomId).count;

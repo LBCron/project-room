@@ -56,7 +56,8 @@ import { STORE_SCHEMA_VERSION, fenceDefinitions, registerWriter, installWriterFe
 import { WANTS_WORK_SCHEMA } from "./work-wants.mjs"; // BOARD-WAKE-2
 import { CODE_DROPS_SCHEMA, CodeDrops } from "./code-drops.mjs"; // room-native patch exchange
 import { PROJECTION_BODIES_SCHEMA, storedProjection, hydrateProjection } from "./projection-at-rest.mjs"; // Phase 1a
-import { MESSAGES_SCHEMA, MESSAGES_BACKFILL_CURSOR_SCHEMA, MESSAGES_BACKFILL_BLOCKS_SCHEMA, archivedMessageRow, archiveMarker, archivedMatchingRecords, archivedThreadRecords, archiveRoomMessages, restoreArchivedMessages, runMessagesBackfill, checkMessagesParity as verifyMessagesParity, runMessagesParityCheck, messagesBackfillCaughtUp } from "./messages-store.mjs";
+import { MESSAGES_SCHEMA, MESSAGES_BACKFILL_CURSOR_SCHEMA, MESSAGES_BACKFILL_BLOCKS_SCHEMA, archivedMessageRow, archiveMarker, archivedMatchingRecords, archivedThreadRecords, archiveRoomMessages, restoreArchivedMessages, runMessagesBackfill, checkMessagesParity as verifyMessagesParity, runMessagesParityCheck, messagesBackfillCaughtUp, resyncRoomMessageRows, syncMessageRows } from "./messages-store.mjs";
+import { hasMessageAuthority } from './message-authority.mjs';
 import { runLegacyMessageShapeUpgrade } from "./legacy-message-shape.mjs";
 import { commitMessageRedaction } from "./message-redaction.mjs";
 import { runPatrolTick, patrolFindings as listPatrolFindings, patrolBlocks as listPatrolBlocks } from "./patrol.mjs";
@@ -2335,6 +2336,32 @@ this.slaBreachAlerts = new SlaBreachAlertJournal(this); // Task 26: durable in-a
   checkMessagesParity(options = {}) {
     return verifyMessagesParity(this, options);
   }
+  // Explicit maintainer migration only. No hosted flag or automatic activation.
+  // The existing parity gate establishes the source before authority changes;
+  // the same transaction publishes complete reducer history and small metadata.
+  migrateMessageAuthority(roomId, { reverse = false } = {}) {
+    if (this.readOnly) throw new Error('Read-only stores cannot migrate message authority');
+    if (typeof reverse !== 'boolean') throw new TypeError('reverse must be boolean');
+    return this.transaction(() => {
+      const room = this.room(roomId, { verifyBodyHashes: true });
+      const enabled = hasMessageAuthority(room.state);
+      if (enabled === !reverse) return { changed: false, sequence: room.sequence };
+      if (!reverse) {
+        const parity = this.checkMessagesParity({ roomId });
+        if (!parity.ok || parity.checked !== 1) throw new Error('Message authority requires exact-head parity');
+        resyncRoomMessageRows(this.db, roomId, room.state);
+      }
+      const state = { ...room.state };
+      if (reverse) delete state.messageAuthority;
+      else state.messageAuthority = { version: 1, count: state.messages.length };
+      const projection = this.storedProjection(roomId, state);
+      this.db.prepare('UPDATE rooms SET projection=? WHERE id=?').run(projection, roomId);
+      // Read the committed format inside the same transaction, refusing missing
+      // records or a malformed marker before conversion can become visible.
+      this.room(roomId, { verifyBodyHashes: true });
+      return { changed: true, sequence: room.sequence, messages: state.messages.length, projectionBytes: Buffer.byteLength(projection) };
+    });
+  }
   // ClueBot phase 1: the resident per-event invariant patrol. Read-only —
   // it writes only patrol_* tables and files findings; see server/patrol.mjs.
   patrolTick(options = {}) {
@@ -3534,7 +3561,7 @@ this.slaBreachAlerts = new SlaBreachAlertJournal(this); // Task 26: durable in-a
   }
   _queueProjectionCache(roomId, sequence, state, projection) {
     const pending = this._pendingProjectionFrames?.at(-1);
-    if (!pending || state.messages?.some(message => typeof message?.bodyRef === "string" || message?._nul === 1)
+    if (!pending || hasMessageAuthority(state) || state.messages?.some(message => typeof message?.bodyRef === "string" || message?._nul === 1)
       || !freezeJsonState(state)) return;
     const bodyWeight = (state.messages ?? []).reduce((n, m) => n + (m?.body?.length ?? 0), 0);
     pending.set(roomId, { messageEntities: this.messageEntityProjection, sequence, value: Object.freeze({ sequence, state }), weight: Buffer.byteLength(projection) + bodyWeight + Buffer.byteLength(JSON.stringify(state.workItems ?? {})) });
@@ -3737,7 +3764,7 @@ this.slaBreachAlerts = new SlaBreachAlertJournal(this); // Task 26: durable in-a
     const row = (this._roomProjectionStmt ??= this.db.prepare("SELECT projection FROM rooms WHERE id=?")).get(roomId);
     if (!row) fail(404, "room_not_found", "Room not found");
     const raw = JSON.parse(row.projection);
-    const messageEntities = raw.messages?.some(message => message?._entity === 1) ?? false;
+    const messageEntities = hasMessageAuthority(raw) || (raw.messages?.some(message => message?._entity === 1) ?? false);
     const { state: parsed, missing } = hydrateProjection(this.db, roomId, raw, { verifyBodyHashes });
     if (missing.length) this._restoreBodiesFromLog(roomId, sequence, parsed, missing);
     const state = deepFreeze(parsed);
@@ -5665,8 +5692,19 @@ this.slaBreachAlerts = new SlaBreachAlertJournal(this); // Task 26: durable in-a
       this.db.prepare("DELETE FROM events WHERE room_id=?").run(roomId);
       const insert = this.db.prepare("INSERT INTO events VALUES(?,?,?,?)");
       events.forEach((e, i) => insert.run(roomId, i + 1, e.id, JSON.stringify(e)));
+      if (hasMessageAuthority(previous)) {
+        // Replaced history owns a new set of posting positions. Reusing old
+        // minimum sequences or publishing before these rows exist is unsafe.
+        this.db.prepare('DELETE FROM messages WHERE room_id=?').run(roomId);
+        events.forEach((incoming, index) => {
+          if (incoming.type === T.MESSAGE_POSTED) syncMessageRows(this.db,
+            { roomId, sequence: index + 1, event: incoming, state });
+        });
+        state.messageAuthority = { version: 1, count: state.messages.length };
+      }
       this.db.prepare("UPDATE rooms SET sequence=?,projection=?,archived_at=? WHERE id=?").run(events.length, this.storedProjection(roomId, state), archivedAtOf(state), roomId);
-      this.db.prepare("INSERT INTO projection_checkpoints(room_id,sequence,projection) VALUES(?,?,?)").run(roomId, events.length, JSON.stringify(state));
+      const { messageAuthority: _authority, ...checkpointState } = state;
+      this.db.prepare("INSERT INTO projection_checkpoints(room_id,sequence,projection) VALUES(?,?,?)").run(roomId, events.length, JSON.stringify(checkpointState));
       syncRoomPublication(this, { roomId, state, previous, auth: null });
       return { imported: events.length, sequence: events.length };
     });

@@ -48,12 +48,12 @@ test("schema upgrade preserves existing records and fences a previously opened c
   legacyStatement.run("fixture-account");
   const current = new RoomStore(filename);
   try {
-    assert.equal(current.db.prepare("PRAGMA user_version").get().user_version, 42);
+    assert.equal(current.db.prepare("PRAGMA user_version").get().user_version, STORE_SCHEMA_VERSION);
     assert.deepEqual(current.db.prepare("SELECT * FROM accounts").all(), before);
     assert.doesNotThrow(() => verifyWriterFence(current.db));
     assert.equal(writerFenceDefinitions.length, (applicationTables.length - unfencedAdditiveTables.length) * 3,
       "the current fence covers every application table except intentionally-unfenced additive tables");
-    assert.throws(() => legacyStatement.run("fixture-account"), /project_room_writer_v42|unsupported database writer/);
+    assert.throws(() => legacyStatement.run("fixture-account"), /project_room_writer_v43|unsupported database writer/);
     current.createAccount("new-fixture-account");
     assert.equal(current.account("new-fixture-account").active, true);
   } finally { current.close(); earlier.close(); }
@@ -98,7 +98,7 @@ test("failure after fence installation rolls back its schema marker and all trig
 
 test("read-only audit does not upgrade a pre-fence database", t => {
   const filename = legacyFixture(t);
-  assert.throws(() => new RoomStore(filename, { readOnly: true }), /requires schema v42/);
+  assert.throws(() => new RoomStore(filename, { readOnly: true }), /requires schema v43/);
   const inspected = new DatabaseSync(filename, { readOnly: true });
   try { assert.equal(inspected.prepare("PRAGMA user_version").get().user_version, 5); }
   finally { inspected.close(); }
@@ -113,8 +113,8 @@ test("the v9 migration preserves v6 guards while retiring pre-open v6 writers", 
   oldWrite.run();
   const current = new RoomStore(filename);
   try {
-    assert.equal(current.db.prepare("PRAGMA user_version").get().user_version, 42);
-    assert.throws(() => oldWrite.run(), /project_room_writer_v42|unsupported database writer/);
+    assert.equal(current.db.prepare("PRAGMA user_version").get().user_version, STORE_SCHEMA_VERSION);
+    assert.throws(() => oldWrite.run(), /project_room_writer_v43|unsupported database writer/);
     current.createAccount("current-writer");
     assert.equal(current.account("current-writer").active, true);
   } finally { current.close(); earlier.close(); }
@@ -171,7 +171,7 @@ test("v7 to v9 preserves every existing table row and retires a pre-open v7 conn
   const current = new RoomStore(filename);
   try {
     assert.deepEqual(Object.fromEntries(tables.map(name => [name, current.db.prepare(`SELECT * FROM ${name}`).all()])), before);
-    assert.throws(() => cached.run(), /project_room_writer_v42|unsupported database writer/);
+    assert.throws(() => cached.run(), /project_room_writer_v43|unsupported database writer/);
     assert.equal(current.db.prepare("SELECT count(*) n FROM private_reminders").get().n, 0);
   } finally { current.close(); old.close(); }
 });
@@ -200,4 +200,20 @@ test("fence metadata snapshots retain exact SQL validation and refresh after rep
   assert.doesNotThrow(() => verifyWriterFence(counted));
   store.db.exec('CREATE TRIGGER writer_v999_unknown_insert BEFORE INSERT ON accounts BEGIN SELECT 1; END');
   assert.throws(() => verifyWriterFence(counted), /operator reconciliation/);
+});
+
+test('v42 metadata upgrades and retires an already-open v42 writer',t=>{
+ const directory=mkdtempSync(join(tmpdir(),'room-v42-upgrade-'));t.after(()=>rmSync(directory,{recursive:true,force:true}));
+ const file=join(directory,'room.sqlite');const seeded=new RoomStore(file);seeded.createAccount('before');
+ seeded.transaction(()=>{
+  for(const {name} of fenceDefinitions(43))seeded.db.exec(`DROP TRIGGER ${name}`);
+  for(const {sql} of fenceDefinitions(42))seeded.db.exec(sql);
+  seeded.db.exec('PRAGMA user_version=42');
+ });seeded.close();
+ const legacy=new DatabaseSync(file);t.after(()=>legacy.close());
+ for(let version=6;version<=42;version++)legacy.function(`project_room_writer_v${version}`,()=>version);
+ const cached=legacy.prepare("UPDATE accounts SET revision=revision+1 WHERE id='before'");cached.run();
+ const upgraded=new RoomStore(file);t.after(()=>upgraded.close());
+ upgraded.createAccount('after');assert.equal(upgraded.account('after').id,'after');
+ assert.throws(()=>cached.run(),/project_room_writer_v43|unsupported database writer/);
 });

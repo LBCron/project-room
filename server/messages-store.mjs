@@ -1,5 +1,6 @@
 import { writeMessageReplaySnapshot, discardMessageReplaySnapshot, decodeMessageReplaySnapshot } from './message-replay-snapshot.mjs';
 import { hydrateProjection, storedProjection } from "./projection-at-rest.mjs";
+import { hasMessageAuthority } from './message-authority.mjs';
 import { closeKeepSet } from "./open-questions.mjs";
 export { closeKeepSet };
 // MSG-1: the messages table, double-written with the room event log.
@@ -544,6 +545,10 @@ export function archivedMatchingRecords(db, roomId, needle) {
 }
 
 function pruneMessages(db, roomId) {
+  const raw = JSON.parse(db.prepare('SELECT projection FROM rooms WHERE id=?').get(roomId).projection);
+  // A canonical room has no legacy array. Its rows cannot be pruned by an
+  // absent mirror; replay validates their content before publishing instead.
+  if (hasMessageAuthority(raw)) return;
   db.prepare(`DELETE FROM messages WHERE room_id=? AND seq>? AND message_id NOT IN (
     SELECT json_extract(value, '$.id') FROM rooms, json_each(rooms.projection, '$.messages') WHERE rooms.id=?
   )`).run(roomId, archiveMarker(db, roomId).throughSeq, roomId);
@@ -1105,7 +1110,8 @@ function publishReplayMessages(store, roomId, sequence, anchor, state) {
   const raw=JSON.parse(db.prepare('SELECT projection FROM rooms WHERE id=?').get(roomId).projection);
   const references=new Set((raw.messages ?? []).filter(message=>message?._entity===1).map(message=>message.id));
   const archive=archiveMarker(db,roomId), retained=new Set(archive.retainedIds);
-  const authoritative=row=>references.has(row.message_id)||(archive.throughSeq&&row.seq<=archive.throughSeq&&!retained.has(row.message_id));
+  const canonical = hasMessageAuthority(raw);
+  const authoritative=row=>canonical||references.has(row.message_id)||(archive.throughSeq&&row.seq<=archive.throughSeq&&!retained.has(row.message_id));
   const validate=row=>{
     if(!authoritative(row))return;
     const expected=index.get(row.message_id);
@@ -1114,7 +1120,7 @@ function publishReplayMessages(store, roomId, sequence, anchor, state) {
     if(!expected || row.body!==storedBody(expected) || !isDeepStrictEqual(record,currentRecord(expected))
       || extras!==null&&!isDeepStrictEqual(extras,reducerExtras(expected)))throw new Error('messages serving entity requires reconciliation');
   };
-  if(published===0&&(references.size||archive.throughSeq)) {
+  if(published===0&&(canonical||references.size||archive.throughSeq)) {
     for(const row of db.prepare('SELECT message_id,seq,body,record_json,reducer_extras_json FROM messages WHERE room_id=?').all(roomId))validate(row);
   } else for(const row of existing.values())validate(row);
   const sequences=new Map();
@@ -1390,7 +1396,8 @@ function nextParityRoom(db, after) {
 }
 
 function parityNumbers(db, roomId) {
-  const projectionCount = db.prepare("SELECT COALESCE(json_array_length(projection, '$.messages'), 0) AS n FROM rooms WHERE id=?").get(roomId).n;
+  const raw = JSON.parse(db.prepare('SELECT projection FROM rooms WHERE id=?').get(roomId).projection);
+  const projectionCount = hasMessageAuthority(raw) ? raw.messageAuthority.count : (raw.messages?.length ?? 0);
   const table = db.prepare("SELECT COUNT(*) AS n, COALESCE(MAX(seq), 0) AS lastSeq FROM messages WHERE room_id=?").get(roomId);
   const posted = db.prepare(`SELECT COALESCE(MAX(sequence), 0) AS lastSeq FROM events
     WHERE room_id=? AND json_extract(body, '$.type')=?`).get(roomId, POSTED);
@@ -1661,11 +1668,17 @@ export function archiveRoomMessages(store, roomId, { keepNewest = 2000, dryRun =
 // marker and not retained leave the state; the marker is rebuilt from the table.
 export function compactReplayLikeArchive(db, roomId, state) {
   const marker = archiveMarker(db, roomId);
-  if (!marker.throughSeq) return state;
+  const raw = JSON.parse(db.prepare('SELECT projection FROM rooms WHERE id=?').get(roomId).projection);
+  const canonical = hasMessageAuthority(raw);
+  if (!marker.throughSeq) {
+    if (canonical) state.messageAuthority = { ...raw.messageAuthority };
+    return state;
+  }
   const archived = new Set(db.prepare("SELECT message_id FROM messages WHERE room_id=? AND seq<=? AND message_id NOT IN (SELECT value FROM json_each(?))")
     .all(roomId, marker.throughSeq, marker.retainedJson).map(row => row.message_id));
   state.messages = (state.messages ?? []).filter(message => !archived.has(message.id));
   state.messagesArchive = { throughSeq: marker.throughSeq, count: archived.size, retainedIds: marker.retainedIds };
+  if (canonical) state.messageAuthority = { ...raw.messageAuthority };
   return state;
 }
 

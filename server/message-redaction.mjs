@@ -3,6 +3,7 @@ import { readMessageReplaySnapshot, writeMessageReplaySnapshot, discardMessageRe
 // table in one transaction. Read-time masking stays; this is the write that
 // makes the old text unreadable in storage.
 
+import { hasMessageAuthority } from './message-authority.mjs';
 import { storedProjection } from "./projection-at-rest.mjs"; // Phase 1a
 import { applyEvent, event, EVENT_TYPES, isRoomArchived } from "../src/events.js";
 import { syncMessageRows } from "./messages-store.mjs";
@@ -142,6 +143,11 @@ export function commitMessageRedaction(db, { roomId, state, actorId, at, message
     if (isRoomArchived(state)) {
       db.prepare(`UPDATE messages SET record_json=NULL WHERE room_id=? AND message_id IN (${ids.map(() => "?").join(",")})`).run(roomId, ...ids);
     }
+    // Canonical rows are the serving record, including the scrubbed reducer
+    // metadata. Keep their redacted tombstone usable instead of nulling the
+    // only authoritative payload. This writes only the affected IDs.
+    if (hasMessageAuthority(next)) syncMessageRows(db, { roomId, sequence,
+      event: { type: EVENT_TYPES.MESSAGE_REDACTED, data: { messageId } }, state: next });
     // A replay snapshot may retain old edit text and attachment metadata.
     // Redact the message inside it in the same deletion transaction, the way
     // the rewritten log now replays it. Discarding the snapshot instead made

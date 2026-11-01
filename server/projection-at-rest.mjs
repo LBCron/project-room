@@ -1,4 +1,5 @@
 import { hydrateWorkItems, referenceWorkItems } from "./work-repository.mjs";
+import { hasMessageAuthority, hydrateMessageAuthority, messageAuthorityProjection } from './message-authority.mjs';
 import { isMessageEntityRef, referenceMessageEntities, hydrateMessageEntities, retainMessageEntities } from "./message-entity-projection.mjs";
 // Phase 1a: message bodies at rest outside the room projection row.
 //
@@ -182,6 +183,11 @@ function serializeProjection(db, roomId, state, { enabled = false, messageEntiti
   // publish the newly referenced set below if serialization uses it.
   const previousMemo = hashMemo.get(db)?.get(roomId);
   hashMemo.get(db)?.delete(roomId);
+  if (hasMessageAuthority(state)) {
+    const projection = JSON.stringify(messageAuthorityProjection(state));
+    if (markedRooms(db).has(roomId)) releaseUnreferencedBodies(db, roomId, new Set());
+    return projection;
+  }
   if (state?.messages?.some(isMessageEntityRef)) state = { ...state, messages: hydrateMessageEntities(db,roomId,state.messages) };
   if (messageEntities && Array.isArray(state?.messages)) {
     if (state.messages.some(message => typeof message?.bodyRef === "string" || hasMarker(message))) {
@@ -261,6 +267,7 @@ function serializeProjection(db, roomId, state, { enabled = false, messageEntiti
 // a row whose bytes no longer hash to its key is reported missing there,
 // which routes the caller to the same rebuild-from-log recovery.
 export function hydrateProjection(db, roomId, state, { verifyBodyHashes = false, workEntities = true } = {}) {
+  state = hydrateMessageAuthority(db, roomId, state);
   if (workEntities) state = hydrateWorkItems(db, roomId, state);
   if (state?.messages?.some(isMessageEntityRef)) state.messages = hydrateMessageEntities(db,roomId,state.messages);
   const messages = Array.isArray(state?.messages) ? state.messages : [];

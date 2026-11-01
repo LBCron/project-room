@@ -1,6 +1,6 @@
 # Follow-up production releases, 2026-11-01
 
-Current observation, 10:08 UTC: production is `d3e73bf53972993905411d78df9e6560b5794aae` (canonical build `2026-11-01T09:58:00.832Z`, entry build `2026-11-01T09:58:09.665Z`). Deployment `41295314517` passed strict smoke 16/16, public smoke and runtime publication. Main also contains historical repair landing `21891d44372c7d24006ea37e312853517f5f9d73`, which is not deployed at this observation. Corrected controlled live post/retry/reversal QA passed at 10:10:43 UTC; its earlier harness failures remain preserved.
+Current observation, 10:31 UTC: production and main are `21891d44372c7d24006ea37e312853517f5f9d73`. Deployment `41296448193` passed strict smoke 16/16, public smoke and runtime publication. Canonical build `2026-11-01T10:13:07.057Z`; entry build `2026-11-01T10:13:16.979Z`. Both Worker and Durable Object doors converged. A fresh live historical repair plan returned HTTP 409 `repair_projection_unavailable`: no repair executed and the quarantine remains. Corrected controlled post/retry/reversal QA on the prior d3e73 source passed at 10:10:43 UTC; it was not rerun on 21891.
 
 The sections below are dated checkpoint history. Later receipts supersede earlier limitations explicitly; failed attempts remain preserved. Exact head qualification, merge, deployment and live checks are distinct. No skipped or cancelled job is called passed.
 
@@ -104,3 +104,10 @@ At `d3e73bf`, seven separate Node processes completed bounded preparation, canon
 The first harness incorrectly intercepted only HTTP 200 and stopped after the new post returned 201. Its original intent stayed saved; exact retry resolved it, and safe reversal completed after a final readback hit the unchanged Operator rate limit. The corrected harness uses separate IDs/journal, records the actual 201 cancellation and paces Operator requests. Earlier failures and receipts were not overwritten or treated as product failures.
 
 A separate future-only, sanitized canonical Worker observation decoded 617 events over ten minutes, with no exceptions and two readiness log samples (maximum total 511 ms, no failure). This limited sample does not establish the prior timeout's cause or fleet-wide latency. Raw provider events, URLs, bindings and private identifiers are excluded.
+
+
+### Historical repair deployment and live refusal (10:31 UTC)
+
+Deployment `41296448193` successfully published source `21891d44372c7d24006ea37e312853517f5f9d73`. Runtime verification at `2026-11-01T10:19:26.809500Z` records 663 files, 3,513,118 archive bytes and SHA256 `b25b04664b555127ed83bceb9751b6a277ff71bf68780217a4116ead7d7b7a34`. Root source readbacks converged; Jill independently reported readiness 10/10. The attached smoke and immutable runtime receipts preserve those checks.
+
+A source-pinned, journaled plan for the selected 25-event historical quarantine refused with `repair_projection_unavailable`. The script had no execute path. The private input and response remain preserved; only the sanitized refusal is published. The response does not distinguish missing proof, proof drift, content mismatch or hydration failure. Old private backup evidence cannot establish which applies now. No trust baseline was minted, serving row rewritten or quarantine cleared. The underlying provenance/recovery investigation remains open.

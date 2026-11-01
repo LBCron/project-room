@@ -1,0 +1,145 @@
+{"event":"room.cold_start","clockSemantics":"runtime-dependent","durationMs":574,"integrity":"eager","phases":{"schema":{"ms":49,"rowsRead":0},"plugin":{"ms":212,"rowsRead":0},"fence":{"ms":81,"rowsRead":0},"verifies":{"ms":15,"rowsRead":0},"checksum":{"ms":0,"rowsRead":0}},"cpuMs":191,"heapBytes":38958368,"rooms":0,"sequences":0,"projectionBytes":0,"events":0}
+{"event":"room.store_initialized","initializationMs":668,"legacyColdStartMs":574,"clockSemantics":"runtime-dependent","cpuMeasured":false}
+[boot-config] ERROR: the agent card is UNSIGNED and no explicit opt-in was recorded at build time — members fetching /.well-known/agent-card.json will see an unsigned card (marked signed:false). To fix: set ROOM_AGENT_CARD_SIGNING_KEY and re-run scripts/sign-agent-card.mjs, or pass --allow-unsigned explicitly to record the choice.
+ROOM_SECURITY_CONTACT is unset; /.well-known/security.txt returns 404
+No magic-link mailer is configured: email-verification gates are relaxed (agent-invite escape hatch); /api/health reports emailVerification: relaxed-no-mailer
+✔ a settled payout lot composes a public receipt with the ledger's real fields (115.172137ms)
+✔ a settled work receipt names its payout lot, and the lot names the receipt back (163.890485ms)
+✔ a work receipt with no journal lot row gains no lot fields (17.470205ms)
+✔ a lot whose entries carry no work receipt id reports workReceiptId null (15.785618ms)
+✔ split from a pre-gate submitted dispute: the page shows both halves, not the full award to the worker (20.292569ms)
+✔ split from accepted: the page shows the poster refund the headline omits (72.345347ms)
+✔ payout lot: the page shows the pool fee leg; single-movement lots gain no movements list (27.797266ms)
+✔ every lot of a settled bounty resolves, each showing its own movement (58.174822ms)
+✔ unknown, malformed, unsettled, and non-bounty lots stay 404 (9.504297ms)
+✔ the directory toggle and operator unpublish hide a lot receipt (17.94663ms)
+✔ the room's recorded public-receipts setting gates a lot receipt (#3594) (58.46717ms)
+✔ other receipt shapes gain no lot field (0.329705ms)
+{"event":"room.cold_start","clockSemantics":"runtime-dependent","durationMs":972,"integrity":"eager","phases":{"schema":{"ms":412,"rowsRead":0},"plugin":{"ms":289,"rowsRead":0},"fence":{"ms":20,"rowsRead":0},"verifies":{"ms":4,"rowsRead":0},"checksum":{"ms":0,"rowsRead":0}},"cpuMs":148,"heapBytes":49238008,"rooms":0,"sequences":0,"projectionBytes":0,"events":0}
+{"event":"room.store_initialized","initializationMs":1070,"legacyColdStartMs":972,"clockSemantics":"runtime-dependent","cpuMeasured":false}
+✔ GET /receipts/<lotId> serves the settled lot page and JSON; unknown lots 404 (2310.679792ms)
+✔ the room's recorded public-receipts setting gates the lot page (#3594) (2192.325722ms)
+{"event":"room.cold_start","clockSemantics":"runtime-dependent","durationMs":950,"integrity":"eager","phases":{"schema":{"ms":199,"rowsRead":0},"plugin":{"ms":391,"rowsRead":0},"fence":{"ms":99,"rowsRead":0},"verifies":{"ms":17,"rowsRead":0},"checksum":{"ms":0,"rowsRead":0}},"cpuMs":237,"heapBytes":39807104,"rooms":0,"sequences":0,"projectionBytes":0,"events":0}
+{"event":"room.store_initialized","initializationMs":1067,"legacyColdStartMs":950,"clockSemantics":"runtime-dependent","cpuMeasured":false}
+[boot-config] ERROR: the agent card is UNSIGNED and no explicit opt-in was recorded at build time — members fetching /.well-known/agent-card.json will see an unsigned card (marked signed:false). To fix: set ROOM_AGENT_CARD_SIGNING_KEY and re-run scripts/sign-agent-card.mjs, or pass --allow-unsigned explicitly to record the choice.
+ROOM_SECURITY_CONTACT is unset; /.well-known/security.txt returns 404
+No magic-link mailer is configured: email-verification gates are relaxed (agent-invite escape hatch); /api/health reports emailVerification: relaxed-no-mailer
+{"event":"room.cold_start","clockSemantics":"runtime-dependent","durationMs":894,"integrity":"eager","phases":{"schema":{"ms":132,"rowsRead":0},"plugin":{"ms":321,"rowsRead":0},"fence":{"ms":84,"rowsRead":0},"verifies":{"ms":71,"rowsRead":0},"checksum":{"ms":0,"rowsRead":0}},"cpuMs":138,"heapBytes":48380000,"rooms":0,"sequences":0,"projectionBytes":0,"events":0}
+{"event":"room.store_initialized","initializationMs":1008,"legacyColdStartMs":894,"clockSemantics":"runtime-dependent","cpuMeasured":false}
+▶ operator purge and status
+  ✔ an unset secret answers the same 404 as an unknown path (1574.459727ms)
+{"event":"room.cold_start","clockSemantics":"runtime-dependent","durationMs":603,"integrity":"eager","phases":{"schema":{"ms":77,"rowsRead":0},"plugin":{"ms":262,"rowsRead":0},"fence":{"ms":25,"rowsRead":0},"verifies":{"ms":21,"rowsRead":0},"checksum":{"ms":0,"rowsRead":0}},"cpuMs":126,"heapBytes":56885248,"rooms":0,"sequences":0,"projectionBytes":0,"events":0}
+{"event":"room.store_initialized","initializationMs":667,"legacyColdStartMs":603,"clockSemantics":"runtime-dependent","cpuMeasured":false}
+  ✔ a wrong token or a cookie without the operator token is a 404, and the eleventh call is rate limited (1603.259176ms)
+{"event":"room.cold_start","clockSemantics":"runtime-dependent","durationMs":521,"integrity":"eager","phases":{"schema":{"ms":52,"rowsRead":0},"plugin":{"ms":171,"rowsRead":0},"fence":{"ms":21,"rowsRead":0},"verifies":{"ms":3,"rowsRead":0},"checksum":{"ms":0,"rowsRead":0}},"cpuMs":130,"heapBytes":51269424,"rooms":0,"sequences":0,"projectionBytes":0,"events":0}
+{"event":"room.store_initialized","initializationMs":657,"legacyColdStartMs":521,"clockSemantics":"runtime-dependent","cpuMeasured":false}
+  ✔ every keyed table has one purge row and every retain row has a reason (911.352962ms)
+{"event":"room.cold_start","clockSemantics":"runtime-dependent","durationMs":536,"integrity":"eager","phases":{"schema":{"ms":50,"rowsRead":0},"plugin":{"ms":282,"rowsRead":0},"fence":{"ms":46,"rowsRead":0},"verifies":{"ms":24,"rowsRead":0},"checksum":{"ms":0,"rowsRead":0}},"cpuMs":136,"heapBytes":57970504,"rooms":0,"sequences":0,"projectionBytes":0,"events":0}
+{"event":"room.store_initialized","initializationMs":586,"legacyColdStartMs":536,"clockSemantics":"runtime-dependent","cpuMeasured":false}
+  ✔ find lists QA leftovers and does not delete them (1272.109033ms)
+room diagnostic op_SgESrU8g 401 unauthenticated access /api/rooms/:roomId
+{"event":"room.cold_start","clockSemantics":"runtime-dependent","durationMs":764,"integrity":"eager","phases":{"schema":{"ms":211,"rowsRead":0},"plugin":{"ms":288,"rowsRead":0},"fence":{"ms":36,"rowsRead":0},"verifies":{"ms":4,"rowsRead":0},"checksum":{"ms":0,"rowsRead":0}},"cpuMs":145,"heapBytes":69842792,"rooms":0,"sequences":0,"projectionBytes":0,"events":0}
+{"event":"room.store_initialized","initializationMs":829,"legacyColdStartMs":764,"clockSemantics":"runtime-dependent","cpuMeasured":false}
+  ✔ purging one room removes its rows, leaves the other room, and re-verifies surviving integrity (2588.944066ms)
+{"event":"room.cold_start","clockSemantics":"runtime-dependent","durationMs":655,"integrity":"eager","phases":{"schema":{"ms":70,"rowsRead":0},"plugin":{"ms":323,"rowsRead":0},"fence":{"ms":93,"rowsRead":0},"verifies":{"ms":9,"rowsRead":0},"checksum":{"ms":0,"rowsRead":0}},"cpuMs":140,"heapBytes":60466272,"rooms":0,"sequences":0,"projectionBytes":0,"events":0}
+{"event":"room.store_initialized","initializationMs":797,"legacyColdStartMs":655,"clockSemantics":"runtime-dependent","cpuMeasured":false}
+  ✔ purging a room removes its recorded public-receipts setting and spares the other room's (1569.108461ms)
+{"event":"room.cold_start","clockSemantics":"runtime-dependent","durationMs":767,"integrity":"eager","phases":{"schema":{"ms":221,"rowsRead":0},"plugin":{"ms":279,"rowsRead":0},"fence":{"ms":37,"rowsRead":0},"verifies":{"ms":6,"rowsRead":0},"checksum":{"ms":0,"rowsRead":0}},"cpuMs":141,"heapBytes":68424264,"rooms":0,"sequences":0,"projectionBytes":0,"events":0}
+{"event":"room.store_initialized","initializationMs":814,"legacyColdStartMs":767,"clockSemantics":"runtime-dependent","cpuMeasured":false}
+  ✔ a new event between plan and execute refuses and deletes nothing (1461.987089ms)
+{"event":"room.cold_start","clockSemantics":"runtime-dependent","durationMs":751,"integrity":"eager","phases":{"schema":{"ms":47,"rowsRead":0},"plugin":{"ms":357,"rowsRead":0},"fence":{"ms":35,"rowsRead":0},"verifies":{"ms":3,"rowsRead":0},"checksum":{"ms":0,"rowsRead":0}},"cpuMs":141,"heapBytes":79590696,"rooms":0,"sequences":0,"projectionBytes":0,"events":0}
+{"event":"room.store_initialized","initializationMs":913,"legacyColdStartMs":751,"clockSemantics":"runtime-dependent","cpuMeasured":false}
+  ✔ a confirm token is single use, expires at 10 minutes, and is bound to its plan (1744.814288ms)
+room diagnostic op_uxHMVmuf 401 unauthenticated access /api/rooms/:roomId
+{"event":"room.cold_start","clockSemantics":"runtime-dependent","durationMs":624,"integrity":"eager","phases":{"schema":{"ms":43,"rowsRead":0},"plugin":{"ms":279,"rowsRead":0},"fence":{"ms":22,"rowsRead":0},"verifies":{"ms":3,"rowsRead":0},"checksum":{"ms":0,"rowsRead":0}},"cpuMs":157,"heapBytes":70971280,"rooms":0,"sequences":0,"projectionBytes":0,"events":0}
+{"event":"room.store_initialized","initializationMs":727,"legacyColdStartMs":624,"clockSemantics":"runtime-dependent","cpuMeasured":false}
+  ✔ purging an identity revokes its bearer and removes links, subscriptions, and deliveries (1594.802641ms)
+{"event":"room.cold_start","clockSemantics":"runtime-dependent","durationMs":335,"integrity":"eager","phases":{"schema":{"ms":29,"rowsRead":0},"plugin":{"ms":114,"rowsRead":0},"fence":{"ms":16,"rowsRead":0},"verifies":{"ms":3,"rowsRead":0},"checksum":{"ms":0,"rowsRead":0}},"cpuMs":120,"heapBytes":78535432,"rooms":0,"sequences":0,"projectionBytes":0,"events":0}
+{"event":"room.store_initialized","initializationMs":392,"legacyColdStartMs":335,"clockSemantics":"runtime-dependent","cpuMeasured":false}
+  ✔ active humans and protected rooms are refused (1163.665038ms)
+{"event":"room.cold_start","clockSemantics":"runtime-dependent","durationMs":316,"integrity":"eager","phases":{"schema":{"ms":33,"rowsRead":0},"plugin":{"ms":122,"rowsRead":0},"fence":{"ms":16,"rowsRead":0},"verifies":{"ms":3,"rowsRead":0},"checksum":{"ms":0,"rowsRead":0}},"cpuMs":123,"heapBytes":85450808,"rooms":0,"sequences":0,"projectionBytes":0,"events":0}
+{"event":"room.store_initialized","initializationMs":435,"legacyColdStartMs":316,"clockSemantics":"runtime-dependent","cpuMeasured":false}
+  ✔ purging an account runs account deletion and retires the account key (583.593386ms)
+{"event":"room.cold_start","clockSemantics":"runtime-dependent","durationMs":327,"integrity":"eager","phases":{"schema":{"ms":34,"rowsRead":0},"plugin":{"ms":128,"rowsRead":0},"fence":{"ms":17,"rowsRead":0},"verifies":{"ms":3,"rowsRead":0},"checksum":{"ms":0,"rowsRead":0}},"cpuMs":124,"heapBytes":91618880,"rooms":0,"sequences":0,"projectionBytes":0,"events":0}
+{"event":"room.store_initialized","initializationMs":413,"legacyColdStartMs":327,"clockSemantics":"runtime-dependent","cpuMeasured":false}
+  ✔ status answers in under two seconds and drift compares the caller SHA (667.626715ms)
+✔ operator purge and status (16774.153551ms)
+{"event":"room.cold_start","clockSemantics":"runtime-dependent","durationMs":427,"integrity":"eager","phases":{"schema":{"ms":30,"rowsRead":0},"plugin":{"ms":207,"rowsRead":0},"fence":{"ms":17,"rowsRead":0},"verifies":{"ms":3,"rowsRead":0},"checksum":{"ms":0,"rowsRead":0}},"cpuMs":189,"heapBytes":79806248,"rooms":0,"sequences":0,"projectionBytes":0,"events":0}
+{"event":"room.store_initialized","initializationMs":490,"legacyColdStartMs":427,"clockSemantics":"runtime-dependent","cpuMeasured":false}
+▶ operator follow-ups (CP-ADMIN-0c)
+  ✔ status leaves out platform _cf_ tables and skips a table that refuses a count instead of failing (637.522168ms)
+  ✔ drift accepts a short SHA as a prefix of the deployed commit (0.542554ms)
+{"event":"room.cold_start","clockSemantics":"runtime-dependent","durationMs":355,"integrity":"eager","phases":{"schema":{"ms":29,"rowsRead":0},"plugin":{"ms":149,"rowsRead":0},"fence":{"ms":16,"rowsRead":0},"verifies":{"ms":3,"rowsRead":0},"checksum":{"ms":0,"rowsRead":0}},"cpuMs":116,"heapBytes":85758960,"rooms":0,"sequences":0,"projectionBytes":0,"events":0}
+{"event":"room.store_initialized","initializationMs":412,"legacyColdStartMs":355,"clockSemantics":"runtime-dependent","cpuMeasured":false}
+  ✔ find by account email returns account ids and names, never the address, and deletes nothing (906.857329ms)
+{"event":"room.cold_start","clockSemantics":"runtime-dependent","durationMs":414,"integrity":"eager","phases":{"schema":{"ms":28,"rowsRead":0},"plugin":{"ms":179,"rowsRead":0},"fence":{"ms":16,"rowsRead":0},"verifies":{"ms":3,"rowsRead":0},"checksum":{"ms":0,"rowsRead":0}},"cpuMs":129,"heapBytes":91462768,"rooms":0,"sequences":0,"projectionBytes":0,"events":0}
+{"event":"room.store_initialized","initializationMs":472,"legacyColdStartMs":414,"clockSemantics":"runtime-dependent","cpuMeasured":false}
+{"event":"room.cold_start","clockSemantics":"runtime-dependent","durationMs":118,"integrity":"eager","phases":{"schema":{"ms":11,"rowsRead":0},"plugin":{"ms":9,"rowsRead":0},"fence":{"ms":9,"rowsRead":0},"verifies":{"ms":3,"rowsRead":0},"checksum":{"ms":0,"rowsRead":0}},"cpuMs":39,"heapBytes":99801968,"rooms":2,"sequences":4,"projectionBytes":1374,"events":4}
+{"event":"room.store_initialized","initializationMs":273,"legacyColdStartMs":118,"clockSemantics":"runtime-dependent","cpuMeasured":false}
+{"event":"room.cold_start","clockSemantics":"runtime-dependent","durationMs":328,"integrity":"eager","phases":{"schema":{"ms":28,"rowsRead":0},"plugin":{"ms":112,"rowsRead":0},"fence":{"ms":16,"rowsRead":0},"verifies":{"ms":3,"rowsRead":0},"checksum":{"ms":0,"rowsRead":0}},"cpuMs":122,"heapBytes":100207984,"rooms":0,"sequences":0,"projectionBytes":0,"events":0}
+{"event":"room.store_initialized","initializationMs":393,"legacyColdStartMs":328,"clockSemantics":"runtime-dependent","cpuMeasured":false}
+{"event":"room.cold_start","clockSemantics":"runtime-dependent","durationMs":115,"integrity":"eager","phases":{"schema":{"ms":8,"rowsRead":0},"plugin":{"ms":6,"rowsRead":0},"fence":{"ms":6,"rowsRead":0},"verifies":{"ms":2,"rowsRead":0},"checksum":{"ms":0,"rowsRead":0}},"cpuMs":27,"heapBytes":108544496,"rooms":2,"sequences":4,"projectionBytes":1374,"events":4}
+{"event":"room.store_initialized","initializationMs":296,"legacyColdStartMs":115,"clockSemantics":"runtime-dependent","cpuMeasured":false}
+{"event":"room.cold_start","clockSemantics":"runtime-dependent","durationMs":311,"integrity":"eager","phases":{"schema":{"ms":29,"rowsRead":0},"plugin":{"ms":109,"rowsRead":0},"fence":{"ms":18,"rowsRead":0},"verifies":{"ms":3,"rowsRead":0},"checksum":{"ms":0,"rowsRead":0}},"cpuMs":122,"heapBytes":119776464,"rooms":0,"sequences":0,"projectionBytes":0,"events":0}
+{"event":"room.store_initialized","initializationMs":379,"legacyColdStartMs":311,"clockSemantics":"runtime-dependent","cpuMeasured":false}
+{"event":"room.cold_start","clockSemantics":"runtime-dependent","durationMs":105,"integrity":"eager","phases":{"schema":{"ms":8,"rowsRead":0},"plugin":{"ms":6,"rowsRead":0},"fence":{"ms":7,"rowsRead":0},"verifies":{"ms":2,"rowsRead":0},"checksum":{"ms":0,"rowsRead":0}},"cpuMs":30,"heapBytes":128012120,"rooms":2,"sequences":4,"projectionBytes":1374,"events":4}
+{"event":"room.store_initialized","initializationMs":210,"legacyColdStartMs":105,"clockSemantics":"runtime-dependent","cpuMeasured":false}
+{"event":"room.cold_start","clockSemantics":"runtime-dependent","durationMs":326,"integrity":"eager","phases":{"schema":{"ms":30,"rowsRead":0},"plugin":{"ms":138,"rowsRead":0},"fence":{"ms":17,"rowsRead":0},"verifies":{"ms":4,"rowsRead":0},"checksum":{"ms":0,"rowsRead":0}},"cpuMs":153,"heapBytes":146563608,"rooms":0,"sequences":0,"projectionBytes":0,"events":0}
+{"event":"room.store_initialized","initializationMs":401,"legacyColdStartMs":326,"clockSemantics":"runtime-dependent","cpuMeasured":false}
+  ✔ find by account email flags truncation past the find limit (5021.703376ms)
+✔ operator follow-ups (CP-ADMIN-0c) (6567.854762ms)
+▶ retained room cleanup compatibility
+  ✔ reopened retained rows are counted and removed only for the selected room (1937.538523ms)
+  ✔ a retained row added after planning invalidates confirmation without deleting data (1938.431462ms)
+  ✔ a retained cleanup failure rolls back earlier deletions and leaves its confirmation retryable (1776.816141ms)
+  ✔ absent main tables ignore temp names while malformed retained tables fail loudly (1195.800612ms)
+✔ retained room cleanup compatibility (6849.249742ms)
+✔ the receipt JSON forwards the payout lot cross-reference, detail and list (118.046349ms)
+✔ the receipt page links to the payout lot (24.970316ms)
+✔ a work receipt with no lot linkage gains neither key and no link (32.16658ms)
+✔ the lot receipt's own page and JSON are undisturbed (14.18013ms)
+{"event":"room.cold_start","clockSemantics":"runtime-dependent","durationMs":756,"integrity":"eager","phases":{"schema":{"ms":211,"rowsRead":0},"plugin":{"ms":239,"rowsRead":0},"fence":{"ms":59,"rowsRead":0},"verifies":{"ms":8,"rowsRead":0},"checksum":{"ms":0,"rowsRead":0}},"cpuMs":173,"heapBytes":31551800,"rooms":0,"sequences":0,"projectionBytes":0,"events":0}
+{"event":"room.store_initialized","initializationMs":861,"legacyColdStartMs":756,"clockSemantics":"runtime-dependent","cpuMeasured":false}
+{"event":"room.cold_start","clockSemantics":"runtime-dependent","durationMs":1095,"integrity":"eager","phases":{"schema":{"ms":257,"rowsRead":0},"plugin":{"ms":492,"rowsRead":0},"fence":{"ms":107,"rowsRead":0},"verifies":{"ms":23,"rowsRead":0},"checksum":{"ms":0,"rowsRead":0}},"cpuMs":153,"heapBytes":37381560,"rooms":0,"sequences":0,"projectionBytes":0,"events":0}
+{"event":"room.store_initialized","initializationMs":1166,"legacyColdStartMs":1095,"clockSemantics":"runtime-dependent","cpuMeasured":false}
+{"event":"room.cold_start","clockSemantics":"runtime-dependent","durationMs":974,"integrity":"eager","phases":{"schema":{"ms":404,"rowsRead":0},"plugin":{"ms":236,"rowsRead":0},"fence":{"ms":49,"rowsRead":0},"verifies":{"ms":9,"rowsRead":0},"checksum":{"ms":0,"rowsRead":0}},"cpuMs":151,"heapBytes":29556296,"rooms":0,"sequences":0,"projectionBytes":0,"events":0}
+{"event":"room.store_initialized","initializationMs":1093,"legacyColdStartMs":974,"clockSemantics":"runtime-dependent","cpuMeasured":false}
+{"event":"room.cold_start","clockSemantics":"runtime-dependent","durationMs":714,"integrity":"eager","phases":{"schema":{"ms":171,"rowsRead":0},"plugin":{"ms":281,"rowsRead":0},"fence":{"ms":34,"rowsRead":0},"verifies":{"ms":6,"rowsRead":0},"checksum":{"ms":0,"rowsRead":0}},"cpuMs":130,"heapBytes":34746024,"rooms":0,"sequences":0,"projectionBytes":0,"events":0}
+{"event":"room.store_initialized","initializationMs":779,"legacyColdStartMs":714,"clockSemantics":"runtime-dependent","cpuMeasured":false}
+✔ lot: a clean settled lot re-validates its ledger chain (88.312238ms)
+✔ lot: a tampered journal entry flips the verdict to contradicted (18.232769ms)
+✔ lot: a rewritten predecessor hash breaks the chain link check (16.070235ms)
+✔ work claim: a clean record re-validates; an unreachable GitHub leaves it partially verifiable (1270.137867ms)
+✔ work claim: a tampered stored row contradicts its source (1695.954668ms)
+✔ public work: record + artifact re-validate; a forged artifact contradicts (1514.519167ms)
+✔ public work: a pruned delivery record is no longer verifiable (1035.120232ms)
+{"event":"room.cold_start","clockSemantics":"runtime-dependent","durationMs":868,"integrity":"eager","phases":{"schema":{"ms":114,"rowsRead":0},"plugin":{"ms":231,"rowsRead":0},"fence":{"ms":223,"rowsRead":0},"verifies":{"ms":67,"rowsRead":0},"checksum":{"ms":0,"rowsRead":0}},"cpuMs":229,"heapBytes":36095080,"rooms":0,"sequences":0,"projectionBytes":0,"events":0}
+{"event":"room.store_initialized","initializationMs":924,"legacyColdStartMs":868,"clockSemantics":"runtime-dependent","cpuMeasured":false}
+[boot-config] ERROR: the agent card is UNSIGNED and no explicit opt-in was recorded at build time — members fetching /.well-known/agent-card.json will see an unsigned card (marked signed:false). To fix: set ROOM_AGENT_CARD_SIGNING_KEY and re-run scripts/sign-agent-card.mjs, or pass --allow-unsigned explicitly to record the choice.
+ROOM_SECURITY_CONTACT is unset; /.well-known/security.txt returns 404
+No magic-link mailer is configured: email-verification gates are relaxed (agent-invite escape hatch); /api/health reports emailVerification: relaxed-no-mailer
+room diagnostic op_zIYWkfnQ 422 command_rejected conflict /api/rooms/:roomId/commands
+{"event":"room.cold_start","clockSemantics":"runtime-dependent","durationMs":864,"integrity":"eager","phases":{"schema":{"ms":154,"rowsRead":0},"plugin":{"ms":404,"rowsRead":0},"fence":{"ms":109,"rowsRead":0},"verifies":{"ms":19,"rowsRead":0},"checksum":{"ms":0,"rowsRead":0}},"cpuMs":145,"heapBytes":48157520,"rooms":0,"sequences":0,"projectionBytes":0,"events":0}
+{"event":"room.store_initialized","initializationMs":909,"legacyColdStartMs":864,"clockSemantics":"runtime-dependent","cpuMeasured":false}
+✔ a private room's claim stays hidden until the owner publishes, and a non-owner cannot publish (2688.317846ms)
+✔ share surfaces: JSON-LD and a per-receipt OG card ride the same owner toggle (1882.9427ms)
+{"event":"room.cold_start","clockSemantics":"runtime-dependent","durationMs":447,"integrity":"eager","phases":{"schema":{"ms":47,"rowsRead":0},"plugin":{"ms":110,"rowsRead":0},"fence":{"ms":146,"rowsRead":0},"verifies":{"ms":98,"rowsRead":0},"checksum":{"ms":0,"rowsRead":0}},"cpuMs":220,"heapBytes":35646728,"rooms":0,"sequences":0,"projectionBytes":0,"events":0}
+{"event":"room.store_initialized","initializationMs":451,"legacyColdStartMs":447,"clockSemantics":"runtime-dependent","cpuMeasured":false}
+[boot-config] ERROR: the agent card is UNSIGNED and no explicit opt-in was recorded at build time — members fetching /.well-known/agent-card.json will see an unsigned card (marked signed:false). To fix: set ROOM_AGENT_CARD_SIGNING_KEY and re-run scripts/sign-agent-card.mjs, or pass --allow-unsigned explicitly to record the choice.
+ROOM_SECURITY_CONTACT is unset; /.well-known/security.txt returns 404
+No magic-link mailer is configured: email-verification gates are relaxed (agent-invite escape hatch); /api/health reports emailVerification: relaxed-no-mailer
+{"event":"room.cold_start","clockSemantics":"runtime-dependent","durationMs":378,"integrity":"eager","phases":{"schema":{"ms":163,"rowsRead":0},"plugin":{"ms":147,"rowsRead":0},"fence":{"ms":64,"rowsRead":0},"verifies":{"ms":3,"rowsRead":0},"checksum":{"ms":0,"rowsRead":0}},"cpuMs":120,"heapBytes":47301128,"rooms":0,"sequences":0,"projectionBytes":0,"events":0}
+{"event":"room.store_initialized","initializationMs":379,"legacyColdStartMs":378,"clockSemantics":"runtime-dependent","cpuMeasured":false}
+✔ published pwr_ receipts are projected under their true room (1184.795364ms)
+{"event":"room.cold_start","clockSemantics":"runtime-dependent","durationMs":396,"integrity":"eager","phases":{"schema":{"ms":94,"rowsRead":0},"plugin":{"ms":223,"rowsRead":0},"fence":{"ms":75,"rowsRead":0},"verifies":{"ms":3,"rowsRead":0},"checksum":{"ms":0,"rowsRead":0}},"cpuMs":116,"heapBytes":56111560,"rooms":0,"sequences":0,"projectionBytes":0,"events":0}
+{"event":"room.store_initialized","initializationMs":397,"legacyColdStartMs":396,"clockSemantics":"runtime-dependent","cpuMeasured":false}
+✔ room unpublish hides the room's pwr_ receipts at the receipts site and list (677.970741ms)
+✔ the backfill sweep re-projects legacy namespace-keyed rows so a takedown reaches them (699.393805ms)
+ℹ tests 50
+ℹ suites 3
+ℹ pass 50
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 33226.510229

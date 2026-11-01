@@ -1,0 +1,169 @@
+{"event":"room.cold_start","clockSemantics":"runtime-dependent","durationMs":421,"integrity":"eager","phases":{"schema":{"ms":72,"rowsRead":0},"plugin":{"ms":134,"rowsRead":0},"fence":{"ms":61,"rowsRead":0},"verifies":{"ms":7,"rowsRead":0},"checksum":{"ms":0,"rowsRead":0}},"cpuMs":184,"heapBytes":30341712,"rooms":0,"sequences":0,"projectionBytes":0,"events":0}
+{"event":"room.store_initialized","initializationMs":483,"legacyColdStartMs":421,"clockSemantics":"runtime-dependent","cpuMeasured":false}
+{"event":"room.cold_start","clockSemantics":"runtime-dependent","durationMs":361,"integrity":"eager","phases":{"schema":{"ms":219,"rowsRead":0},"plugin":{"ms":8,"rowsRead":0},"fence":{"ms":49,"rowsRead":0},"verifies":{"ms":4,"rowsRead":0},"checksum":{"ms":0,"rowsRead":0}},"cpuMs":172,"heapBytes":35915016,"rooms":1,"sequences":2,"projectionBytes":719,"events":2}
+{"event":"room.store_initialized","initializationMs":415,"legacyColdStartMs":361,"clockSemantics":"runtime-dependent","cpuMeasured":false}
+{"event":"room.cold_start","clockSemantics":"runtime-dependent","durationMs":51,"cpuMs":55,"heapBytes":35326120,"rooms":2,"sequences":48,"projectionBytes":6273,"events":48}
+{"event":"room.cold_start","clockSemantics":"runtime-dependent","durationMs":49,"cpuMs":37,"heapBytes":41945800,"rooms":2,"sequences":48,"projectionBytes":6273,"events":48}
+{"event":"room.cold_start","clockSemantics":"runtime-dependent","durationMs":41,"cpuMs":44,"heapBytes":33669472,"rooms":2,"sequences":48,"projectionBytes":6273,"events":48}
+{"event":"room.cold_start","clockSemantics":"runtime-dependent","durationMs":28,"cpuMs":30,"heapBytes":41298304,"rooms":2,"sequences":48,"projectionBytes":6273,"events":48}
+{"event":"room.cold_start","clockSemantics":"runtime-dependent","durationMs":357,"integrity":"eager","phases":{"schema":{"ms":30,"rowsRead":0},"plugin":{"ms":148,"rowsRead":0},"fence":{"ms":18,"rowsRead":0},"verifies":{"ms":3,"rowsRead":0},"checksum":{"ms":0,"rowsRead":0}},"cpuMs":123,"heapBytes":35379160,"rooms":0,"sequences":0,"projectionBytes":0,"events":0}
+{"event":"room.store_initialized","initializationMs":427,"legacyColdStartMs":357,"clockSemantics":"runtime-dependent","cpuMeasured":false}
+{"event":"room.cold_start","clockSemantics":"runtime-dependent","durationMs":203,"integrity":"eager","phases":{"schema":{"ms":118,"rowsRead":0},"plugin":{"ms":6,"rowsRead":0},"fence":{"ms":10,"rowsRead":0},"verifies":{"ms":3,"rowsRead":0},"checksum":{"ms":0,"rowsRead":0}},"cpuMs":146,"heapBytes":40516568,"rooms":1,"sequences":2,"projectionBytes":719,"events":2}
+{"event":"room.store_initialized","initializationMs":253,"legacyColdStartMs":203,"clockSemantics":"runtime-dependent","cpuMeasured":false}
+✔ equal independently captured data is not permission to reopen; all application tables are compared (6799.102211ms)
+{"event":"room.cold_start","clockSemantics":"runtime-dependent","durationMs":57,"cpuMs":45,"heapBytes":36950200,"rooms":2,"sequences":48,"projectionBytes":6273,"events":48}
+{"event":"room.cold_start","clockSemantics":"runtime-dependent","durationMs":103,"cpuMs":43,"heapBytes":43066088,"rooms":2,"sequences":49,"projectionBytes":6469,"events":49}
+{"event":"room.cold_start","clockSemantics":"runtime-dependent","durationMs":41,"cpuMs":34,"heapBytes":32502480,"rooms":2,"sequences":49,"projectionBytes":6469,"events":49}
+{"event":"room.cold_start","clockSemantics":"runtime-dependent","durationMs":72,"cpuMs":35,"heapBytes":38448128,"rooms":2,"sequences":49,"projectionBytes":6469,"events":49}
+{"event":"room.cold_start","clockSemantics":"runtime-dependent","durationMs":29,"cpuMs":34,"heapBytes":46132248,"rooms":2,"sequences":49,"projectionBytes":6469,"events":49}
+{"event":"room.cold_start","clockSemantics":"runtime-dependent","durationMs":258,"integrity":"eager","phases":{"schema":{"ms":34,"rowsRead":0},"plugin":{"ms":108,"rowsRead":0},"fence":{"ms":15,"rowsRead":0},"verifies":{"ms":3,"rowsRead":0},"checksum":{"ms":0,"rowsRead":0}},"cpuMs":117,"heapBytes":38823976,"rooms":0,"sequences":0,"projectionBytes":0,"events":0}
+{"event":"room.store_initialized","initializationMs":303,"legacyColdStartMs":258,"clockSemantics":"runtime-dependent","cpuMeasured":false}
+{"event":"room.cold_start","clockSemantics":"runtime-dependent","durationMs":366,"integrity":"eager","phases":{"schema":{"ms":175,"rowsRead":0},"plugin":{"ms":6,"rowsRead":0},"fence":{"ms":49,"rowsRead":0},"verifies":{"ms":3,"rowsRead":0},"checksum":{"ms":0,"rowsRead":0}},"cpuMs":149,"heapBytes":43845088,"rooms":1,"sequences":2,"projectionBytes":719,"events":2}
+{"event":"room.store_initialized","initializationMs":418,"legacyColdStartMs":366,"clockSemantics":"runtime-dependent","cpuMeasured":false}
+✔ private thread mute changes are included in capture comparison (6567.808282ms)
+{"event":"room.cold_start","clockSemantics":"runtime-dependent","durationMs":50,"cpuMs":35,"heapBytes":37474520,"rooms":2,"sequences":48,"projectionBytes":6273,"events":48}
+{"event":"room.cold_start","clockSemantics":"runtime-dependent","durationMs":61,"cpuMs":36,"heapBytes":43331096,"rooms":2,"sequences":49,"projectionBytes":6485,"events":49}
+{"event":"room.cold_start","clockSemantics":"runtime-dependent","durationMs":90,"cpuMs":34,"heapBytes":32199328,"rooms":2,"sequences":48,"projectionBytes":6273,"events":48}
+{"event":"room.cold_start","clockSemantics":"runtime-dependent","durationMs":37,"cpuMs":36,"heapBytes":39945552,"rooms":2,"sequences":49,"projectionBytes":6485,"events":49}
+{"event":"room.cold_start","clockSemantics":"runtime-dependent","durationMs":477,"integrity":"eager","phases":{"schema":{"ms":69,"rowsRead":0},"plugin":{"ms":228,"rowsRead":0},"fence":{"ms":24,"rowsRead":0},"verifies":{"ms":45,"rowsRead":0},"checksum":{"ms":0,"rowsRead":0}},"cpuMs":158,"heapBytes":47568440,"rooms":0,"sequences":0,"projectionBytes":0,"events":0}
+{"event":"room.store_initialized","initializationMs":522,"legacyColdStartMs":477,"clockSemantics":"runtime-dependent","cpuMeasured":false}
+{"event":"room.cold_start","clockSemantics":"runtime-dependent","durationMs":493,"integrity":"eager","phases":{"schema":{"ms":286,"rowsRead":0},"plugin":{"ms":79,"rowsRead":0},"fence":{"ms":11,"rowsRead":0},"verifies":{"ms":3,"rowsRead":0},"checksum":{"ms":0,"rowsRead":0}},"cpuMs":160,"heapBytes":36166416,"rooms":1,"sequences":2,"projectionBytes":719,"events":2}
+{"event":"room.store_initialized","initializationMs":556,"legacyColdStartMs":493,"clockSemantics":"runtime-dependent","cpuMeasured":false}
+✔ content and retry changes are visible without inventing an access change (7558.040292ms)
+{"event":"room.cold_start","clockSemantics":"runtime-dependent","durationMs":33,"cpuMs":38,"heapBytes":37998440,"rooms":2,"sequences":48,"projectionBytes":6273,"events":48}
+{"event":"room.cold_start","clockSemantics":"runtime-dependent","durationMs":27,"cpuMs":30,"heapBytes":43526752,"rooms":2,"sequences":48,"projectionBytes":6273,"events":48}
+{"event":"room.cold_start","clockSemantics":"runtime-dependent","durationMs":93,"cpuMs":35,"heapBytes":38356992,"rooms":2,"sequences":48,"projectionBytes":6273,"events":48}
+{"event":"room.cold_start","clockSemantics":"runtime-dependent","durationMs":82,"cpuMs":38,"heapBytes":46053456,"rooms":2,"sequences":48,"projectionBytes":6273,"events":48}
+{"event":"room.cold_start","clockSemantics":"runtime-dependent","durationMs":509,"integrity":"eager","phases":{"schema":{"ms":30,"rowsRead":0},"plugin":{"ms":164,"rowsRead":0},"fence":{"ms":68,"rowsRead":0},"verifies":{"ms":4,"rowsRead":0},"checksum":{"ms":0,"rowsRead":0}},"cpuMs":133,"heapBytes":53489824,"rooms":0,"sequences":0,"projectionBytes":0,"events":0}
+{"event":"room.store_initialized","initializationMs":597,"legacyColdStartMs":509,"clockSemantics":"runtime-dependent","cpuMeasured":false}
+{"event":"room.cold_start","clockSemantics":"runtime-dependent","durationMs":461,"integrity":"eager","phases":{"schema":{"ms":240,"rowsRead":0},"plugin":{"ms":59,"rowsRead":0},"fence":{"ms":19,"rowsRead":0},"verifies":{"ms":3,"rowsRead":0},"checksum":{"ms":0,"rowsRead":0}},"cpuMs":157,"heapBytes":58510184,"rooms":1,"sequences":2,"projectionBytes":719,"events":2}
+{"event":"room.store_initialized","initializationMs":602,"legacyColdStartMs":461,"clockSemantics":"runtime-dependent","cpuMeasured":false}
+✔ credential and invitation revocations are found even without a new room event (7786.154722ms)
+{"event":"room.cold_start","clockSemantics":"runtime-dependent","durationMs":27,"cpuMs":27,"heapBytes":47325488,"rooms":2,"sequences":48,"projectionBytes":6273,"events":48}
+{"event":"room.cold_start","clockSemantics":"runtime-dependent","durationMs":34,"cpuMs":29,"heapBytes":40468184,"rooms":2,"sequences":48,"projectionBytes":6273,"events":48}
+{"event":"room.cold_start","clockSemantics":"runtime-dependent","durationMs":67,"cpuMs":31,"heapBytes":62123184,"rooms":2,"sequences":48,"projectionBytes":6273,"events":48}
+{"event":"room.cold_start","clockSemantics":"runtime-dependent","durationMs":84,"cpuMs":32,"heapBytes":36445808,"rooms":2,"sequences":48,"projectionBytes":6273,"events":48}
+{"event":"room.cold_start","clockSemantics":"runtime-dependent","durationMs":382,"integrity":"eager","phases":{"schema":{"ms":29,"rowsRead":0},"plugin":{"ms":161,"rowsRead":0},"fence":{"ms":15,"rowsRead":0},"verifies":{"ms":4,"rowsRead":0},"checksum":{"ms":0,"rowsRead":0}},"cpuMs":124,"heapBytes":43282336,"rooms":0,"sequences":0,"projectionBytes":0,"events":0}
+{"event":"room.store_initialized","initializationMs":434,"legacyColdStartMs":382,"clockSemantics":"runtime-dependent","cpuMeasured":false}
+{"event":"room.cold_start","clockSemantics":"runtime-dependent","durationMs":337,"integrity":"eager","phases":{"schema":{"ms":197,"rowsRead":0},"plugin":{"ms":7,"rowsRead":0},"fence":{"ms":68,"rowsRead":0},"verifies":{"ms":3,"rowsRead":0},"checksum":{"ms":0,"rowsRead":0}},"cpuMs":152,"heapBytes":48213304,"rooms":1,"sequences":2,"projectionBytes":719,"events":2}
+{"event":"room.store_initialized","initializationMs":403,"legacyColdStartMs":337,"clockSemantics":"runtime-dependent","cpuMeasured":false}
+✔ account changes and human session retirement are flagged (7759.367932ms)
+{"event":"room.cold_start","clockSemantics":"runtime-dependent","durationMs":77,"cpuMs":67,"heapBytes":37670728,"rooms":2,"sequences":48,"projectionBytes":6273,"events":48}
+{"event":"room.cold_start","clockSemantics":"runtime-dependent","durationMs":38,"cpuMs":32,"heapBytes":59407184,"rooms":2,"sequences":49,"projectionBytes":6274,"events":49}
+{"event":"room.cold_start","clockSemantics":"runtime-dependent","durationMs":370,"integrity":"eager","phases":{"schema":{"ms":30,"rowsRead":0},"plugin":{"ms":153,"rowsRead":0},"fence":{"ms":28,"rowsRead":0},"verifies":{"ms":5,"rowsRead":0},"checksum":{"ms":0,"rowsRead":0}},"cpuMs":170,"heapBytes":44582848,"rooms":0,"sequences":0,"projectionBytes":0,"events":0}
+{"event":"room.store_initialized","initializationMs":417,"legacyColdStartMs":370,"clockSemantics":"runtime-dependent","cpuMeasured":false}
+{"event":"room.cold_start","clockSemantics":"runtime-dependent","durationMs":482,"integrity":"eager","phases":{"schema":{"ms":343,"rowsRead":0},"plugin":{"ms":53,"rowsRead":0},"fence":{"ms":16,"rowsRead":0},"verifies":{"ms":4,"rowsRead":0},"checksum":{"ms":0,"rowsRead":0}},"cpuMs":217,"heapBytes":49566480,"rooms":1,"sequences":2,"projectionBytes":719,"events":2}
+{"event":"room.store_initialized","initializationMs":541,"legacyColdStartMs":482,"clockSemantics":"runtime-dependent","cpuMeasured":false}
+✖ membership authority changes are detected inside room projections (5841.0168ms)
+{"event":"room.cold_start","clockSemantics":"runtime-dependent","durationMs":52,"cpuMs":28,"heapBytes":38989640,"rooms":2,"sequences":48,"projectionBytes":6273,"events":48}
+{"event":"room.cold_start","clockSemantics":"runtime-dependent","durationMs":31,"cpuMs":32,"heapBytes":61003776,"rooms":2,"sequences":49,"projectionBytes":6274,"events":49}
+{"event":"room.cold_start","clockSemantics":"runtime-dependent","durationMs":76,"cpuMs":42,"heapBytes":49490416,"rooms":2,"sequences":48,"projectionBytes":6273,"events":48}
+{"event":"room.cold_start","clockSemantics":"runtime-dependent","durationMs":77,"cpuMs":28,"heapBytes":57108176,"rooms":2,"sequences":49,"projectionBytes":6274,"events":49}
+{"event":"room.cold_start","clockSemantics":"runtime-dependent","durationMs":367,"integrity":"eager","phases":{"schema":{"ms":30,"rowsRead":0},"plugin":{"ms":154,"rowsRead":0},"fence":{"ms":16,"rowsRead":0},"verifies":{"ms":3,"rowsRead":0},"checksum":{"ms":0,"rowsRead":0}},"cpuMs":120,"heapBytes":63858872,"rooms":0,"sequences":0,"projectionBytes":0,"events":0}
+{"event":"room.store_initialized","initializationMs":410,"legacyColdStartMs":367,"clockSemantics":"runtime-dependent","cpuMeasured":false}
+{"event":"room.cold_start","clockSemantics":"runtime-dependent","durationMs":235,"integrity":"eager","phases":{"schema":{"ms":156,"rowsRead":0},"plugin":{"ms":6,"rowsRead":0},"fence":{"ms":14,"rowsRead":0},"verifies":{"ms":3,"rowsRead":0},"checksum":{"ms":0,"rowsRead":0}},"cpuMs":153,"heapBytes":36631808,"rooms":1,"sequences":2,"projectionBytes":719,"events":2}
+{"event":"room.store_initialized","initializationMs":293,"legacyColdStartMs":235,"clockSemantics":"runtime-dependent","cpuMeasured":false}
+✔ managed-agent disconnection and its exact operation receipt are both flagged (6204.373863ms)
+{"event":"room.cold_start","clockSemantics":"runtime-dependent","durationMs":29,"cpuMs":27,"heapBytes":58361336,"rooms":2,"sequences":48,"projectionBytes":6273,"events":48}
+{"event":"room.cold_start","clockSemantics":"runtime-dependent","durationMs":33,"cpuMs":33,"heapBytes":46829960,"rooms":2,"sequences":48,"projectionBytes":6273,"events":48}
+{"event":"room.cold_start","clockSemantics":"runtime-dependent","durationMs":63,"cpuMs":34,"heapBytes":35069216,"rooms":2,"sequences":48,"projectionBytes":6273,"events":48}
+{"event":"room.cold_start","clockSemantics":"runtime-dependent","durationMs":26,"cpuMs":27,"heapBytes":42633384,"rooms":2,"sequences":48,"projectionBytes":6273,"events":48}
+{"event":"room.cold_start","clockSemantics":"runtime-dependent","durationMs":321,"integrity":"eager","phases":{"schema":{"ms":32,"rowsRead":0},"plugin":{"ms":116,"rowsRead":0},"fence":{"ms":16,"rowsRead":0},"verifies":{"ms":3,"rowsRead":0},"checksum":{"ms":0,"rowsRead":0}},"cpuMs":122,"heapBytes":49513920,"rooms":0,"sequences":0,"projectionBytes":0,"events":0}
+{"event":"room.store_initialized","initializationMs":358,"legacyColdStartMs":321,"clockSemantics":"runtime-dependent","cpuMeasured":false}
+{"event":"room.cold_start","clockSemantics":"runtime-dependent","durationMs":477,"integrity":"eager","phases":{"schema":{"ms":286,"rowsRead":0},"plugin":{"ms":79,"rowsRead":0},"fence":{"ms":29,"rowsRead":0},"verifies":{"ms":5,"rowsRead":0},"checksum":{"ms":0,"rowsRead":0}},"cpuMs":178,"heapBytes":54459432,"rooms":1,"sequences":2,"projectionBytes":719,"events":2}
+{"event":"room.store_initialized","initializationMs":551,"legacyColdStartMs":477,"clockSemantics":"runtime-dependent","cpuMeasured":false}
+✔ passing time does not turn equal stored captures into current authority (6044.804129ms)
+{"event":"room.cold_start","clockSemantics":"runtime-dependent","durationMs":66,"cpuMs":46,"heapBytes":38578888,"rooms":2,"sequences":48,"projectionBytes":6273,"events":48}
+{"event":"room.cold_start","clockSemantics":"runtime-dependent","durationMs":41,"cpuMs":30,"heapBytes":60442112,"rooms":2,"sequences":49,"projectionBytes":6474,"events":49}
+{"event":"room.cold_start","clockSemantics":"runtime-dependent","durationMs":111,"cpuMs":42,"heapBytes":48799336,"rooms":2,"sequences":49,"projectionBytes":6474,"events":49}
+{"event":"room.cold_start","clockSemantics":"runtime-dependent","durationMs":102,"cpuMs":34,"heapBytes":56453968,"rooms":2,"sequences":48,"projectionBytes":6273,"events":48}
+{"event":"room.cold_start","clockSemantics":"runtime-dependent","durationMs":121,"integrity":"eager","phases":{"schema":{"ms":9,"rowsRead":0},"plugin":{"ms":13,"rowsRead":0},"fence":{"ms":18,"rowsRead":0},"verifies":{"ms":13,"rowsRead":0},"checksum":{"ms":0,"rowsRead":0}},"cpuMs":46,"heapBytes":36621720,"rooms":2,"sequences":48,"projectionBytes":6273,"events":48}
+{"event":"room.store_initialized","initializationMs":169,"legacyColdStartMs":121,"clockSemantics":"runtime-dependent","cpuMeasured":false}
+{"event":"room.cold_start","clockSemantics":"runtime-dependent","durationMs":31,"cpuMs":27,"heapBytes":44623904,"rooms":2,"sequences":49,"projectionBytes":6477,"events":49}
+{"event":"room.cold_start","clockSemantics":"runtime-dependent","durationMs":52,"cpuMs":26,"heapBytes":52274624,"rooms":2,"sequences":49,"projectionBytes":6474,"events":49}
+{"event":"room.cold_start","clockSemantics":"runtime-dependent","durationMs":356,"integrity":"eager","phases":{"schema":{"ms":60,"rowsRead":0},"plugin":{"ms":134,"rowsRead":0},"fence":{"ms":18,"rowsRead":0},"verifies":{"ms":3,"rowsRead":0},"checksum":{"ms":0,"rowsRead":0}},"cpuMs":122,"heapBytes":59016464,"rooms":0,"sequences":0,"projectionBytes":0,"events":0}
+{"event":"room.store_initialized","initializationMs":408,"legacyColdStartMs":356,"clockSemantics":"runtime-dependent","cpuMeasured":false}
+{"event":"room.cold_start","clockSemantics":"runtime-dependent","durationMs":287,"integrity":"eager","phases":{"schema":{"ms":188,"rowsRead":0},"plugin":{"ms":6,"rowsRead":0},"fence":{"ms":10,"rowsRead":0},"verifies":{"ms":3,"rowsRead":0},"checksum":{"ms":0,"rowsRead":0}},"cpuMs":168,"heapBytes":64021856,"rooms":1,"sequences":2,"projectionBytes":719,"events":2}
+{"event":"room.store_initialized","initializationMs":330,"legacyColdStartMs":287,"clockSemantics":"runtime-dependent","cpuMeasured":false}
+✔ reversed or forked history requires review rather than timestamp-based merging (7327.901266ms)
+{"event":"room.cold_start","clockSemantics":"runtime-dependent","durationMs":87,"cpuMs":30,"heapBytes":52289824,"rooms":2,"sequences":48,"projectionBytes":6273,"events":48}
+{"event":"room.cold_start","clockSemantics":"runtime-dependent","durationMs":44,"cpuMs":43,"heapBytes":42736880,"rooms":3,"sequences":50,"projectionBytes":7018,"events":50}
+{"event":"room.cold_start","clockSemantics":"runtime-dependent","durationMs":69,"cpuMs":27,"heapBytes":64269008,"rooms":2,"sequences":48,"projectionBytes":6273,"events":48}
+{"event":"room.cold_start","clockSemantics":"runtime-dependent","durationMs":33,"cpuMs":38,"heapBytes":38461384,"rooms":3,"sequences":50,"projectionBytes":7018,"events":50}
+{"event":"room.cold_start","clockSemantics":"runtime-dependent","durationMs":71,"cpuMs":27,"heapBytes":47883152,"rooms":3,"sequences":50,"projectionBytes":7018,"events":50}
+{"event":"room.cold_start","clockSemantics":"runtime-dependent","durationMs":27,"cpuMs":27,"heapBytes":55336664,"rooms":2,"sequences":48,"projectionBytes":6273,"events":48}
+{"event":"room.cold_start","clockSemantics":"runtime-dependent","durationMs":300,"integrity":"eager","phases":{"schema":{"ms":28,"rowsRead":0},"plugin":{"ms":147,"rowsRead":0},"fence":{"ms":15,"rowsRead":0},"verifies":{"ms":6,"rowsRead":0},"checksum":{"ms":0,"rowsRead":0}},"cpuMs":126,"heapBytes":62055512,"rooms":0,"sequences":0,"projectionBytes":0,"events":0}
+{"event":"room.store_initialized","initializationMs":362,"legacyColdStartMs":300,"clockSemantics":"runtime-dependent","cpuMeasured":false}
+{"event":"room.cold_start","clockSemantics":"runtime-dependent","durationMs":305,"integrity":"eager","phases":{"schema":{"ms":198,"rowsRead":0},"plugin":{"ms":7,"rowsRead":0},"fence":{"ms":13,"rowsRead":0},"verifies":{"ms":5,"rowsRead":0},"checksum":{"ms":0,"rowsRead":0}},"cpuMs":153,"heapBytes":66971048,"rooms":1,"sequences":2,"projectionBytes":719,"events":2}
+{"event":"room.store_initialized","initializationMs":350,"legacyColdStartMs":305,"clockSemantics":"runtime-dependent","cpuMeasured":false}
+✔ missing rooms, newly added rooms and absent membership records are explicit (6721.879618ms)
+{"event":"room.cold_start","clockSemantics":"runtime-dependent","durationMs":80,"cpuMs":47,"heapBytes":39347448,"rooms":2,"sequences":48,"projectionBytes":6273,"events":48}
+{"event":"room.cold_start","clockSemantics":"runtime-dependent","durationMs":34,"cpuMs":29,"heapBytes":60579288,"rooms":2,"sequences":48,"projectionBytes":6273,"events":48}
+{"event":"room.cold_start","clockSemantics":"runtime-dependent","durationMs":41,"cpuMs":32,"heapBytes":48906952,"rooms":2,"sequences":49,"projectionBytes":6485,"events":49}
+{"event":"room.cold_start","clockSemantics":"runtime-dependent","durationMs":354,"integrity":"eager","phases":{"schema":{"ms":38,"rowsRead":0},"plugin":{"ms":137,"rowsRead":0},"fence":{"ms":19,"rowsRead":0},"verifies":{"ms":3,"rowsRead":0},"checksum":{"ms":0,"rowsRead":0}},"cpuMs":123,"heapBytes":38093392,"rooms":0,"sequences":0,"projectionBytes":0,"events":0}
+{"event":"room.store_initialized","initializationMs":405,"legacyColdStartMs":354,"clockSemantics":"runtime-dependent","cpuMeasured":false}
+{"event":"room.cold_start","clockSemantics":"runtime-dependent","durationMs":387,"integrity":"eager","phases":{"schema":{"ms":293,"rowsRead":0},"plugin":{"ms":8,"rowsRead":0},"fence":{"ms":15,"rowsRead":0},"verifies":{"ms":3,"rowsRead":0},"checksum":{"ms":0,"rowsRead":0}},"cpuMs":190,"heapBytes":43005752,"rooms":1,"sequences":2,"projectionBytes":719,"events":2}
+{"event":"room.store_initialized","initializationMs":441,"legacyColdStartMs":387,"clockSemantics":"runtime-dependent","cpuMeasured":false}
+✔ CLI has explicit inputs, stable exit codes and private error output (13472.746345ms)
+{"event":"room.cold_start","clockSemantics":"runtime-dependent","durationMs":26,"cpuMs":26,"heapBytes":64402272,"rooms":2,"sequences":48,"projectionBytes":6273,"events":48}
+{"event":"room.cold_start","clockSemantics":"runtime-dependent","durationMs":31,"cpuMs":31,"heapBytes":54271072,"rooms":2,"sequences":48,"projectionBytes":6273,"events":48}
+{"event":"room.cold_start","clockSemantics":"runtime-dependent","durationMs":43,"cpuMs":41,"heapBytes":42417768,"rooms":2,"sequences":48,"projectionBytes":6273,"events":48}
+{"event":"room.cold_start","clockSemantics":"runtime-dependent","durationMs":2,"failed":true,"error":"Read-only invitation audit requires schema v44; migrate a backed-up database through the service first","cpuMs":1,"heapBytes":42448344,"rooms":2,"sequences":48,"projectionBytes":6273,"events":48}
+{"event":"room.cold_start","clockSemantics":"runtime-dependent","durationMs":1,"failed":true,"error":"Read-only invitation audit requires schema v44; migrate a backed-up database through the service first","cpuMs":1,"heapBytes":42496224,"rooms":2,"sequences":48,"projectionBytes":6273,"events":48}
+{"event":"room.cold_start","clockSemantics":"runtime-dependent","durationMs":311,"integrity":"eager","phases":{"schema":{"ms":30,"rowsRead":0},"plugin":{"ms":111,"rowsRead":0},"fence":{"ms":17,"rowsRead":0},"verifies":{"ms":3,"rowsRead":0},"checksum":{"ms":0,"rowsRead":0}},"cpuMs":127,"heapBytes":47139976,"rooms":0,"sequences":0,"projectionBytes":0,"events":0}
+{"event":"room.store_initialized","initializationMs":383,"legacyColdStartMs":311,"clockSemantics":"runtime-dependent","cpuMeasured":false}
+{"event":"room.cold_start","clockSemantics":"runtime-dependent","durationMs":260,"integrity":"eager","phases":{"schema":{"ms":182,"rowsRead":0},"plugin":{"ms":6,"rowsRead":0},"fence":{"ms":10,"rowsRead":0},"verifies":{"ms":3,"rowsRead":0},"checksum":{"ms":0,"rowsRead":0}},"cpuMs":148,"heapBytes":52144616,"rooms":1,"sequences":2,"projectionBytes":719,"events":2}
+{"event":"room.store_initialized","initializationMs":322,"legacyColdStartMs":260,"clockSemantics":"runtime-dependent","cpuMeasured":false}
+✔ unsupported capture schema is rejected without migration in either input position (5643.390823ms)
+{"event":"room.cold_start","clockSemantics":"runtime-dependent","durationMs":45,"cpuMs":51,"heapBytes":39695952,"rooms":2,"sequences":48,"projectionBytes":6273,"events":48}
+{"event":"room.cold_start","clockSemantics":"runtime-dependent","durationMs":38,"cpuMs":31,"heapBytes":61040552,"rooms":2,"sequences":48,"projectionBytes":6273,"events":48}
+{"event":"room.cold_start","clockSemantics":"runtime-dependent","durationMs":79,"cpuMs":30,"heapBytes":48883608,"rooms":2,"sequences":48,"projectionBytes":6273,"events":48}
+{"event":"room.cold_start","clockSemantics":"runtime-dependent","durationMs":26,"cpuMs":26,"heapBytes":56329608,"rooms":2,"sequences":48,"projectionBytes":6273,"events":48}
+{"event":"room.cold_start","clockSemantics":"runtime-dependent","durationMs":516,"integrity":"eager","phases":{"schema":{"ms":103,"rowsRead":0},"plugin":{"ms":259,"rowsRead":0},"fence":{"ms":16,"rowsRead":0},"verifies":{"ms":3,"rowsRead":0},"checksum":{"ms":0,"rowsRead":0}},"cpuMs":132,"heapBytes":62731624,"rooms":0,"sequences":0,"projectionBytes":0,"events":0}
+{"event":"room.store_initialized","initializationMs":616,"legacyColdStartMs":516,"clockSemantics":"runtime-dependent","cpuMeasured":false}
+{"event":"room.cold_start","clockSemantics":"runtime-dependent","durationMs":308,"integrity":"eager","phases":{"schema":{"ms":193,"rowsRead":0},"plugin":{"ms":5,"rowsRead":0},"fence":{"ms":15,"rowsRead":0},"verifies":{"ms":3,"rowsRead":0},"checksum":{"ms":0,"rowsRead":0}},"cpuMs":151,"heapBytes":34325232,"rooms":1,"sequences":2,"projectionBytes":719,"events":2}
+{"event":"room.store_initialized","initializationMs":382,"legacyColdStartMs":308,"clockSemantics":"runtime-dependent","cpuMeasured":false}
+✔ offer publication and its exact retry journal appear in private-safe capture differences (5866.878182ms)
+{"event":"room.cold_start","clockSemantics":"runtime-dependent","durationMs":28,"cpuMs":29,"heapBytes":55721976,"rooms":2,"sequences":48,"projectionBytes":6273,"events":48}
+{"event":"room.cold_start","clockSemantics":"runtime-dependent","durationMs":29,"cpuMs":29,"heapBytes":44612520,"rooms":2,"sequences":48,"projectionBytes":6273,"events":48}
+{"event":"room.cold_start","clockSemantics":"runtime-dependent","durationMs":32,"cpuMs":39,"heapBytes":40206776,"rooms":2,"sequences":48,"projectionBytes":6273,"events":48}
+{"event":"room.cold_start","clockSemantics":"runtime-dependent","durationMs":27,"cpuMs":27,"heapBytes":61687872,"rooms":2,"sequences":48,"projectionBytes":6273,"events":48}
+{"event":"room.cold_start","clockSemantics":"runtime-dependent","durationMs":29,"cpuMs":30,"heapBytes":35789568,"rooms":2,"sequences":48,"projectionBytes":6273,"events":48}
+{"event":"room.cold_start","clockSemantics":"runtime-dependent","durationMs":92,"integrity":"eager","phases":{"schema":{"ms":8,"rowsRead":0},"plugin":{"ms":6,"rowsRead":0},"fence":{"ms":9,"rowsRead":0},"verifies":{"ms":13,"rowsRead":0},"checksum":{"ms":0,"rowsRead":0}},"cpuMs":44,"heapBytes":49513392,"rooms":2,"sequences":48,"projectionBytes":6273,"events":48}
+{"event":"room.store_initialized","initializationMs":132,"legacyColdStartMs":92,"clockSemantics":"runtime-dependent","cpuMeasured":false}
+{"event":"room.cold_start","clockSemantics":"runtime-dependent","durationMs":26,"cpuMs":26,"heapBytes":57034224,"rooms":2,"sequences":48,"projectionBytes":6273,"events":48}
+{"event":"room.cold_start","clockSemantics":"runtime-dependent","durationMs":25,"cpuMs":25,"heapBytes":64572448,"rooms":2,"sequences":48,"projectionBytes":6273,"events":48}
+{"event":"room.cold_start","clockSemantics":"runtime-dependent","durationMs":31,"cpuMs":41,"heapBytes":40319288,"rooms":2,"sequences":48,"projectionBytes":6273,"events":48}
+{"event":"room.cold_start","clockSemantics":"runtime-dependent","durationMs":27,"cpuMs":27,"heapBytes":61762880,"rooms":2,"sequences":48,"projectionBytes":6273,"events":48}
+{"event":"room.cold_start","clockSemantics":"runtime-dependent","durationMs":32,"cpuMs":36,"heapBytes":35899136,"rooms":2,"sequences":48,"projectionBytes":6273,"events":48}
+{"event":"room.cold_start","clockSemantics":"runtime-dependent","durationMs":238,"integrity":"eager","phases":{"schema":{"ms":29,"rowsRead":0},"plugin":{"ms":99,"rowsRead":0},"fence":{"ms":16,"rowsRead":0},"verifies":{"ms":3,"rowsRead":0},"checksum":{"ms":0,"rowsRead":0}},"cpuMs":126,"heapBytes":43032776,"rooms":0,"sequences":0,"projectionBytes":0,"events":0}
+{"event":"room.store_initialized","initializationMs":280,"legacyColdStartMs":238,"clockSemantics":"runtime-dependent","cpuMeasured":false}
+{"event":"room.cold_start","clockSemantics":"runtime-dependent","durationMs":245,"integrity":"eager","phases":{"schema":{"ms":121,"rowsRead":0},"plugin":{"ms":6,"rowsRead":0},"fence":{"ms":10,"rowsRead":0},"verifies":{"ms":3,"rowsRead":0},"checksum":{"ms":0,"rowsRead":0}},"cpuMs":147,"heapBytes":48038512,"rooms":1,"sequences":2,"projectionBytes":719,"events":2}
+{"event":"room.store_initialized","initializationMs":287,"legacyColdStartMs":245,"clockSemantics":"runtime-dependent","cpuMeasured":false}
+✔ populated follow-up lineage and exact retry journal appear in private-safe recovery differences (7013.985685ms)
+{"event":"room.cold_start","clockSemantics":"runtime-dependent","durationMs":37,"cpuMs":37,"heapBytes":42305648,"rooms":2,"sequences":48,"projectionBytes":6273,"events":48}
+{"event":"room.cold_start","clockSemantics":"runtime-dependent","durationMs":29,"cpuMs":30,"heapBytes":64411696,"rooms":2,"sequences":50,"projectionBytes":6273,"events":50}
+{"event":"room.cold_start","clockSemantics":"runtime-dependent","durationMs":33,"cpuMs":32,"heapBytes":52586440,"rooms":2,"sequences":48,"projectionBytes":6273,"events":48}
+{"event":"room.cold_start","clockSemantics":"runtime-dependent","durationMs":31,"cpuMs":26,"heapBytes":60033280,"rooms":2,"sequences":50,"projectionBytes":6273,"events":50}
+✔ a later canonical work revision is reported without permitting stale capture reopening (5390.789323ms)
+ℹ tests 15
+ℹ suites 0
+ℹ pass 14
+ℹ fail 1
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 106818.885287
+
+✖ failing tests:
+
+test at tests/recovery-comparison.test.js:98:1
+✖ membership authority changes are detected inside room projections (5841.0168ms)
+  Error: Backup changed while its snapshot digest was being read
+      at backupSnapshotDigest (file:///home/hatch/workspace/wave-2026-11-01-sync-help/5623comp/repo/server/backup.mjs:54:33)
+      at process.processTicksAndRejections (node:internal/process/task_queues:104:5)
+      at async backupRoom (file:///home/hatch/workspace/wave-2026-11-01-sync-help/5623comp/repo/server/backup.mjs:82:22)
+      at async Object.capture (file:///home/hatch/workspace/wave-2026-11-01-sync-help/5623comp/repo/tests/recovery-comparison.test.js:20:32)
+      at async TestContext.<anonymous> (file:///home/hatch/workspace/wave-2026-11-01-sync-help/5623comp/repo/tests/recovery-comparison.test.js:102:35)
+      at async Test.run (node:internal/test_runner/test:1409:7)
+      at async Test.processPendingSubtests (node:internal/test_runner/test:974:7)

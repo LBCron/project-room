@@ -1,0 +1,97 @@
+{"event":"room.cold_start","clockSemantics":"runtime-dependent","durationMs":522,"integrity":"eager","phases":{"schema":{"ms":59,"rowsRead":0},"plugin":{"ms":151,"rowsRead":0},"fence":{"ms":104,"rowsRead":0},"verifies":{"ms":75,"rowsRead":0},"checksum":{"ms":0,"rowsRead":0}},"cpuMs":185,"heapBytes":29540792,"rooms":0,"sequences":0,"projectionBytes":0,"events":0}
+{"event":"room.store_initialized","initializationMs":573,"legacyColdStartMs":522,"clockSemantics":"runtime-dependent","cpuMeasured":false}
+{"event":"room.cold_start","clockSemantics":"runtime-dependent","durationMs":338,"integrity":"eager","phases":{"schema":{"ms":38,"rowsRead":0},"plugin":{"ms":138,"rowsRead":0},"fence":{"ms":45,"rowsRead":0},"verifies":{"ms":5,"rowsRead":0},"checksum":{"ms":0,"rowsRead":0}},"cpuMs":138,"heapBytes":35328472,"rooms":0,"sequences":0,"projectionBytes":0,"events":0}
+{"event":"room.store_initialized","initializationMs":387,"legacyColdStartMs":338,"clockSemantics":"runtime-dependent","cpuMeasured":false}
+{"event":"room.cold_start","clockSemantics":"runtime-dependent","durationMs":342,"integrity":"eager","phases":{"schema":{"ms":56,"rowsRead":0},"plugin":{"ms":149,"rowsRead":0},"fence":{"ms":26,"rowsRead":0},"verifies":{"ms":4,"rowsRead":0},"checksum":{"ms":0,"rowsRead":0}},"cpuMs":145,"heapBytes":40940824,"rooms":0,"sequences":0,"projectionBytes":0,"events":0}
+{"event":"room.store_initialized","initializationMs":391,"legacyColdStartMs":342,"clockSemantics":"runtime-dependent","cpuMeasured":false}
+{"event":"room.cold_start","clockSemantics":"runtime-dependent","durationMs":411,"integrity":"eager","phases":{"schema":{"ms":51,"rowsRead":0},"plugin":{"ms":176,"rowsRead":0},"fence":{"ms":23,"rowsRead":0},"verifies":{"ms":5,"rowsRead":0},"checksum":{"ms":0,"rowsRead":0}},"cpuMs":137,"heapBytes":31690232,"rooms":0,"sequences":0,"projectionBytes":0,"events":0}
+{"event":"room.store_initialized","initializationMs":483,"legacyColdStartMs":411,"clockSemantics":"runtime-dependent","cpuMeasured":false}
+✔ P1: a mirror-write failure inside a receipts_set command rolls the whole command back (897.969217ms)
+✖ P3a: a mirror poisoned to 0 at an unchanged revision hides stored rows indefinitely (under-exposure) (743.950269ms)
+✖ P3b: a missing mirror row at an unchanged revision serves an opted-out room's rows indefinitely (exposure) (793.685733ms)
+✖ P4: backfill skip + projection repair leaves a serving pwr row with no mirror (exposure, repair line) (1028.295425ms)
+ℹ tests 4
+ℹ suites 0
+ℹ pass 1
+ℹ fail 3
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 4866.529477
+
+✖ failing tests:
+
+test at tests/zz-probe-base-expectations.test.js:123:1
+✖ P3a: a mirror poisoned to 0 at an unchanged revision hides stored rows indefinitely (under-exposure) (743.950269ms)
+  AssertionError [ERR_ASSERTION]: ordinary activity does NOT heal the mirror
+  + actual - expected
+  
+    {
+  +   enabled: 1
+  -   enabled: 0
+    }
+  
+      at TestContext.<anonymous> (file:///home/hatch/workspace/wave-2026-11-01-sync-help/5623comp/repo/tests/zz-probe-base-expectations.test.js:140:10)
+      at Test.runInAsyncScope (node:async_hooks:227:14)
+      at Test.run (node:internal/test_runner/test:1402:25)
+      at Test.processPendingSubtests (node:internal/test_runner/test:974:18)
+      at Test.postRun (node:internal/test_runner/test:1542:19)
+      at Test.run (node:internal/test_runner/test:1467:12)
+      at async startSubtestAfterBootstrap (node:internal/test_runner/harness:387:3) {
+    generatedMessage: false,
+    code: 'ERR_ASSERTION',
+    actual: { enabled: 1 },
+    expected: { enabled: 0 },
+    operator: 'deepStrictEqual',
+    diff: 'simple'
+  }
+
+test at tests/zz-probe-base-expectations.test.js:151:1
+✖ P3b: a missing mirror row at an unchanged revision serves an opted-out room's rows indefinitely (exposure) (793.685733ms)
+  AssertionError [ERR_ASSERTION]: ordinary activity does NOT recreate the mirror row
+  + actual - expected
+  
+  + {
+  +   enabled: 0
+  + }
+  - undefined
+  
+      at TestContext.<anonymous> (file:///home/hatch/workspace/wave-2026-11-01-sync-help/5623comp/repo/tests/zz-probe-base-expectations.test.js:167:10)
+      at Test.runInAsyncScope (node:async_hooks:227:14)
+      at Test.run (node:internal/test_runner/test:1402:25)
+      at Test.processPendingSubtests (node:internal/test_runner/test:974:18)
+      at Test.postRun (node:internal/test_runner/test:1542:19)
+      at Test.run (node:internal/test_runner/test:1467:12)
+      at async Test.processPendingSubtests (node:internal/test_runner/test:974:7) {
+    generatedMessage: false,
+    code: 'ERR_ASSERTION',
+    actual: { enabled: 0 },
+    expected: undefined,
+    operator: 'strictEqual',
+    diff: 'simple'
+  }
+
+test at tests/zz-probe-base-expectations.test.js:175:1
+✖ P4: backfill skip + projection repair leaves a serving pwr row with no mirror (exposure, repair line) (1028.295425ms)
+  AssertionError [ERR_ASSERTION]: ordinary activity does not heal it either
+  + actual - expected
+  
+  + {
+  +   enabled: 0
+  + }
+  - undefined
+  
+      at TestContext.<anonymous> (file:///home/hatch/workspace/wave-2026-11-01-sync-help/5623comp/repo/tests/zz-probe-base-expectations.test.js:208:10)
+      at Test.runInAsyncScope (node:async_hooks:227:14)
+      at Test.run (node:internal/test_runner/test:1402:25)
+      at Test.processPendingSubtests (node:internal/test_runner/test:974:18)
+      at Test.postRun (node:internal/test_runner/test:1542:19)
+      at Test.run (node:internal/test_runner/test:1467:12)
+      at async Test.processPendingSubtests (node:internal/test_runner/test:974:7) {
+    generatedMessage: false,
+    code: 'ERR_ASSERTION',
+    actual: { enabled: 0 },
+    expected: undefined,
+    operator: 'strictEqual',
+    diff: 'simple'
+  }

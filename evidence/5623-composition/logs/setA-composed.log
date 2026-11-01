@@ -1,0 +1,103 @@
+{"event":"room.cold_start","clockSemantics":"runtime-dependent","durationMs":1233,"integrity":"eager","phases":{"schema":{"ms":146,"rowsRead":0},"plugin":{"ms":653,"rowsRead":0},"fence":{"ms":133,"rowsRead":0},"verifies":{"ms":10,"rowsRead":0},"checksum":{"ms":0,"rowsRead":0}},"cpuMs":213,"heapBytes":29484784,"rooms":0,"sequences":0,"projectionBytes":0,"events":0}
+{"event":"room.store_initialized","initializationMs":1338,"legacyColdStartMs":1233,"clockSemantics":"runtime-dependent","cpuMeasured":false}
+{"event":"room.cold_start","clockSemantics":"runtime-dependent","durationMs":804,"integrity":"eager","phases":{"schema":{"ms":97,"rowsRead":0},"plugin":{"ms":319,"rowsRead":0},"fence":{"ms":69,"rowsRead":0},"verifies":{"ms":7,"rowsRead":0},"checksum":{"ms":0,"rowsRead":0}},"cpuMs":155,"heapBytes":36381536,"rooms":0,"sequences":0,"projectionBytes":0,"events":0}
+{"event":"room.store_initialized","initializationMs":894,"legacyColdStartMs":804,"clockSemantics":"runtime-dependent","cpuMeasured":false}
+{"event":"room.cold_start","clockSemantics":"runtime-dependent","durationMs":763,"integrity":"eager","phases":{"schema":{"ms":117,"rowsRead":0},"plugin":{"ms":212,"rowsRead":0},"fence":{"ms":87,"rowsRead":0},"verifies":{"ms":22,"rowsRead":0},"checksum":{"ms":0,"rowsRead":0}},"cpuMs":152,"heapBytes":30221064,"rooms":0,"sequences":0,"projectionBytes":0,"events":0}
+{"event":"room.store_initialized","initializationMs":848,"legacyColdStartMs":763,"clockSemantics":"runtime-dependent","cpuMeasured":false}
+{"event":"room.cold_start","clockSemantics":"runtime-dependent","durationMs":435,"integrity":"eager","phases":{"schema":{"ms":103,"rowsRead":0},"plugin":{"ms":138,"rowsRead":0},"fence":{"ms":64,"rowsRead":0},"verifies":{"ms":3,"rowsRead":0},"checksum":{"ms":0,"rowsRead":0}},"cpuMs":130,"heapBytes":36415264,"rooms":0,"sequences":0,"projectionBytes":0,"events":0}
+{"event":"room.store_initialized","initializationMs":508,"legacyColdStartMs":435,"clockSemantics":"runtime-dependent","cpuMeasured":false}
+✔ B7-2-F1: a stale mirror=1 cannot serve a lot after the owner opted out (P7b) (2454.655955ms)
+✔ B7-2-F1/F2: a missing mirror cannot hide an opted-in lot, and no heal is needed (P5) (1785.930993ms)
+✔ B2-4-F1: importing a pre-opt-in history cannot leave a lot public on a stale mirror (1406.799098ms)
+✔ B7-2-F4: under lot-mirror drift the lot and proof surfaces agree again (1276.182424ms)
+✔ recordedReceiptsSetting reads the authoritative leg and nothing else (13.98662ms)
+✔ lotReceiptVisible: the mirror decides only where no rooms table exists (legacy store) (7.831087ms)
+{"event":"room.cold_start","clockSemantics":"runtime-dependent","durationMs":768,"integrity":"eager","phases":{"schema":{"ms":84,"rowsRead":0},"plugin":{"ms":291,"rowsRead":0},"fence":{"ms":162,"rowsRead":0},"verifies":{"ms":27,"rowsRead":0},"checksum":{"ms":0,"rowsRead":0}},"cpuMs":178,"heapBytes":41762816,"rooms":0,"sequences":0,"projectionBytes":0,"events":0}
+{"event":"room.store_initialized","initializationMs":871,"legacyColdStartMs":768,"clockSemantics":"runtime-dependent","cpuMeasured":false}
+[boot-config] ERROR: the agent card is UNSIGNED and no explicit opt-in was recorded at build time — members fetching /.well-known/agent-card.json will see an unsigned card (marked signed:false). To fix: set ROOM_AGENT_CARD_SIGNING_KEY and re-run scripts/sign-agent-card.mjs, or pass --allow-unsigned explicitly to record the choice.
+ROOM_SECURITY_CONTACT is unset; /.well-known/security.txt returns 404
+No magic-link mailer is configured: email-verification gates are relaxed (agent-invite escape hatch); /api/health reports emailVerification: relaxed-no-mailer
+✔ recorded opt-out hides a pwr_ row on every mirror surface (8.526209ms)
+✔ recorded opt-out hides a drifted wcr_ row too (missed delete edge) (3.107611ms)
+✔ recorded opt-in serves the pwr_ row on every mirror surface (4.270816ms)
+✔ never-recorded keeps the directory default (serves) (4.069654ms)
+✔ level-triggered: opt-out recorded after the row exists hides it with no sync; opt-in restores it (76.757586ms)
+✔ adversarial read-error: a failing setting read never exposes a recorded opt-out (JS filter + SQL surfaces) (8.705569ms)
+✔ adversarial unknown-value: a recorded setting that is neither true/false/0/1 does not fail open (5.871627ms)
+✔ adversarial one-bad-row: one malformed setting row widens nothing and other rooms' settings still govern (3.412238ms)
+✔ attribution: a taskless pwr_ row is namespace-public — the namespace room's recorded setting does not govern it (3.512158ms)
+✔ dedicated door: recorded opt-out refuses anonymous receipt and artifact reads, opt-in serves (4.556315ms)
+✔ round-2 read-error, column: a present mirror table with an unreadable enabled column resolves private (59.930075ms)
+✔ round-2 read-error, task-join: a SQLITE_IOERR on the join never re-attributes a pwr_ receipt to its namespace room (2.934051ms)
+✔ round-2 degrade preserved: a genuinely table-less store still degrades to room attribution (4.190055ms)
+✔ round-3 read-error, renamed column: a populated task table with room_id renamed resolves private (3.107321ms)
+✔ round-4 view, task: an unreadable public_work_tasks VIEW is present, not absent — no namespace re-attribution (2.074902ms)
+✔ round-4 view, setting: an unreadable room_public_receipts_setting VIEW never drops a recorded opt-out (3.830596ms)
+✔ round-4 view, owner: a broken room_directory_settings VIEW fails the probe closed instead of dropping the owner leg (1.74025ms)
+✔ round-4 view, rooms: a broken rooms VIEW is present-but-unreadable (private), never the mirror fallback (3.571367ms)
+✔ round-4 view, readable controls: relations presented as readable VIEWs behave exactly as tables (8.590185ms)
+✔ round-4 degrade preserved: a predating settings TABLE without the toggle column still omits the owner leg (2.911277ms)
+✔ adversarial read-error over HTTP: the anonymous door stays shut when the setting read fails (2037.791863ms)
+{"event":"room.cold_start","clockSemantics":"runtime-dependent","durationMs":956,"integrity":"eager","phases":{"schema":{"ms":81,"rowsRead":0},"plugin":{"ms":258,"rowsRead":0},"fence":{"ms":230,"rowsRead":0},"verifies":{"ms":86,"rowsRead":0},"checksum":{"ms":0,"rowsRead":0}},"cpuMs":253,"heapBytes":35845160,"rooms":0,"sequences":0,"projectionBytes":0,"events":0}
+{"event":"room.store_initialized","initializationMs":1110,"legacyColdStartMs":956,"clockSemantics":"runtime-dependent","cpuMeasured":false}
+[boot-config] ERROR: the agent card is UNSIGNED and no explicit opt-in was recorded at build time — members fetching /.well-known/agent-card.json will see an unsigned card (marked signed:false). To fix: set ROOM_AGENT_CARD_SIGNING_KEY and re-run scripts/sign-agent-card.mjs, or pass --allow-unsigned explicitly to record the choice.
+ROOM_SECURITY_CONTACT is unset; /.well-known/security.txt returns 404
+No magic-link mailer is configured: email-verification gates are relaxed (agent-invite escape hatch); /api/health reports emailVerification: relaxed-no-mailer
+✔ the public start link matches the room door (1.555443ms)
+{"event":"room.cold_start","clockSemantics":"runtime-dependent","durationMs":536,"integrity":"eager","phases":{"schema":{"ms":121,"rowsRead":0},"plugin":{"ms":189,"rowsRead":0},"fence":{"ms":17,"rowsRead":0},"verifies":{"ms":4,"rowsRead":0},"checksum":{"ms":0,"rowsRead":0}},"cpuMs":143,"heapBytes":49418056,"rooms":0,"sequences":0,"projectionBytes":0,"events":0}
+{"event":"room.store_initialized","initializationMs":660,"legacyColdStartMs":536,"clockSemantics":"runtime-dependent","cpuMeasured":false}
+✔ a private room with receipts never appears on a public route (2714.605227ms)
+{"event":"room.cold_start","clockSemantics":"runtime-dependent","durationMs":451,"integrity":"eager","phases":{"schema":{"ms":86,"rowsRead":0},"plugin":{"ms":118,"rowsRead":0},"fence":{"ms":59,"rowsRead":0},"verifies":{"ms":4,"rowsRead":0},"checksum":{"ms":0,"rowsRead":0}},"cpuMs":138,"heapBytes":49135488,"rooms":0,"sequences":0,"projectionBytes":0,"events":0}
+{"event":"room.store_initialized","initializationMs":579,"legacyColdStartMs":451,"clockSemantics":"runtime-dependent","cpuMeasured":false}
+✔ public routes do not read rooms.projection, write nothing, and stay constant with 500 private rooms (1399.166839ms)
+ℹ public route queries before extra rooms: 56
+{"event":"room.cold_start","clockSemantics":"runtime-dependent","durationMs":278,"integrity":"eager","phases":{"schema":{"ms":45,"rowsRead":0},"plugin":{"ms":122,"rowsRead":0},"fence":{"ms":22,"rowsRead":0},"verifies":{"ms":3,"rowsRead":0},"checksum":{"ms":0,"rowsRead":0}},"cpuMs":128,"heapBytes":55744112,"rooms":0,"sequences":0,"projectionBytes":0,"events":0}
+{"event":"room.store_initialized","initializationMs":343,"legacyColdStartMs":278,"clockSemantics":"runtime-dependent","cpuMeasured":false}
+✔ opting out removes the room and its receipts in that write (1253.25311ms)
+{"event":"room.cold_start","clockSemantics":"runtime-dependent","durationMs":332,"integrity":"eager","phases":{"schema":{"ms":30,"rowsRead":0},"plugin":{"ms":165,"rowsRead":0},"fence":{"ms":18,"rowsRead":0},"verifies":{"ms":4,"rowsRead":0},"checksum":{"ms":0,"rowsRead":0}},"cpuMs":126,"heapBytes":61814208,"rooms":0,"sequences":0,"projectionBytes":0,"events":0}
+{"event":"room.store_initialized","initializationMs":377,"legacyColdStartMs":332,"clockSemantics":"runtime-dependent","cpuMeasured":false}
+✔ an unknown room GET is a 404 and writes nothing (662.592744ms)
+{"event":"room.cold_start","clockSemantics":"runtime-dependent","durationMs":406,"integrity":"eager","phases":{"schema":{"ms":41,"rowsRead":0},"plugin":{"ms":119,"rowsRead":0},"fence":{"ms":56,"rowsRead":0},"verifies":{"ms":4,"rowsRead":0},"checksum":{"ms":0,"rowsRead":0}},"cpuMs":137,"heapBytes":68983832,"rooms":0,"sequences":0,"projectionBytes":0,"events":0}
+{"event":"room.store_initialized","initializationMs":454,"legacyColdStartMs":406,"clockSemantics":"runtime-dependent","cpuMeasured":false}
+{"event":"room.cold_start","clockSemantics":"runtime-dependent","durationMs":99,"integrity":"eager","phases":{"schema":{"ms":20,"rowsRead":0},"plugin":{"ms":6,"rowsRead":0},"fence":{"ms":8,"rowsRead":0},"verifies":{"ms":2,"rowsRead":0},"checksum":{"ms":0,"rowsRead":0}},"cpuMs":37,"heapBytes":78077656,"rooms":4,"sequences":12,"projectionBytes":3358,"events":12}
+{"event":"room.store_initialized","initializationMs":320,"legacyColdStartMs":99,"clockSemantics":"runtime-dependent","cpuMeasured":false}
+{"event":"room.cold_start","clockSemantics":"runtime-dependent","durationMs":415,"integrity":"eager","phases":{"schema":{"ms":35,"rowsRead":0},"plugin":{"ms":203,"rowsRead":0},"fence":{"ms":19,"rowsRead":0},"verifies":{"ms":3,"rowsRead":0},"checksum":{"ms":0,"rowsRead":0}},"cpuMs":171,"heapBytes":62083744,"rooms":0,"sequences":0,"projectionBytes":0,"events":0}
+{"event":"room.store_initialized","initializationMs":458,"legacyColdStartMs":415,"clockSemantics":"runtime-dependent","cpuMeasured":false}
+✔ receipt and agent listings are one page at a time (2880.542502ms)
+✔ opening the store does not backfill, and one batch publishes a bounded set (1493.896303ms)
+{"event":"room.cold_start","clockSemantics":"runtime-dependent","durationMs":622,"integrity":"eager","phases":{"schema":{"ms":83,"rowsRead":0},"plugin":{"ms":313,"rowsRead":0},"fence":{"ms":16,"rowsRead":0},"verifies":{"ms":7,"rowsRead":0},"checksum":{"ms":0,"rowsRead":0}},"cpuMs":147,"heapBytes":76671224,"rooms":0,"sequences":0,"projectionBytes":0,"events":0}
+{"event":"room.store_initialized","initializationMs":717,"legacyColdStartMs":622,"clockSemantics":"runtime-dependent","cpuMeasured":false}
+✖ receipts, room pages, the directory, and the sitemap stay within 20 ms p95 with 2000 private rooms (1666.389411ms)
+ℹ /receipts p95 33.09 ms
+✔ public receipts JSON allows any origin and the public pages allow the analytics beacon (1389.996614ms)
+✔ SQL and JS twins agree with the definition across the receipt switch space (14.911888ms)
+✔ edge cells the cross product does not generate (2.054522ms)
+✔ a settings table without the toggle column disables the owner leg in both twins (2.083926ms)
+✔ a store predating the public-work tables degrades the task leg in both twins (2.445218ms)
+✔ the lot rule across unpublish × recorded setting × toggle (4.595894ms)
+✔ the pure-data lot rule the packager's U5 filter must mirror (0.311908ms)
+ℹ tests 42
+ℹ suites 0
+ℹ pass 41
+ℹ fail 1
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 16847.591278
+
+✖ failing tests:
+
+test at tests/public-read-model.test.js:282:1
+✖ receipts, room pages, the directory, and the sitemap stay within 20 ms p95 with 2000 private rooms (1666.389411ms)
+  AssertionError [ERR_ASSERTION]: /receipts p95 33.09 ms
+      at TestContext.<anonymous> (file:///home/hatch/workspace/wave-2026-11-01-sync-help/5623comp/repo/tests/public-read-model.test.js:306:12)
+      at process.processTicksAndRejections (node:internal/process/task_queues:104:5)
+      at async Test.run (node:internal/test_runner/test:1409:7)
+      at async Test.processPendingSubtests (node:internal/test_runner/test:974:7) {
+    generatedMessage: false,
+    code: 'ERR_ASSERTION',
+    actual: false,
+    expected: true,
+    operator: '==',
+    diff: 'simple'
+  }

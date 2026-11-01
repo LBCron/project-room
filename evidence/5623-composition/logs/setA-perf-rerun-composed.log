@@ -1,0 +1,57 @@
+{"event":"room.cold_start","clockSemantics":"runtime-dependent","durationMs":283,"integrity":"eager","phases":{"schema":{"ms":37,"rowsRead":0},"plugin":{"ms":94,"rowsRead":0},"fence":{"ms":29,"rowsRead":0},"verifies":{"ms":19,"rowsRead":0},"checksum":{"ms":0,"rowsRead":0}},"cpuMs":217,"heapBytes":39575112,"rooms":0,"sequences":0,"projectionBytes":0,"events":0}
+{"event":"room.store_initialized","initializationMs":350,"legacyColdStartMs":283,"clockSemantics":"runtime-dependent","cpuMeasured":false}
+[boot-config] ERROR: the agent card is UNSIGNED and no explicit opt-in was recorded at build time — members fetching /.well-known/agent-card.json will see an unsigned card (marked signed:false). To fix: set ROOM_AGENT_CARD_SIGNING_KEY and re-run scripts/sign-agent-card.mjs, or pass --allow-unsigned explicitly to record the choice.
+ROOM_SECURITY_CONTACT is unset; /.well-known/security.txt returns 404
+No magic-link mailer is configured: email-verification gates are relaxed (agent-invite escape hatch); /api/health reports emailVerification: relaxed-no-mailer
+✔ the public start link matches the room door (1.27322ms)
+{"event":"room.cold_start","clockSemantics":"runtime-dependent","durationMs":253,"integrity":"eager","phases":{"schema":{"ms":28,"rowsRead":0},"plugin":{"ms":94,"rowsRead":0},"fence":{"ms":17,"rowsRead":0},"verifies":{"ms":3,"rowsRead":0},"checksum":{"ms":0,"rowsRead":0}},"cpuMs":130,"heapBytes":49250576,"rooms":0,"sequences":0,"projectionBytes":0,"events":0}
+{"event":"room.store_initialized","initializationMs":298,"legacyColdStartMs":253,"clockSemantics":"runtime-dependent","cpuMeasured":false}
+✔ a private room with receipts never appears on a public route (948.441785ms)
+{"event":"room.cold_start","clockSemantics":"runtime-dependent","durationMs":752,"integrity":"eager","phases":{"schema":{"ms":108,"rowsRead":0},"plugin":{"ms":318,"rowsRead":0},"fence":{"ms":80,"rowsRead":0},"verifies":{"ms":5,"rowsRead":0},"checksum":{"ms":0,"rowsRead":0}},"cpuMs":160,"heapBytes":48935880,"rooms":0,"sequences":0,"projectionBytes":0,"events":0}
+{"event":"room.store_initialized","initializationMs":852,"legacyColdStartMs":752,"clockSemantics":"runtime-dependent","cpuMeasured":false}
+✔ public routes do not read rooms.projection, write nothing, and stay constant with 500 private rooms (943.788345ms)
+ℹ public route queries before extra rooms: 56
+{"event":"room.cold_start","clockSemantics":"runtime-dependent","durationMs":525,"integrity":"eager","phases":{"schema":{"ms":113,"rowsRead":0},"plugin":{"ms":177,"rowsRead":0},"fence":{"ms":71,"rowsRead":0},"verifies":{"ms":3,"rowsRead":0},"checksum":{"ms":0,"rowsRead":0}},"cpuMs":148,"heapBytes":55410024,"rooms":0,"sequences":0,"projectionBytes":0,"events":0}
+{"event":"room.store_initialized","initializationMs":619,"legacyColdStartMs":525,"clockSemantics":"runtime-dependent","cpuMeasured":false}
+✔ opting out removes the room and its receipts in that write (1670.969792ms)
+{"event":"room.cold_start","clockSemantics":"runtime-dependent","durationMs":909,"integrity":"eager","phases":{"schema":{"ms":234,"rowsRead":0},"plugin":{"ms":307,"rowsRead":0},"fence":{"ms":161,"rowsRead":0},"verifies":{"ms":7,"rowsRead":0},"checksum":{"ms":0,"rowsRead":0}},"cpuMs":151,"heapBytes":61458024,"rooms":0,"sequences":0,"projectionBytes":0,"events":0}
+{"event":"room.store_initialized","initializationMs":1007,"legacyColdStartMs":909,"clockSemantics":"runtime-dependent","cpuMeasured":false}
+✔ an unknown room GET is a 404 and writes nothing (1317.720591ms)
+{"event":"room.cold_start","clockSemantics":"runtime-dependent","durationMs":466,"integrity":"eager","phases":{"schema":{"ms":31,"rowsRead":0},"plugin":{"ms":240,"rowsRead":0},"fence":{"ms":39,"rowsRead":0},"verifies":{"ms":4,"rowsRead":0},"checksum":{"ms":0,"rowsRead":0}},"cpuMs":147,"heapBytes":68636120,"rooms":0,"sequences":0,"projectionBytes":0,"events":0}
+{"event":"room.store_initialized","initializationMs":519,"legacyColdStartMs":466,"clockSemantics":"runtime-dependent","cpuMeasured":false}
+{"event":"room.cold_start","clockSemantics":"runtime-dependent","durationMs":206,"integrity":"eager","phases":{"schema":{"ms":16,"rowsRead":0},"plugin":{"ms":6,"rowsRead":0},"fence":{"ms":59,"rowsRead":0},"verifies":{"ms":2,"rowsRead":0},"checksum":{"ms":0,"rowsRead":0}},"cpuMs":39,"heapBytes":77729744,"rooms":4,"sequences":12,"projectionBytes":3358,"events":12}
+{"event":"room.store_initialized","initializationMs":558,"legacyColdStartMs":206,"clockSemantics":"runtime-dependent","cpuMeasured":false}
+{"event":"room.cold_start","clockSemantics":"runtime-dependent","durationMs":601,"integrity":"eager","phases":{"schema":{"ms":36,"rowsRead":0},"plugin":{"ms":290,"rowsRead":0},"fence":{"ms":57,"rowsRead":0},"verifies":{"ms":25,"rowsRead":0},"checksum":{"ms":0,"rowsRead":0}},"cpuMs":169,"heapBytes":61863336,"rooms":0,"sequences":0,"projectionBytes":0,"events":0}
+{"event":"room.store_initialized","initializationMs":653,"legacyColdStartMs":601,"clockSemantics":"runtime-dependent","cpuMeasured":false}
+✔ receipt and agent listings are one page at a time (3492.820684ms)
+✔ opening the store does not backfill, and one batch publishes a bounded set (2111.358071ms)
+{"event":"room.cold_start","clockSemantics":"runtime-dependent","durationMs":776,"integrity":"eager","phases":{"schema":{"ms":136,"rowsRead":0},"plugin":{"ms":378,"rowsRead":0},"fence":{"ms":77,"rowsRead":0},"verifies":{"ms":23,"rowsRead":0},"checksum":{"ms":0,"rowsRead":0}},"cpuMs":163,"heapBytes":63000440,"rooms":0,"sequences":0,"projectionBytes":0,"events":0}
+{"event":"room.store_initialized","initializationMs":947,"legacyColdStartMs":776,"clockSemantics":"runtime-dependent","cpuMeasured":false}
+✖ receipts, room pages, the directory, and the sitemap stay within 20 ms p95 with 2000 private rooms (2201.862006ms)
+ℹ /receipts p95 23.59 ms
+✔ public receipts JSON allows any origin and the public pages allow the analytics beacon (1903.34968ms)
+ℹ tests 9
+ℹ suites 0
+ℹ pass 8
+ℹ fail 1
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 15664.656534
+
+✖ failing tests:
+
+test at tests/public-read-model.test.js:282:1
+✖ receipts, room pages, the directory, and the sitemap stay within 20 ms p95 with 2000 private rooms (2201.862006ms)
+  AssertionError [ERR_ASSERTION]: /receipts p95 23.59 ms
+      at TestContext.<anonymous> (file:///home/hatch/workspace/wave-2026-11-01-sync-help/5623comp/repo/tests/public-read-model.test.js:306:12)
+      at process.processTicksAndRejections (node:internal/process/task_queues:104:5)
+      at async Test.run (node:internal/test_runner/test:1409:7)
+      at async Test.processPendingSubtests (node:internal/test_runner/test:974:7) {
+    generatedMessage: false,
+    code: 'ERR_ASSERTION',
+    actual: false,
+    expected: true,
+    operator: '==',
+    diff: 'simple'
+  }

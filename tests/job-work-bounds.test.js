@@ -11,7 +11,7 @@ import { join } from "node:path";
 import { test } from "node:test";
 import { RoomStore } from "../server/store.mjs";
 import { initialRoom } from "../server/bootstrap.mjs";
-import { runPatrolTick, PATROL_TICK_ROOMS } from "../server/patrol.mjs";
+import { runPatrolTick, PATROL_TICK_ROOMS, ensurePatrolSchema } from "../server/patrol.mjs";
 import { backfillPublicReadModel } from "../server/public-read-model.mjs";
 
 function freezeClock(t) {
@@ -127,4 +127,23 @@ test("rotation serves later rooms while earlier rooms are still more than a batc
   reopened.db.prepare("UPDATE patrol_rotation SET last_room=? WHERE id=1").run(`${remembered}-deleted`);
   const after = runPatrolTick(reopened, { deadline: now + 5000, limit: 1 });
   assert.ok(after.rooms > 0 && after.rooms <= PATROL_TICK_ROOMS);
+});
+
+// The rotation row commits before the room's event/findings transaction. A
+// crash between the two (simulated: rotation names a room whose cursor never
+// moved) is only a scheduling advance: the room's cursor must not be
+// acknowledged, and the room must still be tailed when the rotation wraps.
+test("an interrupted attempt advances scheduling only; the room is tailed on wrap without a false cursor acknowledgement", t => {
+  const { store, path } = backloggedStore(PATROL_TICK_ROOMS, 3);
+  const now = freezeClock(t);
+  const victim = "z-light-0";
+  ensurePatrolSchema(store);
+  store.db.prepare("INSERT INTO patrol_rotation(id, last_room) VALUES (1, ?) ON CONFLICT(id) DO UPDATE SET last_room=excluded.last_room").run(victim);
+  store.close();
+  const reopened = new RoomStore(path);
+  const cursor = () => reopened.db.prepare("SELECT sequence FROM patrol_cursor WHERE room_id=?").get(victim)?.sequence ?? 0;
+  runPatrolTick(reopened, { deadline: now + 5000, limit: 1 });
+  assert.equal(cursor(), 0, "the interrupted room has no acknowledged progress");
+  for (let i = 0; i < 4 && cursor() === 0; i++) runPatrolTick(reopened, { deadline: now + 5000, limit: 1 });
+  assert.ok(cursor() > 0, "the interrupted room is tailed once the rotation wraps");
 });

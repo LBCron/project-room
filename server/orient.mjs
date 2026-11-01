@@ -25,6 +25,7 @@ import { ServiceError } from "./store.mjs";
 import { messageVisibleToViewer, summaryHistoryFloor } from "./history-visibility.mjs"; // QA4 Q4-SEC-1
 import { availableClaimsFromBoard, memoizeBoardList } from "./available-work.mjs";
 import { contextVersion } from "./room-context.mjs";
+import { workRoleHolder } from "./work-context.mjs";
 
 // Context embeds current Board orientation as well as formal work. Decide
 // conditional freshness only after composing both under the same read view.
@@ -60,6 +61,19 @@ export function readComposedRoomContext(store, token, roomId, { sinceVersion = n
     }
     return { ...context, context_version: version, orient: buildOrient(store, roomId, context.viewerId, options) };
   });
+}
+
+function withPrivateDefinitionsWithheld(store, roomSlug, state, viewerId) {
+  const privatePartiesByWork = typeof store.privateWorkParties === "function" ? store.privateWorkParties(roomSlug) : null;
+  if (!privatePartiesByWork?.size || !state.workItems) return state;
+  let changed = false;
+  const workItems = Object.fromEntries(Object.entries(state.workItems).map(([id, item]) => {
+    const parties = privatePartiesByWork.get(id);
+    if (!item || !parties || parties.has(viewerId) || workRoleHolder(item, viewerId)) return [id, item];
+    changed = true;
+    return [id, { ...item, title: null, definitionOfDone: null }];
+  }));
+  return changed ? { ...state, workItems } : state;
 }
 
 // Work states that count as open; completed and superseded work is history,
@@ -176,8 +190,12 @@ function fleetSelfOrNull(store, roomSlug, room, viewerId, boardList = null) {
 
 export function buildOrient(store, roomSlug, viewerId, options = {}) {
   // Unknown rooms fail here with the store's 404 (room_not_found).
-  const { sequence, state } = store.room(roomSlug);
-  if (!state.room) throw new Error("Room projection is missing its room record");
+  const { sequence, state: rawState } = store.room(roomSlug);
+  if (!rawState.room) throw new Error("Room projection is missing its room record");
+  // Private work definitions: the same predicate as default orientation
+  // (agent-orientation.mjs) — a non-party, non-role-holder sees the item
+  // with title and definitionOfDone withheld, on every orient consumer.
+  const state = withPrivateDefinitionsWithheld(store, roomSlug, rawState, viewerId);
   const member = state.members?.[viewerId];
   if (!member) throw new Error("Viewer is not a member of this room");
   const now = store.now();
@@ -186,7 +204,19 @@ export function buildOrient(store, roomSlug, viewerId, options = {}) {
   // (agent viewers), and the next-actions snapshot (token callers) —
   // shares this per-request memo; a caller composing several reads in one
   // request (activation pack, context) passes its own memo in.
-  const boardList = options.boardList ?? memoizeBoardList(store);
+  const sharedBoardList = options.boardList ?? memoizeBoardList(store);
+  // Board rows carry their own title, so the private-definition boundary
+  // applied to state.workItems above must also cover every board consumer
+  // (availableClaims, claims, next actions, fleet badge).
+  const withheldIds = new Set(Object.keys(state.workItems ?? {})
+    .filter(id => state.workItems[id] !== rawState.workItems?.[id]));
+  const boardList = withheldIds.size === 0 ? sharedBoardList : slug => {
+    const rows = sharedBoardList(slug);
+    if (slug !== roomSlug || !Array.isArray(rows)) return rows;
+    return rows.map(row => (row && withheldIds.has(row.id)
+      ? { ...row, title: null, ...(row.definitionOfDone !== undefined ? { definitionOfDone: null } : {}) }
+      : row));
+  };
   // Internal version checks need only the structural fields. Defer transient
   // attention, fleet and action reads until a full response is actually sent.
   const structuralOnly = options.structuralOnly === true;

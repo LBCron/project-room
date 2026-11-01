@@ -6,7 +6,11 @@ on:
     # opened/synchronize/reopened are the default pull_request types.
     # labeled starts the run when the landing loop adds ready-to-land.
     # synchronize re-runs it while that label is still on the pull request.
-    types: [opened, synchronize, reopened, ready_for_review, labeled]
+    # unlabeled re-runs it when a label is removed: if ready-to-land was
+    # removed, the heavy jobs skip in the new run and the ci-verdict job
+    # names them NOT-RUN, so the last heavy results on the head are no
+    # longer the latest word. (GitHub event type is spelled "unlabeled".)
+    types: [opened, synchronize, reopened, ready_for_review, labeled, unlabeled]
   push:
     branches: [main]
   merge_group:
@@ -486,7 +490,10 @@ jobs:
         run: node scripts/coverage-thresholds.mjs
   # Ungated. Drafts and unlabeled pull requests still run story tests, rule
   # checks, and the page-weight measurement. The labeled jobs above keep the
-  # required check names.
+  # required check names. This job also runs on the unlabeled event: the
+  # `test` aggregator fails a pull-request run whose safety net was
+  # skipped, and ready-to-land can still be present when a different
+  # label is removed.
   safety-net:
     if: github.event_name == 'pull_request'
     runs-on: ubuntu-latest
@@ -582,3 +589,54 @@ jobs:
             if [ "$result" != "success" ]; then failed=1; fi
           done
           exit "$failed"
+  # Verdict naming. Reporting only: this job never gates, exits 0, and is
+  # not a required check. It runs on every pull-request event, including
+  # the runs where the heavy jobs above skip, and writes one summary that
+  # names the exact subject (pull request, head SHA, event) and every job
+  # as PASSED, FAILED, or NOT-RUN. A skipped job is NOT-RUN here even
+  # though GitHub reports a skipped job's status as "Success": NOT-RUN is
+  # named, never folded into green. Mapping: success -> PASSED,
+  # skipped -> NOT-RUN, failure or cancelled -> FAILED.
+  ci-verdict:
+    needs: [changes, contract, lint, unit, browser-shards, browser, cloudflare, visual-refresh-guard, friend-agent-e2e, coverage, safety-net, test]
+    if: always() && github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Name each job PASSED, FAILED, or NOT-RUN
+        env:
+          CHANGES: ${{ needs.changes.result }}
+          CONTRACT: ${{ needs.contract.result }}
+          LINT: ${{ needs.lint.result }}
+          UNIT: ${{ needs.unit.result }}
+          BROWSER_SHARDS: ${{ needs.browser-shards.result }}
+          BROWSER: ${{ needs.browser.result }}
+          CLOUDFLARE: ${{ needs.cloudflare.result }}
+          VISUAL_REFRESH_GUARD: ${{ needs.visual-refresh-guard.result }}
+          FRIEND_AGENT_E2E: ${{ needs.friend-agent-e2e.result }}
+          COVERAGE: ${{ needs.coverage.result }}
+          SAFETY_NET: ${{ needs.safety-net.result }}
+          TEST: ${{ needs.test.result }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+          EVENT_ACTION: ${{ github.event.action }}
+          READY_TO_LAND: ${{ contains(github.event.pull_request.labels.*.name, 'ready-to-land') }}
+        run: |
+          {
+            echo "## CI verdict"
+            echo ""
+            echo "Subject: pull request #$PR_NUMBER at head $HEAD_SHA (event: $EVENT_ACTION, ready-to-land label present: $READY_TO_LAND)"
+            echo ""
+            echo "| Job | Verdict |"
+            echo "| --- | --- |"
+            for pair in "changes:$CHANGES" "contract:$CONTRACT" "lint:$LINT" "unit:$UNIT" "browser-shards:$BROWSER_SHARDS" "browser:$BROWSER" "cloudflare:$CLOUDFLARE" "visual-refresh-guard:$VISUAL_REFRESH_GUARD" "friend-agent-e2e:$FRIEND_AGENT_E2E" "coverage:$COVERAGE" "safety-net:$SAFETY_NET" "test:$TEST"; do
+              name=${pair%%:*}
+              result=${pair#*:}
+              case "$result" in
+                success) verdict=PASSED ;;
+                skipped) verdict=NOT-RUN ;;
+                *) verdict=FAILED ;;
+              esac
+              echo "| $name | $verdict |"
+            done
+          } | tee -a "$GITHUB_STEP_SUMMARY"

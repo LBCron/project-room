@@ -142,20 +142,39 @@ const inviteStatus = (row, now) =>
   : row.redeemed_at != null ? "redeemed"
   : now >= row.expires_at ? "expired" : "active";
 
-const view = (row, now) => ({
-  inviteId: inviteId(row.code_hash),
-  roomId: row.room_id,
-  createdBy: row.created_by,
-  permissions: JSON.parse(row.permissions_json),
-  ownerEquivalent: row.owner_equivalent === 1,
-  displayName: row.display_name,
-  createdAt: row.created_at,
-  expiresAt: row.expires_at,
-  redeemedAt: row.redeemed_at,
-  redeemedIdentityId: row.redeemed_identity_id,
-  revokedAt: row.revoked_at,
-  status: inviteStatus(row, now),
-});
+// Stored permissions decode for collection reads. One row whose
+// permissions_json no longer parses, or parses to a non-array (legacy
+// writer, partial write, corruption), must not deny every other invite
+// in the room: list() and the access review decode through view(), so
+// the bad row is served with permissions null and unreadable:true —
+// visible isolation, never a silent drop and never invented permissions.
+// Single-invite operations (preview, redeem, reactivate) decode their
+// own row separately and still fail closed on it.
+const storedPermissions = row => {
+  try {
+    const parsed = JSON.parse(row.permissions_json);
+    return Array.isArray(parsed) && parsed.every(permission => typeof permission === "string") ? parsed : undefined;
+  } catch { return undefined; }
+};
+
+const view = (row, now) => {
+  const permissions = storedPermissions(row);
+  return {
+    inviteId: inviteId(row.code_hash),
+    roomId: row.room_id,
+    createdBy: row.created_by,
+    permissions: permissions ?? null,
+    ...(permissions === undefined ? { unreadable: true } : {}),
+    ownerEquivalent: row.owner_equivalent === 1,
+    displayName: row.display_name,
+    createdAt: row.created_at,
+    expiresAt: row.expires_at,
+    redeemedAt: row.redeemed_at,
+    redeemedIdentityId: row.redeemed_identity_id,
+    revokedAt: row.revoked_at,
+    status: inviteStatus(row, now),
+  };
+};
 
 // The owner seat's own credential. The authenticated member id must be the
 // room owner. A human session, a human room key, the owner agent's identity

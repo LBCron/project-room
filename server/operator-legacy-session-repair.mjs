@@ -4,7 +4,7 @@ import { createHash } from 'node:crypto';
 import { isDeepStrictEqual } from 'node:util';
 import { applyEvent, emptyRoomState, messageChannelId } from '../src/events.js';
 import { ensureWorkControlDefaults } from '../src/work-item-session.js';
-import { HISTORICAL_REPLAY_CONTRACT_VERSION, HISTORICAL_REPLAY_KIND, PRE749_ADAPTER_VERSION, pre749PrefixDigest } from './historical-replay-contract.mjs';
+import { HISTORICAL_REPLAY_CONTRACT_VERSION, HISTORICAL_REPLAY_KIND, PRE749_ADAPTER_VERSION, pre749PrefixDigest, decodeHistoricalEventRows } from './historical-replay-contract.mjs';
 import { replayPre749Sessions } from './legacy-session-replay.mjs';
 import { ServiceError } from './service-error.mjs';
 import { appendOperatorAction } from './operator-actions.mjs';
@@ -159,7 +159,8 @@ function inventory(store, input, target) {
     const { clause, args } = where[table];
     const order = table === 'events' ? 'sequence' : table === 'messages_backfill_state' ? 'room_id,part' : columns[0] === 'room_id'
     && columns.length > 1 ? columns[1] : columns[0];
-    data[table] = db.prepare(`SELECT ${columns.join(',')} FROM ${table} WHERE ${clause} ORDER BY ${order}`).all(...args);
+    const selected = columns.map(column => table === 'events' && ['id', 'body'].includes(column) ? `CAST(${column} AS BLOB) AS ${column}` : column);
+    data[table] = db.prepare(`SELECT ${selected.join(',')} FROM ${table} WHERE ${clause} ORDER BY ${order}`).all(...args);
   }
   const room = data.rooms[0], proof = data.integrity_room_state[0], block = data.messages_backfill_blocks[0], cursor = data.messages_backfill_cursor[0];
   if (!room || room.sequence !== target.expectedHead) fail('repair_head_changed');
@@ -207,7 +208,17 @@ function inventory(store, input, target) {
   }
   const hydrated = hydrateProjection(db, roomId, raw, { verifyBodyHashes: true });
   if (hydrated.missing.length) projectionUnavailable('hydration_body_missing');
-  const events = data.events;
+  // Raw event bytes and decoded strings coexist within this bounded input
+  // unit; BYTES is an admitted input budget, not a total heap ceiling.
+  let events, prefixSha256;
+  try {
+    prefixSha256 = pre749PrefixDigest(roomId, data.events);
+    events = decodeHistoricalEventRows(data.events);
+  } catch (error) {
+    if (!(error instanceof TypeError)) throw error;
+    fail('repair_not_exact_legacy');
+  }
+  data.events = events;
   if (events.length !== room.sequence || events.some((r, i) => r.sequence !== i + 1)) fail('repair_not_exact_legacy');
   if (!cursor || cursor.applied_seq > room.sequence || cursor.state_seq > room.sequence
   || cursor.applied_event_id !== (cursor.applied_seq === 0 ? '' : events[cursor.applied_seq - 1]?.id)
@@ -310,7 +321,7 @@ function inventory(store, input, target) {
     replayContract: {
       version: HISTORICAL_REPLAY_CONTRACT_VERSION, kind: HISTORICAL_REPLAY_KIND, adapterVersion: PRE749_ADAPTER_VERSION,
       roomId, throughSequence: room.sequence, headEventId: events.at(-1).id,
-      prefixSha256: pre749PrefixDigest(roomId, events), snapshotHash: hash(json)
+      prefixSha256, snapshotHash: hash(json)
     }
   };
 }

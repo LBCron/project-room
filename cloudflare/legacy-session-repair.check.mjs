@@ -40,7 +40,10 @@ test('actual workerd adopts only independently matched absent proofs atomically 
   const withoutHashes=authority=>({...authority,messages:authority.messages.map(row=>{const value={...row};delete value.entity_hash;return value;})});
   try{
     const {request}=await call('/seed-adopt'),before=await call('/state');assert.ok(before.authority.messages.every(row=>row.entity_hash===null));
-    const plan=await call('/plan',request),input={...request,planHash:plan.planHash,requestId:'proof-restart'};
+    await call('/utf8-valid');const plan=await call('/plan',request);
+    await call('/utf8-invalid');const refused=await call('/plan',request,409);assert.equal(refused.error.code,'repair_not_exact_legacy');assert.deepEqual(await call('/state'),before);
+    await call('/utf8-restore');assert.equal((await call('/plan',request)).planHash,plan.planHash);
+    const input={...request,planHash:plan.planHash,requestId:'proof-restart'};
     assert.equal(plan.derivedOnly,false);assert.deepEqual(await call('/state'),before);
     await call('/audit-fault');await call('/execute',input,500);assert.deepEqual(await call('/state'),before);
     await mf.dispose();mf=worker();assert.deepEqual(await call('/state'),before);

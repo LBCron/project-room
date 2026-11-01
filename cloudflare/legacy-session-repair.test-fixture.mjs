@@ -23,6 +23,15 @@ export class LegacySessionRepairRoom extends DurableObject {
         db.prepare("UPDATE messages SET entity_hash=NULL WHERE room_id='legacy-room'").run();
         return Response.json({request:{...fixture.request,messageProofMode:'adopt-absent-inline-v1'}});
       }
+      if(path==='/utf8-valid') {
+        db.prepare("UPDATE events SET body=json_set(body,'$.data.note',char(65533)) WHERE json_extract(body,'$.type')='work.accepted'").run();
+        return Response.json({changed:true});
+      }
+      if(path==='/utf8-invalid'||path==='/utf8-restore') {
+        const [from,to]=path==='/utf8-invalid'?['efbfbd','80']:['80','efbfbd'];
+        db.prepare(`UPDATE events SET body=replace(body,CAST(x'${from}' AS TEXT),CAST(x'${to}' AS TEXT)) WHERE id='synthetic-4'`).run();
+        return Response.json({changed:true});
+      }
       if(path==='/plan'||path==='/execute')return Response.json(repairLegacyMessages(s,await request.json(),path==='/execute'));
       if(path==='/audit-fault') {
         db.exec("CREATE TRIGGER fail_repair BEFORE INSERT ON operator_actions WHEN NEW.action='legacy_session_backfill_reconciled' BEGIN SELECT RAISE(ABORT,'synthetic audit storage failure'); END");

@@ -121,3 +121,10 @@ The private backup rehearsal uses a read-only Oct31 backup and captured matching
 check with newly staged test-writer witnesses, not proof that the original
 backup or current production serving state is eligible. No production repair
 was executed while implementing or qualifying this mode.
+
+Prefix evidence requires raw SQLite BLOB reads for IDs and bodies after the
+existing count, octet-length and SQL type admission. Shared fatal UTF-8 decoding
+and exact roundtrip validation refuse invalid TEXT bytes; driver-decoded TEXT
+cannot supply provenance. Valid UTF-8 keeps the same version-1 digest framing.
+The 256 KiB bound is the admitted input/output/receipt unit, not a total heap
+ceiling: raw buffers and decoded strings coexist during this bounded check.

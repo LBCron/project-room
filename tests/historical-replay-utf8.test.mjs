@@ -1,7 +1,8 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { DatabaseSync } from 'node:sqlite';
-import { pre749PrefixDigest } from '../server/historical-replay-contract.mjs';
+import { createHash } from 'node:crypto';
+import { pre749PrefixDigest, decodeHistoricalEventRows } from '../server/historical-replay-contract.mjs';
 import { RoomStore } from '../server/store.mjs';
 import { repairLegacyMessages } from '../server/operator-legacy-message-repair.mjs';
 import { historicalSequence, seedLegacyFixture } from './helpers/legacy-session-fixture.mjs';
@@ -45,4 +46,16 @@ for (const column of ['body']) test(`repair refuses invalid UTF-8 ${column} befo
   assert.equal(s.db.prepare('SELECT count(*) AS n FROM operator_actions').get().n, auditBefore);
   assert.equal(s.db.prepare('SELECT entity_hash FROM messages').get().entity_hash, null);
   assert.deepEqual(Buffer.from(s.db.prepare(`SELECT CAST(${column} AS BLOB) AS bytes FROM events WHERE sequence=?`).get(row.sequence).bytes), damaged);
+});
+
+test('raw contract preserves valid UTF-8 framing and BOM across SQLite buffer representations', () => {
+  const row = { sequence: 1, id: 'event', body: '\ufeffnote \ufffd café' };
+  const hash = createHash('sha256');
+  for (const value of ['project-room.historical-replay-prefix.v1', 'room', '1', row.id, row.body])
+    hash.update(String(Buffer.byteLength(value))).update(':').update(value);
+  const raw = { ...row, id: Uint8Array.from(Buffer.from(row.id)).buffer, body: Uint8Array.from(Buffer.from(row.body)).buffer };
+  assert.equal(pre749PrefixDigest('room', [raw]), hash.digest('hex'));
+  assert.deepEqual(decodeHistoricalEventRows([raw]), [row]);
+  for (const bytes of [[0xc0,0x80], [0xe2,0x82], [0xed,0xa0,0x80], [0xf4,0x90,0x80,0x80]])
+    assert.throws(() => pre749PrefixDigest('room', [{ ...raw, body: Uint8Array.from(bytes) }]), TypeError);
 });

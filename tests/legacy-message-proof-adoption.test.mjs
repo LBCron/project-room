@@ -135,10 +135,10 @@ test('mixed existing valid proofs and inactive authors retain their exact proof 
 });
 test('successful receipt prefix evidence binds exact source independently of later head changes',t=>{
   const f=fixture(t),plan=repairLegacyMessages(f.s,f.request),completed=execute(f,plan),db=f.s.db;
-  const rows=db.prepare('SELECT sequence,id,body FROM events WHERE room_id=? ORDER BY sequence').all(roomId);
+  const rows=db.prepare('SELECT sequence,CAST(id AS BLOB) AS id,CAST(body AS BLOB) AS body FROM events WHERE room_id=? ORDER BY sequence').all(roomId);
   assert.equal(completed.replayContract.prefixSha256,pre749PrefixDigest(roomId,rows));
-  assert.equal(completed.replayContract.headEventId,rows.at(-1).id);
-  rows[0]={...rows[0],body:rows[0].body+' '};assert.notEqual(pre749PrefixDigest(roomId,rows),completed.replayContract.prefixSha256);
+  assert.equal(completed.replayContract.headEventId,Buffer.from(rows.at(-1).id).toString());
+  rows[0]={...rows[0],body:Buffer.concat([rows[0].body,Buffer.from(' ')])};assert.notEqual(pre749PrefixDigest(roomId,rows),completed.replayContract.prefixSha256);
 });
 test('opt-in HTTP remains operator-only and keeps proof diagnostics fixed and sanitized',async t=>{
   const f=fixture(t),token='synthetic-opt-in-operator-credential-0001',previous=process.env.ROOM_OPERATOR_TOKEN_SHA256;

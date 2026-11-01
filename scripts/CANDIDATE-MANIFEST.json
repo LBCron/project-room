@@ -133,7 +133,7 @@
     "src/login-polish.css": "sha256:0d4ece96f4d26140e7f99bf34f5e63d73e0143c63e50f7ca61d7dacebd685b3c",
     "src/member-display-names.js": "sha256:7679f106d20b4a8947555173895784952ce9aef858dfc2c2bab041ed4eaa794b",
     "src/message-reducers.js": "sha256:4df23621c020fa8f84d7e9986d07bc579b6d18298d6cce39c7df7439cb7cc475",
-    "src/needs-attention.js": "sha256:b273bada20633864044ddb825fc40b91c2ac285269181b33b7cfc4cfd79862aa",
+    "src/needs-attention.js": "sha256:6bc3861c6714b9360cac0529f7dc808c0ffdc70bb24dd66e1ace5810952b8f32",
     "src/operator-ui.js": "sha256:49a9e113e6d3dcf7eafc933d2c2016ea45fa1a28e2d75bb6480577b5521d481c",
     "src/operator.css": "sha256:82342f24af01bec07b8e9e87035dd869c26db5a78fade40a45c38b2a3e88c02c",
     "src/owner-cockpit.js": "sha256:65ea5926db90c18a625bfbb8f225a803309944cf02951537255f1497b90f714c",

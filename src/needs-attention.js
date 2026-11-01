@@ -42,6 +42,11 @@ export function createNeedsAttentionCard(options) {
     const { member } = viewer();
     return Boolean(member?.active !== false && member?.permissions?.includes("manage_members"));
   }
+  function canReadOwnerRollup() {
+    if (!hasRoomState) return true; // Legacy reader relies on the server owner gate.
+    const { member, owner } = viewer();
+    return owner && member?.kind === "human";
+  }
   function canGrant(permission) {
     if (!hasRoomState) return true; // Legacy reader authenticates the owner.
     const { member, owner } = viewer();
@@ -64,7 +69,7 @@ export function createNeedsAttentionCard(options) {
 
   function owns(ticket, session, generation) {
     if (ticket !== epoch || session !== client.session || generation !== client.generation) return false;
-    if (!canReview() || hasRoomState && currentReport?.ownerOnly && !viewer().owner) { hide(); return false; }
+    if (!canReview() || hasRoomState && currentReport?.ownerOnly && !canReadOwnerRollup()) { hide(); return false; }
     return true;
   }
   function clearRetry() {
@@ -217,6 +222,7 @@ export function createNeedsAttentionCard(options) {
   });
 
   async function refresh(cursor = null) {
+    if (currentReport?.ownerOnly && !canReadOwnerRollup()) hide();
     if (!client.session || !canReview()) { hide(); return; }
     if (hasRoomState && !client.ownsAccountSession()) { hide(); client.endAccess(); return; }
     clearRetry();
@@ -233,7 +239,7 @@ export function createNeedsAttentionCard(options) {
       // Independent authorized reads overlap instead of waiting in sequence.
       // Promise.all also observes both failures if either read rejects first.
       let [report, queue] = await Promise.all([
-        client.needsAttention(cursor, { includeShadow: includeShadow() }),
+        canReadOwnerRollup() ? client.needsAttention(cursor, { includeShadow: includeShadow() }) : null,
         hasRoomState ? client.request(client.path("/access-requests?status=pending")) : null,
       ]);
       if (!owns(ticket, session, generation)) return;
@@ -242,7 +248,7 @@ export function createNeedsAttentionCard(options) {
         const requests = queue.requests.map(requestItem), byId = new Map(requests.map(item => [item.id, item]));
         // Owners retain their paged rollup; admins receive only the request queue
         // their existing manage_members authority permits, never the owner rollup.
-        if (!viewer().owner) report = null;
+        if (!canReadOwnerRollup()) report = null;
         report = report ? { ...report, ownerOnly: true, items: report.items.map(item => item.kind === "access_request" ? byId.get(item.id) : item).filter(Boolean) }
           : { items: requests, itemCount: requests.length, pageOffset: 0, ownerOnly: false };
       }
@@ -288,7 +294,7 @@ export function createNeedsAttentionCard(options) {
     const { member, owner } = viewer(), grants = `${owner}:${member.permissions.join(",")}`;
     // An ex-owner may remain an admin. The owner rollup contains more than
     // requests, so invalidate its page/editor and outstanding reads first.
-    if (currentReport?.ownerOnly && !owner) { hide(); activeScope = identity; }
+    if (currentReport?.ownerOnly && !canReadOwnerRollup()) { hide(); activeScope = identity; }
     if (authority !== grants && currentReport) {
       if (partial) partial.selected = new Set([...partial.selected].filter(canGrant));
       const wasBusy = busy;

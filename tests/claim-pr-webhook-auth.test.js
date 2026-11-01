@@ -126,3 +126,65 @@ test("the webhook core cannot settle without the forwarded delivery material", a
   assert.deepEqual(signed.settled, [{ roomId: "commons", claimId: "target", outcome: "merged" }]);
   assert.equal(store.workClaims.get("commons", "target").state, "done");
 });
+
+test("a durable unrelated scalar pull link cannot block signed settlement", async t => {
+  const { store } = await fixture(t);
+  store.workClaims.set("room-b", {
+    ...store.workClaims.get("room-b", "bystander-b"), pullRequests: ["unrelated-scalar"],
+  });
+  const out = await applyPullRequestWebhook(store, PAYLOAD, sign(PAYLOAD));
+  assert.deepEqual(out.applied, [{ roomId: "commons", claimId: "target", outcome: "merged" }]);
+});
+
+for (const format of ["envelope", "legacy"]) {
+  test(`signed settlement ignores unrelated mixed pull elements (${format})`, async t => {
+    const { store, reads } = await fixture(t);
+    const target = store.workClaims.get("commons", "target");
+    const mixed = ["unrelated-scalar", 42, true, false, null, "{", [],
+      JSON.stringify(target.pullRequest), { url: "https://github.com/Uuriko/project-room/pull/999" }];
+    // Use the real durable writer: it accepts these historical element shapes.
+    store.workClaims.set("room-b", {
+      ...store.workClaims.get("room-b", "bystander-b"), pullRequests: mixed,
+    });
+    // The target must be found through the array branch, not the singular fallback.
+    store.workClaims.set("commons", { ...target, pullRequest: null, pullRequests: [target.pullRequest] });
+    if (format === "legacy") {
+      for (const [roomId, claimId] of [["commons", "target"], ["room-b", "bystander-b"]]) {
+        const raw = store.db.prepare("SELECT item_json FROM work_claims WHERE room_id=? AND claim_id=?").get(roomId, claimId);
+        store.db.prepare("UPDATE work_claims SET item_json=? WHERE room_id=? AND claim_id=?")
+          .run(JSON.stringify(JSON.parse(raw.item_json).data), roomId, claimId);
+      }
+    }
+    const snapshot = () => store.db.prepare("SELECT * FROM work_claims ORDER BY room_id, claim_id").all();
+    const before = snapshot();
+    reads.get.length = 0;
+    const refused = await applyPullRequestWebhook(store, PAYLOAD, sign(PAYLOAD, "wrong-key"));
+    assert.equal(refused.refused, "mismatch");
+    assert.deepEqual(snapshot(), before, "unverified delivery changes no durable row");
+    assert.deepEqual(reads.get, [], "unverified delivery decodes no claims");
+    const out = await applyPullRequestWebhook(store, PAYLOAD, sign(PAYLOAD));
+    assert.deepEqual(out.applied, [{ roomId: "commons", claimId: "target", outcome: "merged" }]);
+    assert.ok(reads.get.every(entry => entry === "commons/target"), "mixed elements never select a bystander");
+    assert.deepEqual(snapshot().filter(row => row.claim_id !== "target"), before.filter(row => row.claim_id !== "target"));
+    assert.equal(store.workClaims.get("commons", "target").state, "done");
+  });
+}
+
+test("unsupported stored record shapes cannot poison unrelated signed settlement", async t => {
+  const { store } = await fixture(t);
+  // Corrupt JSON cannot normally pass the writer's expression indexes. Remove
+  // those indexes only in this corruption fixture to exercise read admission.
+  for (const { name, sql } of store.db.prepare("SELECT name, sql FROM sqlite_master WHERE type='index' AND tbl_name='work_claims'").all()) {
+    if (sql?.includes("json_")) store.db.exec(`DROP INDEX "${name.replaceAll('"', '""')}"`);
+  }
+  const shapes = ["{", "null", "42", "true", '"scalar"', "[]", '{"v":1,"kind":"work-claim","data":"scalar"}',
+    '{"pullRequests":"scalar","data":{"pullRequests":42}}'];
+  for (const [index, item] of shapes.entries()) {
+    store.db.prepare("INSERT INTO work_claims(room_id,claim_id,item_json,updated_at) VALUES(?,?,?,?)")
+      .run("room-b", `unsupported-${index}`, item, "2026-11-01T00:00:00Z");
+  }
+  const before = store.db.prepare("SELECT * FROM work_claims WHERE room_id='room-b' ORDER BY claim_id").all();
+  const out = await applyPullRequestWebhook(store, PAYLOAD, sign(PAYLOAD));
+  assert.deepEqual(out.applied, [{ roomId: "commons", claimId: "target", outcome: "merged" }]);
+  assert.deepEqual(store.db.prepare("SELECT * FROM work_claims WHERE room_id='room-b' ORDER BY claim_id").all(), before);
+});

@@ -105,6 +105,8 @@ export const ALLOWLIST = [
   // (no blanket *-fixture.mjs / *-check.mjs skip). Their genuinely-safe
   // placeholder values are allowlisted explicitly below — each entry names
   // the file and why the value is not a credential.
+  /^\s*const token\s*=\s*'synthetic-selected-parity-operator-0123456789';\s*$/, // cloudflare/operator-selected-parity.check.mjs —
+    // exact Miniflare-only synthetic Operator declaration; never deployed or a real credential
   /synthetic-test-secret/, // scripts/agent-signin-browser-check.mjs:51 — mocked
     // /api/agent-identities route fulfillment; obvious placeholder, not a credential
   /synthetic-test-private-key/, // scripts/agent-signin-browser-check.mjs:51 — same

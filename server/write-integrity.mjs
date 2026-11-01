@@ -105,14 +105,43 @@ export function recordMessageWrite(db,roomId,messageId) {
 // serialized into a durable row until B3's ranged-digest composition
 // replaces the single-stream digest — that composition friction is
 // B4/B9's reconciliation point, recorded in this lane's STATE.md.
-// The ranged-digest composition + snapshot v3 themselves are B3's scope
-// (same file, different concern): the digest stream below is byte-for-
-// byte the existing v2 stream, only its traversal is chunked.
+// Composition (B4, reconciling B3 onto this scanner per tranche-3 §3):
+// the v3 content hash is B3's ranged composition expressed on this
+// scanner's stream — rows are framed exactly as B3 framed them
+// (length-prefixed JSON, in the existing order) and grouped into ranges
+// of CONTENT_HASH_RANGE_ROWS; each completed range's digest is banked
+// on the scanner (bankedProgress()) the moment the range closes, so a
+// durable checkpoint (lane B4, server/store.mjs) can persist it and a
+// fresh scanner can resume mid-room without re-reading banked ranges.
+// The room hash is composeContentHash over (room id, sequence,
+// projection digest, range digests in order). The v2 stream survives
+// only as the transition-only fused pass below (scanServingContentV2),
+// used solely to reproduce a v2 baseline during its explicit
+// transition, exactly as B3 left it: a v2 hash is one sha256 stream and
+// cannot be banked per range, and no v2 scan is ever resumed.
 // ---------------------------------------------------------------------------
 export const CONTENT_SCAN_CHUNK_ROWS = 200;
 export const CONTENT_SCAN_CHUNK_BYTES = 256 * 1024;
 export const CONTENT_SCAN_VISIT_BYTES = CONTENT_SCAN_CHUNK_BYTES;
 const CONTENT_SCAN_PAGE_ROWS = 50;
+// Snapshot v3 ranged composition (B3): each range's digest is the sha256
+// stream over that range's framed rows; the room hash is a digest over
+// (room id, sequence, projection digest, range digests in order).
+export const CONTENT_HASH_RANGE_ROWS = 200;
+function framedRowUpdate(hash, text) {
+  hash.update(String(Buffer.byteLength(text))).update(':').update(text);
+}
+export function contentRangeDigest(texts) {
+  const hash = createHash('sha256').update('content-range-v3\0');
+  for (const text of texts) framedRowUpdate(hash, text);
+  return hash.digest('hex');
+}
+export function composeContentHash(roomId, sequence, projDigest, rangeDigests) {
+  const hash = createHash('sha256').update('content-hash-v3\0');
+  hash.update(roomId).update('\0').update(String(sequence)).update('\0').update(projDigest);
+  for (const digest of rangeDigests) hash.update('\0').update(digest);
+  return hash.digest('hex');
+}
 const CONTENT_SCAN_PHASES = Object.freeze(['messages', 'work', 'done']);
 const SCAN_AGAIN = Symbol('content-scan-again');
 // Step driver, the #5625 parity idiom: run step() synchronously until it
@@ -148,7 +177,7 @@ const rowFetchedBytes = row => {
 const MESSAGE_PROBE_SELECT = MESSAGE_PROOF_FIELDS.map(key => `COALESCE(LENGTH(${key}),0)`).join('+')
   + '+COALESCE(LENGTH(entity_hash),0)';
 
-export function createServingContentScanner(db, roomId, sequence, projection, { verify, hashContent, chunkRows = CONTENT_SCAN_CHUNK_ROWS, chunkBytes = CONTENT_SCAN_CHUNK_BYTES, pageRows = CONTENT_SCAN_PAGE_ROWS } = {}) {
+export function createServingContentScanner(db, roomId, sequence, projection, { verify, hashContent, chunkRows = CONTENT_SCAN_CHUNK_ROWS, chunkBytes = CONTENT_SCAN_CHUNK_BYTES, pageRows = CONTENT_SCAN_PAGE_ROWS, definition = 'v3', resume = null } = {}) {
   if (!Number.isSafeInteger(chunkRows) || chunkRows < 1) throw new RangeError('content scan chunkRows must be a positive integer');
   if (!Number.isSafeInteger(chunkBytes) || chunkBytes < 1) throw new RangeError('content scan chunkBytes must be a positive integer');
   if (!Number.isSafeInteger(pageRows) || pageRows < 1) throw new RangeError('content scan pageRows must be a positive integer');
@@ -157,28 +186,66 @@ export function createServingContentScanner(db, roomId, sequence, projection, { 
     chunkRows, chunkBytes, pageSize: pageRows,
     phase: 'messages', cursor: '', count: 0, visible: 0, drift: false,
     done: false, outcome: null, authority: false, archive: null, retained: new Set(),
-    state: null, hash: null, fetchedBytes: 0, lastSegmentBytes: 0, maxSegmentBytes: 0,
+    state: null, legacyHash: null, rangeDigests: null, rangeTexts: [], banked: null, definition,
+    fetchedBytes: 0, lastSegmentBytes: 0, maxSegmentBytes: 0,
     fetchOversize: 0, scanDiscards: 0, chunks: 0,
   };
+  // Feed one framed row text into the active digest definition. Returns
+  // true when the text closed a v3 range (its digest was banked).
+  const takeRowText = text => {
+    if (scanner.legacyHash) framedRowUpdate(scanner.legacyHash, text);
+    if (!scanner.rangeDigests) return false;
+    scanner.rangeTexts.push(text);
+    if (scanner.rangeTexts.length >= CONTENT_HASH_RANGE_ROWS) {
+      scanner.rangeDigests.push(contentRangeDigest(scanner.rangeTexts));
+      scanner.rangeTexts = [];
+      return true;
+    }
+    return false;
+  };
+  // Snapshot the durable-bankable state: exactly the state as of the
+  // last completed range (cursor, counts, drift, range digests). Rows
+  // scanned past it belong to a partial range a resume re-reads — the
+  // redo bound is one range, mirroring part 2's one-chunk redo bound.
+  const bankNow = phase => {
+    scanner.banked = { phase, cursor: scanner.cursor, count: scanner.count, visible: scanner.visible,
+      drift: scanner.drift, rangeDigests: scanner.rangeDigests ? [...scanner.rangeDigests] : [] };
+  };
   const initScan = () => {
-    scanner.hash = scanner.hashContent
+    scanner.legacyHash = scanner.hashContent && scanner.definition === 'v2'
       ? createHash('sha256').update(roomId).update('\0').update(String(sequence)).update('\0').update(projection ?? '') : null;
+    scanner.rangeDigests = scanner.hashContent && scanner.definition === 'v3' ? [] : null;
+    scanner.rangeTexts = [];
     scanner.state = JSON.parse(projection);
     scanner.drift = false;
     // Metadata-digest leg: once per scan, at scan start.
     if (scanner.verify) {
       const proof = db.prepare('SELECT metadata_hash FROM integrity_room_state WHERE room_id=?').get(roomId);
       scanner.drift = Boolean(proof?.metadata_hash && proof.metadata_hash !== projectionDigest(projection));
-      if (scanner.drift && !scanner.hash) { finish({ drift: true }); }
+      if (scanner.drift && !scanner.hashContent) { finish({ drift: true }); }
     }
+    scanner.banked = { phase: 'messages', cursor: '', count: 0, visible: 0, drift: scanner.drift, rangeDigests: [] };
     if (scanner.done) return;
     scanner.authority = hasMessageAuthority(scanner.state);
     if (scanner.authority) {
-      scanner.hash?.update('\0canonical-messages-v1\0');
+      scanner.legacyHash?.update('\0canonical-messages-v1\0');
       scanner.archive = scanner.state.messagesArchive;
       scanner.retained = new Set(scanner.archive?.retainedIds ?? []);
     }
     scanner.phase = 'messages'; scanner.cursor = ''; scanner.count = 0; scanner.visible = 0;
+    if (resume) {
+      // Resume from a durable checkpoint's banked state (B4): banked
+      // ranges are trusted as scan state — the checkpoint is an
+      // optimisation of when the proof runs, and the resumed scan
+      // re-verifies every row past the banked cursor itself.
+      scanner.cursor = typeof resume.range_cursor === 'string' ? resume.range_cursor : '';
+      scanner.count = Number.isSafeInteger(resume.scanned_count) ? resume.scanned_count : 0;
+      scanner.visible = Number.isSafeInteger(resume.visible_count) ? resume.visible_count : 0;
+      scanner.drift = scanner.drift || Boolean(resume.drift);
+      if (scanner.rangeDigests) scanner.rangeDigests = [...(resume.rangeDigests ?? [])];
+      scanner.phase = resume.phase === 'work' ? 'work' : 'messages';
+      bankNow(scanner.phase);
+    }
   };
   const finish = outcome => { scanner.done = true; scanner.phase = 'done'; scanner.outcome = outcome; return outcome; };
   // One chunk of the messages leg. Returns SCAN_AGAIN when a chunk was
@@ -202,8 +269,9 @@ export function createServingContentScanner(db, roomId, sequence, projection, { 
         // Messages leg complete: the count verdict runs once, here.
         if (scanner.verify && (scanner.visible !== scanner.state.messageAuthority.count
           || scanner.count !== scanner.state.messageAuthority.count + (scanner.archive?.count ?? 0))) scanner.drift = true;
-        if (scanner.drift && !scanner.hash) return finish({ drift: true });
+        if (scanner.drift && !scanner.hashContent) return finish({ drift: true });
         scanner.phase = 'work';
+        if (!scanner.rangeTexts.length) bankNow('work');
         break;
       }
       let take = 0, probedBytes = 0;
@@ -223,15 +291,14 @@ export function createServingContentScanner(db, roomId, sequence, projection, { 
         const bytes = rowFetchedBytes(row); pageBytes += bytes; noteSegment(bytes);
         if (scanner.verify && !messageProofMatches(row)) {
           scanner.drift = true;
-          if (!scanner.hash) { scanner.cursor = row.message_id; return finish({ drift: true }); }
+          if (!scanner.hashContent) { scanner.cursor = row.message_id; return finish({ drift: true }); }
         }
-        if (scanner.hash) {
-          const text = JSON.stringify(MESSAGE_PROOF_FIELDS.map(key => row[key]));
-          scanner.hash.update(String(Buffer.byteLength(text))).update(':').update(text);
-        }
+        const rangeFlushed = scanner.hashContent
+          ? takeRowText(JSON.stringify(MESSAGE_PROOF_FIELDS.map(key => row[key]))) : false;
         scanner.count++;
         if (!scanner.archive || row.seq > scanner.archive.throughSeq || scanner.retained.has(row.message_id)) scanner.visible++;
         scanner.cursor = row.message_id; // commit cursor per row, banked per chunk
+        if (rangeFlushed) bankNow('messages'); // a closed range is durable-bankable at once
       }
       chunkCount += rows.length;
       if (scanner.pageSize > 1 && pageBytes > Math.max(1, (scanner.chunkBytes - pageStartBytes) / 2)) {
@@ -242,8 +309,9 @@ export function createServingContentScanner(db, roomId, sequence, projection, { 
       if (probed.length < limit) {
         if (scanner.verify && (scanner.visible !== scanner.state.messageAuthority.count
           || scanner.count !== scanner.state.messageAuthority.count + (scanner.archive?.count ?? 0))) scanner.drift = true;
-        if (scanner.drift && !scanner.hash) return finish({ drift: true });
+        if (scanner.drift && !scanner.hashContent) return finish({ drift: true });
         scanner.phase = 'work';
+        if (!scanner.rangeTexts.length) bankNow('work');
         break;
       }
       if (segmentBytes >= scanner.chunkBytes) break;
@@ -255,24 +323,29 @@ export function createServingContentScanner(db, roomId, sequence, projection, { 
   const stepWork = () => {
     const references = scanner.state.workItems ?? {};
     if (Object.values(references).some(record => record?._workEntity === 1)) {
-      scanner.hash?.update('\0canonical-work-v1\0');
+      scanner.legacyHash?.update('\0canonical-work-v1\0');
       const seen = new Set();
       for (const row of db.prepare('SELECT work_id,revision,digest,body FROM work_entities WHERE room_id=? ORDER BY work_id').iterate(roomId)) {
-        if (scanner.hash) {
-          const text = JSON.stringify(Object.values(row));
-          scanner.hash.update(String(Buffer.byteLength(text))).update(':').update(text);
-        }
+        if (scanner.hashContent && takeRowText(JSON.stringify(Object.values(row)))) bankNow(scanner.banked.phase);
         const reference = references[row.work_id];
         if (!scanner.verify || reference?._workEntity !== 1) continue;
         seen.add(row.work_id);
         if (reference.digest !== row.digest || reference.revision !== row.revision || projectionDigest(row.body) !== row.digest) {
           scanner.drift = true;
-          if (!scanner.hash) return finish({ drift: true });
+          if (!scanner.hashContent) return finish({ drift: true });
         }
       }
       if (scanner.verify && Object.entries(references).some(([id, record]) => record?._workEntity === 1 && !seen.has(id))) scanner.drift = true;
     }
-    return finish({ drift: scanner.drift, ...(scanner.hash ? { hash: scanner.hash.digest('hex') } : {}) });
+    if (!scanner.hashContent) return finish({ drift: scanner.drift });
+    if (scanner.legacyHash) return finish({ drift: scanner.drift, hash: scanner.legacyHash.digest('hex') });
+    // The trailing partial range closes at scan end; the composed hash
+    // is B3's composeContentHash over every banked range digest in order.
+    if (scanner.rangeTexts.length) { scanner.rangeDigests.push(contentRangeDigest(scanner.rangeTexts)); scanner.rangeTexts = []; }
+    bankNow('done');
+    return finish({ drift: scanner.drift,
+      hash: composeContentHash(roomId, sequence, projectionDigest(projection ?? ''), scanner.rangeDigests),
+      rangeDigests: [...scanner.rangeDigests] });
   };
   scanner.step = () => {
     if (scanner.done) return scanner.outcome;
@@ -296,6 +369,17 @@ export function createServingContentScanner(db, roomId, sequence, projection, { 
     fetchedBytes: scanner.fetchedBytes, lastSegmentBytes: scanner.lastSegmentBytes,
     maxSegmentBytes: scanner.maxSegmentBytes, fetchOversize: scanner.fetchOversize,
     scanDiscards: scanner.scanDiscards, chunks: scanner.chunks,
+    rangeDigests: scanner.rangeDigests ? [...scanner.rangeDigests] : [],
+    rangesBanked: scanner.banked ? scanner.banked.rangeDigests.length : 0,
+  });
+  // The durable-bankable snapshot (B4's checkpoint payload): state as of
+  // the last completed range only — phase, range cursor, counts, drift
+  // and the banked per-range digests, in the checkpoint's vocabulary.
+  scanner.bankedProgress = () => ({
+    phase: scanner.banked.phase, range_cursor: scanner.banked.cursor, cursor: scanner.banked.cursor,
+    rangeDigests: [...scanner.banked.rangeDigests], scanned_count: scanner.banked.count, count: scanner.banked.count,
+    visible_count: scanner.banked.visible, drift: scanner.banked.drift,
+    scanBound: sequence, scan_bound: sequence, bound: sequence, sequence,
   });
   scanner.result = () => scanner.done ? scanner.outcome : { ...scanner.progress(), budgetExceeded: 1 };
   // Drive this scanner chunk by chunk: check the deadline before each
@@ -322,17 +406,75 @@ export function createServingContentScanner(db, roomId, sequence, projection, { 
 export function driveServingContentScan(scanner, { deadline = Infinity, yieldBetween = null } = {}) {
   return scanner.drive({ deadline, yieldBetween });
 }
-function scanServingContent(db, roomId, sequence, projection, { verify, hashContent }) {
+// The v2 stream, transition-only (B3): one fused sha256 pass, retained
+// solely to reproduce a v2 baseline's hash while that baseline is being
+// judged during the explicit v2 -> v3 transition. A v2 hash is a single
+// stream and cannot be banked per range; no v2 scan is chunked or
+// resumed, and the v3 scanner above never produces it.
+function scanServingContentV2(db, roomId, sequence, projection, { verify, hashContent }) {
+  const hash = hashContent
+    ? createHash('sha256').update(roomId).update('\0').update(String(sequence)).update('\0').update(projection ?? '') : null;
+  const state = JSON.parse(projection);
+  let drift = false;
+  if (verify) {
+    const proof = db.prepare('SELECT metadata_hash FROM integrity_room_state WHERE room_id=?').get(roomId);
+    drift = Boolean(proof?.metadata_hash && proof.metadata_hash !== projectionDigest(projection));
+    if (drift && !hashContent) return { drift };
+  }
+  if (hasMessageAuthority(state)) {
+    hash?.update('\0canonical-messages-v1\0');
+    const archive = state.messagesArchive, retained = new Set(archive?.retainedIds ?? []);
+    let count = 0, visible = 0;
+    for (const row of db.prepare(`SELECT ${MESSAGE_PROOF_SELECT},entity_hash FROM messages WHERE room_id=? ORDER BY message_id`).iterate(roomId)) {
+      if (verify && !messageProofMatches(row)) { drift = true; if (!hashContent) return { drift }; }
+      if (hash) framedRowUpdate(hash, JSON.stringify(MESSAGE_PROOF_FIELDS.map(key => row[key])));
+      count++;
+      if (!archive || row.seq > archive.throughSeq || retained.has(row.message_id)) visible++;
+    }
+    if (verify && (visible !== state.messageAuthority.count || count !== state.messageAuthority.count + (archive?.count ?? 0))) drift = true;
+    if (drift && !hashContent) return { drift };
+  }
+  const references = state.workItems ?? {};
+  if (Object.values(references).some(record => record?._workEntity === 1)) {
+    hash?.update('\0canonical-work-v1\0');
+    const seen = new Set();
+    for (const row of db.prepare('SELECT work_id,revision,digest,body FROM work_entities WHERE room_id=? ORDER BY work_id').iterate(roomId)) {
+      if (hash) framedRowUpdate(hash, JSON.stringify(Object.values(row)));
+      const reference = references[row.work_id];
+      if (!verify || reference?._workEntity !== 1) continue;
+      seen.add(row.work_id);
+      if (reference.digest !== row.digest || reference.revision !== row.revision || projectionDigest(row.body) !== row.digest) {
+        drift = true; if (!hashContent) return { drift };
+      }
+    }
+    if (verify && Object.entries(references).some(([id, record]) => record?._workEntity === 1 && !seen.has(id))) drift = true;
+  }
+  if (!hashContent) return { drift };
+  return { drift, hash: hash.digest('hex') };
+}
+function scanServingContent(db, roomId, sequence, projection, { verify, hashContent, definition = 'v3' }) {
   // The synchronous contract: drive the chunked scanner to completion
   // in one call, exactly as checkMessagesParity's direct callers were
-  // preserved in part 2.
-  return createServingContentScanner(db, roomId, sequence, projection, { verify, hashContent }).drive();
+  // preserved in part 2. The v2 definition routes to the transition-only
+  // fused pass above; every other scan is the v3 scanner.
+  if (hashContent && definition === 'v2') return scanServingContentV2(db, roomId, sequence, projection, { verify, hashContent });
+  return createServingContentScanner(db, roomId, sequence, projection, { verify, hashContent, definition }).drive();
 }
 export function projectionContentHash(db,roomId,sequence,projection) {
-  return scanServingContent(db,roomId,sequence,projection,{verify:false,hashContent:true}).hash;
+  return scanServingContent(db,roomId,sequence,projection,{verify:false,hashContent:true,definition:'v3'}).hash;
+}
+export function projectionContentHashV3(db,roomId,sequence,projection) {
+  return projectionContentHash(db,roomId,sequence,projection);
+}
+// The exact pre-v3 stream, retained so a v2 baseline can still be checked
+// for drift during the explicit v2 -> v3 transition (and only there): a
+// stored v2 hash compared against a v3 hash would read as drift on every
+// room and the transition could never adopt.
+export function projectionContentHashV2(db,roomId,sequence,projection) {
+  return scanServingContent(db,roomId,sequence,projection,{verify:false,hashContent:true,definition:'v2'}).hash;
 }
 export function servingContentProof(db,roomId,sequence,projection) {
-  return scanServingContent(db,roomId,sequence,projection,{verify:protocols.has(db),hashContent:true});
+  return scanServingContent(db,roomId,sequence,projection,{verify:protocols.has(db),hashContent:true,definition:'v3'});
 }
 export function servingProofDrift(db,roomId,projection) {
   return protocols.has(db) && scanServingContent(db,roomId,null,projection,{verify:true,hashContent:false}).drift;
@@ -355,8 +497,12 @@ export function bootstrapLegacyWriteProofs(db) {
     }
     // A current metadata proof already covers legitimate writes after an
     // older historical baseline. Consult that baseline only when bootstrapping.
+    // A stored baseline may carry either digest definition (a v2 baseline
+    // not yet transitioned, or a v3 one): matching its own definition is
+    // what proves the bytes, never a cross-definition comparison.
     if (proof?.projection_hash && (proof.sequence !== row.sequence
-      || projectionContentHash(db,row.id,row.sequence,row.projection) !== proof.projection_hash))
+      || (projectionContentHash(db,row.id,row.sequence,row.projection) !== proof.projection_hash
+        && projectionContentHashV2(db,row.id,row.sequence,row.projection) !== proof.projection_hash)))
       throw Error('projection_corrupt: legacy content does not match its baseline');
     insert.run(row.id,row.sequence,row.bytes);
     update.run(hash,row.id);

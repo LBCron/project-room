@@ -1,3 +1,4 @@
+import {currentWorkSummary} from './current-work-summary.mjs';
 import {advanceCanonicalH} from './replay-canonical-h.mjs';
 import {stageCurrentCandidateRecords,currentCandidateCommandContext,applyCurrentCandidateEvent,publishCurrentCandidate,readCurrentRecord,admitCurrentCandidateBudget} from './current-room-repository.mjs';
 import {applyEvent,memberHistoryVisibility} from '../src/events.js';
@@ -1357,12 +1358,14 @@ export function advanceCurrentRoomConversion(store,input) {
                 if(!room)throw Error('Room metadata must precede member qualification');
                 if(memberHistoryVisibility({room,members:{[address[1]]:value}},address[1])==='since_join')throw Error('Since-join member requires bounded historical floor qualification');
               }
+              const changes=[{domain:key,key:address[1],value}];
               if(key==='workItems') {
                 const item=value?._workEntity===1?JSON.parse(readHReferenceSource(db,header,'work',address[1],budget).row.body):value;
                 if(item?.suspended_by==='round_limit')nextCounts.roundLimitPauses++;
                 if(value?._workEntity!==1)throw Error('Inline work requires code-owned target reference conversion');
+                changes.push({domain:'workSummary',key:address[1],value:currentWorkSummary(item,value)});
               }
-              stage([{domain:key,key:address[1],value}],nextCounts);state={...state,metadataEntry:next.key};
+              stage(changes,nextCounts);state={...state,metadataEntry:next.key};
             } else {
               if(partitioned&&['workItems','replyRequests','members'].includes(key)&&counts[key]!==source.entries)throw Error('Complete target map count differs');
               state={...state,metadataIndex:state.metadataIndex+1,metadataEntry:''};

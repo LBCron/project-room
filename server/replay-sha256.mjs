@@ -15,7 +15,9 @@ const K = [
 ];
 export const REPLAY_HASH_INPUT_LIMIT = 256 * 1024;
 export const REPLAY_HASH_STATE_LIMIT = 1024;
-const MAX_BYTES = 8 * 1024 * 1024;
+// SHA-256 carries a 64-bit bit length. Safe integer byte counters fit within
+// 56 bits after multiplication by eight; each feed remains independently bounded.
+const MAX_BYTES = Number.MAX_SAFE_INTEGER;
 const rotate = (x, n) => (x >>> n) | (x << (32 - n));
 const uint32 = value => Number.isInteger(value) && value >= 0 && value <= 0xffffffff;
 
@@ -62,7 +64,7 @@ function block(words, bytes, offset, schedule) {
 export function advanceReplayHash(state, input) {
   validate(state);
   if (!(input instanceof Uint8Array) || input.byteLength > REPLAY_HASH_INPUT_LIMIT
-    || state.bytes + input.byteLength > MAX_BYTES) throw Error('replay hash input limit');
+    || !Number.isSafeInteger(state.bytes + input.byteLength) || state.bytes + input.byteLength > MAX_BYTES) throw Error('replay hash input limit');
   const words = [...state.words], schedule = new Uint32Array(64);
   let offset = 0;
   if (state.pending.length) {

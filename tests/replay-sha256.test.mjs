@@ -80,11 +80,25 @@ test('8 MiB input retains only eight words and at most 63 bytes; each update is 
     state = decodeReplayHash(encodeReplayHash(state));
   }
   assert.equal(finishReplayHash(state), native(bytes));
-  assert.throws(() => advanceReplayHash(state, new Uint8Array([1])), /input limit/);
+  assert.equal(finishReplayHash(advanceReplayHash(state,new Uint8Array([1]))),native(Buffer.concat([bytes,Buffer.from([1])])));
 });
 
 test('update, finish and serialization preserve the caller state',()=>{
   const state=advanceReplayHash(initialReplayHash(),Buffer.from('partial'));const before=structuredClone(state);
   advanceReplayHash(state,Buffer.from('next'));finishReplayHash(state);encodeReplayHash(state);
   assert.deepEqual(state,before);assert.equal(finishReplayHash(advanceReplayHash(state,new Uint8Array())),native(Buffer.from('partial')));
+});
+
+test('stream exceeds former8MiB capture-only ceiling with native digest equivalence',()=>{
+ const block=Buffer.alloc(65536,0x61),nativeHash=createHash('sha256');let state=initialReplayHash();
+ for(let n=0;n<145;n++){nativeHash.update(block);state=advanceReplayHash(decodeReplayHash(encodeReplayHash(state)),block);}
+ assert.ok(state.bytes>8*1024*1024);assert.equal(finishReplayHash(state),nativeHash.digest('hex'));
+});
+test('safe byte counters cross32-bit and SHA length-high-word boundaries without wrap',()=>{
+ for(const bytes of [0x20000000-64,0x100000000-64]){
+  const base={...initialReplayHash(),bytes,pending:[]};const next=advanceReplayHash(decodeReplayHash(encodeReplayHash(base)),Buffer.alloc(64));
+  assert.equal(next.bytes,bytes+64);assert.equal(decodeReplayHash(encodeReplayHash(next)).bytes,bytes+64);assert.match(finishReplayHash(next),/^[a-f0-9]{64}$/);
+ }
+ const last={...initialReplayHash(),bytes:Number.MAX_SAFE_INTEGER,pending:new Array(63).fill(0)};
+ assert.throws(()=>advanceReplayHash(last,Buffer.alloc(1)),/input limit/);
 });

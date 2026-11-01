@@ -11,8 +11,8 @@ import {PassThrough} from 'node:stream';
 import {readWorkItem} from '../server/work-repository.mjs';
 import {textVersion} from '../server/text-results.mjs';
 
-function fixture(t) {
-  const store=new RoomStore(':memory:');t.after(()=>store.close());const events=initialRoom();
+function fixture(t,filename=':memory:') {
+  const store=new RoomStore(filename);t.after(()=>{try{store.close();}catch{}});const events=initialRoom();
   const add=(type,data,actorId='owner')=>events.push(event({roomId:'commons',actorId,type,data}));
   for(const id of ['worker','other'])add('member.added',{memberId:id,displayName:id,kind:'agent',permissions:[]});
   for(let i=0;i<19;i++)add('work.proposed',{workItemId:'task-'+String(i).padStart(2,'0'),title:'Title '+i,definitionOfDone:'NO-DEFINITION-BLOB',accountableMemberId:i===18?'worker':'other'});
@@ -98,3 +98,11 @@ test('results listing resolves canonical native completion pointers rather than 
   const completed=send('work.completed',{workItemId:'000-result',expectedRevision:item().revision,evidenceKind:'room_text',evidenceMessageId:'native-result',evidenceMessageEventId:posted.event.id,evidenceVersion:textVersion(body),previousCompletionEventId:null,producerId:'owner',summary:'Saved',nextAction:'Review'});
   const listed=pages(store,keys.worker,{focus:'results'}).flatMap(p=>p.work);assert.equal(listed.length,1);assert.equal(listed[0].result.kind,'room_text');assert.equal(listed[0].nextResultRead.arguments.completionEventId,completed.event.id);
 });
+import {createHash,createDecipheriv} from 'node:crypto';
+function decryptAsCredentialHolder(token,secret){const bytes=Buffer.from(token,'base64url'),key=createHash('sha256').update('current-work-source-v1:'+secret).digest(),decipher=createDecipheriv('aes-256-gcm',key,bytes.subarray(0,12));decipher.setAuthTag(bytes.subarray(-16));return JSON.parse(Buffer.concat([decipher.update(bytes.subarray(12,-16)),decipher.final()]).toString('utf8'));}
+test('an actual credential holder cannot decrypt excluded request source identities from a work cursor',t=>{
+ const {store,keys}=fixture(t),first=store.currentWorkListing(keys.worker,'commons',{focus:'needs_me'});assert.equal(first.replyRequests.length,0);assert.ok(first.page.nextCursor);assert.throws(()=>{const recovered=decryptAsCredentialHolder(first.page.nextCursor,keys.worker);assert.equal(recovered.requestAfter,'request-03');console.log('CREDENTIAL_HOLDER_RECOVERED_EXCLUDED '+recovered.requestAfter);return recovered;},'Knowing the actual caller credential must not reveal excluded request IDs');
+});
+
+import {mkdtempSync,rmSync}from'node:fs';import{tmpdir}from'node:os';import{join}from'node:path';
+test('work cursor rejects exact cold restart and a different credential for the same member',t=>{const directory=mkdtempSync(join(tmpdir(),'work-cursor-cold-'));t.after(()=>rmSync(directory,{recursive:true,force:true}));const filename=join(directory,'room.sqlite'),{store,keys}=fixture(t,filename),first=store.currentWorkListing(keys.worker,'commons',{focus:'needs_me'}),otherIdentity=store.identities.create('Same worker credential');store.db.prepare('INSERT INTO identity_links(room_id,identity_id,member_id,linked_at) VALUES(?,?,?,?)').run('commons',otherIdentity.identityId,'worker',new Date(store.now()).toISOString());const secondKey=otherIdentity.secret;assert.equal(store.authenticate(secondKey,'commons').member.id,'worker');assert.throws(()=>store.currentWorkListing(secondKey,'commons',first.page.nextRead.arguments),e=>e.code==='invalid_work_cursor');store.close();const cold=new RoomStore(filename);t.after(()=>cold.close());assert.throws(()=>cold.currentWorkListing(keys.worker,'commons',first.page.nextRead.arguments),e=>e.code==='invalid_work_cursor'&&/restart/i.test(e.message));assert.equal(cold.currentWorkListing(keys.worker,'commons',{focus:'needs_me'}).workScope,'bounded_source_window');});

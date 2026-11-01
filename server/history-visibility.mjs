@@ -31,6 +31,23 @@ export function guestHistoryAccessLead(room) {
 
 const JOIN_TYPES = [T.MEMBER_ADDED, T.MEMBER_JOINED_VIA_INVITATION];
 
+// Pure leaves shared by the full history audit and durable recovery census.
+export function advanceHistoryActivation(previous,entry) {
+ let nowActive;
+ if(JOIN_TYPES.includes(entry.type))nowActive=true;
+ else if(entry.active===1||entry.active===true)nowActive=true;
+ else if(entry.active===0||entry.active===false)nowActive=false;
+ else return previous;
+ return {active:nowActive,row:nowActive&&!previous.active?entry:previous.row};
+}
+export function historyJoinPoint(row,headSequence) {
+ if(!row||!Number.isSafeInteger(row.sequence)||typeof row.at!=='string')return {sequence:(Number.isSafeInteger(headSequence)?headSequence:0)+1,at:'9999-12-31T23:59:59.999Z',found:false};
+ return {sequence:row.sequence,at:row.at,found:true};
+}
+export function historyExclusionIds(entry) {
+ return [entry.id,entry.messageId].flatMap(id=>typeof id==='string'?[id,`${id}:channel`]:[]);
+}
+
 // Returns null (no limit) or { sequence, at, sameInstant } for the member's
 // join event. Timestamps have millisecond precision, so `sameInstant` lists
 // the ids of messages and events that share the join's millisecond but come
@@ -49,32 +66,16 @@ export function historyFloor(db, state, roomId, memberId, headSequence = null) {
        AND json_extract(body,'$.data.memberId')=?
      ORDER BY sequence`
   ).all(roomId, ...JOIN_TYPES, T.MEMBER_ACCESS_CHANGED, memberId);
-  let row = null, active = false;
-  for (const entry of rows) {
-    let nowActive;
-    if (JOIN_TYPES.includes(entry.type)) nowActive = true;
-    else if (entry.active === 1 || entry.active === true) nowActive = true;
-    else if (entry.active === 0 || entry.active === false) nowActive = false;
-    else continue; // access_changed without an explicit active flag says nothing about activation
-    if (nowActive && !active) row = entry;
-    active = nowActive;
-  }
-  if (!row || !Number.isSafeInteger(row.sequence) || typeof row.at !== "string") {
-    const head = Number.isSafeInteger(headSequence) ? headSequence : 0;
-    return { sequence: head + 1, at: "9999-12-31T23:59:59.999Z", sameInstant: new Set() };
-  }
+  let activation={active:false,row:null};
+  for(const entry of rows)activation=advanceHistoryActivation(activation,entry);
+  const row=historyJoinPoint(activation.row,headSequence);
+  if(!row.found)return {sequence:row.sequence,at:row.at,sameInstant:new Set()};
   const sameInstant = new Set();
   const earlier = db.prepare(
     `SELECT json_extract(body,'$.id') AS id, json_extract(body,'$.data.messageId') AS messageId FROM events
      WHERE room_id=? AND sequence<? AND json_extract(body,'$.at')=?`
   ).all(roomId, row.sequence, row.at);
-  for (const entry of earlier) {
-    for (const id of [entry.id, entry.messageId]) {
-      if (typeof id !== "string") continue;
-      sameInstant.add(id);
-      sameInstant.add(`${id}:channel`);
-    }
-  }
+  for(const entry of earlier)for(const id of historyExclusionIds(entry))sameInstant.add(id);
   return { sequence: row.sequence, at: row.at, sameInstant };
 }
 

@@ -79,10 +79,10 @@
 // lot after the owner opted out (or after a restore/import dropped the
 // recorded setting), and a missing mirror hid a lot the owner had opted
 // in (B7-2-F1/F2/F4, B2-4-F1 — the settled-lot drift class). The mirror
-// is consulted now only where the store carries no rooms table at all
-// (a predating/partial store, where the mirror is the only record that
-// can exist); wherever the authoritative record can be read, it alone
-// decides, so mirror drift cannot move a lot's public state.
+// is consulted now only where the store carries no rooms relation at
+// all (a predating/partial store, where the mirror is the only record
+// that can exist); wherever the authoritative record can be read, it
+// alone decides, so mirror drift cannot move a lot's public state.
 //
 // Legacy stores: a settings table predating the public_receipts column
 // has no private rooms by definition (the column's default is public),
@@ -177,41 +177,66 @@ export function receiptVisibilitySql({ ownerToggle = true, taskRoomLeg = true, r
   return legs.join(" AND ");
 }
 
-// Whether a table exists in this store at all, read structurally
+// The kind of a named relation in this store — "table", "view",
+// or null when no relation carries the name — read structurally
 // from the schema. The degrade decisions below key on genuine
-// ABSENCE, never on error text: a present table with a renamed or
-// unreadable column is not absent, and pattern-matching an error
-// message cannot tell the two apart — a renamed column produces
-// the same "no such column" as a predating schema (Codex review,
-// seq 25136).
-function tableExists(db, name) {
-  return Boolean(db.prepare("SELECT 1 FROM sqlite_master WHERE type='table' AND name=?").get(name));
+// ABSENCE OF THE NAMED RELATION, never on error text and never on
+// the relation being a table specifically: a present table with a
+// renamed or unreadable column is not absent (round 3, seq 25136),
+// and neither is a VIEW — a store may present any of these
+// relations as a view (a restore/import representation, a compat
+// shape), and a view is the relation's presence, not its absence.
+// The round-3 gate asked sqlite_master for type='table' only, so
+// a view-backed relation read as absent and every degrade behind
+// it fired: an unreadable public_work_tasks view degraded the
+// task attribution, an unreadable setting view dropped a recorded
+// opt-out, and even a READABLE view silently disqualified both
+// SQL probes below, so the composed SQL served what the JS twin
+// hid (Codex review, seq 25157). A present relation of either
+// kind that cannot be read is present-but-unreadable: the probes
+// let its read error propagate, and the composed reads fail
+// closed.
+function relationType(db, name) {
+  const row = db.prepare("SELECT type FROM sqlite_master WHERE name=? AND type IN ('table','view')").get(name);
+  return row ? row.type : null;
 }
 
-// Whether the public-work tables the task leg reads can be read here.
+function relationExists(db, name) {
+  return relationType(db, name) !== null;
+}
+
+// Whether a relation carries a column, read structurally (the
+// table-valued pragma function takes the name as a bound value).
+function relationHasColumn(db, name, column) {
+  return Boolean(db.prepare("SELECT 1 FROM pragma_table_info(?) WHERE name=?").get(name, column));
+}
+
+// Whether the public-work relations the task leg reads can be read
+// here.
 export function publicWorkTablesReadable(db) {
-  if (!tableExists(db, "public_work_receipts") || !tableExists(db, "public_work_tasks")) return false;
-  // Both tables exist: a further read failure (a renamed column on
-  // a populated table) is present-but-unreadable, not absence — let
-  // it propagate, so the composed reads fail closed instead of
-  // degrading the task-room attribution to the origin room.
+  if (!relationExists(db, "public_work_receipts") || !relationExists(db, "public_work_tasks")) return false;
+  // Both relations exist: a further read failure (a renamed column
+  // on a populated table, a view whose base is gone) is
+  // present-but-unreadable, not absence — let it propagate, so the
+  // composed reads fail closed instead of degrading the task-room
+  // attribution to the origin room.
   db.prepare("SELECT receipt_id, offer_id FROM public_work_receipts LIMIT 0").all();
   db.prepare("SELECT offer_id, room_id FROM public_work_tasks LIMIT 0").all();
   return true;
 }
 
-// Whether the recorded setting's read-model copy can be read here at
-// all: a store predating room_public_receipts_setting carries no
-// recorded setting the public read may consult, so the opt-out leg
-// cannot apply there. Only a genuinely absent TABLE is that legacy
-// case (checked structurally, per tableExists): a store whose table
-// exists but whose enabled column cannot be read may hold recorded
-// opt-outs behind the column, so the error propagates and the
-// composed reads throw rather than serve with the leg silently
-// omitted (the JS twin's rule in mirroredReceiptsSetting; Codex
-// review, seq 25107/25108).
+// Whether the recorded setting's read-model copy can be read here
+// at all: a store predating room_public_receipts_setting carries
+// no recorded setting the public read may consult, so the opt-out
+// leg cannot apply there. Only a genuinely absent RELATION is
+// that legacy case (checked structurally, per relationExists): a
+// store whose relation exists but whose enabled column cannot be
+// read may hold recorded opt-outs behind the column, so the error
+// propagates and the composed reads throw rather than serve with
+// the leg silently omitted (the JS twin's rule in
+// mirroredReceiptsSetting; Codex review, seq 25107/25108).
 export function recordedSettingReadable(db) {
-  if (!tableExists(db, "room_public_receipts_setting")) return false;
+  if (!relationExists(db, "room_public_receipts_setting")) return false;
   db.prepare("SELECT room_id, enabled FROM room_public_receipts_setting LIMIT 0").all();
   return true;
 }
@@ -226,17 +251,25 @@ export function receiptVisibilitySqlFor(db) {
   });
 }
 
-// A legacy store whose settings table predates the toggle column has no
-// private rooms by definition, so the owner leg applies only where the
-// column can be read.
+// A legacy store whose settings TABLE predates the toggle column
+// has no private rooms by definition, so the owner leg applies
+// only where the column can be read. The predating shape is a
+// property of a table, decided structurally (round 4): relation
+// kind from sqlite_master, column presence from pragma_table_info
+// — no error-text matching anywhere in the decision. A settings
+// VIEW is a current-schema object, never a predating store, so it
+// gets no column degrade: a view without the column, or one whose
+// base is gone, fails the probe read and the error propagates
+// (the composed reads fail closed) instead of silently omitting
+// the owner leg. The round-3 form pattern-matched the probe's
+// error text, and a broken view's "no such table: <base>" matched
+// it (Codex review, seq 25157).
 export function ownerToggleReadable(db) {
-  try {
-    db.prepare("SELECT public_receipts FROM room_directory_settings LIMIT 0").all();
-    return true;
-  } catch (error) {
-    if (!/no such (column|table)/i.test(error?.message ?? "")) throw error;
-    return false;
-  }
+  const kind = relationType(db, "room_directory_settings");
+  if (!kind) return false; // no settings relation at all: no owner leg can apply
+  if (kind === "table" && !relationHasColumn(db, "room_directory_settings", "public_receipts")) return false;
+  db.prepare("SELECT public_receipts FROM room_directory_settings LIMIT 0").all();
+  return true;
 }
 
 // Pure-data forms of the two rules, for consumers that work from plain
@@ -294,17 +327,19 @@ export function hiddenReceiptIds(db, receiptIds) {
         WHERE pr.id IN (SELECT value FROM json_each(?))`).all(idList);
     } catch (error) {
       // Only genuine ABSENCE degrades (the predating store above,
-      // whose missing tables mean no task record can exist), and
-      // absence is checked structurally in the schema — never from
-      // the error text: a present table with a renamed column
+      // whose missing relations mean no task record can exist),
+      // and absence is checked structurally in the schema — never
+      // from the error text: a present table with a renamed column
       // produces the same "no such column" as a predating schema,
-      // and an I/O error reading live tables is not absence either.
-      // Anything else rethrows, and the outer catch hides everything
-      // asked about rather than re-attributing a public-work receipt
-      // to its stored namespace/origin room, the deciding room the
-      // opt-out leg's attribution rule removed (Codex review,
-      // seq 25107/25108 and seq 25136).
-      if (tableExists(db, "public_work_receipts") && tableExists(db, "public_work_tasks")) throw error;
+      // an I/O error reading live tables is not absence either,
+      // and a relation presented as a VIEW is present, readable or
+      // not (round 4, seq 25157). Anything else rethrows, and the
+      // outer catch hides everything asked about rather than
+      // re-attributing a public-work receipt to its stored
+      // namespace/origin room, the deciding room the opt-out leg's
+      // attribution rule removed (Codex review, seq 25107/25108
+      // and seq 25136).
+      if (relationExists(db, "public_work_receipts") && relationExists(db, "public_work_tasks")) throw error;
       taskLegAvailable = false;
       rows = db.prepare(`SELECT id, room_id AS roomId, origin_room_id AS origin, NULL AS taskRoom, NULL AS pwrId
         FROM public_receipts WHERE id IN (SELECT value FROM json_each(?))`).all(idList);
@@ -413,19 +448,29 @@ export function receiptVisible(db, id) {
 //     there but holds no row for the room (or cannot be read): no
 //     recorded opt-in exists, so the verdict is private.
 //   { status: "unavailable", enabled: null } — the store carries no
-//     rooms table at all (a predating/partial store): the authoritative
-//     record cannot exist here, and the caller falls back to the
-//     write-time mirror, the only record such a store can hold.
+//     rooms relation at all (a predating/partial store): the
+//     authoritative record cannot exist here, and the caller falls
+//     back to the write-time mirror, the only record such a store
+//     can hold.
 export function recordedReceiptsSetting(db, roomId) {
+  let row;
   try {
-    const row = db.prepare(`SELECT json_extract(projection, '$.room.publicReceipts.enabled') AS enabled
+    row = db.prepare(`SELECT json_extract(projection, '$.room.publicReceipts.enabled') AS enabled
       FROM rooms WHERE id=?`).get(roomId);
-    if (!row) return { status: "absent", enabled: null };
-    return { status: "recorded", enabled: row.enabled === 1 ? 1 : row.enabled === 0 ? 0 : null };
-  } catch (error) {
-    if (/no such table/i.test(error?.message ?? "")) return { status: "unavailable", enabled: null };
+  } catch {
+    // "unavailable" is a statement about the STORE, decided
+    // structurally (round 4): only a store with no rooms relation
+    // at all has no authoritative record. A rooms VIEW is the
+    // record's presence — a read failure through it (its base
+    // renamed away; the error text still says "no such table",
+    // which the round-3 form pattern-matched into the mirror
+    // fallback) is present-but-unreadable: "absent", private, and
+    // the mirror is never consulted (Codex review, seq 25157).
+    if (!relationExists(db, "rooms")) return { status: "unavailable", enabled: null };
     return { status: "absent", enabled: null }; // a store that cannot answer recorded no opt-in
   }
+  if (!row) return { status: "absent", enabled: null };
+  return { status: "recorded", enabled: row.enabled === 1 ? 1 : row.enabled === 0 ? 0 : null };
 }
 
 // The write-time mirror of the recorded setting: the fallback record
@@ -452,14 +497,17 @@ function mirroredReceiptsSetting(db, roomId) {
   try {
     row = db.prepare("SELECT enabled FROM room_public_receipts_setting WHERE room_id=?").get(roomId);
   } catch (error) {
-    // Only a genuinely absent TABLE is the legacy null above: no
-    // recorded setting can exist in a store that predates the
-    // mirror. Absence is checked structurally (tableExists), not by
-    // error text — a missing or unreadable COLUMN on a present
-    // table is not absence (recorded rows may sit behind that
-    // column) and propagates like any other read error, so the
-    // verdict composers fail closed (Codex review, seq 25107/25108).
-    if (!tableExists(db, "room_public_receipts_setting")) return null;
+    // Only a genuinely absent RELATION is the legacy null above:
+    // no recorded setting can exist in a store that predates the
+    // mirror. Absence is checked structurally (relationExists),
+    // not by error text — a missing or unreadable COLUMN on a
+    // present table is not absence (recorded rows may sit behind
+    // that column), and neither is a mirror presented as a VIEW:
+    // the view is the mirror's presence, readable or not (round
+    // 4, seq 25157). Both propagate like any other read error, so
+    // the verdict composers fail closed (Codex review,
+    // seq 25107/25108).
+    if (!relationExists(db, "room_public_receipts_setting")) return null;
     throw error;
   }
   if (!row) return null;

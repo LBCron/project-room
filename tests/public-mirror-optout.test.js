@@ -22,7 +22,7 @@ import { PUBLIC_READ_MODEL_SCHEMA, publicReceiptById, queryPublicReceipts, colle
 import { publicUnpublishSchema } from "../server/legal-store.mjs";
 import { roomDirectorySchema } from "../server/room-directory.mjs";
 import { PublicWorkClaims, publicWorkClaimsSchema } from "../server/public-work-claims.mjs";
-import { receiptVisible, hiddenReceiptIds, recordedReceiptsOptOut } from "../server/public-visibility.mjs";
+import { receiptVisible, hiddenReceiptIds, recordedReceiptsOptOut, ownerToggleReadable, lotReceiptVisible } from "../server/public-visibility.mjs";
 import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -341,6 +341,162 @@ test("round-3 read-error, renamed column: a populated task table with room_id re
   assert.deepEqual([...hiddenReceiptIds(db, [PWR])], [PWR]);
   assert.throws(() => queryPublicReceipts({ db }, { limit: 10 }), /no such column/);
   assert.throws(() => publicReceiptById({ db }, PWR), /no such column/);
+});
+
+// --- Round 4 (Codex review, seq 25157): named-relation detection.
+// The round-3 schema gate asked sqlite_master for type='table' only,
+// so a relation presented as a VIEW read as genuinely absent and
+// every degrade behind the gate fired: an unreadable
+// public_work_tasks view degraded the task attribution to the
+// namespace room, an unreadable room_public_receipts_setting view
+// dropped a recorded opt-out as "never recorded" — and even a
+// READABLE view silently disqualified both SQL probes, so the
+// composed SQL served what the JS twin hid. The same class lived in
+// the two remaining error-text gates: ownerToggleReadable matched
+// /no such (column|table)/i (a broken settings view's
+// "no such table: <base>" matches, dropping the owner leg), and
+// recordedReceiptsSetting matched /no such table/i (a broken rooms
+// view re-armed the lot rule's mirror fallback). Round 4 decides
+// every degrade from the named relation's schema entry — kind
+// (table/view/absent) from sqlite_master, column presence from
+// pragma_table_info — and treats a present relation of either kind
+// that cannot be read as present-but-unreadable: the read error
+// propagates and the surfaces fail closed.
+
+// The namespaced fixture (task room ROOM opted out, receipt stored
+// under ns-room) with public_work_tasks presented as a view whose
+// base table is then dropped: the relation EXISTS, the read fails.
+function makeDbTaskViewBroken() {
+  const db = makeDbNamespaced();
+  db.exec("DROP TABLE public_work_tasks");
+  db.exec(`CREATE TABLE public_work_tasks_base
+    (offer_id TEXT, namespace_key TEXT, room_id TEXT, terms_version INTEGER,
+     repository_url TEXT, repository_ref TEXT, files_json TEXT, generation INTEGER, created_at INTEGER)`);
+  db.prepare(`INSERT INTO public_work_tasks_base
+    (offer_id, namespace_key, room_id, terms_version, repository_url, repository_ref, files_json, generation, created_at)
+    VALUES (?,?,?,?,?,?,?,?,?)`).run("offer-1", "ns", ROOM, 1, "https://example.invalid/repo", "main", "[]", 1, 0);
+  db.exec(`CREATE VIEW public_work_tasks AS
+    SELECT offer_id, namespace_key, room_id, terms_version, repository_url, repository_ref, files_json, generation, created_at
+    FROM public_work_tasks_base`);
+  db.exec("DROP TABLE public_work_tasks_base");
+  return db;
+}
+
+test("round-4 view, task: an unreadable public_work_tasks VIEW is present, not absent — no namespace re-attribution", () => {
+  const db = makeDbTaskViewBroken();
+  // JS surfaces fail closed rather than re-attribute to ns-room.
+  assert.equal(receiptVisible(db, PWR), false);
+  assert.deepEqual([...hiddenReceiptIds(db, [PWR])], [PWR]);
+  // SQL surfaces throw (the probe propagates) rather than compose
+  // the origin fragments and serve under the namespace room.
+  assert.throws(() => queryPublicReceipts({ db }, { limit: 10 }));
+  assert.throws(() => publicReceiptById({ db }, PWR));
+});
+
+// The recorded opt-out (enabled=0) lives behind a
+// room_public_receipts_setting VIEW whose base table is dropped.
+function makeDbSettingViewBroken() {
+  const db = makeDb(null);
+  db.exec("DROP TABLE room_public_receipts_setting");
+  db.exec("CREATE TABLE setting_base (room_id TEXT PRIMARY KEY, enabled INTEGER)");
+  db.prepare("INSERT INTO setting_base (room_id, enabled) VALUES (?,?)").run(ROOM, 0);
+  db.exec("CREATE VIEW room_public_receipts_setting AS SELECT room_id, enabled FROM setting_base");
+  db.exec("DROP TABLE setting_base");
+  return db;
+}
+
+test("round-4 view, setting: an unreadable room_public_receipts_setting VIEW never drops a recorded opt-out", () => {
+  const db = makeDbSettingViewBroken();
+  assert.equal(receiptVisible(db, PWR), false);
+  assert.equal(receiptVisible(db, WCR), false);
+  assert.deepEqual([...hiddenReceiptIds(db, [PWR, WCR])].sort(), [PWR, WCR].sort());
+  assert.equal(recordedReceiptsOptOut(db, ROOM), true);
+  assert.throws(() => queryPublicReceipts({ db }, { limit: 10 }));
+  assert.throws(() => publicReceiptById({ db }, PWR));
+});
+
+// ROOM's owner toggle is 0 behind a room_directory_settings VIEW
+// whose base is dropped; the recorded setting is a clean opt-in, so
+// only the owner leg can hide these receipts.
+function makeDbOwnerViewBroken() {
+  const db = makeDb(true);
+  db.exec("DROP TABLE room_directory_settings");
+  db.exec(`CREATE TABLE directory_settings_base
+    (room_id TEXT PRIMARY KEY, discoverable INTEGER NOT NULL DEFAULT 0, listed_at INTEGER,
+     updated_at INTEGER NOT NULL, opportunities_enabled INTEGER NOT NULL DEFAULT 1,
+     public_receipts INTEGER NOT NULL DEFAULT 1)`);
+  db.prepare("INSERT INTO directory_settings_base (room_id, updated_at, public_receipts) VALUES (?,?,?)").run(ROOM, 0, 0);
+  db.exec(`CREATE VIEW room_directory_settings AS
+    SELECT room_id, discoverable, listed_at, updated_at, opportunities_enabled, public_receipts
+    FROM directory_settings_base`);
+  db.exec("DROP TABLE directory_settings_base");
+  return db;
+}
+
+test("round-4 view, owner: a broken room_directory_settings VIEW fails the probe closed instead of dropping the owner leg", () => {
+  const db = makeDbOwnerViewBroken();
+  // Round 3 pattern-matched the broken view's "no such table: <base>"
+  // error and omitted the owner leg entirely. Round 4: the probe
+  // read propagates, so nothing composes a verdict without the leg.
+  assert.throws(() => ownerToggleReadable(db));
+  assert.throws(() => queryPublicReceipts({ db }, { limit: 10 }));
+  assert.throws(() => publicReceiptById({ db }, PWR));
+});
+
+test("round-4 view, rooms: a broken rooms VIEW is present-but-unreadable (private), never the mirror fallback", () => {
+  const db = new DatabaseSync(":memory:");
+  db.exec(PUBLIC_READ_MODEL_SCHEMA);
+  db.exec(publicUnpublishSchema);
+  db.exec(roomDirectorySchema);
+  // The mirror (the only record a rooms-less store may consult) says
+  // ON, and it is stale: the authoritative record says OFF.
+  db.prepare("INSERT INTO room_public_receipts_setting (room_id, enabled) VALUES (?,?)").run(ROOM, 1);
+  db.exec("CREATE TABLE rooms_base (id TEXT PRIMARY KEY, projection TEXT)");
+  db.prepare("INSERT INTO rooms_base (id, projection) VALUES (?,?)")
+    .run(ROOM, JSON.stringify({ room: { publicReceipts: { enabled: 0 } } }));
+  db.exec("CREATE VIEW rooms AS SELECT id, projection FROM rooms_base");
+  db.exec("DROP TABLE rooms_base");
+  // The authoritative record EXISTS (as a view) but cannot be read:
+  // the lot is private. Falling back to the stale mirror here is
+  // the drift class the lot rule exists to close (B7-2).
+  assert.equal(lotReceiptVisible(db, { id: `lot_${"e".repeat(32)}`, roomId: ROOM }), false);
+});
+
+test("round-4 view, readable controls: relations presented as readable VIEWs behave exactly as tables", () => {
+  // Task view, readable: the task room's recorded opt-out decides
+  // on every surface, exactly as with a table.
+  const db = makeDbNamespaced();
+  db.exec("DROP TABLE public_work_tasks");
+  db.exec(`CREATE TABLE public_work_tasks_base
+    (offer_id TEXT, namespace_key TEXT, room_id TEXT, terms_version INTEGER,
+     repository_url TEXT, repository_ref TEXT, files_json TEXT, generation INTEGER, created_at INTEGER)`);
+  db.prepare(`INSERT INTO public_work_tasks_base
+    (offer_id, namespace_key, room_id, terms_version, repository_url, repository_ref, files_json, generation, created_at)
+    VALUES (?,?,?,?,?,?,?,?,?)`).run("offer-1", "ns", ROOM, 1, "https://example.invalid/repo", "main", "[]", 1, 0);
+  db.exec(`CREATE VIEW public_work_tasks AS
+    SELECT offer_id, namespace_key, room_id, terms_version, repository_url, repository_ref, files_json, generation, created_at
+    FROM public_work_tasks_base`);
+  assert.deepEqual(surfaces(db, PWR), ALL_HIDDEN);
+  // Setting view, readable, enabled=0: the opt-out applies on every
+  // surface, exactly as with a table (round 3 omitted the SQL leg
+  // for any view, readable or not).
+  const db2 = makeDb(null);
+  db2.exec("DROP TABLE room_public_receipts_setting");
+  db2.exec("CREATE TABLE setting_base (room_id TEXT PRIMARY KEY, enabled INTEGER)");
+  db2.prepare("INSERT INTO setting_base (room_id, enabled) VALUES (?,?)").run(ROOM, 0);
+  db2.exec("CREATE VIEW room_public_receipts_setting AS SELECT room_id, enabled FROM setting_base");
+  assert.deepEqual(surfaces(db2, PWR), ALL_HIDDEN);
+  assert.equal(recordedReceiptsOptOut(db2, ROOM), true);
+});
+
+test("round-4 degrade preserved: a predating settings TABLE without the toggle column still omits the owner leg", () => {
+  const db = makeDb(true); // recorded opt-in; only the owner leg could hide
+  db.exec("DROP TABLE room_directory_settings");
+  db.exec("CREATE TABLE room_directory_settings (room_id TEXT PRIMARY KEY)");
+  // The predating shape is a property of a table: no private rooms
+  // by definition, the leg is inapplicable, everything else serves.
+  assert.equal(ownerToggleReadable(db), false);
+  assert.deepEqual(surfaces(db, PWR), ALL_SERVED);
 });
 
 test("adversarial read-error over HTTP: the anonymous door stays shut when the setting read fails", async t => {

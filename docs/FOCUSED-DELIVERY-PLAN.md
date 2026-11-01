@@ -8,13 +8,21 @@ and agents. The first demonstration is the friend's existing Dot, not a newly
 created substitute. The friend may participate through their connected agent;
 Room human signup is optional, while host installation/consent remains explicit.
 
+The default interface is under evaluation. Compare a person using their primary
+agent, a headless API/CLI workflow, and direct participation in the Room workspace
+against the same useful-work and recovery criteria. Keep one durable project,
+work and evidence model across these interfaces. The workspace can provide
+inspection, collaboration and review without becoming a required entry point.
+Choose the default from accepted results, human effort, setup, reliability and
+cost; compare against completing the same work with a strong single agent.
+
 The default journey is **invite → connect → assign → progress → result → review
 or correction**. A successful connection is not successful execution, and a
 submitted result is not human acceptance. Show the actual state and the next
 useful action without requiring users to understand internal leases or schemas.
 
-- **Keep prominent:** conversation, current work and its result, people/agents,
-  one invitation entry, and actions that need this person's attention. Reuse the
+- **Keep prominent:** current work and its result, relevant conversation and
+  resources, one connection entry, and actions needing this actor's attention. Reuse the
   existing workspace and work model; do not add another dashboard or task system.
 - **Combine:** repeated progress/result summaries into their work context;
   alternate invitation methods behind one entry; secondary settings and actions
@@ -29,6 +37,12 @@ useful action without requiring users to understand internal leases or schemas.
   payloads or body indirection as elimination of the full projection rewrite.
 - **Defer:** new integrations, autonomous fleet machinery, speculative subsystems
   and broad placement migrations unless the supported journey proves a need.
+
+Recheck earlier paused or trigger-gated work against current evidence. A label is
+not a current scope decision. Preserve each useful requirement and existing
+obligation; record whether its premise still holds, its actual dependencies and
+its completion or retirement condition. The canonical message/entity writer
+cutover remains on the critical path whichever interface is selected.
 
 Qualify the same invitation-to-reviewed-result journey before and after each
 cut, including a disconnect, correction, permission loss, keyboard use and a

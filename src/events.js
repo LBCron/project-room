@@ -1,3 +1,4 @@
+import { inheritCurrentRecordContext } from './current-record-context.js';
 import { canAdministerRoom, canInviteCoOwners, museDevelopmentAccess } from './room-administration.js';
 import { createWorkReducers } from "./work-reducers.js";
 import { createMessageReducers, isRedactedBody } from "./message-reducers.js";
@@ -611,6 +612,7 @@ function lightMessageCloneIds(incoming) {
 }
 function cloneStateForApply(current, incoming, journal = null) {
   const state = { ...current, ...(journal ?? {}) };
+  inheritCurrentRecordContext(current,state);
   if (!journal && Array.isArray(current.eventLog)) state.eventLog = current.eventLog.slice();
   if (!journal && current.seenEvents && typeof current.seenEvents === "object") {
     state.seenEvents = { ...current.seenEvents };

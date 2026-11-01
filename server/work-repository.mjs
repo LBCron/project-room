@@ -1,3 +1,4 @@
+import { isCurrentRoom, readCurrentWorkItem } from './current-room-repository.mjs';
 // Canonical work payloads. References identify exact content, not merely a
 // mutable row. The caller owns the transaction containing event + carrier.
 import { createHash } from 'node:crypto';
@@ -69,6 +70,7 @@ export function referenceWorkItems(db, roomId, input, { enabled = modes.get(db) 
 }
 
 export function readWorkItem(db, roomId, workId) {
+  if (isCurrentRoom(db,roomId)) return readCurrentWorkItem(db,roomId,workId);
   const row = db.prepare("SELECT item.value FROM rooms,json_each(rooms.projection,'$.workItems') AS item WHERE rooms.id=? AND item.key=?").get(roomId, workId);
   if (!row) return null;
   const item = JSON.parse(row.value);

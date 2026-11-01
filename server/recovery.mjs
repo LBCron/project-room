@@ -1,3 +1,4 @@
+import { isCurrentRoom, readCurrentRoomForAudit, verifyCurrentRoomSchema } from './current-room-repository.mjs';
 // Read-only offline audit. It neither repairs data nor proves post-capture authority.
 import { createHash } from "node:crypto";
 import { EVENT_TYPES, RETIRED_REPLAY_EVENT_TYPES, validId } from "../src/events.js";
@@ -71,11 +72,12 @@ export function auditRecovery(store) {
     requireState(tables.every(name => allowed.has(name)));
     if (tables.includes("message_replay_units")) auditReplayCutoverRecovery(store.db);
     requireState(required.every(name => tables.includes(name)));
+    verifyCurrentRoomSchema(store.db);
     const rooms = new Map();
     const drift = [];
     let eventCount = 0, checkpointCount = 0, checkpointEvents = 0;
     for (const row of store.db.prepare("SELECT id,sequence FROM rooms ORDER BY id").all()) {
-      const actual = store.room(row.id), rebuilt = store.rebuildProjection(row.id);
+      const actual = isCurrentRoom(store.db,row.id) ? readCurrentRoomForAudit(store,row.id) : store.room(row.id), rebuilt = store.rebuildProjection(row.id);
       // An archived room's stored projection is compacted; compare the replay compacted the same way.
       compactReplayLikeArchive(store.db, row.id, rebuilt.state);
       // Phase 2 channels: old stored projections may lack channels while the

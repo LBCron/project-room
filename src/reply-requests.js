@@ -1,3 +1,4 @@
+import { currentRecordReplyCount } from './current-record-context.js';
 // Shared request semantics. Deliberately independent of events, storage and UI.
 export const REPLY_CANCELLED = "reply_request.cancelled";
 export const REPLY_POLICY_VERSION = 1;
@@ -157,7 +158,7 @@ export function prepareReplyPost(state, incoming) {
     "Invalid answer credential");
   if (mode === "open") {
     requireValid(data.toMemberId !== incoming.actorId, "A reply request needs another participant");
-    requireValid(Object.keys(state.replyRequests ?? {}).length < MAX_REPLY_REQUESTS, "Reply request capacity reached");
+    requireValid((currentRecordReplyCount(state) ?? Object.keys(state.replyRequests ?? {}).length) < MAX_REPLY_REQUESTS, "Reply request capacity reached");
   } else {
     const request = replyRequest(state, data.responseToRequestId);
     openRevision(request, data.expectedRequestRevision);

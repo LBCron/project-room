@@ -1,0 +1,569 @@
+import { messageInHistory, historyFloor as deriveHistoryFloor } from './history-visibility.mjs';
+import { bindCurrentRecordContext } from '../src/current-record-context.js';
+// Current serving metadata, never replay staging. Version/fences are storage
+// compatibility and prospective write integrity, not authority against a DBA.
+import { createHash, randomUUID } from 'node:crypto';
+import { isDeepStrictEqual } from 'node:util';
+import { emptyRoomState, memberHistoryVisibility } from '../src/events.js';
+import { messageProofMatches, MESSAGE_PROOF_SELECT, recordProjectionWrite } from './write-integrity.mjs';
+import { decodeMessageEntity } from './message-entity-projection.mjs';
+import { referenceWorkItems } from './work-repository.mjs';
+import { syncMessageRows } from './messages-store.mjs';
+import { ServiceError } from './service-error.mjs';
+
+export const CURRENT_ROOM_TABLES = Object.freeze(['current_room_records','current_room_record_proofs','current_room_head','current_room_writer_permit']);
+const hash = text => createHash('sha256').update(text).digest('hex');
+const corrupt = message => { throw Error('current_room_corrupt: ' + message); };
+const refuse = message => { throw new ServiceError(409,'current_room_context_unavailable',message); };
+const MAX_INPUT = 256 * 1024, MAX_RECORD = 128 * 1024;
+const maps = new Set(['members','channels','workItems','replyRequests','agentHalts','helpOffers','bonds']);
+const omitted = new Set(['messages','messageAuthority','eventLog','seenEvents','seenIdempotencyKeys']);
+const normalized = sql => sql?.trim().replace(/;$/,'').replace(/IF NOT EXISTS /g,'').replace(/\s+/g,' ');
+const schemaCache=new WeakMap(),formatScopes=new WeakMap();
+const definitions = [
+  ['current_room_records',`CREATE TABLE IF NOT EXISTS current_room_records (
+    room_id TEXT NOT NULL REFERENCES rooms(id) ON DELETE CASCADE, domain TEXT NOT NULL, record_key TEXT NOT NULL,
+    revision INTEGER NOT NULL CHECK(revision>=0), payload_bytes INTEGER NOT NULL CHECK(payload_bytes BETWEEN 1 AND 131072),
+    payload_sha256 TEXT NOT NULL, payload TEXT NOT NULL, PRIMARY KEY(room_id,domain,record_key))`],
+  ['current_room_record_proofs',`CREATE TABLE IF NOT EXISTS current_room_record_proofs (
+    room_id TEXT NOT NULL REFERENCES rooms(id) ON DELETE CASCADE, domain TEXT NOT NULL, record_key TEXT NOT NULL,
+    revision INTEGER NOT NULL CHECK(revision>=0), present INTEGER NOT NULL CHECK(present IN (0,1)),
+    payload_sha256 TEXT NOT NULL, receipt_id TEXT NOT NULL, PRIMARY KEY(room_id,domain,record_key))`],
+  ['current_room_head',`CREATE TABLE IF NOT EXISTS current_room_head (
+    room_id TEXT PRIMARY KEY REFERENCES rooms(id) ON DELETE CASCADE, format_version INTEGER NOT NULL CHECK(format_version=1),
+    sequence INTEGER NOT NULL, event_id TEXT NOT NULL, revision INTEGER NOT NULL,
+    head_sha256 TEXT NOT NULL, counts_json TEXT NOT NULL, receipt_id TEXT NOT NULL)`],
+  ['current_room_writer_permit',`CREATE TABLE IF NOT EXISTS current_room_writer_permit (
+    singleton INTEGER PRIMARY KEY CHECK(singleton=1), enabled INTEGER NOT NULL CHECK(enabled IN (0,1)), room_id TEXT, receipt_id TEXT)`]
+];
+export const CURRENT_ROOM_SCHEMA = definitions.map(([,sql])=>sql+';').join('\n')
+  + '\nINSERT OR IGNORE INTO current_room_writer_permit VALUES(1,0,NULL,NULL);';
+const permitFor = row => `(SELECT enabled=1 AND room_id=${row}.room_id FROM current_room_writer_permit WHERE singleton=1) IS 1`;
+const guardDefinitions = [];
+for (const table of ['current_room_records','current_room_record_proofs','current_room_head','messages','work_entities','events','commands','rooms']) {
+  for (const operation of ['INSERT','UPDATE','DELETE']) {
+    const rows=operation==='UPDATE'?['OLD','NEW']:[operation==='DELETE'?'OLD':'NEW'];
+    const key=row=>`${row}.${table==='rooms'?'id':'room_id'}`;
+    const scoped = CURRENT_ROOM_TABLES.includes(table) ? '1'
+      : rows.map(row=>`EXISTS(SELECT 1 FROM current_room_head WHERE room_id=${key(row)})`).join(' OR ');
+    const admitted = rows.map(row=> table==='rooms'
+      ? `(SELECT enabled=1 AND room_id=${key(row)} FROM current_room_writer_permit WHERE singleton=1) IS 1`
+      : permitFor(row)).join(' AND ');
+    const marker = table==='rooms' && operation!=='DELETE'
+      ? ` SELECT CASE WHEN json_valid(NEW.projection) IS NOT 1 OR json_extract(NEW.projection,'$.normalizedCurrent.version') IS NOT 1
+        OR (SELECT count(*) FROM json_each(NEW.projection))<>1 THEN RAISE(ABORT,'unsupported current room carrier') END;` : '';
+    const name=`current_room_guard_${table}_${operation.toLowerCase()}`;
+    guardDefinitions.push([name,`CREATE TRIGGER IF NOT EXISTS ${name} BEFORE ${operation} ON ${table}
+      WHEN ${scoped} BEGIN SELECT CASE WHEN NOT (${admitted}) THEN RAISE(ABORT,'unsupported current room writer') END;${marker} END`]);
+  }
+}
+guardDefinitions.push(['current_room_permit_update',`CREATE TRIGGER IF NOT EXISTS current_room_permit_update BEFORE UPDATE ON current_room_writer_permit BEGIN
+  SELECT CASE WHEN NEW.singleton IS NOT 1 OR NEW.enabled NOT IN (0,1) OR
+    (NEW.enabled=0 AND (NEW.room_id IS NOT NULL OR NEW.receipt_id IS NOT NULL)) OR
+    (NEW.enabled=1 AND (OLD.enabled IS NOT 0 OR NOT EXISTS(SELECT 1 FROM operator_actions a
+      WHERE a.id=NEW.receipt_id AND a.action='current_room_writer_admission' AND a.target_kind='room' AND a.target_id=NEW.room_id
+      AND json_extract(a.counts_json,'$.roomId')=NEW.room_id AND json_extract(a.counts_json,'$.permitId')=NEW.receipt_id
+      AND json_extract(a.counts_json,'$.headHash')=coalesce((SELECT head_sha256 FROM current_room_head WHERE room_id=NEW.room_id),'new'))
+      OR EXISTS(SELECT 1 FROM operator_actions WHERE id=NEW.receipt_id||'_closed'))) OR
+    (NEW.enabled=0 AND OLD.enabled=1 AND NOT EXISTS(SELECT 1 FROM operator_actions WHERE id=OLD.receipt_id||'_closed'
+      AND action='current_room_writer_closed' AND target_id=OLD.room_id))
+    THEN RAISE(ABORT,'unsupported current room permit') END; END`],
+  ['current_room_permit_insert',`CREATE TRIGGER IF NOT EXISTS current_room_permit_insert BEFORE INSERT ON current_room_writer_permit BEGIN
+    SELECT CASE WHEN NEW.enabled IS NOT 0 OR NEW.room_id IS NOT NULL OR NEW.receipt_id IS NOT NULL
+      OR EXISTS(SELECT 1 FROM current_room_writer_permit WHERE enabled<>0)
+      THEN RAISE(ABORT,'unsupported current room permit') END; END`],
+  ['current_room_permit_delete',`CREATE TRIGGER IF NOT EXISTS current_room_permit_delete BEFORE DELETE ON current_room_writer_permit BEGIN
+    SELECT RAISE(ABORT,'unsupported current room permit'); END`]);
+export const CURRENT_ROOM_GUARDS = guardDefinitions.map(([,sql])=>sql+';').join('\n') + `
+CREATE INDEX IF NOT EXISTS current_messages_public_seq ON messages(room_id,seq DESC,message_id DESC) WHERE to_member_id IS NULL OR to_member_id='';
+CREATE INDEX IF NOT EXISTS current_messages_channel_public_seq ON messages(room_id,channel_id,seq DESC,message_id DESC) WHERE to_member_id IS NULL OR to_member_id='';
+CREATE INDEX IF NOT EXISTS current_messages_incoming_seq ON messages(room_id,to_member_id,seq DESC,message_id DESC);
+CREATE INDEX IF NOT EXISTS current_messages_outgoing_seq ON messages(room_id,author_id,seq DESC,message_id DESC) WHERE to_member_id IS NOT NULL AND to_member_id<>'';
+CREATE INDEX IF NOT EXISTS current_messages_pair_seq ON messages(room_id,author_id,to_member_id,seq DESC,message_id DESC);
+`;
+export function verifyCurrentRoomSchema(db) {
+  for(const [name,sql] of [...definitions,...guardDefinitions])
+    if(normalized(db.prepare('SELECT sql FROM sqlite_master WHERE name=?').get(name)?.sql)!==normalized(sql))
+      corrupt('schema requires reconciliation: '+name);
+  const permit=db.prepare('SELECT singleton,enabled,room_id,receipt_id FROM current_room_writer_permit').all();
+  if(permit.length!==1 || permit[0].singleton!==1 || permit[0].enabled!==0 || permit[0].room_id!==null || permit[0].receipt_id!==null)
+    corrupt('writer permit is not closed');
+}
+export function withCurrentRoomWriter(db,roomId,operation) {
+  if(!db.isTransaction)throw Error('Current room writer requires existing transaction');
+  const previous=db.prepare('SELECT enabled,room_id,receipt_id FROM current_room_writer_permit WHERE singleton=1').get();
+  if(previous.enabled!==0) {
+    if(previous.enabled!==1 || previous.room_id!==roomId || formatScopes.get(db)!==roomId)throw Error('Current room writer scope collision');
+    return operation();
+  }
+  if(previous.room_id!==null||previous.receipt_id!==null)corrupt('unclosed format writer');
+  const permitId='oa_cwa_'+hash(randomUUID()),headHash=db.prepare('SELECT head_sha256 FROM current_room_head WHERE room_id=?').get(roomId)?.head_sha256??'new';
+  db.prepare('INSERT INTO operator_actions(id,at,action,target_kind,target_id,counts_json,result) VALUES(?,?,?,?,?,?,?)')
+    .run(permitId,Date.now(),'current_room_writer_admission','room',roomId,JSON.stringify({roomId,permitId,headHash}),'opened');
+  db.prepare('UPDATE current_room_writer_permit SET enabled=1,room_id=?,receipt_id=? WHERE singleton=1').run(roomId,permitId);
+  formatScopes.set(db,roomId);
+  try { const result=operation();if(result?.then)throw Error('Current room writer must remain synchronous');return result; }
+  finally { formatScopes.delete(db);if(db.isTransaction){
+    db.prepare('INSERT INTO operator_actions(id,at,action,target_kind,target_id,counts_json,result) VALUES(?,?,?,?,?,?,?)')
+      .run(permitId+'_closed',Date.now(),'current_room_writer_closed','room',roomId,JSON.stringify({permitId}),'closed');
+    db.prepare('UPDATE current_room_writer_permit SET enabled=0,room_id=NULL,receipt_id=NULL WHERE singleton=1').run();
+  }}
+}
+export function isCurrentRoom(db,roomId) {
+  if(db.prepare('SELECT 1 FROM current_room_head WHERE room_id=?').get(roomId))return true;
+  const prefix=Buffer.from('{"normalizedCurrent":');
+  if(db.prepare('SELECT 1 FROM rooms WHERE id=? AND substr(CAST(projection AS BLOB),1,?)=?').get(roomId,prefix.length,prefix))
+    corrupt('closed current marker lacks its independent head');
+  return false;
+}
+const budget = () => ({bytes:0,records:0,receipts:new Map()});
+function charge(b,n,rows=1) {
+  if(!Number.isSafeInteger(n)||n<0)corrupt('invalid scalar size');
+  b.bytes+=n;b.records+=rows;
+  if(b.bytes>MAX_INPUT||b.records>200)refuse('Current record context exceeds bounded input; use a smaller addressed request');
+}
+function receipt(db,id,b) {
+  if(b.receipts.has(id))return b.receipts.get(id);
+  const size=db.prepare('SELECT length(CAST(counts_json AS BLOB)) AS bytes FROM operator_actions WHERE id=? AND action=?')
+    .get(id,'current_room_transition');
+  if(!size||size.bytes>MAX_RECORD)corrupt('missing transition receipt');charge(b,size.bytes+256);
+  const row=db.prepare('SELECT counts_json FROM operator_actions WHERE id=? AND action=?').get(id,'current_room_transition');
+  const value=JSON.parse(row.counts_json);b.receipts.set(id,value);return value;
+}
+const headValue = row => [1,row.room_id,row.sequence,row.event_id,row.revision,JSON.parse(row.counts_json)];
+function admitCurrentSchema(db,b) {
+  if(b.schemaVerified)return;
+  const expected=new Map([...definitions,...guardDefinitions].map(([name,sql])=>[name,normalized(sql)]));
+  // Include the exact owned visibility indexes as well as mutation guards.
+  for(const sql of CURRENT_ROOM_GUARDS.split(';').map(sql=>sql.trim()).filter(sql=>sql.startsWith('CREATE INDEX')))
+    expected.set(/CREATE INDEX IF NOT EXISTS ([a-z_]+)/.exec(sql)[1],normalized(sql));
+  const saved=schemaCache.get(db);let rows;
+  if(saved)rows=db.prepare(`SELECT rowid,name,sql FROM sqlite_master WHERE rowid IN (${saved.map(()=>'?').join(',')})`).all(...saved);
+  else rows=db.prepare(`SELECT rowid,name,sql FROM sqlite_master WHERE name IN (${[...expected].map(()=>'?').join(',')})`).all(...expected.keys());
+  charge(b,rows.reduce((bytes,row)=>bytes+Buffer.byteLength(row.sql??'')+128,0),rows.length);
+  if(rows.length!==expected.size||rows.some(row=>expected.get(row.name)!==normalized(row.sql)))corrupt('owned serving schema changed');
+  if(!saved)schemaCache.set(db,rows.map(row=>row.rowid));
+  const permit=db.prepare('SELECT singleton,enabled,room_id,receipt_id FROM current_room_writer_permit').all();charge(b,256,permit.length);
+  const scope=formatScopes.get(db);
+  if(permit.length!==1||permit[0].singleton!==1||permit[0].enabled!==(scope?1:0)||permit[0].room_id!==(scope??null)||(!scope&&permit[0].receipt_id!==null))corrupt('unregistered format writer permit');
+  b.schemaVerified=true;
+}
+export function readCurrentHead(db,roomId,b=budget()) {
+  const scalar=db.prepare('SELECT length(CAST(counts_json AS BLOB)) AS bytes FROM current_room_head WHERE room_id=?').get(roomId);
+  if(!scalar){isCurrentRoom(db,roomId);return null;}admitCurrentSchema(db,b);if(scalar.bytes>4096)corrupt('oversized head');charge(b,scalar.bytes+1024);
+  const row=db.prepare('SELECT * FROM current_room_head WHERE room_id=?').get(roomId);
+  if(row.format_version!==1||hash(JSON.stringify(headValue(row)))!==row.head_sha256)corrupt('head commitment changed');
+  const saved=receipt(db,row.receipt_id,b);
+  if(saved.roomId!==roomId||saved.headHash!==row.head_sha256)corrupt('head receipt changed');
+  const carrier=db.prepare('SELECT sequence,projection FROM rooms WHERE id=?').get(roomId);
+  charge(b,512);
+  if(!carrier||carrier.sequence!==row.sequence||carrier.projection!==JSON.stringify({normalizedCurrent:{version:1,headRevision:row.revision,headHash:row.head_sha256}}))
+    corrupt('carrier differs from independent head');
+  return {...row,counts:JSON.parse(row.counts_json)};
+}
+export function readCurrentRecord(db,roomId,domain,key,b=budget()) {
+  if(!b.schemaVerified&&!readCurrentHead(db,roomId,b))corrupt('record namespace is not initialized');
+  if(typeof key!=='string'||Buffer.byteLength(key)>200)refuse('Current record identity is too large');
+  charge(b,1024,2);
+  const proof=db.prepare('SELECT revision,present,payload_sha256,receipt_id FROM current_room_record_proofs WHERE room_id=? AND domain=? AND record_key=?').get(roomId,domain,key);
+  const scalar=db.prepare('SELECT revision,payload_bytes,length(CAST(payload AS BLOB)) AS bytes,payload_sha256 FROM current_room_records WHERE room_id=? AND domain=? AND record_key=?').get(roomId,domain,key);
+  if(!proof){if(scalar)corrupt('payload lacks independent membership proof');return undefined;}
+  const saved=receipt(db,proof.receipt_id,b);
+  if(saved.roomId!==roomId||!saved.records?.some(tuple=>isDeepStrictEqual(tuple,[domain,key,proof.revision,proof.present,proof.payload_sha256])))
+    corrupt('record witness receipt changed');
+  if(proof.present===0){if(scalar)corrupt('tombstoned payload exists');return undefined;}
+  if(proof.present!==1||!scalar||scalar.revision!==proof.revision||scalar.payload_sha256!==proof.payload_sha256
+    ||scalar.payload_bytes!==scalar.bytes||scalar.bytes<1||scalar.bytes>MAX_RECORD)corrupt('record differs from membership proof');
+  charge(b,scalar.bytes);
+  const {payload}=db.prepare('SELECT payload FROM current_room_records WHERE room_id=? AND domain=? AND record_key=?').get(roomId,domain,key);
+  if(hash(payload)!==proof.payload_sha256)corrupt('record payload changed');
+  return JSON.parse(payload);
+}
+function fieldsOf(state) {
+  const out=new Map();
+  for(const [key,value] of Object.entries(state)) {
+    if(omitted.has(key))continue;
+    if(maps.has(key)&&value!==null&&typeof value==='object'&&!Array.isArray(value)) {
+      out.set(JSON.stringify(['shape',key]),'object');
+      for(const [id,item] of Object.entries(value))out.set(JSON.stringify([key,id]),item);
+    } else out.set(JSON.stringify(['metadata',key]),value);
+  }
+  return out;
+}
+function saveTransition(db,roomId,sequence,eventId,oldHead,changes,counts) {
+  if(changes.length>128)refuse('Too many current metadata changes in one transition');
+  const revision=(oldHead?.revision??-1)+1,head={room_id:roomId,sequence,event_id:eventId,revision,counts_json:JSON.stringify(counts)};
+  const headHash=hash(JSON.stringify(headValue(head))),receiptId='oa_current_'+hash(JSON.stringify([roomId,sequence,revision,headHash]));
+  const tuples=[];
+  for(const {domain,key,value} of changes) {
+    const prior=db.prepare('SELECT revision FROM current_room_record_proofs WHERE room_id=? AND domain=? AND record_key=?').get(roomId,domain,key);
+    const recordRevision=(prior?.revision??-1)+1,present=value===undefined?0:1,payload=present?JSON.stringify(value):'',digest=hash(payload);
+    if(present&&(Buffer.byteLength(payload)>MAX_RECORD))refuse('Current metadata record exceeds bounded input');
+    tuples.push([domain,key,recordRevision,present,digest]);
+    if(present)db.prepare(`INSERT INTO current_room_records VALUES(?,?,?,?,?,?,?) ON CONFLICT(room_id,domain,record_key)
+      DO UPDATE SET revision=excluded.revision,payload_bytes=excluded.payload_bytes,payload_sha256=excluded.payload_sha256,payload=excluded.payload`)
+      .run(roomId,domain,key,recordRevision,Buffer.byteLength(payload),digest,payload);
+    else db.prepare('DELETE FROM current_room_records WHERE room_id=? AND domain=? AND record_key=?').run(roomId,domain,key);
+    db.prepare(`INSERT INTO current_room_record_proofs VALUES(?,?,?,?,?,?,?) ON CONFLICT(room_id,domain,record_key)
+      DO UPDATE SET revision=excluded.revision,present=excluded.present,payload_sha256=excluded.payload_sha256,receipt_id=excluded.receipt_id`)
+      .run(roomId,domain,key,recordRevision,present,digest,receiptId);
+  }
+  const saved=JSON.stringify({version:1,roomId,headHash,records:tuples});
+  if(Buffer.byteLength(saved)>MAX_RECORD)refuse('Current transition receipt exceeds bounded input');
+  db.prepare('INSERT INTO operator_actions(id,at,action,target_kind,target_id,counts_json,result) VALUES(?,?,?,?,?,?,?)')
+    .run(receiptId,Date.now(),'current_room_transition','room',roomId,saved,'committed');
+  db.prepare(`INSERT INTO current_room_head VALUES(?,1,?,?,?,?,?,?) ON CONFLICT(room_id) DO UPDATE SET
+    sequence=excluded.sequence,event_id=excluded.event_id,revision=excluded.revision,head_sha256=excluded.head_sha256,counts_json=excluded.counts_json,receipt_id=excluded.receipt_id`)
+    .run(roomId,sequence,eventId,revision,headHash,head.counts_json,receiptId);
+  return JSON.stringify({normalizedCurrent:{version:1,headRevision:revision,headHash}});
+}
+export function initializeCurrentRoom(store,state,events) {
+  const db=store.db,roomId=state.room.id;
+  return withCurrentRoomWriter(db,roomId,()=>{
+    // New room only. Existing-room adoption must come through H/tail equality.
+    if(db.prepare('SELECT 1 FROM rooms WHERE id=?').get(roomId))throw Error('Current room initialization requires a new room');
+    db.prepare('INSERT INTO rooms(id,sequence,projection,archived_at) VALUES(?,?,?,NULL)').run(roomId,events.length,'{}');
+    const insert=db.prepare('INSERT INTO events VALUES(?,?,?,?)');
+    events.forEach((event,index)=>{insert.run(roomId,index+1,event.id,JSON.stringify(event));syncMessageRows(db,{roomId,sequence:index+1,event,state});});
+    const referenced=referenceWorkItems(db,roomId,state,{enabled:true});
+    const fields=fieldsOf(referenced),counts={messages:state.messages.length,workItems:Object.keys(state.workItems).length,
+      replyRequests:Object.keys(state.replyRequests??{}).length,members:Object.keys(state.members).length,roundLimitPauses:0,threadParticipants:0};
+    const messageById=new Map(state.messages.map(message=>[message.id,message]));
+    for(const message of state.messages) {
+      let root=message;const visited=new Set();
+      while(root.replyToId) {if(visited.has(root.id))corrupt('initial reply cycle');visited.add(root.id);const parent=messageById.get(root.replyToId);if(!parent)break;root=parent;}
+      fields.set(JSON.stringify(['threadParticipants',root.id+'\0'+message.authorId]),{threadRootId:root.id,memberId:message.authorId});
+    }
+    counts.threadParticipants=[...fields.keys()].filter(key=>JSON.parse(key)[0]==='threadParticipants').length;
+    counts.historyFloors=0;counts.historyExclusions=0;
+    for(const memberId of Object.keys(state.members)) {
+      const floor=deriveHistoryFloor(db,state,roomId,memberId,events.length);if(!floor)continue;
+      fields.set(JSON.stringify(['historyFloors',memberId]),{sequence:floor.sequence,at:floor.at,sameInstantCount:floor.sameInstant.size});counts.historyFloors++;
+      for(const id of floor.sameInstant){fields.set(JSON.stringify(['historyExclusions',memberId+'\0'+id]),true);counts.historyExclusions++;}
+    }
+    counts.metadataRecords=fields.size;counts.metadataProofs=fields.size;
+    if(Object.values(state.workItems).some(item=>item.suspended_by==='round_limit'))refuse('Round-limit index is not yet qualified');
+    const changes=[...fields].map(([address,value])=>{const [domain,key]=JSON.parse(address);return {domain,key,value};});
+    let carrier,oldHead=null;
+    for(let offset=0;offset<changes.length||offset===0;offset+=128) {
+      carrier=saveTransition(db,roomId,events.length,events.at(-1)?.id??'',oldHead,changes.slice(offset,offset+128),counts);
+      oldHead={revision:(oldHead?.revision??-1)+1};
+    }
+    db.prepare('UPDATE rooms SET projection=? WHERE id=?').run(carrier,roomId);
+    // Existing integrity metadata protects the small marker; entity proofs stay
+    // those produced by their code-owned repository writes above.
+    store.ensureIntegrityRoomState();
+    db.prepare('INSERT INTO integrity_room_state(room_id,sequence,projection_bytes,projection_hash,metadata_hash) VALUES(?,?,?,?,?)')
+      .run(roomId,events.length,Buffer.byteLength(carrier),null,hash(carrier));
+    return roomId;
+  });
+}
+export function currentRoomAuthority(db,roomId) {
+  const b=contextBudgets.get(db)??budget(),head=readCurrentHead(db,roomId,b);if(!head)return null;
+  const room=readCurrentRecord(db,roomId,'metadata','room',b);
+  const members={};
+  if(head.counts.members>100)refuse('Room authority requires bounded membership');
+  const keys=db.prepare("SELECT record_key FROM current_room_record_proofs WHERE room_id=? AND domain='members' AND present=1 ORDER BY record_key LIMIT 101").all(roomId);
+  charge(b,keys.reduce((n,row)=>n+Buffer.byteLength(row.record_key)+32,0),keys.length);
+  if(keys.length!==head.counts.members)corrupt('complete member census differs');
+  for(const {record_key:key} of keys)Object.defineProperty(members,key,{value:readCurrentRecord(db,roomId,'members',key,b),enumerable:true,writable:true,configurable:true});
+  if(!room||!Object.hasOwn(members,room.ownerId))corrupt('missing owner authority');
+  return {sequence:head.sequence,ownerId:room.ownerId,members,historyVisibility:room.historyVisibility??null,historyDefaultsVersion:room.historyDefaultsVersion??null};
+}
+export function readCurrentMessage(db,roomId,messageId,b=budget()) {
+  if(!b.schemaVerified&&!readCurrentHead(db,roomId,b))corrupt('message namespace is not initialized');
+  const scalar=db.prepare(`SELECT ${MESSAGE_PROOF_SELECT.split(',').map(key=>`length(CAST(${key} AS BLOB)) AS ${key}`).join(',')}
+    FROM messages WHERE room_id=? AND message_id=?`).get(roomId,messageId);
+  if(!scalar)return undefined;
+  const bytes=Object.values(scalar).reduce((sum,value)=>sum+(value??0),0);
+  if(bytes>MAX_RECORD)refuse('Message dependency exceeds bounded input');charge(b,bytes+512);
+  const row=db.prepare(`SELECT ${MESSAGE_PROOF_SELECT},entity_hash FROM messages WHERE room_id=? AND message_id=?`).get(roomId,messageId);
+  if(!messageProofMatches(row))corrupt('message field proof changed');
+  return {row,value:decodeMessageEntity(row)};
+}
+
+const supported = new Set(['work_claim.updated','message.posted','work.proposed','work.accepted','work.started','work.completed']);
+const contextBudgets = new WeakMap();
+export function withCurrentServingWriter(db,roomId,operation) {
+  if(!isCurrentRoom(db,roomId))return operation();
+  const previous=contextBudgets.get(db);if(!previous)contextBudgets.set(db,budget());
+  try{return withCurrentRoomWriter(db,roomId,operation);}finally{if(!previous)contextBudgets.delete(db);}
+}
+export function currentCommandContext(store,roomId,command) {
+  const db=store.db,b=contextBudgets.get(db)??budget(),head=readCurrentHead(db,roomId,b);if(!head)return null;
+  if(!supported.has(command.type))refuse('This command has no qualified current-record dependency plan');
+  if(head.counts.roundLimitPauses!==0)refuse('Round-limit resume dependencies require qualification');
+  if(store.messageProjectionWindow!==null)refuse('Legacy automatic archive mode is not a current-record writer');
+  if(db.prepare('SELECT 1 FROM activity_fanout_failures WHERE room_id=? AND recovered_at IS NULL LIMIT 1').get(roomId))
+    refuse('Pending activity recovery requires an addressed recovery context');
+  const authority=currentRoomAuthority(db,roomId),state=emptyRoomState();state.members=authority.members;
+  const keys=db.prepare("SELECT domain,record_key FROM current_room_record_proofs WHERE room_id=? AND domain IN ('metadata','shape') AND present=1 ORDER BY domain,record_key LIMIT 33").all(roomId);
+  if(keys.length>32)refuse('Current metadata shape exceeds bounded context');charge(b,keys.length*256,keys.length);
+  for(const {domain,record_key:key} of keys) {
+    const value=readCurrentRecord(db,roomId,domain,key,b);
+    if(domain==='metadata')state[key]=value;
+    else {if(!maps.has(key)||value!=='object')corrupt('unsupported map shape');state[key]??={};}
+  }
+  if(!state.room||state.room.id!==roomId)corrupt('missing room singleton');
+  if(state.room.publicPage?.enabled||state.room.publicReceipts?.enabled||state.room.starterSeeded)
+    refuse('Published/starter room dependencies require qualification');
+  const assistant=db.prepare('SELECT value FROM room_assistant_config WHERE room_id=?').get(roomId);
+  if(assistant&&JSON.parse(assistant.value)?.coordinatorMemberId)refuse('Assistant coordination dependencies require qualification');
+  if(store.humanPush?.vapid)refuse('Human push visibility dependencies require qualification');
+  const messages=new Map(),workRefs=new Map();
+  const loadMessage=id=>{
+    if(!id||messages.has(id))return messages.get(id);
+    const source=readCurrentMessage(db,roomId,id,b);if(source)messages.set(id,source);return source;
+  };
+  const wantedMessages=[command.data.messageId??command.id,`${command.data.messageId??command.id}:channel`,command.data.replyToId,
+    command.data.sourceMessageId,command.data.evidenceMessageId];
+  for(const id of wantedMessages)if(typeof id==='string')loadMessage(id);
+  let cursor=command.data.replyToId,childSeq=Number.MAX_SAFE_INTEGER;
+  for(let depth=0;cursor;depth++) {
+    if(depth>=32)refuse('Reply ancestry exceeds bounded context');
+    const source=loadMessage(cursor);if(!source)break;
+    if(source.row.seq>=childSeq)corrupt('reply ancestry is cyclic or out of order');childSeq=source.row.seq;
+    const request=readCurrentRecord(db,roomId,'replyRequests',cursor,b);
+    if(request!==undefined)(state.replyRequests??={})[cursor]=request;
+    cursor=source.value.replyToId;
+  }
+  if(command.data.responseToRequestId) {
+    const id=command.data.responseToRequestId;
+    const request=readCurrentRecord(db,roomId,'replyRequests',id,b);if(request!==undefined)(state.replyRequests??={})[id]=request;
+  }
+  const workId=command.data.workItemId;
+  if(typeof workId==='string') {
+    const ref=readCurrentRecord(db,roomId,'workItems',workId,b);
+    if(ref!==undefined) {
+      const scalar=db.prepare('SELECT length(CAST(body AS BLOB)) AS bytes FROM work_entities WHERE room_id=? AND work_id=?').get(roomId,workId);
+      if(!scalar||scalar.bytes>MAX_RECORD)corrupt('missing or oversized work payload');charge(b,scalar.bytes+256);
+      const row=db.prepare('SELECT revision,digest,body FROM work_entities WHERE room_id=? AND work_id=?').get(roomId,workId);
+      if(ref._workEntity!==1||ref.id!==workId||ref.revision!==row.revision||ref.digest!==row.digest||hash(row.body)!==ref.digest)
+        corrupt('work membership reference differs');
+      const item=JSON.parse(row.body);if(item.id!==workId||item.revision!==ref.revision)corrupt('work payload identity differs');
+      state.workItems[workId]=item;workRefs.set(workId,ref);
+    }
+  }
+  const channelIds=new Set(['general',command.data.channelId,...[...messages.values()].map(m=>m.value.channelId)]);
+  for(const id of channelIds)if(typeof id==='string') {
+    const channel=readCurrentRecord(db,roomId,'channels',id,b);if(channel!==undefined)state.channels[id]=channel;
+  }
+  for(const id of Object.keys(state.members)) {
+    const halt=readCurrentRecord(db,roomId,'agentHalts',id,b);
+    if(halt!==undefined)(state.agentHalts??={})[id]=halt;
+  }
+  // Shared reducers see the complete addressed ancestry in original order.
+  state.messages=[...messages.values()].sort((a,b)=>a.row.seq-b.row.seq||Buffer.compare(Buffer.from(a.value.id),Buffer.from(b.value.id))).map(source=>source.value);
+  bindCurrentRecordContext(state,{replyRequestCount:head.counts.replyRequests});
+  const before=fieldsOf({...state,workItems:Object.fromEntries(workRefs)});
+  return {room:{sequence:head.sequence,state},current:{head,before,workRefs,budget:b},count:head.counts.messages};
+}
+export function prepareCurrentWrite(store,{roomId,previous,state,event,sequence,current}) {
+  const db=store.db,refs={},workWrites=[];
+  for(const [id,item] of Object.entries(state.workItems)) {
+    const body=JSON.stringify(item),digest=hash(body),prior=current.workRefs.get(id);
+    refs[id]={_workEntity:1,id,revision:item.revision,digest};
+    if(!isDeepStrictEqual(refs[id],prior))workWrites.push({id,item,body,digest});
+  }
+  const after=fieldsOf({...state,workItems:refs}),changes=[];
+  for(const key of new Set([...current.before.keys(),...after.keys()]))if(!isDeepStrictEqual(current.before.get(key),after.get(key))) {
+    const [domain,id]=JSON.parse(key);changes.push({domain,key:id,value:after.get(key)});
+  }
+  const counts={...current.head.counts};
+  if(event.type==='message.posted') {
+    const added=state.messages.filter(message=>!previous.state.messages.some(old=>old.id===message.id));
+    for(const message of added) {
+      let root=message;const seen=new Set();
+      while(root.replyToId) {if(seen.has(root.id))corrupt('new reply cycle');seen.add(root.id);const parent=state.messages.find(m=>m.id===root.replyToId);if(!parent)corrupt('unloaded reply ancestor');root=parent;}
+      const key=root.id+'\0'+message.authorId;
+      const member=readCurrentRecord(db,roomId,'threadParticipants',key,current.budget);
+      if(member===undefined&&!changes.some(change=>change.domain==='threadParticipants'&&change.key===key)) {
+        changes.push({domain:'threadParticipants',key,value:{threadRootId:root.id,memberId:message.authorId}});counts.threadParticipants++;
+      }
+    }
+  }
+  counts.messages+=state.messages.length-previous.state.messages.length;
+  for(const domain of ['workItems','replyRequests','members'])for(const change of changes.filter(c=>c.domain===domain)) {
+    const existed=current.before.has(JSON.stringify([domain,change.key]));
+    counts[domain]+=(change.value===undefined?-1:existed?0:1);
+  }
+  for(const change of changes) {
+    const proof=db.prepare('SELECT present FROM current_room_record_proofs WHERE room_id=? AND domain=? AND record_key=?').get(roomId,change.domain,change.key);
+    counts.metadataRecords+=(change.value===undefined?0:1)-(proof?.present??0);
+    if(!proof)counts.metadataProofs++;
+  }
+  for(const value of Object.values(counts))if(!Number.isSafeInteger(value)||value<0)corrupt('invalid qualified count effect');
+  const nextHead={room_id:roomId,sequence,event_id:event.id,revision:current.head.revision+1,counts_json:JSON.stringify(counts)};
+  const headHash=hash(JSON.stringify(headValue(nextHead)));
+  const projection=JSON.stringify({normalizedCurrent:{version:1,headRevision:nextHead.revision,headHash}});
+  recordProjectionWrite(db,roomId,projection);
+  return {projection,retainedMessageIds:[],persistEntities(){
+    for(const {id,item,body,digest} of workWrites)db.prepare(`INSERT INTO work_entities VALUES(?,?,?,?,?) ON CONFLICT(room_id,work_id)
+      DO UPDATE SET revision=excluded.revision,digest=excluded.digest,body=excluded.body`).run(roomId,id,item.revision,digest,body);
+    syncMessageRows(db,{roomId,sequence,event,state});
+    const saved=saveTransition(db,roomId,sequence,event.id,current.head,changes,counts);
+    if(saved!==projection)corrupt('prepared carrier differs from committed head');
+  }};
+}
+
+export function currentThreadParticipants(db,roomId,rootId) {
+  const b=contextBudgets.get(db)??budget(),prefix=rootId+'\0',upper=rootId+'\u0001';
+  const rows=db.prepare("SELECT record_key FROM current_room_record_proofs WHERE room_id=? AND domain='threadParticipants' AND record_key>=? AND record_key<? AND present=1 ORDER BY record_key LIMIT 101")
+    .all(roomId,prefix,upper);
+  if(rows.length>100)refuse('Thread participant census exceeds bounded fanout');charge(b,rows.length*256,rows.length);
+  return rows.map(({record_key:key})=>{const value=readCurrentRecord(db,roomId,'threadParticipants',key,b);
+    if(!value||value.threadRootId!==rootId||key!==rootId+'\0'+value.memberId)corrupt('thread participant identity differs');return value.memberId;});
+}
+
+export function readCurrentWorkItem(db,roomId,id,b=budget()) {
+  const head=readCurrentHead(db,roomId,b);if(!head)return null;
+  const ref=readCurrentRecord(db,roomId,'workItems',id,b);if(ref===undefined)return null;
+  const scalar=db.prepare('SELECT length(CAST(body AS BLOB)) AS bytes FROM work_entities WHERE room_id=? AND work_id=?').get(roomId,id);
+  if(!scalar||scalar.bytes>MAX_RECORD)corrupt('missing or oversized work payload');charge(b,scalar.bytes+256);
+  const row=db.prepare('SELECT revision,digest,body FROM work_entities WHERE room_id=? AND work_id=?').get(roomId,id);
+  if(ref._workEntity!==1||ref.id!==id||ref.revision!==row.revision||ref.digest!==row.digest||hash(row.body)!==ref.digest)corrupt('work reference changed');
+  const item=JSON.parse(row.body);if(item.id!==id||item.revision!==ref.revision)corrupt('work identity changed');return item;
+}
+
+// Three separately indexed visibility streams avoid scanning private history
+// while constructing a public window. Only admitted scalars cross before rows.
+export function currentConversationRows(store,roomId,{viewerId,limit,before,beforeId,messageId,channelId,peerMemberId,floor}) {
+  if(limit>64)refuse('Current conversation pages support at most64 messages');
+  const db=store.db,b=contextBudgets.get(db)??budget();
+  if(messageId!==null) {
+    // Addressed selection always uses the existing primary key, including a
+    // missing/old/private identity. Never scan a seq stream to find it.
+    const source=readCurrentMessage(db,roomId,messageId,b),m=source?.value;
+    const visible=m&&(!m.toMemberId||m.authorId===viewerId||m.toMemberId===viewerId)
+      &&(channelId===null||!m.toMemberId&&(m.channelId||'general')===channelId)
+      &&(peerMemberId===null||(m.authorId===viewerId&&m.toMemberId===peerMemberId)||(m.authorId===peerMemberId&&m.toMemberId===viewerId))
+      &&messageInHistory(m,floor);
+    return {rows:visible?[{position:source.row.seq,messageId,body:source.row.record_json}]:[],continuation:null,examined:source?1:0,complete:true};
+  }
+  const pageSize=8,streams=[];
+  const base='room_id=? AND (seq,message_id)<(?,?)';
+  if(peerMemberId===null)streams.push({
+    index:channelId===null?'current_messages_public_seq':'current_messages_channel_public_seq',
+    where:`(to_member_id IS NULL OR to_member_id='')`+(channelId===null?'':' AND channel_id=?'),args:channelId===null?[]:[channelId]});
+  if(channelId===null) {
+    streams.push(peerMemberId===null
+      ?{index:'current_messages_incoming_seq',where:'to_member_id=?',args:[viewerId]}
+      :{index:'current_messages_pair_seq',where:'author_id=? AND to_member_id=?',args:[peerMemberId,viewerId]});
+    streams.push(peerMemberId===null
+      ?{index:'current_messages_outgoing_seq',where:"author_id=? AND to_member_id IS NOT NULL AND to_member_id<>''",args:[viewerId]}
+      :{index:'current_messages_pair_seq',where:'author_id=? AND to_member_id=?',args:[viewerId,peerMemberId]});
+  }
+  for(const stream of streams){stream.before=before;stream.beforeId=beforeId;stream.rows=[];stream.done=false;}
+  const refill=stream=>{
+    if(stream.rows.length||stream.done)return;
+    // History/time predicates are residuals AFTER this bounded source window.
+    const rows=db.prepare(`SELECT message_id,seq FROM messages INDEXED BY ${stream.index}
+      WHERE ${base} AND ${stream.where} ORDER BY seq DESC,message_id DESC LIMIT ?`)
+      .all(roomId,stream.before,stream.beforeId,...stream.args,pageSize);
+    charge(b,rows.reduce((n,row)=>n+Buffer.byteLength(row.message_id)+32,0),rows.length);
+    stream.rows=rows;stream.done=rows.length<pageSize;
+    if(rows.length){stream.before=rows.at(-1).seq;stream.beforeId=rows.at(-1).message_id;}
+  };
+  const rows=[],seen=new Set();let examined=0,last=null,interrupted=false;
+  while(rows.length<limit&&examined<64) {
+    for(const stream of streams)refill(stream);
+    const available=streams.filter(stream=>stream.rows.length);if(!available.length)break;
+    available.sort((a,c)=>c.rows[0].seq-a.rows[0].seq||Buffer.compare(Buffer.from(c.rows[0].message_id),Buffer.from(a.rows[0].message_id)));
+    const row=available[0].rows.shift();if(seen.has(row.message_id))continue;seen.add(row.message_id);
+    let source;
+    try{source=readCurrentMessage(db,roomId,row.message_id,b);}
+    catch(error){if(error.code==='current_room_context_unavailable'&&last){interrupted=true;break;}throw error;}
+    if(!source||source.row.seq!==row.seq)corrupt('window order or membership changed');
+    let visible;
+    try{visible=messageInHistory(source.value,floor);}
+    catch(error){if(error.code==='current_room_context_unavailable'&&last){interrupted=true;break;}throw error;}
+    examined++;last={position:row.seq,messageId:row.message_id};
+    if(visible)rows.push({position:row.seq,messageId:row.message_id,body:source.row.record_json});
+  }
+  const complete=!interrupted&&streams.every(stream=>stream.done&&!stream.rows.length);
+  return {rows,continuation:!complete?last:null,examined,complete};
+}
+
+// Explicit independent recovery census. This full scan is deliberately absent
+// from serving admission, command contexts and conversation pagination.
+export function readCurrentRoomForAudit(store,roomId) {
+  const db=store.db;
+  if(!db.isTransaction)throw Error('Current room census requires a consistent recovery transaction');
+  const head=readCurrentHead(db,roomId);if(!head)return null;
+  const state=emptyRoomState(),refs=new Map(),participants=new Map(),floors=new Map(),exclusions=new Map();let proofs=0,records=0;
+  const unitBudget=()=>({...budget(),schemaVerified:true});
+  for(const scalar of db.prepare(`SELECT rowid,length(CAST(domain AS BLOB)) AS domain_bytes,
+    length(CAST(record_key AS BLOB)) AS key_bytes FROM current_room_record_proofs WHERE room_id=? ORDER BY domain,record_key`).iterate(roomId)) {
+    if(scalar.domain_bytes<1||scalar.domain_bytes>64||scalar.key_bytes<1||scalar.key_bytes>200)corrupt('invalid recovery membership identity');
+    const proof=db.prepare('SELECT domain,record_key,present FROM current_room_record_proofs WHERE rowid=?').get(scalar.rowid);
+    const value=readCurrentRecord(db,roomId,proof.domain,proof.record_key,unitBudget());proofs++;
+    if(!proof.present)continue;records++;
+    const key=proof.record_key;
+    if(proof.domain==='shape') {
+      if(!maps.has(key)||value!=='object')corrupt('invalid recovered map shape');state[key]??={};
+    } else if(proof.domain==='metadata') {
+      if(omitted.has(key)||maps.has(key)&&value!==null&&typeof value==='object'&&!Array.isArray(value))corrupt('competing recovered state');
+      Object.defineProperty(state,key,{value,enumerable:true,writable:true,configurable:true});
+    } else if(maps.has(proof.domain)) {
+      if(proof.domain==='workItems')refs.set(key,value);
+      else Object.defineProperty(state[proof.domain]??={},key,{value,enumerable:true,writable:true,configurable:true});
+    } else if(proof.domain==='threadParticipants')participants.set(key,value);
+    else if(proof.domain==='historyFloors')floors.set(key,value);
+    else if(proof.domain==='historyExclusions')exclusions.set(key,value);
+    else corrupt('unknown recovered metadata domain');
+  }
+  const actualRecords=db.prepare('SELECT count(*) AS count FROM current_room_records WHERE room_id=?').get(roomId).count;
+  if(proofs!==head.counts.metadataProofs||records!==head.counts.metadataRecords||actualRecords!==records)corrupt('complete metadata census differs');
+  for(const [id,ref] of refs) {
+    const scalar=db.prepare('SELECT length(CAST(body AS BLOB)) AS bytes FROM work_entities WHERE room_id=? AND work_id=?').get(roomId,id);
+    if(!scalar||scalar.bytes>MAX_RECORD)corrupt('recovered work payload missing/oversized');
+    const row=db.prepare('SELECT revision,digest,body FROM work_entities WHERE room_id=? AND work_id=?').get(roomId,id);
+    if(ref._workEntity!==1||ref.id!==id||ref.revision!==row.revision||ref.digest!==row.digest||hash(row.body)!==ref.digest)corrupt('recovered work reference changed');
+    const item=JSON.parse(row.body);if(item.id!==id||item.revision!==ref.revision)corrupt('recovered work identity changed');
+    Object.defineProperty(state.workItems,id,{value:item,enumerable:true,writable:true,configurable:true});
+  }
+  for(const scalar of db.prepare('SELECT rowid,length(CAST(message_id AS BLOB)) AS bytes FROM messages WHERE room_id=? ORDER BY seq,message_id').iterate(roomId)) {
+    if(scalar.bytes<1||scalar.bytes>200)corrupt('invalid recovered message identity');
+    const {message_id:id}=db.prepare('SELECT message_id FROM messages WHERE rowid=?').get(scalar.rowid);
+    state.messages.push(readCurrentMessage(db,roomId,id,unitBudget()).value);
+  }
+  if(state.messages.length!==head.counts.messages||Object.keys(state.workItems).length!==head.counts.workItems
+    ||Object.keys(state.members).length!==head.counts.members||Object.keys(state.replyRequests??{}).length!==head.counts.replyRequests)
+    corrupt('complete domain census differs');
+  const expected=new Map(),roots=new Map();
+  for(const message of state.messages) {
+    const root=message.replyToId?roots.get(message.replyToId):message.id;
+    if(!root)corrupt('recovered reply ancestry incomplete');roots.set(message.id,root);
+    expected.set(root+'\0'+message.authorId,{threadRootId:root,memberId:message.authorId});
+  }
+  if(expected.size!==head.counts.threadParticipants||!isDeepStrictEqual(expected,participants))corrupt('complete thread participant census differs');
+  const expectedFloors=new Map(),expectedExclusions=new Map();
+  for(const id of Object.keys(state.members)) {
+    const floor=deriveHistoryFloor(db,state,roomId,id,head.sequence);if(!floor)continue;
+    expectedFloors.set(id,{sequence:floor.sequence,at:floor.at,sameInstantCount:floor.sameInstant.size});
+    for(const excluded of floor.sameInstant)expectedExclusions.set(id+'\0'+excluded,true);
+  }
+  if(floors.size!==head.counts.historyFloors||exclusions.size!==head.counts.historyExclusions
+    ||!isDeepStrictEqual(floors,expectedFloors)||!isDeepStrictEqual(exclusions,expectedExclusions))corrupt('complete history floor/exclusion census differs');
+  return {sequence:head.sequence,state};
+}
+
+export function withCurrentReadContext(db,roomId,operation) {
+  if(!isCurrentRoom(db,roomId))return operation();
+  const previous=contextBudgets.get(db);if(!previous)contextBudgets.set(db,budget());
+  try{return operation();}finally{if(!previous)contextBudgets.delete(db);}
+}
+export function readCurrentHistoryFloor(db,roomId,memberId) {
+  const b=contextBudgets.get(db)??budget(),head=readCurrentHead(db,roomId,b);if(!head)return undefined;
+  const room=readCurrentRecord(db,roomId,'metadata','room',b),member=readCurrentRecord(db,roomId,'members',memberId,b);
+  if(!room||!member)corrupt('missing history policy authority');
+  const limited=memberHistoryVisibility({room,members:{[memberId]:member}},memberId)==='since_join';
+  const floor=readCurrentRecord(db,roomId,'historyFloors',memberId,b);
+  if(!limited){if(floor!==undefined)corrupt('unexpected limited history witness');return null;}
+  if(!floor||!Number.isSafeInteger(floor.sequence)||floor.sequence<1||typeof floor.at!=='string'
+    ||!Number.isSafeInteger(floor.sameInstantCount)||floor.sameInstantCount<0)corrupt('missing qualified history floor');
+  return {sequence:floor.sequence,at:floor.at,sameInstant:{size:floor.sameInstantCount,
+    has(id){if(!db.isTransaction)throw Error('Addressed history membership requires its read transaction');
+      return readCurrentRecord(db,roomId,'historyExclusions',memberId+'\0'+id,b)===true;},
+    [Symbol.iterator](){refuse('Use addressed history exclusion membership; full exclusion hydration is unavailable');}}};
+}

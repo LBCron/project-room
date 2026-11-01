@@ -1,3 +1,4 @@
+import { CURRENT_ROOM_SCHEMA, CURRENT_ROOM_GUARDS, initializeCurrentRoom, currentRoomAuthority, isCurrentRoom, currentCommandContext, prepareCurrentWrite, withCurrentServingWriter, readCurrentRecord, readCurrentHistoryFloor } from './current-room-repository.mjs';
 import {bindReplayAppend} from './replay-cutover.mjs';
 import { bootstrapLegacyWriteProofs, configureWriteIntegrity, beginWriteProofFrame, endWriteProofFrame, publishProjectionWrites, projectionDigest, projectionContentHash, servingContentProof, servingProofDrift, assertProjectionWrite, assertMessageWrite, recordMessageWrite, withVerifiedRoomReconstruction } from './write-integrity.mjs';
 const OPERATOR_QA_ARCHIVE = Symbol("operator QA room archive");
@@ -1192,7 +1193,7 @@ function roomSchemaStamp() {
     agentKeyRegistrySchema, INTEGRITY_SNAPSHOT_SCHEMA, OPERATOR_ACTIONS_SCHEMA,
     INTEGRITY_JOB_CURSOR_SCHEMA, INTEGRITY_ROOM_STATE_SCHEMA, INTEGRITY_SWEEP_COLUMN, INTEGRITY_ROOM_HASH_COLUMN, INTEGRITY_METADATA_HASH_COLUMN, INTEGRITY_SNAPSHOT_WATERMARK_COLUMN,
     ROOM_SCHEMA_STAMP_SCHEMA, LOOKUP_INDEXES, MESSAGES_SCHEMA, MESSAGE_REPLAY_SNAPSHOT_SCHEMA, MESSAGES_BACKFILL_CURSOR_SCHEMA, MESSAGES_BACKFILL_BLOCKS_SCHEMA, WANTS_WORK_SCHEMA, CODE_DROPS_SCHEMA, PROJECTION_BODIES_SCHEMA, WORK_REPOSITORY_SCHEMA,
-    PUBLIC_READ_MODEL_SCHEMA,
+    PUBLIC_READ_MODEL_SCHEMA, CURRENT_ROOM_SCHEMA, CURRENT_ROOM_GUARDS,
     // Additive tables converged outside the version bump. A warm wake whose
     // stamp matches skips the whole schema pass, so any DDL the pass applies
     // must be hashed here or a room stamped by an older deploy never gets it
@@ -1725,7 +1726,10 @@ this.slaBreachAlerts = new SlaBreachAlertJournal(this); // Task 26: durable in-a
       ${referralSchema}`);
       this.storagePlatform.setVersion(this.db, 4);
     }
+    if (version > 0 && version < 45 && this.db.prepare("SELECT 1 FROM sqlite_master WHERE name='message_replay_units'").get())
+      throw new Error('Optional replay capture requires explicit abandonment/schema reconciliation before current serving format upgrade');
     this.db.exec(WORK_REPOSITORY_SCHEMA);
+    this.db.exec(CURRENT_ROOM_SCHEMA);
     if (version > 0 && version < 26 && (
       this.db.prepare("SELECT 1 FROM events WHERE json_extract(body,'$.type')='work.completed' AND json_type(body,'$.data.externalProducer') IS NOT NULL LIMIT 1").get()
       || this.db.prepare("SELECT 1 FROM rooms,json_tree(rooms.projection) WHERE json_tree.key='externalProducer' LIMIT 1").get()
@@ -2223,6 +2227,7 @@ this.slaBreachAlerts = new SlaBreachAlertJournal(this); // Task 26: durable in-a
       // Idempotent: recreates fences for tables the additive schemas just
       // (re)created, and refuses a file whose existing triggers drifted.
       phase("fence");
+      this.db.exec(CURRENT_ROOM_GUARDS);
       this.storagePlatform.installWriterFence(this.db);
       this.storagePlatform.verifyWriterFence(this.db);
       this.db.exec(INTEGRITY_SNAPSHOT_SCHEMA);
@@ -3727,6 +3732,7 @@ this.slaBreachAlerts = new SlaBreachAlertJournal(this); // Task 26: durable in-a
   // Reads only the authority and history fields, not the full projection, so
   // event polling stays cheap.
   historyFloor(roomId, memberId, headSequence = null) {
+    const current=readCurrentHistoryFloor(this.db,roomId,memberId);if(current!==undefined)return current;
     const { sequence, ownerId, members, historyVisibility, historyDefaultsVersion } = this.roomAuthority(roomId, { includeHistory: true });
     const state = { room: { ownerId, historyVisibility, historyDefaultsVersion }, members };
     return readHistoryFloor(this.db, state, roomId, memberId, headSequence ?? sequence);
@@ -4075,6 +4081,7 @@ this.slaBreachAlerts = new SlaBreachAlertJournal(this); // Task 26: durable in-a
     return value;
   }
   _readProjection(roomId, sequence, { verifyBodyHashes = false } = {}) {
+    if (isCurrentRoom(this.db,roomId)) fail(409,'current_room_context_required','Use an addressed current Room read');
     const row = (this._roomProjectionStmt ??= this.db.prepare("SELECT projection FROM rooms WHERE id=?")).get(roomId);
     if (!row) fail(404, "room_not_found", "Room not found");
     const raw = JSON.parse(row.projection);
@@ -4187,6 +4194,9 @@ this.slaBreachAlerts = new SlaBreachAlertJournal(this); // Task 26: durable in-a
     });
   }
   roomAuthority(roomId, { includeHistory = false } = {}) {
+    const current = currentRoomAuthority(this.db, roomId);
+    if (current) return { sequence: current.sequence, ownerId: current.ownerId, members: current.members,
+      ...(includeHistory ? {historyVisibility: current.historyVisibility, historyDefaultsVersion: current.historyDefaultsVersion} : {}) };
     // History policy travels in the same validated prefix as membership. This
     // keeps fresh permission reads independent of conversation JSON parsing.
     // Fresh storage read, not an authorization cache. Keep membership provenance
@@ -4219,7 +4229,7 @@ this.slaBreachAlerts = new SlaBreachAlertJournal(this); // Task 26: durable in-a
       ...(includeHistory ? { historyVisibility: authority[2] ?? null, historyDefaultsVersion: authority[3] ?? null } : {}) };
   }
   rebuildProjection(roomId, through = null) {
-    return this._replayRoom(roomId, through ?? this.room(roomId).sequence);
+    return this._replayRoom(roomId, through ?? this.headSequence(roomId));
   }
   _replayRoom(roomId, through) {
     const head = this.db.prepare("SELECT sequence FROM rooms WHERE id=?").get(roomId);
@@ -4262,9 +4272,11 @@ this.slaBreachAlerts = new SlaBreachAlertJournal(this); // Task 26: durable in-a
     return { sequence, state: compact(state) };
   }
   // Administrative bootstrap, never exposed over HTTP. Historical demo events are test fixtures only.
-  initialize(events) {
+  initialize(events, { representation = null } = {}) {
     return this.transaction(() => {
       const state = replayEvents(emptyRoomState(), events);
+      if (representation === 'normalized-current-v1') return initializeCurrentRoom(this, compact(state), events);
+      if (representation !== null) throw new Error('Unsupported room representation');
       const stored = compact(state);
       this.db.prepare("INSERT INTO rooms(id,sequence,projection,archived_at) VALUES(?,?,?,?)").run(state.room.id, events.length, this.storedProjection(state.room.id, stored), archivedAtOf(stored));
       const insert = this.db.prepare("INSERT INTO events VALUES(?,?,?,?)");
@@ -4773,7 +4785,7 @@ this.slaBreachAlerts = new SlaBreachAlertJournal(this); // Task 26: durable in-a
     this.db.prepare("UPDATE accounts SET ever_had_room=1 WHERE id=?").run(accountId);
   }
   ensureHumanAccountBinding(roomId, memberId, requestedAccountId = null, origin = "local-provisioning") {
-    const members = this.room(roomId).state.members;
+    const members = this.roomAuthority(roomId).members;
     const member = validId(memberId) && Object.hasOwn(members, memberId) && members[memberId];
     if (!member || member.kind !== "human") fail(422, "invalid_account_binding", "Only a human Room member can bind to an account");
     if (requestedAccountId !== null && !validId(requestedAccountId)) fail(422, "invalid_account", "Invalid account id");
@@ -5130,7 +5142,7 @@ this.slaBreachAlerts = new SlaBreachAlertJournal(this); // Task 26: durable in-a
   }
   issueAccessKey(roomId, memberId, lifetimeMs = 7 * 86400000, accountId = null) {
     return this.transaction(() => {
-      const members = this.room(roomId).state.members;
+      const members = this.roomAuthority(roomId).members;
       const member = validId(memberId) && Object.hasOwn(members, memberId) && members[memberId];
       if (!member || member.active === false) fail(403, "access_denied", "Active member required");
       if (!Number.isSafeInteger(lifetimeMs) || lifetimeMs <= 0 || lifetimeMs > 30 * 86400000) fail(422, "invalid_expiry", "Access keys expire within 30 days");
@@ -5148,7 +5160,7 @@ this.slaBreachAlerts = new SlaBreachAlertJournal(this); // Task 26: durable in-a
   // atomic revoke+issue ordering stays load-bearing for every other caller.
   mintAccessKey(roomId, memberId, lifetimeMs = 7 * 86400000, accountId = null) {
     return this.transaction(() => {
-      const members = this.room(roomId).state.members;
+      const members = this.roomAuthority(roomId).members;
       const member = validId(memberId) && Object.hasOwn(members, memberId) && members[memberId];
       if (!member || member.active === false) fail(403, "access_denied", "Active member required");
       if (!Number.isSafeInteger(lifetimeMs) || lifetimeMs <= 0 || lifetimeMs > 30 * 86400000) fail(422, "invalid_expiry", "Access keys expire within 30 days");
@@ -5178,7 +5190,7 @@ this.slaBreachAlerts = new SlaBreachAlertJournal(this); // Task 26: durable in-a
     if (this.agentConnections.row(roomId, memberId)) fail(409, "managed_agent", "Replace this agent's key through its room connection");
     const count = this.db.prepare("SELECT count(*) AS n FROM credentials WHERE room_id=?").get(roomId).n;
     if (count >= 5000) fail(409, "pilot_limit", "Credential retention limit reached; administrator maintenance required");
-    const member = this.room(roomId).state.members[memberId];
+    const member = this.roomAuthority(roomId).members[memberId];
     if (!member) fail(403, "access_denied", "Room member required");
     const account = member.kind === "human" ? this.ensureHumanAccountBinding(roomId, memberId) : null;
     if (account && !account.active) fail(403, "access_denied", "Active account required");
@@ -5313,7 +5325,7 @@ this.slaBreachAlerts = new SlaBreachAlertJournal(this); // Task 26: durable in-a
   // so invite sessions can never mint admin rights.
   createJoinSession(roomId, memberId) {
     return this.transaction(() => {
-      const member = this.room(roomId).state.members[memberId];
+      const member = this.roomAuthority(roomId).members[memberId];
       if (!member || member.active === false) fail(403, "access_denied", "Room member required");
       if (member.kind !== "agent") fail(403, "access_denied", "Join sessions are for agent joins");
       const expiresAt = this.now() + 8 * 3600000;
@@ -6489,7 +6501,7 @@ this.slaBreachAlerts = new SlaBreachAlertJournal(this); // Task 26: durable in-a
       if (!work) fail(404, "work_not_found", "Work item not found in this Room");
       // The full selected receipt history is needed for withdrawn historical
       // text. Unrelated work and conversation bodies are not result dependencies.
-      const state = { room: JSON.parse(row.metadata), workItems: { [workItemId]: work } };
+      const state = { room: isCurrentRoom(this.db,roomId) ? readCurrentRecord(this.db,roomId,'metadata','room') : JSON.parse(row.metadata), workItems: { [workItemId]: work } };
       const messages = new Map();
       const messageRecords = { get: id => {
         if (!messages.has(id)) messages.set(id, selectedMessageRecord(this, roomId, id, row.archive_type === "object"));
@@ -6925,7 +6937,7 @@ this.slaBreachAlerts = new SlaBreachAlertJournal(this); // Task 26: durable in-a
     // reducer, persistence, or the transaction commit itself.
     let floodSpend = null;
     try {
-    return this.transaction(() => {
+    return this.transaction(() => withCurrentServingWriter(this.db,roomId,() => {
       const auth = token === OPERATOR_QA_ARCHIVE && roomId === "qa-onb-10302113" && command.type === T.ROOM_ARCHIVED
         ? { member: ownMember(this.roomAuthority(roomId).members, this.roomAuthority(roomId).ownerId), kind: "operator" }
         : this.authenticate(token, roomId, expectedSessionBinding);
@@ -6970,7 +6982,8 @@ this.slaBreachAlerts = new SlaBreachAlertJournal(this); // Task 26: durable in-a
         const listed = this.room(roomId);
         return { sequence: listed.sequence, duplicate: false, event: null, bonds: this.bonds.listForMember(roomId, auth.member.id) };
       }
-      const messageContext = this.canonicalMessagePostContext(roomId, command, auth.member.id)
+      const messageContext = currentCommandContext(this,roomId,command)
+        ?? this.canonicalMessagePostContext(roomId, command, auth.member.id)
         ?? this.canonicalMessageEditContext(roomId, command);
       let room = messageContext?.room ?? this.room(roomId);
       refuseArchivedWrite(room.state);
@@ -7037,7 +7050,7 @@ this.slaBreachAlerts = new SlaBreachAlertJournal(this); // Task 26: durable in-a
         && workItem != null && !isTerminalSession(sessionRecord(workItem).status);
       const cleanup = endingAccess || endingRequest || endingHelp || endingOffer || endingClaim || endingWork || endingSession || command.type === T.ROOM_ARCHIVED;
       // At capacity, each remaining membership/request/help/offer/claim and each open work item can still be ended once.
-      if ((room.sequence >= PILOT_LIMITS.eventsPerRoom && !cleanup) || (command.type === T.MEMBER_ADDED && activeMemberCount(room.state.members) >= PILOT_LIMITS.membersPerRoom) || (command.type === T.WORK_PROPOSED && Object.keys(room.state.workItems).length >= PILOT_LIMITS.workItemsPerRoom)) fail(409, "pilot_limit", "Bounded pilot capacity reached; no data was changed");
+      if ((room.sequence >= PILOT_LIMITS.eventsPerRoom && !cleanup) || (command.type === T.MEMBER_ADDED && activeMemberCount(room.state.members) >= PILOT_LIMITS.membersPerRoom) || (command.type === T.WORK_PROPOSED && (messageContext?.current?.head.counts.workItems ?? Object.keys(room.state.workItems).length) >= PILOT_LIMITS.workItemsPerRoom)) fail(409, "pilot_limit", "Bounded pilot capacity reached; no data was changed");
       enforceSpendAllowance(room.state, command, this.now(), fail); // C3: a start that would exceed the room allowance is refused
       // Graduated autonomy tiers: read fresh from the table on every command,
       // so a demotion to t1_readonly wins on the agent's next write. New
@@ -7247,7 +7260,9 @@ this.slaBreachAlerts = new SlaBreachAlertJournal(this); // Task 26: durable in-a
         if (conflict) fail(409, "claim_conflict", `Scope is reserved by work ${conflict.id}. Coordinate or release that reservation first; no new claim was saved.`);
       }
       const sequence = room.sequence + 1;
-      const messageWrite = prepareMessageWrite(this, {roomId,previous:room,state,event:incoming,sequence,messageAuthorityCount:messageContext?.count});
+      const messageWrite = messageContext?.current
+        ? prepareCurrentWrite(this,{roomId,previous:room,state,event:incoming,sequence,current:messageContext.current})
+        : prepareMessageWrite(this, {roomId,previous:room,state,event:incoming,sequence,messageAuthorityCount:messageContext?.count});
       const { projection } = messageWrite;
       if (Buffer.byteLength(projection) > PILOT_LIMITS.projectionBytes && !cleanup) fail(409, "pilot_limit", "Room projection limit reached; no data was changed. Ask the room owner to have older messages archived to free space.");
       // R1 delivery-path tracing (RC-2026-09-26-966): delivery.log spans the
@@ -7262,7 +7277,7 @@ this.slaBreachAlerts = new SlaBreachAlertJournal(this); // Task 26: durable in-a
         if (bondEffect?.dm) this.bonds.sealDm(bondEffect.dm, incoming.id);
         this.db.prepare("INSERT INTO commands VALUES(?,?,?,?,?)").run(roomId, auth.member.id, command.id, fingerprint, sequence);
         this.db.prepare("UPDATE rooms SET sequence=?,projection=?,archived_at=? WHERE id=?").run(sequence, projection, archivedAtOf(state), roomId);
-        this._queueProjectionCache(roomId, sequence, state, projection);
+        if (!messageContext?.current) this._queueProjectionCache(roomId, sequence, state, projection);
         // Board is the claim authority the MCP tools share with /work-claims.
         // Same transaction as the projection event: decision #10's write-path
         // cutover syncs the item's board claim from post-command state via
@@ -7270,12 +7285,13 @@ this.slaBreachAlerts = new SlaBreachAlertJournal(this); // Task 26: durable in-a
         // lifecycle, not just the five events the frozen mirror translated
         // (decision #34) — and a failed board write (caps, occupied
         // successor) rolls the command back.
+        if (messageContext?.current) messageWrite.persistEntities();
         if (WORK_ITEM_BOARD_SYNC_TYPES.has(incoming.type)) {
           syncWorkItemClaim(this, roomId, auth.member.id, incoming, state);
         }
         // Persist the message domain in the same transaction as event/receipt.
         // A failure rolls back both the entity and its projection reference.
-        messageWrite.persistEntities();
+        if (!messageContext?.current) messageWrite.persistEntities();
         // fo-qa-c10-202610280645: a plain shared post that addresses the room
         // assistant starts its run server-side, so the ask never depends on the
         // client's projection being fresh. Reply-based continuations stay
@@ -7447,7 +7463,7 @@ this.slaBreachAlerts = new SlaBreachAlertJournal(this); // Task 26: durable in-a
       }
       return { sequence, event: incoming, duplicate: false, ...(note ? { note } : {}),
         ...((Array.isArray(mentionWarnings) && mentionWarnings.length > 0) ? { mentionWarnings } : {}) };
-    });
+    }));
     } catch (error) {
       // The test doubles that replace roomFlood expose only consume(), so a
       // missing refund (or a spend consume() did not report) means no refund.

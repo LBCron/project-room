@@ -1,3 +1,4 @@
+import { isCurrentRoom, readCurrentRecord, currentConversationRows, withCurrentReadContext } from './current-room-repository.mjs';
 import { hasMessageAuthority } from './message-authority.mjs';
 import { messageRepository } from './message-repository.mjs';
 import { createHash, createCipheriv, createDecipheriv, randomBytes } from "node:crypto";
@@ -78,12 +79,13 @@ export function readConversation(store, token, roomId, { limit = 50, cursor = nu
     || messageId !== null && !validId(messageId)
     || channelId !== null && !validId(channelId)
     || peerMemberId !== null && (!validId(peerMemberId) || channelId !== null)) fail(422, "invalid_conversation_selection", "Choose a bounded conversation page or one message");
-  return store.readTransaction(() => {
+  return store.readTransaction(() => withCurrentReadContext(store.db,roomId,() => {
     const auth = store.authenticate(token, roomId, expectedSessionBinding);
+    const current = isCurrentRoom(store.db,roomId);
     // Channel history is public-room conversation, never an addressed DM.
     // Archived channels retain readable history. Authenticate before lookup.
-    if (channelId !== null && !store.db.prepare(`SELECT 1 FROM rooms r, json_each(r.projection, '$.channels') c
-      WHERE r.id=? AND c.key=?`).get(roomId, channelId)) fail(404, "channel_not_found", "Channel not found");
+    if (channelId !== null && !(current ? readCurrentRecord(store.db,roomId,'channels',channelId) : store.db.prepare(`SELECT 1 FROM rooms r, json_each(r.projection, '$.channels') c
+      WHERE r.id=? AND c.key=?`).get(roomId, channelId))) fail(404, "channel_not_found", "Channel not found");
     const head = store.db.prepare("SELECT sequence FROM rooms WHERE id=?").get(roomId);
     const anchor = store.db.prepare("SELECT id FROM events WHERE room_id=? AND sequence=?").get(roomId, head.sequence)?.id ?? null;
     const identity = { roomId, viewerId: auth.member.id, viewerAccountId: auth.account?.id ?? null,
@@ -101,7 +103,7 @@ export function readConversation(store, token, roomId, { limit = 50, cursor = nu
     // Certification covers the full record and query columns at this exact
     // head. Never replay or perform a full parity scan on a read request.
     const canonicalMarker = store.db.prepare("SELECT json_extract(projection,'$.messageAuthority') AS marker FROM rooms WHERE id=?").get(roomId)?.marker;
-    const canonical = canonicalMarker != null && hasMessageAuthority({ messageAuthority: JSON.parse(canonicalMarker) });
+    const canonical = current || canonicalMarker != null && hasMessageAuthority({ messageAuthority: JSON.parse(canonicalMarker) });
     const indexed = canonical || Boolean(store.db.prepare(`SELECT 1 FROM messages_backfill_cursor
       WHERE room_id=? AND applied_seq=? AND parity_at_seq=? AND applied_event_id=?`)
       .get(roomId, head.sequence, head.sequence, anchor ?? ""));
@@ -118,11 +120,12 @@ export function readConversation(store, token, roomId, { limit = 50, cursor = nu
     const floor = store.historyFloor(roomId, auth.member.id);
     // One JSON parameter keeps complete same-instant exclusions within Worker
     // SQLite's bind limit even for large imported equal-timestamp histories.
-    const exclusions = JSON.stringify([...(floor?.sameInstant ?? [])]);
+    const exclusions = current ? '[]' : JSON.stringify([...(floor?.sameInstant ?? [])]);
     // Only reference-bearing fallback projections consult entity rows. Ordinary
     // uncertified projections must never treat the unqualified mirror as truth.
     const entityRefs = !indexed && !archiveMerged && Boolean(store.db.prepare("SELECT instr(projection, '\"_entity\":1') AS refs FROM rooms WHERE id=?").get(roomId)?.refs);
-    const rows = (archiveMerged
+    const currentPage = current ? currentConversationRows(store,roomId,{viewerId:auth.member.id,limit,before,beforeId:cursor!==null?saved.beforeId:'',messageId,channelId,peerMemberId,floor}) : null;
+    const rows = currentPage ? currentPage.rows : (archiveMerged
       ? archivedConversationRows(store,roomId,{viewerId:auth.member.id,channelId,peerMemberId,messageId,floor,limit,afterId:cursor===null?null:saved.beforeMessageId})
       : indexed ? store.db.prepare(`SELECT seq AS position, message_id AS messageId, record_json AS body
       FROM messages WHERE room_id=? AND (seq<? OR (seq=? AND message_id<?))
@@ -190,7 +193,8 @@ export function readConversation(store, token, roomId, { limit = 50, cursor = nu
         && resolveMentionTargetsInText(members, identityNamesForRoom(store.db, roomId), message.body, message.authorId).includes(auth.member.id))
         || squadMentionTargets(store.db, roomId, message.body, message.authorId, members, message.toMemberId).includes(auth.member.id);
     }
-    const nextCursor = rows.length > selected.length ? signed.encode({ kind: "page", scope, sequence: head.sequence, anchor,
+    const nextCursor = currentPage ? (currentPage.continuation ? signed.encode({kind:"page",scope,sequence:head.sequence,anchor,
+      before:currentPage.continuation.position,beforeId:currentPage.continuation.messageId,indexed:true,archiveMerged:false}) : null) : rows.length > selected.length ? signed.encode({ kind: "page", scope, sequence: head.sequence, anchor,
       before: selected.at(-1).position, indexed, archiveMerged,
       ...(indexed ? { beforeId: selected.at(-1).messageId } : {}),
       ...(archiveMerged ? {beforeMessageId:selected.at(-1).messageId} : {}) }) : null;
@@ -203,9 +207,10 @@ export function readConversation(store, token, roomId, { limit = 50, cursor = nu
       ...base, mode: "replace",
       ...(addressing ? { addressing } : {}),
       messages: messages.map(message => markIfOther(message, auth.member.id, message.authorId)),
-      nextCursor, checkpoint, messageBytes: bytes
+      nextCursor, checkpoint, messageBytes: bytes,
+      ...(currentPage ? {sourceWindow:{examined:currentPage.examined,complete:currentPage.complete}} : {})
     });
-  });
+  }));
 }
 
 // Directory metadata only: never hydrate bodies or infer other people's pairs.
@@ -214,6 +219,8 @@ export function readDirectConversations(store, token, roomId, { limit = 50, curs
   if (!Number.isSafeInteger(limit) || limit < 1 || limit > 100) fail(422, 'invalid_conversation_selection', 'Choose a bounded conversation list');
   return store.readTransaction(() => {
     const auth = store.authenticate(token, roomId, expectedSessionBinding);
+    const current = isCurrentRoom(store.db,roomId);
+    if(current) fail(409,'current_room_context_required','Use the bounded conversation window with an explicit peer');
     const head = store.db.prepare('SELECT sequence FROM rooms WHERE id=?').get(roomId);
     const anchor = store.db.prepare('SELECT id FROM events WHERE room_id=? AND sequence=?').get(roomId, head.sequence)?.id ?? '';
     const identity = { roomId, viewerId: auth.member.id, viewerAccountId: auth.account?.id ?? null,
@@ -225,7 +232,7 @@ export function readDirectConversations(store, token, roomId, { limit = 50, curs
     if (cursor !== null && (!saved || saved.scope !== scope || saved.sequence !== head.sequence || saved.anchor !== anchor || typeof saved.after !== 'string'))
       return { ...base, mode: 'reset', peers: [], nextCursor: null };
     const canonicalMarker = store.db.prepare("SELECT json_extract(projection,'$.messageAuthority') AS marker FROM rooms WHERE id=?").get(roomId)?.marker;
-    const canonical = canonicalMarker != null && hasMessageAuthority({ messageAuthority: JSON.parse(canonicalMarker) });
+    const canonical = current || canonicalMarker != null && hasMessageAuthority({ messageAuthority: JSON.parse(canonicalMarker) });
     const indexed = canonical || Boolean(store.db.prepare(`SELECT 1 FROM messages_backfill_cursor
       WHERE room_id=? AND applied_seq=? AND parity_at_seq=? AND applied_event_id=?`).get(roomId, head.sequence, head.sequence, anchor));
     const marker = indexed ? null : archiveMarker(store.db, roomId);

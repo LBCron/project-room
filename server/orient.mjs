@@ -37,13 +37,8 @@ export function readComposedRoomContext(store, token, roomId, { sinceVersion = n
     // A caller may still hold the old formal-only version from before this
     // composition contract. Refresh it once rather than omit its projection.
     if (context.not_modified) context = store.roomContext(token, roomId, { expectedSessionBinding });
-    // A structural version certifies a successful observation. Read the board
-    // before the glance builder's catch-to-empty fallback so an unavailable
-    // registry cannot be certified as an unchanged empty board. The surrounding
-    // read transaction maps storage failures to its existing typed refusal.
-    const board = store.workClaims.list(roomId);
     const options = {
-      text: false, token, binding: expectedSessionBinding, boardList: () => board
+      text: false, token, binding: expectedSessionBinding, boardList: memoizeBoardList(store)
     };
     const orient = buildOrient(store, roomId, context.viewerId, { ...options, structuralOnly: true });
     const { room, member, instructions, claims, availableClaims, workItems, orientation, work, workTotal, links } = orient;

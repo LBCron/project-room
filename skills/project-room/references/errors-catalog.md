@@ -94,7 +94,7 @@ above, not JSON-RPC.
 
 ## Full code index
 
-930 rows (889 distinct codes).
+1038 rows (997 distinct codes).
 *Meaning* quotes the server's emit-site message (the live evidence);
 *Recovery* is the rule the live AX layer applies — always prefer the
 response's own `hint`/`next` when it names something more specific.

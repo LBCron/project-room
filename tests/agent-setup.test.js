@@ -13,6 +13,7 @@ import { initialRoom } from "../server/bootstrap.mjs";
 import { createRoomServer } from "../server/http.mjs";
 import { openMcpTestClient } from "../scripts/mcp-test-client.mjs";
 import { connectRoom, setupTarget } from "../client/agent-setup.mjs";
+import { joinPageForAgentCode, JOIN_PAGE_AGENT_LINE } from "../server/routes/agent-connect.mjs";
 import { openSetupJournal } from "../client/setup-journal.mjs";
 import { readAgentConnection, saveAgentConnection } from "../client/agent-connection.mjs";
 import { createAgentIdentity, redeemAgentInvite } from "../client/room-agent.mjs";
@@ -28,6 +29,36 @@ async function fixture(t) {
   const connect = extra => connectRoom({ origin, directory, name: "Peer", accept: true, ...extra });
   return { root, store, keys, origin, directory, invite, connect };
 }
+test("the /a/<code> agent invite link the server emits parses and connects", async t => {
+  const f = await fixture(t);
+  // Contract: the url the real invite create endpoint returns goes into the CLI unchanged.
+  const response = await fetch(`${f.origin}/api/rooms/commons/agent-invites`, { method: "POST",
+    headers: { Authorization: `Bearer ${f.keys.commons}`, "Content-Type": "application/json" },
+    body: JSON.stringify({ profile: "chat", displayName: "Peer" }) });
+  assert.equal(response.status, 201);
+  const invite = await response.json();
+  assert.equal(new URL(invite.url).pathname, `/a/${encodeURIComponent(invite.code)}`);
+  assert.ok(invite.next.find(step => step?.action === "share-code")?.url === invite.url);
+  // The join page's no-JavaScript line points at the same path.
+  assert.ok(joinPageForAgentCode(JOIN_PAGE_AGENT_LINE, invite.code).includes(`<code>${new URL(invite.url).pathname}</code>`));
+  assert.deepEqual(setupTarget(invite.url), { origin: f.origin, code: invite.code });
+  assert.deepEqual(setupTarget(`${f.origin}/room/a/${invite.code}/`), { origin: f.origin, code: invite.code });
+  assert.deepEqual(setupTarget(`${f.origin}/a/${invite.code.toLowerCase()}`), { origin: f.origin, code: invite.code });
+  assert.throws(() => setupTarget(`${f.origin}/a/${invite.code}#x`));
+  assert.throws(() => setupTarget(`${f.origin}/a/${invite.code}/extra`));
+  // Malformed codes, credentials, and stray query strings are refused before any fetch,
+  // and refusals never echo the URL back.
+  for (const bad of [`${f.origin}/a/RM-`, `${f.origin}/a/${invite.code}-x`, `${f.origin}/join/RM-`,
+    `${f.origin}/a/${invite.code}?token=leak`, `${f.origin}/join/${invite.code}?token=leak`]) {
+    assert.throws(() => setupTarget(bad), error => !String(error.message).includes("leak") && !String(error.message).includes(invite.code));
+  }
+  const userUrl = new URL(`${f.origin}/a/${invite.code}`); userUrl.username = "u"; userUrl.password = "leak";
+  assert.throws(() => setupTarget(userUrl.href), /must not contain credentials/);
+  assert.deepEqual(setupTarget(`${f.origin}/a/${invite.code}?ref=hn`), { origin: f.origin, code: invite.code });
+  const result = await f.connect({ target: invite.url });
+  assert.equal(result.status, "connected");
+  assert.equal(result.roomId, "commons");
+});
 test("self-serve join links parse in the CLI and connect like the old hash links", async t => {
   const f = await fixture(t), invite = f.invite();
   assert.deepEqual(setupTarget(`${f.origin}/join/${invite.code}`), { origin: f.origin, code: invite.code });

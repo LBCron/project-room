@@ -8,6 +8,7 @@
 
 - Both doors agree: sourceRevision `513d3ee8471464803fd3c70dea2fe9ce30f27ad0`, buildId `2026-11-01T18:30:36.961Z` — the **recovery build** (restore R4), not the original 13:39Z build of the same source.
 - Ready snapshot by this lane: app door 3/3 × 200 (first read 3.0 s, then ~1.1–1.2 s), entry door 3/3 × 200 (~1.6–1.8 s). A snapshot only — your ×10 series is the verification.
+- **This build already carries the readiness pattern:** an in-room recovery-trace post reported a canonical /api/ready 503 at 18:42:02.172Z on this exact `513d3ee8`-r2 build (single read, DO timeout 2500 ms; the same-source RPC later settled ok). Recorded by the sync-tab lane's filing (SYNC.md), full text in-room. The pattern is not closed, and this build is its current carrier — which is what raises this build's place in your queue.
 - Main tip at read time: `82de0f8b42f7bbcb1fd3e92368b43d18280a319a` — 10 commits ahead of the production source.
 - **Flip 62's source `ef583ba8` (#5608) is NOT what production serves.** It was live ~18:10–18:30Z and was rolled back by R4. Git ancestry (this run): `ef583ba8` descends from `513d3ee8` (the production source is 6 commits behind it) and is itself an ancestor of main (4 behind the tip). #5608 is merged on main and not live. Your verified baseline therefore stands at the `513d3ee8` source, under the R4 recovery buildId.
 

@@ -234,3 +234,42 @@ test('actual Worker complete H work/default qualification resumes across process
     console.log('DURABLE_H_WORK_QUALIFICATION '+JSON.stringify({count:seed.count,maxInputBytes,maxReads,maxWarmReads,maxWrites,samples,restarted:true,unchangedServingProof:true,historyProvenance:'unknown',certified:false}));
   }finally{await mf.dispose();await rm(directory,{recursive:true,force:true});}
 });
+
+test('actual Worker nested retained identity growth stays in fixed codec controls and bounded steps',async()=>{
+  const built=await build({entryPoints:[fileURLToPath(new URL('./replay-cutover.test-fixture.mjs',import.meta.url))],bundle:true,write:false,format:'esm',platform:'neutral',external:['node:*','cloudflare:*']});
+  const directory=await mkdtemp(join(tmpdir(),'nested-retained-'));
+  const create=()=>new Miniflare({modules:true,script:built.outputFiles[0].text,compatibilityDate:'2026-07-30',compatibilityFlags:['nodejs_compat'],durableObjectsPersist:directory,durableObjects:{ROOM:{className:'ReplayCutoverRoom',useSQLite:true}}});
+  let mf=create();const call=async(surface,path)=>{const response=await mf.dispatchFetch('http://localhost'+path+(path.includes('?')?'&':'?')+'surface='+surface),value=await response.json();assert.equal(response.status,200,JSON.stringify(value));return value;};
+  try{
+    const measured={};
+    for(const [surface,count] of [['archive-small',1000],['archive-large',24000]]){
+      const seed=await call(surface,'/nested-archive-seed?count='+count);let progress={bytes:0},step=0;
+      while(progress.phase!=='witness_verified'&&step<300)progress=await call(surface,'/durable-step?generation='+seed.capture.generation+'&bytes='+progress.bytes+'&step='+step++);
+      assert.equal(progress.phase,'witness_verified');progress={bytes:0};step=0;
+      let maximumInputBytes=0,maximumLogicalRows=0,maximumWarmReads=0,representativeCost;
+      while(progress.phase!=='codec_partitioned'&&step<1200){
+        const next=await call(surface,'/nested-archive-codec?generation='+seed.capture.generation+'&bytes='+progress.bytes+'&step='+step);
+        progress=next.result;assert.ok(progress.inputBytes<=262144);assert.ok(progress.logicalUnitRows<=200);
+        maximumInputBytes=Math.max(maximumInputBytes,progress.inputBytes);maximumLogicalRows=Math.max(maximumLogicalRows,progress.logicalUnitRows);
+        if(step!==3)maximumWarmReads=Math.max(maximumWarmReads,next.cost.rowsRead);
+        if(step===2)representativeCost=next.cost;
+        if(step===2){await mf.dispose();mf=create();}
+        if(step===4)await call(surface,'/append-cost?i=77');
+        step++;
+      }
+      assert.equal(progress.phase,'codec_partitioned');
+      const census=await call(surface,'/nested-archive-census?generation='+seed.capture.generation);
+      assert.equal(census.count,count);assert.equal(census.frame.entries,count);assert.equal(census.frame.kind,'entry-array');
+      assert.equal(census.maximumLeafBytes,130);assert.equal(census.sample,'retained-000017-'+'x'.repeat(112));
+      measured[count]={sourceBytes:seed.capture.bytes,steps:step,maximumInputBytes,maximumLogicalRows,maximumWarmReads,representativeCost};
+    }
+    assert.ok(measured[24000].representativeCost.rowsRead<=measured[1000].representativeCost.rowsRead+32,JSON.stringify(measured));
+    const bad=await call('archive-bad','/nested-archive-seed?count=1&bad=1');let progress={bytes:0},step=0;
+    while(progress.phase!=='witness_verified')progress=await call('archive-bad','/durable-step?generation='+bad.capture.generation+'&bytes='+progress.bytes+'&step='+step++);
+    const before=await call('archive-bad','/nested-archive-state');
+    const refused=await mf.dispatchFetch('http://localhost/nested-archive-codec?generation='+bad.capture.generation+'&bytes=0&step=0&surface=archive-bad');
+    assert.equal(refused.status,500);assert.match((await refused.json()).message,/codec/);
+    assert.deepEqual(await call('archive-bad','/nested-archive-state'),before);
+    console.log('DURABLE_NESTED_RETAINED_CODEC '+JSON.stringify({measured,restarted:true,concurrentAppend:true,invalidIdentityRefusedAtomically:true,certified:false,semanticMembershipQualified:false}));
+  }finally{await mf.dispose();await rm(directory,{recursive:true,force:true});}
+});

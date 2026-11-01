@@ -14,6 +14,27 @@ export class ReplayCutoverRoom extends ReplayWitnessRoom {
   async fetch(request){
     const url=new URL(request.url);
     try{
+      if(url.pathname==='/nested-archive-seed'){
+        const count=Number(url.searchParams.get('count')),bad=url.searchParams.get('bad')==='1';
+        if(![1,1000,24000].includes(count))throw Error('invalid synthetic retained identity count');
+        this.s.initialize(initialRoom());const state=structuredClone(this.s.room('commons').state);
+        state.messagesArchive={throughSeq:1,count:0,retainedIds:bad?['x'.repeat(201)]:Array.from({length:count},(_,i)=>'retained-'+String(i).padStart(6,'0')+'-'+'x'.repeat(112))};
+        this.s.transaction(()=>this.db.prepare("UPDATE rooms SET projection=? WHERE id='commons'").run(this.s.storedProjection('commons',state)));
+        const capture=captureReplayWitness(this.s,{roomId:'commons',requestId:'nested-capture',expectedHead:2,reason:'Synthetic nested representation scaling only'});
+        return Response.json({capture,count,bad});
+      }
+      if(url.pathname==='/nested-archive-codec'){
+        const before={...this.stats},result=partitionReplayWitness(this.s,{roomId:'commons',generation:url.searchParams.get('generation'),
+          expectedBytes:Number(url.searchParams.get('bytes')),requestId:'nested-codec-'+url.searchParams.get('step')});
+        return Response.json({result,cost:Object.fromEntries(Object.keys(before).map(k=>[k,this.stats[k]-before[k]]))});
+      }
+      if(url.pathname==='/nested-archive-census')return Response.json({
+        ...this.db.prepare("SELECT count(*) AS count,MAX(payload_bytes) AS maximumLeafBytes FROM message_replay_units WHERE domain='metadata-index'").get(),
+        frame:cutover.readReplayWitnessLeaf(this.s,{roomId:'commons',generation:url.searchParams.get('generation'),domain:'metadata-entry',key:JSON.stringify(['messagesArchive','retainedIds'])}).value,
+        sample:cutover.readReplayWitnessLeaf(this.s,{roomId:'commons',generation:url.searchParams.get('generation'),domain:'metadata-index',key:JSON.stringify(['messagesArchive','retainedIds',17])}).value});
+      if(url.pathname==='/nested-archive-state')return Response.json({
+        codec:this.db.prepare("SELECT payload_sha256 FROM message_replay_units WHERE domain='codec'").get().payload_sha256,
+        source:this.db.prepare("SELECT sequence,metadata_hash FROM integrity_room_state WHERE room_id='commons'").get()});
       if(url.pathname==='/work-qualification-seed'){
         const count=65;
         this.s.initialize([...initialRoom(),...Array.from({length:count},(_,i)=>event({id:'work-'+i,roomId:'commons',actorId:'owner',
@@ -208,5 +229,5 @@ export class ReplayCutoverRoom extends ReplayWitnessRoom {
   }
 }
 export default {fetch(request,env){const surface=new URL(request.url).searchParams.get('surface')??'cutover';
-  if(!/^(?:cutover|cow-baseline|cow-idle|cow-active|cow-fault|references|h-small|h-large|h-work)$/.test(surface))return new Response('invalid fixture surface',{status:400});
+  if(!/^(?:cutover|cow-baseline|cow-idle|cow-active|cow-fault|references|h-small|h-large|h-work|archive-small|archive-large|archive-bad)$/.test(surface))return new Response('invalid fixture surface',{status:400});
   return env.ROOM.getByName(surface).fetch(request);}};

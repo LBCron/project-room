@@ -109,3 +109,15 @@ for(const mutation of ['root-control','sibling-self-hash','oversized-sibling'])t
   }
   assert.throws(()=>partition(f),/checkpoint binding|hash binding|source inclusion/);
 });
+
+test('large nested archive retained identities use independent indexed leaf commitments',t=>{
+  const retainedIds=Array.from({length:6000},(_,i)=>'message-'+String(i).padStart(6,'0')+'-x'.repeat(12));
+  const f=fixture(t,{messagesArchive:{throughSeq:9000,count:3000,retainedIds}});const result=partition(f);
+  assert.equal(result.phase,'codec_partitioned');assert.equal(result.certified,false);
+  const frame=cutover.readReplayWitnessLeaf(f.store,{roomId:'commons',generation:f.captured.generation,domain:'metadata-entry',key:JSON.stringify(['messagesArchive','retainedIds'])});
+  assert.equal(frame.value.kind,'entry-array');assert.equal(frame.value.entries,retainedIds.length);assert.ok(frame.bytes<256);
+  const key=JSON.stringify(['messagesArchive','retainedIds',4095]);
+  assert.equal(cutover.readReplayWitnessLeaf(f.store,{roomId:'commons',generation:f.captured.generation,domain:'metadata-index',key}).value,retainedIds[4095]);
+  f.store.db.prepare("UPDATE message_replay_units SET payload=CAST('\"forged\"' AS BLOB),payload_bytes=8 WHERE domain='metadata-index' AND unit_key=?").run(key);
+  assert.throws(()=>cutover.readReplayWitnessLeaf(f.store,{roomId:'commons',generation:f.captured.generation,domain:'metadata-index',key}),/independent replay leaf binding changed/);
+});

@@ -1,4 +1,4 @@
-const PARTITIONED_MAPS=new Set(['members','channels','workItems','replyRequests']);
+const PARTITIONED_MAPS=new Set(['members','channels','workItems','replyRequests','messagesArchive']);
 // Bounded byte scanner for the immutable captured at-rest JSON. It partitions
 // existing bytes; record semantics remain in projection-at-rest and applyEvent.
 export const REPLAY_CODEC_TOKEN_BYTES = 128 * 1024;
@@ -9,20 +9,20 @@ const decode = bytes => new TextDecoder('utf-8',{fatal:true,ignoreBOM:true}).dec
 const fail = () => {throw Error('unsupported or corrupt replay projection codec');};
 export function initialProjectionScan(){
   return {version:2,offset:0,phase:'start',key:'',keys:[],keyBytes:[],keyEscape:false,
-    tokenStart:0,depth:0,string:false,escape:false,messageIndex:0,kind:'metadata',canEnd:true,entryKey:'',entryKeyOffset:0,entryKeyLength:0,mapStart:0,mapIndex:0};
+    tokenStart:0,depth:0,string:false,escape:false,messageIndex:0,kind:'metadata',canEnd:true,entryKey:'',entryKeyOffset:0,entryKeyLength:0,mapStart:0,mapIndex:0,arrayStart:0,arrayIndex:0};
 }
 function validate(state){
   if(!state || state.version!==2 || !Number.isSafeInteger(state.offset) || state.offset<0 || state.offset>4*1024*1024
-    || !['start','key-or-end','key','colon','messages-start','message-or-end','value','after-value','after-message','map-start','map-key-or-end','map-key','map-colon','after-map-entry','done'].includes(state.phase)
+    || !['start','key-or-end','key','colon','messages-start','message-or-end','value','after-value','after-message','map-start','map-key-or-end','map-key','map-colon','after-map-entry','nested-array-start','nested-array-entry-or-end','after-nested-array-entry','done'].includes(state.phase)
     || !Number.isSafeInteger(state.depth) || state.depth<0 || state.depth>64
     || !Number.isSafeInteger(state.tokenStart) || state.tokenStart<0 || state.tokenStart>state.offset
     || !Number.isSafeInteger(state.messageIndex) || state.messageIndex<0 || state.messageIndex>1000000
     || !Array.isArray(state.keys) || state.keys.length>64 || state.keys.some(k=>typeof k!=='string'||new TextEncoder().encode(k).length>200)
     || new Set(state.keys).size!==state.keys.length || typeof state.key!=='string' || new TextEncoder().encode(state.key).length>200
     || !Array.isArray(state.keyBytes) || state.keyBytes.length>512 || state.keyBytes.some(x=>!Number.isInteger(x)||x<0||x>255)
-    || !['metadata','message','metadata-entry'].includes(state.kind)
+    || !['metadata','message','metadata-entry','metadata-index'].includes(state.kind)
     || typeof state.entryKey!=='string'||new TextEncoder().encode(state.entryKey).length>200
-    || !['entryKeyOffset','entryKeyLength','mapStart','mapIndex'].every(k=>Number.isSafeInteger(state[k])&&state[k]>=0&&state[k]<=4*1024*1024)
+    || !['entryKeyOffset','entryKeyLength','mapStart','mapIndex','arrayStart','arrayIndex'].every(k=>Number.isSafeInteger(state[k])&&state[k]>=0&&state[k]<=4*1024*1024)
     || ['keyEscape','string','escape','canEnd'].some(k=>typeof state[k]!=='boolean')
     || new TextEncoder().encode(JSON.stringify(state)).length>REPLAY_CODEC_CONTROL_BYTES)fail();
 }
@@ -31,11 +31,19 @@ function validate(state){
 // a spanning token is fetched once from the immutable witness by its bounded
 // byte range. No growing token buffer or repeated prefix serialization exists.
 export function scanProjectionChunk(current,input,{maximumRecords=32}={}){
+  // Old non-nested continuation states acquire only fixed zero controls.
+  current={...current,...(!Object.hasOwn(current??{},'arrayStart')?{arrayStart:0}:{}),...(!Object.hasOwn(current??{},'arrayIndex')?{arrayIndex:0}:{})};
   validate(current);
   if(!(input instanceof Uint8Array)||input.length>REPLAY_CODEC_INPUT_BYTES
     || !Number.isInteger(maximumRecords)||maximumRecords<1||maximumRecords>32)fail();
   const state=structuredClone(current),records=[];let i=0;
   const take=()=>{i++;state.offset++;};
+  const finishNestedArray=()=>{
+    records.push({kind:'metadata-array',key:state.key,entryKey:state.entryKey,index:state.mapIndex++,
+      keyOffset:state.entryKeyOffset,keyLength:state.entryKeyLength,offset:state.arrayStart,
+      length:state.offset-state.arrayStart,entries:state.arrayIndex});
+    state.phase='after-map-entry';
+  };
   while(i<input.length && records.length<maximumRecords){
     const byte=input[i];
     if(state.phase==='start'){
@@ -63,7 +71,9 @@ export function scanProjectionChunk(current,input,{maximumRecords=32}={}){
       state.phase=state.key==='messages'?'messages-start':PARTITIONED_MAPS.has(state.key)?'map-start':'value';state.kind='metadata';state.tokenStart=state.offset;continue;
     }
     if(state.phase==='map-start'){
-      if(whitespace(byte)){take();continue;}if(byte!==123)fail();state.mapStart=state.offset;state.mapIndex=0;take();state.phase='map-key-or-end';state.canEnd=true;continue;
+      if(whitespace(byte)){take();continue;}
+      if(state.key==='messagesArchive'&&byte!==123){state.phase='value';state.kind='metadata';state.tokenStart=state.offset;continue;}
+      if(byte!==123)fail();state.mapStart=state.offset;state.mapIndex=0;take();state.phase='map-key-or-end';state.canEnd=true;continue;
     }
     if(state.phase==='map-key-or-end'){
       if(whitespace(byte)){take();continue;}
@@ -75,7 +85,9 @@ export function scanProjectionChunk(current,input,{maximumRecords=32}={}){
       if(byte!==34)fail();state.entryKeyOffset=state.offset;state.keyBytes=[byte];state.keyEscape=false;state.phase='map-key';take();continue;
     }
     if(state.phase==='map-colon'){
-      if(whitespace(byte)){take();continue;}if(byte!==58)fail();take();state.phase='value';state.kind='metadata-entry';state.tokenStart=state.offset;continue;
+      if(whitespace(byte)){take();continue;}if(byte!==58)fail();take();
+      state.phase=state.key==='messagesArchive'&&state.entryKey==='retainedIds'?'nested-array-start':'value';
+      state.kind='metadata-entry';state.tokenStart=state.offset;continue;
     }
     if(state.phase==='after-map-entry'){
       if(whitespace(byte)){take();continue;}
@@ -85,6 +97,20 @@ export function scanProjectionChunk(current,input,{maximumRecords=32}={}){
         state.phase='after-value';continue;
       }
       fail();
+    }
+    if(state.phase==='nested-array-start'){
+      if(whitespace(byte)){take();continue;}if(byte!==91)fail();
+      state.arrayStart=state.offset;state.arrayIndex=0;take();state.phase='nested-array-entry-or-end';state.canEnd=true;continue;
+    }
+    if(state.phase==='nested-array-entry-or-end'){
+      if(whitespace(byte)){take();continue;}
+      if(byte===93){if(!state.canEnd)fail();take();finishNestedArray();continue;}
+      state.phase='value';state.kind='metadata-index';state.tokenStart=state.offset;continue;
+    }
+    if(state.phase==='after-nested-array-entry'){
+      if(whitespace(byte)){take();continue;}
+      if(byte===44){state.phase='nested-array-entry-or-end';state.canEnd=false;take();continue;}
+      if(byte===93){take();finishNestedArray();continue;}fail();
     }
     if(state.phase==='messages-start'){
       if(whitespace(byte)){take();continue;}if(byte!==91)fail();take();state.phase='message-or-end';state.canEnd=true;continue;
@@ -99,9 +125,10 @@ export function scanProjectionChunk(current,input,{maximumRecords=32}={}){
       if(empty&&whitespace(byte)){take();state.tokenStart=state.offset;continue;}
       if(!state.string && state.depth===0 && !empty && (whitespace(byte)||byte===44||byte===93||byte===125)){
         const length=state.offset-state.tokenStart;if(length<1||length>REPLAY_CODEC_TOKEN_BYTES)fail();
-        records.push({kind:state.kind,key:state.key,index:state.kind==='message'?state.messageIndex++:state.kind==='metadata-entry'?state.mapIndex++:null,offset:state.tokenStart,length,
-          ...(state.kind==='metadata-entry'?{entryKey:state.entryKey,keyOffset:state.entryKeyOffset,keyLength:state.entryKeyLength}:{})});
-        state.phase=state.kind==='message'?'after-message':state.kind==='metadata-entry'?'after-map-entry':'after-value';continue;
+        records.push({kind:state.kind,key:state.key,index:state.kind==='message'?state.messageIndex++:state.kind==='metadata-entry'?state.mapIndex++:state.kind==='metadata-index'?state.arrayIndex++:null,offset:state.tokenStart,length,
+          ...(['metadata-entry','metadata-index'].includes(state.kind)?{entryKey:state.entryKey}:{ }),
+          ...(state.kind==='metadata-entry'?{keyOffset:state.entryKeyOffset,keyLength:state.entryKeyLength}:{})});
+        state.phase=state.kind==='message'?'after-message':state.kind==='metadata-entry'?'after-map-entry':state.kind==='metadata-index'?'after-nested-array-entry':'after-value';continue;
       }
       if(!state.string){
         if(byte===34)state.string=true;
@@ -133,6 +160,7 @@ export function decodeProjectionSpan(bytes,record){
   const value=JSON.parse(decode(bytes));
   if(record.kind==='message' && (!value||typeof value!=='object'||Array.isArray(value)
     || typeof value.id!=='string'||new TextEncoder().encode(value.id).length>200))fail();
+  if(record.kind==='metadata-index'&&(typeof value!=='string'||new TextEncoder().encode(value).length<1||new TextEncoder().encode(value).length>200))fail();
   return value;
 }
 
@@ -143,4 +171,12 @@ export function projectionMapFrame(record){
     ||!Number.isSafeInteger(record.offset)||record.offset<0||!Number.isSafeInteger(record.length)||record.length<2
     ||record.offset+record.length>4*1024*1024||!Number.isSafeInteger(record.entries)||record.entries<0||record.entries>1000000)fail();
   return {version:1,kind:'entry-map',parent:record.key,offset:record.offset,length:record.length,entries:record.entries};
+}
+
+
+export function projectionArrayFrame(record){
+  if(record?.kind!=='metadata-array'||record.key!=='messagesArchive'||record.entryKey!=='retainedIds'
+    ||!Number.isSafeInteger(record.offset)||record.offset<0||!Number.isSafeInteger(record.length)||record.length<2
+    ||record.offset+record.length>4*1024*1024||!Number.isSafeInteger(record.entries)||record.entries<0||record.entries>1000000)fail();
+  return {version:1,kind:'entry-array',parent:record.key,member:record.entryKey,offset:record.offset,length:record.length,entries:record.entries};
 }

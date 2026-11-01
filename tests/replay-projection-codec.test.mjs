@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import {RoomStore} from '../server/store.mjs';
 import {initialRoom} from '../server/bootstrap.mjs';
 import {projectionMessageAtRest} from '../server/projection-at-rest.mjs';
-import {initialProjectionScan,scanProjectionChunk,decodeProjectionSpan,projectionMapFrame,REPLAY_CODEC_INPUT_BYTES,REPLAY_CODEC_CONTROL_BYTES} from '../server/replay-projection-codec.mjs';
+import {initialProjectionScan,scanProjectionChunk,decodeProjectionSpan,projectionMapFrame,projectionArrayFrame,REPLAY_CODEC_INPUT_BYTES,REPLAY_CODEC_CONTROL_BYTES} from '../server/replay-projection-codec.mjs';
 function scan(text,size=REPLAY_CODEC_INPUT_BYTES,maximumRecords=32){
   const bytes=Buffer.from(text),out=[];let state=initialProjectionScan(),steps=0,maxControl=0,maxFetched=0;
   while(state.offset<bytes.length){
@@ -11,6 +11,7 @@ function scan(text,size=REPLAY_CODEC_INPUT_BYTES,maximumRecords=32){
     assert.ok(step.consumed>0||step.records.length>0,'must make honest bounded progress');
     for(const span of step.records){
       if(span.kind==='metadata-map'){out.push({...span,value:projectionMapFrame(span)});continue;}
+      if(span.kind==='metadata-array'){out.push({...span,value:projectionArrayFrame(span)});continue;}
       assert.ok(span.length<=128*1024);maxFetched=Math.max(maxFetched,span.length);out.push({...span,value:decodeProjectionSpan(bytes.subarray(span.offset,span.offset+span.length),span)});
     }
     assert.ok(step.records.length<=maximumRecords);state=step.state;steps++;maxControl=Math.max(maxControl,Buffer.byteLength(JSON.stringify(state)));
@@ -113,4 +114,20 @@ test('growing archive retainedIds partition by exact nested array position witho
   assert.equal(result.out.find(x=>x.kind==='metadata-array').entries,retainedIds.length);
   assert.equal(result.out.find(x=>x.kind==='metadata-map'&&x.key==='messagesArchive').entries,3);
   assert.ok(result.maxFetched<256);assert.ok(result.maxControl<=REPLAY_CODEC_CONTROL_BYTES);
+});
+
+for(const size of [1,2,7,63])test('nested retained framing survives escaped keys and UTF8 boundaries: '+size,()=>{
+  const text='{"messagesArchive":{"throughSeq":7,"retained\\u0049ds":["first","🦉\\\"\\\\\\n","last"],"count":2},"messages":[]}';
+  const result=scan(text,size,1);
+  assert.deepEqual(result.out.filter(x=>x.kind==='metadata-index').map(x=>x.value),JSON.parse(text).messagesArchive.retainedIds);
+  const frame=result.out.find(x=>x.kind==='metadata-array');assert.equal(frame.entryKey,'retainedIds');assert.equal(frame.entries,3);
+  assert.equal(result.out.find(x=>x.kind==='metadata-map').entries,3);
+});
+for(const archive of [null,{retainedIds:[]},{}])test('nested archive empty/null shape remains explicit '+JSON.stringify(archive),()=>{
+  const result=scan(JSON.stringify({messagesArchive:archive,messages:[]}),2,1);
+  if(archive===null)assert.equal(result.out.find(x=>x.kind==='metadata').value,null);
+  else if(archive.retainedIds)assert.equal(result.out.find(x=>x.kind==='metadata-array').entries,0);
+});
+for(const retainedIds of [{},[7],['x'.repeat(201)]])test('nested archive refuses malformed identity shape '+JSON.stringify(retainedIds).slice(0,30),()=>{
+  assert.throws(()=>scan(JSON.stringify({messagesArchive:{retainedIds},messages:[]})),/codec/);
 });

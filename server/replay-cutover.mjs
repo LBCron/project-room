@@ -4,7 +4,7 @@ import {createHash} from 'node:crypto';
 import {isDeepStrictEqual} from 'node:util';
 import {ensureWorkControlDefaults} from '../src/work-item-session.js';
 import {MESSAGE_PROOF_FIELDS,messageProofMatches} from './write-integrity.mjs';
-import {initialProjectionScan,scanProjectionChunk,decodeProjectionSpan,projectionMapFrame} from './replay-projection-codec.mjs';
+import {initialProjectionScan,scanProjectionChunk,decodeProjectionSpan,projectionMapFrame,projectionArrayFrame} from './replay-projection-codec.mjs';
 import {sqliteValueLimit} from './storage-limits.mjs';
 import {STORE_SCHEMA_VERSION} from './writer-fence.mjs';
 import {initialReplayHash, advanceReplayHash, finishReplayHash,
@@ -200,7 +200,7 @@ export function replayCutoverSchema({durable = false} = {}) {
     row_version INTEGER NOT NULL, payload_bytes INTEGER NOT NULL,
     payload_sha256 TEXT NOT NULL, payload BLOB NOT NULL,
     PRIMARY KEY(room_id,generation,domain,unit_key),
-    CHECK(domain IN ('control','header','witness','hash','codec','message','metadata','replay-message','replay-metadata','semantic','source-chunk','source-merkle','leaf-proof','metadata-entry','h-message','h-message-absent','h-work','h-work-absent','h-body','h-body-absent','tail-event'))
+    CHECK(domain IN ('control','header','witness','hash','codec','message','metadata','replay-message','replay-metadata','semantic','source-chunk','source-merkle','leaf-proof','metadata-entry','h-message','h-message-absent','h-work','h-work-absent','h-body','h-body-absent','tail-event','metadata-index'))
   );
   ${['INSERT','UPDATE','DELETE'].map(operation => `CREATE TRIGGER replay_units_writer_${operation.toLowerCase()}
     BEFORE ${operation} ON message_replay_units BEGIN
@@ -915,7 +915,7 @@ function readSourceRange(db,header,offset,length,budget){
 
 export function readReplayWitnessLeaf(store,input){
   if(!input||!id(input.roomId)||!digest(input.generation)
-    ||!['message','metadata','metadata-entry'].includes(input.domain)||typeof input.key!=='string'
+    ||!['message','metadata','metadata-entry','metadata-index'].includes(input.domain)||typeof input.key!=='string'
     ||Buffer.byteLength(input.key)>512||Object.keys(input).some(k=>!['roomId','generation','domain','key'].includes(k)))throw Error('invalid replay leaf intent');
   return store.readTransaction(()=>{
     const db=store.db;verifyReplayCutoverSchema(db);
@@ -1017,7 +1017,7 @@ export function partitionReplayWitness(store,input) {
     let outputBytes=8192;
     const records=scanned.records.map(record=>{
       const relative=record.offset-state.offset;
-      const frame=record.kind==='metadata-map'?projectionMapFrame(record):null;
+      const frame=record.kind==='metadata-map'?projectionMapFrame(record):record.kind==='metadata-array'?projectionArrayFrame(record):null;
       const bytes=frame?Buffer.from(JSON.stringify(frame)):relative>=0 && relative+record.length<=chunk.length
         ? chunk.subarray(relative,relative+record.length)
         : readSourceRange(db,header,record.offset,record.length,budget);
@@ -1037,12 +1037,12 @@ export function partitionReplayWitness(store,input) {
     const insert=db.prepare(`INSERT INTO message_replay_units VALUES(?,?,?,?,?,?,?,?)`);
     const leafCommitments=[];
     for(const {record,bytes,value} of records){
-      const domain=record.kind==='message'?'message':record.kind==='metadata-entry'?'metadata-entry':'metadata';
-      const key=record.kind==='message'?value.id:record.kind==='metadata-entry'?JSON.stringify([record.key,record.entryKey]):record.key;
+      const domain=record.kind==='message'?'message':['metadata-entry','metadata-array'].includes(record.kind)?'metadata-entry':record.kind==='metadata-index'?'metadata-index':'metadata';
+      const key=record.kind==='message'?value.id:['metadata-entry','metadata-array'].includes(record.kind)?JSON.stringify([record.key,record.entryKey]):record.kind==='metadata-index'?JSON.stringify([record.key,record.entryKey,record.index]):record.key;
       if(db.prepare('SELECT 1 FROM message_replay_units WHERE room_id=? AND generation=? AND domain=? AND unit_key=?').get(roomId,generation,domain,key))
         throw Error('duplicate replay projection leaf key');
       insert.run(roomId,generation,domain,key,record.offset+1,bytes.length,hash(bytes),bytes);
-      const keyFrame=record.kind==='metadata-entry'?[record.keyOffset,record.keyLength,record.index]:null;
+      const keyFrame=['metadata-entry','metadata-array'].includes(record.kind)?[record.keyOffset,record.keyLength,record.index]:null;
       putPointer(db,roomId,generation,'leaf-proof',JSON.stringify([domain,key]),{receiptId,index:leafCommitments.length,sourceLength:record.length,keyFrame});
       leafCommitments.push(leafCommitment(header.hash,hashed.sourceRoot,generation,domain,key,record.offset,record.length,bytes.length,hash(bytes),keyFrame));
     }

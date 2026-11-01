@@ -1,5 +1,6 @@
 import {emptyWorkPrivacy,applyWorkPrivacyRequest,workRequestKey,workRequestValue} from './current-work-privacy.mjs';
 import {canonicalCurrentProofPlan} from './replay-canonical-plan.mjs';
+import {assertLegacyWorkReconciled} from './current-legacy-work-gate.mjs';
 import {currentWorkSummary} from './current-work-summary.mjs';
 import {advanceCanonicalH} from './replay-canonical-h.mjs';
 import {purgeCurrentCandidateForPrivacy,assertCurrentCandidateEmpty,cleanupCurrentCandidateRecords,stageCurrentCandidateRecords,currentCandidateCommandContext,applyCurrentCandidateEvent,publishCurrentCandidate,readCurrentRecord,admitCurrentCandidateBudget} from './current-room-repository.mjs';
@@ -444,6 +445,7 @@ function receipt(store, input, phase, operation) {
 export function captureReplayWitness(store, input) {
   return receipt(store,input,'capture',({receiptId}) => {
     const db = store . db , roomId = input . roomId , ceiling = input . ceilingBytes ?? REPLAY_CAPTURE_BYTES ;
+    assertLegacyWorkReconciled(db,roomId);
     const admitted=db.prepare(`SELECT
       CASE WHEN typeof(r.sequence)='integer' AND r.sequence BETWEEN 1 AND ${MAX} THEN r.sequence END AS head,
       CASE WHEN typeof(r.projection)='text' THEN octet_length(r.projection) END AS bytes,
@@ -1470,6 +1472,7 @@ export function advanceCurrentRoomConversion(store,input) {
       // a caller-supplied head alone never reaches this publication branch.
       if(db.prepare('SELECT sequence FROM rooms WHERE id=?').get(input.roomId)?.sequence!==state.tailSequence)state={...state,currentPhase:'tail'};
       else {
+        assertLegacyWorkReconciled(db,input.roomId);
         const publication=publishCurrentCandidate(store,state.candidateHead,{generation:input.generation,qualificationReceiptId:semantic.value.receiptId});
         abandonReplayCapture(store,{roomId:input.roomId,generation:input.generation,requestId:input.requestId+'-published',reason:'Qualified current serving activated; temporary source generation retired'});
         return {...publication,generation:input.generation,bindingHash:header.hash,workCount:state.workCount,workDefaultsQualified:true,currentSteps:state.currentSteps+1,phase:'current_serving',publication:'current'};

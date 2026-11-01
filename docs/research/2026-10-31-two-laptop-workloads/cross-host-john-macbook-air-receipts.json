@@ -1,0 +1,45 @@
+{
+  "sourceCommit": "3f8d7c44309387261bc6a5d50dc5cc6d497e55ca",
+  "capsuleSha256": "2113d1f62460bd156f368cc7406be45af0abcd7d9906b11dd36a28d318d02a12",
+  "packetSha256": "10e5b4faaa3689ada201568564500d6f1d6ab49c94436dc5bcb19bceaf27450c",
+  "actualHost": "Johns-MacBook-Air.local",
+  "receipts": {
+    "verify-peer": {
+      "host": "Johns-MacBook-Air.local",
+      "records": 4096,
+      "sourceDigest": "33f5d9125fc96d9431f93c3a7d04d1875cb7b59fe5a03944b3f64fb3b187b46d",
+      "resultDigest": "ce841c27e6add51c5e64c0900df8f0436ff3639abd578ee017c42f9b5e285297",
+      "authors": 17
+    },
+    "receive-first": {
+      "host": "Johns-MacBook-Air.local",
+      "cached": false,
+      "executions": 1,
+      "records": 4096,
+      "sourceDigest": "33f5d9125fc96d9431f93c3a7d04d1875cb7b59fe5a03944b3f64fb3b187b46d",
+      "resultDigest": "ce841c27e6add51c5e64c0900df8f0436ff3639abd578ee017c42f9b5e285297",
+      "authors": 17
+    },
+    "receive-retry": {
+      "host": "Johns-MacBook-Air.local",
+      "cached": true,
+      "executions": 1,
+      "records": 4096,
+      "sourceDigest": "33f5d9125fc96d9431f93c3a7d04d1875cb7b59fe5a03944b3f64fb3b187b46d",
+      "resultDigest": "ce841c27e6add51c5e64c0900df8f0436ff3639abd578ee017c42f9b5e285297",
+      "authors": 17
+    },
+    "after-conflict": {
+      "host": "Johns-MacBook-Air.local",
+      "cached": true,
+      "executions": 1,
+      "records": 4096,
+      "sourceDigest": "33f5d9125fc96d9431f93c3a7d04d1875cb7b59fe5a03944b3f64fb3b187b46d",
+      "resultDigest": "ce841c27e6add51c5e64c0900df8f0436ff3639abd578ee017c42f9b5e285297",
+      "authors": 17
+    }
+  },
+  "sameIdDifferentValidInputRejected": true,
+  "conflictExitCode": 1,
+  "limits": "Git artifact transfer across two actual hosts; local durable receipt/retry proof. No remote network throughput, power-loss or external exactly-once effect proof."
+}

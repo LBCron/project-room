@@ -369,7 +369,11 @@ test('entity projections pass recovery audit and channel repair after reopening'
  const f=setup(t,true,4,true);f.certify();f.post('recoverable','Recovery content.');
  f.command('message.edited',{messageId:'recoverable',body:'Revised recovery content.',expectedMessageRevision:0});
  assert.doesNotThrow(()=>auditRecovery(f.store));
- f.store.db.prepare("UPDATE rooms SET projection=json_remove(projection,'$.channels') WHERE id='commons'").run();
+ // Stage a legitimate legacy shape through the registered writer. Raw
+ // metadata tampering is a refusal case, not a migration precondition.
+ const legacy={...f.store.room('commons').state};delete legacy.channels;
+ f.store.transaction(()=>f.store.db.prepare("UPDATE rooms SET projection=? WHERE id='commons'")
+   .run(f.store.storedProjection('commons',legacy)));
  f.reopen();
  assert.equal(f.store.room('commons').state.messages[0].body,'Revised recovery content.');
  assert.equal(f.store.room('commons').state.messages[0].editHistory.length,1);

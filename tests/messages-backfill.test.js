@@ -435,8 +435,24 @@ test("a replay state too big for one row is stored in parts and still certifies"
 test("a torn state replays from the log", t => {
   const store = open(t);
   const long = longRoom(store, "commons");
-  store.backfillMessages({ limit: 14 });
+  finish(store);
+  const owner = store.issueAccessKey("commons", "owner");
+  // Invalidate certification as an archive/import can, then append normally:
+  // serving progress is already large when its replay snapshot is lost.
+  store.db.prepare("UPDATE messages_backfill_cursor SET parity_at_seq=NULL WHERE room_id='commons'").run();
+  store.command(owner, "commons", { id: "after-torn-snapshot", type: T.MESSAGE_POSTED,
+    data: { messageId: "after-torn-snapshot", body: "Keep serving this saved message" } });
+  const serving = rows(store, "commons");
+  const applied = store.db.prepare("SELECT applied_seq FROM messages_backfill_cursor WHERE room_id='commons'").get().applied_seq;
   store.db.prepare("DELETE FROM messages_backfill_state WHERE room_id='commons' AND part=1").run();
+  for (const expected of [3, 6]) {
+    const batch = store.backfillMessages({ limit: 3 });
+    assert.equal(batch.done, false, "a damaged snapshot must not replay the prior serving prefix outside the event budget");
+    assert.equal(batch.events, 3);
+    assert.equal(batch.replaySeq, expected, "the next call resumes its bounded reconstruction checkpoint");
+    assert.equal(store.db.prepare("SELECT applied_seq FROM messages_backfill_cursor WHERE room_id='commons'").get().applied_seq, applied);
+    assert.deepEqual(rows(store, "commons"), serving, "staging does not replace serving content or progress");
+  }
   finish(store);
   assert.equal(store.checkMessagesParity().checked, 1);
   assert.equal(rows(store, "commons").find(row => row.message_id === "m12").body, long(12));

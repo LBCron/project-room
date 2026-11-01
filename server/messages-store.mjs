@@ -460,9 +460,11 @@ function cursorMatches(db, roomId, cursor, sequence) {
   if (!Number.isInteger(cursor.applied_seq) || cursor.applied_seq < 0 || cursor.applied_seq > sequence) return false;
   if (cursor.applied_seq === 0 && cursor.applied_event_id !== "") return false;
   if (cursor.applied_seq > 0 && db.prepare("SELECT id FROM events WHERE room_id=? AND sequence=?").get(roomId,cursor.applied_seq)?.id !== cursor.applied_event_id) return false;
-  if (cursor.state_seq > cursor.applied_seq) {
-    if (cursor.state_seq > sequence || db.prepare("SELECT id FROM events WHERE room_id=? AND sequence=?").get(roomId,cursor.state_seq)?.id !== cursor.replay_event_id) return false;
-  }
+  // Reconstruction can legitimately stage behind already published rows.
+  // Every positive staging checkpoint still needs its exact event anchor.
+  if (!Number.isInteger(cursor.state_seq) || cursor.state_seq < 0 || cursor.state_seq > sequence) return false;
+  if (cursor.state_seq === 0 && cursor.replay_event_id !== "") return false;
+  if (cursor.state_seq > 0 && db.prepare("SELECT id FROM events WHERE room_id=? AND sequence=?").get(roomId,cursor.state_seq)?.id !== cursor.replay_event_id) return false;
   return true;
 }
 
@@ -1011,43 +1013,15 @@ function refreshStaleBlocks(store, freshRooms = new Map(), { deadline = Infinity
 }
 
 function loadState(db, roomId, cursor) {
-  if (!cursor) return { state: emptyRoomState(), seq: 0 };
-  const replayFrom = (start, state) => {
-    const skip = new Set();
-    try {
-      const quarantined = db.prepare("SELECT event_id FROM messages_backfill_blocks WHERE room_id=? AND skipped=1 AND event_id IS NOT NULL").get(roomId);
-      if (quarantined?.event_id) skip.add(quarantined.event_id);
-    } catch { /* no blocks table yet */ }
-    const rows = db.prepare("SELECT id, body FROM events WHERE room_id=? AND sequence>? AND sequence<=? ORDER BY sequence")
-      .all(roomId, start, cursor.applied_seq);
-    let current = state;
-    for (const row of rows) {
-      let incoming;
-      try { incoming = JSON.parse(row.body); }
-      catch (error) {
-        if (skip.has(row.id)) continue;
-        throw error;
-      }
-      try { current = compactState(applyEvent(current, incoming)); }
-      catch (error) {
-        // The named quarantine is retried once here. A repaired event joins
-        // the state; a still-rejected one is skipped so this resume cannot
-        // park the room again. Any other failure still propagates.
-        if (skip.has(row.id) && isRoomDataError(error)) continue;
-        throw error;
-      }
-    }
-    return current;
-  };
-  if (typeof cursor.state_json === "string" && cursor.state_seq >= cursor.applied_seq) {
+  if (cursor && typeof cursor.state_json === "string" && Number.isInteger(cursor.state_seq) && cursor.state_seq >= 0) {
     try { return { state: decodeMessageReplaySnapshot(db, roomId, cursor.state_json), seq: cursor.state_seq }; }
-    catch { /* a torn snapshot replays from the log */ }
+    catch { /* Rebuild a damaged staging snapshot through bounded chunks below. */ }
   }
-  if (typeof cursor.state_json === "string" && Number.isInteger(cursor.state_seq) && cursor.state_seq >= 0 && cursor.state_seq < cursor.applied_seq) {
-    try { return { state: replayFrom(cursor.state_seq, decodeMessageReplaySnapshot(db, roomId, cursor.state_json)), seq: cursor.applied_seq }; }
-    catch { /* fall through to a full replay */ }
-  }
-  return { state: replayFrom(0, emptyRoomState()), seq: cursor.applied_seq };
+  // Never eagerly replay to applied_seq here. That prefix can contain years of
+  // history and previously ran before fillRoom's event/deadline budget. Keep
+  // serving rows and applied_seq intact; saveCursor publishes only staging
+  // progress until the reconstructed fold reaches and validates the room head.
+  return { state: emptyRoomState(), seq: 0 };
 }
 
 // Parked rooms are excluded by the messages_backfill_blocks clause below, so

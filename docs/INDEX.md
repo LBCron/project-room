@@ -177,6 +177,8 @@ Dated plans, checkpoints, and working notes are in [history/](../archive/docs/hi
 
 [Bounded operator authority activation](research/2026-11-01-message-authority-activation.md) records the initial admission, recovery and refusal limits.
 
+[Historical session backfill reconciliation](research/2026-11-01-legacy-session-backfill-reconciliation.md) describes the explicit operator proof boundary and derived-only repair.
+
 [Normalized message storage migration carrier](NORMALIZED-MESSAGE-SLICE.md) describes the opt-in working set, qualification boundaries, reversal, and remaining architecture overhaul.
 
 [Per-room Durable Object cutover](design/ROOM-SHARD-CUTOVER.md) is the operator runbook for the dark `RoomShard` path. The flag stays off until Potter says go, and Codex deploys.

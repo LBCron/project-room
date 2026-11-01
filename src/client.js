@@ -108,6 +108,11 @@ const FILL_DELAY_MS = 250;
 const LIVENESS_INTERVAL_MS = 10000;
 function firstWindow(read) {
   const window = read?.messagesWindow;
+  if (read?.snapshotVersion === 2 && window?.mode === "recent" && window.omitted === null
+    && typeof window.complete === "boolean" && Array.isArray(read?.state?.messages)) {
+    const { messagesWindow, ...snapshot } = read;
+    return { snapshot, partial: !window.complete };
+  }
   if (!window || window.mode !== "recent" || !Number.isSafeInteger(window.omitted) || window.omitted < 0 || !Array.isArray(read?.state?.messages)) return null;
   const { messagesWindow, ...snapshot } = read;
   return { snapshot, partial: window.omitted > 0 };
@@ -402,7 +407,7 @@ export class RoomClient {
           if (!whole && read.messagesWindow?.mode === "recent" && Number.isSafeInteger(read.messagesWindow.omitted)) this.windowOmitted = read.messagesWindow.omitted;
           let snapshot, partial = false, complete = whole;
           if (whole) snapshot = read;
-          else if (!holding || holding.partial) {
+          else if (read.snapshotVersion === 2 || !holding || holding.partial) {
             // First window (or a newer window while only a window is held): used as is.
             const first = firstWindow(read);
             snapshot = first?.snapshot ?? null; partial = Boolean(first?.partial); complete = Boolean(first) && !partial;
@@ -433,7 +438,7 @@ export class RoomClient {
             this.sequence = snapshot.sequence;
             this.held = { generation, session, messages: Array.isArray(snapshot.state?.messages) ? snapshot.state.messages.slice() : null,
               fullSequence: complete ? snapshot.sequence : (holding?.fullSequence ?? 0),
-              partial, owesFull: stopFill ? false : (!complete && (partial || Boolean(holding?.owesFull))) };
+              partial, owesFull: read.snapshotVersion === 2 || stopFill ? false : (!complete && (partial || Boolean(holding?.owesFull))) };
             void this.rememberBoot(snapshot);
             this.live = { generation, session, snapshot };
             this.rawTail = Array.isArray(snapshot.state?.eventLog) ? snapshot.state.eventLog.slice(-100) : [];
@@ -700,6 +705,24 @@ export class RoomClient {
   async pageOlder() {
     const generation = this.generation, session = this.session;
     const anchored = () => this.live && this.live.generation === generation && this.live.session === session ? this.live : null;
+    if (anchored()?.snapshot?.snapshotVersion === 2) {
+      const live = anchored(), held = this.heldMessages(), page = live.snapshot.messagesPage;
+      if (!held?.partial || !page?.hasMore || typeof page.cursor !== "string") return false;
+      const params = new URLSearchParams({ cursor: page.cursor, limit: String(page.limit) });
+      const read = await this.request(this.path(`/conversation?${params}`), { fresh: true });
+      if (generation !== this.generation || this.session !== session || anchored() !== live) return false;
+      if (!this.ownsResponse(read, session)) { this.endAccess(); throw new Error(uiText("error.connection_changed")); }
+      if (read.mode === "reset") { await this.refresh(null, { revalidate: true }); return false; }
+      if (read.mode !== "replace" || !Array.isArray(read.messages)) throw new Error("Invalid current conversation page");
+      const seen = new Set(held.messages.map(message => message.id));
+      const messages = [...read.messages.filter(message => !seen.has(message.id)), ...held.messages];
+      const more = read.nextCursor !== null;
+      const snapshot = { ...live.snapshot, state: { ...live.snapshot.state, messages },
+        messagesPage: { ...page, cursor: read.nextCursor, hasMore: more } };
+      this.held = { ...held, messages: messages.slice(), partial: more, owesFull: false };
+      this.live = { generation, session, snapshot }; this.onSnapshot(snapshot, session);
+      return true;
+    }
     let before = anchored()?.snapshot?.messagesPage?.before;
     let beforeId = anchored()?.snapshot?.messagesPage?.beforeId ?? null;
     const held0 = this.heldMessages();

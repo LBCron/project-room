@@ -9,7 +9,7 @@ import {ServiceError} from './service-error.mjs';
 
 const fail=(code,message,status=422)=>{throw new ServiceError(status,code,message);};
 const keys='v roomId viewerId head focus limit at workAfter requestAfter workDone requestsDone'.split(' ');
-const cursorKey=secret=>createHash('sha256').update('current-work-source-v1:'+secret).digest();
+const cursorKey = secret => createHash ( 'sha256' ) . update ( 'current-work-source-v1:' + secret ) . digest ( ) ;
 function encode(value,secret) {
   // Source keys include excluded private requests. Authenticate AND encrypt
   // them; a readable signed token would disclose another exchange's ID.

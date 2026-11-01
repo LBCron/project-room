@@ -1,6 +1,7 @@
 import {emptyWorkPrivacy,validateWorkPrivacy,applyWorkPrivacyRequest,deriveWorkPrivacy,workRequestPrefix,workRequestKey,workRequestValue} from './current-work-privacy.mjs';
 import {CURRENT_LEGACY_WORK_INDEXES,CURRENT_LEGACY_WORK_GUARDS,assertLegacyWorkReconciled} from './current-legacy-work-gate.mjs';
 import {currentWorkCapacity,assertCurrentWorkCapacity,CURRENT_WORK_CAPACITY_INDEXES} from './current-work-capacity.mjs';
+import {CURRENT_WRITER_FORMAT} from './current-room-format.mjs';
 import {workRoleHolder} from './work-context.mjs';
 import {currentWorkSummary} from './current-work-summary.mjs';
 import {archiveRetains,recoverArchiveMarker} from './current-room-archive.mjs';
@@ -21,7 +22,7 @@ import { syncMessageRows } from './messages-store.mjs';
 import { ServiceError } from './service-error.mjs';
 
 export const CURRENT_ROOM_TABLES = Object.freeze(['current_room_records','current_room_record_proofs','current_room_head','current_room_writer_permit']);
-export const CURRENT_WRITER_FORMAT = 'normalized-current-v1-native-work-2';
+export {CURRENT_WRITER_FORMAT} from './current-room-format.mjs';
 const hash = text => createHash('sha256').update(text).digest('hex');
 const corrupt = message => { throw Error('current_room_corrupt: ' + message); };
 const refuse = message => { throw new ServiceError(409,'current_room_context_unavailable',message); };
@@ -778,7 +779,7 @@ export function readCurrentReplyRequestWindow(store,roomId,{after='',limit=4}={}
   for(const {record_key:id} of rows.slice(0,limit)) {
     const scalar=db.prepare("SELECT payload_bytes FROM current_room_records WHERE room_id=? AND domain='replyRequests' AND record_key=?").get(roomId,id);
     if(!scalar)corrupt('request source payload missing');
-    if(requests.length&&b.bytes+scalar.payload_bytes+16384>MAX_INPUT)break;
+    if ( requests . length && b . bytes + scalar . payload_bytes + 16384 > MAX_INPUT ) break ;
     const request=readCurrentRecord(db,roomId,'replyRequests',id,b);if(request?.id!==id)corrupt('request source identity differs');
     requests.push(request);examinedAfter=id;
   }

@@ -3365,8 +3365,14 @@ function revealWorkTimeline(id) {
 function revealWork(id, expandDetails = false) {
   // A normalized snapshot carries a bounded summary window. Missing entries
   // are unknown, and held summaries are not full records or action authority.
-  if (partialWorkSnapshot && inspectedWorkRecord !== state?.workItems?.[id])
+  if (partialWorkSnapshot && inspectedWorkRecord !== state?.workItems?.[id]) {
+    if (activeWorkNavigationId && activeWorkNavigationId !== id) {
+      const previous = workRecord(activeWorkNavigationId)?.querySelector(".work-details");
+      if (previous) previous.open = false;
+    }
+    activeWorkNavigationId = id;
     return readSelectedWorkRecord(id, expandDetails);
+  }
   // #3795: a record id the legacy workItems projection does not hold may be
   // a board claim — its record lives on the board. Reveal it there instead
   // of reporting the record missing; deep links, reloads and the
@@ -3394,7 +3400,7 @@ async function readSelectedWorkRecord(id, expandDetails) {
   const generation = client.generation, identity = session, held = state;
   const epoch = workNavigationEpoch, url = location.href;
   const current = () => context === workNavigationContext() && generation === client.generation
-    && identity === session && held === state && epoch === workNavigationEpoch && url === location.href;
+    && identity === session && held === state && epoch === workNavigationEpoch && url === location.href && activeWorkNavigationId === id;
   try {
     const selected = await client.workContext(id);
     if (!current()) return null;
@@ -3691,7 +3697,7 @@ $("#work-navigation-return").addEventListener("click", () => {
 function revealDrafts(id) {
   if (partialWorkSnapshot && inspectedWorkRecord !== state?.workItems?.[id]) {
     const epoch = workNavigationEpoch, url = location.href;
-    return Promise.resolve(readSelectedWorkRecord(id, false)).then(card => {
+    return Promise.resolve(revealWork(id, false)).then(card => {
       if (card && epoch === workNavigationEpoch && url === location.href) return revealDrafts(id);
     });
   }
@@ -4049,6 +4055,13 @@ function releaseSubmission(ticket, { restoreFocus = false } = {}) {
 // Unified timeline: work items render inline in #message-list, interleaved
 // chronologically with messages (Discord/Slack-style). Work cards follow the
 // active channel: a card shows when its proposal message is in the channel.
+function workSummaryCard(item) {
+  const card = document.createElement("article"), heading = document.createElement("h3"), link = document.createElement("a");
+  card.className = "work-card"; card.dataset.workSummaryId = item.id;
+  link.className = "source-link"; link.href = workHref(item.id); link.dataset.openWork = item.id; link.textContent = item.title;
+  heading.append(link); card.append(heading);
+  return card.outerHTML;
+}
 function timelineWorkEntries(onlyId) {
   if (onlyId === null) return [];
   const now = Date.now();
@@ -4072,7 +4085,7 @@ function timelineWorkEntries(onlyId) {
       const mostRecent = proposals[0];
       return { item, channelId: mostRecent ? messageChannelId(mostRecent) : DEFAULT_CHANNEL_ID,
         ts: Date.parse(item.updatedAt) || 0, html: partialWorkSnapshot && item !== inspectedWorkRecord
-          ? `<article class="work-card" data-work-summary-id="${esc(item.id)}"><h3><a class="source-link" href="${esc(workHref(item.id))}" data-open-work="${esc(item.id)}">${esc(item.title)}</a></h3></article>`
+          ? workSummaryCard(item)
           : workCard(item, now, proposals, state.messages) };
     })
     .sort((a, b) => a.ts - b.ts);

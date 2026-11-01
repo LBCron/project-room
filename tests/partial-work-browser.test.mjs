@@ -42,9 +42,10 @@ test('legacy missing records still use the existing board fallback',async()=>{
  const h=harness();h.partialWorkSnapshot=false;await h.reveal('legacy-claim');assert.deepEqual(h.calls.map(x=>Array.from(x)),[['legacy-board','legacy-claim']]);
 });
 test('partial timeline renders a summary link until the full selected record is mounted',async()=>{
- const h=harness({held:{late:{id:'late',title:'Summary',revision:1}}});Object.assign(h,{DEFAULT_CHANNEL_ID:'general',esc:String,workHref:id=>'#work-'+id,messageChannelId:()=> 'general',workCard:item=>{assert.equal(typeof item.definitionOfDone,'string');return 'FULL:'+item.definitionOfDone;}});h.state.messages=[];
- const start=source.indexOf('function timelineWorkEntries(onlyId)'),end=source.indexOf('function makeTimelineWorkNode',start);vm.runInContext(source.slice(start,end)+'this.timeline=timelineWorkEntries;',h);
- assert.match(h.timeline('late')[0].html,/data-open-work="late"/);assert.doesNotMatch(h.timeline('late')[0].html,/FULL:/);
+ const h=harness({held:{late:{id:'late',title:'Summary',revision:1}}});class Element{constructor(tag){this.tag=tag;this.dataset={};this.children=[];}append(child){this.children.push(child);}get outerHTML(){return JSON.stringify(this);}}
+ Object.assign(h,{document:{createElement:tag=>new Element(tag)},DEFAULT_CHANNEL_ID:'general',esc:String,workHref:id=>'#work-'+id,messageChannelId:()=> 'general',workCard:item=>{assert.equal(typeof item.definitionOfDone,'string');return 'FULL:'+item.definitionOfDone;}});h.state.messages=[];
+ const start=source.indexOf('function workSummaryCard(item)'),end=source.indexOf('function makeTimelineWorkNode',start);vm.runInContext(source.slice(start,end)+'this.timeline=timelineWorkEntries;',h);
+ assert.equal(JSON.parse(h.timeline('late')[0].html).children[0].children[0].dataset.openWork,'late');assert.doesNotMatch(h.timeline('late')[0].html,/FULL:/);
  await h.reveal('late',true);assert.equal(h.timeline('late')[0].html,'FULL:Complete selected definition');
 });
 test('selected work preserves account-session ownership refusal before any request',async()=>{
@@ -58,4 +59,19 @@ test('actual accountless agent join-cookie session reads selected normalized wor
  const origin=`http://127.0.0.1:${server.address().port}`,joined=store.createJoinSession('commons','joined-agent'),joinedAuth=store.authenticate(joined.token,'commons');assert.equal(joinedAuth.account,null);
  const client=new RoomClient({fetcher:(path,options)=>fetch(origin+path,{...options,headers:{...options.headers,Cookie:'room_session='+joined.token}})});client.session={...joinedAuth,authMode:'room',csrf:null};
  assert.equal((await client.workContext('joined-task')).work.definitionOfDone,'Saved output');assert.notEqual(client.session,null);client.disconnect();
+});
+test('actual work navigation accepts an unheld normalized ID and runs the selected reader on the destination',async()=>{
+ const h=harness();Object.assign(h,{URL,crypto:{randomUUID:()=> 'navigation-ticket'},updatesUi:null,workNavigationOrigins:new Map(),workHistoryReplayKey:null,conversation:{byId:new Map()}});
+ h.location={href:'http://localhost/#pr-view/rooms',hash:'#pr-view/rooms'};h.history={state:null,replaceState(value){this.state=value;},pushState(value,_unused,target){this.state=value;h.location.href=new URL(target,h.location.href).href;h.location.hash=new URL(h.location.href).hash;}};
+ const show=source.slice(source.indexOf('function showWorkDestination('),source.indexOf('// #3795: open the board',source.indexOf('function showWorkDestination(')));
+ const navStart=source.indexOf('function navigateWorkRecord('),navEnd=source.indexOf('// #3795: navigate to a board claim',navStart);
+ vm.runInContext(`var $=()=>({open:false});var recordHref=(kind,id)=>'#pr-record/'+kind+'/'+id;var captureWorkOrigin=()=>({type:'conversation'});var currentWorkOrigin=()=>null;var workHistoryState=()=>({});var sameWorkOrigin=()=>false;${show}${source.slice(navStart,navEnd)}this.navigate=navigateWorkRecord;`,h);
+ assert.equal(h.navigate('work','late',{presentation:'details'}),true);await new Promise(resolve=>setImmediate(resolve));
+ assert.equal(h.history.state.roomWorkTarget,'navigation-ticket');assert.equal(h.state.workItems.late.definitionOfDone,'Complete selected definition');assert.equal(h.calls.some(([kind])=>kind==='legacy-board'),false);
+});
+test('a later direct native work selection wins even when an older read completes first',async()=>{
+ const h=harness(),resolvers={};h.client.workContext=id=>new Promise(resolve=>resolvers[id]=resolve);
+ const first=h.reveal('first',true),second=h.reveal('second',true);
+ for(const id of ['first','second']){resolvers[id]({roomId:'commons',viewerId:'owner',work:{id,title:id,definitionOfDone:id,revision:1}});await(id==='first'?first:second);}
+ assert.equal(h.state.workItems.first,undefined);assert.equal(h.state.workItems.second.definitionOfDone,'second');assert.equal(h.activeWorkNavigationId,'second');
 });

@@ -188,3 +188,17 @@ test("scratch Operator conditional random generation is narrowly exempt without 
   const awsKey = fakeAwsKey();
   assert.ok(scan(line + ' ' + awsKey).some(finding => finding.rule === "aws-access-key"));
 });
+
+
+test("selected-status Miniflare exception matches only its complete synthetic declaration", async () => {
+  const { ALLOWLIST } = await import("../scripts/secret-scan-check.mjs");
+  const declaration = "  const token='synthetic-selected-parity-operator-0123456789';";
+  const scan = line => scanText(line, { allowlist: ALLOWLIST });
+  assert.deepEqual(scan(declaration), []);
+  assert.ok(scan(declaration.replace('0123456789', '0123456780')).some(f => f.rule === 'generic-secret'));
+  assert.ok(scan(declaration.replace('const token', 'const password')).some(f => f.rule === 'generic-secret'));
+  const unrelated = fakeStripeKey();
+  const adjacent = scan(declaration + ` const password = "${unrelated}";`);
+  assert.ok(adjacent.some(f => f.rule === 'generic-secret'));
+  assert.ok(adjacent.some(f => f.rule === 'stripe-key'));
+});

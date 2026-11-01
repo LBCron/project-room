@@ -22,7 +22,7 @@ Claim: muse-room seq 24770. Prepared 2026-10-31 ~21:50–22:15 PT.
   manual Absolute 5). No merge, deploy, close or cancellation was made
   by this lane; no CI was dispatched by this lane (see §6).
 - **Sources bound:** GitHub API reads in this run (2026-11-01
-  04:47–05:05 UTC) — every head, base, draft flag and mergeable state
+  04:47–05:12 UTC) — every head, base, draft flag and mergeable state
   below is from those reads; RD-R1 master table + Amendment 1
   (READINESS.md, this wave); HW-P1 LANDING-PACKS.md (branch
   evidence/hw-p1-landing-packs @ 4df28076, sha256 2a0f57b9…; re-read via
@@ -52,10 +52,13 @@ Claim: muse-room seq 24770. Prepared 2026-10-31 ~21:50–22:15 PT.
 ## 2. The spine — composed stack, landed as #5568
 
 **Release vehicle (this run, API): PR #5568** "Reconcile the Project
-Room MVP and dependable agent connections", head
-**77f1f839f17db3b97d995ebe550aeb8a6fbef44f**, branch
+Room MVP and dependable agent connections", branch
 codex/mvp-release-reconciliation-1101, base main, draft=true,
-mergeable=true (mergeable_state clean), 157 ahead / 0 behind main.
+mergeable=true (mergeable_state clean). **Its head moved during
+this packet's preparation** (see the Addendum): prepared against
+77f1f839f17db3b97d995ebe550aeb8a6fbef44f (157 ahead / 0 behind main);
+current head at packet close **9909bf8b5c978d48607cffadf4e4416f954de1b7**
+(162 ahead / 0 behind main), a fast-forward of exactly 5 commits.
 Its body (read this run) states: it includes the exact ancestry of
 #5560–#5567 plus schema documentation reconciliation, maintained
 distribution documentation links and the physical Mac's seven
@@ -91,13 +94,14 @@ physical Mac per Dot seq 24767 and Codex's seq 24748 framing.
    (Dot seq 24739 for #5563–#5566; Dot seq 24767 for #5567 run
    41273904555 and release run 41274136671). Independently confirmed
    in this run via the jobs API for runs 41273301287 (#5565),
-   41273904555 (#5567) and 41274136671 (#5568): safety-net PASSED;
-   unit, lint, contract, coverage, cloudflare, browser, visual,
-   friend-agent-e2e all SKIPPED (draft-PR pattern). **No fresh full CI
-   pass exists for the final composed head 77f1f839.** This is the
-   spine's largest remaining blocker: a final-head required-receipts
-   run (dispatch test.yml at 77f1f839 when Codex freezes the slate)
-   is Codex's to call — this lane dispatched nothing (§6).
+   41273904555 (#5567), 41274136671 (#5568 @77f1f839) and 41274940891
+   (#5568 @9909bf8b): safety-net PASSED; unit, lint, contract,
+   coverage, cloudflare, browser, visual, friend-agent-e2e all
+   SKIPPED (draft-PR pattern). **No fresh full CI pass exists for
+   any composed #5568 head.** This is the spine's largest remaining
+   blocker: a final-head required-receipts run (dispatch test.yml at
+   the frozen #5568 head when Codex freezes the slate) is Codex's to
+   call — this lane dispatched nothing (§6).
 2. **#5560's own dispatch table is not clean** (SA-S3, run
    41271088568): 8 PASSED / 1 FAILED — browser shard 3/6, one 30 s
    timeout in native-result-browser-check (154 passed in shard).
@@ -315,7 +319,7 @@ this lane dispatched NOTHING.** Collected anchors:
 | #5565 9c3f185c | PR test run 41273301287 | completed; jobs table read this run — safety-net PASSED, functional SKIPPED |
 | #5566 4ae8c7bc | PR test run 41273338560 | completed; same draft pattern |
 | #5567 9b2003e0 | PR test run 41273904555 | completed; jobs read this run — SKIPPED pattern (Dot 24767 concurs) |
-| #5568 77f1f839 | PR test run 41274136671 | completed; jobs read this run — safety-net PASSED, functional SKIPPED |
+| #5568 77f1f839 → 9909bf8b | PR test runs 41274136671 (old head) + 41274940891 (current head) | completed; jobs read this run for both — safety-net PASSED, functional SKIPPED |
 | #5442 / #5441 | dispatches 41271082028 / 41271076413 (SA-S1a) | completed; browser green, coverage not-introduced FAILED |
 | #5498–#5503 set | SA-S1b hosted dispatches at exact heads | completed; zero NOT-RUN on the set |
 | #5557, singles, freeze set | PR/dispatch runs exist at every head (API-listed this run) | completed; per-job tables live in their verdict filings (R1 CI column) |
@@ -376,5 +380,27 @@ health after each deploy post.
 In slate: spine 9 (#5560–#5567 + vehicle #5568) · landable-now
 independent 40 (§4.1–4.3) · conditional 9 (§4.4) · struck 2 ·
 not-in-slate 3 named + 554 NO-VERDICT.
-Heads moved during this run: **none**. CI dispatched by this lane:
-**none**.
+Heads moved during this run: **one — #5568 only** (Addendum).
+CI dispatched by this lane: **none**.
+
+## Addendum — #5568 head moved during preparation (2026-11-01 04:55:40Z)
+
+At packet close the release vehicle's head re-read at the API is
+**9909bf8b5c978d48607cffadf4e4416f954de1b7**, a fast-forward of
+exactly 5 commits over the prepared-against head 77f1f839 (compare:
+ahead 5 / behind 0; mergeable=true, clean; still draft). The 5
+commits (compare API, this run): 3dbfced2 "test(worker): align
+legacy and metered fixtures with write proofs" · 91f1a6b0
+"fix(store): register startup writes within atomic proof
+migration" · 245b0bb5 "fix: recover recent exact work retries with
+omitted revisions" · d40125d8 "fix: preserve delegation journals
+during backup restoration" · 9909bf8b "test: preserve write proof
+when staging historical browser members". Three of the five are
+schema-44 write-proof legs — they work on §2 blockers 3/4's causes
+at source; they do not clear them (qualification is still §2
+blocker 1's unrun final-head dispatch; the new head's own PR run
+41274940891 shows the same SKIPPED functional pattern, jobs read
+this run). No stack head (#5560–#5567) and no §4 head moved; main
+is unchanged at 1ab906c3. Every #5568 statement in this packet
+should be read at the current head 9909bf8b, with the ancestry
+verifications (§2) unaffected: the new head descends from the old.

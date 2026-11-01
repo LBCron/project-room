@@ -1,6 +1,6 @@
 # Follow-up production releases, 2026-11-01
 
-Current checkpoint at 12:25Z: production is verified on `8facbfe4389e6ecd23b1c1fb9c2fe398398ee2e4`, deployment `41305099031`. Canonical build `2026-11-01T12:10:05.283Z`; entry build `2026-11-01T12:10:15.776Z`. Strict 16/16, live smoke, immutable runtime publication and root six-door readback passed. Jill independently reported readiness 10/10. Main is `1cc9ef442381b61e6ea5652524ebc459ed913a56`; its agent attention UI guard is being deployed separately in `41306354999` and is not yet live-qualified. Intermittent readiness causality, historical quarantine and large-room blob cutover remain open. No live historical repair has run.
+Current checkpoint at 12:32Z: production and main are verified on `1cc9ef442381b61e6ea5652524ebc459ed913a56`, deployment `41306354999`. Canonical build `2026-11-01T12:25:25.015Z`; entry build `2026-11-01T12:25:35.108Z`. Strict 16/16, live smoke, runtime publication and root six-door readback passed. Fo's two manual identity-reload checks remain pending this pinned build. Selected-room read-only parity PR #5604 at `e50de49c002e2e6e8200414b1240232632493ad7` awaits own-head checks. Intermittent readiness causality, historical quarantine and large-room blob cutover remain open. No live historical repair has run.
 
 The sections below are dated checkpoint history. Later receipts supersede earlier limitations explicitly; failed attempts remain preserved. Exact head qualification, merge, deployment and live checks are distinct. No skipped or cancelled job is called passed.
 
@@ -187,3 +187,8 @@ Deployment 41305099031 completed strict 16/16, public smoke and runtime publicat
 Agent attention UI #5603 landed `1cc9ef442381b61e6ea5652524ebc459ed913a56` from exact green head `ea5402942c69885e54be1e10b48273e3b1066c0d`, hosted 41304937738 including six browser shards. It suppresses human-owner rollup calls for agent views while retaining authorized queue reads and clears stale owner content. Its deployment 41306354999 is running. Fo's two manual identity-reload cases remain pending the next verified build.
 
 Natural retention and integrity attempts at 12:00:37/38Z committed after the optional index installation, with zero consecutive failures; integrity records 79 verified rooms and one quarantined event. These job timestamps are not source attestations. No quarantine clearance, historical execute, large-room activation, consent widening or schedule reset is claimed.
+
+
+### UI deployment 41306354999 completed
+
+Source `1cc9ef442381b61e6ea5652524ebc459ed913a56` passed strict 16/16, public smoke and immutable runtime publication. Root's four-source/two-readiness readback passed at `2026-11-01T12:31:55.293Z`. Canonical build `2026-11-01T12:25:25.015Z`; entry `2026-11-01T12:25:35.108Z`. Runtime contains 667 files / 3,528,587 bytes / SHA256 `e3df249df330afd6c41b9383885b63d6fd650276b00f07e096ee33be7d86f5f0`. Fo was asked to finish only the two remaining manual identity-reload cases against this build. No manual pass is inferred from deployment or hosted browser results.

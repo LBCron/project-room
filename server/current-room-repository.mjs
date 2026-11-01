@@ -1,4 +1,5 @@
 import {emptyWorkPrivacy,validateWorkPrivacy,applyWorkPrivacyRequest,deriveWorkPrivacy,workRequestPrefix,workRequestKey,workRequestValue} from './current-work-privacy.mjs';
+import {CURRENT_LEGACY_WORK_INDEXES} from './current-legacy-work-gate.mjs';
 import {workRoleHolder} from './work-context.mjs';
 import {currentWorkSummary} from './current-work-summary.mjs';
 import {archiveRetains,recoverArchiveMarker} from './current-room-archive.mjs';
@@ -82,7 +83,7 @@ guardDefinitions.push(['current_room_permit_update',`CREATE TRIGGER IF NOT EXIST
       THEN RAISE(ABORT,'unsupported current room permit') END; END`],
   ['current_room_permit_delete',`CREATE TRIGGER IF NOT EXISTS current_room_permit_delete BEFORE DELETE ON current_room_writer_permit BEGIN
     SELECT RAISE(ABORT,'unsupported current room permit'); END`]);
-export const CURRENT_ROOM_GUARDS = [...guardDefinitions,...RESTORE_CONTROL_GUARDS].map(([,sql])=>sql+';').join('\n') + `
+export const CURRENT_ROOM_GUARDS = [...guardDefinitions,...RESTORE_CONTROL_GUARDS].map(([,sql])=>sql+';').join('\n') + CURRENT_LEGACY_WORK_INDEXES + `
 CREATE INDEX IF NOT EXISTS current_work_summary_keys ON current_room_record_proofs(room_id,record_key) WHERE domain='workSummary' AND present=1;
 CREATE INDEX IF NOT EXISTS current_reply_request_keys ON current_room_record_proofs(room_id,record_key) WHERE domain='replyRequests' AND present=1;
 CREATE INDEX IF NOT EXISTS current_messages_public_seq ON messages(room_id,seq DESC,message_id DESC) WHERE to_member_id IS NULL OR to_member_id='';
@@ -132,6 +133,7 @@ function charge(b,n,rows=1) {
   b.bytes+=n;b.records+=rows;
   if(b.bytes>MAX_INPUT||b.records>200)refuse('Current record context exceeds bounded input; use a smaller addressed request');
 }
+export const chargeCurrentReadBudget=(b,bytes,records=1)=>charge(b,bytes,records);
 function receipt(db,id,b) {
   if(b.receipts.has(id))return b.receipts.get(id);
   // Audit units retain independent input accounting while reusing at most four
@@ -638,7 +640,7 @@ export function readCurrentRoomForAudit(store,roomId) {
 export function withCurrentReadContext(db,roomId,operation) {
   if(!isCurrentRoom(db,roomId))return operation();
   const previous=contextBudgets.get(db);if(!previous)contextBudgets.set(db,budget());
-  try{return operation();}finally{if(!previous)contextBudgets.delete(db);}
+  try{return operation(contextBudgets.get(db));}finally{if(!previous)contextBudgets.delete(db);}
 }
 export function readCurrentHistoryFloor(db,roomId,memberId) {
   const b=contextBudgets.get(db)??budget(),head=readCurrentHead(db,roomId,b);if(!head)return undefined;

@@ -457,12 +457,18 @@ export function createBackupReplaySession(store, { audit = "strict", sourceSchem
       // order only after inspecting real schema; unknown backup names still fail.
       for (const table of tableNames(db)) {
         if (existing.has(table)) continue;
-        if (db.prepare(`PRAGMA foreign_key_list(${quoteIdent(table)})`).all().length) throw new Error("Lazy restore table requires dependency ordering");
+        const foreignKeys = db.prepare(`PRAGMA foreign_key_list(${quoteIdent(table)})`).all();
+        // The replay sidecar has one code-owned rooms FK. Its schema has just
+        // been verified; feed that parent into the existing buffered cascade.
+        const replayChild = table === "message_replay_units" && foreignKeys.length === 1
+          && foreignKeys[0].table === "rooms" && foreignKeys[0].from === "room_id"
+          && foreignKeys[0].to === "id" && existing.has("rooms");
+        if (foreignKeys.length && !replayChild) throw new Error("Lazy restore table requires dependency ordering");
         existing.add(table);
         topoIndex.set(table, topo.length);
         topo.push(table);
-        deps.set(table, new Set());
-        ancestors.set(table, new Set());
+        deps.set(table, new Set(replayChild ? ["rooms"] : []));
+        ancestors.set(table, new Set(replayChild ? ["rooms", ...(ancestors.get("rooms") ?? [])] : []));
       }
     }
     if (!existing.has(record.table)) throw new Error("Export names a table this store does not have");

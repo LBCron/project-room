@@ -65,6 +65,8 @@ Exporting a room that is **not** lifecycle-archived requires the `confirmRoomId`
 
 Event bodies are scrubbed on the way out for this product's own token shapes only (`pri_…`, `rak_…`, `ga1.…` become sha256 hashes, at any nesting depth). The response header `X-Room-Export-Scrub: token-shapes` and the audit row carry that marker; nothing is added to the JSONL body itself. Any other secret pasted into a room passes through verbatim: **an export is as sensitive as the room itself**. Keep it with the same care as a backup, never in a shared drive or chat, and delete it when its purpose is done.
 
+Room-event exports are archival history, not full restore artifacts. They omit serving proofs, derived replay units and historical repair receipts. Ordinary import retains current strict replay rules; a historical event can therefore require a whole-store backup rather than event import. Use the existing physical SQLite backup or whole-store NDJSON backup/restore path for recovery, preserving its audit and grant-reconciliation requirements.
+
 This door needs only the operator token. It does not use or arm the whole-store export door; that door and its token are unchanged.
 
 ## QA2 leftovers

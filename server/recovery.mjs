@@ -1,6 +1,7 @@
 // Read-only offline audit. It neither repairs data nor proves post-capture authority.
 import { createHash } from "node:crypto";
 import { EVENT_TYPES, RETIRED_REPLAY_EVENT_TYPES, validId } from "../src/events.js";
+import { auditReplayCutoverRecovery } from "./replay-cutover.mjs";
 import { terminalWork } from "../src/workflow.js";
 import { applicationTables, lazyAdditiveTables, STORE_SCHEMA_VERSION } from "./writer-fence.mjs";
 import { auditTextResults } from "./text-results.mjs";
@@ -68,6 +69,7 @@ export function auditRecovery(store) {
     const required = [...applicationTables, ...runtimeTables].sort();
     const allowed = new Set([...required, ...lazyAdditiveTables]);
     requireState(tables.every(name => allowed.has(name)));
+    if (tables.includes("message_replay_units")) auditReplayCutoverRecovery(store.db);
     requireState(required.every(name => tables.includes(name)));
     const rooms = new Map();
     const drift = [];

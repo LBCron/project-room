@@ -68,7 +68,7 @@ export function replayCutoverSchema({durable = false} = {}) {
     END;`;
 }
 
-function verifySchema(db) {
+export function verifyReplayCutoverSchema(db) {
   const ddl=replayCutoverSchema({durable:Boolean(db.storage?.sql)});
   const definitions=[...ddl.matchAll(/(CREATE (?:TABLE|TRIGGER) ([a-z_]+)[\s\S]*?);(?=\s*CREATE |\s*$)/g)];
   if(definitions.length!==8)throw Error('invalid replay schema contract');
@@ -147,7 +147,7 @@ function validate(input, phase) {
     || typeof input.reason !== 'string' || !input.reason.trim() || Buffer.byteLength(input.reason)>280
     || (input.ceilingBytes !== undefined && (!Number.isSafeInteger(input.ceilingBytes)
       || input.ceilingBytes<1 || input.ceilingBytes>REPLAY_CAPTURE_BYTES)))) throw Error('invalid replay capture intent');
-  if (phase === 'hash' && (!digest(input.generation) || !Number.isSafeInteger(input.expectedBytes)
+  if (phase !== 'capture' && (!digest(input.generation) || !Number.isSafeInteger(input.expectedBytes)
     || input.expectedBytes<0 || input.expectedBytes>REPLAY_CAPTURE_BYTES)) throw Error('invalid replay hash intent');
 }
 function receipt(store, input, phase, operation) {
@@ -167,7 +167,7 @@ function receipt(store, input, phase, operation) {
       if (value.fingerprint !== fingerprint) throw Error('replay idempotency conflict');
       return {...value,duplicate:true};
     }
-    verifySchema(store.db);
+    verifyReplayCutoverSchema(store.db);
     const value = {...operation({receiptId}),fingerprint,duplicate:false};
     store.db.prepare(`INSERT INTO operator_actions
       (id,at,action,target_kind,target_id,reason,plan_hash,counts_json,result,request_id)
@@ -296,6 +296,11 @@ export function partitionReplayWitness(store,input) {
           WHERE room_id=? AND generation=? AND domain='witness' AND unit_key='state'`)
           .get(record.offset+1,record.length,roomId,generation).chunk);
       const value=decodeProjectionSpan(bytes,record);
+      // JSON.parse validates syntax but shadows duplicate keys. SQLite's
+      // bounded tree walk sees every nested/escaped-equivalent object key.
+      if(db.prepare(`SELECT 1 FROM json_tree(?) WHERE key IS NOT NULL
+        GROUP BY parent,key HAVING count(*)>1 LIMIT 1`).get(fatalText(bytes)))
+        throw Error('duplicate replay projection object key');
       outputBytes+=bytes.length+512;
       return {record,bytes,value};
     });
@@ -310,4 +315,56 @@ export function partitionReplayWitness(store,input) {
       bytes:scanned.state.offset,records:records.length,messages:scanned.state.messageIndex,
       phase:scanned.complete&&scanned.state.offset===header.value.bytes?'codec_partitioned':'codec_partitioning',publication:'pending',certified:false};
   });
+}
+
+// Restore installs only code-owned DDL when an incoming whole-store artifact
+// actually contains this optional table. Ordinary store opens do not call it.
+export function ensureReplayCutoverRestoreSchema(db) {
+  if (!db.prepare("SELECT 1 FROM sqlite_master WHERE type='table' AND name='message_replay_units'").get())
+    db.exec(replayCutoverSchema({durable:Boolean(db.storage?.sql)}));
+  verifyReplayCutoverSchema(db);
+}
+
+// Whole-store backup/recovery already performs a complete offline audit. This
+// verifies preserved derivation inputs, not serving parity or completion. It is
+// deliberately not called by ordinary appends or bounded continuation steps.
+export function auditReplayCutoverRecovery(db) {
+  verifyReplayCutoverSchema(db);
+  if(db.prepare(`SELECT 1 FROM message_replay_units u WHERE generation<>''
+    AND NOT EXISTS(SELECT 1 FROM message_replay_units h WHERE h.room_id=u.room_id
+      AND h.generation=u.generation AND h.domain='header' AND h.unit_key='state') LIMIT 1`).get())
+    throw Error('orphaned recovered replay generation');
+  const headers=db.prepare(`SELECT CASE WHEN typeof(room_id)='text' AND octet_length(room_id)<=64
+      THEN room_id END AS room_id,CASE WHEN typeof(generation)='text' AND octet_length(generation)=64
+      THEN generation END AS generation FROM message_replay_units
+    WHERE domain='header' AND unit_key='state'`).all();
+  for(const {room_id:roomId,generation} of headers){
+    if(!id(roomId)||!digest(generation))throw Error('invalid recovered replay identity');
+    const header=captureBinding(db,roomId,generation);
+    if(!Number.isSafeInteger(header.value.bytes)||header.value.bytes<1||header.value.bytes>REPLAY_CAPTURE_BYTES)
+      throw Error('invalid recovered replay witness bound');
+    for(const domain of ['hash','codec']){
+      const saved=get(db,roomId,generation,domain).value;
+      const prior=auditBinding(db,saved.receiptId);
+      if(saved.headerHash!==header.hash||prior.bindingHash!==header.hash
+        ||prior[domain==='hash'?'hashStateHash':'codecStateHash']!==hash(saved.state))
+        throw Error('independent recovered replay checkpoint binding changed');
+    }
+    const witness=db.prepare(`SELECT CASE WHEN typeof(payload)='blob'
+      AND typeof(payload_bytes)='integer' AND payload_bytes=? AND octet_length(payload)=?
+      AND payload_sha256=? THEN 1 ELSE 0 END AS admitted FROM message_replay_units
+      WHERE room_id=? AND generation=? AND domain='witness' AND unit_key='state'`)
+      .get(header.value.bytes,header.value.bytes,header.value.metadataHash,roomId,generation);
+    if(!witness?.admitted)throw Error('recovered replay witness changed');
+    const independent=createHash('sha256');
+    for(let offset=0;offset<header.value.bytes;offset+=REPLAY_CAPTURE_STEP_BYTES){
+      const row=db.prepare(`SELECT substr(payload,?,?) AS chunk FROM message_replay_units
+        WHERE room_id=? AND generation=? AND domain='witness' AND unit_key='state'`)
+        .get(offset+1,REPLAY_CAPTURE_STEP_BYTES,roomId,generation);
+      independent.update(new Uint8Array(row.chunk));
+    }
+    if(independent.digest('hex')!==header.value.metadataHash)
+      throw Error('independent recovered replay witness mismatch');
+  }
+  return {captures:headers.length,certified:false,publication:'pending'};
 }

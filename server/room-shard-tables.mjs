@@ -111,7 +111,7 @@ export function roomTablesPresent(db) {
 
 // Grant families and callback secrets remain directory authority. They are
 // optional because a fresh store has never mounted OAuth or event delivery.
-const optionalDirectory = new Set([...OAUTH_PROVIDER_TABLES, ...MCP_EVENT_ADDITIVE_TABLES]);
+const optionalDirectory = new Set(["message_replay_units", ...OAUTH_PROVIDER_TABLES, ...MCP_EVENT_ADDITIVE_TABLES]);
 const directory = new Set(DIRECTORY_TABLES);
 const skipped = new Set(REPLAY_SKIPPED_TABLES);
 

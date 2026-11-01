@@ -4821,13 +4821,14 @@ export function createRoomServer({ store, origin, assetRoot = new URL("../", imp
           return res.end(bytes);
         }
         const lines = [];
-        // R1 (export/import round-trip): the per-viewer filter can drop
+        // Archival event export: the per-viewer filter can drop
         // targeted DMs the viewer cannot see, leaving sequence gaps in the
         // file; importEvents demands dense line.sequence === i + 1, so the
         // export renumbers the visible walk densely. Event bodies carry no
         // sequence (order + event ids are the stable references; import
-        // rewrites dense row keys anyway), so renumbering is replay-safe
-        // and keeps the export self-consistent for reimport.
+        // rewrites dense row keys anyway). Dense rows do not promise a full
+        // restore: import still requires current replay semantics and cannot
+        // recover whole-store proofs or historical operator authority.
         const visible = [];
         for (const line of store.exportEvents(selected.token, roomId, fence)) {
           if (!roomEventVisible(line.event)) continue;

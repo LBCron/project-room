@@ -14,6 +14,7 @@ import { PATROL_SCHEMA } from "./patrol.mjs";
 import { PROJECT_MAP_SCHEMA, PROJECT_MAP_TABLES } from "./project-map-store.mjs";
 import { PROJECTION_SHAPE_UPGRADES_SCHEMA } from "./legacy-message-shape.mjs";
 import { auditRecovery } from "./recovery.mjs";
+import { ensureReplayCutoverRestoreSchema } from "./replay-cutover.mjs";
 import { Buffer } from "node:buffer";
 import { ensureOAuthProviderSchema, OAUTH_PROVIDER_TABLES } from "./oauth-provider-store.mjs";
 import { ensureMcpInviteOAuthSchema, inviteOAuthDatabase } from "./mcp-invite-oauth.mjs";
@@ -91,6 +92,16 @@ export function scrubEventTokens(value) {
 export function sanitizeCell(table, column, value) {
   if (value === null || value === undefined) return null;
   if (isExportSecretColumn(table, column)) return sha256Hex(typeof value === "string" ? value : String(value));
+  // Replay payloads are structured UTF-8 text even though bounded SQL reads
+  // use BLOBs. Preserve the existing text scrubbing policy before base64;
+  // changed source hashes intentionally remain unchanged and must refuse reuse.
+  if (table === "message_replay_units" && column === "payload" && typeof value !== "string") {
+    const bytes = value instanceof ArrayBuffer ? new Uint8Array(value)
+      : ArrayBuffer.isView(value) ? new Uint8Array(value.buffer, value.byteOffset, value.byteLength) : null;
+    if (!bytes) throw new Error("Invalid replay payload bytes");
+    const text = new TextDecoder("utf-8", {fatal:true, ignoreBOM:true}).decode(bytes);
+    return {$base64:Buffer.from(scrubTokens(text), "utf8").toString("base64")};
+  }
   // REL-14: BLOB cells (room file bytes) leave as base64. JSON.stringify of a
   // Uint8Array is an object of indices that replay could not bind, so any room
   // holding a file produced an export that could not be restored.
@@ -550,6 +561,7 @@ export const CONTENT_DIGEST_SKIPPED_TABLES = Object.freeze([...REPLAY_SKIPPED_TA
 // Restore only the known lazy schemas, never backup-supplied DDL. Streaming
 // restore calls this when it encounters the first row in a native namespace.
 export function ensureNativeAgentRestoreSchema(db, names) {
+  if (names.has("message_replay_units")) ensureReplayCutoverRestoreSchema(db);
   // Production also creates these application schemas lazily. Restore their
   // rows using code-owned DDL; never accept schema supplied by the export.
   if (["agent_wake_listener_leases", "agent_wake_signal_claims", "agent_host_disconnects"].some(table => names.has(table))) db.exec(wakeListenerLeaseSchema);

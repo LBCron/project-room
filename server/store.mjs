@@ -5824,9 +5824,9 @@ this.slaBreachAlerts = new SlaBreachAlertJournal(this); // Task 26: durable in-a
       const {members,ownerId}=this.roomAuthority(roomId),watching=new Set(watcherMemberIds??[]);
       return Object.values(members).filter(m=>m.active!==false).map(m=>{
         const link=m.kind==='agent'?this.db.prepare('SELECT identity_id FROM identity_links WHERE room_id=? AND member_id=?').get(roomId,m.id):null;
-        const host=link?this.agentHeartbeats.statusOf(link.identity_id):null,observed=host&&host.status!=='unregistered'&&Number.isFinite(host.lastSeenAt)&&host.lastSeenAt<=this.now();
+        const host=link?this.agentHeartbeats.statusWindow(link.identity_id):null,observed=host&&host.status!=='unregistered'&&Number.isFinite(host.lastSeenAt)&&host.lastSeenAt<=this.now();
         const isWatching=watching.has(m.id),liveHost=observed&&host.status==='online';
-        return{memberId:m.id,displayName:m.displayName,kind:m.kind,watching:isWatching,lastSeenAt:observed?host.lastSeenAt:null,statusMessage:m.statusMessage??null,presence:host?{status:host.status,lastSeenAt:observed?host.lastSeenAt:null,basis:observed?'host':'registration'}:null,
+        return{memberId:m.id,displayName:m.displayName,kind:m.kind,watching:isWatching,lastSeenAt:observed?host.lastSeenAt:null,statusMessage:m.statusMessage??null,presence:host?{status:host.status,lastSeenAt:observed?host.lastSeenAt:null,basis:observed?'host':'registration',sourceWindow:host.sourceWindow}:null,
           state:isWatching||liveHost?'listening':'unknown',isOwner:m.id===ownerId,scopes:[...m.permissions],ownerIdentityId:link?.identity_id??null,coverage:{execution:'not-evaluated',heldWork:'not-evaluated',queuedWakes:'not-evaluated'}};
       }).sort((a,b)=>a.memberId.localeCompare(b.memberId,'en'));
     },{maxRecords:512});

@@ -16,7 +16,7 @@ import { encodeRow, decodeRow } from "./persisted-row.mjs";
 // read and missing fields take these defaults, so rows written by older code
 // (plain JSON, no envelope) still load.
 export const WORK_CLAIM_ROW_KIND = "work-claim";
-const WORK_CLAIM_FIELDS = ["id", "title", "state", "owner", "history", "claimedAt",
+export const WORK_CLAIM_FIELDS = ["id", "title", "state", "owner", "history", "claimedAt",
   "leaseStartAt", "leaseExpiresAt", "deliveryMode", "reviewPolicy", "reviewedBy",
   "attestations", "tags", "files", "fileBlocks", "blobs", "dependsOn", "parentClaimId", "evidenceRefs",
   "premiseFlag", "pullRequest", "pullRequests", "updatedAt",

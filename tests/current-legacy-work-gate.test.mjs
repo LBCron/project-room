@@ -9,17 +9,17 @@ import {replayCutoverSchema,captureReplayWitness,advanceReplayWitness,partitionR
 const by={kind:'human',id:'owner'};
 function fixture(t){const store=new RoomStore(':memory:');t.after(()=>store.close());store.initialize(initialRoom());store.db.exec(replayCutoverSchema());return store;}
 const capture=store=>captureReplayWitness(store,{roomId:'commons',requestId:'capture',expectedHead:store.headSequence('commons'),reason:'Legacy assignment reconciliation control'});
-test('capture refuses active collaboration authority and preserves released journal evidence',t=>{
+test('preparation permits active collaboration but the serving gate requires recorded release',t=>{
  const s=fixture(t),assigned=s.collab.assignThread('commons','thread',{kind:'agent',id:'worker'},{by});
  const before=s.db.prepare('SELECT * FROM collab_assignments').all();
- assert.throws(()=>capture(s),e=>e.code==='current_room_legacy_work_unreconciled'&&e.message.includes('/collab/assignments'));
+ assert.throws(()=>assertLegacyWorkReconciled(s.db,'commons'),e=>e.code==='current_room_legacy_work_unreconciled'&&e.message.includes('/collab/assignments'));assert.doesNotThrow(()=>capture(s));
  assert.deepEqual(s.db.prepare('SELECT * FROM collab_assignments').all(),before);
  s.collab.releaseAssignment('commons',assigned.assignmentId,{by,reason:'Recorded reconciliation'});
  assert.doesNotThrow(()=>capture(s));assert.equal(s.collab.listAssignments('commons')[0].status,'released');
 });
 test('legacy board open work gates conversion but terminal history and other rooms do not',t=>{
  const s=fixture(t),work=createWork({id:'legacy-open',title:'Existing obligation'},{agentId:'owner',now:new Date(s.now())});
- s.workClaims.set('commons',work);assert.throws(()=>capture(s),e=>e.code==='current_room_legacy_work_unreconciled'&&e.message.includes('/work-claims-read'));
+ s.workClaims.set('commons',work);assert.throws(()=>assertLegacyWorkReconciled(s.db,'commons'),e=>e.code==='current_room_legacy_work_unreconciled'&&e.message.includes('/work-claims-read'));assert.doesNotThrow(()=>capture(s));
  // Storage fixture for an already recorded closed authority. This does not
  // manufacture a claim completion or rewrite immutable claim history.
  s.transaction(()=>s.db.prepare("UPDATE work_claims SET item_json=json_set(item_json,'$.data.state','closed') WHERE room_id=? AND claim_id=?").run('commons',work.id));

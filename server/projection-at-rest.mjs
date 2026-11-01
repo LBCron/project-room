@@ -188,9 +188,9 @@ function serializeProjection(db, roomId, state, { enabled = false, messageEntiti
   const previousMemo = hashMemo.get(db)?.get(roomId);
   hashMemo.get(db)?.delete(roomId);
   if (hasMessageAuthority(state)) {
-    const projection = JSON.stringify(messageAuthorityProjection(state, messageAuthorityCount));
+    const serialized = JSON.stringify(messageAuthorityProjection(state, messageAuthorityCount));
     if (markedRooms(db).has(roomId)) releaseUnreferencedBodies(db, roomId, new Set());
-    return projection;
+    return serialized;
   }
   if (state?.messages?.some(isMessageEntityRef)) state = { ...state, messages: hydrateMessageEntities(db,roomId,state.messages) };
   if (messageEntities && Array.isArray(state?.messages)) {

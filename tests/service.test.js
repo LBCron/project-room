@@ -417,7 +417,7 @@ test("an exact-scope write claim can be released at event and projection capacit
     repository: "Uuriko/project-room", ref: "main", paths: ["src/**"], expiresAt: "2099-01-01T00:00:00.000Z" }));
   const state = structuredClone(store.room("commons").state);
   state.messages.push({ body: "x".repeat(PILOT_LIMITS.projectionBytes) });
-  store.db.prepare("UPDATE rooms SET sequence=?,projection=? WHERE id='commons'").run(PILOT_LIMITS.eventsPerRoom, JSON.stringify(state));
+  store.transaction(() => store.db.prepare("UPDATE rooms SET sequence=?,projection=? WHERE id='commons'").run(PILOT_LIMITS.eventsPerRoom, store.storedProjection("commons", state)));
   assert.throws(() => store.command(owner, "commons", command(T.WORK_STARTED, { workItemId: "capacity-claim", expectedRevision: 2 })), { code: "pilot_limit" });
   const release = command(T.CLAIM_RELEASED, { workItemId: "capacity-claim", expectedRevision: 2 });
   assert.equal(store.command(owner, "commons", release).sequence, PILOT_LIMITS.eventsPerRoom + 1);
@@ -439,7 +439,7 @@ test("open work can be completed, unblocked, and superseded at event and project
   store.command(owner, "commons", command(T.WORK_PROPOSED, { workItemId: "cap-new", title: "Replacement", definitionOfDone: "Carries the goal", accountableMemberId: "owner" }));
   const state = structuredClone(store.room("commons").state);
   state.messages.push({ body: "x".repeat(PILOT_LIMITS.projectionBytes) });
-  store.db.prepare("UPDATE rooms SET sequence=?,projection=? WHERE id='commons'").run(PILOT_LIMITS.eventsPerRoom, JSON.stringify(state));
+  store.transaction(() => store.db.prepare("UPDATE rooms SET sequence=?,projection=? WHERE id='commons'").run(PILOT_LIMITS.eventsPerRoom, store.storedProjection("commons", state)));
   // Acquisition and ordinary progress remain capped.
   assert.throws(() => store.command(owner, "commons", command(T.WORK_PROPOSED, { workItemId: "cap-extra", title: "New work", definitionOfDone: "Not at capacity", accountableMemberId: "owner" })), { code: "pilot_limit" });
   assert.throws(() => store.command(owner, "commons", command(T.WORK_STARTED, { workItemId: "cap-blocked", expectedRevision: 2, resolvedBlocker: "skip" })), { code: "pilot_limit" });

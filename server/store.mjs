@@ -2304,14 +2304,14 @@ this.slaBreachAlerts = new SlaBreachAlertJournal(this); // Task 26: durable in-a
       const insert = this.db.prepare(`INSERT OR IGNORE INTO integrity_room_state(room_id,sequence,projection_bytes)
         VALUES(?,?,?)`);
       const update = this.db.prepare('UPDATE integrity_room_state SET metadata_hash=? WHERE room_id=? AND metadata_hash IS NULL');
-      for (const row of this.db.prepare('SELECT id,sequence,projection FROM rooms').iterate()) {
+      for (const row of this.db.prepare('SELECT id,sequence,projection,LENGTH(projection) AS bytes FROM rooms').iterate()) {
         const proof = this.db.prepare('SELECT sequence,projection_hash,metadata_hash FROM integrity_room_state WHERE room_id=?').get(row.id);
         if (proof?.metadata_hash) continue;
         if (proof?.projection_hash && (proof.sequence !== row.sequence
           || projectionContentHash(this.db,row.id,row.sequence,row.projection) !== proof.projection_hash)) {
           throw Error('projection_corrupt: legacy content does not match its baseline');
         }
-        insert.run(row.id,row.sequence,row.projection.length);
+        insert.run(row.id,row.sequence,row.bytes);
         update.run(projectionDigest(row.projection),row.id);
       }
     });
@@ -2854,6 +2854,20 @@ this.slaBreachAlerts = new SlaBreachAlertJournal(this); // Task 26: durable in-a
       }
       this.db.prepare("DELETE FROM integrity_room_state WHERE room_id NOT IN (SELECT id FROM rooms)").run();
     });
+  }
+
+  // Internal owner-authorized history reconstruction, never ordinary write
+  // admission. The repair caller has replayed and checked its exact head in
+  // this transaction; refresh only this room and preserve the fleet snapshot.
+  rememberReconstructedRoomProof(roomId) {
+    if (!this.db.isTransaction) throw Error("Reconstruction proof requires its transaction");
+    const row=this.db.prepare('SELECT sequence,projection,LENGTH(projection) AS bytes FROM rooms WHERE id=?').get(roomId);
+    if (!row) throw Error("Reconstructed room is missing");
+    this.db.prepare(`INSERT INTO integrity_room_state(room_id,sequence,projection_bytes,projection_hash,metadata_hash) VALUES(?,?,?,?,?)
+      ON CONFLICT(room_id) DO UPDATE SET sequence=excluded.sequence,projection_bytes=excluded.projection_bytes,
+      projection_hash=excluded.projection_hash,metadata_hash=excluded.metadata_hash`)
+      .run(roomId,row.sequence,row.bytes,projectionContentHash(this.db,roomId,row.sequence,row.projection),projectionDigest(row.projection));
+    this.clearIntegrityFailure("projection_content",roomId);
   }
 
   // Retire projection_content failure records whose room once again

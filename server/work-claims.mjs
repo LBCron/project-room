@@ -544,10 +544,19 @@ const currentReviewBasis = (review, item) => {
   // stales it exactly like a CI head move. An approval recorded before
   // any delivery (generation 0) attests the work in flight and counts
   // only for the round's FIRST delivery (generation 1); a replacement
-  // delivery is outside what it attested and stales it too.
+  // delivery is outside what it attested and stales it too. A delivery
+  // with no bundle has no digest to bind to, so its reviews bind to the
+  // generation instead: a review recorded on generation N's delivery
+  // (digest null, generation N > 0) is current only while the claim is
+  // still on generation N — a bundle-less re-delivery advances the
+  // generation like any other finish, so the earlier round's verdict
+  // stales instead of reading as a live send_back on the new delivery
+  // (Dot 24432: the stale send_back edge).
   const deliveryCurrent = basis.deliveryDigest !== null && basis.deliveryDigest !== undefined
     ? basis.deliveryDigest === current.deliveryDigest
-    : (basis.deliveryGeneration ?? 0) === 0 && current.deliveryGeneration <= 1;
+    : (basis.deliveryGeneration ?? 0) === 0
+      ? current.deliveryGeneration <= 1
+      : (basis.deliveryGeneration ?? 0) === current.deliveryGeneration;
   return deliveryCurrent
     && ["version", "owner", "claimedAt", "revision", "headSha"].every(key => basis[key] === current[key]);
 };
@@ -1310,7 +1319,13 @@ export function updateWork(work, agentId, { state, note, deliveryMode, reviewedB
         // #3684: every frozen delivery advances the round's generation —
         // approvals bound to an earlier generation's delivery go stale.
         deliveryGeneration: (item.deliveryGeneration ?? 0) + 1 }
-      : { ...item, delivery: null };
+      // A bundle-less finish is still a delivery: it opens a new round
+      // exactly like a frozen bundle does, so it advances the generation
+      // too. Without this, a no-bundle claim's generation stays 0 across
+      // a send-back and redelivery, and the first round's reviews (basis
+      // generation 0, digest null) still read as current on the new
+      // delivery — the stale send_back edge (Dot 24432).
+      : { ...item, delivery: null, deliveryGeneration: (item.deliveryGeneration ?? 0) + 1 };
   }
   // #3685: a finish that REPLACES an existing delivery opens a new
   // delivery round — the previous round's CI settlement is invalidated

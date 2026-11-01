@@ -1,0 +1,20 @@
+{
+  "ok": true,
+  "origin": "https://room.trydemigod.com",
+  "liveRevision": "c1c92c5b65fb6c4fbe87e78cddced8496f0ab51c",
+  "deploy": {
+    "status": "current",
+    "mainRevision": "c1c92c5b65fb6c4fbe87e78cddced8496f0ab51c",
+    "aheadBy": 0,
+    "lagHours": 0
+  },
+  "p95Ms": 646,
+  "findings": [
+    {
+      "code": "advertised_url",
+      "detail": "https://room.trydemigod.com/extensions/work-receipt/v1 -> 404",
+      "severity": "warn",
+      "known": "AUDIT P3: A2A extension URIs do not resolve to a spec page"
+    }
+  ]
+}

@@ -49,3 +49,7 @@ test('replacement must retain its exact protected membership/body proof',t=>{
  s.transaction(()=>withCurrentServingWriter(s.db,'commons',()=>s.db.prepare("UPDATE work_entities SET digest=? WHERE room_id='commons' AND work_id='successor'").run('synthetic-corrupt-digest')));
  const before=rows(s);assert.throws(()=>s.command(keys.owner,'commons',request),/work membership reference differs/);assert.deepEqual(rows(s),before);
 });
+test('supersession exact retry still requires the current owner credential',t=>{
+ const{s,keys,command}=setup(t),request=command();s.command(keys.owner,'commons',request);s.issueAccessKey('commons','owner');const before=rows(s);
+ assert.throws(()=>s.command(keys.owner,'commons',request),e=>e.status===401);assert.deepEqual(rows(s),before);
+});

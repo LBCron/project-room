@@ -1,3 +1,4 @@
+import {initialRecoveryEngine,validateRecoveryEngine,advanceRecoveryEngine} from './recovery-engine-continuation.mjs';
 // First independent audit phase: shared current-record checks plus complete
 // proof/payload membership. The remaining full audit is still REQUIRED.
 import {Buffer} from 'node:buffer';
@@ -12,16 +13,18 @@ import {EVENT_TYPES,memberHistoryVisibility} from '../src/events.js';
 import {validId} from '../src/events.js';
 import {isCurrentRoom,withCurrentAuditUnits,currentAuditMessageRoot} from './current-room-repository.mjs';
 import {withRestoreAuditRows,RESTORE_AUDIT_VERSION,RESTORE_AUDIT_UNIT_BYTES} from './restore-admission.mjs';
-export const initialRecoveryCensus=()=>({version:RESTORE_AUDIT_VERSION,stage:'rooms',roomAfter:'',roomId:null,domainAfter:'',keyAfter:'',proofs:0,records:0,actualRecords:0,workAfter:'',workCount:0,workReferenceRecords:0,workSummaryRecords:0,workCapacityRecords:0,workPrivacyRecords:0,workRequestRecords:0,requestAfter:'',requestLinks:0,privacyAfter:'',privacyWork:null,privacyLinkAfter:'',privacyValue:null,privacyEntries:0,privacyLinks:0,messageAfterSeq:0,messageAfterId:'',messageCount:0,retainedMessages:0,witnessRecords:0,archiveRecords:0,participantRecords:0,expectedParticipants:0,memberRecords:0,requestRecords:0,archiveAfter:'',archiveSlots:0,historySequence:0,historyAfter:'',historyMember:null,historyJoinSequence:0,historyJoinAt:'',historyJoinFound:false,historyPart:0,historyExcluded:0,historyFloorRecords:0,historyExclusionRecords:0,expectedFloors:0,expectedExclusions:0,rooms:0,legacyRooms:0,units:0,bytes:0});
+export const initialRecoveryCensus=()=>({version:RESTORE_AUDIT_VERSION,engine:null,stage:'rooms',roomAfter:'',roomId:null,domainAfter:'',keyAfter:'',proofs:0,records:0,actualRecords:0,workAfter:'',workCount:0,workReferenceRecords:0,workSummaryRecords:0,workCapacityRecords:0,workPrivacyRecords:0,workRequestRecords:0,requestAfter:'',requestLinks:0,privacyAfter:'',privacyWork:null,privacyLinkAfter:'',privacyValue:null,privacyEntries:0,privacyLinks:0,messageAfterSeq:0,messageAfterId:'',messageCount:0,retainedMessages:0,witnessRecords:0,archiveRecords:0,participantRecords:0,expectedParticipants:0,memberRecords:0,requestRecords:0,archiveAfter:'',archiveSlots:0,historySequence:0,historyAfter:'',historyMember:null,historyJoinSequence:0,historyJoinAt:'',historyJoinFound:false,historyPart:0,historyExcluded:0,historyFloorRecords:0,historyExclusionRecords:0,expectedFloors:0,expectedExclusions:0,rooms:0,legacyRooms:0,units:0,bytes:0});
 const fail=()=>{throw Error('Independent recovery census requires reconciliation');};
 export function validateRecoveryCensus(value){
- if(!value||Object.keys(value).sort().join(',')!==Object.keys(initialRecoveryCensus()).sort().join(',')||value.version!==RESTORE_AUDIT_VERSION||!['rooms','proofs','records','work','request_links','privacy','archive','messages','history_events','history_members','history_exclusions','cleanup','full_audit_pending'].includes(value.stage)
+ if(!value||Object.keys(value).sort().join(',')!==Object.keys(initialRecoveryCensus()).sort().join(',')||value.version!==RESTORE_AUDIT_VERSION||!['rooms','proofs','records','work','request_links','privacy','archive','messages','history_events','history_members','history_exclusions','engine','cleanup','full_audit_pending'].includes(value.stage)
   ||!['proofs','records','actualRecords','rooms','legacyRooms','units','bytes','workCount','workReferenceRecords','workSummaryRecords','workCapacityRecords','workPrivacyRecords','workRequestRecords','requestLinks','privacyEntries','privacyLinks','messageAfterSeq','messageCount','retainedMessages','witnessRecords','archiveRecords','participantRecords','expectedParticipants','memberRecords','requestRecords','archiveSlots','historySequence','historyJoinSequence','historyPart','historyExcluded','historyFloorRecords','historyExclusionRecords','expectedFloors','expectedExclusions'].every(key=>Number.isSafeInteger(value[key])&&value[key]>=0)
   ||typeof value.roomAfter!=='string'||Buffer.byteLength(value.roomAfter)>128||value.roomId!==null&&(!validId(value.roomId))
   ||typeof value.workAfter!=='string'||Buffer.byteLength(value.workAfter)>200
   ||!['requestAfter','privacyAfter','privacyLinkAfter','messageAfterId','archiveAfter','historyAfter'].every(key=>typeof value[key]==='string'&&Buffer.byteLength(value[key])<=200)||value.privacyWork!==null&&(typeof value.privacyWork!=='string'||Buffer.byteLength(value.privacyWork)>200)
   ||typeof value.historyJoinFound!=='boolean'||value.historyMember!==null&&(typeof value.historyMember!=='string'||Buffer.byteLength(value.historyMember)>200)||typeof value.historyJoinAt!=='string'||Buffer.byteLength(value.historyJoinAt)>RESTORE_AUDIT_UNIT_BYTES
   ||typeof value.domainAfter!=='string'||Buffer.byteLength(value.domainAfter)>64||typeof value.keyAfter!=='string'||Buffer.byteLength(value.keyAfter)>200)fail();
+ if(value.engine!==null)validateRecoveryEngine(value.engine);
+ if(['engine','full_audit_pending'].includes(value.stage)?value.engine===null||value.stage==='full_audit_pending'&&value.engine.stage!=='complete':value.engine!==null)fail();
  if(value.privacyValue!==null){validateWorkPrivacy(value.privacyValue);if(Buffer.byteLength(JSON.stringify(value.privacyValue))>RESTORE_AUDIT_UNIT_BYTES)fail();}
  if((value.privacyWork===null)!==(value.privacyValue===null))fail();
 }
@@ -34,8 +37,9 @@ export function advanceRecoveryCensus(store,restoreId,previous){
  validateRecoveryCensus(previous);const p={...previous},db=store.db;let units=0,bytes=0;
  return withRestoreAuditRows(db,restoreId,scratch=>{
   if(p.stage==='cleanup'){
-   const result=scratch.deletePage(128);p.units+=result.deleted;if(result.done)p.stage='full_audit_pending';return p;
+   const result=scratch.deletePage(128);p.units+=result.deleted;if(result.done){p.stage='engine';p.engine=initialRecoveryEngine();}return p;
   }
+  if(p.stage==='engine'){p.engine=advanceRecoveryEngine(store,restoreId,p.engine);p.units+=p.engine.lastBatch?.atoms??0;if(p.engine.stage==='complete')p.stage='full_audit_pending';return p;}
   if(p.stage==='full_audit_pending')return p;
   while(units<128){
    if(p.stage==='rooms'){

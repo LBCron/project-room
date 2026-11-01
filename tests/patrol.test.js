@@ -21,6 +21,7 @@ import { operatorStatus } from "../server/operator-status.mjs";
 import { jobByName } from "../server/jobs.mjs";
 import { applyOutcomes, jobHealthView, runCronJobs } from "../cloudflare/job-heartbeat.mjs";
 import { claimWork, createWork, updateWork, closeWhenLive } from "../server/work-claims.mjs";
+import { recordPullOutcome } from "../server/claim-coordination.mjs";
 import { emitWorkClaimEvent } from "../server/work-claim-events.mjs";
 import { event as makeEvent, EVENT_TYPES } from "../src/events.js";
 
@@ -752,12 +753,13 @@ test("the collapse exemption is verb-scoped: blocked -> done still files", () =>
 
 // Land and deploy claims auto-close when the live revision matches
 // (closeWhenLive, server/work-claims.mjs; driven by claim-pr-sync and the
-// work-claim route): ANY non-terminal state moves to done under the
-// state_changed action. Patrol used to file those as illegal_transition.
+// work-claim route): a held claim with a live lease and settled pulls
+// (at least one merged) moves to done under the state_changed action.
+// Patrol used to file those as illegal_transition.
 const REV = "0123456789abcdef0123456789abcdef01234567";
 function landClaim(store, id, kind = "land") {
   const now = Date.now();
-  let item = createWork({ id, title: `Task ${id}`, kind, revision: REV }, { now, agentId: "owner" });
+  let item = createWork({ id, title: `Task ${id}`, kind, revision: REV, pullRequest: SETTLE_URL }, { now, agentId: "owner" });
   driveClaim(store, item, "created", now);
   item = claimWork(item, "owner", { now: now + 1 });
   driveClaim(store, item, "claimed", now + 1);
@@ -768,7 +770,11 @@ for (const kind of ["land", "deploy"]) {
     const store = openStore();
     try {
       const { item, now } = landClaim(store, `task-live-${kind}`, kind);
-      const closed = closeWhenLive(item, REV, now + 5);
+      assert.equal(closeWhenLive(item, REV, now + 5), null, 'an open pull cannot close on a revision match');
+      const unmerged = recordPullOutcome(item, SETTLE_URL, 'closed', now + 3);
+      assert.equal(closeWhenLive(unmerged, REV, now + 5), null, 'closed without merge remains ineligible');
+      const merged = recordPullOutcome(item, SETTLE_URL, 'merged', now + 3);
+      const closed = closeWhenLive(merged, REV, now + 5);
       assert.equal(closed?.state, "done");
       driveClaim(store, closed, "state_changed", now + 5);
       assert.equal(store.patrolTick().fresh, 0);
@@ -796,7 +802,9 @@ for (const stamped of [true, false]) {
     const store = openStore();
     try {
       const { item, now } = landClaim(store, `task-live-gone-${stamped}`);
-      const closed = closeWhenLive(item, REV, now + 5);
+      const merged = recordPullOutcome(item, SETTLE_URL, 'merged', now + 3);
+      const closed = closeWhenLive(merged, REV, now + 5);
+      assert.equal(closed?.state, 'done', 'the poller-confirmed merged pull is eligible');
       driveClaim(store, stamped ? closed : { ...closed, kind: undefined }, "state_changed", now + 5);
       store.workClaims.delete("alpha", closed.id);
       emitWorkClaimEvent(store, "alpha", { actorId: "owner", item: closed, action: "deleted", atMs: now + 6 });

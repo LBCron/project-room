@@ -330,7 +330,7 @@ test("project preflight composes dependency, coverage and runtime checks", () =>
 });
 
 
-test("offline schema45 archive cold-imports normalized serving and refuses an omitted dependency", t => {
+test("offline schema45 archive cold-serves nonempty native work and refuses an omitted dependency", t => {
   const directory = mkdtempSync(join(tmpdir(), "room-package-current-"));
   t.after(() => rmSync(directory, { recursive: true, force: true }));
   const commit = execFileSync("git", ["rev-parse", "HEAD"], { cwd: repository, encoding: "utf8" }).trim();
@@ -352,19 +352,38 @@ test("offline schema45 archive cold-imports normalized serving and refuses an om
     if(applyWorkPrivacyRequest(emptyWorkPrivacy(),{requesterId:'owner',recipientId:'reader'},1).requests!==1)throw Error('privacy counter export failed');
     let rejected=false;try{advanceCanonicalH({state:{},header:{},readMetadata:()=>null});}catch(error){rejected=/Invalid protected canonical authority marker/.test(error.message);}
     if(!rejected)throw Error('canonical source admission export failed closed');
+    import {readWorkItem} from ${JSON.stringify(pathToFileURL(join(destination,"server/work-repository.mjs")).href)};
+    import {textVersion} from ${JSON.stringify(pathToFileURL(join(destination,"server/text-results.mjs")).href)};
     const path=${JSON.stringify(join(directory,"normalized.sqlite"))};
     let store=new RoomStore(path);
     store.initialize([...initialRoom(),event({id:'packaged-post',roomId:'commons',actorId:'owner',type:'message.posted',data:{messageId:'saved',body:'Packaged useful result'}})],{representation:'normalized-current-v1'});
-    const key=store.issueAccessKey('commons','owner');store.close();
+    const key=store.issueAccessKey('commons','owner');
+    for(const workItemId of ['native-task','other-task'])store.command(key,'commons',{id:'propose-'+workItemId,type:'work.proposed',data:{workItemId,title:'Useful '+workItemId,definitionOfDone:'Saved exact result',accountableMemberId:'owner'}});
+    store.workClaims.configure('commons',{maxOpenClaims:1});
+    store.command(key,'commons',{id:'accept-native-task',type:'work.accepted',data:{workItemId:'native-task',expectedRevision:0}});
+    let capDenied=false;try{store.command(key,'commons',{id:'accept-other-task',type:'work.accepted',data:{workItemId:'other-task',expectedRevision:0}});}catch(error){capDenied=error.code==='work_board_full';}
+    if(!capDenied)throw Error('packaged native capacity admission missing');
+    store.close();
     store=new RoomStore(path,{integrity:'deferred'});store.room=()=>{throw Error('whole room hydration');};
     const page=store.eventsAfter(key,'commons');
     if(page.events.find(row=>row.event.id==='packaged-post')?.event.data.body!=='Packaged useful result')throw Error('normalized archived import/read failed');
     assertRestoreAdmitted(store.db);
-    const listed=readCurrentWorkListing(store,key,'commons');if(listed.work.length!==0)throw Error('empty normalized work export failed');
+    const listed=readCurrentWorkListing(store,key,'commons');
+    if(!listed.work.some(item=>item.id==='native-task'&&item.state==='accepted'))throw Error('nonempty native work did not survive cold package reopen');
+    const revision=()=>readWorkItem(store.db,'commons','native-task').revision;
+    store.command(key,'commons',{id:'start-native-task',type:'work.started',data:{workItemId:'native-task',expectedRevision:revision()}});
+    const body='Packaged native saved result',post=store.command(key,'commons',{id:'native-result',type:'message.posted',data:{messageId:'native-result',workItemId:'native-task',body}});
+    const complete={id:'complete-native-task',type:'work.completed',data:{workItemId:'native-task',expectedRevision:revision(),evidenceKind:'room_text',evidenceMessageId:'native-result',evidenceMessageEventId:post.event.id,evidenceVersion:textVersion(body),previousCompletionEventId:null,producerId:'owner',summary:'Saved',nextAction:'Review'}};
+    store.command(key,'commons',complete);
+    if(!store.command(key,'commons',complete).duplicate)throw Error('native completion retry lost its receipt');
+    if(store.db.prepare('SELECT count(*) AS n FROM work_claims').get().n!==0)throw Error('packaged native work recreated legacy mirrors');
     store.readTransaction(()=>{const direct=readCurrentEventWindow(store,'commons','owner');if(!direct.events.length)throw Error('event export failed');});
-    store.close(); console.log(JSON.stringify({normalized:true,restarted:true}));`;
+    store.close();store=new RoomStore(path,{integrity:'deferred'});
+    const saved=readWorkItem(store.db,'commons','native-task');
+    if(saved.state!=='completed'||!saved.receipt?.nativeText)throw Error('native saved result did not survive another cold reopen');
+    store.close(); console.log(JSON.stringify({normalized:true,restarted:true,nativeAccepted:true,nativeCompleted:true,capacityDenied:true,legacyMirrors:0}));`;
   const cold=spawnSync(process.execPath,["--input-type=module","-e",program],{cwd:directory,env:{PATH:"/unavailable"},encoding:"utf8"});
-  assert.equal(cold.status,0,cold.stderr);assert.deepEqual(JSON.parse(cold.stdout),{normalized:true,restarted:true});
+  assert.equal(cold.status,0,cold.stderr);assert.deepEqual(JSON.parse(cold.stdout),{normalized:true,restarted:true,nativeAccepted:true,nativeCompleted:true,capacityDenied:true,legacyMirrors:0});
   assert.deepEqual(verifyRuntimePackage(destination,{expectedCommit:commit}),receipt);
   rmSync(join(destination,"server/current-room-repository.mjs"));
   assert.throws(()=>verifyRuntimePackage(destination),/missing|differ/);

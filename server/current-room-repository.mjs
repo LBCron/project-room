@@ -467,6 +467,7 @@ function commandContextFromHead(store,roomId,command,head,b,{readMessage,readWor
   const haltIds=new Set([actorId]);
   if(command.type==='work.halt_cleared'&&typeof command.data.memberId==='string')haltIds.add(command.data.memberId);
   for(const id of haltIds) {
+    if(typeof id!=='string'||!validId(id))continue;
     const halt=readCurrentRecord(db,roomId,'agentHalts',id,b);
     if(halt!==undefined)(state.agentHalts??={})[id]=halt;
   }

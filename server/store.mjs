@@ -7555,7 +7555,12 @@ this.slaBreachAlerts = new SlaBreachAlertJournal(this); // Task 26: durable in-a
       return { sequence, event: incoming, duplicate: false, ...(note ? { note } : {}),
         ...((Array.isArray(mentionWarnings) && mentionWarnings.length > 0) ? { mentionWarnings } : {}) };
       });
-    },{maxRecords:command.type===T.MESSAGE_POSTED&&typeof command.data.body==="string"&&command.data.body.includes("@")?1024:200}));
+    }, {
+      // Alias resolution is the sole qualified command needing a full roster.
+      // This internal consumer reservation leaves the byte ceiling unchanged.
+      maxRecords: command.type === T.MESSAGE_POSTED && typeof command.data.body === "string"
+        && command.data.body.includes("@") ? 1024 : 200
+    }));
     } catch (error) {
       // The test doubles that replace roomFlood expose only consume(), so a
       // missing refund (or a spend consume() did not report) means no refund.

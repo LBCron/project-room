@@ -181,7 +181,7 @@ function applyActivityFanOut(store, roomId, state, senderId, command, incoming, 
     const data = command.data ?? {};
     const messageId = data.messageId || incoming.id;
     const body = typeof data.body === "string" ? data.body : "";
-    const identityNames = identityNamesFor(store, roomId);
+    const identityNames = body.includes("@") ? identityNamesFor(store, roomId) : {};
     const recipients = new Map(); // userId -> { type, threadId }
     for (const target of resolveMentionTargetsInText(members, identityNames, body, senderId)) {
       recipients.set(target, { type: "mention", threadId: "" });

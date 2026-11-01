@@ -158,7 +158,8 @@ function lookupValue(db, row, roomId, head) {
   const value = objectJson(db,row.counts_json), keys = ['version','roomId','throughSequence','receiptId','contractSha256'];
   if (row.id !== lookupId(roomId,head) || row.action !== LOOKUP_ACTION || row.target_kind !== 'room' || row.target_id !== roomId || row.result !== 'verified'
     || Object.keys(value).length !== keys.length || !keys.every(key => Object.hasOwn(value,key)) || value.version !== 1
-    || value.roomId !== roomId || value.throughSequence !== head || !sha(value.contractSha256)) unavailable();
+    || value.roomId !== roomId || value.throughSequence !== head || typeof value.receiptId !== 'string'
+    || !/^oa_lsr_[a-f0-9]{64}$/.test(value.receiptId) || !sha(value.contractSha256)) unavailable();
   return value;
 }
 // Caller holds its read/writer transaction. This reconstructs only a previously

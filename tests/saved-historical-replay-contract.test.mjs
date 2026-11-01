@@ -134,3 +134,13 @@ test('exact same-head lookup reuse is append-only and projection recovery itself
   assert.deepEqual(derived(store),progress);
   store.rebuildProjection('legacy-room');assert.deepEqual(authority(store),before);assert.deepEqual(derived(store),progress);
 });
+
+for(const receiptId of [null,{},'malformed']) test('malformed lower-head receipt ID refuses despite a valid higher lookup: '+JSON.stringify(receiptId),t=>{
+  const {store}=repaired(t,true),row=lookup(store),value={...JSON.parse(row.counts_json),throughSequence:10,receiptId};
+  store.db.prepare('INSERT INTO operator_actions(id,at,action,target_kind,target_id,reason,plan_hash,counts_json,result,request_id) VALUES(?,?,?,?,?,?,?,?,?,?)')
+    .run(row.id.replace(/_11$/,'_10'),row.at,row.action,row.target_kind,row.target_id,row.reason,null,JSON.stringify(value),'verified',null);
+  const before=authority(store),progress=derived(store);
+  assert.throws(()=>store.rebuildProjection('legacy-room'),e=>e.code==='projection_corrupt');
+  assert.throws(()=>store.backfillMessages({limit:64}),e=>e.code==='projection_corrupt');
+  assert.deepEqual(authority(store),before);assert.deepEqual(derived(store),progress);
+});

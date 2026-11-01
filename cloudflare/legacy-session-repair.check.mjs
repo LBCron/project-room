@@ -62,6 +62,10 @@ test('actual workerd adopts only independently matched absent proofs atomically 
     assert.equal(after.cursor.parity_at_seq,before.head);assert.equal(after.authority.messages.every(messageProofMatches),true);
     assert.deepEqual(withoutHashes(after.authority),withoutHashes(before.authority));
     assert.equal(completed.replayContract.version,1);assert.equal(completed.replayContract.adapterVersion,1);assert.equal(completed.replayContract.throughSequence,before.head);
+    await call('/lose-replay-checkpoints');
+    await mf.dispose();mf=worker();
+    const adoptedRecovery=await call('/recover-saved');assert.equal(adoptedRecovery.parity.ok,true);assert.equal(adoptedRecovery.replay.sequence,before.head);
+    assert.deepEqual((await call('/state')).authority,after.authority);
     await mf.dispose();mf=worker();assert.deepEqual(await call('/execute',input),{...completed,duplicate:true});
     await call('/append');const appended=await call('/state');assert.equal(appended.head,before.head+1);
     await mf.dispose();mf=worker();assert.deepEqual(await call('/execute',input),{...completed,duplicate:true});assert.deepEqual(await call('/state'),appended);

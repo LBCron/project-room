@@ -2,11 +2,14 @@
 // This is an early dependency plan; callers MUST retain the full oracle until
 // checkpoint seeding and every retained event/global expansion are qualified.
 import {isDeepStrictEqual} from 'node:util';
-import {applyEvent,emptyRoomState,messageChannelId} from '../src/events.js';
+import {applyEvent,emptyRoomState,messageChannelId,EVENT_TYPES,RETIRED_REPLAY_EVENT_TYPES} from '../src/events.js';
 import {bindCurrentRecordContext} from '../src/current-record-context.js';
 import {replyContextOwners} from '../src/reply-requests.js';
 const supported=new Set(['room.created','member.added','member.access_changed','room.history_visibility_set','pair.requested','pair.approved','pair.denied','message.posted','work.proposed','work.accepted','work.started','work.completed','work_claim.updated']);
-const memberFields=['memberId','toMemberId','accountableMemberId','verifierMemberId','humanDecisionMakerId','accountableHumanId','referredBy','producerId'];
+// These handlers read only addressed member/work/channel records and room scalars.
+for(const name of ['ROOM_CHARTER_UPDATED','ROOM_POLICY_SET','ROOM_SPEND_ALLOWANCE_SET','ROOM_SPEND_PRICING_SET','ROOM_DEVELOPMENT_ACCESS_SET','ROOM_TRUST_SET','ROOM_PUBLIC_RECEIPTS_SET','ROOM_PUBLIC_PAGE_SET','ROOM_JOIN_LINK_SET','MEMBER_PUBLIC_NAME_SET','WORK_PUBLIC_SET','ROOM_ARCHIVED','OWNERSHIP_TRANSFERRED','MEMBER_STATUS_UPDATED','NOTIFICATION_PREFERENCES_SET','MEMBER_MUTE_SET','CAPABILITIES_ADVERTISED','ACCESS_REQUESTED','LAND_UPDATED','ROOM_STARTER_SEEDED','AGENT_INVITE_MINTED','ROOM_EXPORTED','DM_CONSENT_CHANGED','DM_POSTED','REFERRAL_COMPLETED','DECISION_RECORDED'])supported.add(EVENT_TYPES[name]);
+supported.add(RETIRED_REPLAY_EVENT_TYPES.MESSAGE_REACTION_SET);
+const memberFields=['memberId','toMemberId','accountableMemberId','verifierMemberId','humanDecisionMakerId','accountableHumanId','referredBy','producerId','referrerMemberId','refereeMemberId'];
 const workMemberFields=['accountableMemberId','verifierMemberId','humanDecisionMakerId','proposedById'];
 const messageFields=['replyToId','sourceMessageId','progressMessageId','evidenceMessageId'];
 const own=(object,key)=>Object.hasOwn(object,key);

@@ -249,3 +249,46 @@ for (const lateFailure of [false, true]) {
     assert.equal(store.workClaims.get("commons", "target").state, "done");
   });
 }
+
+for (const faultKind of ['invalid-claim', 'storage', 'unexpected']) {
+  test(`settlement savepoints publish appends only after outer commit (${faultKind})`, async t => {
+    const { store } = await fixture(t), target = store.workClaims.get('commons', 'target');
+    store.workClaims.set('commons', { ...target, id: 'bad-middle' });
+    store.workClaims.set('commons', { ...target, id: 'good-last' });
+    const before = store.db.prepare("SELECT * FROM work_claims WHERE room_id='commons' ORDER BY claim_id").all();
+    const head = store.headSequence('commons'), stamp = store.eventStamp('commons'), notifications = [], writes = [];
+    store.onEventAppended(roomId => notifications.push({ roomId, inTransaction: store.db.isTransaction, head: store.headSequence(roomId) }));
+    const prepare = store.db.prepare.bind(store.db);
+    const fault = faultKind === 'invalid-claim' ? new ClaimError('invalid_claim_input', 'late invalid claim')
+      : Object.assign(new Error('late settlement fault'), faultKind === 'storage' ? { code: 'EIO' } : {});
+    store.db.prepare = sql => {
+      const statement = prepare(sql);
+      if (!sql.startsWith('INSERT INTO events VALUES')) return statement;
+      const run = statement.run.bind(statement);
+      statement.run = (...args) => {
+        const result = run(...args), id = JSON.parse(args[3]).data.workClaim;
+        writes.push(id);
+        if (id === 'bad-middle') throw fault;
+        return result;
+      };
+      return statement;
+    };
+    if (faultKind === 'invalid-claim') {
+      const out = await applyPullRequestWebhook(store, PAYLOAD, sign(PAYLOAD));
+      assert.deepEqual(out.applied.map(item => item.claimId), ['target', 'good-last']);
+      assert.deepEqual(writes, ['target', 'bad-middle', 'good-last']);
+      assert.equal(store.headSequence('commons'), head + 2);
+      assert.equal(store.workClaims.get('commons', 'bad-middle').state, 'claimed');
+      assert.equal(store.workClaims.get('commons', 'bad-middle').pullRequest.outcome, null);
+      assert.deepEqual(notifications, [{ roomId: 'commons', inTransaction: false, head: head + 2 }]);
+      assert.equal(store.eventStamp('commons'), stamp + 1, 'the committed room wakes once');
+    } else {
+      await assert.rejects(applyPullRequestWebhook(store, PAYLOAD, sign(PAYLOAD)), error => error === fault || error.cause === fault);
+      assert.deepEqual(writes, ['target', 'bad-middle']);
+      assert.deepEqual(store.db.prepare("SELECT * FROM work_claims WHERE room_id='commons' ORDER BY claim_id").all(), before);
+      assert.equal(store.headSequence('commons'), head);
+      assert.deepEqual(notifications, [], 'an outer rollback never publishes a committed append');
+      assert.equal(store.eventStamp('commons'), stamp);
+    }
+  });
+}

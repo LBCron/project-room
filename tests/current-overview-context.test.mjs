@@ -47,3 +47,15 @@ test('actual hosted MCP get_room_context composes current Orient through identit
  const value=result.result.structuredContent??JSON.parse(result.result.content[0].text);
  assert.ok(value.workWindow,JSON.stringify(value));assert.equal(value.workWindow.total,0,JSON.stringify(value));assert.equal(value.orient.workWindow.complete,true);
 });
+
+import {event,PERMISSIONS} from '../src/events.js';
+test('context visible horizon never exposes another pair private head or scans an excluded backlog',t=>{
+ const store=new RoomStore(':memory:');t.after(()=>store.close());const events=initialRoom();
+ for(const memberId of ['a','b'])events.push(event({id:'add-'+memberId,type:'member.added',actorId:'owner',roomId:'commons',data:{memberId,displayName:memberId,kind:'agent',permissions:[...PERMISSIONS]}}));
+ events.push(event({id:'public',type:'message.posted',actorId:'a',roomId:'commons',data:{messageId:'public',body:'Public'}}));
+ events.push(event({id:'private',type:'message.posted',actorId:'a',roomId:'commons',data:{messageId:'private',body:'Private',toMemberId:'b'}}));
+ store.initialize(events,{representation:'normalized-current-v1'});const owner=store.issueAccessKey('commons','owner'),a=store.issueAccessKey('commons','a');store.room=()=>{throw Error('fullblob');};
+ assert.equal(store.roomContext(owner,'commons').evaluatedThrough,5);assert.equal(store.roomContext(a,'commons').evaluatedThrough,6);
+ for(let i=0;i<16;i++)store.command(a,'commons',{id:'hidden-'+i,type:'message.posted',data:{messageId:'hidden-'+i,body:'Private backlog',toMemberId:'b'}});
+ assert.throws(()=>store.roomContext(owner,'commons'),/excluded tail/);
+});

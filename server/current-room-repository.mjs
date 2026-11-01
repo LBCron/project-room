@@ -739,7 +739,7 @@ export function readCurrentOverviewWindow(store,roomId,{workAfter='',limit=8}={}
   if(!workAfter&&!hasMore&&returned!==head.counts.workItems)corrupt('complete work summary membership differs');
   return {sequence:head.sequence,state,workWindow:{order:'id',after:workAfter||null,shown:returned,total:head.counts.workItems,
     complete:!workAfter&&!hasMore,nextAfter:hasMore?after:null,
-    nextRead:hasMore?{tool:'get_room_context',arguments:{work_after:after}}:null}};
+    nextRead:hasMore?{tool:'get_room_context',arguments:{roomId,work_after:after}}:null}};
 }
 
 // Bound source examination before parsing event bodies. Long excluded tails

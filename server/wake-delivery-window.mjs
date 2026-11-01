@@ -5,8 +5,10 @@ export const WAKE_INDEX_INSTALL_LIMITS = Object.freeze({ rows: 32768, keyBytes: 
 export const WAKE_INDEX_POLICY = 'wake-delivery-ordered.v1';
 export const WAKE_INDEX_RECEIPT = 'oa_wake_delivery_indexes_v1';
 export const WAKE_INDEXES = Object.freeze([
-  { table: 'agent_wake_signals', name: 'agent_wake_signals_ordered_pending', sql: 'CREATE INDEX agent_wake_signals_ordered_pending ON agent_wake_signals(agent_id,created_at,signal_id) WHERE delivered_at IS NULL' },
-  { table: 'agent_work_wakes', name: 'agent_work_wakes_ordered_pending', sql: 'CREATE INDEX agent_work_wakes_ordered_pending ON agent_work_wakes(agent_id,created_at,signal_id) WHERE delivered_at IS NULL AND invalidated_at IS NULL' }
+  { table: 'agent_wake_signals', scoped: false, name: 'agent_wake_signals_ordered_pending', sql: 'CREATE INDEX agent_wake_signals_ordered_pending ON agent_wake_signals(agent_id,created_at,signal_id) WHERE delivered_at IS NULL' },
+  { table: 'agent_work_wakes', scoped: false, name: 'agent_work_wakes_ordered_pending', sql: 'CREATE INDEX agent_work_wakes_ordered_pending ON agent_work_wakes(agent_id,created_at,signal_id) WHERE delivered_at IS NULL AND invalidated_at IS NULL' },
+  { table: 'agent_wake_signals', scoped: true, name: 'agent_wake_signals_ordered_room_pending', sql: 'CREATE INDEX agent_wake_signals_ordered_room_pending ON agent_wake_signals(agent_id,room_id,created_at,signal_id) WHERE delivered_at IS NULL' },
+  { table: 'agent_work_wakes', scoped: true, name: 'agent_work_wakes_ordered_room_pending', sql: 'CREATE INDEX agent_work_wakes_ordered_room_pending ON agent_work_wakes(agent_id,room_id,created_at,signal_id) WHERE delivered_at IS NULL AND invalidated_at IS NULL' }
 ]);
 export const WAKE_WINDOW_LIMITS = Object.freeze({ rows: 128, bytes: 128 * 1024, fieldBytes: 8192 });
 const unavailable = () => { throw new ServiceError(503, 'storage_unavailable', 'Wake delivery input requires reconciliation; no continuation was advanced', { 'Retry-After': '30' }); };
@@ -23,7 +25,7 @@ export function wakeIndexState(db) {
     // plan validity check, never proof of historical DDL continuity.
     if (rows.some((row, n) => JSON.stringify(row) !== JSON.stringify(cached[n]))) { forgetWakeIndexState(db); return 'conflict'; }
   } else {
-    rows = db.prepare('SELECT rowid AS catalogId,name,type,tbl_name,CASE WHEN length(CAST(sql AS BLOB))<=? THEN sql ELSE NULL END AS sql FROM sqlite_master WHERE name IN (?,?)')
+    rows = db.prepare(`SELECT rowid AS catalogId,name,type,tbl_name,CASE WHEN length(CAST(sql AS BLOB))<=? THEN sql ELSE NULL END AS sql FROM sqlite_master WHERE name IN (${WAKE_INDEXES.map(() => '?').join(',')})`)
       .all(Math.max(...WAKE_INDEXES.map(index => index.sql.length)), ...WAKE_INDEXES.map(index => index.name));
   }
   const states = WAKE_INDEXES.map(index => {
@@ -36,17 +38,16 @@ export function wakeIndexState(db) {
   }
   return states.every(state => state === 'absent') ? 'absent' : 'conflict';
 }
-export function boundedWakeDeliveryActive(db) {
-  const state = wakeIndexState(db);
+export function readWakeIndexReceipt(db) {
   let row;
   try { row = db.prepare(`SELECT action,target_kind,target_id,result,plan_hash,request_id,CASE WHEN typeof(reason)='text' AND length(CAST(reason AS BLOB))<=500 THEN reason ELSE NULL END AS reason,
     CASE WHEN typeof(counts_json)='text' AND length(CAST(counts_json AS BLOB))<=8192 THEN counts_json ELSE NULL END AS counts_json
     FROM operator_actions WHERE id=?`).get(WAKE_INDEX_RECEIPT); }
-  catch (error) { if (state === 'absent' && /no such table: (?:main\.)?operator_actions\b/.test(String(error?.message))) return false; throw error; }
-  if (!row && state === 'absent') return false;
+  catch (error) { if (/no such table: (?:main\.)?operator_actions\b/.test(String(error?.message))) return null; throw error; }
+  if (!row) return null;
   // An unreceipted complete pair, partial pair or malformed receipt is never
   // silently treated as activated. Leave an operator-visible refusal.
-  if (!row || state !== 'installed' || row.action !== 'wake_delivery_indexes_execute' || row.target_kind !== 'database'
+  if (row.action !== 'wake_delivery_indexes_execute' || row.target_kind !== 'database'
     || row.target_id !== 'wake_delivery' || row.result !== 'ok' || !/^[a-f0-9]{64}$/.test(row.plan_hash ?? '')
     || typeof row.request_id !== 'string' || !row.request_id || row.counts_json === null) unavailable();
   let saved; try { saved = JSON.parse(row.counts_json); } catch { unavailable(); }
@@ -63,7 +64,13 @@ export function boundedWakeDeliveryActive(db) {
     || Object.entries(WAKE_INDEX_INSTALL_LIMITS).some(([key, max]) => !Number.isSafeInteger(receipt.admitted[key]) || receipt.admitted[key] < 0 || receipt.admitted[key] > max)
     || !/^[A-Za-z0-9:_-]{1,128}$/.test(row.request_id) || row.reason === null
     || createHash('sha256').update(JSON.stringify({ reason: row.reason, requestId: row.request_id, planHash: row.plan_hash })).digest('hex') !== saved.inputHash) unavailable();
-  return true;
+  return { row, saved };
+}
+export function boundedWakeDeliveryActive(db) {
+  const state = wakeIndexState(db), original = readWakeIndexReceipt(db);
+  if (!original && state === 'absent') return false;
+  if (original && state === 'installed') return true;
+  unavailable();
 }
 const fields = Object.freeze({
   agent_wake_signals: ['signal_id', 'agent_id', 'kind', 'room_id', 'message_id', 'created_at', 'delivered_at'],
@@ -71,8 +78,8 @@ const fields = Object.freeze({
 });
 // Source admission precedes wide TEXT / pointer transfer. The ordered partial
 // index bounds physical traversal even when every candidate is later filtered.
-export function readWakeWindow(db, table, agentId, after = null) {
-  const index = WAKE_INDEXES.find(value => value.table === table); if (!index) unavailable();
+export function readWakeWindow(db, table, agentId, after = null, roomId = null) {
+  const index = WAKE_INDEXES.find(value => value.table === table && value.scoped === (roomId !== null)); if (!index) unavailable();
   const columns = fields[table], text = columns.filter(column => !['created_at', 'delivered_at', 'invalidated_at', 'work_revision'].includes(column));
   const nullable = new Set(table === 'agent_wake_signals' ? ['room_id', 'message_id'] : []);
   const bytes = text.map(column => `COALESCE(length(CAST(${column} AS BLOB)),0)`).join('+');
@@ -80,10 +87,10 @@ export function readWakeWindow(db, table, agentId, after = null) {
   const valid = text.map(column => `(typeof(${column})='text'${nullable.has(column) ? ` OR ${column} IS NULL` : ''}) AND COALESCE(length(CAST(${column} AS BLOB)),0)<=${fieldLimit[column]}`).join(' AND ');
   const predicate = table === 'agent_work_wakes' ? 'delivered_at IS NULL AND invalidated_at IS NULL' : 'delivered_at IS NULL';
   const range = after ? ' AND (created_at,signal_id)>(?,?)' : '';
-  const bindings = after ? [agentId, after.createdAt, after.signalId] : [agentId];
+  const bindings = [agentId, ...(roomId !== null ? [roomId] : []), ...(after ? [after.createdAt, after.signalId] : [])];
   const scalars = db.prepare(`SELECT rowid AS rid,created_at,${bytes}+128 AS sourceBytes,
     CASE WHEN ${valid} AND typeof(created_at)='integer' AND created_at>=0${table === 'agent_work_wakes' ? " AND typeof(work_revision)='integer'" : ''} THEN 1 ELSE 0 END AS valid
-    FROM ${table} INDEXED BY ${index.name} WHERE agent_id=? AND ${predicate}${range}
+    FROM ${table} INDEXED BY ${index.name} WHERE agent_id=?${roomId !== null ? ' AND room_id=?' : ''} AND ${predicate}${range}
     ORDER BY created_at,signal_id LIMIT ?`).all(...bindings, WAKE_WINDOW_LIMITS.rows + 1);
   const admitted = []; let used = 0;
   for (const scalar of scalars.slice(0, WAKE_WINDOW_LIMITS.rows)) {
@@ -98,7 +105,7 @@ export function readWakeWindow(db, table, agentId, after = null) {
   const rows = admitted.map(scalar => {
     const row = get.get(scalar.rid);
     try { for (const column of text) if (row?.[column] !== null) row[column] = new TextDecoder('utf-8', { fatal: true, ignoreBOM: true }).decode(row[column]); } catch { unavailable(); }
-    if (!row || row.created_at !== scalar.created_at || row.agent_id !== agentId) unavailable();
+    if (!row || row.created_at !== scalar.created_at || row.agent_id !== agentId || roomId !== null && row.room_id !== roomId) unavailable();
     return row;
   });
   const last = rows.at(-1);

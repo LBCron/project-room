@@ -20,7 +20,7 @@ test('actual AgentHeartbeats work delivery bounds examined backlog before filter
     assert.equal(result.more, false); assert.equal(result.nextCursor, null);
     if (result.controls) assert.deepEqual(result.controls, { optedOut: 0, paused: 0, quiet: 0, restored: 1, removed: 0 });
   }
-  for (const result of observations) { assert.ok(result.selected <= 258); for (const plan of result.plans.flat()) { assert.match(plan, /USING (?:COVERING )?INDEX agent_(?:work_wakes|wake_signals)_ordered_pending/); assert.doesNotMatch(plan, /TEMP B-TREE|SCAN /); } assert.ok(result.totalRowsRead < 600, 'physical reads per page must remain bounded'); assert.ok(result.emptyMorePages > 0); }
+  for (const result of observations) { assert.ok(result.selected <= 258); for (const plan of result.plans.flat()) { assert.match(plan, /USING (?:COVERING )?INDEX agent_(?:work_wakes|wake_signals)_ordered_(?:room_)?pending/); assert.doesNotMatch(plan, /TEMP B-TREE|SCAN /); } assert.ok(result.totalRowsRead < 600, 'physical reads per page must remain bounded'); if (result.kind === 'messages') { assert.equal(result.emptyMorePages, 0); assert.equal(result.pages, 1); } else assert.ok(result.emptyMorePages > 0); }
   for (let n = 0; n < observations.length; n += 2) assert.equal(observations[n].totalRowsRead, observations[n + 1].totalRowsRead, 'per-page reads must not grow with backlog');
 });
 
@@ -41,6 +41,8 @@ test('actual Worker cold restart preserves activation and oversized pointer refu
     assert.deepEqual(cold.value.page, warm.value.page); assert.equal(cold.value.page.more, true);
     assert.ok(cold.value.rowsRead - warm.value.rowsRead <= cold.value.catalogRows + 10, 'one cold catalog discovery, followed by exact tuple point reads');
     assert.ok(warm.value.rowsRead < 600);
+    const reinstalled = await call('/reinstall'); assert.equal(reinstalled.status, 200);
+    assert.deepEqual(reinstalled.value, { interrupted: true, rolledBack: true, installed: true, repairDuplicate: true, originalDuplicate: true, originalUnchanged: true, repairRetryUnchanged: true });
     const oversized = await call('/oversize'); assert.equal(oversized.status, 503); assert.deepEqual(oversized.value, { code: 'storage_unavailable', payloadReads: 0 });
     console.log(JSON.stringify({ coldRowsRead: cold.value.rowsRead, warmRowsRead: warm.value.rowsRead, catalogRows: cold.value.catalogRows, oversized: oversized.value }));
   } finally { await mf.dispose(); await rm(persistence, { recursive: true, force: true }); }

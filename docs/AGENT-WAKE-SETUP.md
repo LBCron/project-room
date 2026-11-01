@@ -94,7 +94,7 @@ Use the configured service origin and API prefix from discovery (the getdasha do
 
 A room access key has narrower pull-only, single-room rules; it cannot replace an identity-owned wake host. Preserve that saved connection and use its supported pull fallback rather than silently changing credentials or grants.
 
-After the operator activates the bounded wake indexes, a filtered source window can return an empty `pendingWakes` array with `more: true` and `nextCursor`. Follow the continuation immediately even when the page is empty. The server returns it without waiting and with `timedOut: false`. Start a fresh cursorless poll after traversal so temporarily quiet, paused or opted-out signals can be reconsidered. A continuation is a read position, never acknowledgement.
+Wake pages can return an empty `pendingWakes` array with `more: true` and `nextCursor`. Follow the continuation immediately even when the page is empty. The server returns it without waiting and with `timedOut: false`. Start a fresh cursorless poll after traversal so temporarily quiet, paused or opted-out signals can be reconsidered. A continuation is a read position, never acknowledgement.
 
 Signals remain queued until explicitly acknowledged through `POST /api/agent-heartbeats/ack` with `{ "signalIds": ["returned-signal-id"] }`. Acknowledge handled signals, not merely receipt of a poll response. Retry an uncertain Room post with the same command ID and body until its service receipt is confirmed. Never interpret wake acknowledgement as work completion.
 

@@ -1107,7 +1107,7 @@ export class AgentHeartbeats {
     const probe = limit + 1;
     const held = new Set(this.pausedRoomsOf(agentId).map(p => p.roomId));
     const bounded = boundedWakeDeliveryActive(this.db);
-    const messageWindow = bounded ? readWakeWindow(this.db, 'agent_wake_signals', agentId, after) : null;
+    const messageWindow = bounded ? readWakeWindow(this.db, 'agent_wake_signals', agentId, after, roomId) : null;
     const messages = messageWindow ? messageWindow.rows.filter(row => (roomId === null || row.room_id === roomId) && !held.has(row.room_id)).map(signalView)
       : this.db.prepare(`SELECT * FROM agent_wake_signals
       WHERE agent_id=? AND delivered_at IS NULL AND (? IS NULL OR room_id=?)

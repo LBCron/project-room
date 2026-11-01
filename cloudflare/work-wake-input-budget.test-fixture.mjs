@@ -1,5 +1,6 @@
 // Disposable local Worker data; synthetic backlog cloned from a real producer row.
 import { DurableObject } from 'cloudflare:workers';
+import { WAKE_INDEXES, WAKE_INDEX_RECEIPT, forgetWakeIndexState, wakeIndexState } from '../server/wake-delivery-window.mjs';
 import { operatorWakeIndex } from '../server/operator-wake-index.mjs';
 import { RoomStore } from '../server/store.mjs';
 import { initialRoom } from '../server/bootstrap.mjs';
@@ -12,6 +13,22 @@ export class WorkWakeBudgetProbe extends DurableObject {
   }
   async fetch(request) {
     const s = this.store, db = this.db, { count, kind } = await request.json();
+    if (new URL(request.url).pathname === '/reinstall') {
+      const original = db.prepare('SELECT counts_json FROM operator_actions WHERE id=?').get(WAKE_INDEX_RECEIPT).counts_json;
+      for (const index of WAKE_INDEXES) db.exec('DROP INDEX ' + index.name); forgetWakeIndexState(db);
+      const reason = 'Synthetic explicit Worker reinstall';
+      const plan = operatorWakeIndex(s, { reason, reinstall: true });
+      const input = { reason, reinstall: true, requestId: 'reinstall', planHash: plan.planHash };
+      db.exec("CREATE TRIGGER reject_reinstall BEFORE INSERT ON operator_actions WHEN NEW.action='wake_delivery_indexes_reinstall' BEGIN SELECT RAISE(ABORT,'synthetic repair interruption'); END");
+      let interrupted = false; try { operatorWakeIndex(s, input, true); } catch (error) { interrupted = String(error.message).includes('synthetic repair interruption'); }
+      const rolledBack = wakeIndexState(db) === 'absent'; db.exec('DROP TRIGGER reject_reinstall');
+      const first = operatorWakeIndex(s, input, true), retry = operatorWakeIndex(s, input, true);
+      const saved = JSON.parse(original);
+      const originalRetry = operatorWakeIndex(s, { reason: 'Synthetic Worker qualification', requestId: 'install', planHash: saved.receipt.planHash }, true);
+      return Response.json({ interrupted, rolledBack, installed: first.result.installed, repairDuplicate: retry.duplicate,
+        originalDuplicate: originalRetry.duplicate, originalUnchanged: db.prepare('SELECT counts_json FROM operator_actions WHERE id=?').get(WAKE_INDEX_RECEIPT).counts_json === original,
+        repairRetryUnchanged: JSON.stringify({ ...retry, duplicate: false }) === JSON.stringify(first) });
+    }
     if (['/read', '/oversize'].includes(new URL(request.url).pathname)) {
       const identityId = s.identities.identityIdForMember('commons', 'worker');
       if (new URL(request.url).pathname === '/oversize') s.transaction(() => db.prepare("UPDATE agent_work_wakes SET pointer=? WHERE signal_id=(SELECT signal_id FROM agent_work_wakes WHERE agent_id=? ORDER BY created_at,signal_id LIMIT 1)").run('x'.repeat(8193), identityId));
@@ -70,7 +87,7 @@ export class WorkWakeBudgetProbe extends DurableObject {
       }
       throw Error('window traversal did not finish');
     };
-    const plans = ['agent_wake_signals', 'agent_work_wakes'].map(table => db.prepare(`EXPLAIN QUERY PLAN SELECT rowid FROM ${table} INDEXED BY ${table}_ordered_pending WHERE agent_id=? AND delivered_at IS NULL${table === 'agent_work_wakes' ? ' AND invalidated_at IS NULL' : ''} AND (created_at,signal_id)>(?,?) ORDER BY created_at,signal_id LIMIT 129`).all(identity.identityId, 0, '').map(row => row.detail));
+    const plans = WAKE_INDEXES.map(index => db.prepare(`EXPLAIN QUERY PLAN SELECT rowid FROM ${index.table} INDEXED BY ${index.name} WHERE agent_id=?${index.scoped ? ' AND room_id=?' : ''} AND delivered_at IS NULL${index.table === 'agent_work_wakes' ? ' AND invalidated_at IS NULL' : ''} AND (created_at,signal_id)>(?,?) ORDER BY created_at,signal_id LIMIT 129`).all(identity.identityId, ...(index.scoped ? ['commons'] : []), 0, '').map(row => row.detail));
     const page = drain();
     const measured = { selected: Math.max(...page.perPage.map(p => p.selected)), reads: Math.max(...page.perPage.map(p => p.candidateRowsRead)),
       totalRowsRead: Math.max(...page.perPage.map(p => p.totalRowsRead)), roomReads: Math.max(...page.perPage.map(p => p.roomReads)) };

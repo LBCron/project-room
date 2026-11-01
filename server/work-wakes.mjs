@@ -108,7 +108,7 @@ export class WorkWakes {
     // Existing hostless callers retain their mention/DM contract. New work delivery
     // requires the reporting host, whose explicit consent is checked below.
     if (!this.available || hostId === null) return bounded ? { signals: [], more: false, through: null } : [];
-    const window = bounded ? readWakeWindow(this.db, 'agent_work_wakes', agentId, after) : null;
+    const window = bounded ? readWakeWindow(this.db, 'agent_work_wakes', agentId, after, roomId) : null;
     const rows = window ? window.rows : this.db.prepare(`SELECT * FROM agent_work_wakes WHERE agent_id=? AND delivered_at IS NULL
       AND invalidated_at IS NULL AND (? IS NULL OR room_id=?)
       AND (? IS NULL OR created_at>? OR (created_at=? AND signal_id>?))

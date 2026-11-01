@@ -75,3 +75,21 @@ test('operator authentication and method gate precede installation, and partial 
   const failed = await fetch(f.origin + '/api/agent-wakes/poll?hostId=host&waitMs=0', { headers: { authorization: 'Bearer ' + f.identity.secret } });
   assert.equal(failed.status, 503); assert.equal(failed.headers.get('retry-after'), '30'); assert.equal((await failed.json()).error.code, 'storage_unavailable');
 });
+test('room-scoped delivery never advances through or reveals foreign-room wake positions', async t => {
+  const f = await fixture(t, 0);
+  f.store.transaction(() => {
+    const insert = f.store.db.prepare("INSERT INTO agent_wake_signals VALUES(?,?,'mention','foreign-room',?,1,NULL)");
+    for (let n = 0; n < 1000; n++) insert.run('foreign-position-' + n, f.identity.identityId, 'private-reference-' + n);
+  });
+  f.install();
+  const page = f.store.agentHeartbeats.pendingWakePage(f.identity.identityId, { roomId: 'commons', hostId: 'host' });
+  assert.deepEqual(page.signals.map(row => row.signalId), [f.row.signal_id]);
+  assert.equal(page.more, false); assert.equal(page.nextCursor, null);
+  const key = f.store.issueAccessKey('commons', 'worker');
+  const heartbeat = await fetch(f.origin + '/api/agent-heartbeats', { method: 'POST', headers: { authorization: 'Bearer ' + key, origin: f.origin, 'content-type': 'application/json' }, body: JSON.stringify({ hostId: 'scoped-host', mode: 'pull-only', workWakes: true }) });
+  assert.equal(heartbeat.status, 200); const beat = await heartbeat.json();
+  assert.deepEqual(beat.pendingWakes.map(row => row.signalId), [f.row.signal_id]); assert.equal(beat.more, false); assert.equal(beat.nextCursor ?? null, null);
+  const polled = await fetch(f.origin + '/api/agent-wakes/poll?hostId=scoped-host&waitMs=0', { headers: { authorization: 'Bearer ' + key } });
+  assert.equal(polled.status, 200); const current = await polled.json();
+  assert.deepEqual(current.pendingWakes.map(row => row.signalId), [f.row.signal_id]); assert.equal(current.more, false); assert.equal(current.nextCursor, null);
+});

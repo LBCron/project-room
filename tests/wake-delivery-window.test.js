@@ -20,7 +20,7 @@ function fixture(t) {
     }) };
   return f;
 }
-test('both indexes plus their exact original immutable receipt activate; startup/retry preserve them', t => {
+test('all four indexes plus their exact original immutable receipt activate; startup/retry preserve them', t => {
   const f = fixture(t); f.seed(300);
   assert.equal(wakeIndexState(f.store.db), 'absent'); assert.equal(boundedWakeDeliveryActive(f.store.db), false);
   const plan = f.plan(); const first = f.execute(plan); assert.equal(first.duplicate, false);
@@ -39,7 +39,7 @@ test('unreceipted, partial or later missing pair refuses activation without fall
   f.store.db.exec(WAKE_INDEXES[1].sql);
   assert.throws(() => boundedWakeDeliveryActive(f.store.db), { code: 'storage_unavailable' });
 });
-test('installation rollback includes both indexes and success receipt; retry uses original plan', t => {
+test('installation rollback includes all four indexes and success receipt; retry uses original plan', t => {
   const f = fixture(t); f.seed(1); const plan = f.plan();
   f.store.db.exec(`CREATE TRIGGER reject_wake_install BEFORE INSERT ON operator_actions WHEN NEW.id='${WAKE_INDEX_RECEIPT}' BEGIN SELECT RAISE(ABORT,'synthetic interruption'); END`);
   assert.throws(() => f.execute(plan), /synthetic interruption/);
@@ -97,4 +97,14 @@ test('interruption after the first CREATE INDEX rolls back the pair and leaves o
   f.store.db.exec = exec; assert.equal(wakeIndexState(f.store.db), 'absent');
   assert.equal(f.store.db.prepare('SELECT 1 FROM operator_actions WHERE id=?').get(WAKE_INDEX_RECEIPT), undefined);
   assert.equal(f.execute(plan).duplicate, false);
+});
+test('UTF8 byte ordering matches SQLite BINARY and leading BOM source text is preserved', t => {
+  const f = fixture(t);
+  f.store.transaction(() => {
+    const insert = f.store.db.prepare("INSERT INTO agent_wake_signals VALUES(?,'agent','mention','commons',?,1,NULL)");
+    insert.run('\uE000', '\uFEFFkept'); insert.run('\u{10000}', 'other');
+  });
+  f.execute(f.plan()); const page = readWakeWindow(f.store.db, 'agent_wake_signals', 'agent');
+  assert.deepEqual(page.rows.map(row => row.signal_id), ['\uE000', '\u{10000}']);
+  assert.equal(page.rows[0].message_id, '\uFEFFkept');
 });

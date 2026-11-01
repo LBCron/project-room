@@ -8,9 +8,11 @@ export function advanceCanonicalH({state,header,readMetadata,readRange,nextMessa
  if(!c){
   const marker=readMetadata('messageAuthority');
   if(!marker||marker.version!==1||!Number.isSafeInteger(marker.count)||marker.count<0||Object.keys(marker).some(k=>!['version','count'].includes(k)))throw Error('Invalid protected canonical authority marker');
-  if(header.historicalCheckpoint.sequence!==header.head||!/^[a-f0-9]{64}$/.test(header.historicalCheckpoint.contentHash??''))throw Error('Canonical H current content checkpoint required');
+  const anchored=header.historicalCheckpoint.sequence===header.head&&/^[a-f0-9]{64}$/.test(header.historicalCheckpoint.contentHash??'');
+  const explicit=header.contentProofIntent;
+  if(!anchored&&!(explicit?.basis==='current-write-proofs'&&explicit.checkpointComparison==='unavailable-stale'&&/^[a-f0-9]{64}$/.test(explicit.planHash??'')))throw Error('Canonical H current content checkpoint or explicit write-proof plan required');
   const archive=archiveInfo();
-  c={phase:archive?'retained':'projection',archive,retainedIndex:0,visible:0,offset:0,cursor:'',count:0,expectedVisible:marker.count,expectedCount:marker.count+(archive?.count??0),hash:push(encodeReplayHash(initialReplayHash()),header.roomId+'\0'+header.head+'\0')};
+  c={basis:anchored?'exact-current-checkpoint':'current-write-proofs',checkpointComparison:anchored?'pending':'unavailable-stale',phase:archive?'retained':'projection',archive,retainedIndex:0,visible:0,offset:0,cursor:'',count:0,expectedVisible:marker.count,expectedCount:marker.count+(archive?.count??0),hash:push(encodeReplayHash(initialReplayHash()),header.roomId+'\0'+header.head+'\0')};
  }
  if(c.phase==='retained'){
   if(c.retainedIndex<c.archive.retainedCount){
@@ -39,8 +41,9 @@ export function advanceCanonicalH({state,header,readMetadata,readRange,nextMessa
   if(key!==null){const source=readWork(key);c={...c,cursor:key};if(!source.absent){const text=JSON.stringify(['work_id','revision','digest','body'].map(field=>source.row[field]));c={...c,hash:push(c.hash,Buffer.byteLength(text)+':'+text)};}}
   else c={...c,phase:'finish'};
  }else if(c.phase==='finish'){
-  if(finishReplayHash(decodeReplayHash(c.hash))!==header.historicalCheckpoint.contentHash)throw Error('Canonical H complete content digest differs');
-  c={...c,phase:'qualified'};
+  const currentDigest=finishReplayHash(decodeReplayHash(c.hash));
+  if(c.basis!=='current-write-proofs'&&currentDigest!==header.historicalCheckpoint.contentHash)throw Error('Canonical H complete content digest differs');
+  c={...c,phase:'qualified',contentHash:currentDigest,checkpointComparison:c.basis==='current-write-proofs'?'unavailable-stale':'matched'};
  }
  return {...state,canonicalH:c,hMessageCount:c.count,hCanonicalCount:c.count,hMessagesQualified:c.phase==='qualified'};
 }

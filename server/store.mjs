@@ -1,4 +1,5 @@
 import { assertRestoreAdmitted, restorePending, verifyRestoreControl } from './restore-admission.mjs';
+import {readCurrentWorkListing} from './current-work-list.mjs';
 import { CURRENT_ROOM_SCHEMA, CURRENT_ROOM_GUARDS, initializeCurrentRoom, currentRoomAuthority, isCurrentRoom, currentCommandContext, prepareCurrentWrite, withCurrentServingWriter, readCurrentRecord, readCurrentHistoryFloor, withCurrentReadContext, readCurrentSelectedWorkState, readCurrentOverviewWindow, currentVisibleHorizon, readCurrentPrivateWorkParties } from './current-room-repository.mjs';
 import {bindReplayAppend} from './replay-cutover.mjs';
 import { savedHistoricalReplayCheckpoint } from './historical-replay-contract.mjs';
@@ -6335,6 +6336,7 @@ this.slaBreachAlerts = new SlaBreachAlertJournal(this); // Task 26: durable in-a
       return {...overview,visibleSequence:currentVisibleHorizon(this,roomId,viewerId,overview.sequence)};
     }));
   }
+  currentWorkListing(token,roomId,args={}) { return readCurrentWorkListing(this,token,roomId,args); }
   // Compact catch-up. sinceVersion equal to context_version returns
   // { not_modified: true } and no roster, work, or refs. Message and file
   // bodies are never part of either shape.

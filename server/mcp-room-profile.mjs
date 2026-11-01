@@ -388,10 +388,15 @@ function workRecord(item, now) {
   };
 }
 
-function listWork(store, secret, args) {
+export function listRoomWork(store, secret, args) {
+  if(!validWorkPage(args)||args.focus!==undefined&&!['all','needs_me','results','help_wanted'].includes(args.focus)
+    ||args.query!==undefined&&(typeof args.query!=='string'||args.query.length>200||!args.query.trim())
+    ||args.sort!==undefined&&args.sort!=='curiosity')throw new ServiceError(422,'invalid_work_page','Choose a work focus, query, and returned continuation');
+  const current=store.currentWorkListing?.(secret,args.roomId,args);
+  if(current)return stampWorkListing(current);
   const focus = args.focus ?? "all";
   const help = focus === "help_wanted";
-  const snapshot = store.snapshot(secret, args.roomId, null, "work", help);
+  const snapshot = store.snapshot(secret, args.roomId, args.expectedSessionBinding??null, "work", help);
   const member = snapshot.state.members[snapshot.viewerId];
   const now = help ? Date.parse(snapshot.evaluatedAt) : Date.now();
   const items = Object.values(snapshot.state.workItems);
@@ -435,6 +440,8 @@ function listWork(store, secret, args) {
   })) ?? null;
   return stampWorkListing(pageWorkListing({
     roomId: snapshot.roomId, evaluatedThrough: snapshot.sequence, focus,
+    viewerId:snapshot.viewerId,viewerAccountId:snapshot.viewerAccountId??null,viewerAuthEpoch:snapshot.viewerAuthEpoch??null,
+    viewerSessionBinding:snapshot.viewerSessionBinding??null,viewerSessionRevision:snapshot.viewerSessionRevision??null,
     member: member ? { id: member.id, kind: member.kind, permissions: [...member.permissions] } : null,
     charter: snapshot.charter ?? null,
     ...(matches ? { selection: { query: args.query.trim(), matches: matches.total, shown: work.length } } : {}),
@@ -662,7 +669,7 @@ function dispatchRoomToolCall(store, secret, identity, name, args, agentRooms) {
       ...(args.workItemId === undefined ? {} : { workItemId: args.workItemId }) };
     return commandReceipt(store, secret, roomId, { id, type: "message.posted", data }, "posted");
   }
-  if (name === "room_list_work") return listWork(store, secret, args);
+  if (name === "room_list_work") return listRoomWork(store, secret, args);
   if (name === "add_land_item" || name === "list_land_queue" || name === "remove_land_item" || name === "report_tip") {
     return callLandTool(store, secret, name, args);
   }

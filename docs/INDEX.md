@@ -186,6 +186,7 @@ Dated plans, checkpoints, and working notes are in [history/](../archive/docs/hi
 [Bounded operator authority activation](research/2026-11-01-message-authority-activation.md) records the initial admission, recovery and refusal limits.
 
 [ACP exact child environment](research/2026-11-01-acp-child-environment.md) records the local prefix leak reproduction, exact-name compatibility contract and qualification limits.
+[Busy canonical room qualification](research/2026-11-01-stale-canonical-current-proof-basis.md) explains explicit current-write-proof planning, immutable old checkpoint receipts, and unknown historical provenance.
 
 [Historical session backfill reconciliation](research/2026-11-01-legacy-session-backfill-reconciliation.md) describes the explicit operator proof boundary and derived-only repair.
 

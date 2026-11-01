@@ -241,3 +241,71 @@ for(const mode of ['canonical','reference'])for(const door of ['prepare','global
     assert.deepEqual(s.db.prepare("SELECT * FROM messages WHERE message_id='kept'").get(),before);
   });
 }
+
+for(const stage of ['event-read','snapshot-write','parity-sql']) {
+  test(`unexpected SQLite ${stage} fault escapes prepare and rolls the whole step back`,t=>{
+    const f=fixture(t,stage==='snapshot-write'?300:5),db=f.s.db,p=f.plan();
+    const before=cursor(f.s),messages=db.prepare("SELECT * FROM messages WHERE room_id='commons'").all();
+    const prepare=db.prepare.bind(db);let injected=null;
+    db.prepare=sql=>{
+      const target=stage==='event-read'?sql.includes('SELECT sequence, id, body FROM events')
+        :stage==='snapshot-write'?sql.includes('INSERT INTO message_replay_snapshots')
+        :sql.includes('SELECT COUNT(*) AS n, COALESCE(MAX(seq), 0) AS lastSeq');
+      if(target){try{prepare('SELECT * FROM nonexistent_authority_storage_probe').get();}catch(error){injected=error;throw error;}}
+      return prepare(sql);
+    };
+    assert.throws(()=>f.prepare(p.planHash),error=>{assert.equal(error,injected);assert.equal(error.code,'ERR_SQLITE_ERROR');return true;});
+    assert.ok(injected,'the fault must occur inside the admitted replay/parity phase');
+    assert.deepEqual(cursor(f.s),before);
+    assert.deepEqual(prepare("SELECT * FROM messages WHERE room_id='commons'").all(),messages);
+    assert.equal(prepare("SELECT count(*) AS n FROM message_replay_snapshots WHERE room_id='commons'").get().n,0);
+    assert.equal(prepare("SELECT count(*) AS n FROM operator_actions WHERE action='message_authority_prepare'").get().n,0);
+  });
+}
+
+for(const door of ['prepare','global']) {
+  test(`${door} propagates typed SQLite IOERR without blaming room data`,t=>{
+    const f=fixture(t,5),db=f.s.db,p=f.plan(),prepare=db.prepare.bind(db);
+    const fault=Object.assign(new Error('injected storage outage'),{code:'SQLITE_IOERR',errcode:10});
+    db.prepare=sql=>{if(sql.includes('SELECT sequence, id, body FROM events'))throw fault;return prepare(sql);};
+    assert.throws(()=>door==='prepare'?f.prepare(p.planHash):f.s.backfillMessages({limit:200}),error=>door==='prepare'
+      ?error.code==='storage_unavailable'&&error.status===503&&error.cause===fault:error===fault);
+    assert.equal(cursor(f.s),undefined);
+    assert.equal(prepare("SELECT count(*) AS n FROM messages_backfill_blocks WHERE room_id='commons'").get().n,0);
+  });
+}
+
+test('unexpected non-verdict parity exception propagates unchanged with atomic rollback',t=>{
+  const f=fixture(t,5),p=f.plan(),fault=new Error('unexpected parity implementation fault');
+  f.s.checkMessagesParity=()=>{throw fault;};
+  assert.throws(()=>f.prepare(p.planHash),error=>error===fault);
+  assert.equal(cursor(f.s),undefined);
+  assert.equal(f.s.db.prepare("SELECT count(*) AS n FROM messages WHERE room_id='commons'").get().n,0);
+  assert.equal(f.s.db.prepare("SELECT count(*) AS n FROM operator_actions WHERE action='message_authority_prepare'").get().n,0);
+});
+
+test('prepare HTTP reports unexpected admitted storage failure as standard 500 with operationId',async t=>{
+  const prior=process.env.ROOM_OPERATOR_TOKEN_SHA256,token='synthetic-storage-fault-operator';
+  process.env.ROOM_OPERATOR_TOKEN_SHA256=createHash('sha256').update(token).digest('hex');
+  const f=fixture(t,5),server=createRoomServer({store:f.s});await new Promise(resolve=>server.listen(0,'127.0.0.1',resolve));
+  t.after(async()=>{server.closeStreams();server.closeAllConnections();await new Promise(resolve=>server.close(resolve));if(prior===undefined)delete process.env.ROOM_OPERATOR_TOKEN_SHA256;else process.env.ROOM_OPERATOR_TOKEN_SHA256=prior;});
+  const input={...f.request,planHash:f.plan().planHash,requestId:'http-storage-fault'},prepare=f.s.db.prepare.bind(f.s.db);
+  f.s.db.prepare=sql=>{if(sql.includes('SELECT sequence, id, body FROM events'))return prepare('SELECT * FROM nonexistent_authority_storage_probe');return prepare(sql);};
+  const origin='http://127.0.0.1:'+server.address().port;
+  const response=await fetch(origin+'/api/operator/messages/authority/prepare',{method:'POST',headers:{origin,'content-type':'application/json',authorization:'Operator '+token},body:JSON.stringify(input)});
+  const body=await response.json();
+  assert.equal(response.status,500);assert.equal(body.error.code,'ERR_SQLITE_ERROR');assert.match(body.operationId,/^op_/);
+  assert.doesNotMatch(body.error.message,/nonexistent_authority_storage_probe|reconcil/i);
+  assert.equal(cursor(f.s),undefined);
+  assert.equal(prepare("SELECT count(*) AS n FROM operator_actions WHERE action='message_authority_prepare'").get().n,0);
+});
+
+test('prepare retains the existing typed storage refusal for filesystem EIO',t=>{
+  const f=fixture(t,5),db=f.s.db,p=f.plan(),prepare=db.prepare.bind(db);
+  const fault=Object.assign(new Error('injected filesystem outage'),{code:'EIO'});
+  db.prepare=sql=>{if(sql.includes('SELECT sequence, id, body FROM events'))throw fault;return prepare(sql);};
+  assert.throws(()=>f.prepare(p.planHash),error=>error.code==='storage_unavailable'&&error.status===503&&error.cause===fault);
+  assert.equal(f.s.storageFailures,1,'one outer rollback counts one storage failure');
+  assert.equal(cursor(f.s),undefined);
+  assert.equal(prepare("SELECT count(*) AS n FROM messages_backfill_blocks WHERE room_id='commons'").get().n,0);
+});

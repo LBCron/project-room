@@ -1284,12 +1284,13 @@ export function runTargetedMessagesBackfill(store, room, admitState) {
 // that can no longer replay to the room's sequence, a malformed event body.
 // Operational failures are recognized by type first: the store's typed
 // storage_unavailable refusal (its transaction has already rolled back,
-// so no partial write exists) and SQLite lock contention (SQLITE_BUSY,
-// primary result code 5) are the environment failing, never the room's
-// data — blaming the room would strand its backfill behind a transient.
-function isRoomDataError(error) {
-  if (error?.code === "storage_unavailable" || error?.code === "SQLITE_BUSY") return false;
-  if (Number.isInteger(error?.errcode) && (error.errcode & 0xff) === 5) return false;
+// so no partial write exists) and typed SQLite errors are store failures,
+// never a room-data verdict. Preserve driver codes even when the message
+// does not identify SQLite; untyped legacy adapters retain the fallback.
+export function isRoomDataError(error) {
+  if (error?.code === "storage_unavailable" || error?.code === "ERR_SQLITE_ERROR"
+    || (typeof error?.code === "string" && error.code.startsWith("SQLITE_"))) return false;
+  if (Number.isInteger(error?.errcode)) return false;
   return !/no such (table|column)|missing schema|sqlite|database disk|disk full|readonly database|database is locked/i
     .test(String(error?.message ?? error));
 }

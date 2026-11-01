@@ -7,7 +7,7 @@ import { tableExists } from './db-util.mjs';
 import { hasMessageAuthority } from './message-authority.mjs';
 import { appendOperatorAction } from './operator-actions.mjs';
 import { ServiceError } from './service-error.mjs';
-import { runTargetedMessagesBackfill } from './messages-store.mjs';
+import { runTargetedMessagesBackfill, isRoomDataError } from './messages-store.mjs';
 import { decodeMessageReplaySnapshot } from './message-replay-snapshot.mjs';
 
 export const MESSAGE_AUTHORITY_LIMITS = Object.freeze({ projectionBytes: 524288, events: 2048,
@@ -194,15 +194,24 @@ export function operatorMessageAuthority(store,input,execute=false,requestId=nul
         lastState=state;lastJson=json;return json;
       };
       try {preparation=runTargetedMessagesBackfill(store,{id:request.roomId,sequence:plan.sequence},admitState);}
-      catch(error) {if(error instanceof ServiceError)throw error;fail(409,'authority_not_ready','Target replay requires reconciliation; the step was rolled back');}
+      catch(error) {
+        // Preserve the store's existing disk/quota/I/O refusal before the
+        // room-data classifier can turn an untyped adapter fault into 409.
+        const failure=store.storageFailure(error,false);
+        if(failure instanceof ServiceError || !isRoomDataError(failure))throw failure;
+        fail(409,'authority_not_ready','Target replay requires reconciliation; the step was rolled back');
+      }
       // Staging JSON/checksums are not independent provenance. Before a final
       // fold can commit new serving rows/proofs, compare against the admitted
       // current projection through the existing targeted parity contract.
       if(preparation.caughtUp) {
         try {
           const parity=store.checkMessagesParity({roomId:request.roomId});
-          if(!parity.ok||parity.checked!==1)throw Error('exact-head parity unavailable');
-        } catch {fail(409,'authority_not_ready','Prepared rows differ from current message authority; the step was rolled back');}
+          if(!parity.ok||parity.checked!==1)fail(409,'authority_not_ready','Exact-head message parity is unavailable');
+        } catch(error) {
+          if(!String(error?.message??'').startsWith('messages parity failed for '))throw error;
+          fail(409,'authority_not_ready','Prepared rows differ from current message authority; the step was rolled back');
+        }
       }
     }
     if(execute) {

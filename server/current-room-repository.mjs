@@ -84,6 +84,7 @@ guardDefinitions.push(['current_room_permit_update',`CREATE TRIGGER IF NOT EXIST
     SELECT RAISE(ABORT,'unsupported current room permit'); END`]);
 export const CURRENT_ROOM_GUARDS = [...guardDefinitions,...RESTORE_CONTROL_GUARDS].map(([,sql])=>sql+';').join('\n') + `
 CREATE INDEX IF NOT EXISTS current_work_summary_keys ON current_room_record_proofs(room_id,record_key) WHERE domain='workSummary' AND present=1;
+CREATE INDEX IF NOT EXISTS current_reply_request_keys ON current_room_record_proofs(room_id,record_key) WHERE domain='replyRequests' AND present=1;
 CREATE INDEX IF NOT EXISTS current_messages_public_seq ON messages(room_id,seq DESC,message_id DESC) WHERE to_member_id IS NULL OR to_member_id='';
 CREATE INDEX IF NOT EXISTS current_messages_channel_public_seq ON messages(room_id,channel_id,seq DESC,message_id DESC) WHERE to_member_id IS NULL OR to_member_id='';
 CREATE INDEX IF NOT EXISTS current_messages_incoming_seq ON messages(room_id,to_member_id,seq DESC,message_id DESC);
@@ -751,6 +752,25 @@ export function readCurrentSelectedWorkState(store,roomId,workId,viewerId,{inclu
 }
 
 export {currentWorkSummary} from './current-work-summary.mjs';
+// Examine a fixed source window before recipient/status/history predicates.
+// Tombstones are excluded by the partial index rather than scanned on refill.
+export function readCurrentReplyRequestWindow(store,roomId,{after='',limit=4}={}) {
+  const db=store.db,b=contextBudgets.get(db)??budget(),head=readCurrentHead(db,roomId,b);if(!head)return null;
+  if(typeof after!=='string'||Buffer.byteLength(after)>200||!Number.isInteger(limit)||limit<1||limit>8)refuse('Invalid request source window');
+  const rows=db.prepare("SELECT record_key FROM current_room_record_proofs INDEXED BY current_reply_request_keys WHERE room_id=? AND domain='replyRequests' AND present=1 AND record_key>? ORDER BY record_key LIMIT ?").all(roomId,after,limit+1);
+  charge(b,rows.reduce((n,row)=>n+Buffer.byteLength(row.record_key)+32,0),rows.length);
+  const requests=[];let examinedAfter=after;
+  for(const {record_key:id} of rows.slice(0,limit)) {
+    const scalar=db.prepare("SELECT payload_bytes FROM current_room_records WHERE room_id=? AND domain='replyRequests' AND record_key=?").get(roomId,id);
+    if(!scalar)corrupt('request source payload missing');
+    if(requests.length&&b.bytes+scalar.payload_bytes+16384>MAX_INPUT)break;
+    const request=readCurrentRecord(db,roomId,'replyRequests',id,b);if(request?.id!==id)corrupt('request source identity differs');
+    requests.push(request);examinedAfter=id;
+  }
+  const hasMore=rows.length>requests.length;
+  if(!after&&!hasMore&&requests.length!==head.counts.replyRequests)corrupt('complete request source membership differs');
+  return {requests,examinedAfter,hasMore,total:head.counts.replyRequests};
+}
 export function readCurrentOverviewWindow(store,roomId,{workAfter='',limit=8,viewerId=null}={}) {
   const db=store.db,b=contextBudgets.get(db)??budget(),head=readCurrentHead(db,roomId,b);if(!head)return null;
   if(typeof workAfter!=='string'||Buffer.byteLength(workAfter)>200||!Number.isInteger(limit)||limit<1||limit>8)refuse('Invalid bounded work context window');

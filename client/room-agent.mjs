@@ -1,4 +1,4 @@
-import { pageWorkListing, validWorkPage } from "../server/work-list-page.mjs";
+import { validWorkPage } from "../server/work-list-page.mjs";
 import { workTemplate, WORK_TEMPLATES } from "../src/work-templates.js";
 import { roomTemplate, ROOM_TEMPLATES } from "../src/room-templates.js";
 import { validId, PERMISSIONS, WORK_STATES, AGENT_AUTONOMY_PERMISSIONS, MAX_MESSAGE_BODY_CHARS } from "../src/events.js";
@@ -1475,14 +1475,19 @@ export class RoomAgentClient {
   async orient({ paginate = false, limit, cursor, ...options } = {}) {
     if (paginate || limit !== undefined || cursor !== undefined) {
       if (!validWorkPage({ limit, cursor })) throw new RoomClientError(0, "invalid_work_page", "Use limit 1–100 and a returned cursor");
-      const listing = await this.#orientFull({ ...options, fullQuery: true });
-      try { return pageWorkListing(listing, { ...options, limit, cursor }, this.#token, "stdio"); }
-      catch (error) {
-        if (["invalid_work_page", "invalid_work_cursor", "stale_work_cursor"].includes(error.code)) {
-          throw new RoomClientError(error.status, error.code, error.message);
-        }
-        throw error;
-      }
+      const {signal,focus='all',query,sort}=options;
+      if(!['all','needs_me','results','help_wanted'].includes(focus))throw new RoomClientError(0,'invalid_focus','Choose a supported work focus');
+      if(query!==undefined&&!validWorkSearchQuery(query))throw new RoomClientError(0,'invalid_query','Use a nonblank work query of at most 200 UTF-16 code units');
+      if(sort!==undefined&&sort!=='curiosity')throw new RoomClientError(0,'invalid_sort','Sort is omitted or curiosity');
+      const params=new URLSearchParams({focus});
+      for(const [key,value] of Object.entries({limit,cursor,query,sort}))if(value!==undefined)params.set(key,String(value));
+      const listing=await this.#request('/work-list?'+params,undefined,signal);
+      if(listing?.roomId!==this.#roomId||listing.member?.id!==this.#memberId||listing.viewerId!==this.#memberId
+        ||listing.viewerAccountId!==null||listing.viewerAuthEpoch!==null||listing.viewerSessionBinding!==null||listing.viewerSessionRevision!==null||!Array.isArray(listing.work)
+        ||!listing.page||typeof listing.page.hasMore!=='boolean'||listing.page.hasMore!==Boolean(listing.page.nextRead)
+        ||(listing.page.nextRead&&listing.page.nextRead.arguments?.roomId!==this.#roomId))
+        throw new RoomClientError(200,'invalid_response','Room returned an invalid work listing');
+      return listing;
     }
     return this.#orientFull(options);
   }

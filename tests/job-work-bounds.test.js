@@ -88,7 +88,7 @@ function countWork(store) {
   } });
   return work;
 }
-test("patrol tick statement work is constant as the backlog grows (rows grow only by the room listing)", t => {
+test("patrol tick statement invocations stay constant as the backlog grows (counts statements and returned rows, not SQLite rows examined or CPU)", t => {
   const now = freezeClock(t), measured = [];
   for (const rooms of [PATROL_TICK_ROOMS + 2, PATROL_TICK_ROOMS * 6]) {
     const store = storeWithRooms(rooms), work = countWork(store);

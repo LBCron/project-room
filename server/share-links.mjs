@@ -1,6 +1,6 @@
 import { canInviteCoOwners, museDevelopmentAccess } from "../src/room-administration.js";
 import { createHash, randomBytes, randomUUID } from "node:crypto";
-import { validId, event, EVENT_TYPES as T, MEMBERSHIP_AUTHORITY_POLICY_VERSION, INVITATION_ROLE_POLICY_VERSION, INVITATION_ROLES, PERMISSIONS, NEVER_GRANT, canInviteMembers, historyVisibility } from "../src/events.js";
+import { validId, event, EVENT_TYPES as T, MEMBERSHIP_AUTHORITY_POLICY_VERSION, INVITATION_ROLE_POLICY_VERSION, INVITATION_ROLES, PERMISSIONS, NEVER_GRANT, canInviteMembers, historyVisibility, ownMember } from "../src/events.js";
 import { applyEventWithGrowth, growthCollector } from "../src/growth-emit.js";
 import { invitationJoinedEvent } from "./invitation-evidence.mjs";
 import { canonicalInvitationData } from "./journal.mjs";
@@ -579,7 +579,7 @@ export class ShareLinks {
   // same way agent-invite redemption does. Retries return the duplicate path
   // before reaching here, and the referrals primary key keeps it exactly-once.
   creditReferral(row, refereeMemberId, at, trace = {}) {
-    const issuer = this.store.room(row.room_id).state.members?.[row.issuer_member_id];
+    const issuer = ownMember(this.store.room(row.room_id).state.members, row.issuer_member_id);
     if (!this.store.referrals || !issuer || issuer.active === false || row.issuer_member_id === refereeMemberId) return;
     this.store.referrals.record({ roomId: row.room_id, referrerMemberId: row.issuer_member_id, refereeMemberId, via: "invite", at });
     rememberReferee(this.store, row.room_id, refereeMemberId, trace);

@@ -60,7 +60,7 @@ function certify(store, roomId) {
   assert.ok(parityAtSeq(store, roomId) !== null, `parity certifies ${roomId}`);
 }
 
-test("account deletion in an already-archived room leaves rows parity can certify", async t => {
+for (const canonical of [false, true]) test(`account deletion in an already-archived room leaves rows parity can certify (canonical=${canonical})`, async t => {
   const f = createAcceptanceFixture();
   const origin = await startServer(t, f);
   const ctx = await deletionAccount(origin, f);
@@ -78,6 +78,7 @@ test("account deletion in an already-archived room leaves rows parity can certif
   assert.equal(f.store.backfillMessages({ limit: 1000 }).done, true);
   certify(f.store, roomId);
 
+  if (canonical) f.store.migrateMessageAuthority(roomId);
   // The owner archives the room, and the machinery catches up again.
   send(T.ROOM_ARCHIVED, {});
   assert.equal(f.store.backfillMessages({ limit: 1000 }).done, true);
@@ -103,6 +104,7 @@ test("account deletion in an already-archived room leaves rows parity can certif
     assert.equal(record.redacted, true);
   }
 
+  if (canonical) assert.equal(JSON.parse(f.store.db.prepare('SELECT projection FROM rooms WHERE id=?').get(roomId).projection).messageAuthority.version, 1);
   // Parity certifies the room again instead of mismatching it forever...
   certify(f.store, roomId);
 

@@ -46,6 +46,10 @@ export const ALLOWLIST = [
   // when every character outside an interpolation is a separator, so a literal
   // run long enough to be a credential is still caught.
   /\b(secret|password|passwd|pwd|token|api[_-]?key)\b\s*[:=]\s*`(?:\$\{[^{}`]*\}|[\s.\-_:/+,;=&?#|])*`/i,
+  // Scratch OpenAPI probe: conditional random generation, never a literal
+  // credential. Pin the complete expression/line so either literal branch or
+  // an adjacent credential cannot inherit this exemption.
+  /^\s*const token = operatorEnabled \? randomBytes\(32\)\.toString\("hex"\) : null;$/,
   // Verified false positives (2026-09-16 audit):
   /IDENTITY_SECRET_PREFIX/, // runtime-generated: `secret = PREFIX + base64url(randomBytes(32))`
   /secret = suppliedSecret/, // server/agent-identities.mjs:186 — variable reference, not a hardcoded secret
@@ -101,6 +105,8 @@ export const ALLOWLIST = [
   // (no blanket *-fixture.mjs / *-check.mjs skip). Their genuinely-safe
   // placeholder values are allowlisted explicitly below — each entry names
   // the file and why the value is not a credential.
+  /^\s*const token\s*=\s*'synthetic-selected-parity-operator-0123456789';\s*$/, // cloudflare/operator-selected-parity.check.mjs —
+    // exact Miniflare-only synthetic Operator declaration; never deployed or a real credential
   /synthetic-test-secret/, // scripts/agent-signin-browser-check.mjs:51 — mocked
     // /api/agent-identities route fulfillment; obvious placeholder, not a credential
   /synthetic-test-private-key/, // scripts/agent-signin-browser-check.mjs:51 — same

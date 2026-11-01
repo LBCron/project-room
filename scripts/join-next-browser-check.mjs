@@ -47,6 +47,7 @@ test("join page ignores an off-origin next and follows a relative one", { timeou
 
   const hostile = await invite();
   await page.goto(`${origin}/join/${hostile}?next=//evil.example/phish`);
+  await page.locator("#join-browser-alternative > summary").click();
   await page.locator("#join-name").waitFor({ state: "visible" });
   await page.locator("#join-name").fill("Hostile Next");
   await page.locator("#join-submit").click();
@@ -93,6 +94,7 @@ test("join page ignores an off-origin next and follows a relative one", { timeou
 
   const relative = await invite();
   await page.goto(`${origin}/join/${relative}?next=/offers`);
+  await page.locator("#join-browser-alternative > summary").click();
   await page.locator("#join-name").fill("Relative Next");
   await page.locator("#join-submit").click();
   await open.waitFor({ state: "visible" });
@@ -147,7 +149,9 @@ test("terminal join refusal moves keyboard focus to its explained outcome", { ti
   const response = await fetch(`${origin}/api/rooms/commons/agent-invites`, { method: "POST", headers: { "Content-Type": "application/json", Authorization: `Bearer ${ownerKey}` }, body: JSON.stringify({ profile: "chat" }) });
   assert.equal(response.status, 201); const { code } = await response.json();
   const page = await browser.newPage(); page.setDefaultTimeout(5000);
-  await page.goto(`${origin}/join/${code}`); await page.locator("#join-name").fill("Keyboard visitor");
+  await page.goto(`${origin}/join/${code}`);
+  await page.locator("#join-browser-alternative > summary").click();
+  await page.locator("#join-name").fill("Keyboard visitor");
   await page.route("**/api/join", route => route.fulfill({ status: 410, contentType: "application/json", body: JSON.stringify({ error: { code: "invite_revoked" } }) }));
   await page.locator("#join-submit").focus(); await page.keyboard.press("Enter");
   await page.locator("#join-error").waitFor({ state: "visible" });

@@ -1,3 +1,4 @@
+import { assertMessageWrite, recordMessageWrite } from './write-integrity.mjs';
 // RC-2026-09-19-078 — account-deletion wiring.
 //
 // src/account-deletion.mjs plans WHAT to purge in WHAT order but never
@@ -18,6 +19,7 @@
 import { createHash, createHmac, randomBytes, timingSafeEqual } from "node:crypto";
 import { EVENT_TYPES, MEMBERSHIP_AUTHORITY_POLICY_VERSION, applyEvent, event, isRoomArchived, roomKind } from "../src/events.js";
 import { commitMessageRedaction, readRedactionLog, redactRemainingMessageBodies } from "./message-redaction.mjs";
+import { hasMessageAuthority } from './message-authority.mjs';
 import { resyncRoomMessageRows } from "./messages-store.mjs";
 import { canonicalLane } from "./bounty-escrow.mjs";
 import { ServiceError } from "./store.mjs";
@@ -291,9 +293,10 @@ function saveRoomProjection(store, roomId, sequence, state) {
   // Checkpoints keep full bodies: replay edits from them. Only the room row
   // goes through the Phase 1a serializer.
   const projection = store.storedProjection(roomId, compact);
+  const { messageAuthority: _authority, ...checkpoint } = compact;
   store.db.prepare("UPDATE rooms SET sequence=?, projection=?, archived_at=? WHERE id=?").run(sequence, projection, archivedAt, roomId);
   store.db.prepare(`INSERT INTO projection_checkpoints(room_id, sequence, projection) VALUES(?,?,?)
-    ON CONFLICT(room_id) DO UPDATE SET sequence=excluded.sequence, projection=excluded.projection`).run(roomId, sequence, JSON.stringify(compact));
+    ON CONFLICT(room_id) DO UPDATE SET sequence=excluded.sequence, projection=excluded.projection`).run(roomId, sequence, JSON.stringify(checkpoint));
 }
 
 function appendRoomEvent(store, roomId, actorId, type, data) {
@@ -357,7 +360,11 @@ function redactRoomMessages(store, roomId, actorId) {
   if (archived.length) {
     const archivedAt = at;
     const clear = store.db.prepare("UPDATE messages SET body=NULL, reducer_extras_json=NULL, record_json=NULL, deleted_at=COALESCE(deleted_at, ?) WHERE room_id=? AND message_id=?");
-    for (const row of archived) removed += clear.run(archivedAt, roomId, row.id).changes;
+    for (const row of archived) {
+      assertMessageWrite(store.db,roomId,row.id);
+      removed += clear.run(archivedAt, roomId, row.id).changes;
+      recordMessageWrite(store.db,roomId,row.id);
+    }
   }
   let files = 0;
   try {
@@ -375,14 +382,18 @@ function redactRoomMessages(store, roomId, actorId) {
 function rebuildRoom(store, roomId) {
   store.db.prepare("DELETE FROM projection_checkpoints WHERE room_id=?").run(roomId);
   const rebuilt = store.rebuildProjection(roomId);
-  saveRoomProjection(store, roomId, rebuilt.sequence, rebuilt.state);
+  const raw = JSON.parse(store.db.prepare('SELECT projection FROM rooms WHERE id=?').get(roomId).projection);
+  if (hasMessageAuthority(raw)) rebuilt.state.messageAuthority = { version: 1, count: rebuilt.state.messages.length };
   // The redaction above rewrote the stored log and — for an already-archived
   // room — nulled the messages rows' records (the erasure). The rebuilt
   // projection is the redacted truth; re-derive the room's rows from it so
   // the table certifies against the projection again. Without this, parity
   // mismatches the NULL records forever and no automatic path ever rewrites
   // them (the room is caught up, so the backfill never re-selects it).
-  store.transaction(() => resyncRoomMessageRows(store.db, roomId, rebuilt.state));
+  store.transaction(() => {
+    resyncRoomMessageRows(store.db, roomId, rebuilt.state);
+    saveRoomProjection(store, roomId, rebuilt.sequence, rebuilt.state);
+  });
 }
 
 // Archive a solely owned personal room and strip message and file bytes.

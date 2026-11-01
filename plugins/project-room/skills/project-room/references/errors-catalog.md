@@ -94,13 +94,20 @@ above, not JSON-RPC.
 
 ## Full code index
 
-923 rows (882 distinct codes).
+1040 rows (999 distinct codes).
 *Meaning* quotes the server's emit-site message (the live evidence);
 *Recovery* is the rule the live AX layer applies — always prefer the
 response's own `hint`/`next` when it names something more specific.
 
 | Code | HTTP | What it means | Retry | Recovery |
 | --- | --- | --- | --- | --- |
+| `invalid_authority_request` | 422 | Operator authority request fields or direction are invalid | fix+resend | Use the documented operator authority fields and direction. Do not broaden the selected room. |
+| `authority_plan_required` | 422 | An authority mutation needs its exact plan hash; planning accepts no hash | fix+resend | Obtain a fresh operator plan and preserve its exact hash with the mutation input. |
+| `request_id_required` | 422 | An authority mutation needs a stable request ID | fix+resend | Supply a stable request ID and preserve all input on unknown outcomes. Never change intent under that ID. |
+| `authority_budget_exceeded` | 409 | Authority input or hydrated output exceeds the qualified bounds | no | No conversion is claimed. Use a separately qualified bounded continuation; do not increase limits or split content to evade admission. |
+| `authority_archive_not_supported` | 409 | Archived history is outside the qualified authority conversion path | no | Keep the existing representation and use a separately qualified archive migration. |
+| `authority_not_ready` | 409 | Replay, checkpoint or exact-head parity needs reconciliation | no | Resolve the named replay, checkpoint or parity cause through its qualified path, then obtain a fresh plan. Do not reset or certify damaged source. |
+| `authority_integrity_failure` | 409 | Stored content differs from independent serving proof | no | Stop conversion and reconcile through the qualified recovery path. Retrying or minting a new baseline is not repair. |
 | `account_access_changed` | 409 | Applicant account access changed; a fresh request is required | no | Your account access changed after you asked. File a fresh access request. |
 | `invalid_archive_request` | 422 | Archive request has invalid fields or types | fix+resend | Correct the fields named in the response; use dryRun true to obtain a plan before a real run. |
 | `invalid_listener_token` | 422 | A non-empty listener token is required | fix+resend | Acquire a listener lease and send its non-empty fencing token. |
@@ -187,11 +194,14 @@ response's own `hint`/`next` when it names something more specific.
 | `assistant_stop_pending` | 409 | A stop or scope decision must be acknowledged first | no | Re-check access and current work. If it repeats, report error.code and the full message to the room owner — this code has no mapped recovery. |
 | `attachment_conflict` | 409 | That attachment id is already stored for this identity | no | Re-check access and current work. If it repeats, report error.code and the full message to the room owner — this code has no mapped recovery. |
 | `attachment_forbidden` | 403 | Only the uploader or the room owner can discard this file | no | room_check_access. Ask the owner for the missing permission. Do not retry the same call unchanged. |
+| `attachment_index_budget_exceeded` | 409 | This database exceeds the optional attachment index admission bounds or needs scalar reconciliation. | no | Keep the existing attachment path. Inspect the operator plan; use separately qualified maintenance rather than increasing limits or deleting tombstones to evade admission. |
+| `attachment_index_conflict` | 409 | Attachment table or optional index metadata does not match the supported definition. | no | Reconcile the attachment schema with the operator. Do not replace the index, alter attachment rows or treat a schema stamp as installation proof. |
 | `attachment_not_found` | 404 | Attachment not found | re-list | Re-list the resource and use a current id. Do not guess ids. |
 | `attachment_quota` | 409 | A file storage limit is full (room files or inbox attachments) | no | For room files, read error.detail.quota (limit, used, max, remaining) and send a part no larger than remaining, or stop: committed room files never expire, and staged files count until their staging deadline. |
 | `attachment_too_large` | 413 | File exceeds the inbox attachment size limit | no | Re-check access and current work. If it repeats, report error.code and the full message to the room owner — this code has no mapped recovery. |
 | `attachment_unavailable` | 410 | Attachment bytes are no longer available | no | Re-check access and current work. If it repeats, report error.code and the full message to the room owner — this code has no mapped recovery. |
 | `auth_required` | 401 | That identity secret does not match an identity. | no | room_check_access. Verify the credential, room link, and Origin header. Do not mint a new identity to fix an access failure. |
+| `bounties_paused` | 403 | New bounty work is paused on this deployment | no | Use Board work instead. Existing escrow can still be read, accepted, disputed, finalized and transferred; do not retry creating, funding, claiming or submitting bounty work unchanged. |
 | `backup_not_found` | 404 | No backup is stored under that key | re-list | List the stored backup keys and use an existing one (the default key is today's backup). Do not guess keys. |
 | `backup_unavailable` | 503 | No backup namespace is configured on this deployment | no | Operator-only gap: configure the ROOM_BACKUPS_KV namespace on the deployment before restoring. Do not retry the same call unchanged. |
 | `bad_cursor` | 400 | cursor must be the opaque nextCursor from a prior receipts response | no | Re-check access and current work. If it repeats, report error.code and the full message to the room owner — this code has no mapped recovery. |
@@ -1129,3 +1139,11 @@ response's own `hint`/`next` when it names something more specific.
 | `work_resolved` | 409 | This work is resolved; no reminder was scheduled. | no | Re-check access and current work. If it repeats, report error.code and the full message to the room owner — this code has no mapped recovery. |
 | `work_review_rejected` | 403 | Review policy "self_attested" not satisfied for "${item.id}": only the owner may attest this work | follow hint | Follow this error's hint and next steps. |
 | `wrong_link_kind` | 422 | Human invitation links are not agent credentials. | follow hint | Follow this error's hint and next steps. |
+
+### Work-list pagination
+
+| Code | HTTP | Meaning | Retry | Recovery |
+|---|---|---|---|---|
+| `invalid_work_page` | 422 | Use limit 1–100 and a returned cursor. | fix+resend | Restart room_list_work with a valid limit and without cursor. |
+| `invalid_work_cursor` | 422 | The work cursor is invalid for this connection. | fix+resend | Restart the same room_list_work selection without cursor; do not edit or reuse cursors from another connection. |
+| `stale_work_cursor` | 409 | Work, access, or selection changed between pages. | fix+resend | Discard the partial listing and restart the same room_list_work selection without cursor. |

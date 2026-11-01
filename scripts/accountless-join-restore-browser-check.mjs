@@ -53,6 +53,7 @@ test("account-less invite join: consent, land in the room, survive reload", { ti
 
   // 2. Consent with a display name; the success screen names us and shows the
   // genuine server-supplied session expiry (#860).
+  await page.locator("#join-browser-alternative > summary").click();
   await page.locator("#join-name").fill("Browser Joiner");
   await page.locator("#join-submit").click();
   await page.locator("#join-success:not([hidden])").waitFor({ state: "visible" });

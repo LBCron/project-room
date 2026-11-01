@@ -150,7 +150,7 @@ export function candidateRuntimeFixture(repository, directory) {
   paths.add('server/account-deletion.mjs'); // RC-2026-09-19-078: deletion executor (imported by server/http.mjs)
   paths.add('src/account-deletion.mjs'); // RC-2026-09-19-078: pure purge planner (imported by server/account-deletion.mjs)
   // CP-ADMIN-0: operator auth, purge, and status (imported by server/http.mjs and server/store.mjs)
-  for (const path of ['server/operator-auth.mjs', 'server/operator-actions.mjs', 'server/purge-registry.mjs', 'server/operator-purge.mjs', 'server/operator-room-purge.mjs', 'server/operator-status.mjs', 'server/operator-routes.mjs', 'server/operator-archive.mjs', 'server/operator-rooms.mjs']) paths.add(path);
+  for (const path of ['server/operator-auth.mjs', 'server/operator-actions.mjs', 'server/purge-registry.mjs', 'server/operator-purge.mjs', 'server/operator-room-purge.mjs', 'server/operator-status.mjs', 'server/operator-routes.mjs', 'server/operator-message-authority.mjs', 'server/operator-archive.mjs', 'server/operator-rooms.mjs']) paths.add(path);
   paths.add('server/account-passkeys.mjs'); // Passkey auth wiring (slice 5; imported by server/http.mjs)
   paths.add('src/passkey-login.mjs'); // WebAuthn logic (imported by server/account-passkeys.mjs)
   paths.add('src/password-auth.mjs'); // Email+password crypto (imported by server/http.mjs, slice 2)
@@ -167,13 +167,14 @@ export function candidateRuntimeFixture(repository, directory) {
   for (const path of ['server/sla-clocks.mjs', 'server/sla-breach-journal.mjs', 'server/inbox-triage.mjs']) paths.add(path); // Tasks 21/24/26 (imported by server/inbox.mjs)
   paths.add('server/inbox-handoff.mjs'); // Task 23 (imported by server/inbox.mjs and server/store.mjs)
   for (const path of ['server/inbox-assign.mjs', 'server/inbox-internal-notes.mjs', 'server/inbox-collision.mjs', 'server/inbox-approval.mjs', 'server/inbox-agent-routing.mjs', 'server/inbox-collab-store.mjs', 'server/inbox-collab-routes.mjs']) paths.add(path); // Lane C inbox collaboration (task RC-2026-09-18-011)
+  paths.add('server/work-list-page.mjs'); // Shared hosted/stdio work pagination
   paths.add('server/content-trust.mjs'); // structured untrusted markers (imported by server/http.mjs surfaces and MCP)
   paths.add('server/room-activation-pack.mjs'); // Room activation pack (quill lane, RC-2026-09-18-040; imported by server/http.mjs)
   paths.add('server/room-context.mjs'); // Compact agent room context (imported by server/store.mjs)
   for (const path of ['server/work-claims.mjs', 'server/work-claim-routes.mjs', 'server/work-duplicates.mjs', 'server/claim-coordination.mjs', 'server/claim-pr-sync.mjs', 'server/mention-receipts.mjs']) paths.add(path); // RC-2026-09-18-041: work-claim state machine + HTTP routes (imported by server/http.mjs); work-duplicates: pure duplicate detection (imported by server/work-claim-routes.mjs)
   paths.add('server/retention-response.mjs'); // room-retention: first-contribution SLA bot + zero-reply watchdog (pure, imported by server/work-claim-routes.mjs)
   paths.add('server/claim-validate.mjs'); // RC-2026-09-24-204: synchronous pre-post claim-block validation (imported by server/http.mjs; pure, no imports of its own)
-  for (const path of ['server/bounty-escrow.mjs', 'server/bounty-escrow-routes.mjs', 'server/bounty-disputes.mjs', 'server/dispute-arbiters.mjs', 'server/bounty-disputability.mjs', 'server/bounty-reputation.mjs', 'server/reputation.mjs', 'server/bounty-receipts.mjs']) paths.add(path); // agent work exchange slice 1: escrowed bounties (imported by server/http.mjs) + slice #4 bounty -> reputation + receipts slice #1: Ed25519-signed movement receipts (imported by server/bounty-escrow.mjs)
+  for (const path of ['server/bounty-escrow.mjs', 'server/bounty-escrow-routes.mjs', 'server/bounty-flag.mjs', 'server/bounty-disputes.mjs', 'server/dispute-arbiters.mjs', 'server/bounty-disputability.mjs', 'server/bounty-reputation.mjs', 'server/reputation.mjs', 'server/bounty-receipts.mjs']) paths.add(path); // agent work exchange slice 1: escrowed bounties (imported by server/http.mjs) + slice #4 bounty -> reputation + receipts slice #1: Ed25519-signed movement receipts (imported by server/bounty-escrow.mjs)
   paths.add('server/persisted-row.mjs'); // RC-2026-09-27-2730: replay-safe persisted-row envelope (imported by server/bounty-escrow.mjs, server/work-claim-sqlite.mjs, server/dispatch-journal.mjs; pure, no imports)
   paths.add('server/spam-shadow.mjs'); // Shadow-mode auto-quarantine instrumentation (imported by server/inbox.mjs)
   paths.add('server/dm-consents.mjs'); // Directional DM-consent journal (imported by server/store.mjs)

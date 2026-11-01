@@ -37,6 +37,7 @@ export const OAUTH_SCOPES = Object.freeze([
   "chat:write",
   "work:read",
   "work:write",
+  "members:invite",
 ]);
 
 const CLIENT_ID_PATTERN = /^[A-Za-z0-9_-]{1,64}$/;
@@ -332,7 +333,7 @@ export function createOAuthProvider({ clients, codes, accessTokens, refreshToken
     check(typeof refreshToken === "string" && refreshToken.length > 0, "refresh_token is required");
     check(typeof clientId === "string" && clientId.length > 0, "client_id is required");
     const record = refreshStore.get(sha256(refreshToken));
-    check(record, "invalid refresh token");
+    if (!record) fail("invalid_grant", "invalid refresh token");
     if (record.revoked && record.rotatedBy) {
       const revokedCount = revokeTokenFamily(record.familyId);
       emitSecurityEvent({
@@ -345,10 +346,10 @@ export function createOAuthProvider({ clients, codes, accessTokens, refreshToken
       });
       fail("invalid_grant", "refresh token reuse detected: token family revoked");
     }
-    check(!record.revoked, "refresh token revoked");
-    if (isExpired(record, now)) { refreshStore.delete(record.tokenHash); fail("invalid_request", "refresh token expired"); }
+    if (record.revoked) fail("invalid_grant", "refresh token revoked");
+    if (isExpired(record, now)) { refreshStore.delete(record.tokenHash); fail("invalid_grant", "refresh token expired"); }
     if (isAccountActive && !isAccountActive(record.userId)) fail("invalid_grant", "account is no longer active");
-    check(record.clientId === clientId, "client_id mismatch");
+    if (record.clientId !== clientId) fail("invalid_grant", "client_id mismatch");
     checkResource(record, resource);
     if (!bindingActive(record)) fail("invalid_grant", "agent connection is no longer active");
     // Issue the replacement pair BEFORE revoking the old token (#2944).

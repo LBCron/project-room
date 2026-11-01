@@ -97,9 +97,9 @@ export function assertMessageCommandReferences(store, roomId, state, command, ac
 // RoomStore persists the returned carrier alongside its event and receipt, then
 // invokes persistEntities before any observer can see the transaction. Pending
 // references are safe only because both writes share that transaction.
-export function prepareMessageWrite(store, { roomId, previous, state, event, sequence }) {
+export function prepareMessageWrite(store, { roomId, previous, state, event, sequence, messageAuthorityCount }) {
   const certificate = store.maintainMessageCertification
-    ? captureMessageCertification(store.db, {roomId,sequence:previous.sequence,event,state:previous.state}) : null;
+    ? captureMessageCertification(store.db, {roomId,sequence:previous.sequence,event,state:previous.state,nextState:state}) : null;
   // Cancellation changes request metadata only. Existing entity references
   // already designate canonical records; retaining them is not a new cutover
   // or permission to advance an unsupported transition's parity certificate.
@@ -127,7 +127,9 @@ export function prepareMessageWrite(store, { roomId, previous, state, event, seq
     if (retainEntities && !isDeepStrictEqual(hydrateMessageEntities(store.db, roomId, prior), state.messages))
       throw new Error('projection_corrupt: message entities changed during cancellation');
   }
-  const projection = store.messageEntityProjection && (certificate || retainEntities)
+  const projection = messageAuthorityCount !== undefined
+    ? storedProjection(store.db,roomId,state,{enabled:store.bodiesAtRest,messageAuthorityCount})
+    : store.messageEntityProjection && (certificate || retainEntities)
     ? storedProjection(store.db,roomId,state,{messageEntities:true,pendingMessageIds:affectedMessageIds(event)})
     : retainedMessageIds.length
       ? storedProjection(store.db, roomId, state, { enabled: store.bodiesAtRest, retainedMessageIds })

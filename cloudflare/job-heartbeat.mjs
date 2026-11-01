@@ -171,6 +171,18 @@ export function applyOutcomes(previous, outcomes) {
     if (!outcome || !JOBS.has(outcome.job)) continue;
     const prior = next[outcome.job] ?? {};
     const at = Number.isFinite(outcome.at) ? outcome.at : Date.now();
+    // Chronology guard (inherited defect, reproduced by Codex at main
+    // c1c92c5b): the fold is monotonic. An outcome OLDER than the
+    // recorded state (at < lastRunAt) is stale — a late completion
+    // landing after a newer outcome already folded — and must not
+    // rewind that state: folding it in array order moved lastRunAt
+    // backward and let an older success reset consecutiveFailures to
+    // 0, presenting a failing job as freshly succeeded. A stale
+    // outcome therefore folds nothing; its exact-ID attempt
+    // resolution below still runs, so the attempt-ID cure's handling
+    // is unchanged. An outcome at exactly lastRunAt is not stale and
+    // keeps the pre-existing fold semantics.
+    const stale = Number.isFinite(prior.lastRunAt) && at < prior.lastRunAt;
     // An unobserved success (#3927 R2) records the run — lastRunAt, the
     // summary, the duration — and nothing else: it carries no evidence
     // about the job's health, so it must neither erase a recorded
@@ -189,13 +201,14 @@ export function applyOutcomes(previous, outcomes) {
     // (runCronJobs records null); then the prior summary stands, still
     // labelled by its own lastSummaryAt.
     const failureSummary = outcome.ok ? null : compactSummary(outcome.summary);
-    const record = outcome.ok
+    const folded = outcome.ok
       ? outcome.unobserved
         ? { ...prior, lastRunAt: at, lastDurationMs: outcome.durationMs ?? null, lastSummary: compactSummary(outcome.summary), lastSummaryAt: at }
         : { ...prior, lastRunAt: at, lastSuccessAt: at, consecutiveFailures: 0, lastDurationMs: outcome.durationMs ?? null, lastSummary: compactSummary(outcome.summary), lastSummaryAt: at, lastFailure: null }
       : { ...prior, lastRunAt: at, lastErrorAt: at, lastError: redactError(outcome.error), consecutiveFailures: (prior.consecutiveFailures ?? 0) + 1,
         lastDurationMs: outcome.durationMs ?? null, lastFailure: sanitizeFailureDetail(outcome.failure),
         ...(failureSummary ? { lastSummary: failureSummary, lastSummaryAt: at } : {}) };
+    const record = stale ? { ...prior } : folded;
     // A committed outcome resolves the attempt recorded before its run —
     // but ONLY on an exact attempt-ID match. The outcome fold is
     // serialized, not instantaneous: a slow job's completion can land
@@ -220,7 +233,7 @@ export function applyOutcomes(previous, outcomes) {
     // streak, and a job whose summary has no `overdue` field at all
     // (every job but escrow-epochs today) never gains one. A summary
     // with overdue: 0 closes the streak.
-    const summary = outcome.ok ? record.lastSummary : failureSummary;
+    const summary = stale ? null : outcome.ok ? record.lastSummary : failureSummary;
     if (summary && Number.isFinite(summary.overdue)) {
       if (summary.overdue > 0) {
         record.overdueStreak = (prior.overdueStreak ?? 0) + 1;

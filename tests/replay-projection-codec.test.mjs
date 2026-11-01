@@ -87,3 +87,16 @@ test('fatal span decoding preserves a BOM inside a string but refuses one outsid
   const invalid=Buffer.concat([Buffer.from([239,187,191]),Buffer.from('{"body":"outside"}')]);
   assert.throws(()=>decodeProjectionSpan(invalid,{kind:'metadata',length:invalid.length}),/JSON|Unexpected/);
 });
+
+test('growing members, channels and work maps partition into bounded addressed entries',()=>{
+  for(const parent of ['members','channels','workItems']){
+    const source={room:{id:'synthetic'},[parent]:Object.fromEntries(Array.from({length:180},(_,i)=>['entry-'+i,{id:'entry-'+i,text:'x'.repeat(1024)}])),messages:[]};
+    const text=JSON.stringify(source);assert.ok(Buffer.byteLength(JSON.stringify(source[parent]))>131072);
+    const result=scan(text,997,3);
+    const entries=result.out.filter(x=>x.kind==='metadata-entry'&&x.key===parent);
+    assert.equal(entries.length,180,'RED: a growing top-level map must not be one oversized token');
+    assert.deepEqual(Object.fromEntries(entries.map(x=>[x.entryKey,x.value])),source[parent]);
+    assert.equal(result.out.find(x=>x.kind==='metadata-map'&&x.key===parent).entries,180);
+    assert.ok(result.maxFetched<2048);assert.ok(result.maxControl<=REPLAY_CODEC_CONTROL_BYTES);
+  }
+});

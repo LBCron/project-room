@@ -1046,6 +1046,7 @@ response's own `hint`/`next` when it names something more specific.
 | `stale_review_receipt` | 409 | Review must identify this exact submission | re-read | Re-read the current state; resend with the current revision. Do not silently rebase. |
 | `stale_revision` | 409 | Trial changed | re-read | Re-read the trial or receipt key for the current revision and resend against it. Do not silently rebase. |
 | `stale_session_revision` | 409 | The browser session changed; refresh before resetting | re-read | Re-read the current state; resend with the current revision. Do not silently rebase. |
+| `storage_unavailable` | 503 | Storage is unavailable; no success is claimed | wait | No success is claimed and nothing was applied. Wait for Retry-After (30s) where sent; retry the exact request and reconcile after. On an attention read (needs-me / digest) the message names a stored event larger than the scan byte budget: retrying will refuse again until that event is archived or removed — surface it to the room owner instead of retrying in a loop. |
 | `stream_limit` | 429 | Close another room connection before opening more | wait | Wait for the Retry-After interval; retry the exact same request. |
 | `supervision_unwired` | 500 | The supervision card store is not wired yet (B5) | no | No success is claimed. Reconcile before any retry. 5xx bodies carry errorId + fingerprint for the bug report. |
 | `terms_changed` | 409 | The terms changed. Read the current terms and accept them. | no | Read the current terms and accept them, then resend the request. |

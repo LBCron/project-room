@@ -1356,25 +1356,29 @@ export async function applyPullRequestWebhook(store, payload, { nowMs = Date.now
   const applied = [];
   let rows = [];
   try {
+    // CASE evaluates lazily: malformed records and non-object array elements
+    // must never reach json_extract (AND does not guarantee that ordering).
     rows = store.db.prepare(`
       SELECT room_id AS roomId, claim_id AS claimId
       FROM work_claims
-      WHERE (
+      WHERE CASE WHEN json_valid(item_json) THEN CASE WHEN json_type(item_json) = 'object' THEN (
         EXISTS (
           SELECT 1 FROM json_each(CASE WHEN json_type(item_json, '$.pullRequests') = 'array'
             THEN json_extract(item_json, '$.pullRequests') ELSE '[]' END)
-          WHERE json_extract(value, '$.url') = ? AND json_extract(value, '$.outcome') IS NULL
+          WHERE CASE WHEN type = 'object' THEN
+            json_extract(value, '$.url') = ? AND json_extract(value, '$.outcome') IS NULL ELSE 0 END
         )
         OR EXISTS (
           SELECT 1 FROM json_each(CASE WHEN json_type(item_json, '$.data.pullRequests') = 'array'
             THEN json_extract(item_json, '$.data.pullRequests') ELSE '[]' END)
-          WHERE json_extract(value, '$.url') = ? AND json_extract(value, '$.outcome') IS NULL
+          WHERE CASE WHEN type = 'object' THEN
+            json_extract(value, '$.url') = ? AND json_extract(value, '$.outcome') IS NULL ELSE 0 END
         )
         OR (json_extract(item_json, '$.pullRequest.url') = ?
             AND json_extract(item_json, '$.pullRequest.outcome') IS NULL)
         OR (json_extract(item_json, '$.data.pullRequest.url') = ?
             AND json_extract(item_json, '$.data.pullRequest.outcome') IS NULL)
-      )${publicNamespaceSqlExclusion(store)}
+      ) ELSE 0 END ELSE 0 END${publicNamespaceSqlExclusion(store)}
     `).all(decision.url, decision.url, decision.url, decision.url);
   } catch (error) {
     if (/no such table/i.test(error?.message ?? "")) return { applied: [] };

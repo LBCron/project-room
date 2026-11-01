@@ -82,8 +82,17 @@ export function servingProofDrift(db,roomId,projection) {
   const proof=db.prepare('SELECT metadata_hash FROM integrity_room_state WHERE room_id=?').get(roomId);
   if (proof?.metadata_hash && proof.metadata_hash!==projectionDigest(projection)) return true;
   const state=JSON.parse(projection);
-  if (state.messageAuthority) for (const row of db.prepare(`SELECT ${MESSAGE_PROOF_SELECT},entity_hash FROM messages WHERE room_id=? ORDER BY message_id`).iterate(roomId)) {
-    if (!messageProofMatches(row)) return true;
+  if (state.messageAuthority) {
+    const archive=state.messagesArchive, retained=new Set(archive?.retainedIds ?? []);
+    let count=0,visible=0;
+    for (const row of db.prepare(`SELECT ${MESSAGE_PROOF_SELECT},entity_hash FROM messages WHERE room_id=? ORDER BY message_id`).iterate(roomId)) {
+      if (!messageProofMatches(row)) return true;
+      count++;
+      if (!archive || row.seq>archive.throughSeq || retained.has(row.message_id)) visible++;
+    }
+    // Valid surviving rows cannot establish that a missing row never existed.
+    // Both retained and archived membership counts are bound by metadata.
+    if (visible!==state.messageAuthority.count || count!==state.messageAuthority.count+(archive?.count ?? 0)) return true;
   }
   const references=state.workItems ?? {};
   if (Object.values(references).some(record=>record?._workEntity===1)) {

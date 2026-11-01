@@ -56,6 +56,10 @@ for (const [version, baseline] of [[8, v8ConnectionBaseline], [9, v9TextBaseline
   assert.deepEqual(catalog(), oldCatalog); assert.deepEqual(oldAudit(f.store), before);
   assert.equal(cached.run(f.owner.session.account.id).changes, 1);
   const current = new RoomStore(f.filename, { now: f.now }); t.after(() => current.close());
+  const writeProofs = current.db.prepare("SELECT projection_hash,metadata_hash FROM integrity_room_state").all();
+  assert.equal(writeProofs.length, roomsBefore.length);
+  assert.ok(writeProofs.every(row => /^[a-f0-9]{64}$/.test(row.metadata_hash)), "legacy metadata gets prospective write protection");
+  assert.ok(writeProofs.every(row => row.projection_hash === null), "opening an old schema does not certify its historical content");
   // v28 adds rooms.archived_at, so the rooms digest differs by construction; its rows are compared column-wise below.
   // Channels arrived after these baselines were frozen, and opening an old
   // database materialises the default "general" channel into each room's

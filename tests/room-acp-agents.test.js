@@ -114,3 +114,22 @@ test("doctor with no ACP agent names the adapters and flags plain claude", async
   assert.match(text, /npm i -g @agentclientprotocol\/codex-acp@2\.5\.0/);
   assert.match(text, /--agent-cmd/);
 });
+
+test("spawnAgent preserves exact locale/location/fixture names and excludes arbitrary prefixed context", async t => {
+  const exact = ["LC_ALL", "LC_COLLATE", "LC_CTYPE", "LC_MESSAGES", "LC_MONETARY", "LC_NUMERIC", "LC_TIME",
+    "XDG_CONFIG_HOME", "XDG_DATA_HOME", "XDG_CACHE_HOME", "XDG_STATE_HOME", "XDG_RUNTIME_DIR", "XDG_CONFIG_DIRS", "XDG_DATA_DIRS",
+    "FAKE_ACP_MODE", "FAKE_ACP_DELAY_MS", "FAKE_ACP_TRACE"];
+  const excluded = ["LC_ROOM_TOKEN", "XDG_GITHUB_TOKEN", "FAKE_ACP_OPENAI_API_KEY", "LC_ALL_EXTRA", "XDG_CONFIG_HOME_TOKEN", "FAKE_ACP_MODE_SECRET"];
+  const env = { HOME: "/synthetic/home", CODEX_HOME: "/synthetic/chosen-codex", CODEX_PATH: "/synthetic/codex" };
+  for (const name of [...exact, ...excluded]) env[name] = "synthetic-placeholder-" + name.toLowerCase();
+  const dir = mkdtempSync(pathJoin(tmpdir(), "room-acp-exact-env-"));
+  t.after(() => rmSync(dir, { recursive: true, force: true }));
+  const { child, peer } = spawnAgent({ command: process.execPath,
+    args: ["-e", "require('node:fs').writeFileSync('observed.json',JSON.stringify(process.env))"] }, { cwd: dir, env });
+  t.after(() => { peer.close(); child.kill(); });
+  const code = await new Promise((resolve, reject) => child.once("exit", resolve).once("error", reject));
+  assert.equal(code, 0);
+  const observed = JSON.parse(readFileSync(pathJoin(dir, "observed.json"), "utf8"));
+  for (const name of [...exact, "HOME", "CODEX_HOME", "CODEX_PATH"]) assert.equal(observed[name], env[name], name);
+  for (const name of excluded) assert.equal(Object.hasOwn(observed, name), false, `${name} crossed to child`);
+});

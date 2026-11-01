@@ -431,8 +431,9 @@ for (const count of [1, 5]) test(`agent invitation clipboard handoff keeps ${cou
   for (const link of links) assert.equal(handoff.split(link).length - 1, 1);
   assert.equal(handoff.split('room_check_access').length - 1, count);
   assert.match(handoff, /read the shared brief/);
-  assert.match(handoff, /suggest a useful next task/);
-  assert.match(handoff, /explain the exact next step and wait/);
+  assert.match(handoff, /suggest useful work; do not claim work automatically/);
+  assert.match(handoff, /If a host capability is unsupported, say what is missing and the next action/);
+  assert.match(handoff, /do not invent an install link/);
   assert.doesNotMatch(handoff, /npx|agent-inbox\.mjs/);
   await page.getByRole('button', { name: count === 1 ? 'Copy link' : 'Copy all links', exact: true }).click();
   assert.equal(await page.evaluate(() => globalThis.inviteCopied.at(-1)), links.join('\n'));

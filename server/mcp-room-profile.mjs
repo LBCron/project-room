@@ -1,3 +1,5 @@
+import { SQL_BIND_CHUNK } from "./sql-binds.mjs";
+import { pageWorkListing, validWorkPage } from "./work-list-page.mjs";
 import { resolveMcpOAuthPrincipal, runMcpOAuthRequest, mcpOAuthToolAllowed, mcpOAuthPrincipalDescriptor, authorizeMcpOAuthDescriptor } from './mcp-oauth.mjs';
 import { handlePublicWorkMcp, isPublicWorkMcpTool } from './mcp-public-work.mjs';
 import { handleIdentityMintMcp, isIdentityMintMcpTool } from './mcp-identity-mint.mjs';
@@ -31,7 +33,7 @@ import { claimThread } from "./claim-thread.mjs";
 import { randomUUID } from "node:crypto";
 import { validId, ROOM_KINDS, MAX_MESSAGE_BODY_CHARS } from "../src/events.js";
 import { nextWorkStep } from "../src/workflow.js";
-import { completedResults, searchWork } from "../src/work-selectors.js";
+import { completedResults, searchWorkMatches as searchWork } from "../src/work-selectors.js";
 import { sortWorkByCuriosity, viewerHistory } from "../src/curiosity-rank.mjs";
 import { workHelpContext } from "../src/work-help.js";
 import { HOSTED_ROOM_MCP_TOOLS, HOSTED_MCP_FOLLOW_UPS, ROOM_MCP_SERVER_NAME, ROOM_MCP_SERVER_VERSION, canonicalMcpToolName, PUBLIC_WORK_MCP_TOOLS } from "../src/room-mcp-join.js";
@@ -229,7 +231,7 @@ function validRoomArgs(name, args) {
   if (name === "room_list_work") {
     const queryOk = args.query === undefined || typeof args.query === "string" && args.query.length <= 200 && args.query.trim().length > 0;
     const sortOk = args.sort === undefined || args.sort === "curiosity";
-    return (args.focus === undefined || ["all", "needs_me", "help_wanted", "results"].includes(args.focus)) && queryOk && sortOk;
+    return (args.focus === undefined || ["all", "needs_me", "help_wanted", "results"].includes(args.focus)) && queryOk && sortOk && validWorkPage(args);
   }
   if (name === "bond_propose") {
     const noteOk = args.note === undefined || typeof args.note === "string" && args.note.length <= 500;
@@ -430,14 +432,14 @@ function listWork(store, secret, args) {
     id: request.id, requesterId: request.requesterId, workItemId: request.workItemId, revision: request.revision,
     nextRead: { tool: "room_read_request", arguments: { requestMessageId: request.id } }
   })) ?? null;
-  return stampWorkListing({
+  return stampWorkListing(pageWorkListing({
     roomId: snapshot.roomId, evaluatedThrough: snapshot.sequence, focus,
     member: member ? { id: member.id, kind: member.kind, permissions: [...member.permissions] } : null,
     charter: snapshot.charter ?? null,
     ...(matches ? { selection: { query: args.query.trim(), matches: matches.total, shown: work.length } } : {}),
     ...(sort ? { sort } : {}),
     work, ...(focus === "needs_me" ? { replyRequests, replyRequestsEvaluatedThrough: replyListing.evaluatedThrough } : {})
-  });
+  }, args, secret, "hosted"));
 }
 
 // UFO-steal track 2 (RC-2026-09-27-2743): call-time tier denial mirroring
@@ -555,9 +557,19 @@ function dispatchRoomToolCall(store, secret, identity, name, args, agentRooms) {
     const rooms = store.identities.roomsForIdentity(identity.identityId).map(row => ({
       roomId: row.roomId, title: row.title ?? row.roomId, memberId: row.memberId
     })).filter(row => !allowed || allowed.includes(row.roomId));
+    // Archived rooms are read-only and accept no writes; listing them beside
+    // live rooms sent agents into 409 room_archived. Count them instead.
+    const archived = new Set();
+    for (let offset = 0; offset < rooms.length; offset += SQL_BIND_CHUNK) {
+      const chunk = rooms.slice(offset, offset + SQL_BIND_CHUNK);
+      for (const row of store.db.prepare(
+        `SELECT id FROM rooms WHERE archived_at IS NOT NULL AND id IN (${chunk.map(() => "?").join(",")})`
+      ).all(...chunk.map(row => row.roomId))) archived.add(row.id);
+    }
     return {
       contractVersion: 1, type: "agent_connection_check", status: "credential_accepted",
-      identityId: identity.identityId, displayName: identity.displayName, rooms,
+      identityId: identity.identityId, displayName: identity.displayName,
+      rooms: rooms.filter(row => !archived.has(row.roomId)), archivedRooms: archived.size,
       expiresAt: null, scope: "identity", externalExecution: false
     };
   }
@@ -907,6 +919,10 @@ function argumentFailure(requestId, name, args, schema) {
           report.missing.push(canonical);
       }
     }
+  }
+  if (name === "room_join" && !report.missing.length && !report.unexpected.length && !Object.keys(report.invalid).length
+    && args.linkToken === undefined && args.inviteCode === undefined && args.roomId === undefined && args.pairId === undefined) {
+    report.missing.push("linkToken or inviteCode");
   }
   if (!report.missing.length && !report.unexpected.length && !Object.keys(report.invalid).length) {
     report.invalid.arguments = "does not match the tool input";

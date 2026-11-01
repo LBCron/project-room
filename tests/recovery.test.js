@@ -105,7 +105,7 @@ test("online capture preserves all application tables, identity boundaries and e
       continue;
     }
     if (table.table === "integrity_room_state") {
-      assert.equal(table.rows, 0, "per-room integrity state is written by the cron, not on open");
+      assert.equal(table.rows, before.rooms, "room creation seeds scoped proof; the cron later advances it");
       continue;
     }
     if (table.table === "guest_link_exchanges") {
@@ -309,7 +309,7 @@ test("read-only open accepts a v34 backup written before the additive wake queue
   assert.deepEqual(objects(), [], "read-only verification is not migration");
   // Only the additive tables are optional: a wrong schema marker still fails.
   f.store.db.exec("PRAGMA user_version=27");
-  assert.throws(() => new RoomStore(f.filename, { readOnly: true }), /requires schema v42/);
+  assert.throws(() => new RoomStore(f.filename, { readOnly: true }), /requires schema v44/);
   f.store.db.exec("PRAGMA user_version=34");
   // A true v34 file carries v34 writer triggers, not v35 ones; the doctored
   // marker alone would leave the file self-inconsistent and the fence
@@ -318,7 +318,7 @@ test("read-only open accepts a v34 backup written before the additive wake queue
   // the file is self-consistent; the writable migration below reinstalls the
   // v36 set.
   const v34Tables = new Set(f.store.db.prepare("SELECT name FROM sqlite_master WHERE type='table'").all().map(row => row.name));
-  for (const row of f.store.db.prepare("SELECT name FROM sqlite_master WHERE type='trigger' AND (name GLOB 'writer_v3[89]_*' OR name GLOB 'writer_v4[012]_*')").all()) {
+  for (const row of f.store.db.prepare("SELECT name FROM sqlite_master WHERE type='trigger' AND (name GLOB 'writer_v3[89]_*' OR name GLOB 'writer_v4[01234]_*')").all()) {
     f.store.db.exec(`DROP TRIGGER "${row.name}"`);
   }
   for (const { name, sql } of fenceDefinitions(34)) {

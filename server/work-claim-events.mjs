@@ -56,6 +56,9 @@ export function workClaimEventData(item, action, { previousOwnerId = null, paths
       outcome: action === "pr_merged" ? "merged" : "closed"
     };
   }
+  // Kind is fixed at creation. Stamping it on land/deploy receipts lets a
+  // replay judge closeWhenLive moves after the registry row is deleted.
+  if (item.kind === "land" || item.kind === "deploy") data.kind = item.kind;
   if (reason) data.reason = reason;
   if (ciState) data.ciState = ciState;
   if (verdict) data.verdict = verdict;
@@ -242,8 +245,14 @@ function isResolvingClaimEvent(action, item, previousState) {
 
 // Handler unit tests drive the routes with a registry-only store; events need
 // the real event log, so a store without one records nothing here.
-export function emitWorkClaimEvent(store, roomId, { actorId, item, action, previousOwnerId = null, previousState = null, resolving = false, atMs = null, paths = undefined, pullRequest = undefined, reason = undefined, ciState = undefined, verdict = undefined, attention = undefined, attentionMemberId = undefined, coalesce = false }) {
+export function emitWorkClaimEvent(store, roomId, options) {
   if (!store?.db || typeof store.room !== "function") return null;
+  // Standalone receipt callers get atomic event/projection publication.
+  // Claim owners still wrap their registry transition in the outer transaction.
+  if (!store.db.isTransaction && typeof store.transaction === "function") {
+    return store.transaction(() => emitWorkClaimEvent(store, roomId, options));
+  }
+  const { actorId, item, action, previousOwnerId = null, previousState = null, resolving = false, atMs = null, paths = undefined, pullRequest = undefined, reason = undefined, ciState = undefined, verdict = undefined, attention = undefined, attentionMemberId = undefined, coalesce = false } = options;
   const stamp = Number.isFinite(atMs) ? atMs : (typeof store.now === "function" ? store.now() : Date.now());
   if (coalesce && claimEventCoalesced(store, roomId, item.id, action, stamp)) return null;
   const room = store.room(roomId);

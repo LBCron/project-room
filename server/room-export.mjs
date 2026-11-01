@@ -526,11 +526,19 @@ function insertOrder(names) {
 // acked / stranded) is derived from the wake tables themselves, which do
 // replay. Replay skips these and reports the row counts; the export itself
 // still holds the rows.
+export const PATROL_DERIVED_TABLES = Object.freeze(["patrol_idem_keys", "patrol_idem_coverage"]);
 export const REPLAY_SKIPPED_TABLES = Object.freeze([
   "room_runtime_version", "room_writer_permit",
   "emissary_drops", "emissary_idempotency", "emissary_invite_attribution",
   "emissary_journal", "external_identities", "external_receipts",
-  "abuse_rate_buckets", "agent_wake_counters", "agent_wake_failures"
+  "abuse_rate_buckets", "agent_wake_counters", "agent_wake_failures",
+  // Dot 25585: the patrol key index and its coverage are a rebuildable
+  // cache that certifies ABSENCE of earlier keys. Export pages are not one
+  // snapshot, so a supported import landing between the coverage page and
+  // the (alphabetically later) keys page yields old coverage over an
+  // emptied index. A restore never trusts them: it starts uncovered and the
+  // legacy catch-up rebuilds from the restored events.
+  ...PATROL_DERIVED_TABLES
 ]);
 
 const CLAIM_PERMIT_TABLE = "public_work_claim_writer_permit";
@@ -639,7 +647,7 @@ export function replayNdjson(ndjson, filename, { audit = "strict", retainTables 
     const existing = retained ?? new Set(tableNames(store.db));
     const skipped = {};
     for (const table of REPLAY_SKIPPED_TABLES) {
-      if (existing.has(table) || !byTable.has(table)) continue;
+      if (!byTable.has(table) || (existing.has(table) && !PATROL_DERIVED_TABLES.includes(table))) continue;
       skipped[table] = byTable.get(table).length;
       byTable.delete(table);
     }

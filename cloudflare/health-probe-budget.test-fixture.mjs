@@ -1,5 +1,19 @@
 import { DurableObject } from 'cloudflare:workers';
-import worker from './room.mjs';
+import worker, { ProjectRoom } from './room.mjs';
+
+const observations = [];
+let failTelemetry = false;
+const originalInfo = console.info.bind(console);
+console.info = (...args) => {
+  let row;
+  try { row = JSON.parse(args[0]); } catch { /* unrelated existing log */ }
+  if (row?.event === 'room.readiness_probe') {
+    if (failTelemetry) throw new Error('PRIVATE_TELEMETRY_FAILURE');
+    observations.push(row);
+    return;
+  }
+  originalInfo(...args);
+};
 export class BudgetProbe extends DurableObject {
   calls = 0;
   config = {};
@@ -23,9 +37,38 @@ export class BudgetProbe extends DurableObject {
   async readJobHealth() { await this.result(); return { schema: 'room.job-health/1', status: 'ok', jobs: [] }; }
   unblock() { this.release?.(); }
 }
+export class ObservedProjectRoom extends ProjectRoom {
+  exercise(mode) {
+    observations.length = 0;
+    const originalPrepare = this.store.db.prepare;
+    const originalPaused = this.paused;
+    const sentinel = new Error('PRIVATE_SQL_FAILURE');
+    let statements = 0;
+    this.store.db.prepare = (...args) => {
+      statements++;
+      if (mode === 'sql-error') throw sentinel;
+      return originalPrepare.apply(this.store.db, args);
+    };
+    this.paused = mode === 'paused';
+    failTelemetry = mode === 'emitter-error';
+    try {
+      const result = this.probeStorage();
+      return { result, statements, observations: [...observations] };
+    } catch (error) {
+      return { originalError: error === sentinel, statements, observations: [...observations] };
+    } finally {
+      this.store.db.prepare = originalPrepare;
+      this.paused = originalPaused;
+      failTelemetry = false;
+    }
+  }
+}
 export default {
   async fetch(request, env, ctx) {
     const path = new URL(request.url).pathname, stub = env.ROOM.getByName('invite-only-pilot');
+    if (path === '/observations') return Response.json(observations);
+    if (path === '/telemetry-failure') { failTelemetry = (await request.json()).enabled; return new Response('configured'); }
+    if (path === '/actual') return Response.json(await env.ACTUAL.getByName('actual').exercise(new URL(request.url).searchParams.get('mode')));
     if (path === '/configure') { await stub.configure(await request.json()); return new Response('configured'); }
     if (path === '/count') return Response.json({ count: await stub.count() });
     if (path === '/unblock') { await stub.unblock(); return new Response('released'); }

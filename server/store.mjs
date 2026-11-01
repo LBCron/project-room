@@ -1656,6 +1656,8 @@ this.slaBreachAlerts = new SlaBreachAlertJournal(this); // Task 26: durable in-a
     // Those scans are the integrity job's work. An older schema still migrates
     // and repairs here; that path runs once per upgrade, not on every wake.
     const deferIntegrity = this.integrityMode === "deferred" && version === STORE_SCHEMA_VERSION;
+    configureWriteIntegrity(this.db,(id,row,proof)=>Boolean(proof?.projection_hash && proof.sequence===row.sequence
+      && projectionContentHash(this.db,id,row.sequence,row.projection)===proof.projection_hash));
     try { this.transaction(() => {
     // Reread under the write lock: another startup may have upgraded while we waited.
     if (this.storagePlatform.version(this.db) !== version) throw new Error("Database changed during startup; retry with the current service");
@@ -1728,6 +1730,30 @@ this.slaBreachAlerts = new SlaBreachAlertJournal(this); // Task 26: durable in-a
       || this.db.prepare("SELECT 1 FROM rooms,json_tree(rooms.projection) WHERE json_tree.key='externalProducer' LIMIT 1").get()
       || version >= 2 && this.db.prepare("SELECT 1 FROM projection_checkpoints,json_tree(projection_checkpoints.projection) WHERE json_tree.key='externalProducer' LIMIT 1").get()))
       throw new Error("Pre-v26 outside credit history requires operator reconciliation");
+    // Establish prospective proofs before startup repairs, in the same
+    // transaction as schema/fence changes. Refusal must roll all of it back.
+    this.db.exec(INTEGRITY_JOB_CURSOR_SCHEMA);
+    this.ensureIntegrityRoomState();
+    // A genuine older schema has no prospective write proof. Record its
+    // current metadata before the first new writer, without inventing a
+    // historical content baseline: projection_hash deliberately stays NULL.
+    // Existing strong baselines must still match; current-schema missing
+    // proofs never enter this one-time format transition.
+    if (version < 44) {
+      const insert = this.db.prepare(`INSERT OR IGNORE INTO integrity_room_state(room_id,sequence,projection_bytes)
+        VALUES(?,?,?)`);
+      const update = this.db.prepare('UPDATE integrity_room_state SET metadata_hash=? WHERE room_id=? AND metadata_hash IS NULL');
+      for (const row of this.db.prepare('SELECT id,sequence,projection,LENGTH(projection) AS bytes FROM rooms').iterate()) {
+        const proof = this.db.prepare('SELECT sequence,projection_hash,metadata_hash FROM integrity_room_state WHERE room_id=?').get(row.id);
+        if (proof?.metadata_hash) continue;
+        if (proof?.projection_hash && (proof.sequence !== row.sequence
+          || projectionContentHash(this.db,row.id,row.sequence,row.projection) !== proof.projection_hash)) {
+          throw Error('projection_corrupt: legacy content does not match its baseline');
+        }
+        insert.run(row.id,row.sequence,row.bytes);
+        update.run(projectionDigest(row.projection),row.id);
+      }
+    }
     if (!deferIntegrity) this.repairProjectionProvenance({ upgradeV1: version === 1 });
     if (version === 1 || version === 2) this.migrateIdentityV3(version);
     if (version === 1 || version === 2 || version === 3) this.migrateInvitationsV4();
@@ -2269,28 +2295,6 @@ this.slaBreachAlerts = new SlaBreachAlertJournal(this); // Task 26: durable in-a
         console.error("work-item board backfill failed at open", error);
       }
     }
-    configureWriteIntegrity(this.db,(id,row,proof)=>Boolean(proof?.projection_hash && proof.sequence===row.sequence
-      && projectionContentHash(this.db,id,row.sequence,row.projection)===proof.projection_hash));
-    // A genuine older schema has no prospective write proof. Record its
-    // current metadata before the first new writer, without inventing a
-    // historical content baseline: projection_hash deliberately stays NULL.
-    // Existing strong baselines must still match; current-schema missing
-    // proofs never enter this one-time format transition.
-    if (version < 44) this.transaction(() => {
-      const insert = this.db.prepare(`INSERT OR IGNORE INTO integrity_room_state(room_id,sequence,projection_bytes)
-        VALUES(?,?,?)`);
-      const update = this.db.prepare('UPDATE integrity_room_state SET metadata_hash=? WHERE room_id=? AND metadata_hash IS NULL');
-      for (const row of this.db.prepare('SELECT id,sequence,projection,LENGTH(projection) AS bytes FROM rooms').iterate()) {
-        const proof = this.db.prepare('SELECT sequence,projection_hash,metadata_hash FROM integrity_room_state WHERE room_id=?').get(row.id);
-        if (proof?.metadata_hash) continue;
-        if (proof?.projection_hash && (proof.sequence !== row.sequence
-          || projectionContentHash(this.db,row.id,row.sequence,row.projection) !== proof.projection_hash)) {
-          throw Error('projection_corrupt: legacy content does not match its baseline');
-        }
-        insert.run(row.id,row.sequence,row.bytes);
-        update.run(projectionDigest(row.projection),row.id);
-      }
-    });
     configureWorkRepository(this.db, this.workEntities);
     if (this.workEntities && version < 42) this.migrateWorkProjections();
     // Legacy coldStart.durationMs ends before the backfill above. Keep it

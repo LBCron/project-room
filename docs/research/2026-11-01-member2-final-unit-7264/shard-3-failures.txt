@@ -1,0 +1,200 @@
+✖ failing tests:
+
+test at tests/checkpoint-channel-backfill.test.js:46:1
+✖ a room whose checkpoint predates channels can still be audited (269.558292ms)
+  Error: projection_corrupt: stored metadata does not match its write proof
+      at assertProjectionWrite (file:///Users/potter/Documents/Codex/2026-10-22/you-x20/work/mvp-final-unit-3/server/write-integrity.mjs:19:11)
+      at storedProjection (file:///Users/potter/Documents/Codex/2026-10-22/you-x20/work/mvp-final-unit-3/server/projection-at-rest.mjs:179:3)
+      at RoomStore.storedProjection (file:///Users/potter/Documents/Codex/2026-10-22/you-x20/work/mvp-final-unit-3/server/store.mjs:4147:12)
+      at RoomStore.repairProjectionShape (file:///Users/potter/Documents/Codex/2026-10-22/you-x20/work/mvp-final-unit-3/server/store.mjs:3785:23)
+      at file:///Users/potter/Documents/Codex/2026-10-22/you-x20/work/mvp-final-unit-3/server/store.mjs:3677:12
+      at run (file:///Users/potter/Documents/Codex/2026-10-22/you-x20/work/mvp-final-unit-3/server/store.mjs:693:22)
+      at Object.transaction (file:///Users/potter/Documents/Codex/2026-10-22/you-x20/work/mvp-final-unit-3/server/store.mjs:699:29)
+      at RoomStore.transaction (file:///Users/potter/Documents/Codex/2026-10-22/you-x20/work/mvp-final-unit-3/server/store.mjs:3981:41)
+      at RoomStore.repairProjectionProvenance (file:///Users/potter/Documents/Codex/2026-10-22/you-x20/work/mvp-final-unit-3/server/store.mjs:3657:10)
+      at file:///Users/potter/Documents/Codex/2026-10-22/you-x20/work/mvp-final-unit-3/server/store.mjs:1743:31
+
+test at tests/checkpoint-channel-backfill.test.js:53:1
+✖ the replay and the stored projection agree about the default channel (232.98375ms)
+  Error: projection_corrupt: stored metadata does not match its write proof
+      at assertProjectionWrite (file:///Users/potter/Documents/Codex/2026-10-22/you-x20/work/mvp-final-unit-3/server/write-integrity.mjs:19:11)
+      at storedProjection (file:///Users/potter/Documents/Codex/2026-10-22/you-x20/work/mvp-final-unit-3/server/projection-at-rest.mjs:179:3)
+      at RoomStore.storedProjection (file:///Users/potter/Documents/Codex/2026-10-22/you-x20/work/mvp-final-unit-3/server/store.mjs:4147:12)
+      at RoomStore.repairProjectionShape (file:///Users/potter/Documents/Codex/2026-10-22/you-x20/work/mvp-final-unit-3/server/store.mjs:3785:23)
+      at file:///Users/potter/Documents/Codex/2026-10-22/you-x20/work/mvp-final-unit-3/server/store.mjs:3677:12
+      at run (file:///Users/potter/Documents/Codex/2026-10-22/you-x20/work/mvp-final-unit-3/server/store.mjs:693:22)
+      at Object.transaction (file:///Users/potter/Documents/Codex/2026-10-22/you-x20/work/mvp-final-unit-3/server/store.mjs:699:29)
+      at RoomStore.transaction (file:///Users/potter/Documents/Codex/2026-10-22/you-x20/work/mvp-final-unit-3/server/store.mjs:3981:41)
+      at RoomStore.repairProjectionProvenance (file:///Users/potter/Documents/Codex/2026-10-22/you-x20/work/mvp-final-unit-3/server/store.mjs:3657:10)
+      at file:///Users/potter/Documents/Codex/2026-10-22/you-x20/work/mvp-final-unit-3/server/store.mjs:1743:31
+
+test at tests/checkpoint-channel-backfill.test.js:67:1
+✖ the checkpoint row itself is left alone (197.718791ms)
+  Error: projection_corrupt: stored metadata does not match its write proof
+      at assertProjectionWrite (file:///Users/potter/Documents/Codex/2026-10-22/you-x20/work/mvp-final-unit-3/server/write-integrity.mjs:19:11)
+      at storedProjection (file:///Users/potter/Documents/Codex/2026-10-22/you-x20/work/mvp-final-unit-3/server/projection-at-rest.mjs:179:3)
+      at RoomStore.storedProjection (file:///Users/potter/Documents/Codex/2026-10-22/you-x20/work/mvp-final-unit-3/server/store.mjs:4147:12)
+      at RoomStore.repairProjectionShape (file:///Users/potter/Documents/Codex/2026-10-22/you-x20/work/mvp-final-unit-3/server/store.mjs:3785:23)
+      at file:///Users/potter/Documents/Codex/2026-10-22/you-x20/work/mvp-final-unit-3/server/store.mjs:3677:12
+      at run (file:///Users/potter/Documents/Codex/2026-10-22/you-x20/work/mvp-final-unit-3/server/store.mjs:693:22)
+      at Object.transaction (file:///Users/potter/Documents/Codex/2026-10-22/you-x20/work/mvp-final-unit-3/server/store.mjs:699:29)
+      at RoomStore.transaction (file:///Users/potter/Documents/Codex/2026-10-22/you-x20/work/mvp-final-unit-3/server/store.mjs:3981:41)
+      at RoomStore.repairProjectionProvenance (file:///Users/potter/Documents/Codex/2026-10-22/you-x20/work/mvp-final-unit-3/server/store.mjs:3657:10)
+      at file:///Users/potter/Documents/Codex/2026-10-22/you-x20/work/mvp-final-unit-3/server/store.mjs:1743:31
+
+test at tests/invitation-journal.test.js:106:58
+✖ v4 accepted migration preserves authority bytes and honestly marks its baseline (205.710375ms)
+  Error: projection_corrupt: legacy content does not match its baseline
+      at bootstrapLegacyWriteProofs (file:///Users/potter/Documents/Codex/2026-10-22/you-x20/work/mvp-final-unit-3/server/write-integrity.mjs:148:13)
+      at file:///Users/potter/Documents/Codex/2026-10-22/you-x20/work/mvp-final-unit-3/server/store.mjs:1742:23
+      at run (file:///Users/potter/Documents/Codex/2026-10-22/you-x20/work/mvp-final-unit-3/server/store.mjs:693:22)
+      at Object.transaction (file:///Users/potter/Documents/Codex/2026-10-22/you-x20/work/mvp-final-unit-3/server/store.mjs:720:22)
+      at RoomStore.transaction (file:///Users/potter/Documents/Codex/2026-10-22/you-x20/work/mvp-final-unit-3/server/store.mjs:3981:41)
+      at new RoomStore (file:///Users/potter/Documents/Codex/2026-10-22/you-x20/work/mvp-final-unit-3/server/store.mjs:1661:16)
+      at Object.reopen (file:///Users/potter/Documents/Codex/2026-10-22/you-x20/work/mvp-final-unit-3/tests/invitation-journal.test.js:41:29)
+      at TestContext.<anonymous> (file:///Users/potter/Documents/Codex/2026-10-22/you-x20/work/mvp-final-unit-3/tests/invitation-journal.test.js:116:22)
+      at Test.runInAsyncScope (node:async_hooks:227:14)
+      at Test.run (node:internal/test_runner/test:1402:25)
+
+test at tests/patrol.test.js:767:3
+✖ a land claim closed by closeWhenLive from claimed files nothing (147.988208ms)
+  AssertionError [ERR_ASSERTION]: Expected values to be strictly equal:
+  + actual - expected
+  
+  + undefined
+  - 'done'
+  
+      at TestContext.<anonymous> (file:///Users/potter/Documents/Codex/2026-10-22/you-x20/work/mvp-final-unit-3/tests/patrol.test.js:772:14)
+      at Test.runInAsyncScope (node:async_hooks:227:14)
+      at Test.run (node:internal/test_runner/test:1402:25)
+      at Test.processPendingSubtests (node:internal/test_runner/test:974:18)
+      at Test.postRun (node:internal/test_runner/test:1542:19)
+      at Test.run (node:internal/test_runner/test:1467:12)
+      at async Test.processPendingSubtests (node:internal/test_runner/test:974:7) {
+    generatedMessage: true,
+    code: 'ERR_ASSERTION',
+    actual: undefined,
+    expected: 'done',
+    operator: 'strictEqual',
+    diff: 'simple'
+  }
+
+test at tests/patrol.test.js:767:3
+✖ a deploy claim closed by closeWhenLive from claimed files nothing (161.09175ms)
+  AssertionError [ERR_ASSERTION]: Expected values to be strictly equal:
+  + actual - expected
+  
+  + undefined
+  - 'done'
+  
+      at TestContext.<anonymous> (file:///Users/potter/Documents/Codex/2026-10-22/you-x20/work/mvp-final-unit-3/tests/patrol.test.js:772:14)
+      at Test.runInAsyncScope (node:async_hooks:227:14)
+      at Test.run (node:internal/test_runner/test:1402:25)
+      at Test.processPendingSubtests (node:internal/test_runner/test:974:18)
+      at Test.postRun (node:internal/test_runner/test:1542:19)
+      at Test.run (node:internal/test_runner/test:1467:12)
+      at async Test.processPendingSubtests (node:internal/test_runner/test:974:7) {
+    generatedMessage: true,
+    code: 'ERR_ASSERTION',
+    actual: undefined,
+    expected: 'done',
+    operator: 'strictEqual',
+    diff: 'simple'
+  }
+
+test at tests/patrol.test.js:795:3
+✖ a live-closed land claim whose row was deleted replays clean (kind on the receipt) (152.70325ms)
+  TypeError [Error]: work claim item needs an id
+      at Object.set (file:///Users/potter/Documents/Codex/2026-10-22/you-x20/work/mvp-final-unit-3/server/work-claim-sqlite.mjs:227:55)
+      at driveClaim (file:///Users/potter/Documents/Codex/2026-10-22/you-x20/work/mvp-final-unit-3/tests/patrol.test.js:42:20)
+      at TestContext.<anonymous> (file:///Users/potter/Documents/Codex/2026-10-22/you-x20/work/mvp-final-unit-3/tests/patrol.test.js:800:7)
+      at Test.runInAsyncScope (node:async_hooks:227:14)
+      at Test.run (node:internal/test_runner/test:1402:25)
+      at Test.processPendingSubtests (node:internal/test_runner/test:974:18)
+      at Test.postRun (node:internal/test_runner/test:1542:19)
+      at Test.run (node:internal/test_runner/test:1467:12)
+      at async Test.processPendingSubtests (node:internal/test_runner/test:974:7)
+
+test at tests/patrol.test.js:795:3
+✖ a live-closed land claim whose row was deleted replays clean (legacy unstamped receipt) (134.610083ms)
+  TypeError [Error]: work claim item needs an id
+      at Object.set (file:///Users/potter/Documents/Codex/2026-10-22/you-x20/work/mvp-final-unit-3/server/work-claim-sqlite.mjs:227:55)
+      at driveClaim (file:///Users/potter/Documents/Codex/2026-10-22/you-x20/work/mvp-final-unit-3/tests/patrol.test.js:42:20)
+      at TestContext.<anonymous> (file:///Users/potter/Documents/Codex/2026-10-22/you-x20/work/mvp-final-unit-3/tests/patrol.test.js:800:7)
+      at Test.runInAsyncScope (node:async_hooks:227:14)
+      at Test.run (node:internal/test_runner/test:1402:25)
+      at Test.processPendingSubtests (node:internal/test_runner/test:974:18)
+      at Test.postRun (node:internal/test_runner/test:1542:19)
+      at Test.run (node:internal/test_runner/test:1467:12)
+      at async Test.processPendingSubtests (node:internal/test_runner/test:974:7)
+
+test at tests/production-schema-compat.test.js:13:1
+✖ rebuilt service opens deployed schema v33 and converges it without data loss (279.026083ms)
+  Error: projection_corrupt: legacy content does not match its baseline
+      at bootstrapLegacyWriteProofs (file:///Users/potter/Documents/Codex/2026-10-22/you-x20/work/mvp-final-unit-3/server/write-integrity.mjs:148:13)
+      at file:///Users/potter/Documents/Codex/2026-10-22/you-x20/work/mvp-final-unit-3/server/store.mjs:1742:23
+      at run (file:///Users/potter/Documents/Codex/2026-10-22/you-x20/work/mvp-final-unit-3/server/store.mjs:693:22)
+      at Object.transaction (file:///Users/potter/Documents/Codex/2026-10-22/you-x20/work/mvp-final-unit-3/server/store.mjs:720:22)
+      at RoomStore.transaction (file:///Users/potter/Documents/Codex/2026-10-22/you-x20/work/mvp-final-unit-3/server/store.mjs:3981:41)
+      at new RoomStore (file:///Users/potter/Documents/Codex/2026-10-22/you-x20/work/mvp-final-unit-3/server/store.mjs:1661:16)
+      at TestContext.<anonymous> (file:///Users/potter/Documents/Codex/2026-10-22/you-x20/work/mvp-final-unit-3/tests/production-schema-compat.test.js:24:19)
+      at Test.runInAsyncScope (node:async_hooks:227:14)
+      at Test.run (node:internal/test_runner/test:1402:25)
+      at Test.start (node:internal/test_runner/test:1262:17)
+
+test at tests/proposed-by.test.js:64:1
+✖ reopening a pre-upgrade database repairs provenance from each item's own proposal envelope (182.536666ms)
+  Error: projection_corrupt: stored metadata does not match its write proof
+      at assertProjectionWrite (file:///Users/potter/Documents/Codex/2026-10-22/you-x20/work/mvp-final-unit-3/server/write-integrity.mjs:19:11)
+      at storedProjection (file:///Users/potter/Documents/Codex/2026-10-22/you-x20/work/mvp-final-unit-3/server/projection-at-rest.mjs:179:3)
+      at RoomStore.storedProjection (file:///Users/potter/Documents/Codex/2026-10-22/you-x20/work/mvp-final-unit-3/server/store.mjs:4147:12)
+      at RoomStore.replayProvenance (file:///Users/potter/Documents/Codex/2026-10-22/you-x20/work/mvp-final-unit-3/server/store.mjs:3827:65)
+      at file:///Users/potter/Documents/Codex/2026-10-22/you-x20/work/mvp-final-unit-3/server/store.mjs:3680:12
+      at run (file:///Users/potter/Documents/Codex/2026-10-22/you-x20/work/mvp-final-unit-3/server/store.mjs:693:22)
+      at Object.transaction (file:///Users/potter/Documents/Codex/2026-10-22/you-x20/work/mvp-final-unit-3/server/store.mjs:699:29)
+      at RoomStore.transaction (file:///Users/potter/Documents/Codex/2026-10-22/you-x20/work/mvp-final-unit-3/server/store.mjs:3981:41)
+      at RoomStore.repairProjectionProvenance (file:///Users/potter/Documents/Codex/2026-10-22/you-x20/work/mvp-final-unit-3/server/store.mjs:3657:10)
+      at file:///Users/potter/Documents/Codex/2026-10-22/you-x20/work/mvp-final-unit-3/server/store.mjs:1743:31
+
+test at tests/proposed-by.test.js:83:1
+✖ reopening a pre-upgrade database separates legacy reporters from unknown producers (210.848209ms)
+  Error: projection_corrupt: stored metadata does not match its write proof
+      at assertProjectionWrite (file:///Users/potter/Documents/Codex/2026-10-22/you-x20/work/mvp-final-unit-3/server/write-integrity.mjs:19:11)
+      at storedProjection (file:///Users/potter/Documents/Codex/2026-10-22/you-x20/work/mvp-final-unit-3/server/projection-at-rest.mjs:179:3)
+      at RoomStore.storedProjection (file:///Users/potter/Documents/Codex/2026-10-22/you-x20/work/mvp-final-unit-3/server/store.mjs:4147:12)
+      at RoomStore.replayProvenance (file:///Users/potter/Documents/Codex/2026-10-22/you-x20/work/mvp-final-unit-3/server/store.mjs:3827:65)
+      at file:///Users/potter/Documents/Codex/2026-10-22/you-x20/work/mvp-final-unit-3/server/store.mjs:3680:12
+      at run (file:///Users/potter/Documents/Codex/2026-10-22/you-x20/work/mvp-final-unit-3/server/store.mjs:693:22)
+      at Object.transaction (file:///Users/potter/Documents/Codex/2026-10-22/you-x20/work/mvp-final-unit-3/server/store.mjs:699:29)
+      at RoomStore.transaction (file:///Users/potter/Documents/Codex/2026-10-22/you-x20/work/mvp-final-unit-3/server/store.mjs:3981:41)
+      at RoomStore.repairProjectionProvenance (file:///Users/potter/Documents/Codex/2026-10-22/you-x20/work/mvp-final-unit-3/server/store.mjs:3657:10)
+      at file:///Users/potter/Documents/Codex/2026-10-22/you-x20/work/mvp-final-unit-3/server/store.mjs:1743:31
+
+test at tests/proposed-by.test.js:120:1
+✖ reopening backfills verification independence only from explicit producer provenance (243.105083ms)
+  Error: projection_corrupt: stored metadata does not match its write proof
+      at assertProjectionWrite (file:///Users/potter/Documents/Codex/2026-10-22/you-x20/work/mvp-final-unit-3/server/write-integrity.mjs:19:11)
+      at storedProjection (file:///Users/potter/Documents/Codex/2026-10-22/you-x20/work/mvp-final-unit-3/server/projection-at-rest.mjs:179:3)
+      at RoomStore.storedProjection (file:///Users/potter/Documents/Codex/2026-10-22/you-x20/work/mvp-final-unit-3/server/store.mjs:4147:12)
+      at RoomStore.replayProvenance (file:///Users/potter/Documents/Codex/2026-10-22/you-x20/work/mvp-final-unit-3/server/store.mjs:3827:65)
+      at file:///Users/potter/Documents/Codex/2026-10-22/you-x20/work/mvp-final-unit-3/server/store.mjs:3680:12
+      at run (file:///Users/potter/Documents/Codex/2026-10-22/you-x20/work/mvp-final-unit-3/server/store.mjs:693:22)
+      at Object.transaction (file:///Users/potter/Documents/Codex/2026-10-22/you-x20/work/mvp-final-unit-3/server/store.mjs:699:29)
+      at RoomStore.transaction (file:///Users/potter/Documents/Codex/2026-10-22/you-x20/work/mvp-final-unit-3/server/store.mjs:3981:41)
+      at RoomStore.repairProjectionProvenance (file:///Users/potter/Documents/Codex/2026-10-22/you-x20/work/mvp-final-unit-3/server/store.mjs:3657:10)
+      at file:///Users/potter/Documents/Codex/2026-10-22/you-x20/work/mvp-final-unit-3/server/store.mjs:1743:31
+
+test at tests/share-links.test.js:374:1
+✖ v34 databases migrate share-link and invitation history to v36 with issuer columns nullable (285.714209ms)
+  Error: projection_corrupt: legacy content does not match its baseline
+      at bootstrapLegacyWriteProofs (file:///Users/potter/Documents/Codex/2026-10-22/you-x20/work/mvp-final-unit-3/server/write-integrity.mjs:148:13)
+      at file:///Users/potter/Documents/Codex/2026-10-22/you-x20/work/mvp-final-unit-3/server/store.mjs:1742:23
+      at run (file:///Users/potter/Documents/Codex/2026-10-22/you-x20/work/mvp-final-unit-3/server/store.mjs:693:22)
+      at Object.transaction (file:///Users/potter/Documents/Codex/2026-10-22/you-x20/work/mvp-final-unit-3/server/store.mjs:720:22)
+      at RoomStore.transaction (file:///Users/potter/Documents/Codex/2026-10-22/you-x20/work/mvp-final-unit-3/server/store.mjs:3981:41)
+      at new RoomStore (file:///Users/potter/Documents/Codex/2026-10-22/you-x20/work/mvp-final-unit-3/server/store.mjs:1661:16)
+      at TestContext.<anonymous> (file:///Users/potter/Documents/Codex/2026-10-22/you-x20/work/mvp-final-unit-3/tests/share-links.test.js:428:17)
+      at process.processTicksAndRejections (node:internal/process/task_queues:104:5)
+      at async Test.run (node:internal/test_runner/test:1409:7)
+      at async Test.processPendingSubtests (node:internal/test_runner/test:974:7)
+unit-ci: shard 3/3 exit 1 in 140s

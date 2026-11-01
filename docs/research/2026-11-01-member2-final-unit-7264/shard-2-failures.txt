@@ -1,0 +1,62 @@
+✖ failing tests:
+
+test at tests/mcp-invite-oauth.test.js:124:1
+✖ accountless native agent discovers work, submits, revises and reads exact independent approval (541.772625ms)
+  Error: Independent verification requires a verifier different from the human decision-maker
+      at fail (file:///Users/potter/Documents/Codex/2026-10-22/you-x20/work/mvp-final-unit-2/server/store.mjs:455:49)
+      at file:///Users/potter/Documents/Codex/2026-10-22/you-x20/work/mvp-final-unit-2/server/store.mjs:7169:9
+      at run (file:///Users/potter/Documents/Codex/2026-10-22/you-x20/work/mvp-final-unit-2/server/store.mjs:693:22)
+      at Object.transaction (file:///Users/potter/Documents/Codex/2026-10-22/you-x20/work/mvp-final-unit-2/server/store.mjs:720:22)
+      at RoomStore.transaction (file:///Users/potter/Documents/Codex/2026-10-22/you-x20/work/mvp-final-unit-2/server/store.mjs:3981:41)
+      at RoomStore.command (file:///Users/potter/Documents/Codex/2026-10-22/you-x20/work/mvp-final-unit-2/server/store.mjs:6891:17)
+      at TestContext.<anonymous> (file:///Users/potter/Documents/Codex/2026-10-22/you-x20/work/mvp-final-unit-2/tests/mcp-invite-oauth.test.js:137:11)
+      at process.processTicksAndRejections (node:internal/process/task_queues:104:5)
+      at async Test.run (node:internal/test_runner/test:1409:7)
+      at async Test.processPendingSubtests (node:internal/test_runner/test:974:7) {
+    status: 422,
+    code: 'command_rejected',
+    headers: null
+  }
+
+test at tests/recovery.test.js:290:1
+✖ read-only open accepts a v34 backup written before the additive wake queue and attention tables (766.0235ms)
+  Error: projection_corrupt: legacy content does not match its baseline
+      at bootstrapLegacyWriteProofs (file:///Users/potter/Documents/Codex/2026-10-22/you-x20/work/mvp-final-unit-2/server/write-integrity.mjs:148:13)
+      at file:///Users/potter/Documents/Codex/2026-10-22/you-x20/work/mvp-final-unit-2/server/store.mjs:1742:23
+      at run (file:///Users/potter/Documents/Codex/2026-10-22/you-x20/work/mvp-final-unit-2/server/store.mjs:693:22)
+      at Object.transaction (file:///Users/potter/Documents/Codex/2026-10-22/you-x20/work/mvp-final-unit-2/server/store.mjs:720:22)
+      at RoomStore.transaction (file:///Users/potter/Documents/Codex/2026-10-22/you-x20/work/mvp-final-unit-2/server/store.mjs:3981:41)
+      at new RoomStore (file:///Users/potter/Documents/Codex/2026-10-22/you-x20/work/mvp-final-unit-2/server/store.mjs:1661:16)
+      at TestContext.<anonymous> (file:///Users/potter/Documents/Codex/2026-10-22/you-x20/work/mvp-final-unit-2/tests/recovery.test.js:328:20)
+      at Test.runInAsyncScope (node:async_hooks:227:14)
+      at Test.run (node:internal/test_runner/test:1402:25)
+      at Test.processPendingSubtests (node:internal/test_runner/test:974:18)
+
+test at tests/schema-migration-v33-v35.test.js:385:1
+✖ a v33 database migrates to the current schema with every row intact (274.100041ms)
+  Error: projection_corrupt: legacy content does not match its baseline
+      at bootstrapLegacyWriteProofs (file:///Users/potter/Documents/Codex/2026-10-22/you-x20/work/mvp-final-unit-2/server/write-integrity.mjs:148:13)
+      at file:///Users/potter/Documents/Codex/2026-10-22/you-x20/work/mvp-final-unit-2/server/store.mjs:1742:23
+      at run (file:///Users/potter/Documents/Codex/2026-10-22/you-x20/work/mvp-final-unit-2/server/store.mjs:693:22)
+      at Object.transaction (file:///Users/potter/Documents/Codex/2026-10-22/you-x20/work/mvp-final-unit-2/server/store.mjs:720:22)
+      at RoomStore.transaction (file:///Users/potter/Documents/Codex/2026-10-22/you-x20/work/mvp-final-unit-2/server/store.mjs:3981:41)
+      at new RoomStore (file:///Users/potter/Documents/Codex/2026-10-22/you-x20/work/mvp-final-unit-2/server/store.mjs:1661:16)
+      at assertMigrated (file:///Users/potter/Documents/Codex/2026-10-22/you-x20/work/mvp-final-unit-2/tests/schema-migration-v33-v35.test.js:288:17)
+      at TestContext.<anonymous> (file:///Users/potter/Documents/Codex/2026-10-22/you-x20/work/mvp-final-unit-2/tests/schema-migration-v33-v35.test.js:390:3)
+      at Test.runInAsyncScope (node:async_hooks:227:14)
+      at Test.run (node:internal/test_runner/test:1402:25)
+
+test at tests/schema-migration-v33-v35.test.js:393:1
+✖ a v34 database migrates to the current schema with every row intact (273.402667ms)
+  Error: projection_corrupt: legacy content does not match its baseline
+      at bootstrapLegacyWriteProofs (file:///Users/potter/Documents/Codex/2026-10-22/you-x20/work/mvp-final-unit-2/server/write-integrity.mjs:148:13)
+      at file:///Users/potter/Documents/Codex/2026-10-22/you-x20/work/mvp-final-unit-2/server/store.mjs:1742:23
+      at run (file:///Users/potter/Documents/Codex/2026-10-22/you-x20/work/mvp-final-unit-2/server/store.mjs:693:22)
+      at Object.transaction (file:///Users/potter/Documents/Codex/2026-10-22/you-x20/work/mvp-final-unit-2/server/store.mjs:720:22)
+      at RoomStore.transaction (file:///Users/potter/Documents/Codex/2026-10-22/you-x20/work/mvp-final-unit-2/server/store.mjs:3981:41)
+      at new RoomStore (file:///Users/potter/Documents/Codex/2026-10-22/you-x20/work/mvp-final-unit-2/server/store.mjs:1661:16)
+      at assertMigrated (file:///Users/potter/Documents/Codex/2026-10-22/you-x20/work/mvp-final-unit-2/tests/schema-migration-v33-v35.test.js:288:17)
+      at TestContext.<anonymous> (file:///Users/potter/Documents/Codex/2026-10-22/you-x20/work/mvp-final-unit-2/tests/schema-migration-v33-v35.test.js:396:3)
+      at Test.runInAsyncScope (node:async_hooks:227:14)
+      at Test.run (node:internal/test_runner/test:1402:25)
+unit-ci: shard 2/3 exit 1 in 136s

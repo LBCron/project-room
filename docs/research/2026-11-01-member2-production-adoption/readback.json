@@ -1,0 +1,509 @@
+{
+  "expectedSource": "c1c92c5b65fb6c4fbe87e78cddced8496f0ab51c",
+  "reader": "Member2",
+  "method": "Read-only HTTPS GET; no reset or recovery mutation",
+  "firstObservedBothDoAdoptionAt": "2026-11-01T05:56:11.991Z",
+  "state": "source-adopted-readiness-and-job-health-ok",
+  "samples": [
+    {
+      "at": "2026-11-01T05:51:36.472Z",
+      "readings": [
+        {
+          "url": "https://room.trydemigod.com/api/version/worker",
+          "ms": 79,
+          "sourceRevision": "c1c92c5b65fb6c4fbe87e78cddced8496f0ab51c",
+          "buildId": "2026-11-01T05:50:46.811Z",
+          "httpStatus": 200,
+          "versionStatus": "ok"
+        },
+        {
+          "url": "https://room.trydemigod.com/api/version",
+          "ms": 444,
+          "sourceRevision": "1ab906c37b5c5bdfe07f1b12808c8855128a713f",
+          "buildId": "2026-10-31T08:29:22.284Z",
+          "httpStatus": 200,
+          "versionStatus": "ok"
+        },
+        {
+          "url": "https://room.trydemigod.com/api/ready",
+          "ms": 443,
+          "ready": "ready",
+          "do": {
+            "status": "ok",
+            "statusCode": 200,
+            "ms": 364
+          },
+          "emailVerification": "enforced",
+          "httpStatus": 200
+        },
+        {
+          "url": "https://room.trydemigod.com/api/health",
+          "ms": 442,
+          "healthStatus": "degraded",
+          "liveness": "ok",
+          "jobs": {
+            "status": "stale"
+          },
+          "httpStatus": 200
+        },
+        {
+          "url": "https://room.trydemigod.com/api/health/jobs",
+          "ms": 515,
+          "jobHealthStatus": "stale",
+          "integrity": {
+            "lastRunAt": "2026-10-31T19:00:35.769Z",
+            "lastSuccessAt": "2026-10-31T19:00:35.769Z",
+            "lastErrorAt": "2026-10-31T07:00:39.529Z",
+            "lastErrorCurrent": false,
+            "lastErrorCode": null,
+            "lastDurationMs": 0,
+            "consecutiveFailures": 0,
+            "stale": true,
+            "status": "stale"
+          },
+          "httpStatus": 503
+        },
+        {
+          "url": "https://www.getdasha.com/room/api/version/worker",
+          "ms": 306,
+          "sourceRevision": "c1c92c5b65fb6c4fbe87e78cddced8496f0ab51c",
+          "buildId": "2026-11-01T05:50:57.181Z",
+          "httpStatus": 200,
+          "versionStatus": "ok"
+        },
+        {
+          "url": "https://www.getdasha.com/room/api/version",
+          "ms": 442,
+          "sourceRevision": "1ab906c37b5c5bdfe07f1b12808c8855128a713f",
+          "buildId": "2026-10-31T08:29:22.284Z",
+          "httpStatus": 200,
+          "versionStatus": "ok"
+        },
+        {
+          "url": "https://www.getdasha.com/room/api/ready",
+          "ms": 442,
+          "ready": "ready",
+          "do": {
+            "status": "ok",
+            "statusCode": 200,
+            "ms": 360
+          },
+          "emailVerification": "enforced",
+          "httpStatus": 200
+        },
+        {
+          "url": "https://www.getdasha.com/room/api/health",
+          "ms": 442,
+          "healthStatus": "degraded",
+          "liveness": "ok",
+          "jobs": {
+            "status": "stale"
+          },
+          "httpStatus": 200
+        },
+        {
+          "url": "https://www.getdasha.com/room/api/health/jobs",
+          "ms": 438,
+          "jobHealthStatus": "stale",
+          "integrity": {
+            "lastRunAt": "2026-10-31T19:00:35.769Z",
+            "lastSuccessAt": "2026-10-31T19:00:35.769Z",
+            "lastErrorAt": "2026-10-31T07:00:39.529Z",
+            "lastErrorCurrent": false,
+            "lastErrorCode": null,
+            "lastDurationMs": 0,
+            "consecutiveFailures": 0,
+            "stale": true,
+            "status": "stale"
+          },
+          "httpStatus": 503
+        }
+      ]
+    },
+    {
+      "at": "2026-11-01T05:53:11.214Z",
+      "readings": [
+        {
+          "url": "https://room.trydemigod.com/api/version/worker",
+          "ms": 86,
+          "sourceRevision": "c1c92c5b65fb6c4fbe87e78cddced8496f0ab51c",
+          "buildId": "2026-11-01T05:50:46.811Z",
+          "httpStatus": 200,
+          "versionStatus": "ok"
+        },
+        {
+          "url": "https://room.trydemigod.com/api/version",
+          "ms": 187,
+          "sourceRevision": "1ab906c37b5c5bdfe07f1b12808c8855128a713f",
+          "buildId": "2026-10-31T08:29:22.284Z",
+          "httpStatus": 200,
+          "versionStatus": "ok"
+        },
+        {
+          "url": "https://www.getdasha.com/room/api/version/worker",
+          "ms": 515,
+          "sourceRevision": "c1c92c5b65fb6c4fbe87e78cddced8496f0ab51c",
+          "buildId": "2026-11-01T05:50:57.181Z",
+          "httpStatus": 200,
+          "versionStatus": "ok"
+        },
+        {
+          "url": "https://www.getdasha.com/room/api/version",
+          "ms": 410,
+          "sourceRevision": "1ab906c37b5c5bdfe07f1b12808c8855128a713f",
+          "buildId": "2026-10-31T08:29:22.284Z",
+          "httpStatus": 200,
+          "versionStatus": "ok"
+        }
+      ]
+    },
+    {
+      "at": "2026-11-01T05:54:37.200Z",
+      "readings": [
+        {
+          "url": "https://room.trydemigod.com/api/version/worker",
+          "ms": 89,
+          "sourceRevision": "c1c92c5b65fb6c4fbe87e78cddced8496f0ab51c",
+          "buildId": "2026-11-01T05:50:46.811Z",
+          "httpStatus": 200,
+          "versionStatus": "ok"
+        },
+        {
+          "url": "https://room.trydemigod.com/api/version",
+          "ms": 1081,
+          "sourceRevision": "1ab906c37b5c5bdfe07f1b12808c8855128a713f",
+          "buildId": "2026-10-31T08:29:22.284Z",
+          "httpStatus": 200,
+          "versionStatus": "ok"
+        },
+        {
+          "url": "https://room.trydemigod.com/api/ready",
+          "ms": 1081,
+          "ready": "ready",
+          "do": {
+            "status": "ok",
+            "statusCode": 200,
+            "ms": 976
+          },
+          "emailVerification": "enforced",
+          "httpStatus": 200
+        },
+        {
+          "url": "https://room.trydemigod.com/api/health/jobs",
+          "ms": 1555,
+          "jobHealthStatus": "stale",
+          "integrity": {
+            "lastRunAt": "2026-10-31T19:00:35.769Z",
+            "lastSuccessAt": "2026-10-31T19:00:35.769Z",
+            "lastErrorAt": "2026-10-31T07:00:39.529Z",
+            "lastErrorCurrent": false,
+            "lastErrorCode": null,
+            "lastDurationMs": 0,
+            "consecutiveFailures": 0,
+            "stale": true,
+            "status": "stale"
+          },
+          "httpStatus": 503
+        },
+        {
+          "url": "https://www.getdasha.com/room/api/version/worker",
+          "ms": 672,
+          "sourceRevision": "c1c92c5b65fb6c4fbe87e78cddced8496f0ab51c",
+          "buildId": "2026-11-01T05:50:57.181Z",
+          "httpStatus": 200,
+          "versionStatus": "ok"
+        },
+        {
+          "url": "https://www.getdasha.com/room/api/version",
+          "ms": 1305,
+          "sourceRevision": "1ab906c37b5c5bdfe07f1b12808c8855128a713f",
+          "buildId": "2026-10-31T08:29:22.284Z",
+          "httpStatus": 200,
+          "versionStatus": "ok"
+        },
+        {
+          "url": "https://www.getdasha.com/room/api/ready",
+          "ms": 1306,
+          "ready": "ready",
+          "do": {
+            "status": "ok",
+            "statusCode": 200,
+            "ms": 986
+          },
+          "emailVerification": "enforced",
+          "httpStatus": 200
+        },
+        {
+          "url": "https://www.getdasha.com/room/api/health/jobs",
+          "ms": 1314,
+          "jobHealthStatus": "stale",
+          "integrity": {
+            "lastRunAt": "2026-10-31T19:00:35.769Z",
+            "lastSuccessAt": "2026-10-31T19:00:35.769Z",
+            "lastErrorAt": "2026-10-31T07:00:39.529Z",
+            "lastErrorCurrent": false,
+            "lastErrorCode": null,
+            "lastDurationMs": 0,
+            "consecutiveFailures": 0,
+            "stale": true,
+            "status": "stale"
+          },
+          "httpStatus": 503
+        }
+      ]
+    },
+    {
+      "at": "2026-11-01T05:56:11.991Z",
+      "readings": [
+        {
+          "url": "https://room.trydemigod.com/api/version",
+          "sourceRevision": "c1c92c5b65fb6c4fbe87e78cddced8496f0ab51c",
+          "buildId": "2026-11-01T05:50:46.811Z",
+          "httpStatus": 200,
+          "versionStatus": "ok"
+        },
+        {
+          "url": "https://www.getdasha.com/room/api/version",
+          "sourceRevision": "c1c92c5b65fb6c4fbe87e78cddced8496f0ab51c",
+          "buildId": "2026-11-01T05:50:46.811Z",
+          "httpStatus": 200,
+          "versionStatus": "ok"
+        }
+      ]
+    },
+    {
+      "at": "2026-11-01T05:56:31.203Z",
+      "readings": [
+        {
+          "url": "https://room.trydemigod.com/api/version/worker",
+          "ms": 67,
+          "sourceRevision": "c1c92c5b65fb6c4fbe87e78cddced8496f0ab51c",
+          "buildId": "2026-11-01T05:50:46.811Z",
+          "httpStatus": 200,
+          "versionStatus": "ok"
+        },
+        {
+          "url": "https://room.trydemigod.com/api/version",
+          "ms": 1160,
+          "sourceRevision": "c1c92c5b65fb6c4fbe87e78cddced8496f0ab51c",
+          "buildId": "2026-11-01T05:50:46.811Z",
+          "httpStatus": 200,
+          "versionStatus": "ok"
+        },
+        {
+          "url": "https://room.trydemigod.com/api/ready",
+          "ms": 1158,
+          "ready": "ready",
+          "do": {
+            "status": "ok",
+            "statusCode": 200,
+            "ms": 1031
+          },
+          "emailVerification": "enforced",
+          "httpStatus": 200
+        },
+        {
+          "url": "https://room.trydemigod.com/api/health",
+          "ms": 1159,
+          "healthStatus": "degraded",
+          "liveness": "ok",
+          "jobs": {
+            "status": "stale"
+          },
+          "httpStatus": 200
+        },
+        {
+          "url": "https://room.trydemigod.com/api/health/jobs",
+          "ms": 1158,
+          "jobHealthStatus": "stale",
+          "integrity": {
+            "lastRunAt": "2026-10-31T19:00:35.769Z",
+            "lastSuccessAt": "2026-10-31T19:00:35.769Z",
+            "lastErrorAt": "2026-10-31T07:00:39.529Z",
+            "lastErrorCurrent": false,
+            "lastErrorCode": null,
+            "lastDurationMs": 0,
+            "consecutiveFailures": 0,
+            "stale": true,
+            "status": "stale"
+          },
+          "httpStatus": 503
+        },
+        {
+          "url": "https://www.getdasha.com/room/api/version/worker",
+          "ms": 73,
+          "sourceRevision": "c1c92c5b65fb6c4fbe87e78cddced8496f0ab51c",
+          "buildId": "2026-11-01T05:50:57.181Z",
+          "httpStatus": 200,
+          "versionStatus": "ok"
+        },
+        {
+          "url": "https://www.getdasha.com/room/api/version",
+          "ms": 1156,
+          "sourceRevision": "c1c92c5b65fb6c4fbe87e78cddced8496f0ab51c",
+          "buildId": "2026-11-01T05:50:46.811Z",
+          "httpStatus": 200,
+          "versionStatus": "ok"
+        },
+        {
+          "url": "https://www.getdasha.com/room/api/ready",
+          "ms": 1159,
+          "ready": "ready",
+          "do": {
+            "status": "ok",
+            "statusCode": 200,
+            "ms": 770
+          },
+          "emailVerification": "enforced",
+          "httpStatus": 200
+        },
+        {
+          "url": "https://www.getdasha.com/room/api/health",
+          "ms": 1158,
+          "healthStatus": "degraded",
+          "liveness": "ok",
+          "jobs": {
+            "status": "stale"
+          },
+          "httpStatus": 200
+        },
+        {
+          "url": "https://www.getdasha.com/room/api/health/jobs",
+          "ms": 1157,
+          "jobHealthStatus": "stale",
+          "integrity": {
+            "lastRunAt": "2026-10-31T19:00:35.769Z",
+            "lastSuccessAt": "2026-10-31T19:00:35.769Z",
+            "lastErrorAt": "2026-10-31T07:00:39.529Z",
+            "lastErrorCurrent": false,
+            "lastErrorCode": null,
+            "lastDurationMs": 0,
+            "consecutiveFailures": 0,
+            "stale": true,
+            "status": "stale"
+          },
+          "httpStatus": 503
+        }
+      ]
+    },
+    {
+      "at": "2026-11-01T06:02:01.560Z",
+      "readings": [
+        {
+          "url": "https://room.trydemigod.com/api/version/worker",
+          "httpStatus": 200,
+          "ms": 85,
+          "versionStatus": "ok",
+          "sourceRevision": "c1c92c5b65fb6c4fbe87e78cddced8496f0ab51c",
+          "buildId": "2026-11-01T05:50:46.811Z"
+        },
+        {
+          "url": "https://room.trydemigod.com/api/version",
+          "httpStatus": 200,
+          "ms": 692,
+          "versionStatus": "ok",
+          "sourceRevision": "c1c92c5b65fb6c4fbe87e78cddced8496f0ab51c",
+          "buildId": "2026-11-01T05:50:46.811Z"
+        },
+        {
+          "url": "https://room.trydemigod.com/api/ready",
+          "httpStatus": 200,
+          "ms": 693,
+          "ready": "ready",
+          "do": {
+            "status": "ok",
+            "statusCode": 200,
+            "ms": 548
+          },
+          "emailVerification": "enforced"
+        },
+        {
+          "url": "https://room.trydemigod.com/api/health",
+          "httpStatus": 200,
+          "ms": 697,
+          "healthStatus": "ok",
+          "liveness": "ok",
+          "jobs": {
+            "status": "ok"
+          }
+        },
+        {
+          "url": "https://room.trydemigod.com/api/health/jobs",
+          "httpStatus": 200,
+          "ms": 693,
+          "jobHealthStatus": "ok",
+          "integrity": {
+            "lastRunAt": "2026-11-01T06:00:38.852Z",
+            "lastSuccessAt": "2026-11-01T06:00:38.852Z",
+            "lastErrorAt": "2026-10-31T07:00:39.529Z",
+            "lastErrorCurrent": false,
+            "lastErrorCode": null,
+            "lastDurationMs": 0,
+            "consecutiveFailures": 0,
+            "stale": false,
+            "status": "ok"
+          },
+          "knownQuarantinedEvents": 1
+        },
+        {
+          "url": "https://www.getdasha.com/room/api/version/worker",
+          "httpStatus": 200,
+          "ms": 67,
+          "versionStatus": "ok",
+          "sourceRevision": "c1c92c5b65fb6c4fbe87e78cddced8496f0ab51c",
+          "buildId": "2026-11-01T05:50:57.181Z"
+        },
+        {
+          "url": "https://www.getdasha.com/room/api/version",
+          "httpStatus": 200,
+          "ms": 697,
+          "versionStatus": "ok",
+          "sourceRevision": "c1c92c5b65fb6c4fbe87e78cddced8496f0ab51c",
+          "buildId": "2026-11-01T05:50:46.811Z"
+        },
+        {
+          "url": "https://www.getdasha.com/room/api/ready",
+          "httpStatus": 200,
+          "ms": 695,
+          "ready": "ready",
+          "do": {
+            "status": "ok",
+            "statusCode": 200,
+            "ms": 533
+          },
+          "emailVerification": "enforced"
+        },
+        {
+          "url": "https://www.getdasha.com/room/api/health",
+          "httpStatus": 200,
+          "ms": 695,
+          "healthStatus": "ok",
+          "liveness": "ok",
+          "jobs": {
+            "status": "ok"
+          }
+        },
+        {
+          "url": "https://www.getdasha.com/room/api/health/jobs",
+          "httpStatus": 200,
+          "ms": 693,
+          "jobHealthStatus": "ok",
+          "integrity": {
+            "lastRunAt": "2026-11-01T06:00:38.852Z",
+            "lastSuccessAt": "2026-11-01T06:00:38.852Z",
+            "lastErrorAt": "2026-10-31T07:00:39.529Z",
+            "lastErrorCurrent": false,
+            "lastErrorCode": null,
+            "lastDurationMs": 0,
+            "consecutiveFailures": 0,
+            "stale": false,
+            "status": "ok"
+          },
+          "knownQuarantinedEvents": 1
+        }
+      ]
+    }
+  ],
+  "realPostAdoptionIntegritySuccessAt": "2026-11-01T06:00:38.852Z",
+  "limits": "One actual scheduled success observed; not a sustained multi-hour reliability claim. Signed-card strict smoke and authenticated write journey owned by Root."
+}

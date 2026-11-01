@@ -10,7 +10,9 @@
 //  3. handlePrWebhookPayload is the core a pull_request webhook calls after
 //     signature verification: it records the delivery (so the poll fallback
 //     knows the webhook is alive), auto-links unlinked PRs, and settles
-//     already-linked claims through the existing applyPullRequestWebhook.
+//     already-linked claims through the existing applyPullRequestWebhook,
+//     forwarding the delivery's raw body, signature header, and env so
+//     the settlement export re-verifies the delivery itself (RES-0140).
 //  4. discoverUnlinkedPulls is the poll fallback for repos/rooms where the
 //     webhook is not configured: open PRs are matched to claims that carry
 //     no PR link yet. It shares the claim-pr GitHub budget and skips repos
@@ -260,9 +262,12 @@ function liveClaims(store) {
 
 // --- webhook core --------------------------------------------------------
 // Runs after the route verified the HMAC signature. Never throws on
-// hostile payload shapes; returns { ok:false, reason } instead.
+// hostile payload shapes; returns { ok:false, reason } instead. The
+// settlement leg additionally re-verifies inside applyPullRequestWebhook
+// from the forwarded delivery material (RES-0140), so a caller that
+// skips verification cannot settle claims through this core either.
 
-export function handlePrWebhookPayload(store, payload, { nowMs = Date.now() } = {}) {
+export async function handlePrWebhookPayload(store, payload, { nowMs = Date.now(), webhook = null, env } = {}) {
   const pr = payload && typeof payload === "object" && !Array.isArray(payload) ? payload.pull_request : null;
   const parsed = parsePullRequestUrl(pr && typeof pr.html_url === "string" ? pr.html_url : "");
   if (!parsed) return { ok: false, reason: "unparseable" };
@@ -287,10 +292,15 @@ export function handlePrWebhookPayload(store, payload, { nowMs = Date.now() } = 
     } else if (found && found.ambiguous) {
       ambiguous = found.ambiguous;
     }
-    // Settlement for already-linked claims (existing behavior, shared).
-    const applied = applyPullRequestWebhook(store, payload, { nowMs });
-    settled = applied.applied ?? [];
   });
+  // Settlement for already-linked claims (including one linked just above).
+  // It runs after the link commits because applyPullRequestWebhook now
+  // verifies the delivery's signature (async, RES-0140) before settling,
+  // and opens its own per-room transactions.
+  const deliveryOpts = { nowMs, ...(webhook ?? {}) };
+  if (env !== undefined) deliveryOpts.env = env;
+  const applied = await applyPullRequestWebhook(store, payload, deliveryOpts);
+  settled = applied.applied ?? [];
   return {
     ok: true, repo, url: parsed.url,
     action: typeof payload?.action === "string" ? payload.action : null,
@@ -474,7 +484,13 @@ export async function postPrWebhook(ctx) {
   if (parsedEvent.ignored || parsedEvent.event !== "pull_request") {
     return ctx.json(ctx.res, 200, { ok: true, ignored: true });
   }
-  const result = handlePrWebhookPayload(ctx.store, parsedEvent.payload, { nowMs: Date.now() });
+  const result = await handlePrWebhookPayload(ctx.store, parsedEvent.payload, {
+    nowMs: Date.now(),
+    // RES-0140: the settlement export re-verifies the delivery itself, so
+    // it receives the same raw body and signature header the route just
+    // checked, plus the env the route read its secret from.
+    webhook: { rawBody: text, signature256: ctx.req.headers["x-hub-signature-256"], env },
+  });
   if (!result.ok) return ctx.json(ctx.res, 200, { ok: true, ignored: true, reason: result.reason });
   // Minimal by design: claim id, PR number, and state. Nothing else.
   return ctx.json(ctx.res, 200, {

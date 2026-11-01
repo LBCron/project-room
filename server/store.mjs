@@ -3981,13 +3981,20 @@ this.slaBreachAlerts = new SlaBreachAlertJournal(this); // Task 26: durable in-a
     // the outer commit. A scoped rooms write invalidates that room's earlier candidates;
     // unknown writes and rollbacks invalidate every candidate.
     const boundary = outermost || isolated;
+    // A failed savepoint discards only its own appends. Earlier successful
+    // writes still belong to the outer transaction and must wake on commit.
+    const priorAppends = boundary ? new Set(this._pendingAppends) : null;
     const frames = this._pendingProjectionFrames ??= [];
     if (boundary) { frames.push(new Map()); beginWriteProofFrame(this.db); }
     let result;
     try { result = this.storagePlatform.transaction(this.db, fn, false, { isolated }); }
     catch (error) {
       this._dropProjectionCache();
-      if (boundary) { frames.pop(); endWriteProofFrame(this.db,false); this._pendingAppends.clear(); }
+      if (boundary) {
+        frames.pop(); endWriteProofFrame(this.db,false);
+        this._pendingAppends.clear();
+        if (!outermost) for (const roomId of priorAppends) this._pendingAppends.add(roomId);
+      }
       throw this.storageFailure(error, outermost);
     }
     if (boundary) {
@@ -4005,7 +4012,7 @@ this.slaBreachAlerts = new SlaBreachAlertJournal(this); // Task 26: durable in-a
       // streams woken by the flush observe the post-commit projection state.
       // A rolled-back append never reaches here: the catch path clears
       // _pendingAppends at the same boundary instead.
-      this._flushEventAppends();
+      if (outermost) this._flushEventAppends();
     }
     if (before !== null && (before === undefined || this.storagePlatform.changes(this.db) !== before)) this.storageRecovered();
     return result;

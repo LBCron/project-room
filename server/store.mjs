@@ -2402,6 +2402,12 @@ this.slaBreachAlerts = new SlaBreachAlertJournal(this); // Task 26: durable in-a
     return this.transaction(() => {
       const room = this.room(roomId, { verifyBodyHashes: true });
       const enabled = hasMessageAuthority(room.state);
+      // Reverse is representation change, never permission to trust changed
+      // canonical payloads. Hydration checks shape/body agreement, not the
+      // independent writer proof; validate that proof before removing authority.
+      if (enabled && reverse && servingProofDrift(this.db, roomId,
+        this.db.prepare('SELECT projection FROM rooms WHERE id=?').get(roomId).projection))
+        throw Error('projection_corrupt: reverse authority requires intact serving proofs');
       const missingProof = enabled && (this.db.prepare('SELECT 1 FROM messages WHERE room_id=? AND entity_hash IS NULL LIMIT 1').get(roomId)
         || !this.db.prepare('SELECT metadata_hash FROM integrity_room_state WHERE room_id=?').get(roomId)?.metadata_hash);
       if (enabled === !reverse && (reverse || !missingProof)) return { changed: false, sequence: room.sequence };

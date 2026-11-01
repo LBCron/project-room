@@ -675,8 +675,8 @@ export function restoreFreezeDefinitions(tables) {
     return {name,sql:`CREATE TRIGGER ${name} BEFORE ${operation} ON ${table} WHEN EXISTS(SELECT 1 FROM current_restore_admission WHERE singleton=1 AND state='pending' AND phase IN ('coverage','audit_pending')) BEGIN SELECT RAISE(ABORT,'restore target is sealed'); END`};
   }));
 }
-export function verifyRestoreFreeze(db,tables) {
-  const expected=restoreFreezeDefinitions(tables),rows=db.prepare("SELECT name,sql FROM sqlite_master WHERE type='trigger' AND name GLOB 'restore_frozen_*' ORDER BY name").all();
+export function verifyRestoreFreeze(db,tables,catalog=null) {
+  const expected=restoreFreezeDefinitions(tables),rows=catalog?catalog.filter(row=>row.type==='trigger'&&row.name.startsWith('restore_frozen_')):db.prepare("SELECT name,sql FROM sqlite_master WHERE type='trigger' AND name GLOB 'restore_frozen_*' ORDER BY name").all();
   if(rows.length!==expected.length||expected.some(def=>rows.find(row=>row.name===def.name)?.sql!==def.sql))throw Error('Restore freeze schema requires reconciliation');
 }
 export function installRestoreFreeze(db,tables) {

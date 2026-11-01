@@ -154,11 +154,48 @@ function canonicalResumeDigest(row,columns){
  digest.update(']');return digest.digest('hex');
 }
 const normalizedRestoreSql=sql=>sql?.trim().replace(/;$/,'').replace(/IF NOT EXISTS /g,'').replace(/\s+/g,' ');
-function restoreSchemaHash(db){
+// Like replay-cutover's catalogDefinition: RAM stores a current-definition
+// admission, never durable authority. Every warm use revalidates exact tuples in
+// SQLite; Durable SQLite does not authorize a schema_version cookie.
+const restoreCatalogAdmissions=new WeakMap();
+const restoreRecreatedGuards=new Set(['current_restore_admission_insert','current_restore_admission_update','current_restore_admission_delete']);
+function restoreSchemaHash(db,binding=null,{expectedHash=null,tables=null}={}){
  const scalar=db.prepare("SELECT count(*) AS count,coalesce(sum(length(CAST(sql AS BLOB))),0) AS bytes FROM sqlite_master WHERE name NOT LIKE 'sqlite_%' AND name NOT GLOB '_cf_*'").get();
  if(!Number.isSafeInteger(scalar.count)||scalar.count>restoreTablesKnown.size*20+128||!Number.isSafeInteger(scalar.bytes)||scalar.bytes>16*1024*1024)throw Error('Restore schema inventory scalar bytes require reconciliation');
- const rows=db.prepare("SELECT type,name,tbl_name,sql FROM sqlite_master WHERE name NOT LIKE 'sqlite_%' AND name NOT GLOB '_cf_*' ORDER BY type,name").all();
- return sha256Hex(JSON.stringify(rows.map(row=>[row.type,row.name,row.tbl_name,normalizedRestoreSql(row.sql)])));
+ const saved=restoreCatalogAdmissions.get(db);
+ if(binding&&saved?.binding===binding){
+  const refuse=()=>{saved.invalid=true;throw Error('Restore sealed schema changed; exact cold readmission required');};
+  if(saved.invalid||scalar.count!==saved.count||scalar.bytes!==saved.bytes)refuse();
+  // Twelve tuples keep each statement below existing adapter binding limits.
+  // Only exact target-owned control guards are addressed by name: checkpoints
+  // legitimately recreate them. All definitions are compared byte-for-byte;
+  // same-rowid identical recreate proves current definitions, not history.
+  for(const group of saved.groups){
+   const matches=db.prepare(group.sql).all(...group.args);
+   if(matches.length!==group.size||matches.some(row=>row.matches!==1))refuse();
+  }
+  if(saved.hash!==expectedHash)refuse();
+  return saved.hash;
+ }
+ const rows=db.prepare("SELECT rowid,type,name,tbl_name,sql FROM sqlite_master WHERE name NOT LIKE 'sqlite_%' AND name NOT GLOB '_cf_*' ORDER BY type,name").all();
+ const hash=sha256Hex(JSON.stringify(rows.map(row=>[row.type,row.name,row.tbl_name,normalizedRestoreSql(row.sql)])));
+ if(binding){
+  if(hash!==expectedHash)throw Error('Restore sealed schema changed');
+  verifyRestoreFreeze(db,tables,rows);
+  const groups=[],byRowid=rows.filter(row=>!restoreRecreatedGuards.has(row.name));
+  for(let offset=0;offset<byRowid.length;offset+=12){
+   const selected=byRowid.slice(offset,offset+12),args=selected.flatMap(row=>[row.rowid,row.type,row.name,row.tbl_name,row.sql===null?null:Buffer.byteLength(row.sql),row.sql]);
+   const sql=`WITH expected(catalog_id,kind,name,table_name,sql_bytes,definition) AS (VALUES ${selected.map(()=>'(?,?,?,?,?,?)').join(',')})
+    SELECT CASE WHEN s.type=e.kind AND s.name=e.name AND s.tbl_name=e.table_name AND octet_length(s.sql) IS e.sql_bytes AND s.sql IS e.definition COLLATE BINARY THEN 1 ELSE 0 END AS matches
+    FROM expected e LEFT JOIN sqlite_master s ON s.rowid=e.catalog_id`;
+   groups.push({sql,args,size:selected.length});
+  }
+  for(const row of rows.filter(row=>restoreRecreatedGuards.has(row.name)))groups.push({
+   sql:'SELECT CASE WHEN type=? AND name=? AND tbl_name=? AND octet_length(sql) IS ? AND sql IS ? COLLATE BINARY THEN 1 ELSE 0 END AS matches FROM sqlite_master WHERE name=?',
+   args:[row.type,row.name,row.tbl_name,Buffer.byteLength(row.sql),row.sql,row.name],size:1});
+  restoreCatalogAdmissions.set(db,{binding,hash,count:scalar.count,bytes:scalar.bytes,groups});
+ }
+ return hash;
 }
 const sealId=seal=>sha256Hex(JSON.stringify({...seal,id:undefined}));
 function coverageResponse(state){return{ok:true,verified:false,pending:true,restoreId:state.restore_id,sourceSeal:state.seal.id,revision:state.revision,phase:state.phase,progress:{tableIndex:state.progress.tableIndex,tables:state.seal.tables.length,rows:state.progress.rows,bytes:state.progress.bytes},note:'Coverage is incomplete recovery; the independent full audit still must pass before admission'};}
@@ -171,8 +208,7 @@ function validateCoverageState(db,state){
  if(!bagValid(p.bag)||seal.tables.some(entry=>Object.keys(entry).sort().join(',')!=='columns,expected,maxRowBytes,name'||!seal.inventory.includes(entry.name)||!IDENT.test(entry.name)||!Array.isArray(entry.columns)||entry.columns.some(name=>!IDENT.test(name))||!bagValid(entry.expected)||!Number.isSafeInteger(entry.maxRowBytes)||entry.maxRowBytes<0))throw Error('Restore coverage shape requires reconciliation');
  const expectedNames=seal.inventory.filter(table=>!RESTORE_OPERATIONAL_TABLES.includes(table)&&!RESTORE_SKIP_TABLES.has(table)&&table!==CLAIM_PERMIT_TABLE&&!REPLAY_SKIPPED_TABLES.includes(table)).sort();
  if(JSON.stringify(seal.tables.map(entry=>entry.name))!==JSON.stringify(expectedNames)||new Set(seal.tables.map(entry=>entry.name)).size!==seal.tables.length||(state.phase==='audit_pending'&&p.tableIndex!==seal.tables.length)||(state.phase==='coverage'&&p.tableIndex===seal.tables.length))throw Error('Restore phase inventory requires reconciliation');
- verifyRestoreFreeze(db,seal.inventory);
- if(restoreSchemaHash(db)!==seal.schemaHash)throw Error('Restore sealed schema changed');
+ restoreSchemaHash(db,state.restore_id+':'+seal.id+':'+state.phase,{expectedHash:seal.schemaHash,tables:seal.inventory});
 }
 function sealRestoreCoverage(store,{restoreId,sourceSha256,watermark,trailer,tables}){
  const db=store.db,state=restoreProgress(db);if(state.state!=='pending'||state.phase!=='loading'||state.restore_id!==restoreId)throw Error('Restore source seal is stale');

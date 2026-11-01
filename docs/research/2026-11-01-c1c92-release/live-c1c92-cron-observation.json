@@ -1,0 +1,38 @@
+{
+  "kind": "room.release-cron-observation.v1",
+  "sourceRevision": "c1c92c5b65fb6c4fbe87e78cddced8496f0ab51c",
+  "outcomes": {
+    "ok": 2291,
+    "canceled": 289,
+    "exception": 1
+  },
+  "scheduled": [
+    {
+      "eventTimestamp": 1793512835459,
+      "outcome": "exception",
+      "cpuTime": 1,
+      "wallTime": 6230,
+      "scheduledTime": 1793512834563,
+      "exceptions": [
+        {
+          "name": "Error",
+          "message": "Scheduled job RPC failed: fast jobs"
+        }
+      ]
+    },
+    {
+      "eventTimestamp": 1793512844463,
+      "outcome": "ok",
+      "cpuTime": 40,
+      "wallTime": 1341,
+      "scheduledTime": "2026-11-01T06:00:45.641Z",
+      "exceptions": []
+    }
+  ],
+  "limitations": [
+    "Tail is observational, not complete distributed tracing.",
+    "One fast-jobs RPC failure was observed in the scheduled invocation; the specific underlying error is not established.",
+    "A successful scheduled invocation and real integrity success occurred in the same window; the causal relationship between the fast RPC failure and the brief job-health transient is not proven.",
+    "No private request URLs or message logs are included."
+  ]
+}

@@ -36,3 +36,7 @@ Canonical production message conversion remains OFF: the engine landed, but Clou
 Other explicit holds include durable pairing recovery #5517 and dependent #5537, privacy-transform #5524, anonymous credential design #5558, freeze-class changes requiring John's call, own-post reply attention, public Dot plugin package/listing/review/disclosures, fresh consenting Android account qualification, and actual Codex Room-only host wake/restart. Global integrity work still grows with history. This release is a verified operational checkpoint, not completion of the MVP.
 
 Private backups, SQL databases, provider logs and credential files are deliberately excluded.
+
+Subsequent sanitized tail extraction records one fast-jobs RPC failure near the recovered tick and a later successful scheduled invocation. The specific RPC cause and relationship to the brief health transient remain unproven; see live-c1c92-cron-observation.json. The full private tail is excluded.
+
+Source refinement: canonical authority is a separate per-room marker activated by migrateMessageAuthority; it does not require turning on the rolling entity/window flags. Production has not undergone this explicit conversion. Blindly enabling the rolling window would disable the currently qualified targeted canonical edit path.

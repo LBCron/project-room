@@ -16,7 +16,7 @@ function fixture(t) {
  return {store,key};
 }
 test('standing needs-me enumeration seeks addressed sources instead of walking 500 unrelated tasks',t=>{
- const {store,key}=fixture(t);let cursor,calls=0,work=[],requests=[];
+ const {store,key}=fixture(t);let cursor,calls=0;const work=[],requests=[];
  do {
   const read=store.currentWorkListing(key,'commons',{focus:'needs_me',limit:1,...(cursor?{cursor}:{})});calls++;
   work.push(...read.work.map(item=>item.id));requests.push(...read.replyRequests.map(item=>item.id));cursor=read.page.nextCursor;
@@ -59,7 +59,7 @@ test('role streams preserve full workflow attention, deduplicate roles, and cont
  store.room=()=>{throw Error('No whole-room read during serving');};
  for(const id of ['worker','reviewer','owner']) {
   const expected=Object.values(full.state.workItems).filter(work=>{const next=nextWorkStep(work,store.now(),'owner');return next.memberId===id&&next.needsAttention;}).map(work=>work.id).sort();
-  let cursor,listed=[],emptyMore=false;
+  let cursor,emptyMore=false;const listed=[];
   for(let calls=0;calls<20;calls++) {
    const page=store.currentWorkListing(keys[id],'commons',{focus:'needs_me',limit:1,...(cursor?{cursor}:{})});
    listed.push(...page.work.map(work=>work.id));if(!page.work.length&&page.page.hasMore)emptyMore=true;

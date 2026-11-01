@@ -1,6 +1,7 @@
 import {createHmac,createCipheriv,createDecipheriv,randomBytes} from 'node:crypto';
 import {INBOX_WORK_ROLES} from './current-inbox-indexes.mjs';
-import {readCurrentRecord,readCurrentWorkSummaryForViewer,chargeCurrentReadBudget,isCurrentRoom,readCurrentHead,readCurrentWorkItem,readCurrentOverviewWindow,readCurrentReplyRequestWindow,currentVisibleHorizon,withCurrentReadContext} from './current-room-repository.mjs';
+import {readCurrentRecord,readCurrentWorkSummaryForViewer,chargeCurrentReadBudget,isCurrentRoom,readCurrentHead,readCurrentWorkItem,readCurrentOverviewWindow,currentVisibleHorizon,withCurrentReadContext} from './current-room-repository.mjs';
+import {ownMember} from '../src/events.js';
 import {validWorkPage} from './work-list-page.mjs';
 import {nextWorkStep} from '../src/workflow.js';
 import {currentResult} from '../src/work-selectors.js';
@@ -93,7 +94,7 @@ export function readCurrentWorkListing(store,secret,roomId,args={}) {
       const source=addressed&&!saved.workDone?addressedWorkWindow(store,roomId,auth.member.id,room.ownerId,saved.workAfter,limit,b):null;
       const overview=addressed?{state:{members:{[auth.member.id]:auth.member},room,workItems:{}},workWindow:{nextAfter:source?.hasMore?source.after:null}}
         :readCurrentOverviewWindow(store,roomId,{viewerId:auth.member.id,workAfter:saved.workAfter,limit:saved.workDone?1:limit});
-      const member=overview.state.members[auth.member.id],now=saved.at;
+      const member=ownMember(overview.state.members,auth.member.id),now=saved.at;
       const items=saved.workDone?[]:source?.items??Object.values(overview.state.workItems);
       const work=items.filter(item=>focus==='all'||focus==='results'&&currentResult(item)
         ||focus==='needs_me'&&member.active!==false&&nextWorkStep(item,now,overview.state.room.ownerId).memberId===member.id

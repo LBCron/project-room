@@ -1,0 +1,352 @@
+{
+  "revision": "896d2f3102221d061c6ff51454e350fd82ebfdfd",
+  "sourceFileHashes": {
+    "server/work-claim-sqlite.mjs": "cf4b3a42930f740ff8f29dfe50c471c4009f62f7a2e2ce80620983390457ffd7",
+    "server/work-claims.mjs": "5c23a9ae43e5345c63ca9e6a86d13dd5597cff721282f8430dcbe929d11fa22a"
+  },
+  "checksPassed": 8,
+  "checks": [
+    "late relevant review survives 270 current reviews and budgeted empty pages",
+    "aliases, ID precedence, collisions, inactive members and renames match existing resolver",
+    "late matches survive unrelated tags, supersession, wrong room and legacy missing state",
+    "revision/head/digest/generation changes preserve current-review semantics",
+    "50-result boundary counts semantic matches rather than raw candidates",
+    "tag replacement, deletion, rollback and reused rowid do not retain routing",
+    "bounded raw-token pages continue after SQL filters remove the entire first page",
+    "bounded keys preserve dynamic aliases and late review-basis matches"
+  ],
+  "measurements": [
+    {
+      "mode": "terminal-owned",
+      "count": 100,
+      "baselineMedianMs": 1.0032920000000445,
+      "prototypeMedianMs": 0.06845900000001848,
+      "indexBuildMs": 0.629209000000003,
+      "planBefore": [
+        {
+          "id": 5,
+          "parent": 0,
+          "notused": 50,
+          "detail": "SEARCH work_claims USING INDEX work_claim_inbox_owner (room_id=? AND <expr>=? AND rowid>?)"
+        }
+      ],
+      "planAfter": [
+        {
+          "id": 5,
+          "parent": 0,
+          "notused": 50,
+          "detail": "SEARCH work_claims USING INDEX active_owner_prototype (room_id=? AND <expr>=? AND rowid>?)"
+        }
+      ]
+    },
+    {
+      "mode": "terminal-owned",
+      "count": 1000,
+      "baselineMedianMs": 6.073334000000045,
+      "prototypeMedianMs": 0.15754100000003746,
+      "indexBuildMs": 11.585958000000005,
+      "planBefore": [
+        {
+          "id": 5,
+          "parent": 0,
+          "notused": 50,
+          "detail": "SEARCH work_claims USING INDEX work_claim_inbox_owner (room_id=? AND <expr>=? AND rowid>?)"
+        }
+      ],
+      "planAfter": [
+        {
+          "id": 5,
+          "parent": 0,
+          "notused": 50,
+          "detail": "SEARCH work_claims USING INDEX active_owner_prototype (room_id=? AND <expr>=? AND rowid>?)"
+        }
+      ]
+    },
+    {
+      "mode": "terminal-owned",
+      "count": 5000,
+      "baselineMedianMs": 69.83604100000002,
+      "prototypeMedianMs": 0.13841600000000653,
+      "indexBuildMs": 43.14824999999996,
+      "planBefore": [
+        {
+          "id": 5,
+          "parent": 0,
+          "notused": 50,
+          "detail": "SEARCH work_claims USING INDEX work_claim_inbox_owner (room_id=? AND <expr>=? AND rowid>?)"
+        }
+      ],
+      "planAfter": [
+        {
+          "id": 5,
+          "parent": 0,
+          "notused": 50,
+          "detail": "SEARCH work_claims USING INDEX active_owner_prototype (room_id=? AND <expr>=? AND rowid>?)"
+        }
+      ]
+    },
+    {
+      "mode": "unrelated-review-tags",
+      "count": 100,
+      "baselineMedianMs": 2.9364160000000084,
+      "prototypeMedianMs": 0.14949999999998909,
+      "indexBuildMs": 0.00016600000003563764,
+      "planBefore": [
+        {
+          "id": 5,
+          "parent": 0,
+          "notused": 50,
+          "detail": "SEARCH work_claims USING INDEX work_claim_inbox_review (room_id=? AND rowid>?)"
+        }
+      ],
+      "planAfter": [
+        {
+          "id": 5,
+          "parent": 0,
+          "notused": 50,
+          "detail": "SEARCH work_claims USING INDEX work_claim_inbox_review (room_id=? AND rowid=?)"
+        },
+        {
+          "id": 11,
+          "parent": 0,
+          "notused": 0,
+          "detail": "LIST SUBQUERY 2"
+        },
+        {
+          "id": 13,
+          "parent": 11,
+          "notused": 0,
+          "detail": "MERGE (UNION)"
+        },
+        {
+          "id": 15,
+          "parent": 13,
+          "notused": 0,
+          "detail": "LEFT"
+        },
+        {
+          "id": 18,
+          "parent": 15,
+          "notused": 55,
+          "detail": "SEARCH reviewer_tokens USING COVERING INDEX reviewer_exact (room_id=? AND exact=?)"
+        },
+        {
+          "id": 31,
+          "parent": 13,
+          "notused": 0,
+          "detail": "RIGHT"
+        },
+        {
+          "id": 34,
+          "parent": 31,
+          "notused": 55,
+          "detail": "SEARCH reviewer_tokens USING COVERING INDEX reviewer_slug (room_id=? AND slug=?)"
+        }
+      ]
+    },
+    {
+      "mode": "unrelated-review-tags",
+      "count": 1000,
+      "baselineMedianMs": 64.63754100000006,
+      "prototypeMedianMs": 0.22012499999982538,
+      "indexBuildMs": 0.0001249999995707185,
+      "planBefore": [
+        {
+          "id": 5,
+          "parent": 0,
+          "notused": 50,
+          "detail": "SEARCH work_claims USING INDEX work_claim_inbox_review (room_id=? AND rowid>?)"
+        }
+      ],
+      "planAfter": [
+        {
+          "id": 5,
+          "parent": 0,
+          "notused": 50,
+          "detail": "SEARCH work_claims USING INDEX work_claim_inbox_review (room_id=? AND rowid=?)"
+        },
+        {
+          "id": 11,
+          "parent": 0,
+          "notused": 0,
+          "detail": "LIST SUBQUERY 2"
+        },
+        {
+          "id": 13,
+          "parent": 11,
+          "notused": 0,
+          "detail": "MERGE (UNION)"
+        },
+        {
+          "id": 15,
+          "parent": 13,
+          "notused": 0,
+          "detail": "LEFT"
+        },
+        {
+          "id": 18,
+          "parent": 15,
+          "notused": 55,
+          "detail": "SEARCH reviewer_tokens USING COVERING INDEX reviewer_exact (room_id=? AND exact=?)"
+        },
+        {
+          "id": 31,
+          "parent": 13,
+          "notused": 0,
+          "detail": "RIGHT"
+        },
+        {
+          "id": 34,
+          "parent": 31,
+          "notused": 55,
+          "detail": "SEARCH reviewer_tokens USING COVERING INDEX reviewer_slug (room_id=? AND slug=?)"
+        }
+      ]
+    },
+    {
+      "mode": "unrelated-review-tags",
+      "count": 5000,
+      "baselineMedianMs": 144.94220899999982,
+      "prototypeMedianMs": 0.08529099999941536,
+      "indexBuildMs": 0.0001250000004802132,
+      "planBefore": [
+        {
+          "id": 5,
+          "parent": 0,
+          "notused": 50,
+          "detail": "SEARCH work_claims USING INDEX work_claim_inbox_review (room_id=? AND rowid>?)"
+        }
+      ],
+      "planAfter": [
+        {
+          "id": 5,
+          "parent": 0,
+          "notused": 50,
+          "detail": "SEARCH work_claims USING INDEX work_claim_inbox_review (room_id=? AND rowid=?)"
+        },
+        {
+          "id": 11,
+          "parent": 0,
+          "notused": 0,
+          "detail": "LIST SUBQUERY 2"
+        },
+        {
+          "id": 13,
+          "parent": 11,
+          "notused": 0,
+          "detail": "MERGE (UNION)"
+        },
+        {
+          "id": 15,
+          "parent": 13,
+          "notused": 0,
+          "detail": "LEFT"
+        },
+        {
+          "id": 18,
+          "parent": 15,
+          "notused": 55,
+          "detail": "SEARCH reviewer_tokens USING COVERING INDEX reviewer_exact (room_id=? AND exact=?)"
+        },
+        {
+          "id": 31,
+          "parent": 13,
+          "notused": 0,
+          "detail": "RIGHT"
+        },
+        {
+          "id": 34,
+          "parent": 31,
+          "notused": 55,
+          "detail": "SEARCH reviewer_tokens USING COVERING INDEX reviewer_slug (room_id=? AND slug=?)"
+        }
+      ]
+    }
+  ],
+  "boundedPlan": [
+    {
+      "id": 5,
+      "parent": 0,
+      "notused": 0,
+      "detail": "MERGE (UNION)"
+    },
+    {
+      "id": 7,
+      "parent": 5,
+      "notused": 0,
+      "detail": "LEFT"
+    },
+    {
+      "id": 10,
+      "parent": 7,
+      "notused": 47,
+      "detail": "SEARCH reviewer_tokens USING COVERING INDEX reviewer_exact (room_id=? AND exact=? AND claim_rowid>?)"
+    },
+    {
+      "id": 25,
+      "parent": 5,
+      "notused": 0,
+      "detail": "RIGHT"
+    },
+    {
+      "id": 28,
+      "parent": 25,
+      "notused": 47,
+      "detail": "SEARCH reviewer_tokens USING COVERING INDEX reviewer_slug (room_id=? AND slug=? AND claim_rowid>?)"
+    }
+  ],
+  "boundedMeasurements": [
+    {
+      "count": 100,
+      "budget": 128,
+      "medianMs": 3.0594580000006317,
+      "candidates": 101,
+      "matches": [
+        "wanted"
+      ],
+      "exhausted": true,
+      "continuation": null
+    },
+    {
+      "count": 1000,
+      "budget": 128,
+      "medianMs": 4.19524999999976,
+      "candidates": 128,
+      "matches": [],
+      "exhausted": false,
+      "continuation": 128
+    },
+    {
+      "count": 5000,
+      "budget": 128,
+      "medianMs": 5.645959000000403,
+      "candidates": 128,
+      "matches": [],
+      "exhausted": false,
+      "continuation": 128
+    }
+  ],
+  "writeMeasurements": [
+    {
+      "maintainTokens": false,
+      "count": 1000,
+      "elapsedMs": 18.31708400000025,
+      "logicalRowChanges": 1000
+    },
+    {
+      "maintainTokens": true,
+      "count": 1000,
+      "elapsedMs": 164.4742500000002,
+      "logicalRowChanges": 3000
+    }
+  ],
+  "limitations": [
+    "Revision is caller-supplied provenance; imported file hashes bind actual source bytes.",
+    "Disposable Node SQLite prototype; no shared production source edits.",
+    "Tag sidecar is synchronously maintained by this fixture adapter only; every real writer/import/restore must participate before adoption.",
+    "Token-sidecar population is included in fixture setup, not reviewer query timing. Write measurements compare naive replacement against raw item update, not full production registry writes or on-disk WAL.",
+    "Fast reviewer timings use IN-subquery lookup, which can materialize all matching token IDs; bounded raw-key timings are separately listed under boundedMeasurements.",
+    "Cursor is an experiment rowid checkpoint; production needs authorization/selection/revision binding and restart-on-change behavior.",
+    "Result equivalence uses the current exact resolver/review-basis implementation, including its inherited behavior."
+  ]
+}

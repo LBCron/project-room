@@ -764,8 +764,9 @@
     "activatedReceipt": "Present malformed receipt refuses; valid receipt requires all four exact indexes, including after logical restore.",
     "node": {
       "tests": 19,
-      "pass": 19,
-      "fail": 0
+      "pass": 18,
+      "fail": 1,
+      "correction": "Previously misreported19/19 despite the pinned full log ending in append-only audit failure; no ancestry change caused this. Root corrected the fixture and requalified below."
     },
     "actualWorker": {
       "checks": 3,
@@ -810,7 +811,60 @@
       "ciContract": "2807c898c33980664ea506ec2e40823c059154b557fdc72d6910f4b8e54917df",
       "runtimePreflight": "d12c5eb46bd6418e0400744aa7985eca40d15ec14bc7d9decd2f70c4385cb3d9"
     },
-    "repairReplay": "Requires verified original receipt explicitly before duplicate repair receipt replay, with causal original-deletion typed-refusal control.",
+    "repairReplay": "Runtime guard retained; original claimed TypeError causal log actually failed earlier at the immutable audit guard. Root separately reproduced TypeError using an explicitly corrupted fixture on b2d875d5 and qualified typed409 on final source below.",
     "runtimePreflightFiles": 669
+  },
+  "rootFinalComposition": {
+    "sourceCommit": "003a1f5fd",
+    "main": "dcec4be404d0138f2a8eac9bb9610bbfc899bfb9",
+    "mergeCommit": "7f878a5d3",
+    "at": "2026-11-01T19:17:22.362799+00:00",
+    "node": {
+      "tests": 80,
+      "pass": 80,
+      "fail": 0,
+      "skip": 0
+    },
+    "actualWorker": {
+      "tests": 3,
+      "pass": 3,
+      "fail": 0,
+      "skip": 0
+    },
+    "ci": "CI=1 scripts/check.mjs exit0; exact dcec I18N_BASE_REF; lint0errors335warnings;15contract tests pass. CI intentionally skips full Node suite.",
+    "originalFailure": "Composed initial run79/80: intended repair corruption fixture stopped at immutable append-only audit guard, which exists unchanged on both c52 and dcec. Prior helper19/19 summary contradicted its own pinned18/19 log and is retracted.",
+    "fixtureCure": "Assert ordinary DELETE is denied, then explicitly DROP append-only-delete trigger only inside synthetic corruption fixture before deleting original activation receipt; no runtime guard weakened.",
+    "causalRed": {
+      "source": "b2d875d5f3f1932b547b8d4c18a71c6ed0dc1483",
+      "testFixture": "003a1f5fd tests/wake-index-logical-restore.test.js",
+      "result": "1pass/1fail; reaches expected409 assertion and observes TypeError null.row before d5 guard. This supersedes\u2014not relabels\u2014the invalid earlier causal claim."
+    },
+    "logs": {
+      "initialComposedFailure": {
+        "path": "/tmp/wake-final-dcec-composed-tests-1101.log",
+        "sha256": "114565c00fcc8088f838300d841c15f131eb8e07397c6e8607d6ddaec866eb80"
+      },
+      "correctedFixtureCausalRed": {
+        "path": "/tmp/wake-repair-corrected-fixture-causal-red-1101.log",
+        "sha256": "350b2420e157cd7041ed6584ac25398acce04f18e5e72c3775c1c0b965d06bd8"
+      },
+      "node": {
+        "path": "/tmp/wake-final-dcec-composed-qualified-1101.log",
+        "sha256": "e02a24801513670b0a25c676d63c07f4f36ab4e690087bc55f4516438393b478"
+      },
+      "worker": {
+        "path": "/tmp/wake-final-dcec-worker-1101.log",
+        "sha256": "784de3a5d6ff7591683fdeab8582e99ccc061ef0c0a5f89ed3bd444b5dff7869"
+      },
+      "ci": {
+        "path": "/tmp/wake-final-dcec-composed-contract-1101.log",
+        "sha256": "e74393789055f9bc742aa8ecddd9995d568c2c258f3a7b5d4fc7aec1a9d4b806"
+      },
+      "focusedRestore": {
+        "path": "/tmp/wake-final-restore-fixture-qualified-1101.log",
+        "sha256": "6e4ce902be109cd8a9d4662f037ae1e9464f206bfc9f63f13225ff4e3b97bfba"
+      }
+    },
+    "deployment": "Not deployed. No production index plan/execute/install or activation."
   }
 }

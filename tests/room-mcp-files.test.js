@@ -55,7 +55,7 @@ test("room file tools stay behind a live identity secret", async t => {
     roomId: "file-den", title: "File den", purpose: "Room file bytes", kind: "personal", displayName: "File owner"
   });
   const listed = await rpc(origin, "tools/list");
-  assert.deepEqual((await listed.json()).result.tools.map(tool => tool.name), [...JOIN_TOOLS, "public_work_recommend", "public_work_read_task", "room_identity_mint"]);
+  assert.deepEqual((await listed.json()).result.tools.map(tool => tool.name), [...JOIN_TOOLS, "public_work_recommend", "public_work_read_task", "room_identity_mint", "room_check_access"]);
   const denied = await call(origin, "room_get_file", { roomId: created.roomId, id: "note" });
   assert.equal(denied.status, 401);
   assert.equal(denied.body.error.code, -32001);
@@ -282,13 +282,18 @@ test("an enrolled uploader commits a staged file onto a message they posted", as
   assert.equal("data" in listedNote, false);
   const downloaded = await call(origin, "room_get_file", { roomId: created.roomId, id: "note" }, peer.secret);
   assert.equal(downloaded.value.attachment.data, data);
-  const discarded = await call(origin, "room_discard_file", { roomId: created.roomId, id: "note" }, owner.secret);
-  assert.equal(discarded.value.code, "attachment_unavailable");
-
   now += attachmentLimits.lifetimeMs + 1;
   const still = await call(origin, "room_get_file", { roomId: created.roomId, id: "note" }, owner.secret);
   assert.equal(still.value.attachment.state, "committed");
   assert.equal(still.value.attachment.data, data);
+  const discarded = await call(origin, "room_discard_file", { roomId: created.roomId, id: "note" }, owner.secret);
+  assert.equal(discarded.value.status, "deleted");
+  assert.equal(discarded.value.duplicate, false);
+  const retryDelete = await call(origin, "room_discard_file", { roomId: created.roomId, id: "note" }, owner.secret);
+  assert.equal(retryDelete.value.duplicate, true);
+  const unavailable = await call(origin, "room_get_file", { roomId: created.roomId, id: "note" }, owner.secret);
+  assert.equal(unavailable.value.status, 410);
+  assert.equal(unavailable.value.code, "attachment_unavailable");
 
   const second = await call(origin, "room_put_file", {
     roomId: created.roomId, id: "drop", filename: "drop.txt", mediaType: "text/plain", data

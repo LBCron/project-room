@@ -1,6 +1,9 @@
 // Canonical message payloads live in messages, not an array of room references.
 // This is an internal migration boundary, not an authorization or wire API.
 import { decodeMessageEntity } from './message-entity-projection.mjs';
+import { assertProjectionWrite, assertMessageWrite } from './write-integrity.mjs';
+import { hydrateWorkItems, isWorkReference } from './work-repository.mjs';
+import { humanPushRecipients } from './human-push.mjs';
 
 export function hasMessageAuthority(state) {
   if (!Object.hasOwn(state ?? {}, 'messageAuthority')) return false;
@@ -65,4 +68,67 @@ export function canonicalMessageEditContext(db, roomId, command) {
   const archive=raw.messagesArchive;
   if (archive && target.seq<=archive.throughSeq && !archive.retainedIds?.includes(id)) return null;
   return { room: { sequence: row.sequence, state: { ...raw, messages } }, count: raw.messageAuthority.count };
+}
+
+// A plain top-level post depends on bounded room metadata and the proposed
+// identifier, not retained message payloads. Higher-context paths keep their
+// full context. This does not audit unrelated historical rows or certify a
+// new baseline: the trusted retained count survives, incremented by one.
+export function canonicalMessagePostContext(db, roomId, command, { actorId, humanPushEnabled = false, workLimits } = {}) {
+  const data = command.data;
+  if (command.type !== 'message.posted' || typeof data?.messageId !== 'string' || !data.messageId
+    || typeof data.body !== 'string' || Object.keys(data).some(key => !['messageId', 'body'].includes(key))) return null;
+  // Filter in SQL so probing a legacy room never returns/copies its inline
+  // history into this helper before taking the unchanged full path.
+  const row = db.prepare("SELECT sequence,projection FROM rooms WHERE id=? AND json_type(projection,'$.messageAuthority') IS NOT NULL").get(roomId);
+  if (!row) return null;
+  const raw = JSON.parse(row.projection);
+  if (!hasMessageAuthority(raw) || raw.messagesArchive || raw.room?.archivedAt || raw.room?.starterSeeded
+    || raw.room?.publicPage?.enabled || raw.room?.publicReceipts?.enabled) return null;
+  if (Object.hasOwn(raw, 'messages')) throw new Error('projection_corrupt: competing canonical message array');
+  const work = Object.values(raw.workItems ?? {});
+  if (work.some(item => item?.status === 'suspended' && item?.suspended_by === 'round_limit')) return null;
+  const assistant = db.prepare('SELECT value FROM room_assistant_config WHERE room_id=?').get(roomId);
+  if (assistant) {
+    try { if (JSON.parse(assistant.value)?.coordinatorMemberId) return null; }
+    catch { return null; }
+  }
+  // Human push rechecks full visibility asynchronously after commit. Keep that
+  // existing path rather than silently doing a whole-room read after admission.
+  if (humanPushEnabled && humanPushRecipients({ members: raw.members, senderMemberId: actorId, body: data.body }).length) return null;
+  const proof = db.prepare('SELECT metadata_hash FROM integrity_room_state WHERE room_id=?').get(roomId);
+  if (!proof?.metadata_hash) return null;
+  assertProjectionWrite(db, roomId);
+  // Existing retry recovery needs the original thread's full context.
+  if (db.prepare('SELECT 1 FROM activity_fanout_failures WHERE room_id=? AND recovered_at IS NULL LIMIT 1').get(roomId)) return null;
+  let state = raw;
+  if (work.some(isWorkReference)) {
+    const countCap = workLimits?.workItemsPerRoom, byteCap = workLimits?.projectionBytes;
+    if (!Number.isSafeInteger(countCap) || countCap < 1 || !Number.isSafeInteger(byteCap) || byteCap < 1
+      || work.length > countCap) return null;
+    // The existing hydrator reads every room work row, including orphans.
+    // Admit its entire result before any scalar payload crosses into JS.
+    // Reuse pilot budgets as fast-path admission only; larger rooms retain
+    // the unchanged full path, not a new storage limit or conversion.
+    const sizes = db.prepare(`SELECT length(CAST(work_id AS BLOB)) AS id_bytes,
+      length(CAST(revision AS BLOB)) AS revision_bytes, length(CAST(digest AS BLOB)) AS digest_bytes,
+      length(CAST(body AS BLOB)) AS body_bytes FROM work_entities WHERE room_id=? LIMIT ?`).all(roomId, countCap + 1);
+    if (sizes.length > countCap) return null;
+    let bytes = 0;
+    for (const row of sizes) for (const size of Object.values(row)) {
+      if (!Number.isSafeInteger(size) || size < 0) throw new Error('work_projection_corrupt: invalid work scalar size');
+      bytes += size;
+      if (size > byteCap || bytes > byteCap) return null;
+    }
+    // Existing content-addressed references check exact IDs, revisions and
+    // digests; this post never mints a checksum to establish their trust.
+    state = hydrateWorkItems(db, roomId, raw);
+    if (Object.values(state.workItems).some(item => item?.status === 'suspended' && item?.suspended_by === 'round_limit')) return null;
+  }
+  const rows = db.prepare(`SELECT message_id,body,record_json,reducer_extras_json FROM messages
+    WHERE room_id=? AND message_id IN (?,?) ORDER BY message_id`).all(roomId, data.messageId, `${data.messageId}:channel`);
+  for (const record of rows) assertMessageWrite(db, roomId, record.message_id);
+  const count = raw.messageAuthority.count + 1;
+  if (!Number.isSafeInteger(count)) throw new Error('projection_corrupt: invalid canonical context count');
+  return { room: { sequence: row.sequence, state: { ...state, messages: rows.map(decodeMessageEntity) } }, count };
 }

@@ -164,7 +164,7 @@ optional.push("server/mcp-result-text.mjs"); // withholds minted credentials fro
 optional.push("server/mcp-action-search.mjs"); // room_search_actions, room_run_action and the lean profile (imported by server/mcp-discovery.mjs and server/mcp-room-profile.mjs)
 optional.push("server/mcp-tool-contracts.mjs"); // AUX-08 access/cost/REST twin line on core and lean tool descriptions (imported by server/mcp-discovery.mjs)
 optional.push("cloudflare/mcp-event-transport.mjs"); // Restricted native Events transport imported by the packaged Worker.
-optional.push("server/mcp-oauth.mjs", "server/mcp-modern.mjs", "server/mcp-events-runtime.mjs", "server/mcp-event-subscriptions.mjs", "server/mcp-events-wire.mjs", "server/mcp-invite-oauth.mjs", "server/routes/mcp-invite-oauth.mjs", "server/listener-fence.mjs"); // Native OAuth principals and local runtime fencing.
+optional.push("server/mcp-oauth.mjs", "server/mcp-modern.mjs", "server/mcp-events-runtime.mjs", "server/native-mention-context.mjs", "server/mcp-event-subscriptions.mjs", "server/mcp-events-wire.mjs", "server/mcp-invite-oauth.mjs", "server/routes/mcp-invite-oauth.mjs", "server/listener-fence.mjs"); // Native OAuth principals and local runtime fencing.
 optional.push("server/mcp-room-profile.mjs"); // authenticated hosted MCP room tools (imported by server/http.mjs)
 optional.push("server/mcp-request-defaults.mjs"); // pinned API-key roomId defaults for hosted MCP calls (imported by server/mcp-room-profile.mjs and server/mcp-full-profile.mjs)
 optional.push("client/request-id.mjs"); // deterministic transport request IDs (imported by client/mcp-stdio.mjs, work-actions, help-actions, and reply-actions)
@@ -318,6 +318,7 @@ optional.push("connectors/muse.md"); // Muse custom-connector brief (served at /
 optional.push("server/account-login-methods.mjs"); // Multi-method login model (imported by server/store.mjs)
 optional.push("server/account-deletion.mjs"); // RC-2026-09-19-078: deletion executor (imported by server/http.mjs; imports the src planner below)
 optional.push("server/operator-auth.mjs", "server/operator-actions.mjs", "server/purge-registry.mjs", "server/operator-purge.mjs", "server/operator-room-purge.mjs", "server/operator-status.mjs", "server/operator-parity-diagnostics.mjs", "server/operator-legacy-message-repair.mjs", "server/operator-routes.mjs", "server/operator-projection-repair.mjs", "server/operator-rooms.mjs"); // CP-ADMIN-0: operator auth, purge, and status (imported by server/http.mjs and server/store.mjs); projection repair and operator-rooms (MGMT-PANEL Slice 1) imported by server/operator-routes.mjs; operator-room-purge (MGMT-PANEL Slice 2 panel wrapper) imported by server/operator-routes.mjs
+optional.push("server/operator-legacy-session-repair.mjs", "server/legacy-session-replay.mjs"); // Explicit bounded historical reconciliation, imported by operator-legacy-message-repair.mjs.
 optional.push("src/account-deletion.mjs"); // RC-2026-09-19-078: pure purge planner (imported by server/account-deletion.mjs)
 optional.push("server/account-passkeys.mjs"); // Passkey auth wiring (slice 5; imported by server/http.mjs)
 optional.push("src/passkey-login.mjs"); // WebAuthn logic (imported by server/account-passkeys.mjs)
@@ -383,7 +384,7 @@ optional.push("server/spend-pricing.mjs", "server/routes/spend-pricing.mjs"); //
 optional.push("server/room-flood-guard.mjs"); // per (room, member) chat post budget (imported by server/store.mjs)
 optional.push("server/membership-delegation.mjs"); // RC-2026-09-18-038: owner-granted membership administration (imported by server/store.mjs)
 optional.push("server/usage-summary.mjs");
-optional.push("server/operator-archive.mjs", "server/operator-qa-retirement.mjs"); // operator archive door for the projection cap (imported by server/operator-routes.mjs)
+optional.push("server/operator-message-authority.mjs", "server/operator-archive.mjs", "server/operator-qa-retirement.mjs"); // operator archive door for the projection cap (imported by server/operator-routes.mjs)
 optional.push("server/store-relief.mjs"); // store-growth automatic projection relief (imported by server/jobs.mjs)
 optional.push("server/channel-adapters/telegram-config.mjs", "server/channel-adapters/telegram-transport.mjs", "scripts/telegram-set-webhook.mjs", "scripts/telegram-rotate-webhook.mjs");
 optional.push("server/receipts-page.mjs", "server/receipts-live.mjs"); // public receipts page + live room reader (imported by server/http.mjs)

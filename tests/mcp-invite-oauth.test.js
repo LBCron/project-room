@@ -326,3 +326,35 @@ test('hosted portable public client preserves the existing client and separates 
     assert.equal(response.headers.get('location'), null);
   }
 });
+
+// Claude custom connectors (claude.com/docs/connectors/building/authentication):
+// hosted Claude surfaces send exactly https://claude.ai/api/mcp/auth_callback,
+// and Claude accepts a user-entered client ID with no secret as a public client.
+test('hosted Claude public client is registered with the published callback and completes consent', async t => {
+  const config = JSON.parse(readFileSync(new URL('../cloudflare/wrangler.jsonc', import.meta.url), 'utf8'));
+  const clients = JSON.parse(config.env.production.vars.ROOM_MCP_OAUTH_CLIENTS);
+  const client = clients.find(c => c.clientId === 'project-room-claude');
+  assert.ok(client, 'production registers project-room-claude');
+  assert.deepEqual(client.redirectUris, ['https://claude.ai/api/mcp/auth_callback']);
+  assert.ok(clients.find(c => c.clientId === 'project-room-chatgpt'), 'existing ChatGPT client is kept');
+  const f = await setup(t, { client, clients });
+  for (const changes of [
+    { redirect_uri: 'https://example.invalid/callback' },
+    { code_challenge_method: 'plain' },
+    { resource: 'https://example.invalid/mcp' },
+  ]) {
+    const response = await fetch(f.base + '/oauth/authorize?' + new URLSearchParams({
+      client_id: client.clientId, redirect_uri: client.redirectUris[0], scope: 'rooms:read',
+      code_challenge: challenge, code_challenge_method: 'S256', resource, ...changes,
+    }));
+    assert.equal(response.status, 400, JSON.stringify(changes));
+    assert.equal(response.headers.get('location'), null, 'invalid authorization must not redirect to an untrusted callback');
+  }
+  const allowed = await f.submit('allow');
+  assert.ok([302, 303].includes(allowed.status), 'Claude rejects 307; the authorization response must be 302 or 303');
+  const redirect = new URL(allowed.headers.get('location'));
+  assert.equal(redirect.origin + redirect.pathname, 'https://claude.ai/api/mcp/auth_callback');
+  assert.equal(redirect.searchParams.get('iss'), origin);
+  const tokens = await (await f.exchange({ grant_type: 'authorization_code', code: redirect.searchParams.get('code') })).json();
+  assert.equal(typeof tokens.access_token, 'string');
+});

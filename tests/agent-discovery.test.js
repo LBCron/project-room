@@ -646,24 +646,31 @@ test("A2A agent card declares the work-receipt extension (docs/a2a-receipt-exten
   assert.match(ext.params.spec_url, /a2a-receipt-extension\.md$/);
 });
 
-test("anonymous MCP catalog is seven tools (four join + two public-work + identity mint); copy never says four", async () => {
+test("anonymous discovery has eight entries but only seven public actions; the access check requires auth", async () => {
   const { livePublicMcpTools } = await import("../server/mcp-discovery.mjs");
-  const { MCP_JOIN_TOOLS } = await import("../server/mcp-http.mjs");
+  const { MCP_JOIN_TOOLS, handleMcpJoinRpc, mcpRpcStatus } = await import("../server/mcp-http.mjs");
   const { anonymousPublicWorkMcpTools } = await import("../server/mcp-public-work.mjs");
   const { anonymousIdentityMintMcpTools } = await import("../server/mcp-identity-mint.mjs");
   const tools = livePublicMcpTools();
   assert.equal(MCP_JOIN_TOOLS.length, 4);
   assert.equal(anonymousPublicWorkMcpTools.length, 2);
   assert.equal(anonymousIdentityMintMcpTools.length, 1);
-  assert.equal(tools.length, 7);
+  assert.equal(tools.length, 8);
   assert.deepEqual(tools.map(t => t.name).sort(), [
     ...MCP_JOIN_TOOLS.map(t => t.name),
-    "public_work_read_task", "public_work_recommend", "room_identity_mint",
+    "public_work_read_task", "public_work_recommend", "room_identity_mint", "room_check_access",
   ].sort());
   // QA5-gb: the packet once called this anonymous catalog "four tools".
-  const text = llmsTxt();
-  assert.ok(!/four-tool catalog/i.test(text), "llms.txt must not call the anonymous catalog four-tool");
-  assert.ok(!/tools\/list is the four( public join)? tools/i.test(text), "llms.txt must not say no-credential tools/list is only four tools");
+  for (const text of [llmsTxt(), llmsFullTxt()]) {
+    assert.match(text, /eight discovery entries/);
+    assert.match(text, /seven anonymous public actions/i);
+    assert.match(text, /room_check_access[^.]*HTTP 401[^.]*OAuth/);
+    assert.match(text, /listing it grants no anonymous Room access/);
+    assert.doesNotMatch(text, /eight (anonymous|credential-free) (public )?actions/i);
+    assert.doesNotMatch(text, /four-tool catalog/i);
+  }
+  const denied = handleMcpJoinRpc({ jsonrpc: "2.0", id: 1, method: "tools/call", params: { name: "room_check_access", arguments: {} } });
+  assert.equal(mcpRpcStatus(denied), 401, "the eighth entry grants no anonymous execution");
 });
 
 test("llms.txt follows the llmstxt.org header: H1, summary blockquote, Start here links", () => {

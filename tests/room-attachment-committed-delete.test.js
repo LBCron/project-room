@@ -6,6 +6,7 @@ import { join } from "node:path";
 import { RoomStore } from "../server/store.mjs";
 import { AgentRooms } from "../server/agent-rooms.mjs";
 import { attachmentLimits } from "../server/attachment-schema.mjs";
+import { initialRoom } from "../server/bootstrap.mjs";
 
 // Test-audit authoring gate:
 // 1. Protects: a room whose byte quota is full of committed files can free
@@ -73,4 +74,68 @@ test("a committed file whose bound message is gone stays hidden from non-uploade
     VALUES(?,?,?,'f.txt','text/plain',1,'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',?,'committed',0,0,'m-gone')`).run(roomId, "theirs", "someone-else", Buffer.from("x"));
   assert.throws(() => store.roomAttachments.discard(owner.secret, roomId, "theirs"), error => error.code === "attachment_not_found");
   assert.equal(store.db.prepare("SELECT state FROM room_attachments WHERE room_id=? AND id='theirs'").get(roomId).state, "committed");
+});
+
+function visibilityFixture(t) {
+  const store = new RoomStore(":memory:");
+  t.after(() => store.close());
+  store.initialize(initialRoom());
+  const keys = { owner: store.issueAccessKey("commons", "owner") };
+  for (const memberId of ["uploader", "recipient", "observer"]) {
+    store.command(keys.owner, "commons", { id: `add-${memberId}`, type: "member.added",
+      data: { memberId, displayName: memberId, kind: "human", permissions: [] } });
+    keys[memberId] = store.issueAccessKey("commons", memberId);
+  }
+  const files = store.roomAttachments;
+  const commit = (id, toMemberId) => {
+    files.stage(keys.uploader, "commons", { id, filename: `${id}.txt`, mediaType: "text/plain", data: b64(4) });
+    store.command(keys.uploader, "commons", { id: `post-${id}`, type: "message.posted",
+      data: { messageId: `message-${id}`, body: "File context", ...(toMemberId ? { toMemberId } : {}) } });
+    return files.commit(keys.uploader, "commons", { id, messageId: `message-${id}` });
+  };
+  return { store, keys, files, commit };
+}
+
+test("visible public files can be deleted by uploader or owner, with stable retries and no member deletion grant", t => {
+  const { store, keys, files, commit } = visibilityFixture(t);
+  for (const actor of ["uploader", "owner"]) {
+    const id = `public-${actor}`;
+    commit(id);
+    assert.equal(files.get(keys.observer, "commons", id).attachment.data, b64(4));
+    assert.throws(() => files.discard(keys.observer, "commons", id), error => error.status === 403 && error.code === "attachment_forbidden");
+    assert.equal(files.discard(keys[actor], "commons", id).duplicate, false);
+    const after = store.db.prepare("SELECT state,bytes,message_id FROM room_attachments WHERE room_id=? AND id=?").get("commons", id);
+    assert.deepEqual({ ...after }, { state: "deleted", bytes: null, message_id: `message-${id}` });
+    assert.deepEqual(files.discard(keys[actor], "commons", id), { status: "deleted", duplicate: true, roomId: "commons", id });
+    assert.throws(() => files.get(keys.uploader, "commons", id), error => error.status === 410 && error.code === "attachment_unavailable");
+    assert.throws(() => files.discard(keys.observer, "commons", id), error => error.status === 404 && error.code === "attachment_not_found");
+    assert.throws(() => files.commit(keys.uploader, "commons", { id, messageId: `message-${id}` }), error => error.status === 410 && error.code === "attachment_unavailable");
+  }
+});
+
+// The existing DM tests only read committed files; they never delete the
+// bytes and retry as a room owner outside the DM. Exercise the real API so
+// status/receipt differences cannot reveal the hidden file's existence.
+for (const operation of ["get", "discard"]) test(`hidden DM attachment ${operation} remains not-found for a nonparty owner after deletion and retries`, t => {
+  const { store, keys, files, commit } = visibilityFixture(t);
+  const id = "private-file";
+  commit(id, "recipient");
+  const assertHidden = () => {
+    for (const actor of ["owner", "observer"]) {
+      assert.equal(files.list(keys[actor], "commons").files.some(file => file.id === id), false);
+      for (const target of [id, "not-a-file"]) {
+        assert.throws(() => files[operation](keys[actor], "commons", target),
+          error => error.status === 404 && error.code === "attachment_not_found", `${actor} ${operation} ${target}`);
+      }
+    }
+  };
+  assertHidden();
+  assert.equal(files.get(keys.recipient, "commons", id).attachment.data, b64(4));
+  assert.throws(() => files.discard(keys.recipient, "commons", id), error => error.status === 403 && error.code === "attachment_forbidden");
+  assert.equal(files.discard(keys.uploader, "commons", id).duplicate, false);
+  assertHidden();
+  assert.equal(files.discard(keys.uploader, "commons", id).duplicate, true);
+  assertHidden();
+  assert.throws(() => files.get(keys.recipient, "commons", id), error => error.status === 410 && error.code === "attachment_unavailable");
+  assert.equal(store.db.prepare("SELECT state FROM room_attachments WHERE room_id=? AND id=?").get("commons", id).state, "deleted");
 });

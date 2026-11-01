@@ -222,12 +222,13 @@ export class RoomAttachmentBytes {
       this.expire(roomId, this.store.now());
       const row = this.db.prepare("SELECT * FROM room_attachments WHERE room_id=? AND id=?").get(roomId, id);
       if (!row) fail(404, "attachment_not_found", "Attachment not found");
-      if ((row.state !== "staged" && row.state !== "committed") || row.bytes == null) {
-        fail(410, "attachment_unavailable", "Attachment bytes are no longer available");
-      }
-      // Invisible files 404 (not 403) so the id does not leak existence.
+      // Terminal states must preserve the bound message's visibility too:
+      // a 410 would reveal a hidden DM attachment's existence.
       if (!this.visibleTo(row, this.messageIndex(roomId), auth.member.id)) {
         fail(404, "attachment_not_found", "Attachment not found");
+      }
+      if ((row.state !== "staged" && row.state !== "committed") || row.bytes == null) {
+        fail(410, "attachment_unavailable", "Attachment bytes are no longer available");
       }
       return {
         roomId,
@@ -258,13 +259,15 @@ export class RoomAttachmentBytes {
       // uploader or the room owner deletes a committed file: bytes are
       // dropped and the row moves to the existing terminal 'deleted' state,
       // which no quota counts. Visibility is checked first so the id does
-      // not leak a DM file's existence.
+      // not leak a DM file's existence, including a deleted retry receipt.
+      if ((row.state === "committed" || row.state === "deleted")
+        && !this.visibleTo(row, this.messageIndex(roomId), auth.member.id))
+        fail(404, "attachment_not_found", "Attachment not found");
       if (row.state === "deleted") {
         if (!permitted) fail(404, "attachment_not_found", "Attachment not found");
         return { status: "deleted", duplicate: true, roomId, id };
       }
       if (row.state === "committed") {
-        if (!this.visibleTo(row, this.messageIndex(roomId), auth.member.id)) fail(404, "attachment_not_found", "Attachment not found");
         if (!permitted) fail(403, "attachment_forbidden", "Only the uploader or the room owner can delete this file");
         const removed = this.db.prepare(`UPDATE room_attachments SET state='deleted', bytes=NULL
           WHERE room_id=? AND id=? AND state='committed'`).run(roomId, id).changes;

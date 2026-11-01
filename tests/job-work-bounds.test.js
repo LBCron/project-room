@@ -98,3 +98,33 @@ test("patrol tick statement work is constant as the backlog grows (rows grow onl
   assert.equal(measured[0].statements, measured[1].statements, JSON.stringify(measured));
   assert.ok(measured[1].rows - measured[0].rows <= measured[1].rooms - measured[0].rooms + 2, JSON.stringify(measured));
 });
+
+// Fairness must hold while early rooms stay behind (more events than one
+// batch; the batch is shrunk to 1 here), otherwise skipping caught-up rooms hides a missing rotation.
+function backloggedStore(heavy, light) {
+  const store = storeWithRooms(0), path = store.path;
+  const add = (roomId, events) => {
+    store.initialize(initialRoom(roomId));
+    const key = store.issueAccessKey(roomId, "owner");
+    for (let i = 0; i < events; i++) store.command(key, roomId, { id: `c-${roomId}-${i}`, type: "message.posted", data: { body: "b", messageId: `m-${roomId}-${i}` } });
+  };
+  for (let i = 0; i < heavy; i++) add(`a-heavy-${i}`, 4);
+  for (let i = 0; i < light; i++) add(`z-light-${i}`, 1);
+  return { store, path };
+}
+const tailed = store => new Set(store.db.prepare("SELECT room_id FROM patrol_cursor WHERE sequence > 0").all().map(row => row.room_id));
+test("rotation serves later rooms while earlier rooms are still more than a batch behind, across reopen and a deleted remembered room", t => {
+  const { store, path } = backloggedStore(PATROL_TICK_ROOMS, 3);
+  const now = freezeClock(t);
+  runPatrolTick(store, { deadline: now + 5000, limit: 1 });
+  assert.equal([...tailed(store)].some(id => id.startsWith("z-")), false);
+  store.close();
+  const reopened = new RoomStore(path);
+  runPatrolTick(reopened, { deadline: now + 5000, limit: 1 });
+  assert.equal([...tailed(reopened)].filter(id => id.startsWith("z-")).length, 3, "later rooms are served next tick, even after a restart");
+  // The remembered room disappearing must not reset or wedge the rotation.
+  const remembered = reopened.db.prepare("SELECT last_room FROM patrol_rotation WHERE id=1").get().last_room;
+  reopened.db.prepare("UPDATE patrol_rotation SET last_room=? WHERE id=1").run(`${remembered}-deleted`);
+  const after = runPatrolTick(reopened, { deadline: now + 5000, limit: 1 });
+  assert.ok(after.rooms > 0 && after.rooms <= PATROL_TICK_ROOMS);
+});

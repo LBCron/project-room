@@ -340,6 +340,18 @@ test("offline schema45 archive cold-imports normalized serving and refuses an om
     import {RoomStore} from ${JSON.stringify(pathToFileURL(join(destination,"server/store.mjs")).href)};
     import {initialRoom} from ${JSON.stringify(pathToFileURL(join(destination,"server/bootstrap.mjs")).href)};
     import {event} from ${JSON.stringify(pathToFileURL(join(destination,"src/events.js")).href)};
+    // Explicit cold public-export probes identify which packaged modules this
+    // integration exercises; they do not replace their behavioral test suites.
+    import {readCurrentEventWindow} from ${JSON.stringify(pathToFileURL(join(destination,"server/current-room-events.mjs")).href)};
+    import {readCurrentWorkListing} from ${JSON.stringify(pathToFileURL(join(destination,"server/current-work-list.mjs")).href)};
+    import {validateCurrentArchive} from ${JSON.stringify(pathToFileURL(join(destination,"server/current-room-archive.mjs")).href)};
+    import {emptyWorkPrivacy,applyWorkPrivacyRequest} from ${JSON.stringify(pathToFileURL(join(destination,"server/current-work-privacy.mjs")).href)};
+    import {advanceCanonicalH} from ${JSON.stringify(pathToFileURL(join(destination,"server/replay-canonical-h.mjs")).href)};
+    import {assertRestoreAdmitted} from ${JSON.stringify(pathToFileURL(join(destination,"server/restore-admission.mjs")).href)};
+    if(validateCurrentArchive(null)!==null)throw Error('archive absence contract changed');
+    if(applyWorkPrivacyRequest(emptyWorkPrivacy(),{requesterId:'owner',recipientId:'reader'},1).requests!==1)throw Error('privacy counter export failed');
+    let rejected=false;try{advanceCanonicalH({state:{},header:{},readMetadata:()=>null});}catch(error){rejected=/Invalid protected canonical authority marker/.test(error.message);}
+    if(!rejected)throw Error('canonical source admission export failed closed');
     const path=${JSON.stringify(join(directory,"normalized.sqlite"))};
     let store=new RoomStore(path);
     store.initialize([...initialRoom(),event({id:'packaged-post',roomId:'commons',actorId:'owner',type:'message.posted',data:{messageId:'saved',body:'Packaged useful result'}})],{representation:'normalized-current-v1'});
@@ -347,6 +359,9 @@ test("offline schema45 archive cold-imports normalized serving and refuses an om
     store=new RoomStore(path,{integrity:'deferred'});store.room=()=>{throw Error('whole room hydration');};
     const page=store.eventsAfter(key,'commons');
     if(page.events.find(row=>row.event.id==='packaged-post')?.event.data.body!=='Packaged useful result')throw Error('normalized archived import/read failed');
+    assertRestoreAdmitted(store.db);
+    const listed=readCurrentWorkListing(store,key,'commons');if(listed.work.length!==0)throw Error('empty normalized work export failed');
+    store.readTransaction(()=>{const direct=readCurrentEventWindow(store,'commons','owner');if(!direct.events.length)throw Error('event export failed');});
     store.close(); console.log(JSON.stringify({normalized:true,restarted:true}));`;
   const cold=spawnSync(process.execPath,["--input-type=module","-e",program],{cwd:directory,env:{PATH:"/unavailable"},encoding:"utf8"});
   assert.equal(cold.status,0,cold.stderr);assert.deepEqual(JSON.parse(cold.stdout),{normalized:true,restarted:true});

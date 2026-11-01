@@ -344,6 +344,11 @@ test("offline schema45 archive cold-serves nonempty native work and refuses an o
     // integration exercises; they do not replace their behavioral test suites.
     import {readCurrentEventWindow} from ${JSON.stringify(pathToFileURL(join(destination,"server/current-room-events.mjs")).href)};
     import {readCurrentWorkListing} from ${JSON.stringify(pathToFileURL(join(destination,"server/current-work-list.mjs")).href)};
+    import {readCurrentReplies} from ${JSON.stringify(pathToFileURL(join(destination,"server/current-reply-reader.mjs")).href)};
+    import {readCurrentNativeInbox} from ${JSON.stringify(pathToFileURL(join(destination,"server/current-native-inbox.mjs")).href)};
+    import {readCurrentInboxDiscovery} from ${JSON.stringify(pathToFileURL(join(destination,"server/current-inbox-discovery.mjs")).href)};
+    import {INBOX_WORK_ROLES,CURRENT_INBOX_DISCOVERY_INDEXES} from ${JSON.stringify(pathToFileURL(join(destination,"server/current-inbox-indexes.mjs")).href)};
+    if(typeof readCurrentReplies!=='function'||typeof readCurrentInboxDiscovery!=='function'||INBOX_WORK_ROLES.length!==4||!CURRENT_INBOX_DISCOVERY_INDEXES.includes('current_inbox_open_requests'))throw Error('packaged inbox/reply dependency exports missing');
     import {validateCurrentArchive} from ${JSON.stringify(pathToFileURL(join(destination,"server/current-room-archive.mjs")).href)};
     import {emptyWorkPrivacy,applyWorkPrivacyRequest} from ${JSON.stringify(pathToFileURL(join(destination,"server/current-work-privacy.mjs")).href)};
     import {advanceCanonicalH} from ${JSON.stringify(pathToFileURL(join(destination,"server/replay-canonical-h.mjs")).href)};
@@ -357,8 +362,8 @@ test("offline schema45 archive cold-serves nonempty native work and refuses an o
     import {textVersion} from ${JSON.stringify(pathToFileURL(join(destination,"server/text-results.mjs")).href)};
     const path=${JSON.stringify(join(directory,"normalized.sqlite"))};
     let store=new RoomStore(path);
-    store.initialize([...initialRoom(),event({id:'packaged-post',roomId:'commons',actorId:'owner',type:'message.posted',data:{messageId:'saved',body:'Packaged useful result'}})],{representation:'normalized-current-v1'});
-    const key=store.issueAccessKey('commons','owner');
+    store.initialize([...initialRoom(),event({id:'packaged-reader',roomId:'commons',actorId:'owner',type:'member.added',data:{memberId:'reader',displayName:'Reader',kind:'agent',permissions:[]}}),event({id:'packaged-post',roomId:'commons',actorId:'owner',type:'message.posted',data:{messageId:'saved',body:'Packaged useful result'}}),event({id:'packaged-question-event',roomId:'commons',actorId:'owner',type:'message.posted',data:{messageId:'packaged-question',body:'Save a useful reply',toMemberId:'reader',requestKind:'reply',requestPolicyVersion:1}})],{representation:'normalized-current-v1'});
+    const key=store.issueAccessKey('commons','owner'),readerKey=store.issueAccessKey('commons','reader');
     for(const workItemId of ['native-task','other-task'])store.command(key,'commons',{id:'propose-'+workItemId,type:'work.proposed',data:{workItemId,title:'Useful '+workItemId,definitionOfDone:'Saved exact result',accountableMemberId:'owner'}});
     store.workClaims.configure('commons',{maxOpenClaims:1});
     store.command(key,'commons',{id:'accept-native-task',type:'work.accepted',data:{workItemId:'native-task',expectedRevision:0}});
@@ -371,6 +376,10 @@ test("offline schema45 archive cold-serves nonempty native work and refuses an o
     const page=store.eventsAfter(key,'commons');
     if(page.events.find(row=>row.event.id==='packaged-post')?.event.data.body!=='Packaged useful result')throw Error('normalized archived import/read failed');
     assertRestoreAdmitted(store.db);
+    const inbox=readCurrentNativeInbox(store,readerKey,'commons');
+    if(!inbox.replyRequests.some(request=>request.id==='packaged-question'))throw Error('packaged native inbox lost a standing private obligation');
+    const requestList=store.replyRequests.list(readerKey,'commons'),requestRead=store.replyRequests.selected(readerKey,'commons','packaged-question');
+    if(requestList.contractVersion!==2||requestList.requests[0]?.id!=='packaged-question'||requestRead.contractVersion!==2||!requestRead.current.answerBasis||requestRead.page.items[0]?.message.body!=='Save a useful reply')throw Error('packaged v2 reply list/selected reader missing');
     const listed=readCurrentWorkListing(store,key,'commons');
     if(!listed.work.some(item=>item.id==='native-task'&&item.state==='accepted'))throw Error('nonempty native work did not survive cold package reopen');
     const revision=()=>readWorkItem(store.db,'commons','native-task').revision;
@@ -384,9 +393,9 @@ test("offline schema45 archive cold-serves nonempty native work and refuses an o
     store.close();store=new RoomStore(path,{integrity:'deferred'});
     const saved=readWorkItem(store.db,'commons','native-task');
     if(saved.state!=='completed'||!saved.receipt?.nativeText)throw Error('native saved result did not survive another cold reopen');
-    store.close(); console.log(JSON.stringify({normalized:true,restarted:true,nativeAccepted:true,nativeCompleted:true,capacityDenied:true,legacyMirrors:0}));`;
+    store.close(); console.log(JSON.stringify({normalized:true,restarted:true,nativeAccepted:true,nativeCompleted:true,capacityDenied:true,nativeInbox:true,replyReader:true,legacyMirrors:0}));`;
   const cold=spawnSync(process.execPath,["--input-type=module","-e",program],{cwd:directory,env:{PATH:"/unavailable"},encoding:"utf8"});
-  assert.equal(cold.status,0,cold.stderr);assert.deepEqual(JSON.parse(cold.stdout),{normalized:true,restarted:true,nativeAccepted:true,nativeCompleted:true,capacityDenied:true,legacyMirrors:0});
+  assert.equal(cold.status,0,cold.stderr);assert.deepEqual(JSON.parse(cold.stdout),{normalized:true,restarted:true,nativeAccepted:true,nativeCompleted:true,capacityDenied:true,nativeInbox:true,replyReader:true,legacyMirrors:0});
   assert.deepEqual(verifyRuntimePackage(destination,{expectedCommit:commit}),receipt);
   rmSync(join(destination,"server/current-room-repository.mjs"));
   assert.throws(()=>verifyRuntimePackage(destination),/missing|differ/);

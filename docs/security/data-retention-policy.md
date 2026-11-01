@@ -43,7 +43,7 @@ updated.
 2. **Deletion is bounded and named.** The scheduled tick scans the live
    store only for the disposable classes: the web fetch and web research
    logs (rows older than 30 days), finished webhook delivery records
-   (older than 7 days, with the newest 100 per subscription kept), and
+   (deleted only when older than 7 days and outside the newest 100 per subscription), and
    minor expired OAuth provider grants and abuse-rate buckets.
    Deletion applies by default; an operator can make the web-log leg
    plan-only with `ROOM_RETENTION_ALLOW_DELETION=0`. The analytics

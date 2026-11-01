@@ -47,13 +47,18 @@ export function bindingFixture(t, retained = 12, { canonical = true } = {}) {
 }
 export function measureBinding(f, operation) {
   const original = f.store.db.prepare, room = f.store.room;
-  const result = { fullRoomReads: 0, messageRows: 0, messageBytes: 0 };
+  const result = { fullRoomReads: 0, messageRows: 0, messageBytes: 0, contextRows: 0, contextBytes: 0 };
   f.store._dropProjectionCache();
+  for (const key of ['_roomSequenceStmt','_roomProjectionStmt','_roomAuthorityPrefixStmt','_roomAuthorityFullStmt']) f.store[key] = null;
   f.store.room = function(...args) { result.fullRoomReads++; return room.apply(this, args); };
   f.store.db.prepare = function(sql) {
     const statement = original.call(this, sql);
-    if (!/\b(?:FROM|JOIN)\s+messages\b/i.test(sql)) return statement;
-    const record = row => { if (row !== undefined) { result.messageRows++; result.messageBytes += Buffer.byteLength(JSON.stringify(row)); } };
+    if (!/\b(?:FROM|JOIN)\s+(?:rooms|integrity_room_state|messages|work_entities)\b/i.test(sql)) return statement;
+    const messages = /\b(?:FROM|JOIN)\s+messages\b/i.test(sql);
+    const record = row => { if (row !== undefined) {
+      const bytes = Buffer.byteLength(JSON.stringify(row)); result.contextRows++; result.contextBytes += bytes;
+      if (messages) { result.messageRows++; result.messageBytes += bytes; }
+    } };
     return new Proxy(statement, { get(target, key) {
       if (key === 'all') return (...args) => { const rows = target.all(...args); rows.forEach(record); return rows; };
       if (key === 'get') return (...args) => { const row = target.get(...args); record(row); return row; };

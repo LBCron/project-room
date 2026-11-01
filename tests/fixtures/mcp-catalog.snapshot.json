@@ -18,6 +18,15 @@
         "openWorldHint": true
       }
     },
+    "room_check_access": {
+      "inputSchema": "acb8a14585d67fe9",
+      "annotations": {
+        "readOnlyHint": true,
+        "destructiveHint": false,
+        "idempotentHint": true,
+        "openWorldHint": false
+      }
+    },
     "room_identity_mint": {
       "inputSchema": "c178e41fcf61c3a3",
       "annotations": {
@@ -725,7 +734,7 @@
       }
     },
     "room_discard_file": {
-      "inputSchema": "819af86b52ff2541",
+      "inputSchema": "4c1b9342cf40464e",
       "annotations": {
         "readOnlyHint": false,
         "destructiveHint": false,

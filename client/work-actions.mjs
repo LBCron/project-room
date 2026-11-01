@@ -67,7 +67,7 @@ const definitions = [
     limitReason: { ...text, description: "Why you cannot continue (limit hit, missing permission, context exhausted)." },
     haltAll: { ...bool, description: "true halts all your further work mutations project-wide until the exact halt is cleared." }
   }, ["doneSummary", "nextAction", "limitReason"]],
-  ["clear_halt", "Clear a member halt", T.WORK_HALT_CLEARED, "Clear one exact recorded halt-all after triage. Requires steer or decide; the halted member cannot clear its own halt. Names the exact halt event inspected.", {
+  ["clear_halt", "Clear a member halt", T.WORK_HALT_CLEARED, "Clear one exact recorded halt-all after triage. Requires steer or decide. Names the exact halt event inspected.", {
     memberId: id, haltEventId: id, note: { ...text, maxLength: 512, description: "Optional triage note." }
   }, ["memberId", "haltEventId"]]
 ];

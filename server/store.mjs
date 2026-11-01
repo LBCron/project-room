@@ -1,3 +1,4 @@
+import { savedHistoricalReplayCheckpoint } from './historical-replay-contract.mjs';
 import { bootstrapLegacyWriteProofs, configureWriteIntegrity, beginWriteProofFrame, endWriteProofFrame, publishProjectionWrites, projectionDigest, projectionContentHash, servingContentProof, servingProofDrift, assertProjectionWrite, assertMessageWrite, recordMessageWrite, withVerifiedRoomReconstruction } from './write-integrity.mjs';
 const OPERATOR_QA_ARCHIVE = Symbol("operator QA room archive");
 import { authenticateMcpOAuthRequest } from './mcp-oauth.mjs';
@@ -58,7 +59,7 @@ import { WANTS_WORK_SCHEMA } from "./work-wants.mjs"; // BOARD-WAKE-2
 import { CODE_DROPS_SCHEMA, CodeDrops } from "./code-drops.mjs"; // room-native patch exchange
 import { PROJECTION_BODIES_SCHEMA, storedProjection, hydrateProjection } from "./projection-at-rest.mjs"; // Phase 1a
 import { MESSAGES_SCHEMA, MESSAGES_BACKFILL_CURSOR_SCHEMA, MESSAGES_BACKFILL_BLOCKS_SCHEMA, archivedMessageRow, archiveMarker, archivedMatchingRecords, archivedThreadRecords, archiveRoomMessages, restoreArchivedMessages, runMessagesBackfill, checkMessagesParity as verifyMessagesParity, runMessagesParityCheck, messagesBackfillCaughtUp, resyncRoomMessageRows, syncMessageRows } from "./messages-store.mjs";
-import { hasMessageAuthority, canonicalMessageEditContext } from './message-authority.mjs';
+import { hasMessageAuthority, canonicalMessageEditContext, canonicalMessagePostContext } from './message-authority.mjs';
 import { runLegacyMessageShapeUpgrade } from "./legacy-message-shape.mjs";
 import { commitMessageRedaction } from "./message-redaction.mjs";
 import { runPatrolTick, patrolFindings as listPatrolFindings, patrolBlocks as listPatrolBlocks } from "./patrol.mjs";
@@ -2402,6 +2403,12 @@ this.slaBreachAlerts = new SlaBreachAlertJournal(this); // Task 26: durable in-a
     return this.transaction(() => {
       const room = this.room(roomId, { verifyBodyHashes: true });
       const enabled = hasMessageAuthority(room.state);
+      // Reverse is representation change, never permission to trust changed
+      // canonical payloads. Hydration checks shape/body agreement, not the
+      // independent writer proof; validate that proof before removing authority.
+      if (enabled && reverse && servingProofDrift(this.db, roomId,
+        this.db.prepare('SELECT projection FROM rooms WHERE id=?').get(roomId).projection))
+        throw Error('projection_corrupt: reverse authority requires intact serving proofs');
       const missingProof = enabled && (this.db.prepare('SELECT 1 FROM messages WHERE room_id=? AND entity_hash IS NULL LIMIT 1').get(roomId)
         || !this.db.prepare('SELECT metadata_hash FROM integrity_room_state WHERE room_id=?').get(roomId)?.metadata_hash);
       if (enabled === !reverse && (reverse || !missingProof)) return { changed: false, sequence: room.sequence };
@@ -3975,13 +3982,20 @@ this.slaBreachAlerts = new SlaBreachAlertJournal(this); // Task 26: durable in-a
     // the outer commit. A scoped rooms write invalidates that room's earlier candidates;
     // unknown writes and rollbacks invalidate every candidate.
     const boundary = outermost || isolated;
+    // A failed savepoint discards only its own appends. Earlier successful
+    // writes still belong to the outer transaction and must wake on commit.
+    const priorAppends = boundary ? new Set(this._pendingAppends) : null;
     const frames = this._pendingProjectionFrames ??= [];
     if (boundary) { frames.push(new Map()); beginWriteProofFrame(this.db); }
     let result;
     try { result = this.storagePlatform.transaction(this.db, fn, false, { isolated }); }
     catch (error) {
       this._dropProjectionCache();
-      if (boundary) { frames.pop(); endWriteProofFrame(this.db,false); this._pendingAppends.clear(); }
+      if (boundary) {
+        frames.pop(); endWriteProofFrame(this.db,false);
+        this._pendingAppends.clear();
+        if (!outermost) for (const roomId of priorAppends) this._pendingAppends.add(roomId);
+      }
       throw this.storageFailure(error, outermost);
     }
     if (boundary) {
@@ -3999,7 +4013,7 @@ this.slaBreachAlerts = new SlaBreachAlertJournal(this); // Task 26: durable in-a
       // streams woken by the flush observe the post-commit projection state.
       // A rolled-back append never reaches here: the catch path clears
       // _pendingAppends at the same boundary instead.
-      this._flushEventAppends();
+      if (outermost) this._flushEventAppends();
     }
     if (before !== null && (before === undefined || this.storagePlatform.changes(this.db) !== before)) this.storageRecovered();
     return result;
@@ -4142,6 +4156,10 @@ this.slaBreachAlerts = new SlaBreachAlertJournal(this); // Task 26: durable in-a
     if (context) context.room.state = hydrateWorkItems(this.db, roomId, context.room.state);
     return context;
   }
+  canonicalMessagePostContext(roomId, command, actorId) {
+    if (this.messageProjectionWindow !== null || this.maintainMessageCertification) return null;
+    return canonicalMessagePostContext(this.db, roomId, command, { actorId, humanPushEnabled: Boolean(this.humanPush?.vapid), workLimits: PILOT_LIMITS });
+  }
   // Phase 1a: the one serializer for rooms.projection. Every writer uses it.
   storedProjection(roomId, state) {
     return storedProjection(this.db, roomId, state, { enabled: this.bodiesAtRest });
@@ -4199,6 +4217,7 @@ this.slaBreachAlerts = new SlaBreachAlertJournal(this); // Task 26: durable in-a
     return this._replayRoom(roomId, through ?? this.room(roomId).sequence);
   }
   _replayRoom(roomId, through) {
+    return this.readTransaction(() => {
     const head = this.db.prepare("SELECT sequence FROM rooms WHERE id=?").get(roomId);
     if (!head) fail(404, "room_not_found", "Room not found");
     const room = { sequence: head.sequence };
@@ -4220,6 +4239,10 @@ this.slaBreachAlerts = new SlaBreachAlertJournal(this); // Task 26: durable in-a
         console.error(`projection checkpoint for room ${roomId} is unreadable (${error.message}); replaying the full event history`);
       }
     }
+    if (sequence === 0) {
+      const saved = savedHistoricalReplayCheckpoint(this.db, roomId, through);
+      if (saved) { state = saved.state; sequence = saved.sequence; }
+    }
     // Work controls predate some stored projections and their checkpoints:
     // backfill the round/tool-call counters, suspension cause, and receipt
     // segments before replaying, so a checkpoint with no later events still
@@ -4237,6 +4260,7 @@ this.slaBreachAlerts = new SlaBreachAlertJournal(this); // Task 26: durable in-a
     })());
     if (sequence !== through) throw new Error("Event sequence does not reach the room projection");
     return { sequence, state: compact(state) };
+    });
   }
   // Administrative bootstrap, never exposed over HTTP. Historical demo events are test fixtures only.
   initialize(events) {
@@ -6037,6 +6061,16 @@ this.slaBreachAlerts = new SlaBreachAlertJournal(this); // Task 26: durable in-a
       try { state = compact(replayEvents(emptyRoomState(), events)); }
       catch (error) { fail(422, "invalid_import", `Export does not replay: ${error.message}`); }
       if (new Set(events.map(e => e.id)).size !== events.length) fail(422, "invalid_import", "Import has duplicate event ids");
+      // RES-0126 (L05-C2): an import is a room write, so the replayed end
+      // state must satisfy the same pilot caps command() enforces — the
+      // events/member/work counts here, and the projection byte cap on
+      // the final stored projection below, with the same 409 pilot_limit
+      // shapes. A refusal throws inside this transaction, so no data
+      // changes. There is no cleanup exemption here: an import replaces
+      // the whole history rather than ending individual items, and
+      // larger restores go through database backup (see the HTTP import
+      // route), not this path.
+      if (events.length > PILOT_LIMITS.eventsPerRoom || activeMemberCount(state.members) > PILOT_LIMITS.membersPerRoom || Object.keys(state.workItems ?? {}).length > PILOT_LIMITS.workItemsPerRoom) fail(409, "pilot_limit", "Bounded pilot capacity reached; no data was changed");
       // Dependent rows reference event ids/sequences; a history replacement
       // drops them. Pending invitations are lost on restore (documented).
       this.db.prepare("DELETE FROM commands WHERE room_id=?").run(roomId);
@@ -6074,6 +6108,10 @@ this.slaBreachAlerts = new SlaBreachAlertJournal(this); // Task 26: durable in-a
         state.messageAuthority = { version: 1, count: state.messages.length };
       }
       const projection = withVerifiedRoomReconstruction(this.db,roomId,()=>this.storedProjection(roomId,state));
+      // RES-0126 (L05-C2): the projection byte cap, measured on the exact
+      // stored projection like command() and appendSideTableEvent() do.
+      // Throwing here rolls back the whole import transaction above.
+      if (Buffer.byteLength(projection) > PILOT_LIMITS.projectionBytes) fail(409, "pilot_limit", "Room projection limit reached; no data was changed. Ask the room owner to have older messages archived to free space.");
       this.db.prepare("UPDATE rooms SET sequence=?,projection=?,archived_at=? WHERE id=?").run(events.length, projection, archivedAtOf(state), roomId);
       // L05-C1: the imported projection is rebuilt from the replayed log
       // above, so it is verified against its history by construction.
@@ -6933,8 +6971,9 @@ this.slaBreachAlerts = new SlaBreachAlertJournal(this); // Task 26: durable in-a
         const listed = this.room(roomId);
         return { sequence: listed.sequence, duplicate: false, event: null, bonds: this.bonds.listForMember(roomId, auth.member.id) };
       }
-      const editContext = this.canonicalMessageEditContext(roomId, command);
-      let room = editContext?.room ?? this.room(roomId);
+      const messageContext = this.canonicalMessagePostContext(roomId, command, auth.member.id)
+        ?? this.canonicalMessageEditContext(roomId, command);
+      let room = messageContext?.room ?? this.room(roomId);
       refuseArchivedWrite(room.state);
       room = prepareMessageCommand(this, roomId, room, command, auth.member.id);
       if (command.type === T.MESSAGE_POSTED && typeof command.data.toMemberId === "string" && command.data.toMemberId) {
@@ -7209,7 +7248,7 @@ this.slaBreachAlerts = new SlaBreachAlertJournal(this); // Task 26: durable in-a
         if (conflict) fail(409, "claim_conflict", `Scope is reserved by work ${conflict.id}. Coordinate or release that reservation first; no new claim was saved.`);
       }
       const sequence = room.sequence + 1;
-      const messageWrite = prepareMessageWrite(this, {roomId,previous:room,state,event:incoming,sequence,messageAuthorityCount:editContext?.count});
+      const messageWrite = prepareMessageWrite(this, {roomId,previous:room,state,event:incoming,sequence,messageAuthorityCount:messageContext?.count});
       const { projection } = messageWrite;
       if (Buffer.byteLength(projection) > PILOT_LIMITS.projectionBytes && !cleanup) fail(409, "pilot_limit", "Room projection limit reached; no data was changed. Ask the room owner to have older messages archived to free space.");
       // R1 delivery-path tracing (RC-2026-09-26-966): delivery.log spans the

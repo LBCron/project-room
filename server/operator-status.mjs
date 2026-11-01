@@ -1,4 +1,4 @@
-import { operatorParityDiagnostics } from "./operator-parity-diagnostics.mjs";
+import { operatorParityDiagnostics, operatorSelectedParityDiagnostics, SELECTED_PARITY_LIMITS } from "./operator-parity-diagnostics.mjs";
 // Operator status. One read of version, readiness, the largest tables, and
 // the latest operator actions. The server does not call GitHub. Job heartbeats
 // live on the Worker, which this process does not reach without the Durable
@@ -69,6 +69,13 @@ function patrolBlocks(store, limit = 25) {
 }
 
 export function operatorStatus(store, options = {}) {
+  if (options.parityRoom != null) {
+    const value = { version: { sourceRevision: SOURCE_REVISION, buildId: BUILD_ID }, messageParityDiagnostics: operatorSelectedParityDiagnostics(store, options) };
+    if (Buffer.byteLength(JSON.stringify(value)) > SELECTED_PARITY_LIMITS.responseBytes) {
+      value.messageParityDiagnostics.rooms = [{ roomId: options.parityRoom, status: 'unknown', complete: false, proofsVerified: false, exactLegacyShapeOnly: false, reason: 'response_limit' }];
+    }
+    return value;
+  }
   const tables = collectLargestTables(store.db, options);
   return {
     version: { sourceRevision: SOURCE_REVISION, buildId: BUILD_ID },

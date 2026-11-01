@@ -1,0 +1,121 @@
+{
+  "version": 1,
+  "host": "mac",
+  "platform": "darwin",
+  "arch": "arm64",
+  "node": "v24.22.1",
+  "logicalCpus": 10,
+  "memoryBytes": 25769803776,
+  "capsuleSha256": "2113d1f62460bd156f368cc7406be45af0abcd7d9906b11dd36a28d318d02a12",
+  "startedAt": "2026-11-01T02:35:38.314Z",
+  "fixture": "Synthetic 4096 messages; fixed eight CPU jobs; <=32MiB explicit memory buffer and bounded scratch. RSS includes Node overhead.",
+  "workloads": {
+    "cpu": [
+      {
+        "concurrency": 1,
+        "jobs": 8,
+        "elapsedMs": 1218.7548330000002,
+        "workerCpuMs": 1297.16,
+        "peakWorkerRssKiB": 152928,
+        "deterministic": true,
+        "digest": "f4a6f39e67d2b4e8bb944e0ed6800d8a004ddc795cd9a372c1f75901e5ba8763"
+      },
+      {
+        "concurrency": 2,
+        "jobs": 8,
+        "elapsedMs": 661.8832910000001,
+        "workerCpuMs": 1489.2129999999997,
+        "peakWorkerRssKiB": 152512,
+        "deterministic": true,
+        "digest": "f4a6f39e67d2b4e8bb944e0ed6800d8a004ddc795cd9a372c1f75901e5ba8763"
+      }
+    ],
+    "compression": {
+      "inputBytes": 1923542,
+      "outputBytes": 55343,
+      "roundTripMs": [
+        6.044334000000163,
+        5.801291999999876,
+        5.686249999999973,
+        5.6222499999998945,
+        5.804583000000093
+      ],
+      "digest": "a20e36d7be9ad15071ed28cbac83ddffec6dfc13884cdb5a58e38f7cc058c78b"
+    },
+    "memory": {
+      "allocatedBytes": 33554432,
+      "cacheLineTouches": 2097152,
+      "elapsedMs": 4.985417000000098,
+      "checksum": 14680064
+    },
+    "loopback": {
+      "bytesPerRequest": 16384,
+      "idle": {
+        "requests": 24,
+        "medianMs": 0.29920799999990777,
+        "p95Ms": 1.0599170000000413
+      },
+      "withTwoCpuProcesses": {
+        "requests": 24,
+        "medianMs": 0.2012090000000626,
+        "p95Ms": 0.4030410000000302
+      },
+      "scope": "One host loopback; does not measure laptop-to-laptop network or latency under full CPU saturation."
+    },
+    "sqlite": {
+      "bulkRows": 1000,
+      "bulkCommitMs": 1.6143340000003263,
+      "separateCommits": 100,
+      "separateCommitMs": 3.673416999999972,
+      "walBytesBeforeCheckpoint": 1676872,
+      "snapshotReaderCount": 1000,
+      "freshReaderCount": 1001
+    },
+    "artifactIO": {
+      "bytes": 55343,
+      "fsyncAndVerifyMs": 4.430707999999868,
+      "digest": "a20e36d7be9ad15071ed28cbac83ddffec6dfc13884cdb5a58e38f7cc058c78b"
+    },
+    "artifactProtocol": {
+      "packetSha256": "10e5b4faaa3689ada201568564500d6f1d6ab49c94436dc5bcb19bceaf27450c",
+      "records": 4096,
+      "sourceDigest": "33f5d9125fc96d9431f93c3a7d04d1875cb7b59fe5a03944b3f64fb3b187b46d",
+      "resultDigest": "ce841c27e6add51c5e64c0900df8f0436ff3639abd578ee017c42f9b5e285297",
+      "authors": 17
+    },
+    "recovery": {
+      "crashExit": 42,
+      "afterCrash": {
+        "host": "mac",
+        "cached": false,
+        "executions": 1,
+        "records": 4096,
+        "sourceDigest": "33f5d9125fc96d9431f93c3a7d04d1875cb7b59fe5a03944b3f64fb3b187b46d",
+        "resultDigest": "ce841c27e6add51c5e64c0900df8f0436ff3639abd578ee017c42f9b5e285297",
+        "authors": 17
+      },
+      "duplicate": {
+        "host": "mac",
+        "cached": true,
+        "executions": 1,
+        "records": 4096,
+        "sourceDigest": "33f5d9125fc96d9431f93c3a7d04d1875cb7b59fe5a03944b3f64fb3b187b46d",
+        "resultDigest": "ce841c27e6add51c5e64c0900df8f0436ff3639abd578ee017c42f9b5e285297",
+        "authors": 17
+      },
+      "tamperedArtifactRejected": true,
+      "qualification": "Real local process crash and SQLite reopen. Not a laptop reboot, physical network partition or external side-effect guarantee."
+    }
+  },
+  "finishedAt": "2026-11-01T02:35:41.040Z",
+  "elapsedMs": 2725.863792,
+  "parentCpuMs": 150.409,
+  "parentMaxRSSKiB": 167056,
+  "serialOnly": false,
+  "limits": [
+    "CPU scaling is local 1/2 process comparison, not two-host speedup.",
+    "Disk and WAL measurements are local APFS/SQLite, not network filesystem tests.",
+    "Cross-host artifact execution must be separately observed on another host.",
+    "Synthetic repeatable samples, not production latency or a statistically controlled hardware benchmark."
+  ]
+}

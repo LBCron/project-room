@@ -24,7 +24,7 @@ function codec(store){
   }catch{fail('invalid_reply_cursor','Continuation expired, is malformed, or belongs to another store; restart this read. No request was changed.');}}
  };
 }
-const selectionKeys='v mode roomId viewerId accountId authEpoch roomCreatedEventId direction status requestMessageId'.split(' ');
+const selectionKeys='v mode roomId viewerId accountId authEpoch credentialHash sessionBinding sessionRevision roomCreatedEventId direction status requestMessageId'.split(' ');
 function decodeBound(crypto,token,binding){
  const saved=crypto.decode(token);
  if(!saved||!selectionKeys.every(key=>saved[key]===binding[key]))fail('reply_cursor_identity_changed','Continuation belongs to another viewer or selection');
@@ -47,7 +47,7 @@ export function readCurrentReplies(store,token,roomId,mode,args,shape){
    if(row.id!==row.eventId||row.roomId!==roomId||typeof row.type!=='string'||!row.type||!validId(row.actorId)||typeof row.at!=='string'||!Number.isFinite(Date.parse(row.at))||row.dataType!=='object')changed();eventCache.set(sequence,row);return row;
   };
   const created=eventAt(1);if(created.type!=='room.created')changed();
-  const binding={v:2,mode,roomId,viewerId:auth.member.id,accountId:auth.account?.id??null,authEpoch:auth.account?.authEpoch??null,roomCreatedEventId:created.id,direction,status,requestMessageId};
+  const binding={v:2,mode,roomId,viewerId:auth.member.id,accountId:auth.account?.id??null,authEpoch:auth.account?.authEpoch??null,credentialHash:auth.credentialHash,sessionBinding:auth.sessionBinding??null,sessionRevision:auth.sessionRevision??null,roomCreatedEventId:created.id,direction,status,requestMessageId};
   const base={contractVersion:2,roomId,viewerId:auth.member.id,viewerAccountId:auth.account?.id??null,viewerAuthEpoch:auth.account?.authEpoch??null,viewerSessionBinding:auth.sessionBinding,viewerSessionRevision:auth.sessionRevision??null,scope:{...shape.scope,coverage:'bounded-source-window'},evaluationScope:'visible-encountered-anchors'};
   const loadMessage=id=>{
    if(!validId(id)&&!(typeof id==='string'&&id.endsWith(':channel')))changed();
@@ -209,7 +209,7 @@ export function readCurrentReplies(store,token,roomId,mode,args,shape){
   const requester=ownMember(authority.members,request.requesterId),recipient=ownMember(authority.members,request.recipientId),room=readCurrentRecord(db,roomId,'metadata','room',b);
   const denied=store.dmConsents.deniedDirection(roomId,auth.member.id,auth.member.id===request.requesterId?request.recipientId:request.requesterId);
   const canReply=!denied&&requester?.active===true&&recipient?.active===true;
-  const answerBasis=request.status==='open'&&auth.member.id===request.recipientId&&canReply&&!hasMore&&context.row.seq<=horizon?{expectedRequestRevision:request.revision,contextEventId:contextEvent.id,contextSequence:context.row.seq}:null;
+  const answerBasis = request.status === 'open' && auth.member.id === request.recipientId && canReply && !hasMore && context.row.seq <= horizon ? {expectedRequestRevision: request.revision, contextEventId: contextEvent.id, contextSequence: context.row.seq} : null;
   const instructions=charterContext(room),work=request.workItemId?readCurrentWorkItem(db,roomId,request.workItemId):null;
   return stampReplyRead({...base,evaluatedThrough,selection:{direction:null,requestMessageId},request:structuredClone(request),roomCreatedEventId:created.id,sourceWindow:{complete:!hasMore,consistency:'frozen-conversation-current-preparation'},page:{cursor:args.cursor??null,checkpoint:null,items,rowBytes,limit,hasMore,nextCursor,completedCheckpoint:null,nextRead},nextRead,
    ...shape.responseTemplates(roomId,auth.member.id,request,answerBasis),

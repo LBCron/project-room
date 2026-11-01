@@ -411,7 +411,7 @@ function validateCurrentReplyRead(result,{name,args,roomId}) {
       }else{
         const message=withoutUntrusted(row.message);
         assert(message&&validId(message.id)&&message.authorId===row.actorId&&message.createdAt===row.at
-          &&(message.body===null||typeof message.body==='string'&&message.body.length<=MAX_MESSAGE_BODY_CHARS)
+          && (message.body === null || typeof message.body === 'string' && message.body.length <= MAX_MESSAGE_BODY_CHARS)
           &&['workItemId','replyToId','toMemberId'].every(key=>nullableId(message[key]))
           &&(!message.toMemberId||[message.authorId,message.toMemberId].includes(result.viewerId))
           &&(message.authorId===result.viewerId?!Object.hasOwn(row.message,'untrusted'):row.message.untrusted===true)
@@ -448,7 +448,7 @@ function validateCurrentReplyRead(result,{name,args,roomId}) {
       bytes+=Buffer.byteLength(JSON.stringify(withoutUntrusted(row)));
     }else{
       assert(message&&validId(message.id)&&message.authorId===row.actorId&&message.createdAt===row.at
-        &&(message.body===null||typeof message.body==='string'&&message.body.length<=MAX_MESSAGE_BODY_CHARS)
+        && (message.body === null || typeof message.body === 'string' && message.body.length <= MAX_MESSAGE_BODY_CHARS)
         &&['workItemId','replyToId','toMemberId'].every(key=>nullableId(message[key]))
         &&(!message.toMemberId||[message.authorId,message.toMemberId].includes(result.viewerId))
         &&(row.kind!=='opened'||message.id===request.id&&row.eventId===request.openingEventId&&message.authorId===request.requesterId&&message.toMemberId===request.recipientId)

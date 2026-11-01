@@ -259,8 +259,9 @@ export function applyOutcomes(previous, outcomes) {
 // the error fields and the summaries all stand exactly as the last
 // committed outcome left them. uncommittedAttemptSinceAt keeps the
 // FIRST attempt of an unbroken uncommitted streak (the overdue-streak
-// precedent above): later passes re-attempt and die too, and the view
-// grades the streak's age, not the freshest stamp's.
+// precedent above). Later attempts do not erase an unresolved completion;
+// the view grades the streak's age, not the freshest stamp's. A missing
+// outcome alone does not establish why execution failed to commit.
 export function applyAttempts(previous, attempts) {
   const next = { ...(previous && typeof previous === 'object' ? previous : {}) };
   for (const attempt of attempts ?? []) {
@@ -314,12 +315,11 @@ export function jobHealthView(stored, now = Date.now(), env = null, store = null
     const recentPending = Number.isFinite(pendingSince) && pendingSince <= now
       && now - pendingSince <= staleAfterSeconds * 1000;
     const stale = enabled && !waiting && !recentPending && (ageSeconds === null || ageSeconds > staleAfterSeconds);
-    // Attempted-and-died (integrity-staleness cure, part 1): the latest
-    // attempt never committed an outcome and the unbroken uncommitted
-    // streak is older than one period. The run is not still in flight —
-    // it is dead — and the previous success must not present as current
-    // while it stands. A job with no attempt fields at all is
-    // never-attempted, a different state the fields below expose; the
+    // Unresolved completion (integrity-staleness cure, part 1): the latest
+    // attempt has no committed outcome and the unbroken uncommitted
+    // streak is older than one period. Its cause is unknown; the previous
+    // success must not present as evidence of this attempt's completion.
+    // A job with no attempt fields at all is never-attempted, a different state the fields below expose; the
     // ordinary stale rule alone grades it.
     const attemptStuck = enabled && record.attemptOutcome === 'uncommitted'
       && Number.isFinite(record.uncommittedAttemptSinceAt)

@@ -13,6 +13,7 @@
   "src/account-client.js",
   "src/account-deletion.mjs",
   "src/account-settings-ui.js",
+  "src/agent-connection-readiness.js",
   "src/agent-connections.js",
   "src/agent-error.mjs",
   "src/agent-first-run.js",

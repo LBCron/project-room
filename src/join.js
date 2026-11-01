@@ -672,8 +672,8 @@ async function boot() {
     if (copySecret) {
       // An older OS write may never settle. Keep the newly minted key
       // reachable through manual selection without starting another write.
-      copySecret.textContent = clipboard.busy ? "Select key" : "Copy";
-      copySecret.setAttribute("aria-label", clipboard.busy ? "Select agent access key for manual copying" : "Copy agent access key");
+      copySecret.textContent = uiText(clipboard.busy ? "join.key.select" : "join.key.copy");
+      copySecret.setAttribute("aria-label", uiText(clipboard.busy ? "join.key.selectLabel" : "join.key.copyLabel"));
     }
   };
   clipboard.subscribe(syncCopyButtons);

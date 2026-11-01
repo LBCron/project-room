@@ -669,5 +669,9 @@
   "agentError.invalid_work_cursor.recovery": "Restart the same room_list_work selection without cursor; do not edit or reuse cursors from another connection.",
   "agentError.stale_work_cursor.hint": "Work, access, or selection changed between pages.",
   "agentError.stale_work_cursor.recovery": "Discard the partial listing and restart the same room_list_work selection without cursor.",
-  "work.actions.agentRunHint": "Run the work from your agent's app."
+  "work.actions.agentRunHint": "Run the work from your agent's app.",
+  "join.key.select": "Select key",
+  "join.key.copy": "Copy",
+  "join.key.selectLabel": "Select agent access key for manual copying",
+  "join.key.copyLabel": "Copy agent access key"
 }

@@ -1,0 +1,50 @@
+{
+  "inputSha256": "bc7d388aab87a10fd4a86128460468a502ae3998700ad6a8762f263120d1e8a4",
+  "collector": {
+    "observation": "finished",
+    "at": 1793536511.886836,
+    "elapsedSeconds": 600.01,
+    "decodedEvents": 2851,
+    "outputCapReached": false,
+    "exitCode": -9
+  },
+  "targetOnlyNotPerEventSourceAttestation": "1cc9ef442381b61e6ea5652524ebc459ed913a56",
+  "events": 2851,
+  "outcomes": {
+    "ok": 2535,
+    "canceled": 316
+  },
+  "httpStatuses": {
+    "200": 2611,
+    "absent": 108,
+    "400": 2,
+    "429": 69,
+    "404": 24,
+    "201": 5,
+    "503": 1,
+    "301": 4,
+    "401": 5,
+    "405": 3,
+    "304": 19
+  },
+  "http5xx": 1,
+  "exceptionEntries": 0,
+  "readinessPhases": {
+    "worker_wait_started": 46,
+    "worker_rpc_started": 46,
+    "worker_rpc_settled": 46,
+    "worker_response": 46,
+    "do_entered": 9,
+    "sql_completed": 9,
+    "do_completed": 9
+  },
+  "readinessResponses": {
+    "ready": 45,
+    "timeout": 1
+  },
+  "responseWaitMs": {
+    "min": 14,
+    "max": 2500
+  },
+  "limits": "Finite observation; I/O clocks are not CPU, cross-isolate phases lack correlation IDs, canceled/429 and collector termination are separate from HTTP readiness failures."
+}

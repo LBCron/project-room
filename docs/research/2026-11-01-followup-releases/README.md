@@ -1,6 +1,6 @@
 # Follow-up production releases, 2026-11-01
 
-Current checkpoint at 12:32Z: production and main are verified on `1cc9ef442381b61e6ea5652524ebc459ed913a56`, deployment `41306354999`. Canonical build `2026-11-01T12:25:25.015Z`; entry build `2026-11-01T12:25:35.108Z`. Strict 16/16, live smoke, runtime publication and root six-door readback passed. Fo's two manual identity-reload checks remain pending this pinned build. Selected-room read-only parity PR #5604 at `e50de49c002e2e6e8200414b1240232632493ad7` awaits own-head checks. Intermittent readiness causality, historical quarantine and large-room blob cutover remain open. No live historical repair has run.
+Current checkpoint at 12:36Z: a later completed trace found a readiness 503 during the 1cc rollout, despite the completed strict/live/runtime checks. Root started immediate schema-gated recovery `41307273530` to prior verified code `8facbfe4389e6ecd23b1c1fb9c2fe398398ee2e4`, immutable runtime suffix r2. Recovery is not yet verified. The failure began at 12:30:20.132Z, returned 503 at 2500 ms and settled its RPC successfully at 2988 ms. Nearby requests also took approximately 2.9 seconds. This occurred during source convergence and does not establish a causal UI regression. Fo was told to preserve pinned evidence and stop new cases during recovery. Main stays `1cc9ef442381b61e6ea5652524ebc459ed913a56`. Selected parity PR #5604, historical quarantine and the large-room blob cutover remain open; no live historical repair has run.
 
 The sections below are dated checkpoint history. Later receipts supersede earlier limitations explicitly; failed attempts remain preserved. Exact head qualification, merge, deployment and live checks are distinct. No skipped or cancelled job is called passed.
 
@@ -192,3 +192,10 @@ Natural retention and integrity attempts at 12:00:37/38Z committed after the opt
 ### UI deployment 41306354999 completed
 
 Source `1cc9ef442381b61e6ea5652524ebc459ed913a56` passed strict 16/16, public smoke and immutable runtime publication. Root's four-source/two-readiness readback passed at `2026-11-01T12:31:55.293Z`. Canonical build `2026-11-01T12:25:25.015Z`; entry `2026-11-01T12:25:35.108Z`. Runtime contains 667 files / 3,528,587 bytes / SHA256 `e3df249df330afd6c41b9383885b63d6fd650276b00f07e096ee33be7d86f5f0`. Fo was asked to finish only the two remaining manual identity-reload cases against this build. No manual pass is inferred from deployment or hosted browser results.
+
+
+### Later 1cc readiness failure; recovery started
+
+The completed 600-second sanitized rollout trace records 2,851 tail events and one HTTP 503, on readiness at 12:30:20.132Z. Worker wait reached its 2,500 ms deadline; the same logged RPC settled successfully at 2,988 ms. Nearby health and other reads took approximately 2.9 seconds. All 45 other observed readiness responses were ready. There are zero exception entries, 316 canceled tail outcomes and 69 HTTP 429s; these are not silently counted as successful business requests. The collector finished at its time cap with exit -9. Its target header is not per-event source attestation. Nine DO phase triplets versus 46 Worker responses require a routing/tail-coverage check before drawing conclusions from absent DO logs.
+
+Root immediately dispatched recovery 41307273530 to prior 8fac using runtime r2. This is an operational recovery through the existing schema-gated pipeline, not a proven causal fix or a waived manual provider-version rollback receipt. No timeout, probe semantics, grant, health baseline or schedule changed. Previous strict/live/runtime receipts remain valid observations of those finite checks; they do not clear this later incident. New browser cases and live historical repair stay pending recovery.

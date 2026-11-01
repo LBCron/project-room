@@ -147,3 +147,19 @@ test("an interrupted attempt advances scheduling only; the room is tailed on wra
   for (let i = 0; i < 4 && cursor() === 0; i++) runPatrolTick(reopened, { deadline: now + 5000, limit: 1 });
   assert.ok(cursor() > 0, "the interrupted room is tailed once the rotation wraps");
 });
+
+// patrol_rotation is a lazy application table: an export taken after a tick
+// must restore (restore builds lazy schemas from code-owned DDL only).
+test("an export taken after a bounded patrol tick restores with its rotation row", async () => {
+  const { exportNdjsonText } = await import("../server/room-export.mjs");
+  const { replayNdjsonInto } = await import("../server/restore-ndjson.mjs");
+  const store = storeWithRooms(3);
+  runPatrolTick(store);
+  const before = store.db.prepare("SELECT last_room FROM patrol_rotation").all();
+  assert.equal(before.length, 1);
+  const restored = new RoomStore(":memory:");
+  try {
+    assert.equal(replayNdjsonInto(exportNdjsonText(store.db), restored).verified, true);
+    assert.deepEqual(restored.db.prepare("SELECT last_room FROM patrol_rotation").all(), before);
+  } finally { restored.close(); store.close(); }
+});

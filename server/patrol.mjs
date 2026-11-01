@@ -145,6 +145,9 @@ const isLiveCloseMove = (action, fromState, nextState, kind) =>
   && fromState !== "done" && fromState !== "closed";
 
 export const PATROL_SCHEMA = `
+-- Fair continuation for the per-tick room bound; persisted so a DO restart
+-- does not send the patrol back to the alphabetically first rooms.
+CREATE TABLE IF NOT EXISTS patrol_rotation (id INTEGER PRIMARY KEY CHECK (id = 1), last_room TEXT NOT NULL);
 CREATE TABLE IF NOT EXISTS patrol_cursor (
   room_id TEXT PRIMARY KEY,
   sequence INTEGER NOT NULL,
@@ -196,9 +199,6 @@ CREATE TABLE IF NOT EXISTS patrol_blocks (
 
 export function ensurePatrolSchema(store) {
   store.db.exec(PATROL_SCHEMA);
-  // Fair continuation for the per-tick room bound; persisted so a DO restart
-  // does not send the patrol back to the alphabetically first rooms.
-  store.db.exec("CREATE TABLE IF NOT EXISTS patrol_rotation (id INTEGER PRIMARY KEY CHECK (id = 1), last_room TEXT NOT NULL)");
 }
 
 // A closed handle throws from the shared check. The patrol treats that as

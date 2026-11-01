@@ -734,7 +734,7 @@
       }
     },
     "room_discard_file": {
-      "inputSchema": "819af86b52ff2541",
+      "inputSchema": "4c1b9342cf40464e",
       "annotations": {
         "readOnlyHint": false,
         "destructiveHint": false,

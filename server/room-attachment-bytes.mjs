@@ -40,6 +40,10 @@ export function base64LengthForBytes(byteLength) {
 export const mcpAttachmentBodyBytes = base64LengthForBytes(attachmentLimits.fileBytes) + 8192;
 
 const MEDIA_TYPE = /^[a-z0-9][a-z0-9!#$&^_.+-]{0,126}\/[a-z0-9][a-z0-9!#$&^_.+-]{0,126}$/;
+// Inventories, authorization and deletion need no byte payload. Downloads
+// admit metadata first, then read exactly one authorized blob in the same
+// transaction; SQL must not materialize hidden or unrelated file bytes.
+const FILE_METADATA = "id,uploader_id,filename,media_type,byte_length,sha256,state,created_at,expires_at,message_id";
 
 // Encoding validity ONLY (#3436): the size cap is not part of this check.
 // Folding it in made every over-cap upload report as an encoding error and
@@ -171,8 +175,9 @@ export class RoomAttachmentBytes {
     });
   }
 
-  // Visibility rule (2026-09-24, #983): a staged file is visible only to
-  // its uploader; a file committed onto a DM (toMemberId) is visible only
+  // Visibility rule (2026-09-24, #983): an unbound file stays visible only
+  // to its uploader, including after expiry/discard; a file committed onto
+  // a DM (toMemberId) is visible only
   // to the message author and recipient. Everything else stays room-wide.
   // Fail closed (#2950): a committed file whose bound message no longer
   // resolves in the projection (history replaced via importEvents, or the
@@ -182,7 +187,7 @@ export class RoomAttachmentBytes {
   // the uploader authored the bound message, so they were a party to it
   // whether it was a DM or a public post.
   visibleTo(row, messages, memberId) {
-    if (row.state === "staged") return row.uploader_id === memberId;
+    if (row.state === "staged" || !row.message_id) return row.uploader_id === memberId;
     if (row.message_id) {
       const message = messages.get(row.message_id);
       if (!message) return row.uploader_id === memberId;
@@ -206,7 +211,7 @@ export class RoomAttachmentBytes {
       this.expire(roomId, this.store.now());
       const messages = this.messageIndex(roomId);
       const memberId = auth.member.id;
-      const files = this.db.prepare(`SELECT * FROM room_attachments
+      const files = this.db.prepare(`SELECT ${FILE_METADATA} FROM room_attachments
         WHERE room_id=? AND state IN ('staged','committed')
         ORDER BY created_at DESC, id`).all(roomId)
         .filter(row => this.visibleTo(row, messages, memberId))
@@ -220,18 +225,21 @@ export class RoomAttachmentBytes {
       const auth = this.store.authenticate(token, roomId);
       if (!validId(id)) fail(422, "invalid_attachment", "Attachment id is not valid");
       this.expire(roomId, this.store.now());
-      const row = this.db.prepare("SELECT * FROM room_attachments WHERE room_id=? AND id=?").get(roomId, id);
+      const row = this.db.prepare(`SELECT ${FILE_METADATA},bytes IS NOT NULL AS has_bytes
+        FROM room_attachments WHERE room_id=? AND id=?`).get(roomId, id);
       if (!row) fail(404, "attachment_not_found", "Attachment not found");
-      if ((row.state !== "staged" && row.state !== "committed") || row.bytes == null) {
-        fail(410, "attachment_unavailable", "Attachment bytes are no longer available");
-      }
-      // Invisible files 404 (not 403) so the id does not leak existence.
+      // Terminal states must preserve the bound message's visibility too:
+      // a 410 would reveal a hidden DM attachment's existence.
       if (!this.visibleTo(row, this.messageIndex(roomId), auth.member.id)) {
         fail(404, "attachment_not_found", "Attachment not found");
       }
+      if ((row.state !== "staged" && row.state !== "committed") || !row.has_bytes) {
+        fail(410, "attachment_unavailable", "Attachment bytes are no longer available");
+      }
+      const payload = this.db.prepare("SELECT bytes FROM room_attachments WHERE room_id=? AND id=?").get(roomId, id);
       return {
         roomId,
-        attachment: { ...view(row), encoding: "base64", data: Buffer.from(row.bytes).toString("base64") }
+        attachment: { ...view(row), encoding: "base64", data: Buffer.from(payload.bytes).toString("base64") }
       };
     });
   }
@@ -249,11 +257,34 @@ export class RoomAttachmentBytes {
       if (!validId(id)) fail(422, "invalid_attachment", "Attachment id is not valid");
       const now = this.store.now();
       this.expire(roomId, now);
-      const row = this.db.prepare("SELECT * FROM room_attachments WHERE room_id=? AND id=?").get(roomId, id);
+      const row = this.db.prepare(`SELECT ${FILE_METADATA} FROM room_attachments WHERE room_id=? AND id=?`).get(roomId, id);
       if (!row) fail(404, "attachment_not_found", "Attachment not found");
-      if (row.state !== "staged") fail(410, "attachment_unavailable", "Only a staged room file can be discarded");
       const ownerId = this.store.room(roomId).state.room.ownerId;
-      if (row.uploader_id !== auth.member.id && ownerId !== auth.member.id) {
+      const permitted = row.uploader_id === auth.member.id || ownerId === auth.member.id;
+      // Committed files never expire, so without a delete path a room whose
+      // byte quota fills with committed files can never upload again. The
+      // uploader or the room owner deletes a committed file: bytes are
+      // dropped and the row moves to the existing terminal 'deleted' state,
+      // which no quota counts. Visibility is checked first so the id does
+      // not leak a DM file's existence, including a deleted retry receipt.
+      // Expired/discarded unbound uploads also retain uploader-only privacy;
+      // the owner's staged-file administration grant is checked separately.
+      if (row.state !== "staged"
+        && !this.visibleTo(row, this.messageIndex(roomId), auth.member.id))
+        fail(404, "attachment_not_found", "Attachment not found");
+      if (row.state === "deleted") {
+        if (!permitted) fail(404, "attachment_not_found", "Attachment not found");
+        return { status: "deleted", duplicate: true, roomId, id };
+      }
+      if (row.state === "committed") {
+        if (!permitted) fail(403, "attachment_forbidden", "Only the uploader or the room owner can delete this file");
+        const removed = this.db.prepare(`UPDATE room_attachments SET state='deleted', bytes=NULL
+          WHERE room_id=? AND id=? AND state='committed'`).run(roomId, id).changes;
+        if (removed !== 1) fail(409, "attachment_conflict", "That attachment changed before it could be deleted");
+        return { status: "deleted", duplicate: false, roomId, id };
+      }
+      if (row.state !== "staged") fail(410, "attachment_unavailable", "Only a staged or committed room file can be discarded");
+      if (!permitted) {
         fail(403, "attachment_forbidden", "Only the uploader or the room owner can discard this file");
       }
       const changed = this.db.prepare(`UPDATE room_attachments SET state='discarded', bytes=NULL

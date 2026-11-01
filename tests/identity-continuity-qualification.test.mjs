@@ -41,7 +41,7 @@ test('explicitly authenticated RoomClient existing identity refuses a redundant 
   const after = loadConnection({}, f.env); assert.equal(after.identityId, saved.identityId); assert.equal(after.memberId, saved.memberId);
 });
 
-test('MVP guard RED: CLI selecting an already verified saved room must not silently replace its principal on a fresh invitation', async t => {
+test('MVP guard: CLI selecting an already verified saved room must not silently replace its principal on a fresh invitation', async t => {
   const f = await startRoom(t), first = f.invite();
   assert.equal(await cliJoin(f, first.link, 'Synthetic already connected agent'), 0);
   const saved = loadConnection({}, f.env); await new RoomClient({ ...saved }).checkConnection();
@@ -60,7 +60,7 @@ test('MVP guard RED: CLI selecting an already verified saved room must not silen
   await new RoomClient({ ...after }).checkConnection();
   t.diagnostic(JSON.stringify({ scenario: 'explicit-saved-room-selection', result, retry, before, afterFirst, afterRetry,
     existingCredentialForwarded, identityPreserved: after.identityId === saved.identityId, memberPreserved: after.memberId === saved.memberId,
-    savedBytesPreserved: originalBytes.equals(readFileSync(savedPath)), bothOldAndNewCredentialsActive: true }));
+    savedBytesPreserved: originalBytes.equals(readFileSync(savedPath)), originalSavedCredentialStillActive: true }));
   assert.deepEqual(afterRetry, afterFirst, 'exact same-invitation retry must not add another principal');
   const refusedWithoutReplacement = result !== 0 && originalBytes.equals(readFileSync(savedPath));
   const attachedExisting = after.identityId === saved.identityId && after.memberId === saved.memberId;

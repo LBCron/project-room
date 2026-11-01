@@ -1,0 +1,98 @@
+{
+  "candidate": "61225bed6bce0a4b4df3f6edddbfb995857056fc",
+  "genuinePriorSource": "4b060ff07ce0bbedb3eae216e40825315cc9eff5",
+  "weakSource": "72a7d6e4d7e67e866b6314c2218e8a2a0cac8fc5",
+  "records": [
+    {
+      "variant": "intact-strong-baseline",
+      "accepted": true,
+      "proof": {
+        "projection_hash": "89d9d37827ff5a278ad4af15e2061ee19175ef10db11bee3e60d0adfa82d3350",
+        "metadata_hash": "ad381f3019f77477ade6580ed0ff36481ffda35fda2f9af6d00200cda3b0b698"
+      },
+      "commandSucceeded": true
+    },
+    {
+      "variant": "corrupt-strong-baseline",
+      "accepted": false,
+      "error": "projection_corrupt: legacy content does not match its baseline",
+      "beforeVersion": 43,
+      "afterVersion": 44,
+      "projectionUnchanged": true,
+      "proof": {
+        "room_id": "commons",
+        "sequence": 2,
+        "projection_bytes": 719,
+        "projection_hash": "df6662dc7d388627df30d3b1843c3c10835dbbd604f71b61e82ffa68b86a644b",
+        "metadata_hash": null
+      },
+      "secondOpen": {
+        "accepted": true,
+        "title": "Project Room Xommons",
+        "commandAccepted": false,
+        "commandError": "projection_corrupt: stored metadata does not match its write proof",
+        "integrity": {
+          "matched": 0,
+          "skipped": 0,
+          "verified": 0,
+          "invitations": 0,
+          "deferred": {
+            "ran": 2,
+            "next": 6,
+            "failures": [
+              {
+                "step": "projection_content",
+                "recordId": "commons",
+                "code": "projection_content_failed",
+                "message": "projection_content integrity check failed",
+                "failures": 1,
+                "firstSeenAt": 1793507255479,
+                "lastSeenAt": 1793507255479,
+                "eventId": null,
+                "eventSequence": null
+              }
+            ]
+          },
+          "contentDrift": 1,
+          "failures": [
+            {
+              "step": "projection_content",
+              "recordId": "commons",
+              "code": "projection_content_failed",
+              "message": "projection_content integrity check failed",
+              "failures": 1,
+              "firstSeenAt": 1793507255479,
+              "lastSeenAt": 1793507255479,
+              "eventId": null,
+              "eventSequence": null
+            }
+          ],
+          "deferredSkips": 0,
+          "verifiedRooms": 0
+        },
+        "failures": [
+          {
+            "step": "projection_content",
+            "recordId": "commons",
+            "code": "projection_content_failed",
+            "message": "projection_content integrity check failed",
+            "failures": 1,
+            "firstSeenAt": 1793507255479,
+            "lastSeenAt": 1793507255479,
+            "eventId": null,
+            "eventSequence": null
+          }
+        ]
+      }
+    },
+    {
+      "variant": "no-historical-baseline",
+      "accepted": true,
+      "proof": {
+        "projection_hash": null,
+        "metadata_hash": "731bb8e68e9f80905b880cecbf85b69afdba2f5656ce97a1dec3000f1f768ced"
+      },
+      "commandSucceeded": true
+    }
+  ]
+}

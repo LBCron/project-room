@@ -1,6 +1,6 @@
 # Follow-up production releases, 2026-11-01
 
-Current checkpoint: production is `54c92ab83616a5eb46dba7beaaf741da7088ecf0`. Native mention deployment `41298040713` passed strict smoke 16/16, public smoke and runtime publication. Canonical build `2026-11-01T10:34:42.587Z`; entry build `2026-11-01T10:34:51.586Z`. Root independently verified all four source doors and readiness on both origins. Main additionally contains diagnostic landing `1b99d27397c03e73ee134da221c783541d7c192c`; deployment `41298609743` is pending. The historical repair has not executed and its quarantine remains.
+Current checkpoint: production and main are `86bbb53547dd37e1ee43df9207fefe149929b40c`. Attachment deployment `41299172160` passed strict smoke 16/16, public smoke and runtime publication. Canonical build `2026-11-01T10:50:24.055Z`; entry build `2026-11-01T10:50:35.744Z`. Root verified all four source doors and readiness on both origins. The optional index is absent; its fresh plan admits 698 rows, 34,765 key bytes and 18,251,677 stored bytes. Historical repair still refuses: the source-pinned plan at 1b99 identifies `message_proof_mismatch`; no repair executed and the quarantine remains.
 
 The sections below are dated checkpoint history. Later receipts supersede earlier limitations explicitly; failed attempts remain preserved. Exact head qualification, merge, deployment and live checks are distinct. No skipped or cancelled job is called passed.
 
@@ -122,3 +122,16 @@ The bounded native mention path preserves fresh policy checks at every callback 
 PR #5597 passed its exact head `f19b880fead1ca63c99e8d8ad9ca5e35ae779727` in hosted run `41298137674` and landed `1b99d27397c03e73ee134da221c783541d7c192c`. It attaches only fixed, code-owned proof refusal diagnostics. No eligibility, status, predicate ordering, SQL, transaction or trust-baseline change is included. Its deployment and fresh live diagnosis remain pending at this checkpoint.
 
 Attachment PR #5596's initial head `5d87a8b` failed hosted unit because both new Operator operations lacked required OpenAPI permission declarations. The exact guard failed locally before four source/generated annotation lines cured it. Current composed head `df8d76d41e9279ef0ed07bfb71683f55992515bb` has fresh checks running; no failure is waived and no optional index installed.
+
+
+### Diagnostic and attachment releases completed
+
+Deployment `41298609743` published `1b99d27397c03e73ee134da221c783541d7c192c` successfully: strict smoke 16/16, public smoke and runtime publication. Canonical build `2026-11-01T10:42:31.222Z`; entry `2026-11-01T10:42:44.574Z`. Runtime verification at `2026-11-01T10:48:58.693286Z`: 664 files, 3,514,912 bytes, SHA256 `d03828e0baee6d8096dc8acd51c63d53d9c9bb8ea394708636ffc68cefc31fdc`.
+
+The journaled plan-only v2 passed all four source pins and returned HTTP 409 with fixed diagnostic `message_proof_mismatch`. The earlier metadata/projection digest and serving-proof checks completed before that refusal. This supersedes the unverified current missing-metadata hypothesis; the Oct31 missing-proof observation remains historical. The diagnostic does not distinguish absent versus present-invalid message proofs. No repair, proof adoption, serving rewrite or quarantine clearance occurred. Original and v2 private journals remain separate and unchanged.
+
+Deployment `41299172160` then published `86bbb53547dd37e1ee43df9207fefe149929b40c` successfully: strict smoke 16/16, public smoke and runtime publication. Runtime verification at `2026-11-01T10:56:40.113601Z`: 665 files, 3,518,227 bytes, SHA256 `89b2ca6127b7604ffec81edbe3d00bb7f35a0d457146c739a4a5586ae0521033`. Root's fresh six-door receipt confirms all four version reads plus readiness on both origins.
+
+The optional attachment index remains absent. Its fresh exact-source plan admits 698 total rows, 34,765 aggregate key/state bytes and 18,251,677 stored variable bytes, below the independently qualified optional limits. Blob contents were not materialized in JavaScript. Execution and exact saved-input recovery are being prepared; the plan does not prove installation or measured production latency improvement.
+
+New candidates remain separate: first-task UI #5598 at `004b415d11f091cfea91c60e7711e76cc3318fe7` awaits Fo's exact-head browser journey and head CI; OAuth binding #5599 at `eb038e5f1a2e5c3929294380f1674a5713aa9369` awaits head CI. Privacy #5578 at `0d09dea1d536385c7b5c691d00d5645ba6159d59` was marked ready for actual current-head checks after source-preserving composition; draft-skipped jobs are not passed. None has landed at this checkpoint.

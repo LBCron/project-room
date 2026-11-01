@@ -1,0 +1,10 @@
+{
+  "outcome": {
+    "threw": true,
+    "code": "room_archived",
+    "status": 409,
+    "message": "This room is archived: reading and export stay available, nothing new is recorded"
+  },
+  "liveRoomDeployLinked": false,
+  "archivedRoomDeployLinked": false
+}

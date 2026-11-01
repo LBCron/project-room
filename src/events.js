@@ -582,6 +582,7 @@ export function replay(events) {
 //   - message.posted only reads existing messages and pushes new ones
 //     (plus a possible ":channel" copy) — the array needs a fresh slice,
 //     never an element clone;
+//   - member.added changes membership only and shares existing records;
 //   - message.edited / message.deleted / message.redacted / poll.voted
 //     rewrite elements in place, but only the addressed message and its
 //     ":channel" copy — slice the array and deep-clone just those
@@ -600,7 +601,9 @@ const MESSAGE_REWRITE_TYPES = new Set([
   EVENT_TYPES.MESSAGE_REDACTED, EVENT_TYPES.POLL_VOTED
 ]);
 function lightMessageCloneIds(incoming) {
-  if (incoming?.type === EVENT_TYPES.MESSAGE_POSTED) return new Set();
+  // Membership addition leaves existing message records untouched. Keeping their
+  // references also lets the store prove this after post-reducer hooks.
+  if (incoming?.type === EVENT_TYPES.MESSAGE_POSTED || incoming?.type === EVENT_TYPES.MEMBER_ADDED) return new Set();
   if (!MESSAGE_REWRITE_TYPES.has(incoming?.type)) return null;
   const messageId = incoming.data?.messageId;
   if (typeof messageId !== "string" || !messageId) return null;

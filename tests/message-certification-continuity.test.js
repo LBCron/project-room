@@ -71,6 +71,8 @@ test('deletion and unsupported transitions fall back, then replay catches up cor
  assert.equal(f.read({limit:1,cursor:old.nextCursor}).mode,'reset');
  f.certify();assert.equal(f.compare({messageId:'gone'}).messages[0].body,null);
  f.command('member.added',{memberId:'reader',displayName:'Reader',kind:'human',permissions:[]});
+ assert.equal(f.certificate().parity_at_seq,f.store.headSequence('commons'));f.compare();
+ f.command('member.status_updated',{message:'Active'});
  assert.notEqual(f.certificate().parity_at_seq,f.store.headSequence('commons'));f.certify();f.compare();
 });
 
@@ -165,8 +167,8 @@ test('digest, attention and updates preserve current archived DM content across 
  assert.equal(repo.receivedBy('reader').filter(m=>m.id==='dm-old').length,1);
  assert.equal(repo.receivedBy('owner').some(m=>m.id==='dm-old'),false);
  f.reopen();f.store.now=()=>now;assert.deepEqual(snapshot(),before);
- // A non-message command makes certification stale; archived records remain
- // authoritative while the newly changed working set still wins.
+ // A membership addition preserves certification; archived records remain
+ // authoritative while the current working set still wins.
  f.command('member.added',{memberId:'third',displayName:'Third',kind:'human',permissions:[]});
  assert.equal(roomAttention(f.store,'commons','reader',null,0).find(x=>x.id==='dm-old').summary,'Current private wording.');
  assert.equal(f.store.roomDigest(f.owner,'commons').messages.some(x=>x.id==='dm-old'),false);
@@ -355,7 +357,7 @@ test('mixed legacy entities remain inline and unsupported commands safely return
  assert.deepEqual(hydrateProjection(f.store.db,'commons',mixed).state.messages,state.messages);
  // Restore the legacy row before reading the already-persisted reference.
  f.store.db.prepare("UPDATE messages SET reducer_extras_json='{}' WHERE message_id='legacy'").run();
- f.command('member.added',{memberId:'new-reader',displayName:'New reader',kind:'human',permissions:[]});
+ f.command('member.status_updated',{message:'Active'});
  const raw=JSON.parse(f.store.db.prepare("SELECT projection FROM rooms WHERE id='commons'").get().projection);
  assert.equal(raw.messages.some(m=>m._entity===1),false);
  f.reopen();assert.equal(f.store.room('commons').state.messages[0].body,'Retained legacy.');

@@ -99,7 +99,7 @@ export function assertMessageCommandReferences(store, roomId, state, command, ac
 // references are safe only because both writes share that transaction.
 export function prepareMessageWrite(store, { roomId, previous, state, event, sequence }) {
   const certificate = store.maintainMessageCertification
-    ? captureMessageCertification(store.db, {roomId,sequence:previous.sequence,event,state:previous.state}) : null;
+    ? captureMessageCertification(store.db, {roomId,sequence:previous.sequence,event,state:previous.state,nextState:state}) : null;
   // Cancellation changes request metadata only. Existing entity references
   // already designate canonical records; retaining them is not a new cutover
   // or permission to advance an unsupported transition's parity certificate.

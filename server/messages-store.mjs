@@ -318,8 +318,20 @@ function writeMessageRows(db, {roomId,state,sequenceById,messageIndex=null,exact
 const CERTIFIED_MESSAGE_TRANSITIONS = new Set([
   "message.posted", "message.edited", "poll.voted", "message.pinned", "message.unpinned"
 ]);
-export function captureMessageCertification(db, { roomId, sequence, event }) {
-  if (!db.isTransaction || !CERTIFIED_MESSAGE_TRANSITIONS.has(event?.type)) return null;
+// Deliberately narrow: adding a member does not rewrite message records. Do not
+// infer neutrality from the event name alone: a hook may replace a record or
+// alter pins/archive metadata. Frozen prior records and reference identity give
+// an O(retained records) witness without serializing or comparing message bodies.
+function unchangedMemberMessages(event, previous, next) {
+  return event?.type === "member.added" && Object.isFrozen(previous?.messages)
+    && Array.isArray(next?.messages) && previous.messages.length === next.messages.length
+    && previous.messages.every((message, index) => Object.isFrozen(message) && message === next.messages[index])
+    && isDeepStrictEqual(previous.pins, next.pins)
+    && isDeepStrictEqual(previous.messagesArchive, next.messagesArchive);
+}
+export function captureMessageCertification(db, { roomId, sequence, event, state, nextState }) {
+  const neutral = unchangedMemberMessages(event, state, nextState);
+  if (!db.isTransaction || (!CERTIFIED_MESSAGE_TRANSITIONS.has(event?.type) && !neutral)) return null;
   const row = db.prepare(`SELECT c.applied_event_id AS anchor FROM messages_backfill_cursor c
     JOIN rooms r ON r.id=c.room_id JOIN events e ON e.room_id=r.id AND e.sequence=r.sequence
     WHERE r.id=? AND r.sequence=? AND c.applied_seq=r.sequence
@@ -329,15 +341,16 @@ export function captureMessageCertification(db, { roomId, sequence, event }) {
   if (!row) return null;
   const positions = new Map(affectedMessageIds(event).map(id => [id,
     db.prepare("SELECT seq FROM messages WHERE room_id=? AND message_id=?").get(roomId, id)?.seq ?? null]));
-  return { roomId, sequence, anchor: row.anchor, positions };
+  return { roomId, sequence, anchor: row.anchor, positions, ...(neutral ? { neutralState: state } : {}) };
 }
 
 export function advanceMessageCertification(db, certificate, { sequence, event, state }) {
-  if (!certificate || !db.isTransaction || !CERTIFIED_MESSAGE_TRANSITIONS.has(event?.type)
+  const neutral = certificate?.neutralState && unchangedMemberMessages(event, certificate.neutralState, state);
+  if (!certificate || !db.isTransaction || (!CERTIFIED_MESSAGE_TRANSITIONS.has(event?.type) && !neutral)
     || sequence !== certificate.sequence + 1) return false;
   const { roomId } = certificate;
   const ids = affectedMessageIds(event);
-  if (!ids.length) return false;
+  if (!ids.length && !neutral) return false;
   const messages = state.messages ?? [];
   const pinned = new Set((state.pins ?? []).map(pin => pin.messageId));
   for (const id of ids) {
@@ -1510,7 +1523,13 @@ function retainedByState(state) {
     if (typeof item?.receipt?.nativeText?.messageId === "string") keep.add(item.receipt.nativeText.messageId);
     if (typeof item?.receipt?.evidenceMessageId === "string") keep.add(item.receipt.evidenceMessageId);
   }
-  for (const id of Object.keys(state.replyRequests ?? {})) keep.add(id);
+  for (const [id, request] of Object.entries(state.replyRequests ?? {})) {
+    keep.add(id);
+    // Follow-up drafts read the recorded answer from state.messages. A formal
+    // request need not contain a question mark, so open-question retention alone
+    // cannot keep its response. The existing request cap bounds these extra IDs.
+    if (typeof request?.responseMessageId === "string") keep.add(request.responseMessageId);
+  }
   for (const message of state.messages ?? []) if (typeof message?.workItemId === "string" && message.workItemId) keep.add(message.id);
   return keep;
 }

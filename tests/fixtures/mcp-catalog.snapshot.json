@@ -138,7 +138,7 @@
       }
     },
     "room_list_work": {
-      "inputSchema": "35771850cd848eac",
+      "inputSchema": "25d784d7f76497d1",
       "annotations": {
         "readOnlyHint": true,
         "destructiveHint": false,
@@ -2528,7 +2528,7 @@
       }
     },
     "room_list_work": {
-      "inputSchema": "35771850cd848eac",
+      "inputSchema": "25d784d7f76497d1",
       "annotations": {
         "readOnlyHint": true,
         "destructiveHint": false,

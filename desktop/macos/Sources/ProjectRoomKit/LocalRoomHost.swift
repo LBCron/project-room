@@ -311,6 +311,7 @@ public final class LocalRoomHost {
                     case "watching_room", "protocol_qualified", "settled":
                         text = value["protocol"] as? String == "qualified" && ["present", "not_required"].contains(value["credentials"] as? String ?? "") ? "Listening · model execution not verified" : "Connecting · checking agent setup"
                     case "recovery_pending": text = "Waiting for execution reconciliation"
+                    case "report_reconciliation_pending": text = "Result saved · waiting to report it to the room"
                     case "retrying_room": text = "Reconnecting to the room…"
                     case "stopped": text = "Stopping agent…"
                     default: text = "Starting agent…"

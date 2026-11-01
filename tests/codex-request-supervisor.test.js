@@ -332,10 +332,10 @@ test("legacy journal migration retains saved operation and uses indexed retry sc
   const upgraded = openRequestJournal(path);
   try {
     assert.deepEqual({ ...upgraded.prepare("SELECT * FROM request_runs").get() }, {
-      id: "original-op", response: '{"body":"retained"}', delivered: 0, attempt_id: "original-attempt", delivery_refused: 0
+      id: "original-op", response: '{"body":"retained"}', delivered: 0, attempt_id: "original-attempt", delivery_refused: 0, reported: 0
     });
-    const plan = upgraded.prepare("EXPLAIN QUERY PLAN SELECT rowid,id,response FROM request_runs WHERE delivered=0 AND delivery_refused=0 AND response IS NOT NULL AND rowid>? ORDER BY rowid LIMIT 50").all(0);
-    assert.ok(plan.some(row => row.detail.includes("request_runs_retryable_delivery")));
+    const plan = upgraded.prepare("EXPLAIN QUERY PLAN SELECT rowid,id,response FROM request_runs WHERE (delivered=0 OR reported=0) AND delivery_refused=0 AND response IS NOT NULL AND rowid>? ORDER BY rowid LIMIT 50").all(0);
+    assert.ok(plan.some(row => row.detail.includes("request_runs_unsettled")), JSON.stringify(plan));
     assert.ok(plan.every(row => !row.detail.includes("TEMP B-TREE")));
   } finally { upgraded.close(); }
 });
@@ -412,4 +412,16 @@ test("single request requires one explicit requester and request", async t => {
   const f = await fixture(t);
   await assert.rejects(f.run({ singleRequest: true }).promise, /exactly one/);
   await assert.rejects(f.run({ singleRequest: true, allowedRequestIds: ["one", "two"] }).promise, /exactly one/);
+});
+
+test("a refused run report survives restart as report attention without fencing unrelated work", async t => {
+  const f = await fixture(t);
+  f.db.prepare("INSERT INTO request_runs(id,response,delivered,attempt_id,reported) VALUES (?,?,1,?,2)").run("refused-op", '{"responseToRequestId":"gone"}', "refused-attempt");
+  f.reopen();
+  const events = [], run = f.run({ emit: e => events.push(e) });
+  await waitUntil(() => events.some(e => e.type === "host_status" && e.status === "report_reconciliation_pending")); await delay(150);
+  run.controller.abort(); await run.promise;
+  const statuses = events.filter(e => e.type === "host_status").map(e => e.status);
+  assert.equal(statuses.includes("watching_room"), false, "durable refusal is never reported as plain watching");
+  assert.equal(statuses.includes("recovery_pending"), false, "report attention is not the unknown-execution fence");
 });

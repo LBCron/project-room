@@ -211,3 +211,26 @@ test('actual Worker H member keyset pages stay bounded with 1,000 and 17,405 pro
     console.log('DURABLE_H_MEMBER_PAGE '+JSON.stringify({costs,historyProvenance:'unknown',certified:false}));
   }finally{await mf.dispose();await rm(directory,{recursive:true,force:true});}
 });
+
+
+test('actual Worker complete H work/default qualification resumes across process loss with historical retry',async()=>{
+  const built=await build({entryPoints:[fileURLToPath(new URL('./replay-cutover.test-fixture.mjs',import.meta.url))],bundle:true,write:false,format:'esm',platform:'neutral',external:['node:*','cloudflare:*']});
+  const directory=await mkdtemp(join(tmpdir(),'h-work-qualification-'));
+  const create=()=>new Miniflare({modules:true,script:built.outputFiles[0].text,compatibilityDate:'2026-07-30',compatibilityFlags:['nodejs_compat'],durableObjectsPersist:directory,durableObjects:{ROOM:{className:'ReplayCutoverRoom',useSQLite:true}}});
+  let mf=create();const call=async path=>{const response=await mf.dispatchFetch('http://localhost'+path+(path.includes('?')?'&':'?')+'surface=h-work'),value=await response.json();assert.equal(response.status,200,JSON.stringify(value));return value;};
+  try{
+    const seed=await call('/work-qualification-seed');let first,last,maxInputBytes=0,maxReads=0,maxWarmReads=0,maxWrites=0;const samples={};
+    for(let count=0;count<seed.count;count++){
+      const step=await call('/work-qualify?generation='+seed.capture.generation+'&count='+count);first??=step.result;last=step.result;
+      assert.deepEqual(step.source,seed.source);assert.equal(step.result.workCount,count+1);assert.ok(step.result.inputBytes<=262144);
+      maxInputBytes=Math.max(maxInputBytes,step.result.inputBytes);maxReads=Math.max(maxReads,step.cost.rowsRead);maxWrites=Math.max(maxWrites,step.cost.rowsWritten);
+      if(count!==1)maxWarmReads=Math.max(maxWarmReads,step.cost.rowsRead);
+      if([0,1,2,64].includes(count))samples[count]=step.cost;
+      if(count===0){await mf.dispose();mf=create();}
+    }
+    assert.ok(samples[64].rowsRead<=samples[2].rowsRead+2,'examined H work must not be rescanned: '+JSON.stringify(samples));
+    assert.equal(last.phase,'work_qualified');assert.equal(last.workDefaultsQualified,true);assert.equal(last.certified,false);
+    const retry=await call('/work-qualify?generation='+seed.capture.generation+'&count=0');assert.deepEqual({...retry.result,duplicate:false},first);
+    console.log('DURABLE_H_WORK_QUALIFICATION '+JSON.stringify({count:seed.count,maxInputBytes,maxReads,maxWarmReads,maxWrites,samples,restarted:true,unchangedServingProof:true,historyProvenance:'unknown',certified:false}));
+  }finally{await mf.dispose();await rm(directory,{recursive:true,force:true});}
+});

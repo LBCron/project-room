@@ -1,6 +1,8 @@
 // Explicit, unwired replay cutover. Exported DDL is not registered on store
 // open. Capturing bytes never certifies replay or publishes serving rows.
 import {createHash} from 'node:crypto';
+import {isDeepStrictEqual} from 'node:util';
+import {ensureWorkControlDefaults} from '../src/work-item-session.js';
 import {MESSAGE_PROOF_FIELDS,messageProofMatches} from './write-integrity.mjs';
 import {initialProjectionScan,scanProjectionChunk,decodeProjectionSpan,projectionMapFrame} from './replay-projection-codec.mjs';
 import {sqliteValueLimit} from './storage-limits.mjs';
@@ -344,7 +346,7 @@ function auditBinding(db, receiptId) {
   const row=db.prepare(`SELECT CASE WHEN typeof(counts_json)='text' AND octet_length(counts_json)<=4096
     THEN counts_json END AS json FROM operator_actions WHERE id=?
     AND action IN ('replay_cutover_capture','replay_cutover_hash','replay_cutover_codec',
-      'replay_cutover_abandon','replay_cutover_cleanup','replay_cutover_dependency','replay_cutover_tail')`).get(receiptId);
+      'replay_cutover_abandon','replay_cutover_cleanup','replay_cutover_dependency','replay_cutover_tail','replay_cutover_work')`).get(receiptId);
   if(!row?.json)throw Error('missing independent replay audit binding');
   const value=JSON.parse(row.json);
   if(!value||typeof value!=='object'||Array.isArray(value))throw Error('invalid replay audit binding');
@@ -353,6 +355,13 @@ function auditBinding(db, receiptId) {
 }
 
 function validate(input, phase) {
+  if(phase==='work'){
+    if(!input||!id(input.roomId)||!id(input.requestId)||!digest(input.generation)
+      ||!Number.isSafeInteger(input.expectedWorkCount)||input.expectedWorkCount<0||input.expectedWorkCount>1000000
+      ||Object.keys(input).some(k=>!['roomId','generation','requestId','expectedWorkCount'].includes(k)))
+      throw Error('invalid replay work qualification intent');
+    return;
+  }
   if (!input || !id(input.roomId) || !id(input.requestId)) throw Error('invalid replay capture intent');
   if (phase === 'abandon' || phase === 'cleanup') {
     const keys = phase === 'abandon'
@@ -380,7 +389,7 @@ function validate(input, phase) {
 }
 function receipt(store, input, phase, operation) {
   validate(input, phase);
-  const intent=phase==='abandon'
+  const intent=phase==='work'?{phase,roomId:input.roomId,requestId:input.requestId,generation:input.generation,expectedWorkCount:input.expectedWorkCount}:phase==='abandon'
     ? {phase,roomId:input.roomId,requestId:input.requestId,generation:input.generation,reason:input.reason}
     : phase==='cleanup'
       ? {phase,roomId:input.roomId,requestId:input.requestId,generation:input.generation,expectedDeleted:input.expectedDeleted}
@@ -741,7 +750,7 @@ export function readReplayTailEvent(store,input) {
 
 // This verifies only the captured dependency bytes and existing digest. The
 // protected H reference/member must separately match before candidate use.
-function readUntouchedHReference(db,header,kind,key) {
+function readUntouchedHReference(db,header,kind,key,budget) {
   const {roomId,generation}=header.value,work=kind==='work',prefix=work?'hw':'hb';
   for(const suffix of ['', 'a'])if(db.prepare('SELECT 1 FROM operator_actions WHERE id=?')
     .get(`oa_brc_${prefix}${suffix}_${generation}_${Buffer.from(key).toString('hex')}`))
@@ -755,12 +764,13 @@ function readUntouchedHReference(db,header,kind,key) {
     ${work?`AND typeof(revision)='integer' AND revision BETWEEN 0 AND ${MAX}`:''}`;
   const bytes=db.prepare(`SELECT CASE WHEN ${admitted} THEN octet_length(${payload}) END AS bytes
     FROM ${table} WHERE room_id=? AND ${keyColumn}=?`).get(roomId,key)?.bytes;
-  const inputBytes=hReadControlBytes(db,header)+4096+(Number.isSafeInteger(bytes)?bytes:0);
+  const inputBytes=budget.bytes+4096+(Number.isSafeInteger(bytes)?bytes:0);
   if(!Number.isSafeInteger(bytes)||bytes<1||bytes>131072||inputBytes>262144)
     throw Error('unchanged H reference admission required');
   const value=JSON.parse(db.prepare(`SELECT ${payload} AS json FROM ${table} WHERE room_id=? AND ${keyColumn}=?`).get(roomId,key).json);
   if(value[keyColumn]!==key||hash(value.body)!==value[proof])throw Error('unchanged H reference digest changed');
   if(work){const item=JSON.parse(value.body);if(item.id!==key||item.revision!==value.revision)throw Error('unchanged H work identity changed');}
+  budget.bytes=inputBytes;
   return {absent:false,row:value,unchanged:true,inputBytes,certified:false};
 }
 
@@ -771,38 +781,44 @@ export function readReplayHReference(store,input) {
     throw Error('invalid replay reference intent');
   return store.readTransaction(()=>{
     const db=store.db;verifyReplayCutoverSchema(db);
-    const header=captureBinding(db,input.roomId,input.generation),domain='h-'+input.kind;
+    const header=captureBinding(db,input.roomId,input.generation);
+    return readHReferenceSource(db,header,input.kind,input.key,{bytes:hReadControlBytes(db,header)});
+  });
+}
+function readHReferenceSource(db,header,kind,key,budget){
+    const {roomId,generation}=header.value,domain='h-'+kind;
+    const maximumPayloadBytes=Math.min(131072,262144-budget.bytes-8192);
+    if(maximumPayloadBytes<1)throw replayReadBudget();
     const rows=db.prepare(`SELECT domain,CASE WHEN typeof(payload)='blob' AND typeof(payload_bytes)='integer'
-      AND payload_bytes BETWEEN 1 AND 131072 AND octet_length(payload)=payload_bytes
+      AND payload_bytes BETWEEN 1 AND ? AND octet_length(payload)=payload_bytes
       AND row_version=0 AND payload_sha256='' THEN payload END AS payload
       FROM message_replay_units WHERE room_id=? AND generation=? AND domain IN (?,?) AND unit_key=?`)
-      .all(input.roomId,input.generation,domain,domain+'-absent',input.key);
-    if(rows.length===0)return readUntouchedHReference(db,header,input.kind,input.key);
+      .all(maximumPayloadBytes,roomId,generation,domain,domain+'-absent',key);
+    if(rows.length===0)return readUntouchedHReference(db,header,kind,key,budget);
     if(rows.length!==1||!rows[0].payload)throw Error('missing or invalid captured H reference');
     const source=rows[0],absent=source.domain.endsWith('-absent');
-    const receiptId=`oa_brc_h${input.kind==='work'?'w':'b'}${absent?'a':''}_${input.generation}_${Buffer.from(input.key).toString('hex')}`;
+    const receiptId=`oa_brc_h${kind==='work'?'w':'b'}${absent?'a':''}_${generation}_${Buffer.from(key).toString('hex')}`;
     const independent=auditBinding(db,receiptId);
-    if(independent.roomId!==input.roomId||independent.generation!==input.generation
-      ||independent.headerHash!==header.hash||independent.domain!==source.domain||independent.key!==input.key)
+    if(independent.roomId!==roomId||independent.generation!==generation
+      ||independent.headerHash!==header.hash||independent.domain!==source.domain||independent.key!==key)
       throw Error('independent replay H-reference binding changed');
     const value=JSON.parse(fatalText(source.payload));
     if(absent){
       if(value!==null||independent.entityHash!==null)throw Error('independent replay H-absence changed');
     }else{
-      const work=input.kind==='work',fields=work?['work_id','revision','digest','body']:['sha','body'];
+      const work=kind==='work',fields=work?['work_id','revision','digest','body']:['sha','body'];
       if(!value||Object.keys(value).length!==fields.length||fields.some(f=>!Object.hasOwn(value,f))
-        ||value[work?'work_id':'sha']!==input.key||typeof value.body!=='string'
+        ||value[work?'work_id':'sha']!==key||typeof value.body!=='string'
         ||!digest(value[work?'digest':'sha'])||independent.entityHash!==value[work?'digest':'sha']
         ||hash(value.body)!==independent.entityHash||(work&&(!Number.isSafeInteger(value.revision)||value.revision<0)))
         throw Error('independent replay H-reference digest changed');
-      if(work){const item=JSON.parse(value.body);if(item.id!==input.key||item.revision!==value.revision)
+      if(work){const item=JSON.parse(value.body);if(item.id!==key||item.revision!==value.revision)
         throw Error('independent replay H-work identity changed');}
     }
-    const inputBytes=source.payload.byteLength+header.inputBytes+header.captureReceiptInputBytes
-      +receiptInputBytes.get(independent)+schemaContract(db).bindingBytes+8192;
+    budget.bytes+=source.payload.byteLength+receiptInputBytes.get(independent)+4096;
+    const inputBytes=budget.bytes;
     if(inputBytes>262144)throw Error('replay reference aggregate byte limit');
     return {absent,...(absent?{}:{row:value}),receiptId,inputBytes,certified:false};
-  });
 }
 
 // Explicit privacy erasure is stronger than abandonment. Delete every raw
@@ -904,26 +920,34 @@ export function readReplayWitnessLeaf(store,input){
   return store.readTransaction(()=>{
     const db=store.db;verifyReplayCutoverSchema(db);
     const header=captureBinding(db,input.roomId,input.generation);
-    const saved=pointer(db,input.roomId,input.generation,'leaf-proof',JSON.stringify([input.domain,input.key]));
+    return readWitnessLeafSource(db,header,input.domain,input.key,{bytes:hReadControlBytes(db,header)});
+  });
+}
+function readWitnessLeafSource(db,header,domain,key,budget){
+    const {roomId,generation}=header.value;
+    const saved=pointer(db,roomId,generation,'leaf-proof',JSON.stringify([domain,key]));
     const prior=auditBinding(db,saved.receiptId);
     if(!Number.isInteger(saved.index)||saved.index<0||saved.index>=32||prior.bindingHash!==header.hash
-      ||prior.generation!==input.generation||!digest(prior.sourceRoot)||!Array.isArray(prior.leafCommitments)||prior.leafCommitments.length>32)
+      ||prior.generation!==generation||!digest(prior.sourceRoot)||!Array.isArray(prior.leafCommitments)||prior.leafCommitments.length>32)
       throw Error('replay leaf receipt binding changed');
+    budget.bytes+=receiptInputBytes.get(prior)+512+4096;
+    const maximumPayloadBytes=Math.min(131072,262144-budget.bytes);
+    if(maximumPayloadBytes<1)throw replayReadBudget();
     const row=db.prepare(`SELECT CASE WHEN typeof(payload)='blob' AND typeof(payload_bytes)='integer'
-      AND payload_bytes BETWEEN 1 AND 131072 AND octet_length(payload)=payload_bytes THEN payload END AS payload,
+      AND payload_bytes BETWEEN 1 AND ? AND octet_length(payload)=payload_bytes THEN payload END AS payload,
       CASE WHEN typeof(row_version)='integer' AND row_version BETWEEN 1 AND ? THEN row_version END AS position
       FROM message_replay_units WHERE room_id=? AND generation=? AND domain=? AND unit_key=?`)
-      .get(header.value.bytes,input.roomId,input.generation,input.domain,input.key);
+      .get(maximumPayloadBytes,header.value.bytes,roomId,generation,domain,key);
     if(!row?.payload||!row.position||!Number.isSafeInteger(saved.sourceLength)||saved.sourceLength<1
       ||row.position-1+saved.sourceLength>header.value.bytes)throw Error('invalid replay leaf source binding');
     const bytes=new Uint8Array(row.payload);
-    if(input.domain==='metadata-entry' && (!Array.isArray(saved.keyFrame)||saved.keyFrame.length!==3
+    if(domain==='metadata-entry' && (!Array.isArray(saved.keyFrame)||saved.keyFrame.length!==3
       ||saved.keyFrame.some(n=>!Number.isSafeInteger(n)||n<0)||saved.keyFrame[1]<2
       ||saved.keyFrame[0]+saved.keyFrame[1]>row.position-1))throw Error('invalid replay leaf key framing');
-    const commitment=leafCommitment(header.hash,prior.sourceRoot,input.generation,input.domain,input.key,row.position-1,saved.sourceLength,bytes.length,hash(bytes),saved.keyFrame??null);
+    const commitment=leafCommitment(header.hash,prior.sourceRoot,generation,domain,key,row.position-1,saved.sourceLength,bytes.length,hash(bytes),saved.keyFrame??null);
     if(prior.leafCommitments[saved.index]!==commitment)throw Error('independent replay leaf binding changed');
-    return {value:JSON.parse(fatalText(bytes)),offset:row.position-1,bytes:bytes.length,certified:false};
-  });
+    budget.bytes+=bytes.length;
+    return {value:JSON.parse(fatalText(bytes)),offset:row.position-1,bytes:bytes.length,inputBytes:budget.bytes,certified:false};
 }
 
 export function advanceReplayWitness(store, input) {
@@ -1029,6 +1053,76 @@ export function partitionReplayWitness(store,input) {
   });
 }
 
+// This is a qualification of the ENTIRE protected H work map, not a bare
+// caller assertion about sparse work. Only its completed immutable receipt can
+// authorize skipping global legacy-default normalization in a later reducer.
+export function qualifyReplayHWork(store,input){
+  return receipt(store,input,'work',({receiptId})=>{
+    const db=store.db,header=captureBinding(db,input.roomId,input.generation),budget={bytes:hReadControlBytes(db,header)};
+    const codec=get(db,input.roomId,input.generation,'codec'),codecReceipt=auditBinding(db,codec.value.receiptId);
+    budget.bytes+=codec.inputBytes+receiptInputBytes.get(codecReceipt)+4096;
+    const scan=JSON.parse(codec.value.state);
+    if(codec.value.headerHash!==header.hash||codecReceipt.bindingHash!==header.hash
+      ||codecReceipt.codecStateHash!==hash(codec.value.state)||scan.phase!=='done'||scan.offset!==header.value.bytes)
+      throw Error('completed protected codec required for work qualification');
+    const frame=readWitnessLeafSource(db,header,'metadata','workItems',budget).value;
+    if(frame?.kind!=='entry-map'||frame.parent!=='workItems'||!Number.isSafeInteger(frame.entries)||frame.entries<0||frame.entries>1000000)
+      throw Error('protected complete work map frame required');
+    let state={version:1,headerHash:header.hash,codecStateHash:hash(codec.value.state),workCursor:'',workCount:0,workDefaultsQualified:false};
+    const exists=db.prepare("SELECT 1 FROM message_replay_units WHERE room_id=? AND generation=? AND domain='semantic' AND unit_key='state'")
+      .get(input.roomId,input.generation);
+    if(exists){
+      const prior=get(db,input.roomId,input.generation,'semantic'),independent=auditBinding(db,prior.value.receiptId);
+      budget.bytes+=prior.inputBytes+receiptInputBytes.get(independent)+4096;
+      if(independent.semanticStateHash!==hash(JSON.stringify(prior.value.state))||independent.bindingHash!==header.hash
+        ||prior.value.state.headerHash!==header.hash||prior.value.state.codecStateHash!==hash(codec.value.state))
+        throw Error('independent work qualification continuation changed');
+      state=prior.value.state;
+    }
+    if(state.workCount!==input.expectedWorkCount)throw Error('work qualification cursor changed');
+    if(state.workDefaultsQualified)return {generation:input.generation,bindingHash:header.hash,semanticStateHash:hash(JSON.stringify(state)),
+      workCount:state.workCount,expectedWorkCount:frame.entries,workDefaultsQualified:true,phase:'work_qualified',inputBytes:budget.bytes,
+      basis:'protected-current-state',historyProvenance:'unknown',certified:false};
+    const prefix='["workItems",',upper=prefix+'\uffff';
+    if(typeof state.workCursor!=='string'||(state.workCursor!==''&&!state.workCursor.startsWith(prefix))
+      ||Buffer.byteLength(state.workCursor)>512)throw Error('work qualification cursor admission required');
+    const next=db.prepare(`SELECT CASE WHEN typeof(unit_key)='text' AND octet_length(unit_key)<=512 THEN unit_key END AS key
+      FROM message_replay_units WHERE room_id=? AND generation=? AND domain='metadata-entry'
+      AND unit_key>? AND unit_key<? ORDER BY unit_key LIMIT 1`)
+      .get(input.roomId,input.generation,state.workCursor||prefix,upper);
+    if(next){
+      if(typeof next.key!=='string')throw Error('work qualification key admission required');
+      const address=JSON.parse(next.key);if(!Array.isArray(address)||address.length!==2||address[0]!=='workItems'
+        ||typeof address[1]!=='string'||Buffer.byteLength(address[1])>200)throw Error('work qualification identity changed');
+      let item=readWitnessLeafSource(db,header,'metadata-entry',next.key,budget).value;
+      if(item?._workEntity===1){
+        if(Object.keys(item).length!==4||item.id!==address[1]||!digest(item.digest)||!Number.isSafeInteger(item.revision)||item.revision<0)
+          throw Error('protected H work reference changed');
+        const dependency=readHReferenceSource(db,header,'work',address[1],budget);
+        if(dependency.absent||dependency.row.digest!==item.digest||dependency.row.revision!==item.revision)
+          throw Error('protected H work reference digest changed');
+        item=JSON.parse(dependency.row.body);
+      }
+      if(!item||item.id!==address[1])throw Error('protected H work identity changed');
+      const normalized=structuredClone(item);ensureWorkControlDefaults({workItems:{[address[1]]:normalized}});
+      if(!isDeepStrictEqual(normalized,item))throw Error('unloaded legacy work defaults require qualification');
+      state={...state,workCursor:next.key,workCount:state.workCount+1};
+    }
+    const remains=db.prepare(`SELECT 1 FROM message_replay_units WHERE room_id=? AND generation=? AND domain='metadata-entry'
+      AND unit_key>? AND unit_key<? LIMIT 1`).get(input.roomId,input.generation,state.workCursor||prefix,upper);
+    if(!remains){
+      if(state.workCount!==frame.entries)throw Error('work membership count changed');
+      state={...state,workDefaultsQualified:true};
+    }else if(state.workCount>=frame.entries)throw Error('work membership count changed');
+    if(budget.bytes>262144)throw Error('work qualification aggregate byte limit');
+    put(db,input.roomId,input.generation,'semantic',{state,receiptId});
+    return {generation:input.generation,bindingHash:header.hash,semanticStateHash:hash(JSON.stringify(state)),
+      workCount:state.workCount,expectedWorkCount:frame.entries,workDefaultsQualified:state.workDefaultsQualified,
+      phase:state.workDefaultsQualified?'work_qualified':'work_qualifying',inputBytes:budget.bytes,
+      basis:'protected-current-state',historyProvenance:'unknown',certified:false};
+  });
+}
+
 // Restore installs only code-owned DDL when an incoming whole-store artifact
 // actually contains this optional table. Ordinary store opens do not call it.
 export function ensureReplayCutoverRestoreSchema(db) {
@@ -1064,6 +1158,14 @@ export function auditReplayCutoverRecovery(db) {
         ||prior[domain==='hash'?'hashStateHash':'codecStateHash']!==hash(saved.state)
         ||(domain==='hash'&&(!digest(saved.sourceRoot)||prior.sourceRoot!==saved.sourceRoot)))
         throw Error('independent recovered replay checkpoint binding changed');
+    }
+    if(db.prepare("SELECT 1 FROM message_replay_units WHERE room_id=? AND generation=? AND domain='semantic' AND unit_key='state'").get(roomId,generation)){
+      const semantic=get(db,roomId,generation,'semantic').value,prior=auditBinding(db,semantic.receiptId);
+      const codec=get(db,roomId,generation,'codec').value;
+      if(!semantic.state||semantic.state.headerHash!==header.hash||semantic.state.codecStateHash!==hash(codec.state)
+        ||prior.bindingHash!==header.hash||prior.generation!==generation||prior.semanticStateHash!==hash(JSON.stringify(semantic.state))
+        ||prior.workCount!==semantic.state.workCount||prior.workDefaultsQualified!==semantic.state.workDefaultsQualified)
+        throw Error('independent recovered work qualification changed');
     }
     const witness=db.prepare(`SELECT CASE WHEN typeof(payload)='blob'
       AND typeof(payload_bytes)='integer' AND payload_bytes=? AND octet_length(payload)=?

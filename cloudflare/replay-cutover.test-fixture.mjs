@@ -14,6 +14,23 @@ export class ReplayCutoverRoom extends ReplayWitnessRoom {
   async fetch(request){
     const url=new URL(request.url);
     try{
+      if(url.pathname==='/work-qualification-seed'){
+        const count=65;
+        this.s.initialize([...initialRoom(),...Array.from({length:count},(_,i)=>event({id:'work-'+i,roomId:'commons',actorId:'owner',
+          type:'work.proposed',data:{workItemId:'task-'+String(i).padStart(3,'0'),title:'Task '+i,definitionOfDone:'Save result',mode:'read',accountableMemberId:'owner'}}))]);
+        const capture=captureReplayWitness(this.s,{roomId:'commons',requestId:'work-qualification-capture',expectedHead:count+2,reason:'Synthetic complete work defaults qualification'});
+        let progress={bytes:0},n=0;
+        while(progress.phase!=='witness_verified')progress=advanceReplayWitness(this.s,{roomId:'commons',generation:capture.generation,expectedBytes:progress.bytes,requestId:'work-hash-'+n++});
+        progress={bytes:0};n=0;
+        while(progress.phase!=='codec_partitioned')progress=partitionReplayWitness(this.s,{roomId:'commons',generation:capture.generation,expectedBytes:progress.bytes,requestId:'work-codec-'+n++});
+        return Response.json({capture,count,source:this.db.prepare("SELECT sequence,metadata_hash FROM integrity_room_state WHERE room_id='commons'").get()});
+      }
+      if(url.pathname==='/work-qualify'){
+        const count=Number(url.searchParams.get('count')),before={...this.stats};
+        const result=cutover.qualifyReplayHWork(this.s,{roomId:'commons',generation:url.searchParams.get('generation'),expectedWorkCount:count,requestId:'qualify-work-'+count});
+        return Response.json({result,cost:Object.fromEntries(Object.keys(before).map(k=>[k,this.stats[k]-before[k]])),
+          source:this.db.prepare("SELECT sequence,metadata_hash FROM integrity_room_state WHERE room_id='commons'").get()});
+      }
       if(url.pathname==='/h-page-seed'){
         const count=Number(url.searchParams.get('count'));
         if(![1000,17405].includes(count))throw Error('invalid synthetic H member count');
@@ -191,5 +208,5 @@ export class ReplayCutoverRoom extends ReplayWitnessRoom {
   }
 }
 export default {fetch(request,env){const surface=new URL(request.url).searchParams.get('surface')??'cutover';
-  if(!/^(?:cutover|cow-baseline|cow-idle|cow-active|cow-fault|references|h-small|h-large)$/.test(surface))return new Response('invalid fixture surface',{status:400});
+  if(!/^(?:cutover|cow-baseline|cow-idle|cow-active|cow-fault|references|h-small|h-large|h-work)$/.test(surface))return new Response('invalid fixture surface',{status:400});
   return env.ROOM.getByName(surface).fetch(request);}};

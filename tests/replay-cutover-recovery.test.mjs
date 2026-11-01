@@ -12,7 +12,7 @@ import {RoomStore} from '../server/store.mjs';
 import {initialRoom} from '../server/bootstrap.mjs';
 import {auditRecovery} from '../server/recovery.mjs';
 import {exportNdjsonText,replayNdjson,sanitizeCell} from '../server/room-export.mjs';
-import {replayCutoverSchema,captureReplayWitness,advanceReplayWitness,partitionReplayWitness} from '../server/replay-cutover.mjs';
+import {replayCutoverSchema,captureReplayWitness,advanceReplayWitness,partitionReplayWitness,qualifyReplayHWork} from '../server/replay-cutover.mjs';
 
 function fixture(t){
   const directory=mkdtempSync(join(tmpdir(),'replay-recovery-'));
@@ -117,4 +117,19 @@ test('captured exact bytes do not authorize shadowed nested object keys',t=>{
   const before=db.prepare('SELECT * FROM message_replay_units').all();
   assert.throws(()=>partitionReplayWitness(f.store,{roomId:'commons',generation:captured.generation,expectedBytes:0,requestId:'duplicate-key-codec'}),/duplicate replay projection object key/);
   assert.deepEqual(db.prepare('SELECT * FROM message_replay_units').all(),before);
+});
+
+test('whole-store restore preserves complete H work qualification and independently bound continuation',t=>{
+  const f=fixture(t);let progress={bytes:0},n=0;
+  while(progress.phase!=='witness_verified')progress=advanceReplayWitness(f.store,{roomId:'commons',generation:f.captured.generation,expectedBytes:progress.bytes,requestId:'semantic-hash-'+n++});
+  progress={bytes:0};n=0;
+  while(progress.phase!=='codec_partitioned')progress=partitionReplayWitness(f.store,{roomId:'commons',generation:f.captured.generation,expectedBytes:progress.bytes,requestId:'semantic-codec-'+n++});
+  const input={roomId:'commons',generation:f.captured.generation,expectedWorkCount:0,requestId:'semantic-qualify'};
+  const qualified=qualifyReplayHWork(f.store,input);assert.equal(qualified.workDefaultsQualified,true);
+  const before=f.store.db.prepare("SELECT * FROM message_replay_units WHERE domain='semantic'").all();
+  const filename=join(f.directory,'semantic-restored.sqlite');assert.equal(replayNdjson(exportNdjsonText(f.store.db),filename).verified,true);
+  const restored=new RoomStore(filename);t.after(()=>restored.close());
+  assert.deepEqual(restored.db.prepare("SELECT * FROM message_replay_units WHERE domain='semantic'").all(),before);
+  assert.deepEqual({...qualifyReplayHWork(restored,input),duplicate:false},qualified);
+  assert.equal(auditRecovery(restored).checks.writerFence,true);
 });

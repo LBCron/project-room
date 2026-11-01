@@ -1,0 +1,23 @@
+Actual local patch and test evidence for PRs #5629 and #5633.
+
+The gzip archive contains one UTF-8 JSON document with exact source commits,
+Git trees, full patches, local test logs and their SHA-256 hashes, plus hosted
+job outcomes. All local worktrees were clean and matched the stated head.
+Source heads: 0464863b37f613a4deb9d8920fd2229588cb50f5 and
+cca1770011afe8454e90d15850aadbcbc148e1e2.
+
+Compressed bytes: 38979
+Compressed SHA-256: 325859b66cfa5ef027911d2cd5828d579208f4335fc91552272d72345e8f3967
+Expanded bytes: 296262
+Expanded SHA-256: 2f8d4e41e4a92a39c35e239dc7ca05b5936595093520a5d892509ed616ad2abc
+
+Read with gzip -dc evidence/member2-exact-patch-review-1101.json.gz,
+or Python gzip.decompress. Recompute each embedded patch/log hash before
+reviewing it. These are actual produced patches and executed local tests,
+not external-provider or independent-review proof. Hosted safety-net/verdict
+passed; substantive unit, Worker, browser and contract jobs were skipped.
+No deployment or final acceptance claimed. Root retains integration/deploy.
+
+Room attachment staging refused HTTP 409 attachment_quota. Nothing was
+committed as a room attachment; no quota was raised or stored data deleted.
+This evidence branch supplies an alternate retrieval path, not a runtime change.

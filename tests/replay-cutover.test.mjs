@@ -42,15 +42,18 @@ test('Muse-sized capture advances with bounded payloads while later posts and ed
   const done=f.step(start.generation,result.bytes,'done');assert.equal(done.phase,'witness_verified');
 });
 
-for(const mutation of ['older-body','older-sequence','delete','prefix-insert'])test(`source epoch refuses ${mutation} behind the immediate anchor`,t=>{
+for(const mutation of ['older-body','older-sequence','delete','prefix-insert'])test(`current migration fence refuses ${mutation} before source mutation`,t=>{
   const f=fixture(t),start=f.capture(),db=f.s.db;
+  const before=authority(db),mutate=()=>{
   if(mutation==='older-body')db.prepare("UPDATE events SET body=json_set(body,'$.data.name','Changed old source') WHERE room_id='commons' AND sequence=1").run();
   if(mutation==='older-sequence')db.prepare("UPDATE events SET sequence=sequence+100 WHERE room_id='commons' AND sequence=1").run();
   if(mutation==='delete')db.prepare("DELETE FROM events WHERE room_id='commons' AND sequence=1").run();
   if(mutation==='prefix-insert')db.prepare("INSERT INTO events(room_id,sequence,id,body) SELECT room_id,0,'prefix',body FROM events WHERE room_id='commons' LIMIT 1").run();
-  assert.throws(()=>f.step(start.generation,0,0),/missing|epoch|control/);
-  assert.equal(db.prepare("SELECT count(*) AS n FROM message_replay_units WHERE generation<>''").get().n,0,'source rewrites erase privacy-bearing derived bytes');
-  assert.equal(db.prepare("SELECT row_version FROM message_replay_units WHERE domain='control' AND unit_key='epoch'").get().row_version,1);
+  };
+  assert.throws(mutate,/unsupported current room writer|immutable/);
+  assert.deepEqual(authority(db),before,'unregistered source mutation must not commit');
+  assert.equal(f.step(start.generation,0,0).phase,'witness_verified');
+  assert.equal(db.prepare("SELECT row_version FROM message_replay_units WHERE domain='control' AND unit_key='epoch'").get().row_version,0);
 });
 
 test('source and capture output faults roll back the whole step and audit receipt',t=>{
@@ -110,15 +113,16 @@ test('ordinary append source guard uses a single primary-key control lookup desp
   assert.equal(db.prepare("SELECT count(*) AS n FROM message_replay_units WHERE domain='message'").get().n,17405);
 });
 
-test('prior version-44 store opens and writes while leaving the explicit sidecar derivation untouched',t=>{
+test('current version-45 registered writer preserves H and prospectively binds its legacy append',t=>{
   const directory=mkdtempSync(join(tmpdir(),'replay-old44-')),path=join(directory,'room.sqlite');t.after(()=>rmSync(directory,{recursive:true,force:true}));
   let s=new RoomStore(path);s.initialize(initialRoom());s.db.exec(replayCutoverSchema());
   const input={roomId:'commons',requestId:'old44-capture',expectedHead:s.headSequence('commons'),reason:'Synthetic compatibility'};
   const captured=captureReplayWitness(s,input),before=s.db.prepare('SELECT * FROM message_replay_units ORDER BY generation,domain,unit_key').all();s.close();
   s=new RoomStore(path);try{
-    assert.equal(s.db.prepare('PRAGMA user_version').get().user_version,44);
-    const key=s.issueAccessKey('commons','owner');s.command(key,'commons',{id:'old44-post',type:'message.posted',data:{messageId:'old44-post',body:'A valid version-44 post'}});
-    assert.deepEqual(s.db.prepare('SELECT * FROM message_replay_units ORDER BY generation,domain,unit_key').all(),before);
+    assert.equal(s.db.prepare('PRAGMA user_version').get().user_version,45);
+    const key=s.issueAccessKey('commons','owner');s.command(key,'commons',{id:'old44-post',type:'message.posted',data:{messageId:'old44-post',body:'A valid version-45 post'}});
+    for(const row of before)assert.deepEqual(s.db.prepare('SELECT * FROM message_replay_units WHERE room_id=? AND generation=? AND domain=? AND unit_key=?').get(row.room_id,row.generation,row.domain,row.unit_key),row);
+    assert.equal(s.db.prepare("SELECT count(*) n FROM message_replay_units WHERE domain='tail-event'").get().n,1);
     assert.equal(advanceReplayWitness(s,{roomId:'commons',generation:captured.generation,expectedBytes:0,requestId:'old44-hash'}).phase,'witness_verified');
   }finally{s.close();}
 });

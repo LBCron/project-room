@@ -823,3 +823,18 @@ export function cleanupCurrentCandidateRecords(store,roomId,generation) {
     return {owned:true,done:!remaining,rowsDeleted,inputBytes:b.bytes};
   });
 }
+
+// Privacy erasure is deliberately atomic, like the existing whole-generation
+// purge. It is not an ordinary bounded serving operation. Never remove a
+// published current representation or its independent membership witnesses.
+export function purgeCurrentCandidateForPrivacy(db,roomId) {
+  if(!db.isTransaction)throw Error('Candidate privacy purge requires deletion transaction');
+  if(isCurrentRoom(db,roomId))return;
+  const b=budget();admitCurrentSchema(db,b);
+  const fence=readCurrentRecord(db,roomId,'migrationFence','active',b);
+  if(!fence){assertCurrentCandidateEmpty({db},roomId);return;}
+  withCurrentRoomWriter(db,roomId,()=>{
+    db.prepare('DELETE FROM current_room_records WHERE room_id=?').run(roomId);
+    db.prepare('DELETE FROM current_room_record_proofs WHERE room_id=?').run(roomId);
+  });
+}

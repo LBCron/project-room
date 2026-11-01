@@ -1,6 +1,6 @@
 import {currentWorkSummary} from './current-work-summary.mjs';
 import {advanceCanonicalH} from './replay-canonical-h.mjs';
-import {assertCurrentCandidateEmpty,cleanupCurrentCandidateRecords,stageCurrentCandidateRecords,currentCandidateCommandContext,applyCurrentCandidateEvent,publishCurrentCandidate,readCurrentRecord,admitCurrentCandidateBudget} from './current-room-repository.mjs';
+import {purgeCurrentCandidateForPrivacy,assertCurrentCandidateEmpty,cleanupCurrentCandidateRecords,stageCurrentCandidateRecords,currentCandidateCommandContext,applyCurrentCandidateEvent,publishCurrentCandidate,readCurrentRecord,admitCurrentCandidateBudget} from './current-room-repository.mjs';
 import {applyEvent,memberHistoryVisibility} from '../src/events.js';
 import {messageRowForWrite} from './messages-store.mjs';
 import {messageProofHash} from './write-integrity.mjs';
@@ -544,14 +544,14 @@ export function cleanupReplayCapture(store, input) {
         targetRowsDeleted:target.rowsDeleted,phase:'target_cleanup',done:false,inputBytes:target.inputBytes,certified:false,publication:'none'};
     }
 
-    // Prefix lookup plus LIMIT stops at 194 rows; no payload/key materialization
-    // or whole-generation count/sort. Three lifecycle rows, the phase receipt and two runtime writer-permit
+    // Prefix lookup plus LIMIT stops at 192 rows; no payload/key materialization
+    // or whole-generation count/sort. Three lifecycle rows, the phase receipt, format checks and two native runtime writer-permit
     // writes are reserved for the final delete. Native removal of the one <=4 MiB witness is distinct from
     // JavaScript input bytes and is not a 256 KiB physical-delete claim.
     const candidates = db.prepare(`SELECT rowid AS id FROM message_replay_units
       WHERE room_id=? AND generation=?
       AND NOT (domain='header' AND unit_key='state')
-      AND NOT (domain='control' AND unit_key IN ('abandonment','cleanup')) LIMIT 194`)
+      AND NOT (domain='control' AND unit_key IN ('abandonment','cleanup')) LIMIT 192`)
       .all(roomId, generation);
     const remove = db.prepare('DELETE FROM message_replay_units WHERE rowid=?');
     for (const row of candidates) remove.run(row.id);
@@ -868,6 +868,7 @@ function readHReferenceSource(db,header,kind,key,budget){
 export function purgeReplayCapturesForPrivacy(db,roomId) {
   if(!db.isTransaction)throw Error('replay privacy purge requires deletion transaction');
   if(!db.prepare("SELECT 1 FROM sqlite_master WHERE type='table' AND name='message_replay_units'").get())return;
+  purgeCurrentCandidateForPrivacy(db,roomId);
   db.prepare("DELETE FROM message_replay_units WHERE room_id=? AND (generation<>'' OR (domain='control' AND unit_key='capture-head'))").run(roomId);
 }
 

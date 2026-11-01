@@ -150,7 +150,13 @@ export function createOperatorRoutes({ store, json, reject, body, rate }) {
       return true;
     }
     if (path === "/api/operator/status") {
-      json(res, 200, operatorStatus(store));
+      let selection;
+      if (url.searchParams.has('parityRoom') || url.searchParams.has('expectedHead')) {
+        const rooms = url.searchParams.getAll('parityRoom'), heads = url.searchParams.getAll('expectedHead');
+        if (rooms.length !== 1 || heads.length !== 1 || !/^[A-Za-z0-9][A-Za-z0-9_-]{0,63}$/.test(rooms[0]) || !/^(?:[1-9]|[1-5][0-9]|6[0-4])$/.test(heads[0]) || [...url.searchParams.keys()].some(key => !['parityRoom','expectedHead'].includes(key))) reject(422, 'invalid_request', 'Selected parity requires one room and an expected head from 1 to 64.');
+        selection = { parityRoom: rooms[0], expectedHead: Number(heads[0]) };
+      }
+      json(res, 200, operatorStatus(store, selection));
       return true;
     }
     const main = url.searchParams.get("main");

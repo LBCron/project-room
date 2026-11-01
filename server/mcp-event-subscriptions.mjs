@@ -21,7 +21,7 @@ const hash = value => createHash("sha256").update(value).digest("hex");
 const fail = message => { throw Object.assign(new Error(message), { code: -32602 }); };
 function principalKey(principal) {
   const fields = ["principalType", "familyId", "resource", "roomId", "identityId", "memberId"];
-  if (!principal || !["account-agent", "invited-agent"].includes(principal.principalType)) fail("Invalid event principal");
+  if (!principal || !["account-agent", "account-owned-agent", "invited-agent"].includes(principal.principalType)) fail("Invalid event principal");
   const result = {};
   for (const key of fields) {
     if (typeof principal[key] !== "string" || !principal[key] || principal[key].length > 2048) fail("Invalid event principal");

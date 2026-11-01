@@ -1,0 +1,54 @@
+Authorized replacement: executed API boundary qualification
+
+Runtime source: 0464863b37f613a4deb9d8920fd2229588cb50f5 (#5629 candidate).
+No runtime changes. Executable: tests/authorized-replacement-journey.test.mjs.
+Final result: 2 tests passed, zero failed. Log:
+/Users/potter/Documents/ChatGPT/project room/replacement-journey-final-guards.log
+
+The file-backed fixture uses the actual HTTP server, separate credentials and
+distinct agent members. The original agent is accountable to owner; replacement
+is accountable to partner; the verifier is another member accountable to owner.
+The fixture owner explicitly grants memberships and enables Room Trust. These
+are synthetic fixture grants, not evidence that a real external human consented.
+
+Executed journey:
+1. Owner proposes original canonical work, linked to a private owner-to-original
+   source message. Original agent accepts, starts and saves a public handoff.
+2. Owner revokes original membership. Close/reopen the actual SQLite store and
+   restart the HTTP server. Original GET and POST both return 401.
+3. Replacement reads saved public task/handoff context. Its includeSource read
+   says unavailable; the private source sentinel is absent from the response.
+4. Owner explicitly proposes replacement canonical work with named accountable
+   member, definition of done and designated independent verifier. Owner
+   supersedes original work with this real target. The selected original-work
+   read advertises an available replacement. No implicit assignment transfer.
+5. Replacement accepts and starts its new contract, posts a shared native-text
+   result, and completes with the exact stored UTF-8 hash and known producer.
+6. Close/reopen the store and HTTP server again. Retry the exact completion id
+   and original revision: 200 duplicate, same completion identity.
+7. Wrong evidence-version verification refuses 422 and stores no verification.
+   The designated verifier records a pass on the exact current receipt/hash.
+   The board reaches done. A later completion retry remains duplicate and does
+   not rewind the review or alter the task. Original partial progress survives.
+
+Separate control: owner HTTP board reassign succeeds, changing the board holder,
+but canonical accountableMemberId stays original. Replacement trying to record
+a canonical handoff on that original task refuses 422, "Only the accountable
+member". This is an authority boundary, not proof that board reassign alone
+finishes canonical work. Current different-identity recovery should therefore
+use explicit proposal/supersession, or a separately designed authorized canonical
+transfer. Do not relax completion authority to make board reassignment appear
+to transfer the whole contract.
+
+Initial fixture attempted unsupported producerIndependence on verification and
+failed 422. Corrected to the actual contract: known producer on completion,
+independence derived by the service, no client-asserted independence field.
+The complete two-test journey then passes, including additional late/revoked
+mutation, wrong-version and late-completion controls.
+
+Limits: same test process scripts all actors. It demonstrates real local API,
+storage, authentication, privacy and lifecycle behavior; it does not demonstrate
+independent model reasoning, external provider replacement, an actual code patch
+or executed patch test artifact, human consent UX, deployed service fitness or
+production recovery. Those remain distinct MVP acceptance work. No broad suite,
+runtime branch change, merge or deployment performed by this evidence lane.

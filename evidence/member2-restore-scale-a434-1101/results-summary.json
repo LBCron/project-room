@@ -1,0 +1,493 @@
+{
+  "source": "a434c65358fcd1b538070c105225f21d784f8ad2",
+  "node": "v24.22.1",
+  "at": "2026-11-01T23:54:55.491Z",
+  "inProgress": false,
+  "results": [
+    {
+      "count": 1000,
+      "source": "a434c65358fcd1b538070c105225f21d784f8ad2",
+      "startedAt": "2026-11-01T23:54:37.889Z",
+      "seed": {
+        "status": 200,
+        "hostWallMs": 641.1340829999999,
+        "meter": {
+          "statements": 19331,
+          "failedStatements": 24,
+          "rowsRead": 30421,
+          "rowsWritten": 24133,
+          "unknownCounters": 48,
+          "returnedRows": 9721,
+          "returnedTextBytes": 675978,
+          "returnedBlobBytes": 0,
+          "numericCells": 10784,
+          "returnedPayloadBytes": 675978
+        },
+        "runtime": {
+          "valueLimitBytes": 2200000
+        }
+      },
+      "export": {
+        "status": 200,
+        "hostWallMs": 288.7284169999999,
+        "meter": {
+          "statements": 15455,
+          "failedStatements": 0,
+          "rowsRead": 327485,
+          "rowsWritten": 0,
+          "unknownCounters": 0,
+          "returnedRows": 35565,
+          "returnedTextBytes": 5313357,
+          "returnedBlobBytes": 0,
+          "numericCells": 72814,
+          "returnedPayloadBytes": 5313357
+        },
+        "bytes": 2604824,
+        "sha256": "a4ce22e9f39746e3f8ae7816abd37508f6f03e07874302e99db4588cc2158127"
+      },
+      "partial": {
+        "status": 200,
+        "hostWallMs": 177.24199999999996,
+        "meter": {
+          "statements": 12814,
+          "failedStatements": 0,
+          "rowsRead": 177443,
+          "rowsWritten": 23094,
+          "unknownCounters": 0,
+          "returnedRows": 6733,
+          "returnedTextBytes": 108826,
+          "returnedBlobBytes": 0,
+          "numericCells": 6714,
+          "returnedPayloadBytes": 108826
+        },
+        "events": 1000
+      },
+      "pendingReady": {
+        "status": 503,
+        "hostWallMs": 372.634916,
+        "meter": {
+          "statements": 6,
+          "failedStatements": 0,
+          "rowsRead": 51,
+          "rowsWritten": 0,
+          "unknownCounters": 0,
+          "returnedRows": 27,
+          "returnedTextBytes": 9099,
+          "returnedBlobBytes": 0,
+          "numericCells": 24,
+          "returnedPayloadBytes": 9099
+        }
+      },
+      "resume": {
+        "status": 202,
+        "hostWallMs": 166.60099999999989,
+        "meter": {
+          "statements": 8117,
+          "failedStatements": 0,
+          "rowsRead": 449674,
+          "rowsWritten": 999,
+          "unknownCounters": 0,
+          "returnedRows": 11103,
+          "returnedTextBytes": 2275253,
+          "returnedBlobBytes": 0,
+          "numericCells": 18152,
+          "returnedPayloadBytes": 2275253
+        }
+      },
+      "preparedWriterRefusal": {
+        "status": 200,
+        "hostWallMs": 1.4392080000000078,
+        "meter": {
+          "statements": 3,
+          "failedStatements": 1,
+          "rowsRead": 2,
+          "rowsWritten": 1,
+          "unknownCounters": 2,
+          "returnedRows": 1,
+          "returnedTextBytes": 0,
+          "returnedBlobBytes": 0,
+          "numericCells": 1,
+          "returnedPayloadBytes": 0
+        },
+        "refused": true,
+        "error": "restore target is sealed: SQLITE_CONSTRAINT (extended: SQLITE_CONSTRAINT_TRIGGER)"
+      },
+      "targetBeforeFinal": {
+        "events": 1007,
+        "records": 2017,
+        "admission": {
+          "pending": true
+        }
+      },
+      "finalization": {
+        "index": 202,
+        "inputPhase": "audit_pending",
+        "inputStage": "full_audit_pending",
+        "status": 200,
+        "hostWallMs": 267.14474999999993,
+        "meter": {
+          "statements": 15692,
+          "failedStatements": 0,
+          "rowsRead": 1079229,
+          "rowsWritten": 6,
+          "unknownCounters": 0,
+          "returnedRows": 30021,
+          "returnedTextBytes": 4084399,
+          "returnedBlobBytes": 0,
+          "numericCells": 52090,
+          "returnedPayloadBytes": 4084399
+        },
+        "outputPhase": null,
+        "outputStage": null,
+        "pending": false,
+        "verified": true,
+        "logicalRows": null
+      },
+      "completed": true,
+      "finalAuditOk": true,
+      "finishedAt": "2026-11-01T23:54:41.831Z",
+      "continuationCalls": 203,
+      "stages": {
+        "coverage/": {
+          "calls": 48,
+          "sumRowsRead": 1402304,
+          "maxRowsRead": 29312,
+          "sumReturnedPayloadBytes": 13698693,
+          "maxReturnedPayloadBytes": 697363,
+          "sumHostWallMs": 443.02328999999895
+        },
+        "audit_pending/rooms": {
+          "calls": 1,
+          "sumRowsRead": 39732,
+          "maxRowsRead": 39732,
+          "sumReturnedPayloadBytes": 790539,
+          "maxReturnedPayloadBytes": 790539,
+          "sumHostWallMs": 23.043083999999908
+        },
+        "audit_pending/proofs": {
+          "calls": 15,
+          "sumRowsRead": 710205,
+          "maxRowsRead": 47354,
+          "sumReturnedPayloadBytes": 5494819,
+          "maxReturnedPayloadBytes": 374946,
+          "sumHostWallMs": 258.9046659999999
+        },
+        "audit_pending/records": {
+          "calls": 16,
+          "sumRowsRead": 523929,
+          "maxRowsRead": 48012,
+          "sumReturnedPayloadBytes": 5882910,
+          "maxReturnedPayloadBytes": 422569,
+          "sumHostWallMs": 237.8700830000007
+        },
+        "audit_pending/messages": {
+          "calls": 15,
+          "sumRowsRead": 711994,
+          "maxRowsRead": 47484,
+          "sumReturnedPayloadBytes": 5654174,
+          "maxReturnedPayloadBytes": 379300,
+          "sumHostWallMs": 310.00437500000044
+        },
+        "audit_pending/history_events": {
+          "calls": 8,
+          "sumRowsRead": 371368,
+          "maxRowsRead": 46445,
+          "sumReturnedPayloadBytes": 2322279,
+          "maxReturnedPayloadBytes": 300310,
+          "sumHostWallMs": 76.72745899999973
+        },
+        "audit_pending/history_members": {
+          "calls": 1,
+          "sumRowsRead": 45862,
+          "maxRowsRead": 45862,
+          "sumReturnedPayloadBytes": 307525,
+          "maxReturnedPayloadBytes": 307525,
+          "sumHostWallMs": 7.165125000000444
+        },
+        "audit_pending/cleanup": {
+          "calls": 40,
+          "sumRowsRead": 1796311,
+          "maxRowsRead": 44919,
+          "sumReturnedPayloadBytes": 10369616,
+          "maxReturnedPayloadBytes": 259339,
+          "sumHostWallMs": 304.74333199999955
+        },
+        "audit_pending/engine": {
+          "calls": 58,
+          "sumRowsRead": 2471801,
+          "maxRowsRead": 58130,
+          "sumReturnedPayloadBytes": 19440814,
+          "maxReturnedPayloadBytes": 335609,
+          "sumHostWallMs": 341.1336270000015
+        },
+        "audit_pending/full_audit_pending": {
+          "calls": 1,
+          "sumRowsRead": 1079229,
+          "maxRowsRead": 1079229,
+          "sumReturnedPayloadBytes": 4084399,
+          "maxReturnedPayloadBytes": 4084399,
+          "sumHostWallMs": 267.14474999999993
+        }
+      },
+      "finalResult": {
+        "ok": true,
+        "verified": true,
+        "pending": false,
+        "reportVersion": 1,
+        "resumed": true,
+        "contentVerification": "full",
+        "events": 1007,
+        "tables": 221,
+        "audit": {
+          "ok": true
+        }
+      }
+    },
+    {
+      "count": 5000,
+      "source": "a434c65358fcd1b538070c105225f21d784f8ad2",
+      "startedAt": "2026-11-01T23:54:41.832Z",
+      "seed": {
+        "status": 200,
+        "hostWallMs": 1252.422708,
+        "meter": {
+          "statements": 95583,
+          "failedStatements": 24,
+          "rowsRead": 126988,
+          "rowsWritten": 120322,
+          "unknownCounters": 48,
+          "returnedRows": 45847,
+          "returnedTextBytes": 1840633,
+          "returnedBlobBytes": 0,
+          "numericCells": 50910,
+          "returnedPayloadBytes": 1840633
+        },
+        "runtime": {
+          "valueLimitBytes": 2200000
+        }
+      },
+      "export": {
+        "status": 200,
+        "hostWallMs": 1315.0283330000002,
+        "meter": {
+          "statements": 71743,
+          "failedStatements": 0,
+          "rowsRead": 533880,
+          "rowsWritten": 0,
+          "unknownCounters": 0,
+          "returnedRows": 163897,
+          "returnedTextBytes": 25614203,
+          "returnedBlobBytes": 0,
+          "numericCells": 341106,
+          "returnedPayloadBytes": 25614203
+        },
+        "bytes": 12964422,
+        "sha256": "3842618886e27e8f9255121ba80c5b06c21245dc33ba8028c20b33f54bca02fe"
+      },
+      "partial": {
+        "status": 200,
+        "hostWallMs": 606.4104580000003,
+        "meter": {
+          "statements": 61678,
+          "failedStatements": 0,
+          "rowsRead": 643731,
+          "rowsWritten": 115334,
+          "unknownCounters": 0,
+          "returnedRows": 31501,
+          "returnedTextBytes": 376634,
+          "returnedBlobBytes": 0,
+          "numericCells": 31146,
+          "returnedPayloadBytes": 376634
+        },
+        "events": 5000
+      },
+      "pendingReady": {
+        "status": 503,
+        "hostWallMs": 376.09491700000035,
+        "meter": {
+          "statements": 6,
+          "failedStatements": 0,
+          "rowsRead": 51,
+          "rowsWritten": 0,
+          "unknownCounters": 0,
+          "returnedRows": 27,
+          "returnedTextBytes": 9099,
+          "returnedBlobBytes": 0,
+          "numericCells": 24,
+          "returnedPayloadBytes": 9099
+        }
+      },
+      "resume": {
+        "status": 202,
+        "hostWallMs": 550.7408750000004,
+        "meter": {
+          "statements": 33170,
+          "failedStatements": 0,
+          "rowsRead": 887962,
+          "rowsWritten": 1365,
+          "unknownCounters": 0,
+          "returnedRows": 35934,
+          "returnedTextBytes": 7611033,
+          "returnedBlobBytes": 0,
+          "numericCells": 62647,
+          "returnedPayloadBytes": 7611033
+        }
+      },
+      "preparedWriterRefusal": {
+        "status": 200,
+        "hostWallMs": 1.2379579999997077,
+        "meter": {
+          "statements": 3,
+          "failedStatements": 1,
+          "rowsRead": 2,
+          "rowsWritten": 1,
+          "unknownCounters": 2,
+          "returnedRows": 1,
+          "returnedTextBytes": 0,
+          "returnedBlobBytes": 0,
+          "numericCells": 1,
+          "returnedPayloadBytes": 0
+        },
+        "refused": true,
+        "error": "restore target is sealed: SQLITE_CONSTRAINT (extended: SQLITE_CONSTRAINT_TRIGGER)"
+      },
+      "targetBeforeFinal": {
+        "events": 5007,
+        "records": 10017,
+        "admission": {
+          "pending": true
+        }
+      },
+      "finalization": {
+        "index": 765,
+        "inputPhase": "audit_pending",
+        "inputStage": "full_audit_pending",
+        "status": 200,
+        "hostWallMs": 1117.316999999999,
+        "meter": {
+          "statements": 71898,
+          "failedStatements": 0,
+          "rowsRead": 1247561,
+          "rowsWritten": 6,
+          "unknownCounters": 0,
+          "returnedRows": 130290,
+          "returnedTextBytes": 18350141,
+          "returnedBlobBytes": 0,
+          "numericCells": 248256,
+          "returnedPayloadBytes": 18350141
+        },
+        "outputPhase": null,
+        "outputStage": null,
+        "pending": false,
+        "verified": true,
+        "logicalRows": null
+      },
+      "completed": true,
+      "finalAuditOk": true,
+      "finishedAt": "2026-11-01T23:54:55.488Z",
+      "continuationCalls": 766,
+      "stages": {
+        "coverage/": {
+          "calls": 236,
+          "sumRowsRead": 6906190,
+          "maxRowsRead": 29312,
+          "sumReturnedPayloadBytes": 65775028,
+          "maxReturnedPayloadBytes": 1012793,
+          "sumHostWallMs": 2116.7719600000037
+        },
+        "audit_pending/rooms": {
+          "calls": 1,
+          "sumRowsRead": 39734,
+          "maxRowsRead": 39734,
+          "sumReturnedPayloadBytes": 796531,
+          "maxReturnedPayloadBytes": 796531,
+          "sumHostWallMs": 22.50958299999911
+        },
+        "audit_pending/proofs": {
+          "calls": 78,
+          "sumRowsRead": 3693321,
+          "maxRowsRead": 47358,
+          "sumReturnedPayloadBytes": 29203387,
+          "maxReturnedPayloadBytes": 394929,
+          "sumHostWallMs": 1356.3707099999974
+        },
+        "audit_pending/records": {
+          "calls": 78,
+          "sumRowsRead": 2491129,
+          "maxRowsRead": 48010,
+          "sumReturnedPayloadBytes": 29098047,
+          "maxReturnedPayloadBytes": 413613,
+          "sumHostWallMs": 1135.326667000003
+        },
+        "audit_pending/messages": {
+          "calls": 78,
+          "sumRowsRead": 3702976,
+          "maxRowsRead": 47486,
+          "sumReturnedPayloadBytes": 29515363,
+          "maxReturnedPayloadBytes": 393113,
+          "sumHostWallMs": 1612.4366320000008
+        },
+        "audit_pending/history_events": {
+          "calls": 39,
+          "sumRowsRead": 1811158,
+          "maxRowsRead": 46445,
+          "sumReturnedPayloadBytes": 11287102,
+          "maxReturnedPayloadBytes": 300453,
+          "sumHostWallMs": 359.32854100000077
+        },
+        "audit_pending/history_members": {
+          "calls": 1,
+          "sumRowsRead": 45862,
+          "maxRowsRead": 45862,
+          "sumReturnedPayloadBytes": 300223,
+          "maxReturnedPayloadBytes": 300223,
+          "sumHostWallMs": 6.961041999998997
+        },
+        "audit_pending/cleanup": {
+          "calls": 196,
+          "sumRowsRead": 8803835,
+          "maxRowsRead": 44919,
+          "sumReturnedPayloadBytes": 50833384,
+          "maxReturnedPayloadBytes": 259366,
+          "sumHostWallMs": 1452.0730040000017
+        },
+        "audit_pending/engine": {
+          "calls": 58,
+          "sumRowsRead": 2519864,
+          "maxRowsRead": 58130,
+          "sumReturnedPayloadBytes": 19442902,
+          "maxReturnedPayloadBytes": 335645,
+          "sumHostWallMs": 341.87296399999104
+        },
+        "audit_pending/full_audit_pending": {
+          "calls": 1,
+          "sumRowsRead": 1247561,
+          "maxRowsRead": 1247561,
+          "sumReturnedPayloadBytes": 18350141,
+          "maxReturnedPayloadBytes": 18350141,
+          "sumHostWallMs": 1117.316999999999
+        }
+      },
+      "finalResult": {
+        "ok": true,
+        "verified": true,
+        "pending": false,
+        "reportVersion": 1,
+        "resumed": true,
+        "contentVerification": "full",
+        "events": 5007,
+        "tables": 221,
+        "audit": {
+          "ok": true
+        }
+      }
+    }
+  ],
+  "limits": [
+    "Actual local workerd SQLite DO with production restore routes, synthetic data only; no deployment/live conversion.",
+    "Native constructor cost is outside per-request meter. Source export/ingestion and finalization are reported separately.",
+    "Physical native SQL counters are adapter-observed through db.storage; returned bytes count UTF-8 text and BLOB values, excluding numeric encodings/column names/wire overhead.",
+    "Host wall time is not production CPU usage. No source limits or checks disabled; Miniflare defaults retained.",
+    "No duplicate/restart correctness campaign; existing 500-event correctness lane is separate."
+  ]
+}

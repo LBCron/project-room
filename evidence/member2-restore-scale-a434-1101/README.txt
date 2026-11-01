@@ -1,0 +1,15 @@
+Actual local Worker restore scale qualification, exact source a434c65358fcd1b538070c105225f21d784f8ad2.
+
+Both synthetic 1k and 5k message cases completed verified:true, independent full recovery audit ok. Seed accepted work and private DM included. Readiness refused pending target; prepared credential UPDATE refused. No runtime changes, waived checks, budget changes, or production deployment.
+
+Final full_audit_pending remains synchronous and scales with history. At 1k: 15,692 SQL statements; 1,079,229 native rows read; 30,021 rows returned; 4,084,399 returned text/BLOB bytes; 267.145ms host wall. At 5k: 71,898 statements; 1,247,561 rows read; 130,290 rows returned; 18,350,141 bytes; 1117.317ms host wall. No failed statements or unknown counters in either finalization. 203 and 766 total continuation calls respectively. Rows read include repeated metadata/schema work and are not unique logical rows. Physical counters and returned payload are distinct.
+
+Source server/restore-ndjson.mjs continueRestoreCoverage full_audit_pending calls auditRecovery, verifyInvitationAudit, validateCoverageState, verifyCurrentRoomSchema before removeRestoreFreeze and completeRestore, in one transaction. This evidence does not qualify bounded publication. Source ingestion also remains monolithic; reported separately. Newer 012 candidate was published during this started run; Root explicitly allowed completing a434. Do not extrapolate results to newer source.
+
+Run: copy the three .mjs files to cloudflare/ in exact source checkout, install existing package dependencies, then node cloudflare/member2-restore-scale.mjs /absolute/new-results.json. Miniflare 4.20260730.0, esbuild 0.28.2, Node 24.22.1. Default local workerd limits retained. Temporary SQLite synthetic stores are deleted by runner. No raw backup or credentials published. Full per-call results/logs retained on Member 2 laptop in workspace restore-scale-a434-v3-results.json and .log.
+
+Meter limitations: adapter-observed SQL through db.storage only; native constructor excluded. No claim of coverage for hypothetical bypasses. Text bytes use UTF-8, BLOB bytes byteLength; numeric cells counted but encoded numeric bytes, names, wire/disk overhead excluded. Host wall time is not production CPU. Snapshot is passive; calibration artifact c4d484343a80a892ecda8d74bd387e92b347debc. Final full audit source paths use DurableDatabase adapter. Prepared write refusal intentionally causes failed statement/unknown native counters outside finalization.
+
+Harness failures retained locally: v1 used different class names across restart and opened fresh storage, invalid measurement; v2 fixed stable ScaleRoom identity and reached final stage, then optional census referenced nonexistent current_room_messages. v3 removed that typo and completed both cases. No production defect inferred from harness failures.
+
+Independent 500-event interruption/correctness and Root native composed checks are separate lanes; not duplicated here. No artificial saturation or recurring routine.

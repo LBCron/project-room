@@ -462,6 +462,10 @@ optional.push("room-acp.tgz");
 optional.push("server/claim-thread.mjs"); // Shared claimer thread receipt in the hosted MCP profile.
 optional.push("server/current-room-events.mjs"); // bounded normalized event windows and page-selected redaction
 
+// Existing offline schema45 serving/restore modules; inclusion grants no format activation.
+optional.push("server/current-legacy-work-gate.mjs", "server/current-room-archive.mjs", "server/current-room-repository.mjs",
+  "server/current-work-list.mjs", "server/current-work-privacy.mjs", "server/current-work-summary.mjs",
+  "server/replay-canonical-h.mjs", "server/replay-canonical-plan.mjs", "server/restore-admission.mjs", "src/current-record-context.js");
 export const allowed = new Set([...required, ...optional, ...historicalAssets]);
 const sha256 = bytes => createHash("sha256").update(bytes).digest("hex");
 // The contract stays exact: any mismatch fails. Each failure now names the
@@ -480,7 +484,7 @@ function runtimeMetadata(files) {
   const schema = /export const STORE_SCHEMA_VERSION = (\d+);/.exec(files.get("server/writer-fence.mjs").toString());
   const pkg = JSON.parse(files.get("package.json"));
   const config = JSON.parse(files.get("cloudflare/wrangler.jsonc"));
-  check(["8", "9", "10", "11", "12", "13", "14", "15", "16", "17", "18", "19", "20", "21", "22", "23", "24", "25", "26", "27", "28", "29", "30", "31", "32", "33", "34", "35", "36", "37", "38", "39", "40", "41", "42", "43", "44"].includes(schema?.[1]) && typeof pkg.engines?.node === "string",
+  check(["8", "9", "10", "11", "12", "13", "14", "15", "16", "17", "18", "19", "20", "21", "22", "23", "24", "25", "26", "27", "28", "29", "30", "31", "32", "33", "34", "35", "36", "37", "38", "39", "40", "41", "42", "43", "44", "45"].includes(schema?.[1]) && typeof pkg.engines?.node === "string",
     `unsupported store schema ${schema?.[1] ?? "unparseable"} or missing package.json engines.node`);
   return { schemaVersion: Number(schema[1]), node: pkg.engines.node, cloudflare: { compatibilityDate: config.compatibility_date,
     compatibilityFlags: config.compatibility_flags, durableObjects: config.durable_objects, migrations: config.migrations } };

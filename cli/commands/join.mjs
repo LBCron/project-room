@@ -70,7 +70,7 @@ export function chooseRoomLines(result, target, { name, flags = {} } = {}) {
   else if (mine.length) {
     lines.push("Your rooms:");
     for (const room of mine) {
-      if (room.archivedAt) { lines.push(label(`${room.title || room.roomId} (archived, read-only; no join command)`)); continue; }
+      if (room.archivedAt) { lines.push(label(`${room.title || room.roomId} (archived; no join command)`)); continue; }
       lines.push(label(room.title || room.roomId), `    ${rerun(room.roomId)}`);
     }
   }

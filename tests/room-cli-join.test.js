@@ -137,7 +137,7 @@ test("choose_room prints your rooms and public rooms as choices without setup or
   assert.match(all, /Your rooms/);
   assert.match(all, /Public rooms — request access/);
   assert.equal((all.match(/#room\/muse-room/g) ?? []).length, 1, "deduped");
-  assert.match(all, /Old \(archived, read-only; no join command\)/);
+  assert.match(all, /Old \(archived; no join command\)/);
   assert.doesNotMatch(all, /#room\/old:room/, "archived rooms get no join/setup command");
   // Untrusted labels never share a line with an executable command.
   for (const line of lines.filter(line => /room join/.test(line))) assert.match(line, /^    room join '/);

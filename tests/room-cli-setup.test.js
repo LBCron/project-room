@@ -10,6 +10,7 @@ import { readAgentConnection } from "../client/agent-connection.mjs";
 import { main } from "../cli/main.mjs";
 import { connectionHome, connectionsRoot, readPointer, safeName, writePointer } from "../cli/paths.mjs";
 import { nodeSatisfies } from "../cli/commands/doctor.mjs";
+import { chooseRoomLists } from "../cli/commands/login.mjs";
 
 const ORIGIN = "http://127.0.0.1:9";
 const MCP = ORIGIN + "/mcp";
@@ -351,7 +352,7 @@ test("saved connections accept a canonical home alias and reject symlinks escapi
   assert.throws(() => readPointer("room-agent", env), /outside the connection directory/);
 });
 
-test("pending and retried login keep one identity, and choose_room never shows another identity's private rooms", async t => {
+test("an approval_required invite preview and a retried login keep one identity, and choose_room never shows another identity's private rooms", async t => {
   const root = mkdtempSync(join(tmpdir(), "room-choose-id-"));
   const store = new RoomStore(":memory:");
   store.initialize(initialRoom("commons"));
@@ -393,4 +394,15 @@ test("pending and retried login keep one identity, and choose_room never shows a
   assert.equal(bobChoose.out.includes("commons"), false);
   const adaAgain = await run(["login", "--room", origin, "--name", "Ada"], { env: envFor(adaHome), cwd: project });
   assert.equal(adaAgain.out.includes("secret-lab"), false);
+});
+
+test("choose_room directory boundary: valid row kept, malformed envelopes unavailable, nested sentinels dropped", () => {
+  const valid = chooseRoomLists({ memberships: [], directory: { rooms: [{ roomId: "pub", title: "Pub", purpose: "p", kind: "public", memberCount: 3, listedAt: "2026-11-01T00:00:00Z", secret: "x" }], nextCursor: "c1" } });
+  assert.deepEqual(valid.directory, { rooms: [{ roomId: "pub", title: "Pub", purpose: "p", kind: "public", memberCount: 3, listedAt: "2026-11-01T00:00:00Z" }], nextCursor: "c1" });
+  for (const directory of [undefined, null, [], "rooms", { rooms: "nope" }, { rooms: { 0: { roomId: "a" } } }])
+    assert.equal(chooseRoomLists({ memberships: [], directory }).directory, null, JSON.stringify(directory));
+  const nested = chooseRoomLists({ memberships: [{ roomId: "m", archivedAt: { $date: 1 } }], directory: { rooms: [{ roomId: "pub", listedAt: { $date: "2026" }, memberCount: -1 }, { title: "no id" }], nextCursor: { evil: 1 } } });
+  assert.deepEqual(nested.directory, { rooms: [{ roomId: "pub", title: null, purpose: null, kind: null, memberCount: null, listedAt: null }], nextCursor: null });
+  assert.equal(nested.memberships[0].archivedAt, null);
+  assert.equal(chooseRoomLists({ memberships: "nope", directory: null }).memberships, null);
 });

@@ -28,7 +28,7 @@ function parse(argv) {
 const str = value => typeof value === "string" ? value : null;
 const int = value => Number.isSafeInteger(value) && value >= 0 ? value : null;
 const time = value => typeof value === "string" || int(value) !== null ? value : null;
-function chooseRoomLists(result) {
+export function chooseRoomLists(result) {
   const memberships = Array.isArray(result.memberships) ? result.memberships.map(room => ({
     roomId: str(room?.roomId), title: str(room?.title), memberId: str(room?.memberId), archivedAt: time(room?.archivedAt),
   })).filter(room => room.roomId) : null;

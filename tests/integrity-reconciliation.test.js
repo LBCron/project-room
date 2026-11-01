@@ -62,3 +62,16 @@ test('purge then recreation of the same room ID establishes fresh scoped proof',
  const created=s.db.prepare("SELECT projection_hash AS hash FROM integrity_room_state WHERE room_id='repeat'").get().hash;
  assert.notEqual(created,old);assert.equal((await tick(s)).verified,1);assert.deepEqual(s.integrityFailures(),[]);
 });
+
+test('an unrelated valid event cannot certify earlier metadata corruption',async t=>{
+ const s=fixture(t);await tick(s);await tick(s);corrupt(s,'alpha');const key=s.issueAccessKey('alpha','owner');
+ try{s.command(key,'alpha',{id:'unrelated',type:'member.added',data:{memberId:'reader',displayName:'Reader',kind:'human',permissions:[]}});}catch(error){assert.match(error.message,/projection_corrupt|content|integrity/i);}
+ const result=await tick(s);assert.equal(result.verified,0);assert.ok(s.integrityFailures().some(f=>f.recordId==='alpha'&&f.step==='projection_content'));
+});
+test('editing another canonical message cannot certify earlier payload corruption',async t=>{
+ const s=fixture(t),key=s.issueAccessKey('alpha','owner');for(const id of ['first','second'])s.command(key,'alpha',{id,type:'message.posted',data:{messageId:id,body:'Original body'}});
+ while(!s.backfillMessages({limit:1000}).done){}s.checkMessagesParity({roomId:'alpha'});s.migrateMessageAuthority('alpha');await tick(s);await tick(s);
+ s.db.prepare("UPDATE messages SET body='Tampered body',record_json=json_set(record_json,'$.body','Tampered body') WHERE room_id='alpha' AND message_id='first'").run();
+ try{s.command(key,'alpha',{id:'edit-other',type:'message.edited',data:{messageId:'second',body:'Valid edit',expectedMessageRevision:0}});}catch(error){assert.match(error.message,/projection_corrupt|content|integrity/i);}
+ const result=await tick(s);assert.equal(result.verified,0);assert.ok(s.integrityFailures().some(f=>f.recordId==='alpha'&&f.step==='projection_content'));
+});

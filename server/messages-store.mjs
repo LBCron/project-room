@@ -1,3 +1,4 @@
+import { assertMessageWrite, recordMessageWrite } from './write-integrity.mjs';
 import { writeMessageReplaySnapshot, discardMessageReplaySnapshot, decodeMessageReplaySnapshot } from './message-replay-snapshot.mjs';
 import { hydrateProjection, storedProjection } from "./projection-at-rest.mjs";
 import { hasMessageAuthority } from './message-authority.mjs';
@@ -42,6 +43,7 @@ CREATE TABLE IF NOT EXISTS messages (
   pinned INTEGER NOT NULL DEFAULT 0 CHECK (pinned IN (0, 1)),
   record_json TEXT,
   reducer_extras_json TEXT,
+  entity_hash TEXT,
   PRIMARY KEY (room_id, message_id)
 );
 CREATE INDEX IF NOT EXISTS messages_room_seq ON messages(room_id, seq);
@@ -291,6 +293,7 @@ function writeMessageRows(db, {roomId,state,sequenceById,messageIndex=null,exact
   for (const messageId of affected) {
     const message = byId.get(messageId);
     if (!message || typeof message.authorId !== "string" || typeof message.createdAt !== "string") continue;
+    assertMessageWrite(db,roomId,message.id);
     upsert.run(
       roomId, message.id, sequenceById.get(message.id),
       textOrNull(message.channelId),
@@ -308,6 +311,7 @@ function writeMessageRows(db, {roomId,state,sequenceById,messageIndex=null,exact
       JSON.stringify(currentRecord(message)),
       JSON.stringify(reducerExtras(message))
     );
+    recordMessageWrite(db,roomId,message.id);
     written += 1;
   }
   return written;
@@ -416,6 +420,7 @@ export function resyncRoomMessageRows(db, roomId, state) {
     if (typeof message.authorId !== "string" || typeof message.createdAt !== "string") continue;
     const reactions = message.reactions && typeof message.reactions === "object" && Object.keys(message.reactions).length
       ? JSON.stringify(message.reactions) : null;
+    assertMessageWrite(db,roomId,message.id);
     upsert.run(
       roomId, message.id, seq,
       textOrNull(message.channelId),
@@ -433,6 +438,7 @@ export function resyncRoomMessageRows(db, roomId, state) {
       JSON.stringify(currentRecord(message)),
       JSON.stringify(reducerExtras(message))
     );
+    recordMessageWrite(db,roomId,message.id);
     written += 1;
   }
   return written;
@@ -1649,7 +1655,11 @@ export function archiveRoomMessages(store, roomId, { keepNewest = 2000, dryRun =
     // Fill reducer-only history for pre-v39 rows at the migration boundary.
     // These bytes are never returned by current-message repository reads.
     const extras = db.prepare('UPDATE messages SET reducer_extras_json=? WHERE room_id=? AND message_id=?');
-    for (const message of moving) extras.run(JSON.stringify(reducerExtras(message)), roomId, message.id);
+    for (const message of moving) {
+      assertMessageWrite(db,roomId,message.id);
+      extras.run(JSON.stringify(reducerExtras(message)), roomId, message.id);
+      recordMessageWrite(db,roomId,message.id);
+    }
     const next = { ...state, messages: inProjection.filter(message => !movingIds.has(message.id)) };
     // The marker must never claim a message that is still in the projection.
     const overlaps = db.prepare(`SELECT 1 FROM messages WHERE room_id=? AND seq<=?

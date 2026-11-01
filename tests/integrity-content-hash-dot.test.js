@@ -64,7 +64,7 @@ test("Dot 1: drift followed by an ordinary event keeps failing while the changed
     assert.equal(drift.contentDrift, 1);
     assert.equal(fixture.store.integrityFailures().filter(row => row.step === "projection_content").length, 1);
 
-    postOrdinaryMessage(fixture.store, "alpha-after-drift", "An ordinary event after the drift.");
+    assert.throws(()=>postOrdinaryMessage(fixture.store, "alpha-after-drift", "An ordinary event after the drift."), /projection_corrupt/);
     const stored = fixture.store.db.prepare("SELECT projection FROM rooms WHERE id='alpha'").get().projection;
     assert.ok(stored.includes("Project Room Commonz"), "the drifted bytes are still in the stored projection");
 
@@ -97,10 +97,10 @@ test("Dot 2: a v2 snapshot with a NULL room hash does not verify-and-adopt mutat
     const scan = await tick(fixture.store);
     assert.equal(scan.verified, 0, "content with no remembered hash must not be certified");
     assert.equal(scan.matched, 0);
-    assert.equal(scan.baselineUpgraded, 1, "adoption over a hash-less room is an explicit uncertified upgrade, never a silent verification");
-    assert.deepEqual(fixture.store.integrityFailures(), [], "an explicit baseline upgrade is not a drift failure");
+    assert.equal(scan.baselineUpgraded, undefined, "the independent write proof prevents adoption");
+    assert.ok(fixture.store.integrityFailures().some(row=>row.step==='projection_content'), "the retained metadata proof exposes the corruption");
     const quiet = await tick(fixture.store);
-    assert.equal(quiet.matched, 1, "the explicitly adopted baseline is authoritative from the next scan");
+    assert.equal(quiet.matched, 0, "unrepaired bytes are not adopted on a later scan");
   } finally { fixture.close(); }
 });
 

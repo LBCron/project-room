@@ -53,10 +53,11 @@ export const REFERRAL_VIA = Object.freeze(["invite", "request"]);
 export class Referrals {
   constructor(store) { this.store = store; this.db = store.db; }
 
-  // Record a completed referral. Must run inside the caller's transaction,
+  // Record a completed referral. Reuse the caller's transaction or open one,
   // after the referee's member record exists. Idempotent per referee: a
   // second recording for the same referee is a no-op returning the original.
   record({ roomId, referrerMemberId, refereeMemberId, via, at = this.store.now() }) {
+    if (!this.db.isTransaction) return this.store.transaction(()=>this.record({roomId,referrerMemberId,refereeMemberId,via,at}));
     if (typeof roomId !== "string" || !roomId) fail(422, "invalid_referral", "roomId is required");
     for (const [name, id] of [["referrerMemberId", referrerMemberId], ["refereeMemberId", refereeMemberId]]) {
       if (typeof id !== "string" || !MEMBER_ID_PATTERN.test(id)) fail(422, "invalid_referral", `${name} must be a member id`);

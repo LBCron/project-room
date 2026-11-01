@@ -163,8 +163,7 @@ test("Dot round-2 2a: a title mutation before any detecting sweep is not launder
     // round-1 rehydration guard to see.
     mutateSameLength(fixture.store);
     assert.deepEqual(fixture.store.integrityFailures(), [], "no detecting sweep has run — no drift record exists yet");
-    const rewritten = fixture.store.rehydrateAllProjections();
-    assert.ok(rewritten >= 1, "rehydration rewrote the slimmed projection");
+    assert.throws(()=>fixture.store.rehydrateAllProjections(),/projection_corrupt/, "rehydration refuses unverified old metadata");
     assert.equal(roomState(fixture.store, "alpha")?.hash, baselineHash,
       "rehydration must not refresh the baseline over bytes that no longer match it");
     const scan = await tick(fixture.store);

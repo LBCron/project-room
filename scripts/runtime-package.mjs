@@ -441,7 +441,7 @@ optional.push("server/sql-binds.mjs"); // shared Worker-safe SQL list chunks imp
 optional.push("server/sql-write-classification.mjs"); // shared by Node cache invalidation and Workers storage
 optional.push("server/html-escape.mjs", "src/html-escape.js"); // one HTML escape, re-exported for server callers
 optional.push("server/db-util.mjs"); // shared sqlite tableExists
-optional.push("server/work-repository.mjs", "server/message-replay-snapshot.mjs", "server/message-entity-projection.mjs", "server/message-authority.mjs", "server/message-repository.mjs", "server/message-queries.mjs", "server/message-command-service.mjs", "server/agent-pause.mjs"); // Archive-aware message domain reads; pause admission asks agent-pause isPaused
+optional.push("server/work-repository.mjs", "server/message-replay-snapshot.mjs", "server/message-entity-projection.mjs", "server/message-authority.mjs", "server/write-integrity.mjs", "server/message-repository.mjs", "server/message-queries.mjs", "server/message-command-service.mjs", "server/agent-pause.mjs"); // Archive-aware message domain reads; pause admission asks agent-pause isPaused
 optional.push("server/room-shard.mjs", "server/room-shard-tables.mjs"); // per-room table classification; the worker re-exports it and still serves invite-only-pilot
 optional.push("server/room-shard-flag.mjs"); // ROOM_PER_ROOM_OBJECTS default off; storage_home is added only when the flag is on
 optional.push("server/room-shard-route.mjs", "cloudflare/room-shard.mjs"); // ROOM_SHARD class and the pilot/shard name resolver; flag off does not open shard storage
@@ -473,7 +473,7 @@ function runtimeMetadata(files) {
   const schema = /export const STORE_SCHEMA_VERSION = (\d+);/.exec(files.get("server/writer-fence.mjs").toString());
   const pkg = JSON.parse(files.get("package.json"));
   const config = JSON.parse(files.get("cloudflare/wrangler.jsonc"));
-  check(["8", "9", "10", "11", "12", "13", "14", "15", "16", "17", "18", "19", "20", "21", "22", "23", "24", "25", "26", "27", "28", "29", "30", "31", "32", "33", "34", "35", "36", "37", "38", "39", "40", "41", "42", "43"].includes(schema?.[1]) && typeof pkg.engines?.node === "string",
+  check(["8", "9", "10", "11", "12", "13", "14", "15", "16", "17", "18", "19", "20", "21", "22", "23", "24", "25", "26", "27", "28", "29", "30", "31", "32", "33", "34", "35", "36", "37", "38", "39", "40", "41", "42", "43", "44"].includes(schema?.[1]) && typeof pkg.engines?.node === "string",
     `unsupported store schema ${schema?.[1] ?? "unparseable"} or missing package.json engines.node`);
   return { schemaVersion: Number(schema[1]), node: pkg.engines.node, cloudflare: { compatibilityDate: config.compatibility_date,
     compatibilityFlags: config.compatibility_flags, durableObjects: config.durable_objects, migrations: config.migrations } };

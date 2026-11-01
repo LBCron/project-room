@@ -1,3 +1,4 @@
+import { assertMessageWrite, recordMessageWrite } from './write-integrity.mjs';
 // Explicit, bounded repair of already-diagnosed legacy indexed message shapes.
 // Never replays events or rewrites projections, bodies, indexes, or checkpoints.
 import { createHash } from 'node:crypto';
@@ -87,7 +88,11 @@ export function repairLegacyMessages(store, input, execute = false) {
     if (input.planHash !== plan.planHash) fail('repair_plan_changed');
     const update = store.db.prepare('UPDATE messages SET record_json=?,reactions_json=CASE WHEN ? THEN NULL ELSE reactions_json END WHERE room_id=? AND message_id=?');
     wrote = true;
-    for (const change of plan.changes) update.run(change.recordJson, change.clearReactions ? 1 : 0, change.roomId, change.messageId);
+    for (const change of plan.changes) {
+      assertMessageWrite(store.db,change.roomId,change.messageId);
+      update.run(change.recordJson, change.clearReactions ? 1 : 0, change.roomId, change.messageId);
+      recordMessageWrite(store.db,change.roomId,change.messageId);
+    }
     for (const target of rooms) {
       try {
         const verified = store.checkMessagesParity({ roomId: target.roomId });

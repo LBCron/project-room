@@ -1,3 +1,4 @@
+import { configureWriteIntegrity, beginWriteProofFrame, endWriteProofFrame, publishProjectionWrites, projectionDigest, servingProofDrift, assertProjectionWrite, assertMessageWrite, recordMessageWrite, withVerifiedRoomReconstruction } from './write-integrity.mjs';
 const OPERATOR_QA_ARCHIVE = Symbol("operator QA room archive");
 import { authenticateMcpOAuthRequest } from './mcp-oauth.mjs';
 import { assertListenerFence } from "./listener-fence.mjs";
@@ -1188,7 +1189,7 @@ function roomSchemaStamp() {
     ownerDelegateSchema, agentRoomSchema, oauthPendingSchema, gmailSchema, requestRunSchema, roomAssistantSchema,
     directSendSchema, inboxStitchSchema, RETIRED_BOARD_V2_SCHEMA,
     agentKeyRegistrySchema, INTEGRITY_SNAPSHOT_SCHEMA, OPERATOR_ACTIONS_SCHEMA,
-    INTEGRITY_JOB_CURSOR_SCHEMA, INTEGRITY_ROOM_STATE_SCHEMA, INTEGRITY_SWEEP_COLUMN, INTEGRITY_ROOM_HASH_COLUMN, INTEGRITY_SNAPSHOT_WATERMARK_COLUMN,
+    INTEGRITY_JOB_CURSOR_SCHEMA, INTEGRITY_ROOM_STATE_SCHEMA, INTEGRITY_SWEEP_COLUMN, INTEGRITY_ROOM_HASH_COLUMN, INTEGRITY_METADATA_HASH_COLUMN, INTEGRITY_SNAPSHOT_WATERMARK_COLUMN,
     ROOM_SCHEMA_STAMP_SCHEMA, LOOKUP_INDEXES, MESSAGES_SCHEMA, MESSAGE_REPLAY_SNAPSHOT_SCHEMA, MESSAGES_BACKFILL_CURSOR_SCHEMA, MESSAGES_BACKFILL_BLOCKS_SCHEMA, WANTS_WORK_SCHEMA, CODE_DROPS_SCHEMA, PROJECTION_BODIES_SCHEMA, WORK_REPOSITORY_SCHEMA,
     PUBLIC_READ_MODEL_SCHEMA,
     // Additive tables converged outside the version bump. A warm wake whose
@@ -1236,6 +1237,7 @@ export const INTEGRITY_FAILURES_SCHEMA = `CREATE TABLE IF NOT EXISTS integrity_f
 )`;
 const INTEGRITY_SWEEP_COLUMN = "ALTER TABLE integrity_job_cursor ADD COLUMN sweep_after TEXT NOT NULL DEFAULT ''";
 const INTEGRITY_DEFERRED_SKIPS_COLUMN = "ALTER TABLE integrity_job_cursor ADD COLUMN deferred_skips INTEGER NOT NULL DEFAULT 0";
+const INTEGRITY_METADATA_HASH_COLUMN = "ALTER TABLE integrity_room_state ADD COLUMN metadata_hash TEXT";
 const INTEGRITY_ROOM_HASH_COLUMN = "ALTER TABLE integrity_room_state ADD COLUMN projection_hash TEXT";
 // Retain #5506's snapshot column for compatibility and diagnostics only.
 // MAX(rowid) can decrease after purge; this value never proves room newness.
@@ -2172,6 +2174,9 @@ this.slaBreachAlerts = new SlaBreachAlertJournal(this); // Task 26: durable in-a
       if (!this.db.prepare("SELECT 1 FROM pragma_table_info('messages') WHERE name='reducer_extras_json'").get()) {
         this.db.exec("ALTER TABLE messages ADD COLUMN reducer_extras_json TEXT");
       }
+      if (!this.db.prepare("SELECT 1 FROM pragma_table_info('messages') WHERE name='entity_hash'").get()) {
+        this.db.exec("ALTER TABLE messages ADD COLUMN entity_hash TEXT");
+      }
       // MSG-2: replay cursor. Unfenced. The integrity cron fills it. A warm
       // wake whose stamp matches skips this block; the stamp includes this DDL.
       this.db.exec(MESSAGES_BACKFILL_CURSOR_SCHEMA);
@@ -2288,6 +2293,8 @@ this.slaBreachAlerts = new SlaBreachAlertJournal(this); // Task 26: durable in-a
         console.error("work-item board backfill failed at open", error);
       }
     }
+    configureWriteIntegrity(this.db,(id,row,proof)=>Boolean(proof?.projection_hash && proof.sequence===row.sequence
+      && projectionContentHash(this.db,id,row.sequence,row.projection)===proof.projection_hash));
     configureWorkRepository(this.db, this.workEntities);
     if (this.workEntities && version < 42) this.migrateWorkProjections();
     // Legacy coldStart.durationMs ends before the backfill above. Keep it
@@ -2409,11 +2416,26 @@ this.slaBreachAlerts = new SlaBreachAlertJournal(this); // Task 26: durable in-a
     return this.transaction(() => {
       const room = this.room(roomId, { verifyBodyHashes: true });
       const enabled = hasMessageAuthority(room.state);
-      if (enabled === !reverse) return { changed: false, sequence: room.sequence };
+      const missingProof = enabled && (this.db.prepare('SELECT 1 FROM messages WHERE room_id=? AND entity_hash IS NULL LIMIT 1').get(roomId)
+        || !this.db.prepare('SELECT metadata_hash FROM integrity_room_state WHERE room_id=?').get(roomId)?.metadata_hash);
+      if (enabled === !reverse && (reverse || !missingProof)) return { changed: false, sequence: room.sequence };
+      if (missingProof && !reverse) {
+        const raw=this.db.prepare('SELECT sequence,projection FROM rooms WHERE id=?').get(roomId);
+        const proof=this.db.prepare('SELECT sequence,projection_hash AS hash FROM integrity_room_state WHERE room_id=?').get(roomId);
+        if (!proof?.hash || proof.sequence!==raw.sequence || projectionContentHash(this.db,roomId,raw.sequence,raw.projection)!==proof.hash)
+          throw Error('projection_corrupt: write proof migration requires a verified exact-head baseline');
+      }
+      assertProjectionWrite(this.db,roomId);
       if (!reverse) {
         const parity = this.checkMessagesParity({ roomId });
         if (!parity.ok || parity.checked !== 1) throw new Error('Message authority requires exact-head parity');
-        resyncRoomMessageRows(this.db, roomId, room.state);
+        withVerifiedRoomReconstruction(this.db,roomId,()=>{
+          resyncRoomMessageRows(this.db, roomId, room.state);
+          for(const row of this.db.prepare('SELECT message_id FROM messages WHERE room_id=?').all(roomId)) {
+            assertMessageWrite(this.db,roomId,row.message_id);
+            recordMessageWrite(this.db,roomId,row.message_id);
+          }
+        });
       }
       const before = this.db.prepare('SELECT sequence,projection FROM rooms WHERE id=?').get(roomId);
       this.ensureIntegrityRoomState();
@@ -2748,6 +2770,7 @@ this.slaBreachAlerts = new SlaBreachAlertJournal(this); // Task 26: durable in-a
     if (!columns.has("deferred_skips")) this.db.exec(INTEGRITY_DEFERRED_SKIPS_COLUMN);
     const roomColumns = new Set(this.db.prepare("PRAGMA table_info(integrity_room_state)").all().map(column => column.name));
     if (!roomColumns.has("projection_hash")) this.db.exec(INTEGRITY_ROOM_HASH_COLUMN);
+    if (!roomColumns.has("metadata_hash")) this.db.exec(INTEGRITY_METADATA_HASH_COLUMN);
     this.db.exec(INTEGRITY_SNAPSHOT_SCHEMA);
     const snapshotColumns = new Set(this.db.prepare("PRAGMA table_info(integrity_snapshot)").all().map(column => column.name));
     if (!snapshotColumns.has("covered_event_rowid")) this.db.exec(INTEGRITY_SNAPSHOT_WATERMARK_COLUMN);
@@ -2842,7 +2865,7 @@ this.slaBreachAlerts = new SlaBreachAlertJournal(this); // Task 26: durable in-a
     return this.readTransaction(() => {
       const stored = new Map(this.db.prepare("SELECT room_id AS id, sequence, projection_hash AS hash FROM integrity_room_state").all().map(row => [row.id, row]));
       return this.db.prepare("SELECT id, sequence, projection FROM rooms").all()
-        .filter(row => stored.get(row.id)?.hash && stored.get(row.id).sequence === row.sequence
+        .filter(row => servingProofDrift(this.db,row.id,row.projection) || stored.get(row.id)?.hash && stored.get(row.id).sequence === row.sequence
           && projectionContentHash(this.db, row.id, row.sequence, row.projection) !== stored.get(row.id).hash)
         .map(row => row.id);
     });
@@ -2875,6 +2898,7 @@ this.slaBreachAlerts = new SlaBreachAlertJournal(this); // Task 26: durable in-a
         ?? this.db.prepare(`${sweepSql} ORDER BY id LIMIT 1`).get();
       const changed = this.db.prepare(`SELECT r.id, r.sequence, LENGTH(r.projection) AS bytes, r.projection AS projection, s.sequence AS oldSequence, s.projection_bytes AS oldBytes
         FROM rooms r JOIN integrity_room_state s ON s.room_id=r.id WHERE r.sequence!=s.sequence`).all();
+      for (const row of changed) if (servingProofDrift(this.db,row.id,row.projection)) return { ok:false,contentDrift:row.id };
       const uncovered = this.db.prepare(`SELECT 1 FROM rooms r LEFT JOIN integrity_room_state s ON s.room_id=r.id WHERE s.room_id IS NULL
         UNION SELECT 1 FROM integrity_room_state s LEFT JOIN rooms r ON r.id=s.room_id WHERE r.id IS NULL LIMIT 1`).get();
       if (uncovered) return { ok: false };
@@ -3864,6 +3888,7 @@ this.slaBreachAlerts = new SlaBreachAlertJournal(this); // Task 26: durable in-a
         if (roomsWrite) {
           const roomIndex = scopedUpdates.get(sql);
           const roomId = roomIndex === undefined ? null : args[roomIndex];
+          if (ROOMS_WRITE.test(sql)) publishProjectionWrites(this.db,typeof roomId==='string'?roomId:null);
           this._dropProjectionCache(typeof roomId === "string" && args.length === roomIndex + 1 ? roomId : null);
         }
         // Every events insert in the codebase binds (roomId, sequence, ...)
@@ -3881,6 +3906,7 @@ this.slaBreachAlerts = new SlaBreachAlertJournal(this); // Task 26: durable in-a
         let result;
         try { result = exec(sql); }
         finally { if (entityWrite) this._dropMessageEntityCache(); }
+        if (typeof sql === "string" && ROOMS_WRITE.test(sql)) publishProjectionWrites(this.db);
         if (typeof sql === "string" && (ROOMS_WRITE.test(sql) || /\b(?:INSERT(?: OR \w+)? INTO|UPDATE|DELETE FROM) work_entities\b/i.test(sql))) invalidate();
         return result;
       };
@@ -3935,15 +3961,16 @@ this.slaBreachAlerts = new SlaBreachAlertJournal(this); // Task 26: durable in-a
     // unknown writes and rollbacks invalidate every candidate.
     const boundary = outermost || isolated;
     const frames = this._pendingProjectionFrames ??= [];
-    if (boundary) frames.push(new Map());
+    if (boundary) { frames.push(new Map()); beginWriteProofFrame(this.db); }
     let result;
     try { result = this.storagePlatform.transaction(this.db, fn, false, { isolated }); }
     catch (error) {
       this._dropProjectionCache();
-      if (boundary) { frames.pop(); this._pendingAppends.clear(); }
+      if (boundary) { frames.pop(); endWriteProofFrame(this.db,false); this._pendingAppends.clear(); }
       throw this.storageFailure(error, outermost);
     }
     if (boundary) {
+      endWriteProofFrame(this.db,true);
       const pending = frames.pop();
       // ROOMS_WRITE invalidates immediately in the projection watch. A commit
       // of heartbeat/cursor/claim metadata must not discard unrelated parses.
@@ -4208,8 +4235,8 @@ this.slaBreachAlerts = new SlaBreachAlertJournal(this); // Task 26: durable in-a
       // the creation transaction. A rollback removes its proof too.
       this.ensureIntegrityRoomState();
       const created = this.db.prepare('SELECT projection,LENGTH(projection) AS bytes FROM rooms WHERE id=?').get(state.room.id);
-      this.db.prepare('INSERT INTO integrity_room_state(room_id,sequence,projection_bytes,projection_hash) VALUES(?,?,?,?)')
-        .run(state.room.id, events.length, created.bytes, projectionContentHash(this.db, state.room.id,events.length,created.projection));
+      this.db.prepare('INSERT INTO integrity_room_state(room_id,sequence,projection_bytes,projection_hash,metadata_hash) VALUES(?,?,?,?,?)')
+        .run(state.room.id, events.length, created.bytes, projectionContentHash(this.db, state.room.id,events.length,created.projection),projectionDigest(created.projection));
       syncRoomPublication(this, { roomId: state.room.id, state: stored, previous: null, auth: null });
       return state.room.id;
     });
@@ -6000,7 +6027,7 @@ this.slaBreachAlerts = new SlaBreachAlertJournal(this); // Task 26: durable in-a
         });
         state.messageAuthority = { version: 1, count: state.messages.length };
       }
-      const projection = this.storedProjection(roomId, state);
+      const projection = withVerifiedRoomReconstruction(this.db,roomId,()=>this.storedProjection(roomId,state));
       this.db.prepare("UPDATE rooms SET sequence=?,projection=?,archived_at=? WHERE id=?").run(events.length, projection, archivedAtOf(state), roomId);
       // L05-C1: the imported projection is rebuilt from the replayed log
       // above, so it is verified against its history by construction.
@@ -6009,10 +6036,10 @@ this.slaBreachAlerts = new SlaBreachAlertJournal(this); // Task 26: durable in-a
       // report the authorised replacement as drift forever.
       this.ensureIntegrityRoomState();
       this.ensureIntegrityFailures();
-      this.db.prepare(`INSERT INTO integrity_room_state(room_id, sequence, projection_bytes, projection_hash)
-        SELECT id, sequence, LENGTH(projection), ? FROM rooms WHERE id=?
-        ON CONFLICT(room_id) DO UPDATE SET sequence=excluded.sequence, projection_bytes=excluded.projection_bytes, projection_hash=excluded.projection_hash`)
-        .run(projectionContentHash(this.db, roomId, events.length, projection), roomId);
+      this.db.prepare(`INSERT INTO integrity_room_state(room_id, sequence, projection_bytes, projection_hash,metadata_hash)
+        SELECT id, sequence, LENGTH(projection), ?,? FROM rooms WHERE id=?
+        ON CONFLICT(room_id) DO UPDATE SET sequence=excluded.sequence, projection_bytes=excluded.projection_bytes, projection_hash=excluded.projection_hash,metadata_hash=excluded.metadata_hash`)
+        .run(projectionContentHash(this.db, roomId, events.length, projection),projectionDigest(projection), roomId);
       this.db.prepare("DELETE FROM integrity_failures WHERE step='projection_content' AND record_id=?").run(roomId);
       const { messageAuthority: _authority, ...checkpointState } = state;
       this.db.prepare("INSERT INTO projection_checkpoints(room_id,sequence,projection) VALUES(?,?,?)").run(roomId, events.length, JSON.stringify(checkpointState));

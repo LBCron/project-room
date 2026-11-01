@@ -1,3 +1,4 @@
+import { assertProjectionWrite, recordProjectionWrite } from './write-integrity.mjs';
 import { hydrateWorkItems, referenceWorkItems } from "./work-repository.mjs";
 import { hasMessageAuthority, hydrateMessageAuthority, messageAuthorityProjection } from './message-authority.mjs';
 import { isMessageEntityRef, referenceMessageEntities, hydrateMessageEntities, retainMessageEntities } from "./message-entity-projection.mjs";
@@ -175,7 +176,10 @@ function releaseUnreferencedBodies(db, roomId, referenced) {
 // rooms.projection. With enabled=false the output is JSON.stringify(state),
 // byte for byte, apart from rehydrating any bodyRef a raw-read state carries.
 export function storedProjection(db, roomId, state, options = {}) {
-  return serializeProjection(db, roomId, referenceWorkItems(db, roomId, state, { enabled: options.workEntities }), options);
+  assertProjectionWrite(db,roomId);
+  const projection = serializeProjection(db, roomId, referenceWorkItems(db, roomId, state, { enabled: options.workEntities }), options);
+  recordProjectionWrite(db,roomId,projection);
+  return projection;
 }
 function serializeProjection(db, roomId, state, { enabled = false, messageEntities = false, pendingMessageIds = [], retainedMessageIds = [], messageAuthorityCount } = {}) {
   // A nonmemoizing rewrite (deletion, inline rollback or entity cutover) must

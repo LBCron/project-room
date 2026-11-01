@@ -1,3 +1,4 @@
+import { assertMessageWrite, recordMessageWrite } from './write-integrity.mjs';
 // Device-code pairing for agents that can fetch a URL, plus reconnect-by-key
 // and owner merge of two agent members. The user code and device secret are
 // stored only as scrypt hashes. Poll errors for a live pair are RFC 8628
@@ -597,6 +598,8 @@ export class Pairing {
       SELECT public_key FROM agent_member_keys WHERE room_id=? AND member_id=?)`).run(roomId, retired, roomId, kept);
     this.db.prepare("UPDATE agent_member_keys SET member_id=? WHERE room_id=? AND member_id=?").run(kept, roomId, retired);
     if (this.db.prepare("SELECT 1 FROM sqlite_master WHERE type='table' AND name='messages'").get()) {
+      const touched = this.db.prepare('SELECT message_id FROM messages WHERE room_id=? AND (author_id=? OR to_member_id=?)').all(roomId,retired,retired);
+      for (const row of touched) assertMessageWrite(this.db,roomId,row.message_id);
       this.db.prepare("UPDATE messages SET author_id=? WHERE room_id=? AND author_id=?").run(kept, roomId, retired);
       this.db.prepare("UPDATE messages SET to_member_id=? WHERE room_id=? AND to_member_id=?").run(kept, roomId, retired);
       const records = this.db.prepare("SELECT message_id, record_json FROM messages WHERE room_id=? AND record_json LIKE ?").all(roomId, `%${retired}%`);
@@ -609,6 +612,7 @@ export class Pairing {
           if (changed) this.db.prepare("UPDATE messages SET record_json=? WHERE room_id=? AND message_id=?").run(JSON.stringify(record), roomId, row.message_id);
         } catch { /* a non-json shadow is left for the projection */ }
       }
+      for (const row of touched) recordMessageWrite(this.db,roomId,row.message_id);
     }
     if (this.db.prepare("SELECT 1 FROM sqlite_master WHERE type='table' AND name='work_claims'").get()) {
       const claims = this.db.prepare("SELECT claim_id, item_json FROM work_claims WHERE room_id=?").all(roomId);

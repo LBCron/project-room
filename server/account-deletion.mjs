@@ -1,3 +1,4 @@
+import { assertMessageWrite, recordMessageWrite } from './write-integrity.mjs';
 // RC-2026-09-19-078 — account-deletion wiring.
 //
 // src/account-deletion.mjs plans WHAT to purge in WHAT order but never
@@ -359,7 +360,11 @@ function redactRoomMessages(store, roomId, actorId) {
   if (archived.length) {
     const archivedAt = at;
     const clear = store.db.prepare("UPDATE messages SET body=NULL, reducer_extras_json=NULL, record_json=NULL, deleted_at=COALESCE(deleted_at, ?) WHERE room_id=? AND message_id=?");
-    for (const row of archived) removed += clear.run(archivedAt, roomId, row.id).changes;
+    for (const row of archived) {
+      assertMessageWrite(store.db,roomId,row.id);
+      removed += clear.run(archivedAt, roomId, row.id).changes;
+      recordMessageWrite(store.db,roomId,row.id);
+    }
   }
   let files = 0;
   try {

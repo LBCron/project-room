@@ -352,6 +352,7 @@ test("offline schema45 archive cold-serves nonempty native work and refuses an o
     if(applyWorkPrivacyRequest(emptyWorkPrivacy(),{requesterId:'owner',recipientId:'reader'},1).requests!==1)throw Error('privacy counter export failed');
     let rejected=false;try{advanceCanonicalH({state:{},header:{},readMetadata:()=>null});}catch(error){rejected=/Invalid protected canonical authority marker/.test(error.message);}
     if(!rejected)throw Error('canonical source admission export failed closed');
+    import {CURRENT_WRITER_FORMAT} from ${JSON.stringify(pathToFileURL(join(destination,"server/current-room-format.mjs")).href)};
     import {readWorkItem} from ${JSON.stringify(pathToFileURL(join(destination,"server/work-repository.mjs")).href)};
     import {textVersion} from ${JSON.stringify(pathToFileURL(join(destination,"server/text-results.mjs")).href)};
     const path=${JSON.stringify(join(directory,"normalized.sqlite"))};
@@ -363,6 +364,8 @@ test("offline schema45 archive cold-serves nonempty native work and refuses an o
     store.command(key,'commons',{id:'accept-native-task',type:'work.accepted',data:{workItemId:'native-task',expectedRevision:0}});
     let capDenied=false;try{store.command(key,'commons',{id:'accept-other-task',type:'work.accepted',data:{workItemId:'other-task',expectedRevision:0}});}catch(error){capDenied=error.code==='work_board_full';}
     if(!capDenied)throw Error('packaged native capacity admission missing');
+    const formats=store.db.prepare("SELECT json_extract(counts_json,'$.format') AS format FROM operator_actions WHERE action='current_room_writer_admission'").all();
+    if(!formats.length||formats.some(row=>row.format!==CURRENT_WRITER_FORMAT))throw Error('packaged format export differs from protected writer admissions');
     store.close();
     store=new RoomStore(path,{integrity:'deferred'});store.room=()=>{throw Error('whole room hydration');};
     const page=store.eventsAfter(key,'commons');

@@ -3991,6 +3991,7 @@ this.slaBreachAlerts = new SlaBreachAlertJournal(this); // Task 26: durable in-a
   // The room's committed head sequence in one primary-key read — the stream
   // probe's change check, three orders of magnitude cheaper than a page read.
   assertRestoreAdmitted() { return assertRestoreAdmitted(this.db); }
+  restoreStatus() { verifyRestoreControl(this.db); return {pending:restorePending(this.db)}; }
   headSequence(roomId) {
     if(!this._restoreOpening)assertRestoreAdmitted(this.db);
     const row = this.db.prepare("SELECT sequence FROM rooms WHERE id=?").get(roomId);

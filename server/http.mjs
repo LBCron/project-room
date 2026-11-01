@@ -1228,6 +1228,13 @@ export function createRoomServer({ store, origin, assetRoot = new URL("../", imp
       if (url.pathname === "/.well-known/security.txt" || url.pathname === "/security.txt" || url.pathname === "/room/.well-known/security.txt") {
         return writeSecurityTxt(req, res);
       }
+      // A partial backup must not reach direct account/public/module routes or
+      // cached auth fallbacks. Readiness has its own 503; minimal static and
+      // liveness responses do not expose restored application state.
+      const restoreIndependentRead=['GET','HEAD'].includes(req.method) &&
+        (assets.has(url.pathname) || LIVENESS_GET_ONLY_PATHS.has(url.pathname)
+          || isHealthAliasPath(url.pathname) || url.pathname==='/api/ready');
+      if(!restoreIndependentRead)store.assertRestoreAdmitted();
       // Jev-harness admission gate, shadow mode (docs/JEV-GATES.md): score
       // the join with the cheap classifier, journal the would-be decision,
       // then proceed unchanged. Shadow mode never enforces — this helper

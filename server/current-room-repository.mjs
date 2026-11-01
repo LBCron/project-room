@@ -778,7 +778,7 @@ export function readCurrentReplyRequestWindow(store,roomId,{after='',limit=4}={}
   for(const {record_key:id} of rows.slice(0,limit)) {
     const scalar=db.prepare("SELECT payload_bytes FROM current_room_records WHERE room_id=? AND domain='replyRequests' AND record_key=?").get(roomId,id);
     if(!scalar)corrupt('request source payload missing');
-    if(requests.length&&b.bytes+scalar.payload_bytes+16384>MAX_INPUT)break;
+    if ( requests . length && b . bytes + scalar . payload_bytes + 16384 > MAX_INPUT ) break ;
     const request=readCurrentRecord(db,roomId,'replyRequests',id,b);if(request?.id!==id)corrupt('request source identity differs');
     requests.push(request);examinedAfter=id;
   }

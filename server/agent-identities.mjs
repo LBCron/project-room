@@ -1416,7 +1416,7 @@ export class AgentIdentities {
     if (!roomId || typeof identityId !== "string" || !identityId) return null;
     const link = this.db.prepare("SELECT member_id FROM identity_links WHERE room_id=? AND identity_id=?").get(roomId, identityId);
     if (!link) return null;
-    const member = memberOf(this.store.roomAuthority(roomId).members, link.member_id);
+    const member = memberOf(this.store.roomAuthority(roomId, { memberId: link.member_id }).members, link.member_id);
     if (!member || member.active === false) return null;
     if (!this.store.agentConnections.identityAuthority(roomId, member.id)) return null;
     this.noteActivated(identityId);

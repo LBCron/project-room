@@ -15,7 +15,7 @@ import { bindCurrentRecordContext } from '../src/current-record-context.js';
 // compatibility and prospective write integrity, not authority against a DBA.
 import { createHash, randomUUID } from 'node:crypto';
 import { isDeepStrictEqual } from 'node:util';
-import { emptyRoomState, memberHistoryVisibility } from '../src/events.js';
+import { emptyRoomState, memberHistoryVisibility, validId } from '../src/events.js';
 import { messageProofMatches, MESSAGE_PROOF_SELECT, recordProjectionWrite } from './write-integrity.mjs';
 import { decodeMessageEntity } from './message-entity-projection.mjs';
 import { referenceWorkItems } from './work-repository.mjs';
@@ -306,9 +306,26 @@ export function initializeCurrentRoom(store,state,events) {
     return roomId;
   });
 }
-export function currentRoomAuthority(db,roomId) {
+export function currentRoomAuthority(db,roomId,{memberId=null}={}) {
   const b=contextBudgets.get(db)??budget(),head=readCurrentHead(db,roomId,b);if(!head)return null;
-  return currentAuthorityFromHead(db,roomId,head,b);
+  return memberId===null?currentAuthorityFromHead(db,roomId,head,b):currentMemberAuthorityFromHead(db,roomId,head,b,memberId);
+}
+// Explicit addressed authority: protected room/owner and this principal only.
+// Default roster callers retain their full-census contract and budget.
+function currentMemberAuthorityFromHead(db,roomId,head,b,memberId) {
+  if(!validId(memberId))return {sequence:head.sequence,ownerId:null,members:{}};
+  const room=readCurrentRecord(db,roomId,'metadata','room',b);
+  if(!room||!validId(room.ownerId))corrupt('missing owner authority');
+  const members={};
+  for(const id of new Set([room.ownerId,memberId])) {
+    const member=readCurrentRecord(db,roomId,'members',id,b);
+    if(member!==undefined){
+      if(member?.id!==id)corrupt('member authority identity differs');
+      Object.defineProperty(members,id,{value:member,enumerable:true,writable:true,configurable:true});
+    }
+  }
+  if(!Object.hasOwn(members,room.ownerId))corrupt('missing owner authority');
+  return {sequence:head.sequence,ownerId:room.ownerId,members,historyVisibility:room.historyVisibility??null,historyDefaultsVersion:room.historyDefaultsVersion??null};
 }
 function currentAuthorityFromHead(db,roomId,head,b) {
   const room=readCurrentRecord(db,roomId,'metadata','room',b);

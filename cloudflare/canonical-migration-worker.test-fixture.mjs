@@ -1,3 +1,5 @@
+import {buildOrient} from '../server/orient.mjs';
+import {buildActivationPack} from '../server/room-activation-pack.mjs';
 import {DurableObject} from 'cloudflare:workers';
 import {RoomStore} from '../server/store.mjs';
 import {DurableDatabase,durableStorage} from './storage.mjs';
@@ -26,6 +28,12 @@ export class CanonicalMigrationProbe extends DurableObject{
    }
    else if(u.pathname==='/post'){const id=u.searchParams.get('id'),key=await this.ctx.storage.get('key');result=s.command(key,'commons',{id:'post-'+id,type:'message.posted',data:{messageId:id,body:'Useful admitted '+id,replyToId:'root-0000'}});}
    else if(u.pathname==='/state'){result={head:readCurrentHead(db,'commons'),sourceHead:s.headSequence('commons'),projection:JSON.parse(db.prepare("SELECT projection FROM rooms WHERE id='commons'").get().projection),permit:db.prepare('SELECT * FROM current_room_writer_permit').get(),counts:snapshot()};}
+   else if(u.pathname==='/workflow') {
+    const key=await this.ctx.storage.get('key');s.room=()=>{throw Error('actualWorker fullblob hydration');};
+    for(let i=0;i<19;i++)s.command(key,'commons',{id:'work-'+i,type:'work.proposed',data:{workItemId:'task-'+String(i).padStart(2,'0'),title:'Useful '+i,definitionOfDone:'Saved evidence',accountableMemberId:'owner'}});
+    result={context:s.roomContext(key,'commons'),orient:buildOrient(s,'commons','owner'),begin:buildActivationPack(s,'commons','owner')};
+   }
+   else if(u.pathname==='/context') {s.room=()=>{throw Error('actualWorker fullblob hydration');};result=s.roomContext(await this.ctx.storage.get('key'),'commons',{workAfter:u.searchParams.get('after')??''});}
    else if(u.pathname==='/read'){result=readConversation(s,await this.ctx.storage.get('key'),'commons',{messageId:u.searchParams.get('id'),limit:5});}
    else return new Response('missing',{status:404});
    return Response.json({result,cost:delta(this.stats,before),rawRuntime:delta(this.raw,rawBefore),sqlErrors:this.sqlErrors,startup:this.startup});

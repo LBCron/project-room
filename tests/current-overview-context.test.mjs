@@ -5,6 +5,7 @@ import {initialRoom} from '../server/bootstrap.mjs';
 import {buildOrient} from '../server/orient.mjs';
 import {buildActivationPack} from '../server/room-activation-pack.mjs';
 import {buildRoomContext} from '../server/room-context.mjs';
+import {claimNote} from '../server/content-trust.mjs';
 import {thinWorkForContext} from '../server/current-work-summary.mjs';
 
 test('actual default context and Begin enumerate bounded work summaries with honest continuation',t=>{
@@ -27,7 +28,7 @@ test('thin context preserves shared selector semantics including independent ver
  const base={id:'work',title:'Task',state:'completed',revision:4,accountableMemberId:'owner',verifierMemberId:'verifier',humanDecisionMakerId:'human',independentVerificationRequired:true,ownerDecisionRequired:true,receipt,
  verification:{eventId:'verify',verifierId:'verifier',actorId:'verifier',result:'pass',completionEventId:'done',evidenceVersion:'v',independenceConfirmed:true}};
  for(const change of [{},{verification:{...base.verification,verifierId:'owner'}},{decision:{decision:'approve',completionEventId:'done',evidenceVersion:'v',actorId:'human'}},{state:'working',status:'running',worker_member_id:'owner',heartbeat_at:'2026-11-01T00:00:00Z'},{claim:{holderId:'owner',expiresAt:'2027-01-01T00:00:00Z',repository:'repo',paths:['src'],status:'active'}}]) {
- const item={...base,...change},state={room:{id:'room',ownerId:'owner'},members:{},workItems:{work:item}};
+ const item={...base,blocker:{reason:'Resolve exact submitted evidence'},...change};assert.deepEqual(claimNote(thinWorkForContext(item)),claimNote(item));const state={room:{id:'room',ownerId:'owner'},members:{},workItems:{work:item}};
  const args={sequence:2,viewerId:'owner',caughtUp:0,now:1793491200000};
  assert.deepEqual(buildRoomContext({...args,state:{...state,workItems:{work:thinWorkForContext(item)}}}),buildRoomContext({...args,state}));
  }

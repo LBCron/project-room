@@ -94,7 +94,7 @@ above, not JSON-RPC.
 
 ## Full code index
 
-1038 rows (997 distinct codes).
+1040 rows (999 distinct codes).
 *Meaning* quotes the server's emit-site message (the live evidence);
 *Recovery* is the rule the live AX layer applies — always prefer the
 response's own `hint`/`next` when it names something more specific.
@@ -194,6 +194,8 @@ response's own `hint`/`next` when it names something more specific.
 | `assistant_stop_pending` | 409 | A stop or scope decision must be acknowledged first | no | Re-check access and current work. If it repeats, report error.code and the full message to the room owner — this code has no mapped recovery. |
 | `attachment_conflict` | 409 | That attachment id is already stored for this identity | no | Re-check access and current work. If it repeats, report error.code and the full message to the room owner — this code has no mapped recovery. |
 | `attachment_forbidden` | 403 | Only the uploader or the room owner can discard this file | no | room_check_access. Ask the owner for the missing permission. Do not retry the same call unchanged. |
+| `attachment_index_budget_exceeded` | 409 | This database exceeds the optional attachment index admission bounds or needs scalar reconciliation. | no | Keep the existing attachment path. Inspect the operator plan; use separately qualified maintenance rather than increasing limits or deleting tombstones to evade admission. |
+| `attachment_index_conflict` | 409 | Attachment table or optional index metadata does not match the supported definition. | no | Reconcile the attachment schema with the operator. Do not replace the index, alter attachment rows or treat a schema stamp as installation proof. |
 | `attachment_not_found` | 404 | Attachment not found | re-list | Re-list the resource and use a current id. Do not guess ids. |
 | `attachment_quota` | 409 | A file storage limit is full (room files or inbox attachments) | no | For room files, read error.detail.quota (limit, used, max, remaining) and send a part no larger than remaining, or stop: committed room files never expire, and staged files count until their staging deadline. |
 | `attachment_too_large` | 413 | File exceeds the inbox attachment size limit | no | Re-check access and current work. If it repeats, report error.code and the full message to the room owner — this code has no mapped recovery. |

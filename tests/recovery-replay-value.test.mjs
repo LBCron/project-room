@@ -62,3 +62,8 @@ test('actual process exit preserves reducer patch parts and exact independently 
   }));
  }finally{store.close();}
 });
+
+test('declared entity bytes are admitted before allocating or fetching any large body part',()=>{
+ const s=store(),value='x'.repeat(160029);put(s,value,170000);const get=s.get.bind(s);let fetchedParts=0;s.get=(...args)=>{if(args[4]>0)fetchedParts++;return get(...args);};
+ assert.throws(()=>readRecoveryReplayValue(s,'r','seenEvents','e',170000,{admit(bytes){assert.equal(bytes,160031);throw Error('input quantum exhausted');}}),/input quantum exhausted/);assert.equal(fetchedParts,0);
+});

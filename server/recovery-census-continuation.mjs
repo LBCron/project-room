@@ -1,3 +1,4 @@
+import {initialRecoveryReplay,validateRecoveryReplay,advanceRecoveryReplay} from './recovery-replay-continuation.mjs';
 import {validateRecoveryHistoryEntry} from './recovery-history-entry.mjs';
 import {initialRecoveryEngine,validateRecoveryEngine,advanceRecoveryEngine} from './recovery-engine-continuation.mjs';
 // First independent audit phase: shared current-record checks plus complete
@@ -14,16 +15,18 @@ import {EVENT_TYPES,memberHistoryVisibility} from '../src/events.js';
 import {validId} from '../src/events.js';
 import {isCurrentRoom,withCurrentAuditUnits,currentAuditMessageRoot} from './current-room-repository.mjs';
 import {withRestoreAuditRows,RESTORE_AUDIT_VERSION,RESTORE_AUDIT_UNIT_BYTES} from './restore-admission.mjs';
-export const initialRecoveryCensus=()=>({version:RESTORE_AUDIT_VERSION,engine:null,stage:'rooms',roomAfter:'',roomId:null,domainAfter:'',keyAfter:'',proofs:0,records:0,actualRecords:0,workAfter:'',workCount:0,workReferenceRecords:0,workSummaryRecords:0,workCapacityRecords:0,workPrivacyRecords:0,workRequestRecords:0,requestAfter:'',requestLinks:0,privacyAfter:'',privacyWork:null,privacyLinkAfter:'',privacyValue:null,privacyEntries:0,privacyLinks:0,messageAfterSeq:0,messageAfterId:'',messageCount:0,retainedMessages:0,witnessRecords:0,archiveRecords:0,participantRecords:0,expectedParticipants:0,memberRecords:0,requestRecords:0,archiveAfter:'',archiveSlots:0,historySequence:0,strictEvents:0,historyAfter:'',historyMember:null,historyJoinSequence:0,historyJoinAt:'',historyJoinFound:false,historyPart:0,historyExcluded:0,historyFloorRecords:0,historyExclusionRecords:0,expectedFloors:0,expectedExclusions:0,rooms:0,legacyRooms:0,units:0,bytes:0});
+export const initialRecoveryCensus=()=>({version:RESTORE_AUDIT_VERSION,replay:null,replayRooms:0,replayDeferred:0,engine:null,stage:'rooms',roomAfter:'',roomId:null,domainAfter:'',keyAfter:'',proofs:0,records:0,actualRecords:0,workAfter:'',workCount:0,workReferenceRecords:0,workSummaryRecords:0,workCapacityRecords:0,workPrivacyRecords:0,workRequestRecords:0,requestAfter:'',requestLinks:0,privacyAfter:'',privacyWork:null,privacyLinkAfter:'',privacyValue:null,privacyEntries:0,privacyLinks:0,messageAfterSeq:0,messageAfterId:'',messageCount:0,retainedMessages:0,witnessRecords:0,archiveRecords:0,participantRecords:0,expectedParticipants:0,memberRecords:0,requestRecords:0,archiveAfter:'',archiveSlots:0,historySequence:0,strictEvents:0,historyAfter:'',historyMember:null,historyJoinSequence:0,historyJoinAt:'',historyJoinFound:false,historyPart:0,historyExcluded:0,historyFloorRecords:0,historyExclusionRecords:0,expectedFloors:0,expectedExclusions:0,rooms:0,legacyRooms:0,units:0,bytes:0});
 const fail=()=>{throw Error('Independent recovery census requires reconciliation');};
 export function validateRecoveryCensus(value){
- if(!value||Object.keys(value).sort().join(',')!==Object.keys(initialRecoveryCensus()).sort().join(',')||value.version!==RESTORE_AUDIT_VERSION||!['rooms','proofs','records','work','request_links','privacy','archive','messages','history_events','history_members','history_exclusions','engine','cleanup','full_audit_pending'].includes(value.stage)
-  ||!['proofs','records','actualRecords','rooms','legacyRooms','units','bytes','workCount','workReferenceRecords','workSummaryRecords','workCapacityRecords','workPrivacyRecords','workRequestRecords','requestLinks','privacyEntries','privacyLinks','messageAfterSeq','messageCount','retainedMessages','witnessRecords','archiveRecords','participantRecords','expectedParticipants','memberRecords','requestRecords','archiveSlots','historySequence','strictEvents','historyJoinSequence','historyPart','historyExcluded','historyFloorRecords','historyExclusionRecords','expectedFloors','expectedExclusions'].every(key=>Number.isSafeInteger(value[key])&&value[key]>=0)
+ if(!value||Object.keys(value).sort().join(',')!==Object.keys(initialRecoveryCensus()).sort().join(',')||value.version!==RESTORE_AUDIT_VERSION||!['rooms','proofs','records','work','request_links','privacy','archive','messages','history_events','history_members','history_exclusions','replay_events','engine','cleanup','full_audit_pending'].includes(value.stage)
+  ||!['replayRooms','replayDeferred','proofs','records','actualRecords','rooms','legacyRooms','units','bytes','workCount','workReferenceRecords','workSummaryRecords','workCapacityRecords','workPrivacyRecords','workRequestRecords','requestLinks','privacyEntries','privacyLinks','messageAfterSeq','messageCount','retainedMessages','witnessRecords','archiveRecords','participantRecords','expectedParticipants','memberRecords','requestRecords','archiveSlots','historySequence','strictEvents','historyJoinSequence','historyPart','historyExcluded','historyFloorRecords','historyExclusionRecords','expectedFloors','expectedExclusions'].every(key=>Number.isSafeInteger(value[key])&&value[key]>=0)
   ||typeof value.roomAfter!=='string'||Buffer.byteLength(value.roomAfter)>128||value.roomId!==null&&(!validId(value.roomId))
   ||typeof value.workAfter!=='string'||Buffer.byteLength(value.workAfter)>200
   ||!['requestAfter','privacyAfter','privacyLinkAfter','messageAfterId','archiveAfter','historyAfter'].every(key=>typeof value[key]==='string'&&Buffer.byteLength(value[key])<=200)||value.privacyWork!==null&&(typeof value.privacyWork!=='string'||Buffer.byteLength(value.privacyWork)>200)
   ||typeof value.historyJoinFound!=='boolean'||value.historyMember!==null&&(typeof value.historyMember!=='string'||Buffer.byteLength(value.historyMember)>200)||typeof value.historyJoinAt!=='string'||Buffer.byteLength(value.historyJoinAt)>RESTORE_AUDIT_UNIT_BYTES
   ||typeof value.domainAfter!=='string'||Buffer.byteLength(value.domainAfter)>64||typeof value.keyAfter!=='string'||Buffer.byteLength(value.keyAfter)>200)fail();
+ if(value.replay!==null)validateRecoveryReplay(value.replay);
+ if(value.stage==='replay_events'&&value.replay===null)fail();
  if(value.engine!==null)validateRecoveryEngine(value.engine);
  if(['engine','full_audit_pending'].includes(value.stage)?value.engine===null||value.stage==='full_audit_pending'&&value.engine.stage!=='complete':value.engine!==null)fail();
  if(value.privacyValue!==null){validateWorkPrivacy(value.privacyValue);if(Buffer.byteLength(JSON.stringify(value.privacyValue))>RESTORE_AUDIT_UNIT_BYTES)fail();}
@@ -50,6 +53,11 @@ export function advanceRecoveryCensus(store,restoreId,previous,sourceSeal){
     p.roomId=row.id;p.domainAfter='';p.keyAfter='';p.proofs=0;p.records=0;p.actualRecords=0;p.workAfter='';p.workCount=0;p.workReferenceRecords=0;p.workSummaryRecords=0;p.workCapacityRecords=0;p.workPrivacyRecords=0;p.workRequestRecords=0;p.requestAfter='';p.requestLinks=0;p.privacyAfter='';p.privacyWork=null;p.privacyLinkAfter='';p.privacyValue=null;p.privacyEntries=0;p.privacyLinks=0;p.messageAfterSeq=0;p.messageAfterId='';p.messageCount=0;p.retainedMessages=0;p.witnessRecords=0;p.archiveRecords=0;p.participantRecords=0;p.expectedParticipants=0;p.memberRecords=0;p.requestRecords=0;p.archiveAfter='';p.archiveSlots=0;p.historySequence=0;p.historyAfter='';p.historyMember=null;p.historyJoinSequence=0;p.historyJoinAt='';p.historyJoinFound=false;p.historyPart=0;p.historyExcluded=0;p.historyFloorRecords=0;p.historyExclusionRecords=0;p.expectedFloors=0;p.expectedExclusions=0;
     if(!isCurrentRoom(db,p.roomId)){p.legacyRooms++;p.roomAfter=p.roomId;p.roomId=null;units++;continue;}
     p.stage='proofs';
+   }
+   if(p.stage==='replay_events'){
+    const result=advanceRecoveryReplay(db,scratch,p.roomId,p.replay,sourceSeal);p.replay=result.cursor;p.units+=result.units;p.bytes+=result.bytes;
+    if(result.done){p.replayRooms++;if(result.cursor.stage==='deferred')p.replayDeferred++;p.rooms++;p.roomAfter=p.roomId;p.roomId=null;p.stage='rooms';}
+    return p;
    }
    // Every callback/receipt cache ends before this synchronous transaction ends.
    const roomDone=withCurrentAuditUnits(store,p.roomId,reader=>{
@@ -78,7 +86,7 @@ export function advanceRecoveryCensus(store,restoreId,previous,sourceSeal){
      if(p.stage==='history_members'){
       if(scratch.remaining<1)return false;
       const scalar=db.prepare("SELECT rowid,length(CAST(record_key AS BLOB)) bytes FROM current_room_record_proofs WHERE room_id=? AND domain='members' AND present=1 AND record_key>? ORDER BY record_key LIMIT 1").get(p.roomId,p.historyAfter);
-      if(!scalar){if(p.expectedFloors!==p.historyFloorRecords||p.expectedFloors!==reader.head.counts.historyFloors||p.expectedExclusions!==p.historyExclusionRecords||p.expectedExclusions!==reader.head.counts.historyExclusions)fail();p.rooms++;p.roomAfter=p.roomId;p.roomId=null;p.stage='rooms';return true;}
+      if(!scalar){if(p.expectedFloors!==p.historyFloorRecords||p.expectedFloors!==reader.head.counts.historyFloors||p.expectedExclusions!==p.historyExclusionRecords||p.expectedExclusions!==reader.head.counts.historyExclusions)fail();p.stage='replay_events';p.replay=initialRecoveryReplay();return false;}
       if(scalar.bytes<1||scalar.bytes>200)fail();const id=db.prepare('SELECT record_key FROM current_room_record_proofs WHERE rowid=?').get(scalar.rowid).record_key;
       const estimate=recordInputBytes(db,p.roomId,'members',id)+recordInputBytes(db,p.roomId,'metadata','room')+recordInputBytes(db,p.roomId,'historyFloors',id)+4096;if(units&&bytes+estimate>4*1024*1024)return false;
       const member=reader.record('members',id),room=reader.record('metadata','room'),floor=reader.record('historyFloors',id);

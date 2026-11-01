@@ -1110,7 +1110,7 @@ function agentWakeTargets(state, senderMemberId, data, db = null, roomId = "") {
   const members = state?.members ?? {};
   const targets = new Map();
   const body = typeof data?.body === "string" ? data.body : "";
-  const identityNames = db ? identityNamesForRoom(db, roomId) : {};
+  const identityNames = db && body.includes("@") ? identityNamesForRoom(db, roomId) : {};
   for (const memberId of resolveMentionTargetsInText(members, identityNames, body, senderMemberId)) {
     if (members[memberId]?.kind !== "agent") continue;
     if (data?.toMemberId && data.toMemberId !== memberId) continue;
@@ -7073,7 +7073,7 @@ this.slaBreachAlerts = new SlaBreachAlertJournal(this); // Task 26: durable in-a
         const listed = this.room(roomId);
         return { sequence: listed.sequence, duplicate: false, event: null, bonds: this.bonds.listForMember(roomId, auth.member.id) };
       }
-      const messageContext = currentCommandContext(this,roomId,command)
+      const messageContext = currentCommandContext(this,roomId,command,{actorId:auth.member.id})
         ?? this.canonicalMessagePostContext(roomId, command, auth.member.id)
         ?? this.canonicalMessageEditContext(roomId, command);
       let room = messageContext?.room ?? this.room(roomId);
@@ -7555,6 +7555,11 @@ this.slaBreachAlerts = new SlaBreachAlertJournal(this); // Task 26: durable in-a
       return { sequence, event: incoming, duplicate: false, ...(note ? { note } : {}),
         ...((Array.isArray(mentionWarnings) && mentionWarnings.length > 0) ? { mentionWarnings } : {}) };
       });
+    }, {
+      // Alias resolution is the sole qualified command needing a full roster.
+      // This internal consumer reservation leaves the byte ceiling unchanged.
+      maxRecords: command.type === T.MESSAGE_POSTED && typeof command.data.body === "string"
+        && command.data.body.includes("@") ? 1024 : 200
     }));
     } catch (error) {
       // The test doubles that replace roomFlood expose only consume(), so a
@@ -7648,7 +7653,7 @@ this.slaBreachAlerts = new SlaBreachAlertJournal(this); // Task 26: durable in-a
   // skipped; the post still stands. The room event cap is unchanged.
   resumeRoundLimitPauses(roomId, state, senderMemberId, messageEvent, sequence) {
     const body = typeof messageEvent?.data?.body === "string" ? messageEvent.data.body : "";
-    const mentioned = new Set(resolveMentionTargetsInText(state.members ?? {}, identityNamesForRoom(this.db, roomId), body, senderMemberId));
+    const mentioned = new Set(resolveMentionTargetsInText(state.members ?? {}, body.includes("@") ? identityNamesForRoom(this.db, roomId) : {}, body, senderMemberId));
     const dmId = typeof messageEvent?.data?.toMemberId === "string" ? messageEvent.data.toMemberId : "";
     let next = state;
     let seq = sequence;

@@ -256,7 +256,7 @@ export function emitWorkClaimEvent(store, roomId, options) {
   const { actorId, item, action, previousOwnerId = null, previousState = null, resolving = false, atMs = null, paths = undefined, pullRequest = undefined, reason = undefined, ciState = undefined, verdict = undefined, attention = undefined, attentionMemberId = undefined, coalesce = false } = options;
   const stamp = Number.isFinite(atMs) ? atMs : (typeof store.now === "function" ? store.now() : Date.now());
   if (coalesce && claimEventCoalesced(store, roomId, item.id, action, stamp)) return null;
-  const current = currentCommandContext(store,roomId,{id:'claim-context',type:'work_claim.updated',data:{}});
+  const current = currentCommandContext(store,roomId,{id:'claim-context',type:'work_claim.updated',data:{}},{actorId});
   const room = current?.room ?? store.room(roomId);
   // The event log refuses anything after archive (applyEvent throws). Skip
   // the receipt so the claim write still commits; an archived room has no

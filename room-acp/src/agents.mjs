@@ -74,6 +74,7 @@ export function candidates({ agent = null, agentCmd = null, env = process.env } 
 export const CHILD_ENV_KEYS = Object.freeze([
   "PATH", "HOME", "USER", "LOGNAME", "SHELL", "TERM", "COLORTERM", "TMPDIR", "LANG",
   "CODEX_PATH", // README: the operator's explicit override for the Codex binary
+  "CODEX_HOME", // Preserve the operator's selected config/login directory.
   // Windows process basics (spawn below has a win32 path).
   "SystemRoot", "windir", "ComSpec", "PATHEXT", "APPDATA", "LOCALAPPDATA",
   "USERPROFILE", "TEMP", "NUMBER_OF_PROCESSORS", "PROCESSOR_ARCHITECTURE",

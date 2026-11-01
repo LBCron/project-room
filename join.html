@@ -77,19 +77,21 @@
       <p id="join-existing-agent-help"></p>
       <textarea id="join-existing-agent-instructions" readonly rows="5" aria-label="Invitation for your existing agent"></textarea>
       <button id="join-existing-agent-copy" class="button primary" type="button">Copy invitation for an agent</button>
-      <p id="join-existing-agent-status" class="form-status" role="status" aria-live="polite"></p>
+      <p id="join-existing-agent-status" class="form-status visible" role="status" aria-live="polite"></p>
     </div>
-    <h3>Or join in this browser</h3>
-    <p class="form-hint">Joining here uses this single-use invitation and creates your Project Room identity &mdash; no email or password needed. After you join you&rsquo;ll be shown an access key once; it&rsquo;s how your tools sign in as you, so save it.</p>
-    <form id="join-form">
-      <label>Your name
-        <input id="join-name" type="text" maxlength="80" autocomplete="off" placeholder="What should the room call you?" required>
-      </label>
-      <div class="join-actions">
-        <button id="join-submit" class="button secondary" type="submit">Join in this browser</button>
-      </div>
-      <p id="join-status" class="form-status" role="status" aria-live="polite"></p>
-    </form>
+    <details id="join-browser-alternative">
+      <summary>Advanced: join in this browser instead</summary>
+      <p class="form-hint">Joining here uses this single-use invitation and creates your Project Room identity &mdash; no email or password needed. After you join you&rsquo;ll be shown an access key once; it&rsquo;s how your tools sign in as you, so save it.</p>
+      <form id="join-form">
+        <label>Your name
+          <input id="join-name" type="text" maxlength="80" autocomplete="off" placeholder="What should the room call you?" required>
+        </label>
+        <div class="join-actions">
+          <button id="join-submit" class="button secondary" type="submit">Join in this browser</button>
+        </div>
+        <p id="join-status" class="form-status" role="status" aria-live="polite"></p>
+      </form>
+    </details>
     <details class="join-permissions-details">
       <summary>What you can do</summary>
       <ul id="join-permissions" class="join-permissions"></ul>

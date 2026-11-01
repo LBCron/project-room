@@ -2,7 +2,8 @@
 //
 // No inbound GitHub webhook is mounted (server/land-queue.mjs). The per-minute
 // cron and POST /work-claims/sweep poll instead. applyPullRequestWebhook is
-// the same settlement a pull_request webhook would call.
+// the same settlement a verified pull_request webhook calls; it verifies
+// the delivery's HMAC itself before settling (RES-0140).
 //
 // Unauthenticated GitHub allows 60 requests an hour per IP, and Workers share
 // that IP. The tick therefore:
@@ -31,6 +32,7 @@ import {
   pullVerificationDue, pullsReadyToSettle, rateLimitUntil, recordPullOutcome, rememberPoll, rollupClaimCi, settlePullRequest,
   stampVerifiedPullOutcome, usableEtag
 } from "./claim-coordination.mjs";
+import { verifyWebhook } from "./github-app/verify.mjs";
 
 // #3464: the durable registry decodes stored rows WITHOUT validation while
 // every state-machine touch re-validates, so one stored row with a malformed
@@ -88,6 +90,17 @@ function githubToken(env) {
     if (typeof value === "string" && value.trim()) return value.trim();
   }
   return null;
+}
+
+// The PR webhook secret's env var name — the same name claim-autolink's
+// PR_WEBHOOK_SECRET_ENV export names for the route. The value is read
+// from the caller's env at call time (the githubToken pattern above) and
+// is never stored, logged, or accepted from the delivery itself.
+const PR_WEBHOOK_SECRET_ENV = "GITHUB_PR_WEBHOOK_SECRET";
+
+function prWebhookKey(env) {
+  const value = (env ?? process.env)?.[PR_WEBHOOK_SECRET_ENV];
+  return typeof value === "string" ? value : "";
 }
 
 // Receipt verification (server/receipt-verify.mjs) resolves its GitHub
@@ -1300,22 +1313,78 @@ export function staleSweepDueAt(store, _nowMs) {
 }
 
 // Settle every live claim linked to a closing pull_request webhook payload.
-export function applyPullRequestWebhook(store, payload, { nowMs = Date.now() } = {}) {
-  const decision = pullRequestOutcomeFromWebhook(payload);
-  if (!decision || !store?.db || !store.workClaims) return { applied: [] };
+//
+// RES-0140: this export settles claims (done-by-merge / release-by-close),
+// so it authenticates the delivery itself, with the same verifier and the
+// same secret the PR webhook route uses (server/github-app/verify.mjs,
+// GITHUB_PR_WEBHOOK_SECRET): the caller passes the delivery's raw body
+// and its x-hub-signature-256 header; the secret is read from the env
+// (never from the caller), and an unverified call is refused before the
+// store is touched. Settlement authority no longer rests on the
+// caller's say-so.
+//
+// Candidate rows are SQL-selected by the payload's pull URL (the same
+// json_extract discipline as the tick's loaders), so a delivery decodes
+// only the claims actually linked to that pull instead of enumerating
+// the whole registry across every room (#3698).
+export async function applyPullRequestWebhook(store, payload, { nowMs = Date.now(), rawBody, signature256, env } = {}) {
+  if (!store?.db || !store.workClaims) return { applied: [] };
+  const hookKey = prWebhookKey(env);
+  const check = await verifyWebhook({ rawBody, signature256, secret: hookKey });
+  if (!check.ok) return { applied: [], refused: check.reason };
+  // The signature covers the raw body, so the raw body — not the caller's
+  // parsed copy — is the payload of record: a divergent object passed
+  // alongside a valid signature cannot change what settles.
+  const bodyText = typeof rawBody === "string" ? rawBody
+    : rawBody instanceof Uint8Array ? new TextDecoder().decode(rawBody) : null;
+  let signedPayload = null;
+  if (bodyText !== null) {
+    try { signedPayload = JSON.parse(bodyText); } catch { signedPayload = null; }
+  }
+  if (!signedPayload || typeof signedPayload !== "object" || Array.isArray(signedPayload)) {
+    return { applied: [], refused: "invalid_json" };
+  }
+  const decision = pullRequestOutcomeFromWebhook(signedPayload);
+  if (!decision) return { applied: [] };
   const applied = [];
-  let roomIds = [];
+  let rows = [];
   try {
-    roomIds = store.db.prepare("SELECT DISTINCT room_id AS roomId FROM work_claims").all().map(row => row.roomId);
+    rows = store.db.prepare(`
+      SELECT room_id AS roomId, claim_id AS claimId
+      FROM work_claims
+      WHERE (
+        EXISTS (
+          SELECT 1 FROM json_each(CASE WHEN json_type(item_json, '$.pullRequests') = 'array'
+            THEN json_extract(item_json, '$.pullRequests') ELSE '[]' END)
+          WHERE json_extract(value, '$.url') = ? AND json_extract(value, '$.outcome') IS NULL
+        )
+        OR EXISTS (
+          SELECT 1 FROM json_each(CASE WHEN json_type(item_json, '$.data.pullRequests') = 'array'
+            THEN json_extract(item_json, '$.data.pullRequests') ELSE '[]' END)
+          WHERE json_extract(value, '$.url') = ? AND json_extract(value, '$.outcome') IS NULL
+        )
+        OR (json_extract(item_json, '$.pullRequest.url') = ?
+            AND json_extract(item_json, '$.pullRequest.outcome') IS NULL)
+        OR (json_extract(item_json, '$.data.pullRequest.url') = ?
+            AND json_extract(item_json, '$.data.pullRequest.outcome') IS NULL)
+      )${publicNamespaceSqlExclusion(store)}
+    `).all(decision.url, decision.url, decision.url, decision.url);
   } catch (error) {
     if (/no such table/i.test(error?.message ?? "")) return { applied: [] };
     throw error;
   }
-  for (const roomId of roomIds) {
+  const byRoom = new Map();
+  for (const row of rows) {
+    if (!byRoom.has(row.roomId)) byRoom.set(row.roomId, []);
+    byRoom.get(row.roomId).push(row.claimId);
+  }
+  for (const [roomId, claimIds] of byRoom) {
     // The door's claims never settle by PR outcome (receipts, not pulls).
     if (isPublicClaimNamespace(store, roomId)) continue;
     store.workClaims.transaction(() => {
-      for (const item of store.workClaims.list(roomId)) {
+      for (const claimId of claimIds) {
+        const item = store.workClaims.get(roomId, claimId);
+        if (!item) continue;
         if (!pullLinks(item).some(pull => pull.url === decision.url && !pull.outcome)) continue;
         // #3464: same per-item isolation as the poll path — one invalid
         // linked row must not fail settlement for the rest of the room.

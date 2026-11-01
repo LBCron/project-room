@@ -17,7 +17,7 @@
 //             AND NOT owner-hidden
 //             AND NOT authoritatively opted out
 //
-// Authoritatively opted out: the receipt's room has a RECORDED
+// Authoritatively opted out: the receipt's deciding room has a RECORDED
 // public-receipts setting of enabled=false (room.public_receipts_set —
 // the in-room "public receipts" toggle sends exactly this event).
 // Public reads never touch rooms.projection (the read model's
@@ -36,9 +36,19 @@
 // recorded opt-in serves the row again with no rewrite. A room that
 // never recorded a setting keeps the directory toggle's default
 // (public-work receipts are public unless opted out); only a
-// recorded false hides. The deciding room is the receipt's task room
-// for a public-work receipt, else its room_id, else its origin
-// room — the same attribution the owner leg uses.
+// recorded false hides. The deciding room of a public-work receipt
+// is the room that owns its public-work task, and ONLY that room: a
+// public-work receipt names a namespace, not a room (its stored
+// room_id is the namespace resolution), so a pwr_ row with no task
+// record has no deciding room and no room's recorded setting governs
+// it — the dedicated door has always applied exactly this attribution
+// ("rows without a task link stay public", public-work-claims.mjs).
+// The first cut of this leg fell back to the stored room_id for a
+// taskless pwr_ row, which hid namespace-public work whenever the
+// namespace's room recorded any setting change ending in opt-out —
+// over-hiding in the opposite direction (tests/receipts-route.test.js).
+// For every other receipt the deciding room is its room_id, else its
+// origin room.
 //
 // Operator-unpublished: a public_unpublish row of kind 'receipt' naming
 // the receipt, or kind 'room' naming either of the receipt's rooms
@@ -127,21 +137,32 @@ export function ownerHiddenReceiptSql({ taskRoomLeg = true } = {}) {
 // setting is enabled=false in the setting's read-model copy
 // (room_public_receipts_setting — syncRoomPublication maintains it in
 // the same transaction as the recorded change; public reads never
-// touch rooms.projection).
+// touch rooms.projection). A recorded row whose value is anything
+// other than a clean 1 (0, or a corrupt value no writer produces)
+// counts as an opt-out: a recorded setting that cannot be read as ON
+// must never widen visibility. Attribution per the header: a
+// public-work receipt is decided by its task room alone (no task
+// record, no deciding room); any other receipt by room_id, else
+// origin room.
 export const RECORDED_OPTOUT_RECEIPT_SQL = `NOT EXISTS (
   SELECT 1 FROM room_public_receipts_setting s
-  WHERE s.enabled = 0
-    AND s.room_id = COALESCE(
-          (SELECT pwt.room_id FROM public_work_receipts pwr
-             JOIN public_work_tasks pwt ON pwt.offer_id = pwr.offer_id
-             WHERE pwr.receipt_id = public_receipts.id),
-          public_receipts.room_id, public_receipts.origin_room_id))`;
+  WHERE s.enabled IS NOT 1
+    AND (
+      s.room_id IN (
+        SELECT pwt.room_id FROM public_work_receipts pwr
+        JOIN public_work_tasks pwt ON pwt.offer_id = pwr.offer_id
+        WHERE pwr.receipt_id = public_receipts.id)
+      OR (s.room_id = COALESCE(public_receipts.room_id, public_receipts.origin_room_id)
+          AND NOT EXISTS (
+            SELECT 1 FROM public_work_receipts pwr
+            WHERE pwr.receipt_id = public_receipts.id))
+    ))`;
 
 // The opt-out leg without the task-record resolution, for stores that
 // predate the public-work tables (same degrade as the owner leg).
 export const RECORDED_OPTOUT_ORIGIN_RECEIPT_SQL = `NOT EXISTS (
   SELECT 1 FROM room_public_receipts_setting s
-  WHERE s.enabled = 0
+  WHERE s.enabled IS NOT 1
     AND s.room_id = COALESCE(public_receipts.room_id, public_receipts.origin_room_id))`;
 
 export function recordedOptOutReceiptSql({ taskRoomLeg = true } = {}) {
@@ -243,6 +264,7 @@ export function hiddenReceiptIds(db, receiptIds) {
   if (!receiptIds.length) return hidden;
   const idList = JSON.stringify(receiptIds);
   let rowsById;
+  let taskLegAvailable = true;
   const unpublishedReceipts = new Set();
   const unpublishedRooms = new Set();
   try {
@@ -252,13 +274,14 @@ export function hiddenReceiptIds(db, receiptIds) {
     // to the origin room alone rather than failing the whole check.
     let rows;
     try {
-      rows = db.prepare(`SELECT pr.id AS id, pr.room_id AS roomId, pr.origin_room_id AS origin, pwt.room_id AS taskRoom
+      rows = db.prepare(`SELECT pr.id AS id, pr.room_id AS roomId, pr.origin_room_id AS origin, pwt.room_id AS taskRoom, pwr.receipt_id AS pwrId
         FROM public_receipts pr
         LEFT JOIN public_work_receipts pwr ON pwr.receipt_id = pr.id
         LEFT JOIN public_work_tasks pwt ON pwt.offer_id = pwr.offer_id
         WHERE pr.id IN (SELECT value FROM json_each(?))`).all(idList);
     } catch {
-      rows = db.prepare(`SELECT id, room_id AS roomId, origin_room_id AS origin, NULL AS taskRoom
+      taskLegAvailable = false;
+      rows = db.prepare(`SELECT id, room_id AS roomId, origin_room_id AS origin, NULL AS taskRoom, NULL AS pwrId
         FROM public_receipts WHERE id IN (SELECT value FROM json_each(?))`).all(idList);
     }
     for (const row of rows) rowsById.set(row.id, row);
@@ -302,21 +325,33 @@ export function hiddenReceiptIds(db, receiptIds) {
   // The authoritative opt-out leg: a deciding room whose recorded
   // setting is enabled=false hides the receipt, whatever the
   // public_receipts row or the directory toggle says (R08-F1). The
-  // deciding room is the task room, else room_id, else origin — the
-  // SQL twin's attribution. The fact is read from the setting's
-  // read-model copy (mirroredReceiptsSetting), as the SQL twin does;
-  // a store that cannot produce one proves no opt-out.
+  // deciding room follows the SQL twin's attribution: a public-work
+  // receipt is decided by its task room alone (no task record, no
+  // deciding room — a namespace is not a room that can opt it out);
+  // any other receipt by room_id, else origin. Where the public-work
+  // tables cannot be read at all, no task record can exist and every
+  // row degrades to room_id/origin, as the SQL origin twin does. The
+  // fact is read from the setting's read-model copy
+  // (mirroredReceiptsSetting); a read error here fails CLOSED (every
+  // candidate hidden), never open — the first cut swallowed the
+  // error as "no opt-out" and served a recorded opt-out's receipts
+  // (Codex review, seq 25069).
+  const optOutDecidingRoom = (row) => {
+    if (taskLegAvailable && row.pwrId) return row.taskRoom ?? null;
+    return row.roomId ?? row.origin ?? null;
+  };
   const optedOutRooms = new Set();
   {
     const candidates = new Set();
     for (const row of rowsById.values()) {
-      if (row.taskRoom) candidates.add(row.taskRoom);
-      if (row.roomId) candidates.add(row.roomId);
-      if (row.origin) candidates.add(row.origin);
+      const deciding = optOutDecidingRoom(row);
+      if (deciding) candidates.add(deciding);
     }
-    for (const roomId of candidates) {
-      if (mirroredReceiptsSetting(db, roomId) === 0) optedOutRooms.add(roomId);
-    }
+    try {
+      for (const roomId of candidates) {
+        if (mirroredSettingOptsOut(mirroredReceiptsSetting(db, roomId))) optedOutRooms.add(roomId);
+      }
+    } catch { return new Set(receiptIds); } // the privacy read failed: hide everything asked about
   }
   for (const id of receiptIds) {
     const row = rowsById.get(id);
@@ -325,7 +360,7 @@ export function hiddenReceiptIds(db, receiptIds) {
       hidden.add(id);
       continue;
     }
-    const decidingRoom = row.taskRoom ?? row.roomId ?? row.origin;
+    const decidingRoom = optOutDecidingRoom(row);
     if (decidingRoom && optedOutRooms.has(decidingRoom)) { hidden.add(id); continue; }
     const toggleRooms = [];
     if (row.taskRoom) toggleRooms.push(row.taskRoom);
@@ -371,12 +406,42 @@ export function recordedReceiptsSetting(db, roomId) {
 // The write-time mirror of the recorded setting: the fallback record
 // for stores with no rooms table (see recordedReceiptsSetting), and
 // the fact the stored-row opt-out leg reads — public reads consult
-// this copy, never rooms.projection.
+// this copy, never rooms.projection. Returns:
+//   1 | 0  — a recorded setting with a clean boolean value
+//            (1/true = on, 0/false = off);
+//   null   — no recorded row, or the store predates the mirror table
+//            entirely (the legacy case: no recorded setting can exist
+//            there, so no opt-out can be lost by answering null);
+//   "unknown" — a recorded row exists but its value is neither
+//            true/false/0/1: uninterpretable, and every caller must
+//            treat it as private, never as permission to serve.
+// Any OTHER read error (I/O, corruption, a locked store) PROPAGATES:
+// the first cut of this function caught every error as null, so a
+// SQLITE_IOERR on the setting read silently dropped a recorded
+// enabled=0 and the JS surfaces failed OPEN while the SQL surfaces
+// threw (Codex review, seq 25069). Callers that compose a verdict
+// catch the propagation and fail closed; no caller may receive a
+// value that reads as "no opt-out" when the read did not happen.
 function mirroredReceiptsSetting(db, roomId) {
+  let row;
   try {
-    const row = db.prepare("SELECT enabled FROM room_public_receipts_setting WHERE room_id=?").get(roomId);
-    return row ? row.enabled : null;
-  } catch { return null; } // a store that cannot answer recorded no opt-in
+    row = db.prepare("SELECT enabled FROM room_public_receipts_setting WHERE room_id=?").get(roomId);
+  } catch (error) {
+    if (/no such (column|table)/i.test(error?.message ?? "")) return null;
+    throw error;
+  }
+  if (!row) return null;
+  if (row.enabled === 1 || row.enabled === true) return 1;
+  if (row.enabled === 0 || row.enabled === false) return 0;
+  return "unknown";
+}
+
+// Whether a mirrored setting value records an opt-out for visibility
+// purposes: a clean 0, or an uninterpretable recorded value (which
+// must not fail open). Mirrors the SQL twin's `enabled IS NOT 1`
+// restricted to rooms that HAVE a recorded row.
+function mirroredSettingOptsOut(value) {
+  return value === 0 || value === "unknown";
 }
 
 // The lot rule over a live db: operator unpublish, the recorded opt-in
@@ -390,22 +455,29 @@ function mirroredReceiptsSetting(db, roomId) {
 // opt-out (room.public_receipts_set with enabled:false), read from the
 // setting's read-model copy — the same fact the mirror surfaces'
 // opt-out leg applies, so the dedicated public-work receipt door and
-// the mirror can never disagree about an opt-out. Only a recorded
-// false counts: never-recorded is not an opt-out, and a store that
-// cannot produce the recorded setting proves none. The door composed
-// the directory toggle alone before (R08-F1).
+// the mirror can never disagree about an opt-out. A recorded
+// false counts, and so does an uninterpretable recorded value or an
+// unreadable setting read (fail closed, seq 25069); never-recorded
+// and a genuinely absent mirror table are not an opt-out. The door
+// composed the directory toggle alone before (R08-F1).
 export function recordedReceiptsOptOut(db, roomId) {
   if (typeof roomId !== "string" || !roomId) return false;
-  return mirroredReceiptsSetting(db, roomId) === 0;
+  try {
+    return mirroredSettingOptsOut(mirroredReceiptsSetting(db, roomId));
+  } catch { return true; } // an unreadable privacy state is private: fail closed
 }
 
 export function lotReceiptVisible(db, { id, roomId } = {}) {
   if (typeof id !== "string" || !id || typeof roomId !== "string" || !roomId) return false;
   const unpublished = isUnpublished(db, "receipt", id) || isUnpublished(db, "room", roomId);
   const recorded = recordedReceiptsSetting(db, roomId);
-  const settingEnabled = recorded.status === "unavailable"
-    ? mirroredReceiptsSetting(db, roomId)
-    : recorded.enabled;
+  let settingEnabled = recorded.enabled;
+  if (recorded.status === "unavailable") {
+    try {
+      const mirrored = mirroredReceiptsSetting(db, roomId);
+      settingEnabled = mirrored === 1 ? 1 : mirrored === 0 ? 0 : null;
+    } catch { settingEnabled = null; } // unreadable mirror: no recorded opt-in, the lot stays private
+  }
   const receiptsPrivate = ownerToggleReadable(db) ? roomReceiptsPrivate(db, roomId) : false;
   return lotVisibleFromFacts({ unpublished, settingEnabled, receiptsPrivate });
 }

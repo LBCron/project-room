@@ -463,7 +463,7 @@ optional.push("server/claim-thread.mjs"); // Shared claimer thread receipt in th
 optional.push("server/current-room-events.mjs"); // bounded normalized event windows and page-selected redaction
 
 // Existing offline schema45 serving/restore modules; inclusion grants no format activation.
-optional.push("server/current-legacy-work-gate.mjs", "server/current-room-archive.mjs", "server/current-room-repository.mjs",
+optional.push("server/current-legacy-work-gate.mjs", "server/current-room-archive.mjs", "server/current-room-repository.mjs", "server/current-room-format.mjs",
   "server/current-work-list.mjs", "server/current-work-privacy.mjs", "server/current-work-summary.mjs", "server/current-work-capacity.mjs",
   "server/replay-canonical-h.mjs", "server/replay-canonical-plan.mjs", "server/restore-admission.mjs", "src/current-record-context.js");
 export const allowed = new Set([...required, ...optional, ...historicalAssets]);

@@ -68,3 +68,56 @@ historical session/lifecycle sequence seeded by a trusted historical-writer
 fixture, then quarantined by the actual modern backfill. Existing repair
 refuses the explicit mode (red); the modern direct-command rejection is green.
 No private room/event/member identifiers or payloads are present.
+
+## Explicit absent-proof adoption
+
+The default mode above remains strict: its input fingerprint and plan hash do
+not change, and an old saved execute receipt remains an exact retry without
+inventing new evidence. Missing versus present-invalid message proofs now have
+separate fixed `repairCheck` values.
+
+A separate operator opt-in, `messageProofMode: adopt-absent-inline-v1`, may
+justify only SQL `NULL` message hashes. It never accepts an empty, malformed or
+mismatched present hash. It requires independently protected full inline or
+verified body-reference messages; any `_entity` message reference refuses.
+Metadata/content/work/body witnesses, complete row membership, every original
+posting position and the full historical replay must still agree.
+
+For older read representations, clone the independently protected state and
+use only the existing `ensureWorkControlDefaults` and `messageChannelId`
+semantics. Every existing value and array length must survive unchanged;
+explicit null or malformed values cannot be washed into a default. The complete
+read view must equal the historical replay. Every persisted message proof field
+then matches the shared current writer codec, including exact scalar fields,
+null reactions and complete structured record/extras JSON with no ignored keys.
+JSON key order and whitespace may differ, but the original row bytes remain.
+The exact original row bytes, not a rewritten record, receive the justified
+hash. Existing global message parity accepts either the complete literal old
+channel representation or the complete reader-defaulted representation, never
+a mixture of independently chosen fields.
+
+Plans bind the explicit mode and all source bytes but write no proof. The
+prospective hash bytes share the original 256 KiB input/output/receipt unit.
+Execute repeats the inventory, stamps only still-NULL hashes, verifies the
+persisted write proof, reconciles derived state and saves the receipt in one
+transaction. Any storage, parity or audit failure rolls back all of it. The
+opt-in response reports `derivedOnly: false`, explicit planned/adopted proof
+counts and `servingContentChanged: false`; projection, work/message content,
+events, grants and existing non-NULL hashes remain untouched.
+
+Successful new execute receipts also carry `replayContract` version 1, kind
+`pre749-sessions`, adapter version 1, the room, exact prefix boundary and event
+ID, the independently matched snapshot hash and an exact event-prefix digest.
+The shared `historical-replay-contract.mjs` frames the versioned domain, room,
+and each contiguous sequence/ID/raw-body value by UTF-8 byte length. A future
+consumer must revalidate that exact prefix, apply the named historical adapter
+only through that boundary, then use modern rules. The receipt is evidence,
+not a global replay override. Old receipts do not acquire a contract on retry;
+backup/export and recovery consumers must preserve and validate the contract
+before claiming historical recovery after checkpoint loss.
+
+The private backup rehearsal uses a read-only Oct31 backup and captured matching
+25-event source in a prospective in-memory test fixture. It is a feasibility
+check with newly staged test-writer witnesses, not proof that the original
+backup or current production serving state is eligible. No production repair
+was executed while implementing or qualifying this mode.

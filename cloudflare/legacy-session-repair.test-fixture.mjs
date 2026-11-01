@@ -14,6 +14,15 @@ export class LegacySessionRepairRoom extends DurableObject {
     const path=new URL(request.url).pathname,s=this.store,db=this.db;
     try {
       if(path==='/seed')return Response.json({request:seedLegacyFixture(s).request});
+      if(path==='/seed-adopt') {
+        const fixture=seedLegacyFixture(s);
+        s.transaction(()=>{const state=structuredClone(s.room('legacy-room').state);
+          for(const message of state.messages)delete message.channelId;
+          for(const item of Object.values(state.workItems)){delete item.round_count;delete item.tool_calls;delete item.suspended_by;}
+          db.prepare('UPDATE rooms SET projection=? WHERE id=?').run(s.storedProjection('legacy-room',state),'legacy-room');s.rememberReconstructedRoomProof('legacy-room');});
+        db.prepare("UPDATE messages SET entity_hash=NULL WHERE room_id='legacy-room'").run();
+        return Response.json({request:{...fixture.request,messageProofMode:'adopt-absent-inline-v1'}});
+      }
       if(path==='/plan'||path==='/execute')return Response.json(repairLegacyMessages(s,await request.json(),path==='/execute'));
       if(path==='/audit-fault') {
         db.exec("CREATE TRIGGER fail_repair BEFORE INSERT ON operator_actions WHEN NEW.action='legacy_session_backfill_reconciled' BEGIN SELECT RAISE(ABORT,'synthetic audit storage failure'); END");

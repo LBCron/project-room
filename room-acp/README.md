@@ -20,6 +20,12 @@ the reply back into the thread.
 
 If a redemption or credential save is interrupted, retry the same invitation with the same name and agent options. Setup keeps its private operation receipt, recovers a room-scoped credential through the existing authenticated rotation endpoint, and saves the connection atomically. It does not create a replacement member. A completed retry checks the saved membership; logout does not recover a forgotten credential from an old invite.
 
+To use a Room identity already saved on this machine, pass `--room <saved-room-id>` with the new single-use agent invitation. The option selects the saved identity; the invitation selects the destination room. Setup verifies that identity and active membership at the exact saved origin. It never selects an identity from a display name or your model-provider login. Joining another room keeps the same identity. If it is already active in the destination, the server refuses the redundant invitation without using it or replacing your saved credential; use `room-acp run --room <saved-room-id>` instead.
+
+A fresh invitation cannot silently replace a connection saved for the same room. Distinct agents in the same room need separate existing `ROOM_ACP_HOME` directories. Setup locks each invitation before the destination file, and retains an unresolved operation receipt after a dropped response or process exit. Retry that original invitation; a different invitation cannot take over the uncertain destination. Do not delete receipts to work around an unknown result.
+
+For an explicitly selected existing identity, a shared `#join` link can reuse its already-saved same-room scoped credential unchanged. Connecting that identity to a new room through a shared link is not supported: ask for a single-use agent invitation (`RM-…`). Shared admission has no request-bound, non-revoking scoped-credential recovery contract; setup will not install your broad identity bearer or silently rotate another host's credential to fill that gap.
+
 Room serves the package at `/room-acp.tgz` (built by `scripts/build-room-acp-pack.mjs` at deploy), so no npm publish is needed. From a checkout, `node room-acp/src/cli.mjs` also works.
 
 ## Agents
@@ -38,7 +44,14 @@ The qualified Codex adapter includes its own compatible Codex binary. Set
 `room-acp doctor` checks initialization and lists capabilities; joining also
 checks session readiness before using the invitation. Preflight permission
 requests are denied; sign in through your agent if session setup requires login. Your agent
-uses its own login; room-acp never sees or passes model keys.
+uses its own login. The bridge forwards only exact named process, locale and
+configuration-location environment variables, including `CODEX_HOME` and
+`CODEX_PATH`. Arbitrary names beginning with `LC_`, `XDG_` or `FAKE_ACP_` are
+not forwarded; the scripted fixture uses only `FAKE_ACP_MODE`,
+`FAKE_ACP_DELAY_MS` and `FAKE_ACP_TRACE`. This limits ambient environment
+forwarding. The child still has its working directory and access to its
+selected configuration/login files; this is not credential or filesystem
+isolation.
 
 ## What happens in the Room
 

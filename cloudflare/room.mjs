@@ -126,6 +126,54 @@ export function shouldArmAfterRequest(before, after) {
   return after !== before;
 }
 
+// Fixed diagnostic fields only. Runtime clocks advance on I/O: these are
+// local elapsed observations, never CPU time or cross-isolate queue latency.
+const READINESS_OBSERVATIONS = {
+  worker_wait_started: ['pending'], worker_rpc_started: ['pending'],
+  do_entered: ['pending'], sql_completed: ['ok', 'error'],
+  do_completed: ['ok', 'unready', 'error'],
+  worker_rpc_settled: ['ok', 'unready', 'error'],
+  worker_response: ['ready', 'timeout', 'error']
+};
+const isSourceStamp = value => typeof value === 'string' && /^[0-9a-f]{40}$/.test(value);
+const isBuildStamp = value => typeof value === 'string'
+  && /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z$/.test(value)
+  && Number.isFinite(Date.parse(value)) && new Date(value).toISOString() === value;
+const readinessStamps = Object.freeze({
+  sourceRevision: isSourceStamp(SOURCE_REVISION) ? SOURCE_REVISION : null,
+  buildId: isBuildStamp(BUILD_ID) ? BUILD_ID : null
+});
+const observedDuration = value => Number.isFinite(value) && value >= 0 && value <= Number.MAX_SAFE_INTEGER;
+function authorityObservation(result) {
+  const value = result?.readinessObservation;
+  if (value === undefined) return { authorityObservation: 'absent' };
+  const keys = ['sourceRevision', 'buildId', 'sqlOutcome', 'sqlElapsedMs', 'doElapsedMs'];
+  if (!value || typeof value !== 'object' || Array.isArray(value) || Object.keys(value).length !== keys.length
+    || !keys.every(key => Object.hasOwn(value, key))
+    || !(value.sourceRevision === null || isSourceStamp(value.sourceRevision))
+    || !(value.buildId === null || isBuildStamp(value.buildId))
+    || !['ok', 'not_run'].includes(value.sqlOutcome)
+    || !observedDuration(value.sqlElapsedMs) || !observedDuration(value.doElapsedMs))
+    return { authorityObservation: 'invalid' };
+  return { authorityObservation: 'present', authoritySourceRevision: value.sourceRevision,
+    authorityBuildId: value.buildId, authoritySqlOutcome: value.sqlOutcome,
+    authoritySqlElapsedMs: value.sqlElapsedMs, authorityDoElapsedMs: value.doElapsedMs };
+}
+function logReadinessProbe(stage, outcome, details = {}) {
+  try {
+    if (!READINESS_OBSERVATIONS[stage]?.includes(outcome)) return;
+    const epochMs = Date.now();
+    if (!Number.isFinite(epochMs) || epochMs < 0) return;
+    const entry = { event: 'room.readiness_probe', ...runtimeTiming, ...readinessStamps, stage, outcome, epochMs };
+    if (stage === 'worker_rpc_settled') Object.assign(entry, authorityObservation(details.result));
+    for (const key of ['elapsedMs', 'probeWaitMs', 'timeoutMs']) {
+      if (Number.isFinite(details[key]) && details[key] >= 0) entry[key] = details[key];
+    }
+    if (stage === 'worker_response' && ['leader', 'joiner'].includes(details.probeRole)) entry.probeRole = details.probeRole;
+    console.info(JSON.stringify(entry));
+  } catch { /* Diagnostic failure must not replace the original probe result. */ }
+}
+
 export class ProjectRoom extends DurableObject {
   constructor(ctx, env) {
     super(ctx, env);
@@ -326,14 +374,37 @@ export class ProjectRoom extends DurableObject {
 
   // Readiness probes only fixed control metadata and the storage connection. It does not open the room, replay events, or
   // scan a table. A paused object has no database, so it is not ready.
-  probeStorage() {
-    return this.#sqlScope('readiness', 'storage-probe', () => this.#probeStorage());
+  probeStorage(observation) {
+    const observed = observation === 'readiness-observation-v1';
+    const started = performance.now();
+    let outcome = 'error';
+    logReadinessProbe('do_entered', 'pending');
+    try {
+      const result = this.#sqlScope('readiness', 'storage-probe', () => this.#probeStorage(observed));
+      outcome = result?.ok ? 'ok' : 'unready';
+      // Opt-in internal metadata is copied to the caller's existing settle log.
+      // Legacy no-argument callers retain their exact result shape.
+      return observed ? { ...result, readinessObservation: { ...result.readinessObservation,
+        doElapsedMs: Math.max(0, performance.now() - started) } } : result;
+    } finally {
+      logReadinessProbe('do_completed', outcome, { elapsedMs: Math.max(0, performance.now() - started) });
+    }
   }
-  #probeStorage() {
-    if (this.paused || !this.store) return { ok: false };
+  #probeStorage(observed) {
+    if (this.paused || !this.store) return observed ? { ok: false, readinessObservation: {
+      ...readinessStamps, sqlOutcome: 'not_run', sqlElapsedMs: 0 } } : { ok: false };
     try { this.store.assertRestoreAdmitted(); } catch { return {ok:false,reason:'restore_incomplete'}; }
-    const row = this.store.db.prepare("SELECT 1 AS ok").get();
-    return { ok: row?.ok === 1, emailVerification: magicLinkMailerFromEnv(this.env) ? 'enforced' : 'relaxed-no-mailer' };
+    const started = performance.now();
+    let row, sqlElapsedMs, outcome = 'error';
+    try {
+      row = this.store.db.prepare("SELECT 1 AS ok").get();
+      outcome = 'ok';
+    } finally {
+      sqlElapsedMs = Math.max(0, performance.now() - started);
+      logReadinessProbe('sql_completed', outcome, { elapsedMs: sqlElapsedMs });
+    }
+    return { ok: row?.ok === 1, emailVerification: magicLinkMailerFromEnv(this.env) ? 'enforced' : 'relaxed-no-mailer',
+      ...(observed ? { readinessObservation: { ...readinessStamps, sqlOutcome: outcome, sqlElapsedMs } } : {}) };
   }
 
   async syncGmailMailboxes() {
@@ -883,16 +954,38 @@ export default {
     // Readiness is SELECT 1 on invite-only-pilot, bounded by the probe budget.
     // A cold constructor must not turn this check into room_unavailable.
     if (healthPath === '/api/ready' && (request.method === 'GET' || request.method === 'HEAD')) {
+      const started = performance.now();
+      let startedRpc = false;
+      logReadinessProbe('worker_wait_started', 'pending');
+      const observeResponse = (outcome, timing) => logReadinessProbe('worker_response', outcome, {
+        elapsedMs: Math.max(0, performance.now() - started), probeWaitMs: timing.elapsedMs,
+        timeoutMs: HEALTH_PROBE_TIMEOUT_MS, probeRole: startedRpc ? 'leader' : 'joiner'
+      });
       const probed = await durableObjectHealth({
         timeoutMs: HEALTH_PROBE_TIMEOUT_MS,
         start: async () => {
-          const result = await env.ROOM.getByName('invite-only-pilot').probeStorage();
+          startedRpc = true;
+          const rpcStarted = performance.now();
+          logReadinessProbe('worker_rpc_started', 'pending');
+          let result;
+          try { result = await env.ROOM.getByName('invite-only-pilot').probeStorage('readiness-observation-v1'); }
+          catch (error) {
+            logReadinessProbe('worker_rpc_settled', 'error', { elapsedMs: Math.max(0, performance.now() - rpcStarted) });
+            throw error;
+          }
+          logReadinessProbe('worker_rpc_settled', result?.ok ? 'ok' : 'unready', { result, elapsedMs: Math.max(0, performance.now() - rpcStarted) });
           if (!result?.ok) throw new Error('storage probe failed');
           return new Response(JSON.stringify({ status: 'ok', emailVerification: result.emailVerification }), { status: 200, headers: { 'Content-Type': 'application/json; charset=utf-8' } });
         },
         waitUntil: ctx?.waitUntil?.bind(ctx),
-        onSnapshot: (snapshot, timing) => ({ response: readyProbeResponse(snapshot, request, { mode, deployment, elapsedMs: timing.elapsedMs }), servedBy: 'durable-object' }),
-        onUnready: (readiness, timing) => ({ response: healthLivenessResponse(request, { mode, deployment, readiness, ...timing }), servedBy: 'worker' })
+        onSnapshot: (snapshot, timing) => {
+          observeResponse('ready', timing);
+          return { response: readyProbeResponse(snapshot, request, { mode, deployment, elapsedMs: timing.elapsedMs }), servedBy: 'durable-object' };
+        },
+        onUnready: (readiness, timing) => {
+          observeResponse(readiness, timing);
+          return { response: healthLivenessResponse(request, { mode, deployment, readiness, ...timing }), servedBy: 'worker' };
+        }
       });
       return finish(probed.response, probed.servedBy);
     }

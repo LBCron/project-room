@@ -2,17 +2,26 @@
 // are one admitted unit; never an ordinary replay or command fallback.
 import { createHash } from 'node:crypto';
 import { isDeepStrictEqual } from 'node:util';
-import { applyEvent, emptyRoomState } from '../src/events.js';
+import { applyEvent, emptyRoomState, messageChannelId } from '../src/events.js';
+import { ensureWorkControlDefaults } from '../src/work-item-session.js';
+import { HISTORICAL_REPAIR_KIND, HISTORICAL_REPAIR_ACTION, HISTORICAL_PROOF_MODE, validateHistoricalRepairInput, historicalRepairFingerprint, historicalRepairReceiptId, appendHistoricalReplayLookup, HISTORICAL_REPLAY_CONTRACT_VERSION, HISTORICAL_REPLAY_KIND, PRE749_ADAPTER_VERSION, pre749PrefixDigest, decodeHistoricalEventRows } from './historical-replay-contract.mjs';
 import { replayPre749Sessions } from './legacy-session-replay.mjs';
 import { ServiceError } from './service-error.mjs';
 import { appendOperatorAction } from './operator-actions.mjs';
 import { hydrateProjection } from './projection-at-rest.mjs';
-import { projectionDigest, projectionContentHash, servingProofDrift, messageProofMatches, MESSAGE_PROOF_SELECT } from './write-integrity.mjs';
-import { messageRowParityFields, affectedMessageIds, reconcileLegacySessionBackfill } from './messages-store.mjs';
-const KIND = 'pre749-session-backfill', ACTION = 'legacy_session_backfill_reconciled', LIMIT = 64, BYTES = 256 * 1024;
+import { projectionDigest, projectionContentHash, servingProofDrift, messageProofMatches, messageProofHash, assertMessageWrite, MESSAGE_PROOF_SELECT, MESSAGE_PROOF_FIELDS } from './write-integrity.mjs';
+import { messageRowParityFields, affectedMessageIds, reconcileLegacySessionBackfill, messageRowForWrite } from './messages-store.mjs';
+const PROOF_MODE = HISTORICAL_PROOF_MODE;
+const KIND = HISTORICAL_REPAIR_KIND, ACTION = HISTORICAL_REPAIR_ACTION, LIMIT = 64, BYTES = 256 * 1024;
 const hash = x => createHash('sha256').update(typeof x === 'string' ? x : JSON.stringify(x)).digest('hex');
 const fail = (code, status = 409) => {
   throw new ServiceError(status, code, 'Historical session repair refused; inspect fresh plan and independent serving proofs');
+};
+// Only fixed, code-owned operator diagnostics; no persisted values or errors.
+const projectionUnavailable = repairCheck => {
+  const error = new ServiceError(409, 'repair_projection_unavailable', 'Historical session repair refused; inspect fresh plan and independent serving proofs');
+  error.detail = { repairCheck };
+  throw error;
 };
 const parse = text => {
   try {
@@ -28,6 +37,37 @@ const object = text => {
   if (!value || typeof value !== 'object' || Array.isArray(value)) fail('repair_not_exact_legacy');
   return value;
 };
+// Existing reader defaults are permitted only as additions to a clone.
+// Any replacement/removal of an independently protected value refuses.
+function currentReadView(state) {
+  const view = structuredClone(state);
+  ensureWorkControlDefaults(view);
+  for (const message of view.messages) {
+    if (!message || typeof message !== 'object' || Array.isArray(message)) fail('repair_not_exact_legacy');
+    if (!Object.hasOwn(message, 'channelId')) message.channelId = messageChannelId(message);
+  }
+  const pending = [[state, view]];
+  while (pending.length) {
+    const [before, after] = pending.pop();
+    if (before && typeof before === 'object') {
+      if (!after || typeof after !== 'object' || Array.isArray(before) !== Array.isArray(after)
+        || (Array.isArray(before) && before.length !== after.length)) fail('repair_not_exact_legacy');
+      for (const key of Object.keys(before)) {
+        if (!Object.hasOwn(after, key)) fail('repair_not_exact_legacy');
+        pending.push([before[key], after[key]]);
+      }
+    } else if (!isDeepStrictEqual(before, after)) fail('repair_not_exact_legacy');
+  }
+  return view;
+}
+function completeRowMatches(db, row, message, context) {
+  if (!message) return false;
+  const expected = messageRowForWrite(message, context);
+  return MESSAGE_PROOF_FIELDS.every(field => ['record_json', 'reducer_extras_json'].includes(field)
+    ? isDeepStrictEqual(parse(row[field]), parse(expected[field]))
+      && (row[field] === null || !db.prepare('SELECT 1 FROM json_tree(?) WHERE key IS NOT NULL GROUP BY parent,key HAVING count(*)>1 LIMIT 1').get(row[field]))
+    : row[field] === expected[field]);
+}
 const schema = {
   rooms: ['id', 'sequence', 'projection', 'archived_at'],
   events: ['room_id', 'sequence', 'id', 'body'],
@@ -40,21 +80,10 @@ const schema = {
   message_replay_snapshots: ['room_id', 'state_json'],
   messages_backfill_state: ['room_id', 'part', 'json']
 };
-function validate(input, execute) {
-  if (!input || Object.keys(input).some(k => !['repairKind', 'rooms', 'reason', 'planHash', 'requestId'].includes(k))
-  || input.repairKind !== KIND || !Array.isArray(input.rooms) || input.rooms.length !== 1
-  || !input.rooms[0] || Object.keys(input.rooms[0]).some(k => !['roomId', 'expectedHead'].includes(k))
-  || typeof input.rooms[0].roomId !== 'string' || !/^[A-Za-z0-9][A-Za-z0-9_-]{0,63}$/.test(input.rooms[0].roomId)
-  || !Number.isSafeInteger(input.rooms[0].expectedHead) || input.rooms[0].expectedHead < 1
-  || input.rooms[0].expectedHead > LIMIT || typeof input.reason !== 'string'
-  || !input.reason.trim() || Buffer.byteLength(input.reason) > 280 || Buffer.byteLength(JSON.stringify(input)) > 1024) fail('invalid_legacy_repair', 422);
-  if (execute && (typeof input.planHash !== 'string' || !/^[a-f0-9]{64}$/.test(input.planHash)
-  || typeof input.requestId !== 'string' || !/^[A-Za-z0-9_-]{1,64}$/.test(input.requestId))) fail('repair_plan_required', 422);
-  if (!execute && (input.planHash !== undefined || input.requestId !== undefined)) fail('invalid_legacy_repair', 422);
-  return input.rooms[0];
-}
+
 function inventory(store, input, target) {
   const db = store.db, roomId = target.roomId, anchor = roomId + '\0anchor', domains = { }, where = { };
+  const adopt = input.messageProofMode === PROOF_MODE;
   let bytes = 1024;
   // Reserve the complete bounded request/control envelope in both phases.
   for (const [table, columns] of Object.entries(schema)) {
@@ -119,7 +148,8 @@ function inventory(store, input, target) {
     const { clause, args } = where[table];
     const order = table === 'events' ? 'sequence' : table === 'messages_backfill_state' ? 'room_id,part' : columns[0] === 'room_id'
     && columns.length > 1 ? columns[1] : columns[0];
-    data[table] = db.prepare(`SELECT ${columns.join(',')} FROM ${table} WHERE ${clause} ORDER BY ${order}`).all(...args);
+    const selected = columns.map(column => table === 'events' && ['id', 'body'].includes(column) ? `CAST(${column} AS BLOB) AS ${column}` : column);
+    data[table] = db.prepare(`SELECT ${selected.join(',')} FROM ${table} WHERE ${clause} ORDER BY ${order}`).all(...args);
   }
   const room = data.rooms[0], proof = data.integrity_room_state[0], block = data.messages_backfill_blocks[0], cursor = data.messages_backfill_cursor[0];
   if (!room || room.sequence !== target.expectedHead) fail('repair_head_changed');
@@ -129,15 +159,26 @@ function inventory(store, input, target) {
   || typeof raw.workItems !== 'object' || Array.isArray(raw.workItems)) fail('repair_not_exact_legacy');
   if (raw.messages.length > LIMIT || Object.keys(raw.workItems).length > LIMIT) fail('repair_bound_exceeded');
   if (Object.hasOwn(raw, 'messagesArchive') || Object.hasOwn(raw, 'messageAuthority')) fail('repair_not_exact_legacy');
-  if (!proof?.metadata_hash || !proof.projection_hash || proof.sequence !== room.sequence
-  || proof.metadata_hash !== projectionDigest(room.projection) || proof.projection_hash !== projectionContentHash(db, roomId, room.sequence, room.projection)) fail('repair_projection_unavailable');
-  if (servingProofDrift(db, roomId, room.projection) || data.messages.some(row => !messageProofMatches(row))) fail('repair_projection_unavailable');
+  if (!proof?.metadata_hash) projectionUnavailable('metadata_proof_missing');
+  if (!proof.projection_hash) projectionUnavailable('content_proof_missing');
+  if (proof.sequence !== room.sequence) projectionUnavailable('proof_head_mismatch');
+  if (proof.metadata_hash !== projectionDigest(room.projection)) projectionUnavailable('metadata_hash_mismatch');
+  if (proof.projection_hash !== projectionContentHash(db, roomId, room.sequence, room.projection)) projectionUnavailable('content_hash_mismatch');
+  if (servingProofDrift(db, roomId, room.projection)) projectionUnavailable('serving_proof_drift');
+  const missingProofs = [];
+  for (const row of data.messages) if (!messageProofMatches(row)) {
+    if (row.entity_hash !== null) projectionUnavailable('message_proof_mismatch');
+    if (!adopt) projectionUnavailable('message_proof_missing');
+    missingProofs.push(row);
+  }
+  if (adopt && raw.messages.some(message => !message || typeof message !== 'object'
+    || Array.isArray(message) || Object.hasOwn(message, '_entity'))) projectionUnavailable('message_reference_invalid');
   for (const row of data.projection_bodies) if (typeof row.body !== 'string'
-  || hash(row.body) !== row.sha) fail('repair_projection_unavailable');
+  || hash(row.body) !== row.sha) projectionUnavailable('projection_body_proof_mismatch');
   const messageRows = new Map(data.messages.map(row => [row.message_id, row]));
   for (const ref of raw.messages) if (ref?._entity === 1 && (typeof ref.id !== 'string'
   || !messageRows.has(ref.id) || Object.keys(ref).some(key => key !== 'id'
-  && key !== '_entity'))) fail('repair_projection_unavailable');
+  && key !== '_entity'))) projectionUnavailable('message_reference_invalid');
   for (const row of data.messages) {
     object(row.record_json);
     if (row.reducer_extras_json !== null) object(row.reducer_extras_json);
@@ -146,17 +187,27 @@ function inventory(store, input, target) {
   // Strict complete work membership: referenced bodies are independently
   // anchored by the metadata proof; stale or missing side rows never heal.
   const references = Object.entries(raw.workItems ?? { }).filter(([, x]) => x?._workEntity === 1);
-  if (references.length !== data.work_entities.length) fail('repair_projection_unavailable');
+  if (references.length !== data.work_entities.length) projectionUnavailable('work_membership_mismatch');
   for (const [id, ref] of references) {
     const row = data.work_entities.find(x => x.work_id === id);
     if (!row || ref.id !== id || row.digest !== ref.digest || row.revision !== ref.revision
-    || hash(row.body) !== row.digest) fail('repair_projection_unavailable');
+    || hash(row.body) !== row.digest) projectionUnavailable('work_reference_proof_mismatch');
     const value = object(row.body);
-    if (value.id !== id || value.revision !== ref.revision) fail('repair_projection_unavailable');
+    if (value.id !== id || value.revision !== ref.revision) projectionUnavailable('work_body_identity_mismatch');
   }
   const hydrated = hydrateProjection(db, roomId, raw, { verifyBodyHashes: true });
-  if (hydrated.missing.length) fail('repair_projection_unavailable');
-  const events = data.events;
+  if (hydrated.missing.length) projectionUnavailable('hydration_body_missing');
+  // Raw event bytes and decoded strings coexist within this bounded input
+  // unit; BYTES is an admitted input budget, not a total heap ceiling.
+  let events, prefixSha256;
+  try {
+    prefixSha256 = pre749PrefixDigest(roomId, data.events);
+    events = decodeHistoricalEventRows(data.events);
+  } catch (error) {
+    if (!(error instanceof TypeError)) throw error;
+    fail('repair_not_exact_legacy');
+  }
+  data.events = events;
   if (events.length !== room.sequence || events.some((r, i) => r.sequence !== i + 1)) fail('repair_not_exact_legacy');
   if (!cursor || cursor.applied_seq > room.sequence || cursor.state_seq > room.sequence
   || cursor.applied_event_id !== (cursor.applied_seq === 0 ? '' : events[cursor.applied_seq - 1]?.id)
@@ -188,14 +239,17 @@ function inventory(store, input, target) {
     if (error.constructor !== Error || error.code) throw error;
     fail('repair_not_exact_legacy');
   }
-  const expected = compact(hydrated.state);
+  const expected = adopt ? currentReadView(compact(hydrated.state)) : compact(hydrated.state);
   if (!isDeepStrictEqual(legacy, expected)) fail('repair_not_exact_legacy');
   const messageIndex = new Map(legacy.messages.map(m => [m.id, m])), positions = new Map(), pins = new Set((legacy.pins ?? []).map(p => p.messageId));
   for (const row of events) {
     const e = incoming[row.sequence - 1];
     if (e.type === 'message.posted') for (const id of affectedMessageIds(e)) if (!positions.has(id)) positions.set(id, row.sequence);
   }
-  if (messageIndex.size !== data.messages.length) fail('repair_not_exact_legacy');
+  if (messageIndex.size !== data.messages.length || (adopt && messageIndex.size !== legacy.messages.length)) fail('repair_not_exact_legacy');
+  if (adopt) for (const row of data.messages) if (!completeRowMatches(db, row, messageIndex.get(row.message_id), {
+    sequence: positions.get(row.message_id), pinned: pins.has(row.message_id), threadMessages: messageIndex
+  })) fail('repair_not_exact_legacy');
   for (const row of data.messages) if (messageRowParityFields(row, messageIndex.get(row.message_id), {
     sequence: positions.get(row.message_id),
     pinned: pins.has(row.message_id),
@@ -230,8 +284,10 @@ function inventory(store, input, target) {
     || Buffer.byteLength(id) > 256)) fail('repair_not_exact_legacy');
   }
   const json = JSON.stringify(legacy);
-  if (bytes + Buffer.byteLength(json) + 4096 > BYTES) fail('repair_bound_exceeded');
+  const outputBytes = Buffer.byteLength(json) + missingProofs.length * 64;
+  if (bytes + outputBytes + 4096 > BYTES) fail('repair_bound_exceeded');
   const sourceHash = createHash('sha256').update(KIND).update(JSON.stringify(target));
+  if (adopt) sourceHash.update('\0' + PROOF_MODE);
   for (const [table, columns] of Object.entries(schema)) {
     sourceHash.update(table);
     for (const row of data[table])
@@ -248,19 +304,20 @@ function inventory(store, input, target) {
     bytes,
     planHash: sourceHash.digest('hex'),
     snapshotHash: hash(json),
-    priorCursorHash: hash(cursor)
+    priorCursorHash: hash(cursor),
+    outputBytes,
+    missingProofs: missingProofs.map(row => ({ messageId: row.message_id, hash: messageProofHash(row) })),
+    replayContract: {
+      version: HISTORICAL_REPLAY_CONTRACT_VERSION, kind: HISTORICAL_REPLAY_KIND, adapterVersion: PRE749_ADAPTER_VERSION,
+      roomId, throughSequence: room.sequence, headEventId: events.at(-1).id,
+      prefixSha256, snapshotHash: hash(json)
+    }
   };
 }
 export function repairLegacySessionBackfill(store, input, execute = false) {
-  const target = validate(input, execute);
+  const target = validateHistoricalRepairInput(input, execute);
   if (store.readOnly) fail('read_only');
-  const fingerprint = hash({
-      repairKind: KIND,
-      target,
-      reason: input.reason,
-      planHash: input.planHash ?? null,
-      requestId: input.requestId ?? null
-    }), receiptId = execute ? 'oa_lsr_' + hash(target.roomId + '\0' + input.requestId) : null;
+  const fingerprint = historicalRepairFingerprint(input,target), receiptId = execute ? historicalRepairReceiptId(target.roomId,input.requestId) : null;
   return store.transaction(() => {
     if (execute) {
       const old = store.db.prepare("SELECT CASE WHEN typeof(counts_json)='text' AND length(CAST(counts_json AS BLOB))<=4096 THEN counts_json ELSE NULL END AS json FROM operator_actions WHERE id=? AND action=?").get(receiptId, ACTION);
@@ -273,14 +330,16 @@ export function repairLegacySessionBackfill(store, input, execute = false) {
     }
     const plan = inventory(store, input, target), result = {
       repairKind: KIND,
-      derivedOnly: true,
+      derivedOnly: input.messageProofMode !== PROOF_MODE,
+      ...(input.messageProofMode === PROOF_MODE ? { messageProofMode: PROOF_MODE,
+        messageProofsToAdopt: plan.missingProofs.length, servingContentChanged: false } : {}),
       rooms: [{ roomId: target.roomId, head: plan.head, events: plan.events }],
       planHash: plan.planHash,
       snapshotHash: plan.snapshotHash,
       priorCursorHash: plan.priorCursorHash,
       admission: {
         inputBytes: plan.bytes,
-        outputBytes: Buffer.byteLength(plan.json),
+        outputBytes: plan.outputBytes,
         receiptReserveBytes: 4096,
         limitBytes: BYTES
       }
@@ -298,13 +357,22 @@ export function repairLegacySessionBackfill(store, input, execute = false) {
       return result;
     }
     if (input.planHash !== plan.planHash) fail('repair_plan_changed');
+    for (const row of plan.missingProofs) {
+      const changed = store.db.prepare('UPDATE messages SET entity_hash=? WHERE room_id=? AND message_id=? AND entity_hash IS NULL').run(row.hash, target.roomId, row.messageId);
+      if (changed.changes !== 1) projectionUnavailable('message_proof_mismatch');
+      assertMessageWrite(store.db, target.roomId, row.messageId);
+    }
     const parity = reconcileLegacySessionBackfill(store, { roomId: target.roomId, sequence: plan.head, eventId: plan.eventId, json: plan.json });
     if (!parity.ok || parity.checked !== 1) fail('repair_verification_failed');
-    const completed = { ...result, requestFingerprint: fingerprint, verified: 1, duplicate: false };
+    const completed = { ...result, requestFingerprint: fingerprint, verified: 1, duplicate: false,
+      ...(input.messageProofMode === PROOF_MODE ? { messageProofsAdopted: plan.missingProofs.length } : {}),
+      replayContract: plan.replayContract };
     store.db.prepare('INSERT INTO operator_actions(id,at,action,target_kind,target_id,reason,plan_hash,counts_json,result,request_id) VALUES(?,?,?,?,?,?,?,?,?,?)').run(
       receiptId, store.now(), ACTION, 'room', target.roomId, input.reason,
       plan.planHash, JSON.stringify(completed), 'verified', input.requestId
     );
+    try { appendHistoricalReplayLookup(store.db,target.roomId,plan.head,receiptId,plan.replayContract,store.now()); }
+    catch (error) { if (error instanceof ServiceError && error.code === 'projection_corrupt') fail('repair_not_exact_legacy'); throw error; }
     return completed;
   });
 }

@@ -37,6 +37,54 @@ export function scrub(text) {
   return String(text).replace(SECRETISH, "[redacted]");
 }
 
+// Display text from the service is data: strip control characters and bound it.
+const clean = value => String(value ?? "").replace(/[\u0000-\u001f\u007f-\u009f]/g, "").slice(0, 120);
+export function shellQuote(value) {
+  const text = String(value);
+  return /^[A-Za-z0-9_./:@=-]+$/.test(text) ? text : `'${text.replace(/'/g, "'\\''")}'`;
+}
+const ROOM_ID = /^[A-Za-z0-9][A-Za-z0-9_.:-]{0,127}$/;
+
+// choose_room: list the caller's rooms and the opted-in public directory as choices.
+// Never auto-select (even one room) and never run setup. Links use the same-origin
+// #room/<id> route: a listing is not a public page opt-in, so not /r/<id>.
+export function chooseRoomLines(result, target, { name, flags = {} } = {}) {
+  let origin;
+  try { origin = new URL(target).origin; } catch { origin = null; }
+  const link = roomId => origin ? `${origin}/#room/${encodeURIComponent(roomId).replace(/%3A/gi, ":")}` : roomId;
+  const rerun = roomId => ["room join", shellQuote(link(roomId)), "--name", shellQuote(name),
+    ...(flags.tool ? ["--tool", shellQuote(flags.tool)] : []), ...(flags.project ? ["--project", shellQuote(flags.project)] : []),
+    ...(flags.setup === false ? ["--no-setup"] : [])].join(" ");
+  const seen = new Set();
+  const unique = rooms => (Array.isArray(rooms) ? rooms : []).filter(room => {
+    if (!ROOM_ID.test(String(room?.roomId ?? "")) || seen.has(room.roomId)) return false;
+    seen.add(room.roomId); return true;
+  });
+  const mine = unique(result.memberships), listed = unique(result.directory?.rooms);
+  const more = Boolean(result.directory?.nextCursor), directoryKnown = Array.isArray(result.directory?.rooms);
+  const lines = ["Not joined yet (choose_room): pick a room and run join again with its link."];
+  // Labels are untrusted text: print them on their own line and the command
+  // alone below, so copying the command never copies label text.
+  const label = text => `  ${clean(text)}`;
+  if (!Array.isArray(result.memberships)) lines.push("Your rooms could not be read; retry login.");
+  else if (mine.length) {
+    lines.push("Your rooms:");
+    for (const room of mine) {
+      if (room.archivedAt) { lines.push(label(`${room.title || room.roomId} (archived; no join command)`)); continue; }
+      lines.push(label(room.title || room.roomId), `    ${rerun(room.roomId)}`);
+    }
+  }
+  if (!directoryKnown) lines.push("The public room directory is unavailable right now; retry later.");
+  else if (listed.length) {
+    lines.push("Public rooms — request access:");
+    for (const room of listed) lines.push(label(`${room.title || room.roomId}${room.purpose ? ` — ${room.purpose}` : ""}`), `    ${rerun(room.roomId)}`);
+  }
+  if (more) lines.push("There are more public rooms; see GET /api/public/rooms/directory and follow its nextCursor.");
+  else if (Array.isArray(result.memberships) && directoryKnown && !mine.length && !listed.length)
+    lines.push("You have no rooms yet and no public rooms are listed. Ask the room owner for an invite or room link.");
+  return lines;
+}
+
 function parse(argv) {
   const flags = { setup: true };
   const rest = [];
@@ -65,6 +113,10 @@ export async function joinCommand(argv, io = {}) {
   let joined = null;
   const loginArgs = ["--room", target, "--name", name, "--accept"];
   const code = await login(loginArgs, { ...io, out: line => { try { joined = JSON.parse(line); } catch { joined = null; } } });
+  if (joined?.status === "choose_room") {
+    for (const line of chooseRoomLines(joined, target, { name, flags })) out(scrub(line));
+    return 1;
+  }
   if (code !== 0 || joined?.status !== "connected") {
     const status = joined?.status ?? "failed";
     out(scrub(`Not joined yet (${status}). ${joined?.next ?? "Check the room URL or ask for a fresh invite."}`));

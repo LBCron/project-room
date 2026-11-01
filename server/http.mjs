@@ -5,6 +5,7 @@ import { mcpOAuthResourceMetadata, listMcpOAuthAgents, validateMcpOAuthBinding }
 import { messageRepository } from "./message-repository.mjs";
 // JDOT-PUBLIC-CSP-RUM begin: public-page policy
 import { dmEventVisibility, dmConsentEventVisible } from "./dm-event-visibility.mjs";
+import { recordedReceiptsOptOut } from "./public-visibility.mjs";
 import { publicPageCsp } from "./public-search.mjs";
 // JDOT-PUBLIC-CSP-RUM end
 import { acceptPrefersHtml, publicHtmlNotFoundPath, publicSearchAssets, publicSearchCanonical, publicSearchMarketingPolicy, publicSearchPageCsp, publicSearchSitemap, PUBLIC_NOT_FOUND_HTML, PUBLIC_PAGE_LASTMOD, reviewedPublicSearchPaths } from "./public-search.mjs";
@@ -28,7 +29,7 @@ import { SyntheticInboxTransport, FixtureChannelSender } from "./inbox-transport
 import { createSendBudgetRegistry } from "./channel-send-budgets.mjs";
 import { handleInboxCollab } from "./inbox-collab-routes.mjs"; // Lane C inbox collaboration (task RC-2026-09-18-011).
 import { buildActivationPack, briefActivationPack } from "./room-activation-pack.mjs"; // Room activation pack (quill lane, RC-2026-09-18-040).
-import { buildOrient } from "./orient.mjs"; // Orient builder (jill lane, RC-2026-09-28). The standalone /orient endpoint was deleted (register D1); the builder survives inside the activation pack, the context response, and the MCP room profile.
+import { readComposedRoomContext } from "./orient.mjs";
 import { memoizeBoardList } from "./available-work.mjs"; // PERF-10X L4: per-request board-list memo for the composite reads.
 import { listRoomUpdates, listIdentityUpdates, listAccountUpdates, markUpdate, readEventTail } from "./updates.mjs"; // Updates projection (U batch).
 import { handleWorkClaims } from "./work-claim-routes.mjs"; // Work-claim leases/delivery/review (task RC-2026-09-18-041).
@@ -1361,7 +1362,7 @@ export function createRoomServer({ store, origin, assetRoot = new URL("../", imp
       if (!enableDeferredInbox && (url.pathname === "/api/inbox" || url.pathname.startsWith("/api/inbox/")
         || url.pathname.startsWith("/api/auth/gmail/"))) reject(404, "not_found", "Not found");
       if (await dispatchRoute({
-        req, res, url, store, remoteAddress, loopback, operationId,
+        req, res, url, store, remoteAddress, loopback, operationId, operatorRoutes,
         // JDOT-MEMBER-PERMS begin: share quotas across request aliases.
         accessRequests,
         // JDOT-MEMBER-PERMS end
@@ -2173,13 +2174,15 @@ export function createRoomServer({ store, origin, assetRoot = new URL("../", imp
         rate(`public-work-read:${remoteAddress}`, 120);
         if (publicWorkReceiptMatch) {
           const receiptId = pathId(publicWorkReceiptMatch[1]);
-          // Owner-only public-receipts toggle: a room that turned receipts
+          // Owner public-receipts controls (directory toggle or the
+          // authoritative recorded opt-out): a room that turned receipts
           // private still serves them to its members; everyone else gets 403.
           // The credential is optional here — anonymous reads stay open for
           // rooms that never flipped the toggle (current behavior).
           const receiptRoomId = store.publicWorkClaims.receiptRoomId(receiptId);
           let memberId = null;
-          if (receiptRoomId && !store.roomDirectory.publicReceiptsVisible(receiptRoomId)) {
+          if (receiptRoomId && (!store.roomDirectory.publicReceiptsVisible(receiptRoomId)
+            || recordedReceiptsOptOut(store.db, receiptRoomId))) {
             const secret = bearer(req);
             if (secret) {
               try {
@@ -5435,11 +5438,10 @@ export function createRoomServer({ store, origin, assetRoot = new URL("../", imp
         if ([...params.keys()].some(key => !["since_version", "work_after", "auth"].includes(key) || params.getAll(key).length !== 1)) {
           reject(422, "invalid_context_version", "Context accepts since_version and work_after");
         }
-        const context = store.roomContext(selected.token, roomId, {
+        const context = readComposedRoomContext(store, selected.token, roomId, {
           workAfter:params.get("work_after")??"", sinceVersion: params.has("since_version") ? params.get("since_version") : null, expectedSessionBinding: fence
         });
-        if (context.not_modified) return json(res, 200, context);
-        return json(res, 200, { ...context, orient: buildOrient(store, roomId, viewerId, { text: false, workAfter:params.get("work_after")??"", token: selected.token, binding: fence, boardList: memoizeBoardList(store) }) });
+        return json(res, 200, context);
       }
       if (route === "bonds" && req.method === "GET") {
         return json(res, 200, { bonds: store.bonds.listForMember(roomId, auth.member.id) });

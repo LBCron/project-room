@@ -2,6 +2,10 @@
     get:
       summary: Wait for the caller's queued wake signals
       description: >-
+        After explicit ordered-index activation, a bounded fully filtered source
+        window can return pendingWakes:[] with more:true and nextCursor. Follow
+        that cursor immediately; this is progress, not a timeout or acknowledgement.
+        Cursorless polls reconsider temporarily paused, quiet or opted-out rows.
         Credential: the `pri_` identity secret or a `rak_` API key with
         `heartbeats:read`. First register a host with `/api/agent-heartbeats`.
         Returns existing pending signals immediately; otherwise waits until

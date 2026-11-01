@@ -11,6 +11,11 @@ import { messageInHistory } from "./history-visibility.mjs";
 export const WORK_CONTEXT_OMISSIONS = Object.freeze(["other_work", "other_messages", "event_history", "prior_receipts_and_checks", "private_reminders", "read_marker"]);
 const EVIDENCE_RECORDS = Object.freeze(["receipt", "verification", "decision", "handoff"]);
 
+export function workRoleHolder(item, memberId) {
+  if (!item || !memberId) return false;
+  return [item.proposedById, item.accountableMemberId, item.verifierMemberId, item.humanDecisionMakerId, item.claim?.holderId].includes(memberId);
+}
+
 // Current conversation pointers belong to their two participants, even when
 // linked to room-visible work. Neither a request body nor another member's
 // pending conversation is part of this selected task read.

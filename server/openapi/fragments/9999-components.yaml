@@ -1,5 +1,10 @@
 components:
   securitySchemes:
+    operatorToken:
+      type: apiKey
+      in: header
+      name: Authorization
+      description: Existing management credential, sent as Operator followed by a space and the configured secret. Room/account credentials do not grant this authority.
     accountBrowserSession:
       type: "apiKey"
       in: "cookie"

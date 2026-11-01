@@ -62,12 +62,40 @@ export function candidates({ agent = null, agentCmd = null, env = process.env } 
   return out;
 }
 
+// The environment an ACP child receives: an ALLOWLIST, never the parent's
+// environment minus a denylist (RES-0151 and RES-0145 are this one site:
+// the old strip regex removed only three ROOM_* shapes, so every other
+// credential in the parent env crossed verbatim). Pass only named process,
+// location and locale settings. This limits ambient environment forwarding;
+// the child still has its working directory and the selected login/config
+// locations. It is not a filesystem or credential isolation boundary.
+export const CHILD_ENV_KEYS = Object.freeze([
+  "PATH", "HOME", "USER", "LOGNAME", "SHELL", "TERM", "COLORTERM", "TMPDIR", "LANG",
+  "CODEX_PATH", // README: the operator's explicit override for the Codex binary
+  "CODEX_HOME", // Preserve the operator's selected config/login directory.
+  "LC_ALL", "LC_COLLATE", "LC_CTYPE", "LC_MESSAGES", "LC_MONETARY", "LC_NUMERIC", "LC_TIME",
+  // Exact base-directory locations, not every name beginning with XDG_.
+  "XDG_CONFIG_HOME", "XDG_DATA_HOME", "XDG_CACHE_HOME", "XDG_STATE_HOME",
+  "XDG_RUNTIME_DIR", "XDG_CONFIG_DIRS", "XDG_DATA_DIRS",
+  // Exact scripted fixture inputs; arbitrary FAKE_ACP_ names stay in the parent.
+  "FAKE_ACP_MODE", "FAKE_ACP_DELAY_MS", "FAKE_ACP_TRACE",
+  // Windows process basics (spawn below has a win32 path).
+  "SystemRoot", "windir", "ComSpec", "PATHEXT", "APPDATA", "LOCALAPPDATA",
+  "USERPROFILE", "TEMP", "NUMBER_OF_PROCESSORS", "PROCESSOR_ARCHITECTURE",
+]);
+export function childEnvFor(env = process.env) {
+  const out = {};
+  for (const [key, value] of Object.entries(env)) {
+    if (value === undefined) continue;
+    if (CHILD_ENV_KEYS.includes(key)) out[key] = value;
+  }
+  return out;
+}
+
 // Spawn an agent process and wrap its stdio as a JSON-RPC peer. The Room
-// credential is never in the child's environment.
+// credential variables are excluded from the child's environment.
 export function spawnAgent(candidate, { cwd = process.cwd(), env = process.env, onRequest, onNotification, log = () => {} } = {}) {
-  const childEnv = { ...env };
-  for (const key of Object.keys(childEnv)) if (/^ROOM_(TOKEN|CREDENTIAL|ACP_)/.test(key)) delete childEnv[key];
-  const child = spawn(candidate.command, candidate.args, { cwd, env: childEnv, stdio: ["pipe", "pipe", "pipe"], shell: process.platform === "win32" && candidate.command === "npx" });
+  const child = spawn(candidate.command, candidate.args, { cwd, env: childEnvFor(env), stdio: ["pipe", "pipe", "pipe"], shell: process.platform === "win32" && candidate.command === "npx" });
   child.stderr.on("data", () => {});
   const peer = createPeer({ input: child.stdout, output: child.stdin, onRequest, onNotification, log });
   return { child, peer };

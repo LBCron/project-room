@@ -94,7 +94,7 @@ above, not JSON-RPC.
 
 ## Full code index
 
-1038 rows (997 distinct codes).
+1040 rows (999 distinct codes).
 *Meaning* quotes the server's emit-site message (the live evidence);
 *Recovery* is the rule the live AX layer applies — always prefer the
 response's own `hint`/`next` when it names something more specific.
@@ -194,6 +194,8 @@ response's own `hint`/`next` when it names something more specific.
 | `assistant_stop_pending` | 409 | A stop or scope decision must be acknowledged first | no | Re-check access and current work. If it repeats, report error.code and the full message to the room owner — this code has no mapped recovery. |
 | `attachment_conflict` | 409 | That attachment id is already stored for this identity | no | Re-check access and current work. If it repeats, report error.code and the full message to the room owner — this code has no mapped recovery. |
 | `attachment_forbidden` | 403 | Only the uploader or the room owner can discard this file | no | room_check_access. Ask the owner for the missing permission. Do not retry the same call unchanged. |
+| `attachment_index_budget_exceeded` | 409 | This database exceeds the optional attachment index admission bounds or needs scalar reconciliation. | no | Keep the existing attachment path. Inspect the operator plan; use separately qualified maintenance rather than increasing limits or deleting tombstones to evade admission. |
+| `attachment_index_conflict` | 409 | Attachment table or optional index metadata does not match the supported definition. | no | Reconcile the attachment schema with the operator. Do not replace the index, alter attachment rows or treat a schema stamp as installation proof. |
 | `attachment_not_found` | 404 | Attachment not found | re-list | Re-list the resource and use a current id. Do not guess ids. |
 | `attachment_quota` | 409 | A file storage limit is full (room files or inbox attachments) | no | For room files, read error.detail.quota (limit, used, max, remaining) and send a part no larger than remaining, or stop: committed room files never expire, and staged files count until their staging deadline. |
 | `attachment_too_large` | 413 | File exceeds the inbox attachment size limit | no | Re-check access and current work. If it repeats, report error.code and the full message to the room owner — this code has no mapped recovery. |
@@ -1053,6 +1055,7 @@ response's own `hint`/`next` when it names something more specific.
 | `stale_review_receipt` | 409 | Review must identify this exact submission | re-read | Re-read the current state; resend with the current revision. Do not silently rebase. |
 | `stale_revision` | 409 | Trial changed | re-read | Re-read the trial or receipt key for the current revision and resend against it. Do not silently rebase. |
 | `stale_session_revision` | 409 | The browser session changed; refresh before resetting | re-read | Re-read the current state; resend with the current revision. Do not silently rebase. |
+| `storage_unavailable` | 503 | Storage cannot safely complete this operation; no success is claimed. | wait | Respect Retry-After (30s), then reconcile or retry the exact request. Persistent wake index or source admission failures need operator reconciliation before retry can succeed. |
 | `stream_limit` | 429 | Close another room connection before opening more | wait | Wait for the Retry-After interval; retry the exact same request. |
 | `supervision_unwired` | 500 | The supervision card store is not wired yet (B5) | no | No success is claimed. Reconcile before any retry. 5xx bodies carry errorId + fingerprint for the bug report. |
 | `terms_changed` | 409 | The terms changed. Read the current terms and accept them. | no | Read the current terms and accept them, then resend the request. |
@@ -1111,6 +1114,8 @@ response's own `hint`/`next` when it names something more specific.
 | `verified_receipt_required` | 422 | Successful stored vetting receipt required | no | Complete the vetting step first so a passing receipt is stored for the trial, then retry. |
 | `wake_dead` | 409 | This wake is parked as dead letters; requeue it explicitly. | no | Re-check access and current work. If it repeats, report error.code and the full message to the room owner — this code has no mapped recovery. |
 | `wake_limit` | 409 | Wake capacity reached. | no | Re-check access and current work. If it repeats, report error.code and the full message to the room owner — this code has no mapped recovery. |
+| `wake_index_conflict` | 409 | Wake indexes or the original installation receipt do not verify. | no | Operator must reconcile all four exact indexes and the original receipt. Explicit reinstall requires all four absent and a verified original receipt; never rebuild a partial set silently. |
+| `wake_index_budget_exceeded` | 409 | Installation exceeds the fixed source admission budget; nothing was installed. | no | Operator must review the refused source inventory and delivery design. Preserve existing data and reader; do not raise limits or retry unchanged. |
 | `wake_not_dead` | 409 | Only a dead-lettered wake can be requeued. | no | Re-check access and current work. If it repeats, report error.code and the full message to the room owner — this code has no mapped recovery. |
 | `wake_not_leased` | 409 | Only the lease holder can complete a wake. | no | Re-check access and current work. If it repeats, report error.code and the full message to the room owner — this code has no mapped recovery. |
 | `wake_pause_held_by_owner` | 403 | The room owner paused this member's wakes. Only the room owner or a member manager can resume them. | no | Do not retry. Ask the room owner or a member manager to resume the member's wakes. |

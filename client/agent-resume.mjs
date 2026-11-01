@@ -69,6 +69,8 @@ export async function resumeAgent({ connection, fetchImpl = fetch, sinceVersion,
     return new Response(Buffer.concat(chunks), { status: response.status, headers: response.headers });
   };
   const client = new RoomAgentClient({ ...connection, memberId: undefined, fetchImpl: boundedFetch });
+  // agent-work authenticates and pins its own principal, so it needs the expected member.
+  const workClient = new RoomAgentClient({ ...connection, fetchImpl: boundedFetch });
   const out = { version: 1, scope: { roomId: connection.roomId, memberId: connection.memberId, readOnly: true },
     connection: { status: 'unconfirmed' }, toolProfile: { transport: 'hosted_mcp', profile: 'full' }, contextVersion: null, authoritySummary: null,
     observedThroughBySource: {}, attention: [], ownClaims: [], obligations: [], pendingReconciliations: { status: 'not_read' },
@@ -142,10 +144,20 @@ export async function resumeAgent({ connection, fetchImpl = fetch, sinceVersion,
     out.optionalConversations = out.attention.filter(item => ['mention', 'dm'].includes(item.kind));
     try {
       // Current obligations are read independently of any observation continuation.
-      const listing = await client.replyRequests({ direction: 'incoming', status: 'open', signal: stop });
-      if (listing.viewerId !== connection.memberId || listing.viewerAccountId !== null || listing.viewerAuthEpoch !== null) throw invalid();
-      out.openRequests = listing.requests.map(request => ({
+      // One combined /agent-work read returns the open incoming requests and their
+      // runs together (audit D); the client falls back to the separate reads only
+      // on older servers that answer 404. It validates the pinned agent identity.
+      const work = await workClient.agentWork({ signal: stop });
+      if (work.viewerId !== connection.memberId) throw invalid();
+      // The 404 fallback validates only the request-runs envelope, so check run
+      // shape here on both paths: a missing or malformed runs map is never empty.
+      if (!isObject(work.runs) || Object.entries(work.runs).some(([id, run]) => !validId(id)
+        || !isObject(run) || !['working', 'unknown', 'needs_attention', 'result_ready', 'delivered'].includes(run.state)
+        || !count(run.updatedAt))) throw invalid();
+      const blockedBy = isObject(work.blockedBy) ? work.blockedBy : {};
+      out.openRequests = work.requests.map(request => ({
         ...pick(request, ['id', 'requesterId', 'workItemId', 'revision']),
+        ...(Array.isArray(blockedBy[request.id]) ? { blockedBy: blockedBy[request.id].slice(0, 8).map(reason => String(reason).slice(0, 80)) } : {}),
         nextRead: { tool: 'room_read_request', arguments: { roomId: connection.roomId, requestMessageId: request.id } }
       }));
       const requiredIds = new Set(out.openRequests.map(request => request.id));
@@ -153,38 +165,29 @@ export async function resumeAgent({ connection, fetchImpl = fetch, sinceVersion,
       out.optionalConversations = out.attention.filter(item => ['mention', 'dm'].includes(item.kind));
       out.nextReads = out.nextReads.filter(read => read.source !== 'attention' || read.action);
       for (const item of out.attention) out.nextReads.push({ source: 'attention', ...item.nextRead });
-      out.observedThroughBySource.openRequests = { evaluatedThrough: listing.evaluatedThrough, selection: { direction: 'incoming', status: 'open' } };
+      out.observedThroughBySource.openRequests = { evaluatedThrough: work.evaluatedThrough, selection: { direction: 'incoming', status: 'open' } };
       for (const request of out.openRequests) out.nextReads.push({ source: 'openRequests', ...request.nextRead });
-    } catch (error) { incomplete('openRequests', error); }
-    // Observe only runs belonging to current incoming open requests. This is
-    // service metadata, not a read of a host's local journal or permission to retry.
-    if (out.observedThroughBySource.openRequests && out.openRequests.length === 0) {
-      out.pendingReconciliations = { status: 'observed', source: 'open_requests', localJournalRead: false, items: [] };
-    } else if (out.observedThroughBySource.openRequests) {
-      try {
-        // This endpoint authorizes the read itself; the compact context reads
-        // before/after fence identity without downloading the entire room.
-        const path = `/api/rooms/${encodeURIComponent(connection.roomId)}/request-runs`;
-        const response = await boundedFetch(connection.origin + edgeDoorApiPath(connection.origin, path), {
-          method: 'GET', headers: { Authorization: `Bearer ${connection.token}`, Accept: 'application/json' }
-        });
-        if (!response.ok) throw new RoomClientError(response.status, 'request_failed', 'Request runs unavailable');
-        const listing = await response.json();
-        if (listing?.contractVersion !== 1 || listing.roomId !== connection.roomId || listing.viewerId !== connection.memberId
-          || !isObject(listing.runs) || Object.entries(listing.runs).some(([id, run]) => !validId(id)
-          || !isObject(run) || !['working', 'unknown', 'needs_attention', 'result_ready', 'delivered'].includes(run.state)
-          || !count(run.updatedAt))) throw invalid();
-        const items = out.openRequests.flatMap(request => {
-          const run = listing.runs[request.id];
-          return run && ['unknown', 'needs_attention', 'result_ready'].includes(run.state)
-            ? [{ requestMessageId: request.id, state: run.state, updatedAt: run.updatedAt,
-              action: 'inspect_original_attempt_before_retry', nextRead: request.nextRead }] : [];
-        });
-        out.pendingReconciliations = { status: 'observed', source: 'request_runs', localJournalRead: false, items };
-      } catch (error) {
-        out.pendingReconciliations = { status: 'unavailable' };
-        incomplete('pendingReconciliations', error);
-      }
+      // Observe only runs belonging to current incoming open requests. This is
+      // service metadata, not a read of a host's local journal or permission to retry.
+      const runs = work.runs;
+      const items = out.openRequests.flatMap(request => {
+        const run = runs[request.id];
+        return run && ['unknown', 'needs_attention', 'result_ready'].includes(run.state)
+          ? [{ requestMessageId: request.id, state: run.state, updatedAt: run.updatedAt,
+            action: 'inspect_original_attempt_before_retry', nextRead: request.nextRead }] : [];
+      });
+      out.pendingReconciliations = { status: 'observed', source: 'agent_work', localJournalRead: false, items };
+    } catch (error) {
+      // Requests and runs share one read: if it fails, both are withheld and
+      // reported as unavailable (retryable), never as observed-empty.
+      out.openRequests = [];
+      delete out.observedThroughBySource.openRequests;
+      out.nextReads = out.nextReads.filter(read => read.source !== 'openRequests');
+      out.pendingReconciliations = { status: 'unavailable', source: 'agent_work', localJournalRead: false,
+        reason: error instanceof RoomClientError ? error.code : 'request_failed',
+        httpStatus: error instanceof RoomClientError ? error.status : 0 };
+      incomplete('openRequests', error);
+      incomplete('pendingReconciliations', error);
     }
   }
   // Fresh compact read, not a cached grant. Changed context replaces the earlier projection.

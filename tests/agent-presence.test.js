@@ -371,3 +371,106 @@ test("reg59: workingOn derives from live claims — held counts, released and le
   assert.ok(watch.description.includes("1 member holding claimed work"), watch.description);
   assert.ok(!watch.description.includes("online"), watch.description);
 });
+
+// ---- REGISTER row 59 leg (b), board-door claims (wave-5 PROBE-05) ----
+// The reg59 fixtures above drive claims as projection events. A claim
+// taken through the work-claims board door never becomes a projection
+// claim: the routes commit it to the board registry only, so presence
+// read workingOn [] for every board claim shape PROBE-05 executed in
+// production (create-with-assignee, create-then-claim, and a board claim
+// on an accepted work item). These tests write registry rows with the
+// board engine's own pure functions — the exact rows the routes commit —
+// and read the presence derivation back.
+
+function buildBoardRoom(store, roomId, { ownerIdentity, agentIdentity }, extraEvents = []) {
+  const at = new Date(T0).toISOString();
+  store.initialize([
+    event({ type: T.ROOM_CREATED, actorId: "owner-member", roomId, at,
+      data: { roomId, ownerId: "owner-member", title: roomId, purpose: "reg59b", kind: "personal", historyDefaultsVersion: HISTORY_DEFAULTS_VERSION } }),
+    event({ type: T.MEMBER_ADDED, actorId: "owner-member", roomId, at,
+      data: { memberId: "owner-member", displayName: "Owner", kind: "agent", permissions: [...PERMISSIONS], identityId: ownerIdentity } }),
+    event({ type: T.MEMBER_ADDED, actorId: "owner-member", roomId, at,
+      data: { memberId: "agent-member", displayName: "Agent", kind: "agent", permissions: [...PERMISSIONS], identityId: agentIdentity } }),
+    event({ type: T.MEMBER_ADDED, actorId: "owner-member", roomId, at,
+      data: { memberId: "human-member", displayName: "Human", kind: "human", permissions: [] } }),
+    ...extraEvents,
+  ]);
+  for (const [identityId, memberId] of [[ownerIdentity, "owner-member"], [agentIdentity, "agent-member"]]) {
+    store.db.prepare("INSERT INTO identity_links(room_id,identity_id,member_id,linked_at) VALUES(?,?,?,?)")
+      .run(roomId, identityId, memberId, T0);
+  }
+}
+
+test("reg59b: a board claim created with an assignee shows in the holder's workingOn", async t => {
+  const { createWork, claimWork } = await import("../server/work-claims.mjs");
+  const { store } = storeFixture(t);
+  const owner = store.identities.create("reg59b owner");
+  const agent = store.identities.create("reg59b agent");
+  buildBoardRoom(store, "reg59b-assigned-room", { ownerIdentity: owner.identityId, agentIdentity: agent.identityId });
+  const created = createWork({ id: "board-assigned", title: "Board assigned task" }, { now: T0, agentId: "owner-member" });
+  store.workClaims.set("reg59b-assigned-room", claimWork(created, "agent-member", { leaseHours: 24, now: T0 }));
+  const rows = store.presenceMembers("reg59b-assigned-room", []);
+  assert.deepEqual(rows.find(m => m.memberId === "agent-member").workingOn,
+    [{ workItemId: "board-assigned", title: "Board assigned task", status: "claimed" }]);
+  // The summary counts the same evidence: one member holding claimed work.
+  const ownerKey = store.issueAccessKey("reg59b-assigned-room", "owner-member");
+  const doc = store.presence(ownerKey, "reg59b-assigned-room", []);
+  const watch = doc.next.find(n => n.action === "watch-presence");
+  assert.ok(watch && watch.description.includes("1 member holding claimed work"), watch?.description);
+});
+
+test("reg59b: a board claim taken after creation shows in the holder's workingOn", async t => {
+  const { createWork, claimWork } = await import("../server/work-claims.mjs");
+  const { store } = storeFixture(t);
+  const owner = store.identities.create("reg59b owner");
+  const agent = store.identities.create("reg59b agent");
+  buildBoardRoom(store, "reg59b-claimed-room", { ownerIdentity: owner.identityId, agentIdentity: agent.identityId });
+  store.workClaims.set("reg59b-claimed-room",
+    createWork({ id: "board-taken", title: "Board taken task" }, { now: T0, agentId: "owner-member" }));
+  const rowOf = () => store.presenceMembers("reg59b-claimed-room", []).find(m => m.memberId === "agent-member");
+  assert.deepEqual(rowOf().workingOn, [], "an unclaimed board row is nobody's held work");
+  store.workClaims.set("reg59b-claimed-room",
+    claimWork(store.workClaims.get("reg59b-claimed-room", "board-taken"), "agent-member", { leaseHours: 24, now: T0 }));
+  assert.deepEqual(rowOf().workingOn,
+    [{ workItemId: "board-taken", title: "Board taken task", status: "claimed" }]);
+});
+
+test("reg59b: a board claim on an accepted work item shows under the item id", async t => {
+  const { createWork, claimWork } = await import("../server/work-claims.mjs");
+  const { store } = storeFixture(t);
+  const owner = store.identities.create("reg59b owner");
+  const agent = store.identities.create("reg59b agent");
+  const at = new Date(T0).toISOString();
+  buildBoardRoom(store, "reg59b-linked-room", { ownerIdentity: owner.identityId, agentIdentity: agent.identityId }, [
+    event({ type: T.WORK_PROPOSED, actorId: "owner-member", roomId: "reg59b-linked-room", at,
+      data: { workItemId: "board-linked", title: "Board linked task", definitionOfDone: "done", accountableMemberId: "owner-member", mode: "write" } }),
+    event({ type: T.WORK_ACCEPTED, actorId: "owner-member", roomId: "reg59b-linked-room", at, data: { workItemId: "board-linked" } }),
+  ]);
+  const created = createWork({ id: "board-linked", title: "Board linked task", workItemId: "board-linked" }, { now: T0, agentId: "owner-member" });
+  store.workClaims.set("reg59b-linked-room", claimWork(created, "human-member", { leaseHours: 24, now: T0 }));
+  const rows = store.presenceMembers("reg59b-linked-room", []);
+  assert.deepEqual(rows.find(m => m.memberId === "human-member").workingOn,
+    [{ workItemId: "board-linked", title: "Board linked task", status: "claimed" }],
+    "the board hold lists under the work item id, for its holder");
+  assert.deepEqual(rows.find(m => m.memberId === "agent-member").workingOn, []);
+});
+
+test("reg59b: an expired board lease drops off; a lease-less board claim stays", async t => {
+  const { createWork, claimWork } = await import("../server/work-claims.mjs");
+  const { store, advance } = storeFixture(t);
+  const owner = store.identities.create("reg59b owner");
+  const agent = store.identities.create("reg59b agent");
+  buildBoardRoom(store, "reg59b-lease-room", { ownerIdentity: owner.identityId, agentIdentity: agent.identityId });
+  store.workClaims.set("reg59b-lease-room", claimWork(
+    createWork({ id: "board-short-lease", title: "Short lease task" }, { now: T0, agentId: "owner-member" }),
+    "agent-member", { leaseHours: 1, now: T0 }));
+  store.workClaims.set("reg59b-lease-room", claimWork(
+    createWork({ id: "board-no-lease", title: "Lease-less task" }, { now: T0, agentId: "owner-member" }),
+    "agent-member", { leaseHours: null, now: T0 }));
+  const ids = () => store.presenceMembers("reg59b-lease-room", [])
+    .find(m => m.memberId === "agent-member").workingOn.map(entry => entry.workItemId).sort();
+  assert.deepEqual(ids(), ["board-no-lease", "board-short-lease"]);
+  advance(2 * 3600_000);
+  assert.deepEqual(ids(), ["board-no-lease"],
+    "the expired lease is no longer held work; the lease-less claim still is");
+});

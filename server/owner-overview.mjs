@@ -837,9 +837,19 @@ function collectRoomRoster({ store, token, binding }, roomId, base, state, nowMs
     const blocked = sessions.some(({ session }) =>
       session.suspended_by !== null || (session.stop_requested_at !== null
         && ["processing", "active", "suspended"].includes(session.status)));
-    const stalled = (claimsByOwner.get(member.id) ?? []).some(claim => claimIdle(claim, nowMs));
+    const memberClaims = claimsByOwner.get(member.id) ?? [];
+    const stalled = memberClaims.some(claim => claimIdle(claim, nowMs));
+    // Presence lists board-door holds since the #5338 leg (b) cure, so a
+    // claim entry alone no longer proves live work: an entry whose claim
+    // is idle on the registry's own clock (claimIdle) is the stalled case
+    // below. Session entries carry no claim status and always count.
+    const idleClaimKeys = new Set(memberClaims
+      .filter(claim => claimIdle(claim, nowMs))
+      .map(claim => typeof claim.workItemId === "string" && claim.workItemId ? claim.workItemId : claim.id));
+    const liveWorkingOn = workingOn.filter(entry =>
+      typeof entry.status !== "string" || !idleClaimKeys.has(entry.workItemId));
     const workState = hostStatus === "offline" ? "offline"
-      : workingOn.length > 0 ? "working"
+      : liveWorkingOn.length > 0 ? "working"
       : stalled ? "stalled"
       : blocked ? "blocked" : "idle";
 
@@ -862,7 +872,7 @@ function collectRoomRoster({ store, token, binding }, roomId, base, state, nowMs
       identityId: presenceRow?.ownerIdentityId ?? null,
       hostStatus,
       lastSeenAt: presenceRow?.lastSeenAt ?? null,
-      currentWork: workingOn.length > 0 ? Object.freeze({ ...workingOn[0] }) : null,
+      currentWork: liveWorkingOn.length > 0 ? Object.freeze({ ...liveWorkingOn[0] }) : null,
       workState,
       autonomyTier,
       reputationBand,

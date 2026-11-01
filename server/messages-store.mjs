@@ -9,7 +9,7 @@ export { closeKeepSet };
 // same transaction as the event insert. MSG-2 replays events that landed
 // before the table, and events from importEvents and initialize, which still
 // do not double-write. The integrity cron runs that replay.
-import { applyEvent, emptyRoomState } from "../src/events.js";
+import { applyEvent, emptyRoomState, messageChannelId } from "../src/events.js";
 import { isDeepStrictEqual } from "node:util";
 
 export const MESSAGE_ROW_TYPES = Object.freeze([
@@ -237,7 +237,18 @@ export function messageRowForWrite(message, { sequence, pinned, threadMessages }
 }
 
 // Shared, pure comparison: diagnostics must use the same fields as certification.
-export function messageRowParityFields(row, message, { sequence, pinned, threadMessages }) {
+// Preserve the literal representation first. Only a completely coherent
+// reader-defaulted representation may additionally satisfy an absent channel.
+export function messageRowParityFields(row, message, context) {
+  const differences = strictMessageRowParityFields(row, message, context);
+  if (differences.length && message && !Object.hasOwn(message, 'channelId')) {
+    const view = { ...message, channelId: messageChannelId(message) };
+    if (!strictMessageRowParityFields(row, view, context).length) return [];
+  }
+  return differences;
+}
+
+function strictMessageRowParityFields(row, message, { sequence, pinned, threadMessages }) {
   let record, extras;
   try { record = JSON.parse(row.record_json); } catch { /* invalid records fail parity */ }
   try { extras = row.reducer_extras_json === null ? null : JSON.parse(row.reducer_extras_json); }
@@ -267,6 +278,18 @@ export function messageRowParityFields(row, message, { sequence, pinned, threadM
 }
 
 export function messageRecordParityDetail(row, message, receiptId = null) {
+  const detail = strictMessageRecordParityDetail(row, message, receiptId);
+  if (detail.keys.length && message && !Object.hasOwn(message, 'channelId')) {
+    const view = { ...message, channelId: messageChannelId(message) };
+    if (row.channel_id === view.channelId) {
+      const alias = strictMessageRecordParityDetail(row, view, receiptId);
+      if (!alias.keys.length) return alias;
+    }
+  }
+  return detail;
+}
+
+function strictMessageRecordParityDetail(row, message, receiptId) {
   let record;
   try { record = JSON.parse(row.record_json); } catch { return { keys: ['invalid_json'], legacyShapeOnly: false }; }
   const expected = currentRecord(message);

@@ -1,0 +1,38 @@
+{
+  "checkedAt": "2026-11-01T12:07:01.112Z",
+  "http": 200,
+  "overallStatus": "degraded",
+  "jobs": [
+    {
+      "name": "retention",
+      "status": "ok",
+      "lastRunAt": "2026-11-01T12:00:37.412Z",
+      "lastSuccessAt": "2026-11-01T12:00:37.412Z",
+      "lastAttemptAt": "2026-11-01T12:00:37.412Z",
+      "attemptOutcome": "committed",
+      "uncommittedAttemptSinceAt": null,
+      "consecutiveFailures": 0,
+      "lastErrorCurrent": false,
+      "summary": {}
+    },
+    {
+      "name": "integrity",
+      "status": "ok",
+      "lastRunAt": "2026-11-01T12:00:38.692Z",
+      "lastSuccessAt": "2026-11-01T12:00:38.692Z",
+      "lastAttemptAt": "2026-11-01T12:00:38.692Z",
+      "attemptOutcome": "committed",
+      "uncommittedAttemptSinceAt": null,
+      "consecutiveFailures": 0,
+      "lastErrorCurrent": false,
+      "summary": {
+        "verified": 1,
+        "quarantinedEvents": 1,
+        "verifiedRooms": 79,
+        "blockedRooms": 0,
+        "skipped": 0
+      }
+    }
+  ],
+  "sourceLimit": "Jobs have timestamps, not direct source attestations; production recovery source was separately verified."
+}

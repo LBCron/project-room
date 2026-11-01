@@ -85,7 +85,7 @@ test('HTTP Operator auth and method gates precede ambiguous selector parsing and
     await assert.rejects(dispatch({method:'GET',headers:{authorization:'Operator '+token}},{setHeader(){}},{url:new URL(origin+'/api/operator/status'+query),remoteAddress:'127.0.0.1',requestId:'synthetic'}),error=>error.status===422);assert.equal(reads,0);
   }
   reads=0;
-  for (const headers of [{cookie:'room_session=synthetic'}, {cookie:'account_session=synthetic'}, {authorization:'Bearer synthetic-room-credential'}]) {
+  for (const headers of [{cookie:'room_session=synthetic'}, {cookie:'account_session=synthetic'}, {authorization:'Bearer placeholder-room-credential'}]) {
     await assert.rejects(dispatch({method:'GET',headers},{setHeader(){}},{url:new URL(origin+'/api/operator/status?parityRoom=&expectedHead=bad')}),error=>error.status===404);
     assert.equal(reads,0);
   }

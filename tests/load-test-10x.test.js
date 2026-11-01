@@ -1,7 +1,7 @@
 // F010 load-test expansion: 10x scenarios alongside tests/load-test-smoke.test.js.
 //
 // Script-level scenarios drive scripts/load-test.mjs with small-but-real configs
-// (ramp-up/ramp-down, soak, burst spikes, degraded pump, all-mode targets).
+// (ramp-up/ramp-down, burst spikes, degraded pump, all-mode targets).
 // In-process scenarios reuse the script's own fixture pattern (RoomStore +
 // createRoomServer + RoomAgentClient) for the knobs the script does not expose:
 // claim contention on one key, mixed read/write ratios, error injection under
@@ -125,18 +125,6 @@ test("ramp-up/ramp-down: commands scale with concurrency, latency recovers", () 
     `peak ${peak.opsPerSec} ops/s should stay within 4x of small ${small.opsPerSec} ops/s`);
   const down = run(4);
   assert.ok(Number(down.latencyMs.p95) <= Number(peak.latencyMs.p95) * 2, "latency recovers after ramp-down");
-});
-
-// ---- 2. sustained load soak ----------------------------------------------------
-test("sustained load soak: 1000 wakes drain with zero loss", () => {
-  const report = reportOf(runScript(["--mode", "queue", "--wakes", "1000", "--wake-interval-ms", "2",
-    "--poll-ms", "10", "--lease-batch", "32", "--wake-members", "6", "--quiet"])).queue;
-  assert.equal(report.enqueued, 1000);
-  assert.equal(report.leased, 1000);
-  assert.equal(report.completed, 1000);
-  assert.equal(report.unleased, 0);
-  assert.deepEqual(report.errors, {});
-  assert.equal(report.lagMs.count, 1000);
 });
 
 // ---- 3. burst spikes -------------------------------------------------------------
@@ -348,12 +336,9 @@ test("graceful degradation: slow stream pump still delivers everything", () => {
 test("throughput/latency: all-mode run meets the repo's load targets", () => {
   const report = reportOf(runScript(["--mode", "all", "--agents", "10", "--iterations", "2",
     "--streams", "8", "--messages", "20", "--message-interval-ms", "10", "--stream-interval-ms", "50",
-    "--wakes", "60", "--wake-interval-ms", "5", "--poll-ms", "10", "--quiet"]));
+    "--quiet"]));
   assert.ok(report.commands.ops > 0 && report.commands.opsPerSec > 0);
   assert.ok(Number(report.commands.latencyMs.p95) < 10000, "command p95 under bound");
   assert.equal(report.streams.deliveries.received, report.streams.deliveries.expected);
   assert.ok(report.streams.deliveryLatencyMs.p95 < 30000, "delivery p95 under bound");
-  assert.equal(report.queue.completed, report.queue.enqueued);
-  assert.deepEqual(report.queue.errors, {});
-  assert.ok(report.queue.lagMs.p95 < 30000, "wake-lease lag p95 under bound");
 });

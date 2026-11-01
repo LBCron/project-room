@@ -296,13 +296,17 @@ export function canReviewClaim(item, viewer, members) {
 // revision and CI head must match, and — since #3684 — so must the delivery:
 // an approval bound to a delivery digest counts only for that delivery, and
 // an approval recorded before any delivery (generation 0) counts only for
-// the round's first delivery; a re-delivery stales it like a head move.
+// the round's first delivery; a re-delivery stales it like a head move. A
+// bundle-less delivery has no digest, so its reviews bind to the delivery
+// generation: current only on the generation they were recorded against.
 function basisCurrent(review, item) {
   const basis = review?.basis;
   if (!basis || basis.version !== 1) return false;
   const deliveryCurrent = basis.deliveryDigest !== null && basis.deliveryDigest !== undefined
     ? basis.deliveryDigest === (item.delivery?.digest ?? null)
-    : (basis.deliveryGeneration ?? 0) === 0 && (item.deliveryGeneration ?? 0) <= 1;
+    : (basis.deliveryGeneration ?? 0) === 0
+      ? (item.deliveryGeneration ?? 0) <= 1
+      : (basis.deliveryGeneration ?? 0) === (item.deliveryGeneration ?? 0);
   return deliveryCurrent && basis.owner === item.owner && basis.claimedAt === item.claimedAt
     && basis.revision === (item.revision ?? null) && basis.headSha === (item.ci?.headSha ?? null);
 }

@@ -44,3 +44,21 @@ test('existing guarded SQLite scratch atomically checkpoints large replay value 
  assert.throws(()=>store.db.prepare("UPDATE current_restore_audit_scratch SET payload='null'").run(),/unsupported restore admission mutation/);
  store.close();store=new RoomStore(filename);assert.deepEqual(withRestoreTransaction(store,()=>withRestoreAuditRows(store.db,id,scratch=>get(scratch,maximum))),value);assert.deepEqual(restoreProgress(store.db),before);assert.throws(()=>store.headSequence('commons'),error=>error.status===503);
 });
+
+test('actual process exit preserves reducer patch parts and exact independently folded cursor together',async t=>{
+ const {writeFileSync}=await import('node:fs'),{spawnSync}=await import('node:child_process'),{initialRoom}=await import('../server/bootstrap.mjs'),{event,replayEvents,emptyRoomState}=await import('../src/events.js');
+ const directory=mkdtempSync(join(tmpdir(),'recovery-replay-process-'));t.after(()=>rmSync(directory,{recursive:true,force:true}));const filename=join(directory,'target.sqlite'),eventsFile=join(directory,'events.json');let store=new RoomStore(filename);const id=beginRestore(store),seal={syntheticScratchTest:true};
+ const events=[...initialRoom(),event({id:'large-pair-event',roomId:'commons',actorId:'owner',type:'pair.requested',at:'Sun, 01 Nov 2026 12:00:00 GMT'+' '.repeat(160000),data:{pairId:'p',displayName:'Synthetic recovery pair',status:'pending'}}),event({id:'root-message-event',roomId:'commons',actorId:'owner',type:'message.posted',data:{messageId:'root-message',body:'Saved useful work'}}),event({id:'reply-event',roomId:'commons',actorId:'owner',type:'message.posted',data:{messageId:'reply-message',replyToId:'root-message',body:'Cold reply'}})];writeFileSync(eventsFile,JSON.stringify(events));
+ withRestoreTransaction(store,()=>checkpointRestore(store.db,{restoreId:id,expectedRevision:0,phase:'audit_pending',seal,progress:{replay:0,counts:{members:0,channels:0,workItems:0,replyRequests:0}},latest:null}));store.close();
+ const run=mode=>{const child=spawnSync(process.execPath,['tests/fixtures/recovery-point-replay-child.mjs',filename,eventsFile,mode],{encoding:'utf8',timeout:30000,maxBuffer:1024*1024});assert.equal(child.status,77,child.stdout+'\n'+child.stderr);return child.stdout.trim()?JSON.parse(child.stdout.trim().split('\n').at(-1)):null;};
+ for(let n=0;n<events.length;n++){
+  assert.equal(run('before-commit'),null);store=new RoomStore(filename);assert.equal(restoreProgress(store.db).progress.replay,n);store.close();const committed=run('committed');assert.equal(committed.replay,n+1);store=new RoomStore(filename);assert.equal(restoreProgress(store.db).revision,committed.revision);assert.deepEqual(restoreProgress(store.db).latest,committed.receipt);assert.throws(()=>store.headSequence('commons'),error=>error.status===503);store.close();
+ }
+ store=new RoomStore(filename);try{
+  const expected=replayEvents(emptyRoomState(),events);withRestoreTransaction(store,()=>withRestoreAuditRows(store.db,id,scratch=>{
+   for(const incoming of events)assert.equal(readRecoveryReplayValue(scratch,'commons','seenEvents',incoming.id,1024*1024),expected.seenEvents[incoming.id]);
+   for(const message of expected.messages)assert.deepEqual(readRecoveryReplayValue(scratch,'commons','messages',message.id,1024*1024),message);
+   assert.deepEqual(readRecoveryReplayValue(scratch,'commons','metadata','room',1024*1024),expected.room);
+  }));
+ }finally{store.close();}
+});

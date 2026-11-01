@@ -47,6 +47,11 @@ export async function superviseCodexRequests({ connection, db, directory, connec
       return !attempts.length || attempts.some(row => !["completed", "interrupted", "failed"].includes(row.state));
     });
   };
+  // A saved reply whose run report is refused or still unconfirmed needs
+  // reconciliation. It is attention, not the unknown-execution fence above,
+  // so it never blocks unrelated requests.
+  const reportAttention = () => Boolean(db.prepare("SELECT 1 FROM request_runs WHERE delivered=1 AND reported IN (0,2) AND attempt_id IS NOT NULL LIMIT 1").get());
+  const idleStatus = () => unresolved() ? "recovery_pending" : reportAttention() ? "report_reconciliation_pending" : "watching_room";
   const requesterAllowed = request => allowed.has(request.requesterId) && request.recipientId === connection.memberId;
   const selectRequest = request => (!selected || selected.has(request.id)) && !unresolved();
   const executionAllowed = request => requesterAllowed(request) && (!selected || selected.has(request.id));
@@ -70,7 +75,7 @@ export async function superviseCodexRequests({ connection, db, directory, connec
       try { if (owner.shouldStop()) abort(); }
       catch (error) { monitorError = error; abort(); }
     }, Math.min(pollMs, 1000));
-    state(unresolved() ? "recovery_pending" : "watching_room", { providerAuthentication: "unverified" });
+    state(idleStatus(), { providerAuthentication: "unverified" });
     if (singleRequest) {
       const requestMessageId = allowedRequestIds[0];
       // This is the operator's explicit selection, not a server work acceptance
@@ -80,8 +85,11 @@ export async function superviseCodexRequests({ connection, db, directory, connec
       try {
         const result = await runRequestOnce({ connection, db, requestMessageId, execute,
           allowRequest: requesterAllowed, selectRequest, signal: controller.signal });
-        state("settled", { runId: requestMessageId });
-        const receipt = { ...result, requestMessageId };
+        // A refused run report is not settled: the reply is saved but the
+        // service never accepted the outcome, so it needs reconciliation.
+        const refused = result?.runReported === "refused";
+        state(refused ? "recovery_pending" : "settled", { runId: requestMessageId });
+        const receipt = { ...result, requestMessageId, ...(refused ? { reply: "saved", report: "needs_reconciliation" } : {}) };
         emit(receipt);
         return receipt;
       } catch (error) {
@@ -96,11 +104,15 @@ export async function superviseCodexRequests({ connection, db, directory, connec
     if (connectOnStart && !unresolved() && !controller.signal.aborted) await prepare();
     if (!controller.signal.aborted) await runRequestQueue({ connection, db, execute, allowRequest: requesterAllowed, selectRequest,
       signal: controller.signal, intervalMs: pollMs, onPoll: () => {
-        owner.health("watching"); state(unresolved() ? "recovery_pending" : "watching_room");
+        owner.health("watching"); state(idleStatus());
       }, emit: event => {
         if (event.status === "connection_unavailable") { owner.health("retrying"); state("retrying_room"); }
         else if (event.status === "delivered") {
-          state("settled", { runId: event.requestId }); emit(event);
+          const refused = event.runReported === "refused";
+          state(refused ? "recovery_pending" : "settled", { runId: event.requestId });
+          emit(refused ? { ...event, reply: "saved", report: "needs_reconciliation" } : event);
+        } else if (event.status === "report_pending") {
+          state("report_reconciliation_pending", { runId: event.requestMessageId }); emit(event);
         } else if (event.status === "needs_attention") {
           state("recovery_pending", { runId: event.requestMessageId }); emit(event);
         }

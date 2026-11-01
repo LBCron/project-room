@@ -101,6 +101,14 @@ A room's stored state is capped at `PILOT_LIMITS.projectionBytes` (4 MiB). At th
 
 `GET /api/operator/status` returns the deployed version, whether storage is ready, the largest table counts, and the last 10 operator actions. Job heartbeats are on the Worker, so `jobs` is `see /api/health/jobs`.
 
+For a fresh comparison of one explicitly selected small room, use `GET /api/operator/status?parityRoom=<room-id>&expectedHead=<sequence>`. This mode bypasses the global failure sample and returns only `version` and `messageParityDiagnostics`. Supply exactly one nonblank room id and one decimal head from 1 through 64; duplicate, unpaired, malformed or additional query parameters return 422 `invalid_request`. Operator credentials and the GET method are checked before selector parsing or target reads.
+
+Selected diagnosis runs in one read transaction. Before transferring payloads, SQL checks stored scalar types and UTF-8 octet lengths over indexed target-room ranges, with a 65-row refusal sentinel. Admission allows at most 64 events, 64 rows in each message/body/work domain, and 256 KiB of aggregate consumed input including conservative serialization overhead. The response is at most 4 KiB. These bounds do not measure physical I/O or promise a CPU duration. Canonical message authority, message entity references and message archive shapes are unsupported in this initial inline-room mode.
+
+A complete `clean` result requires the requested head to remain current, the backfill cursor to match its event anchor, a present valid current metadata write proof, valid message proofs, verified referenced body hashes, existing serving-content proof checks and the existing message parity comparison of exact snapshot/row membership and fields. `proofsVerified: true` reports those current checks; `recordedCertifiedSequence` is the stored historical certification and is not refreshed by this read. A complete comparison can instead return `mismatch`. Missing/corrupt proofs, storage failures, unsupported shapes, changed heads or admission/budget limits return HTTP 200 with `status: "unknown"`, `complete: false`, `proofsVerified: false` and a fixed reason. An absent target in the global sample proves nothing.
+
+This read does not replay events, establish a new proof baseline, certify history, repair rows, update cursors, clear failures or write an audit receipt. It cannot protect against an administrator replacing both content and its proofs. Clients should pin `version.sourceRevision`, the selected room/head and the complete clean result; operator execute receipts must be reconciled independently.
+
 `GET /api/operator/drift?main=<sha>` compares that SHA with the revision this process was built from. The server does not call GitHub. A SHA is 7 to 64 hex characters, or `unstamped`. A short SHA matches when it is a prefix of the deployed commit.
 
 The table counts leave out Cloudflare's internal `_cf_*` tables. A table that refuses a count is listed in `skippedTables` instead of failing the status read.
@@ -133,3 +141,31 @@ measurements end at response headers and exclude subsequent streaming work.
 Store totals cover the code through successful initialization, but cannot
 measure synchronous CPU on the hosted clock. Local Node timings must not be
 interpreted as hosted timing measurements.
+
+## Optional attachment live index
+
+`POST /api/operator/attachments/live-index/plan` accepts `{reason, reverse?}`.
+This is a database-wide operation under the existing Operator credential, not a
+room grant. It admits every attachment row, including tombstones in every room,
+using SQL scalar types and lengths before reading bounded key text or changing
+an index. Initial limits are 32,768 rows, four MiB of room/id/state key bytes and
+64 MiB of all variable-column bytes, including blob lengths. These are optional
+maintenance bounds, not new upload or lifetime quotas. An over-budget store
+keeps the existing attachment path. Scalar bounds do not fully describe physical
+I/O, and local measurements are not a production CPU SLA.
+
+Execute at `/api/operator/attachments/live-index/execute` with the same reason,
+direction, exact `planHash` and stable `requestId`. Admission and the dependency
+hash are checked again in the writer transaction. The optional partial live-state
+index and immutable operator receipt commit together. Resolve an unknown response
+by retrying the exact input; a changed request under that ID conflicts. An old
+receipt describes its original effect, not current installation state: use a new
+plan to inspect actual state. The hash binds keys, states, scalar lengths and
+schema/index identities; it does not certify payload contents.
+
+`reverse: true` explicitly removes only the exact optional index under the same
+bounded plan/execute contract. If later growth exceeds admission, reversal
+refuses and leaves the index working. No tombstones, file bytes, primary keys,
+owner indexes, visibility rules or quotas change. Runtime live predicates remain
+valid without the index. No constructor or schema-stamp update automatically
+builds it; a matching startup stamp alone is never proof of installation.

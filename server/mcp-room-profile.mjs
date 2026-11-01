@@ -27,7 +27,7 @@ import { EVENT_CATALOG, WebhookSubscriptionError } from "./agent-webhook-subscri
 import { BOND_SCOPES } from "./bonds.mjs";
 import { EscrowError, canonicalLane, ACCEPT_ATTESTATION_CONTRACT } from "./bounty-escrow.mjs";
 import { buildActivationPack } from "./room-activation-pack.mjs";
-import { buildOrient } from "./orient.mjs";
+import { readComposedRoomContext } from "./orient.mjs";
 import { memoizeBoardList } from "./available-work.mjs";
 import { walkProvenance, ClaimError } from "./work-claims.mjs";
 import { claimThread } from "./claim-thread.mjs";
@@ -613,12 +613,11 @@ function dispatchRoomToolCall(store, secret, identity, name, args, agentRooms) {
   }
   if (name === "squads_disband") return disbandSquad(store, secret, roomId, args.squadId);
   if (name === "get_room_context") {
-    const context = store.roomContext(secret, roomId, {
+    const context = readComposedRoomContext(store, secret, roomId, {
       workAfter:args.work_after??"", sinceVersion: args.since_version === undefined ? null : args.since_version
     });
     if (context.not_modified) return context;
-    const auth = store.authenticate(secret, roomId);
-    return { ...stampRoomContext(context), orient: buildOrient(store, roomId, auth.member.id, { text: false, workAfter:args.work_after??"", token: secret, boardList: memoizeBoardList(store) }) };
+    return stampRoomContext(context);
   }
   if (name === "room_read_bootstrap") {
     return withContentTrust(buildRoomBootstrap(store, secret, roomId, null, { accessRequests: new AccessRequests(store), watchers: [] }));

@@ -1,6 +1,7 @@
 import { assertRestoreAdmitted, restorePending, verifyRestoreControl } from './restore-admission.mjs';
 import { CURRENT_ROOM_SCHEMA, CURRENT_ROOM_GUARDS, initializeCurrentRoom, currentRoomAuthority, isCurrentRoom, currentCommandContext, prepareCurrentWrite, withCurrentServingWriter, readCurrentRecord, readCurrentHistoryFloor, withCurrentReadContext, readCurrentSelectedWorkState, readCurrentOverviewWindow, currentVisibleHorizon } from './current-room-repository.mjs';
 import {bindReplayAppend} from './replay-cutover.mjs';
+import { savedHistoricalReplayCheckpoint } from './historical-replay-contract.mjs';
 import { bootstrapLegacyWriteProofs, configureWriteIntegrity, beginWriteProofFrame, endWriteProofFrame, publishProjectionWrites, projectionDigest, projectionContentHash, servingContentProof, servingProofDrift, assertProjectionWrite, assertMessageWrite, recordMessageWrite, withVerifiedRoomReconstruction } from './write-integrity.mjs';
 const OPERATOR_QA_ARCHIVE = Symbol("operator QA room archive");
 import { authenticateMcpOAuthRequest } from './mcp-oauth.mjs';
@@ -107,7 +108,7 @@ import { ensureAttachmentSchema, verifyAttachmentSchema } from "./attachment-sch
 import { RoomAttachmentBytes } from "./room-attachment-bytes.mjs";
 import { InboxAttachmentBytes, inboxAttachmentBytesSchema } from "./inbox-attachment-bytes.mjs";
 import { BountyEscrow, bountyEscrowSchema, convergeBountyDeployedSchema } from "./bounty-escrow.mjs"; // Escrowed bounties, agent work exchange slice 1.
-import { selectedWorkContext, currentWorkRecord } from "./work-context.mjs";
+import { selectedWorkContext, currentWorkRecord, workRoleHolder } from "./work-context.mjs";
 import { workItemChanges, mayWriteBoardClaims } from "../src/workflow.js";
 import { assertDependsOnKnown } from "./work-claim-integrity.mjs";
 import { normalizeWorkDependencies } from "../src/work-dependencies.js";
@@ -4188,8 +4189,6 @@ this.slaBreachAlerts = new SlaBreachAlertJournal(this); // Task 26: durable in-a
   }
   canonicalMessagePostContext(roomId, command, actorId) {
     if (this.messageProjectionWindow !== null || this.maintainMessageCertification) return null;
-    // Native mention callback authorization still reads full room visibility.
-    if (this.enqueueNativeMcpEvent && typeof command.data?.body === 'string' && command.data.body.includes('@')) return null;
     return canonicalMessagePostContext(this.db, roomId, command, { actorId, humanPushEnabled: Boolean(this.humanPush?.vapid), workLimits: PILOT_LIMITS });
   }
   // Phase 1a: the one serializer for rooms.projection. Every writer uses it.
@@ -4253,6 +4252,7 @@ this.slaBreachAlerts = new SlaBreachAlertJournal(this); // Task 26: durable in-a
     return this._replayRoom(roomId, through ?? this.headSequence(roomId));
   }
   _replayRoom(roomId, through) {
+    return this.readTransaction(() => {
     const head = this.db.prepare("SELECT sequence FROM rooms WHERE id=?").get(roomId);
     if (!head) fail(404, "room_not_found", "Room not found");
     const room = { sequence: head.sequence };
@@ -4274,6 +4274,10 @@ this.slaBreachAlerts = new SlaBreachAlertJournal(this); // Task 26: durable in-a
         console.error(`projection checkpoint for room ${roomId} is unreadable (${error.message}); replaying the full event history`);
       }
     }
+    if (sequence === 0) {
+      const saved = savedHistoricalReplayCheckpoint(this.db, roomId, through);
+      if (saved) { state = saved.state; sequence = saved.sequence; }
+    }
     // Work controls predate some stored projections and their checkpoints:
     // backfill the round/tool-call counters, suspension cause, and receipt
     // segments before replaying, so a checkpoint with no later events still
@@ -4291,6 +4295,7 @@ this.slaBreachAlerts = new SlaBreachAlertJournal(this); // Task 26: durable in-a
     })());
     if (sequence !== through) throw new Error("Event sequence does not reach the room projection");
     return { sequence, state: compact(state) };
+    });
   }
   // Administrative bootstrap, never exposed over HTTP. Historical demo events are test fixtures only.
   initialize(events, { representation = null } = {}) {
@@ -8023,9 +8028,4 @@ function dmTalkAllowed(db, state, roomId, senderId, identityId, at) {
   const memberId = talkMemberForIdentity(db, roomId, identityId, at);
   if (!memberId) return true;
   return mayWake(db, state, roomId, senderId, memberId);
-}
-
-function workRoleHolder(item, memberId) {
-  if (!item || !memberId) return false;
-  return [item.proposedById, item.accountableMemberId, item.verifierMemberId, item.humanDecisionMakerId, item.claim?.holderId].includes(memberId);
 }

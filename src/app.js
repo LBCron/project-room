@@ -67,6 +67,7 @@ import { paintClaimChat } from "./board-ui.js";
 import { installHumanExperience } from "./human-experience.js";
 import { createSpendPricingKillSwitch } from "./spend-pricing-ui.js";
 import "./entry-started.js";
+import { consumeBoardDeepLink } from "./board-deeplink.js";
 export function startApp({ accountClient = new AccountClient(), signedIn = false, restoreRoomSession = false } = {}) {
 const bodyHtmlCache = createBodyHtmlCache();
 
@@ -120,6 +121,11 @@ function resumeOAuthConsent() {
 }
 
 const $ = selector => document.querySelector(selector);
+// Agent first-run deep link: assigned once the board block below wires
+// openBoard, so the workspace-show transition can honor ?board=1 from the
+// standalone agent sign-in card. Read only after module evaluation, so the
+// late assignment is safe.
+let openBoardFromEntrance = null;
 applyStoredTheme();
 organizeRoomSettings($("#settings-dialog"));
 const accountSettingsButton = $("#account-settings-button");
@@ -512,6 +518,11 @@ const client = new RoomClient({
     $("#room-overview-open").setAttribute("aria-label", `${roomTitle}, Room overview`);
     $(".room-purpose").textContent = state.room?.purpose ?? "";
     $("#main").hidden = false; $("#auth-panel").hidden = true; $("#auth-panel").setAttribute("aria-busy", "false");
+    // Agent first-run deep link: the standalone sign-in card's board step lands
+    // in the room with ?board=1. Open the work board once on arrival, then
+    // strip the param so a reload restores the plain room view, not the modal.
+    if (openBoardFromEntrance) consumeBoardDeepLink(location.href, openBoardFromEntrance,
+      href => history.replaceState(history.state, "", href));
     $("#account-rooms-panel").hidden = true;
     $(".connection-bar").hidden = false;
     $("#signout-button").hidden = false; $("#signout-button").disabled = signoutLoading;
@@ -8335,6 +8346,9 @@ const ready = (async () => {
     board.sync();
   };
   $("#tasks-board-open").addEventListener("click", openBoard);
+  // Agent first-run deep link: the sign-in card's board step opens the board
+  // once on workspace arrival through this hook (see openBoardFromEntrance).
+  openBoardFromEntrance = () => { openBoard(); return $("#board-dialog")?.open === true; };
   // JDOT-COH-NAV begin
   $("#board-close").addEventListener("click", () => { navigationBoardEpoch++; $("#board-dialog").close(); $("#board-panel").open = false; });
   $("#board-dialog").addEventListener("cancel", () => { navigationBoardEpoch++; });

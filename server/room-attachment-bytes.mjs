@@ -113,7 +113,7 @@ export class RoomAttachmentBytes {
 
   expire(roomId, now) {
     this.db.prepare(`UPDATE room_attachments SET state='expired', bytes=NULL
-      WHERE room_id=? AND state='staged' AND expires_at<=?`).run(roomId, now);
+      WHERE room_id=? AND state IN ('staged','committed') AND state='staged' AND expires_at<=?`).run(roomId, now);
   }
 
   stage(token, roomId, { id, filename, mediaType, data } = {}) {
@@ -145,7 +145,7 @@ export class RoomAttachmentBytes {
         COALESCE(SUM(CASE WHEN state IN ('staged','committed') AND uploader_id=? THEN byte_length ELSE 0 END), 0) AS memberBytes,
         COALESCE(SUM(CASE WHEN state='staged' AND uploader_id=? THEN 1 ELSE 0 END), 0) AS stagedCount,
         COALESCE(SUM(CASE WHEN state IN ('staged','committed') THEN 1 ELSE 0 END), 0) AS records
-        FROM room_attachments WHERE room_id=?`).get(auth.member.id, auth.member.id, roomId);
+        FROM room_attachments WHERE room_id=? AND state IN ('staged','committed')`).get(auth.member.id, auth.member.id, roomId);
       // Name the limit that refused, with what is used and what is left, so an
       // agent can split the file or stop instead of retrying blind. Committed
       // files never expire and staged ones count until their staging deadline,

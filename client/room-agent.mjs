@@ -205,7 +205,11 @@ function checkedWorkSnapshot(value, roomId, expectedView = "work") {
         || new Set(member.permissions).size !== member.permissions.length) throw new Error();
     }
     for (const [id, item] of Object.entries(state.workItems)) {
-      if (!validId(id) || item?.id !== id || !text(item.title) || !text(item.definitionOfDone)
+      // Private tracked-request definitions are withheld as an exact null pair
+      // by the authorized snapshot. Keep their metadata without interpreting
+      // withheld text as malformed or accepting partial/empty definitions.
+      const definitionWithheld = item?.title === null && item?.definitionOfDone === null;
+      if (!validId(id) || item?.id !== id || !definitionWithheld && (!text(item.title) || !text(item.definitionOfDone))
         || !Object.values(WORK_STATES).includes(item.state) || !integer(item.revision) || item.revision > value.sequence
         || !["read", "write"].includes(item.mode) || !Number.isFinite(Date.parse(item.updatedAt))
         || !validId(item.accountableMemberId) || !Object.hasOwn(state.members, item.accountableMemberId)

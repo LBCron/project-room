@@ -1058,7 +1058,7 @@ export function createAgentPluginRoutes({ store, json, reject, body, rate, beare
       const immediate = store.agentHeartbeats.notePoll({ agentId: auth.identityId, roomId, hostId: waiterHostId, cursor });
       if (!immediate.registered) reject(404, "agent_not_registered",
         "No host has reported for this identity yet — POST /api/agent-heartbeats first, then poll.");
-      if (immediate.pendingWakes.length > 0 || waitMs === 0) {
+      if (immediate.pendingWakes.length > 0 || immediate.more === true || waitMs === 0) {
         // #3265: the poll door carries the heartbeat door's truncation
         // flag — a full page says whether more signals are waiting.
         // BUILD-HEARTBEAT-CADENCE: it also carries the server-assigned
@@ -1085,7 +1085,7 @@ export function createAgentPluginRoutes({ store, json, reject, body, rate, beare
       if (current.identityId !== auth.identityId || (current.roomId ?? null) !== roomId)
         reject(403, "identity_changed", "Credential binding changed during wake wait");
       const fresh = store.agentHeartbeats.notePoll({ agentId: current.identityId, roomId, hostId: waiterHostId, cursor });
-      const timedOut = !woken && fresh.pendingWakes.length === 0;
+      const timedOut = !woken && fresh.pendingWakes.length === 0 && fresh.more !== true;
       return json(res, 200, { agentId: auth.identityId, hostId: waiterHostId, pendingWakes: fresh.pendingWakes,
         cadenceSeconds: fresh.cadenceSeconds,
         more: fresh.more === true, nextCursor: fresh.nextCursor ?? null, ...pausedField(auth.identityId),

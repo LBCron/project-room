@@ -24,6 +24,38 @@ import { fleetSelf } from "./agent-fleet.mjs";
 import { ServiceError } from "./store.mjs";
 import { messageVisibleToViewer, summaryHistoryFloor } from "./history-visibility.mjs"; // QA4 Q4-SEC-1
 import { availableClaimsFromBoard, memoizeBoardList } from "./available-work.mjs";
+import { contextVersion } from "./room-context.mjs";
+
+// Context embeds current Board orientation as well as formal work. Decide
+// conditional freshness only after composing both under the same read view.
+// Transient updates, fleet assessments, next-action rankings and transport
+// clocks/cursors are not structural context; they have their own fresh reads.
+export function readComposedRoomContext(store, token, roomId, { sinceVersion = null, expectedSessionBinding = null } = {}) {
+  return store.readTransaction(() => {
+    let context = store.roomContext(token, roomId, { sinceVersion, expectedSessionBinding });
+    // A caller may still hold the old formal-only version from before this
+    // composition contract. Refresh it once rather than omit its projection.
+    if (context.not_modified) context = store.roomContext(token, roomId, { expectedSessionBinding });
+    const options = {
+      text: false, token, binding: expectedSessionBinding, boardList: memoizeBoardList(store)
+    };
+    const orient = buildOrient(store, roomId, context.viewerId, { ...options, structuralOnly: true });
+    const { room, member, instructions, claims, availableClaims, workItems, orientation, work, workTotal, links } = orient;
+    const version = contextVersion({ formal: context.context_version, orientation: {
+      room, member, instructions, claims, availableClaims, workItems, orientation, work, workTotal, links,
+      profile: orient.you.profile, capabilities: orient.you.capabilities
+    } });
+    if (sinceVersion === version) {
+      return {
+        not_modified: true, context_version: version, roomId,
+        evaluatedThrough: context.evaluatedThrough, evaluatedAt: context.evaluatedAt, cursors: context.cursors,
+        viewerId: context.viewerId, viewerAccountId: context.viewerAccountId, viewerAuthEpoch: context.viewerAuthEpoch,
+        viewerSessionBinding: context.viewerSessionBinding, viewerSessionRevision: context.viewerSessionRevision
+      };
+    }
+    return { ...context, context_version: version, orient: buildOrient(store, roomId, context.viewerId, options) };
+  });
+}
 
 // Work states that count as open; completed and superseded work is history,
 // not something an arriving agent should pick up.
@@ -150,11 +182,14 @@ export function buildOrient(store, roomSlug, viewerId, options = {}) {
   // shares this per-request memo; a caller composing several reads in one
   // request (activation pack, context) passes its own memo in.
   const boardList = options.boardList ?? memoizeBoardList(store);
+  // Internal version checks need only the structural fields. Defer transient
+  // attention, fleet and action reads until a full response is actually sent.
+  const structuralOnly = options.structuralOnly === true;
   const query = parseOrientQuery(options);
   const openWork = Object.values(state.workItems ?? {})
     .filter(item => item && OPEN_WORK_STATES.has(item.state))
     .sort((a, b) => (a.createdAt < b.createdAt ? -1 : a.createdAt > b.createdAt ? 1 : 0));
-  const sections = orientSections(store, roomSlug, viewerId, { limit: 40 });
+  const sections = structuralOnly ? { updates: [], uncertain: [] } : orientSections(store, roomSlug, viewerId, { limit: 40 });
   const focusOf = query.focus === "conversation" ? CONVERSATION : query.focus === "work" ? WORK_FOCUS : query.focus === "review" ? REVIEW_FOCUS : null;
   const updates = (focusOf ? sections.updates.filter(item => focusOf.has(item.kind)) : sections.updates).slice(0, 10);
   let claims = [];
@@ -167,7 +202,7 @@ export function buildOrient(store, roomSlug, viewerId, options = {}) {
     availableClaims = availableClaimsFromBoard(board, roomSlug, { viewerId, state }).slice(0, MAX_WORK);
   } catch { claims = []; availableClaims = []; }
   let nextActions = [];
-  if (options.token && store.nextActions?.list) {
+  if (!structuralOnly && options.token && store.nextActions?.list) {
     try {
       const listed = store.nextActions.list(options.token, roomSlug, { limit: 8, binding: options.binding ?? null, boardList });
       nextActions = listed.items.filter(item => item.action?.api).slice(0, 8).map(item => ({
@@ -184,11 +219,11 @@ export function buildOrient(store, roomSlug, viewerId, options = {}) {
     messageId: pin.messageId, pinnedAt: pin.pinnedAt, authorId: pin.message.authorId,
     ...(query.text ? { text: pin.message.body, untrusted: true } : {})
   }));
-  const lines = [
+  const lines = query.q ? [
     ...pinned.filter(pin => pin.text).map(pin => ({ id: pin.messageId, source: "pinned", text: pin.text })),
     ...messageRepository(store, roomSlug, state).recent(40, visible).map(message => ({ id: message.id, source: "message", text: message.body })),
     ...claims.map(item => ({ id: item.id, source: "claim", text: item.title }))
-  ];
+  ] : [];
   // A member with no published directory card is still orientable. Missing
   // cards throw directory_not_found; capabilities then stay the member's own.
   let card = null;
@@ -209,7 +244,7 @@ export function buildOrient(store, roomSlug, viewerId, options = {}) {
       profile: { displayName: member.displayName, kind: member.kind, identityId: member.identityId ?? null },
       capabilities,
       // CP-AGENTS-1: the calling agent's own fleet state (agents only).
-      ...(member.kind === "agent" ? fleetSelfOrNull(store, roomSlug, { sequence, state }, viewerId, boardList) : {})
+      ...(member.kind === "agent" && !structuralOnly ? fleetSelfOrNull(store, roomSlug, { sequence, state }, viewerId, boardList) : {})
     },
     instructions: { charter: charterContext(state.room), pinned },
     focus: query.focus,

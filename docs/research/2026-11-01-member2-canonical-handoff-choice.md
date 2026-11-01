@@ -83,10 +83,37 @@ yaml dependency before completing; reused the existing ignored dependency tree.
 The next contract run exposed main's unindexed legacy-wake-drain removal note;
 added its normal index link, matching the earlier context-cure integration.
 
-Remaining before calling this a complete B cure: discovery still lists an
-old unclaimed dangling row, even though execution now refuses truthfully;
-qualify and align discovery without adding unbounded per-card hydration or
-overlapping the attention owner's active work. Supersession can still generate
-a dangling or unaccepted target; retain its separate semantics for review.
-Cross-owner transfer/provider replacement also remains outside the local
-restart proof. This is a reviewable partial runtime draft, not landing approval.
+## Discovery qualification and main composition
+
+Root confirmed the original-work semantics at Room 25514. Discovery now uses
+one optional canonical-state input in availableBoardRows. Existing orientation
+reads reuse work state they already hold. The inbox's openWorkOf uses a selected
+batch of otherwise-ready linked ids; its only attention-file changes are the
+import and shared-predicate call. Missing and proposed work are excluded before
+result limits. Board-native tasks, including independently authored -next ids,
+remain available. Historical rows stay stored.
+
+Selected batch reads share canonical revision/digest/body-hash verification,
+chunk binds below the Worker's 100-parameter limit and never hydrate unrelated
+work entities. Tests exclude 60 orphan rows and unaccepted work in both inline
+and reference formats, retain accepted/native tasks, and prove the inbox never
+calls whole-room hydration. A corrupt unrelated entity is not transferred or
+hydrated; selecting it fails closed. A 112-id selection uses two carrier reads
+and one entity read, not one full-room read per card. SQLite still examines
+legacy room JSON for each carrier batch; no constant SQL-cost claim is made.
+
+Initial discovery fixture had a wrong snapshot column and was corrected before
+the causal red run. Corrected tests fail at the intended total (63 versus 2),
+then pass after the predicate cure. Local affected tests passed 93/93 plus the
+27 inbox neighbors before composition. Cleanly composed with main dcec4be4,
+which contains the landed context fix and ACP selected-identity work.
+
+Actual workerd/SQLite test passes across disposal and a fresh runtime: 105
+orphan links, accepted canonical work, native work, and bind chunking yield
+exactly the two real candidates in both discovery surfaces. All 107 stored
+rows survive. This proves the adapter and restart path, not production health.
+
+Supersession can still generate a dangling or unaccepted target; its lineage
+semantics remain separate, with new discovery and mutation guards applying.
+Cross-owner transfer/provider replacement remains outside these local restart
+proofs. Root retains final review, integration and deployment authority.

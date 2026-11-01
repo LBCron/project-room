@@ -31,7 +31,7 @@ import { visibleSequenceHorizon } from "./history-visibility.mjs";
 import { nextWorkStep } from "../src/workflow.js";
 import { retiredNeedsMeKeys } from "./updates.mjs";
 import { mayWriteWorkClaims } from "./work-claim-routes.mjs";
-import { availableBoardRows } from "./available-work.mjs";
+import { availableBoardRowsInRoom } from "./available-work.mjs";
 import { claimUpdatedAt, isHardWork, releaseExpired, resolveNamedReviewers, hasCurrentReview, currentReviewOf, CLAIM_LIFECYCLE, ACTIVE_CLAIM_STATES } from "./work-claims.mjs";
 import { claimIdle } from "./agent-fleet.mjs";
 import { identityRoomSeats } from "./membership-resolution.mjs";
@@ -437,7 +437,7 @@ export function openWorkOf(store, roomId, memberId, authority, claims = null, no
   // Sort on the exact timestamp; round to minutes only for display.
   const minutesSince = ms => (ms === null ? null : Math.max(0, Math.round((nowMs - ms) / 60000)));
   // Board order (updatedAt desc, then id) within each group, as the Board shows.
-  const ready = availableBoardRows(list)
+  const ready = availableBoardRowsInRoom(store, roomId, list)
     .map(item => ({ item, at: updatedMs(item), released: (item.history ?? []).some(entry => entry?.action === "claimed"),
       hard: isHardWork(item) }))
     // Hard items (tag hard / hard-problem) first: they are the ones that stall

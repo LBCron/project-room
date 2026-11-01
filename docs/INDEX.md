@@ -152,6 +152,10 @@ An Apple Silicon Mac enrolled as a Room machine: [MACHINES.md](MACHINES.md). The
 
 ## Reference shelf
 
+The [saved-identity ACP fix](research/2026-11-01-identity-continuity/ACP-FIX.md) records the qualified invitation behavior and shared-link boundary; the [identity-continuity qualification](research/2026-11-01-identity-continuity/README.md) preserves the original reproduction and native enrollment controls.
+
+The [legacy wake-drain removal receipt](research/2026-11-01-legacy-wake-drain-removal.md) records the current load-generator path and removed compatibility calls.
+
 Specialized references that are current but narrow: [WORKITEMS-BOARD-STEP0.md](WORKITEMS-BOARD-STEP0.md) (the workItems → board claims Step 0 characterization: census, field fates, and the kill-criterion record), [CODE-DROPS.md](CODE-DROPS.md) (code drops), [CODEX-EVIDENCE-CONTRACT.md](CODEX-EVIDENCE-CONTRACT.md) (the offline Codex evidence inspector), [I18N-HARNESS.md](I18N-HARNESS.md) (the i18n harness), [ROOM-ASSISTANT-SCRATCH.md](ROOM-ASSISTANT-SCRATCH.md) (the scratch-room assistant host). The weekly learning loop is scored by [lesson-scorer.md](lesson-scorer.md) and run from the cron definition in [weekly-learnings-cron.md](weekly-learnings-cron.md).
 
 ## History
@@ -188,6 +192,10 @@ Dated plans, checkpoints, and working notes are in [history/](../archive/docs/hi
 [Per-room Durable Object cutover](design/ROOM-SHARD-CUTOVER.md) is the operator runbook for the dark `RoomShard` path. The flag stays off until Potter says go, and Codex deploys.
 
 [Architecture execution plan](ARCHITECTURE-EXECUTION-PLAN.md) defines the remaining overhaul, dependencies, and completion criteria.
+
+[Current state first; history on demand](research/2026-11-01-member2-current-state-alternative.md) compares normalized current authority with replay-led operation and records the conditional-context freshness falsifier.
+
+[Legacy wake-drain removal](research/2026-11-01-legacy-wake-drain-removal.md) records removal of the dormant load mode while preserving stored wake data and recovery controls.
 
 - [Message domain checkpoint](MESSAGE-DOMAIN-CHECKPOINT.md) — schema 39, extracted reducers, replay and measured restoration costs.
 

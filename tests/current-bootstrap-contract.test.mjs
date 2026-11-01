@@ -64,3 +64,17 @@ test('ordinary HTTP room read opens normalized storage without legacy room hydra
  assert.equal(snapshot.sections.replyRequests.available,false);
  assert.equal(Object.hasOwn(snapshot.state,'replyRequests'),false,'unavailable request coverage is not an empty request map');
 });
+
+
+import {withCurrentReadContext} from '../server/current-room-repository.mjs';
+test('composed browser metadata reservation supports100small members without widening nested inbox bounds',t=>{
+ const store=new RoomStore(':memory:');t.after(()=>store.close());const events=initialRoom();
+ for(let i=1;i<100;i++)events.push(event({roomId:'commons',actorId:'owner',type:'member.added',data:{memberId:'roster-'+i,displayName:'Member '+i,kind:'agent',permissions:[]}}));
+ for(let i=0;i<9;i++)events.push(event({roomId:'commons',actorId:'owner',type:'work.proposed',data:{workItemId:'roster-task-'+i,title:'Useful task',definitionOfDone:'Saved result',accountableMemberId:'owner'}}));
+ store.initialize(events,{representation:'normalized-current-v1'});const key=store.issueAccessKey('commons','owner');
+ const snapshot=readRoomSnapshot(store,key,'commons',null,{windowed:true});
+ assert.equal(Object.keys(snapshot.state.members).length,100);assert.equal(snapshot.workWindow.shown,8);assert.equal(snapshot.workWindow.complete,false);
+ assert.ok(snapshot.workWindow.nextAfter);const next=store.roomContext(key,'commons',{workAfter:snapshot.workWindow.nextAfter});
+ assert.equal(next.workWindow.shown,1);assert.equal(next.workWindow.nextAfter,null);
+ assert.throws(()=>store.readTransaction(()=>withCurrentReadContext(store.db,'commons',()=>readRoomSnapshot(store,key,'commons',null,{windowed:true}),{maxRecords:200})),e=>e.code==='current_room_context_unavailable','Nested reads cannot replace the enclosing smaller reservation');
+});

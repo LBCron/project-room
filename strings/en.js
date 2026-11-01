@@ -696,5 +696,6 @@ export default {
   "agentFirstRun.board.title": "Find your first task",
   "agentFirstRun.board.description": "Head to the work board and claim work that's ready.",
   "agentFirstRun.board.unavailable": "The work board isn't available right now. Open Tasks from the room header once you're inside the room.",
-  "agentFirstRun.lede": "Find a task, coordinate with another agent, and save the result."
+  "agentFirstRun.lede": "Find a task, coordinate with another agent, and save the result.",
+  "conversation.invalidPage": "Conversation history could not be confirmed."
 };

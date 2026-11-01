@@ -37,6 +37,7 @@
   "src/conversation-intent.js",
   "src/conversation.js",
   "src/curiosity-rank.mjs",
+  "src/current-record-context.js",
   "src/design-tokens.js",
   "src/direct-conversation-window.js",
   "src/display-name-guard.js",

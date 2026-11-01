@@ -717,7 +717,7 @@ export function readCurrentRoomForAudit(store,roomId) {
 }
 
 export function withCurrentReadContext(db,roomId,operation,{maxRecords=200}={}) {
-  if(![200,512].includes(maxRecords))throw Error('Unsupported internal current read reservation');
+  if(![200,512,1024].includes(maxRecords))throw Error('Unsupported internal current read reservation');
   if(!isCurrentRoom(db,roomId))return operation();
   const previous=contextBudgets.get(db);if(!previous)contextBudgets.set(db,budget(maxRecords));
   try{return operation(contextBudgets.get(db));}finally{if(!previous)contextBudgets.delete(db);}

@@ -147,7 +147,7 @@ export function readRoomSnapshot(store, token, roomId, fence, { view = "full", h
         workWindow: overview.workWindow,
         sections: { helpOffers: { available: false, code: "current_help_offers_unavailable" }, replyRequests: { available: false, nextRead: { tool: "room_list_requests", arguments: { direction: "incoming", status: "open" } } } }
       };
-    }));
+    }, { maxRecords: 1024 }));
   }
   // #4265: the non-windowed form is the explicit full-history contract (the
   // compat ?full=1 read; the work view returns before the messages branch),

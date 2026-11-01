@@ -6362,7 +6362,7 @@ this.slaBreachAlerts = new SlaBreachAlertJournal(this); // Task 26: durable in-a
       const overview=readCurrentOverviewWindow(this,roomId,{...options,viewerId});if(!overview)return null;
       if(!Object.hasOwn(overview.state.members,viewerId))fail(403,'member_required','Viewer must belong to this room');
       return {...overview,visibleSequence:currentVisibleHorizon(this,roomId,viewerId,overview.sequence)};
-    }));
+    },{maxRecords:1024}));
   }
   currentWorkListing(token,roomId,args={}) { return readCurrentWorkListing(this,token,roomId,args); }
   // Compact catch-up. sinceVersion equal to context_version returns

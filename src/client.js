@@ -713,7 +713,7 @@ export class RoomClient {
       if (generation !== this.generation || this.session !== session || anchored() !== live) return false;
       if (!this.ownsResponse(read, session)) { this.endAccess(); throw new Error(uiText("error.connection_changed")); }
       if (read.mode === "reset") { await this.refresh(null, { revalidate: true }); return false; }
-      if (read.mode !== "replace" || !Array.isArray(read.messages)) throw new Error("Invalid current conversation page");
+      if (read.mode !== "replace" || !Array.isArray(read.messages)) throw new Error(uiText("conversation.invalidPage"));
       const seen = new Set(held.messages.map(message => message.id));
       const messages = [...read.messages.filter(message => !seen.has(message.id)), ...held.messages];
       const more = read.nextCursor !== null;

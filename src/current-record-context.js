@@ -4,7 +4,7 @@
 const contexts = new WeakMap();
 export function bindCurrentRecordContext(state, { replyRequestCount }) {
   if (!Number.isSafeInteger(replyRequestCount) || replyRequestCount < 0)
-    throw Error('Invalid independently qualified reply request count');
+    throw Error('invalid_current_reply_request_count');
   contexts.set(state, Object.freeze({ replyRequestCount }));
 }
 export function inheritCurrentRecordContext(previous, next) {

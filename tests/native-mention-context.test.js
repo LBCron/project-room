@@ -30,7 +30,7 @@ test('bounded native post and signed delivery equal the retained full-context ef
   await f.runtime.drain(); await full.runtime.drain();
   full.store.db.prepare("UPDATE integrity_room_state SET metadata_hash=? WHERE room_id='commons'").run(proof.metadata_hash);
   assert.deepEqual(f.deliveries, full.deliveries);
-  for (const table of ['rooms', 'messages', 'work_entities', 'commands', 'events', 'mention_states', 'mention_observations', 'mcp_event_outbox', 'integrity_room_state']) {
+  for (const table of ['rooms', 'messages', 'work_entities', 'commands', 'events', 'mention_states', 'mention_observations', 'agent_wake_signals', 'activity_events', 'mcp_event_outbox', 'integrity_room_state']) {
     const read = fixture => fixture.store.db.prepare(`SELECT * FROM ${table} ORDER BY rowid`).all();
     assert.deepEqual(read(f), read(full), table);
   }
@@ -78,4 +78,61 @@ test('known metadata and message proof corruption cannot become permissive callb
     await f.runtime.drain();
     assert.equal(f.deliveries.length, 0, damage); assert.equal(outbox(f)[0].state, 'pending', damage);
   }
+});
+
+for (const barrier of [1, 2, 3]) for (const source of ['metadata', 'candidate']) test(`${source} EIO at authorization barrier ${barrier} retries without a false acknowledgment`, async t => {
+  const f = await nativeFixture(t); f.post();
+  const prepare = f.store.db.prepare; let calls = 0;
+  f.store.db.prepare = function(sql) {
+    if (sql.includes(source === 'metadata' ? 'AS metadata_hash_bytes' : 'AS message_id_bytes') && ++calls === barrier)
+      throw Object.assign(Error('injected native context storage failure'), { code: 'EIO' });
+    return prepare.call(this, sql);
+  };
+  try { await f.runtime.drain(); } finally { f.store.db.prepare = prepare; }
+  assert.equal(f.deliveries.length, 0); assert.equal(outbox(f)[0].state, 'pending'); assert.equal(outbox(f)[0].attempts, 1);
+  f.store.now = () => f.clock + 5000;
+  await f.runtime.drain();
+  assert.equal(f.deliveries.length, 1); assert.equal(outbox(f)[0].state, 'delivered'); assert.equal(outbox(f)[0].attempts, 2);
+  assert.equal(f.post().duplicate, true); assert.equal(outbox(f).length, 1);
+});
+
+for (const damage of ['metadata', 'message']) test(`${damage} corruption after DNS cannot become permissive before-send absence`, async t => {
+  const f = await nativeFixture(t); f.post();
+  f.beforeSend(() => {
+    if (damage === 'metadata') f.store.db.prepare("UPDATE rooms SET projection=json_set(projection,'$.room.title','Unproved') WHERE id='commons'").run();
+    else f.store.db.prepare("UPDATE messages SET body='Unproved' WHERE room_id='commons' AND message_id='native-update'").run();
+  });
+  await f.runtime.drain();
+  assert.equal(f.deliveries.length, 0); assert.equal(outbox(f)[0].state, 'pending');
+});
+
+for (const barrier of ['queued', 'beforeSend']) for (const change of ['actor', 'target', 'mute', 'archive', 'trust']) test(`${change} policy change at ${barrier} preserves native refusal`, async t => {
+  const f = await nativeFixture(t, 12, { crossOwner: change === 'trust' });
+  if (change === 'trust') policy(f, 'room');
+  f.post();
+  const action = () => {
+    if (change === 'actor' || change === 'target') {
+      const id = change === 'actor' ? 'coordinator' : f.principal.memberId;
+      const member = f.store.room('commons').state.members[id];
+      f.store.command(f.owner, 'commons', { id: 'disable', type: 'member.access_changed', data: {
+        memberId: id, expectedMemberRevision: member.revision, permissions: member.permissions, active: false
+      } });
+    }
+    if (change === 'mute') {
+      const key = f.store.issueAccessKey('commons', f.principal.memberId);
+      f.store.command(key, 'commons', { id: 'mute', type: 'member.mute_set', data: { memberId: 'coordinator', muted: true } });
+    }
+    if (change === 'archive') f.store.command(f.owner, 'commons', { id: 'archive', type: 'room.archived', data: {} });
+    if (change === 'trust') f.store.command(f.owner, 'commons', { id: 'trust', type: 'room.trust_set', data: { enabled: false } });
+  };
+  if (barrier === 'queued') action(); else f.beforeSend(action);
+  await f.runtime.drain(); assert.equal(f.deliveries.length, 0); assert.equal(outbox(f)[0].state, 'dead');
+});
+
+for (const damage of ['metadata', 'message']) test(`oversized corrupt ${damage} cannot select a permissive full fallback`, async t => {
+  const f = await nativeFixture(t); f.post();
+  const oversized = 'x'.repeat(5 * 1024 * 1024 + 1);
+  if (damage === 'metadata') f.store.db.prepare("UPDATE rooms SET projection=json_set(projection,'$.room.title',?) WHERE id='commons'").run(oversized);
+  else f.store.db.prepare("UPDATE messages SET body=? WHERE room_id='commons' AND message_id='native-update'").run(oversized);
+  await f.runtime.drain(); assert.equal(f.deliveries.length, 0); assert.equal(outbox(f)[0].state, 'pending');
 });

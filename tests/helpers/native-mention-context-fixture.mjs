@@ -36,10 +36,12 @@ function attach(t, store, details) {
   });
   return { ...details, store, oauth, runtime, post, deliveries, challenges, beforeSend(fn) { onLookup = fn; } };
 }
-export async function nativeFixture(t, retained = 12) {
+export async function nativeFixture(t, retained = 12, { crossOwner = false } = {}) {
   const store = new RoomStore(':memory:'), history = initialRoom(), at = '2026-11-01T12:00:00.000Z';
+  if (crossOwner) history.push(event({ id: 'add-other-owner', type: 'member.added', roomId: 'commons', actorId: 'owner', at,
+    data: { memberId: 'other-owner', displayName: 'Other owner', kind: 'human', permissions: [] } }));
   history.push(event({ id: 'add-coordinator', type: 'member.added', roomId: 'commons', actorId: 'owner', at,
-    data: { memberId: 'coordinator', displayName: 'Coordinator', kind: 'agent', permissions: [] } }));
+    data: { memberId: 'coordinator', displayName: 'Coordinator', kind: 'agent', permissions: [], ...(crossOwner ? { accountableHumanId: 'other-owner' } : {}) } }));
   history.push(event({ id: 'seed-work', type: 'work.proposed', roomId: 'commons', actorId: 'owner', at,
     data: { workItemId: 'review', title: 'Review patch', definitionOfDone: 'Report findings', mode: 'read', accountableMemberId: 'coordinator' } }));
   for (let i = 0; i < retained; i++) history.push(event({ id: `seed-event-${i}`, type: 'message.posted', roomId: 'commons', actorId: 'owner', at,

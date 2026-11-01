@@ -4157,8 +4157,6 @@ this.slaBreachAlerts = new SlaBreachAlertJournal(this); // Task 26: durable in-a
   }
   canonicalMessagePostContext(roomId, command, actorId) {
     if (this.messageProjectionWindow !== null || this.maintainMessageCertification) return null;
-    // Native mention callback authorization still reads full room visibility.
-    if (this.enqueueNativeMcpEvent && typeof command.data?.body === 'string' && command.data.body.includes('@')) return null;
     return canonicalMessagePostContext(this.db, roomId, command, { actorId, humanPushEnabled: Boolean(this.humanPush?.vapid), workLimits: PILOT_LIMITS });
   }
   // Phase 1a: the one serializer for rooms.projection. Every writer uses it.

@@ -8,6 +8,7 @@ import { ServiceError } from './service-error.mjs';
 import { projectPublicWorkReceipt, publicWorkReceiptOutcome } from './public-read-model.mjs';
 import { PublicWorkSettlement, publicWorkRewardMillis } from './public-work-settlement.mjs';
 import { isUnpublished } from './legal-store.mjs'; // operator unpublish hides a room or receipt from every public read
+import { recordedReceiptsOptOut } from './public-visibility.mjs'; // the authoritative recorded opt-out hides the room's receipts from non-members too
 
 export const publicWorkClaimsSchema = `
 CREATE TABLE IF NOT EXISTS public_work_tasks (
@@ -713,7 +714,13 @@ export class PublicWorkClaims {
     return { receiptJson: row.receiptJson, roomId: row.roomId ?? null };
   }
   _requireReceiptVisible(roomId, memberId) {
-    if (this.store.roomDirectory.publicReceiptsVisible(roomId)) return;
+    // Public serving requires both owner controls open: the directory
+    // toggle AND no authoritative recorded opt-out (room.public_
+    // receipts_set enabled:false — R08-F1: the toggle alone left an
+    // opted-out room's receipts serving on this door). Members of the
+    // room are still served below, as with the toggle.
+    if (this.store.roomDirectory.publicReceiptsVisible(roomId)
+      && !recordedReceiptsOptOut(this.db, roomId)) return;
     if (typeof memberId === "string" && memberId) {
       const members = this.store.roomAuthority(roomId)?.members ?? {};
       const member = members[memberId];

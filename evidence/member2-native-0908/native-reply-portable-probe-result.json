@@ -1,0 +1,80 @@
+{
+  "synthetic": true,
+  "networkRequests": 0,
+  "source": "0908cbcb76797601e878ee9f1f3b93bcb4afbfa1",
+  "fixtureSha256": "a1ab7288b067e4e4bcb11ea947edae6f80a3ec61783fcc952042c991903199ac",
+  "artifacts": [
+    {
+      "kind": "candidate",
+      "validatorSha256": "22062aa230a1a2e49444f197c72fbc9dd1beea917b061f2af570be166ef5f407",
+      "results": [
+        {
+          "name": "saved_room_stamp",
+          "accepted": true,
+          "expected": true
+        },
+        {
+          "name": "open_unstamped",
+          "accepted": true,
+          "expected": true
+        },
+        {
+          "name": "saved_session_stamp",
+          "accepted": true,
+          "expected": true
+        },
+        {
+          "name": "historical_unstamped",
+          "accepted": true,
+          "expected": true
+        },
+        {
+          "name": "unknown_stamp",
+          "accepted": false,
+          "expected": false
+        },
+        {
+          "name": "stamp_on_open_request",
+          "accepted": false,
+          "expected": false
+        }
+      ]
+    },
+    {
+      "kind": "legacy",
+      "validatorSha256": "66fb04ff05597013a7eb3ab172a5771e78934b42cf4977d014b116c05066257c",
+      "results": [
+        {
+          "name": "saved_room_stamp",
+          "accepted": false,
+          "expected": true
+        },
+        {
+          "name": "open_unstamped",
+          "accepted": true,
+          "expected": true
+        },
+        {
+          "name": "saved_session_stamp",
+          "accepted": false,
+          "expected": true
+        },
+        {
+          "name": "historical_unstamped",
+          "accepted": true,
+          "expected": true
+        },
+        {
+          "name": "unknown_stamp",
+          "accepted": false,
+          "expected": false
+        },
+        {
+          "name": "stamp_on_open_request",
+          "accepted": false,
+          "expected": false
+        }
+      ]
+    }
+  ]
+}

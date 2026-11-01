@@ -5463,6 +5463,17 @@ export function createRoomServer({ store, origin, assetRoot = new URL("../", imp
       }
       if (route === "events" && req.method === "GET") {
         const params = url.searchParams;
+        if(params.has('view')){
+          if(params.get('view')!=='browser'||[...params.keys()].some(key=>!['view','after','limit','eventId','auth'].includes(key)||params.getAll(key).length!==1)||params.has('eventId')&&(params.has('after')||params.has('limit')))
+            reject(422,'invalid_event_selection','Choose one browser event window or addressed event');
+          const eventId=params.get('eventId');let after=Number(params.get('after')??0),limit=Number(params.get('limit')??16);
+          if(!Number.isSafeInteger(after)||after<0||!Number.isInteger(limit)||limit<1||limit>16||eventId!==null&&!validId(eventId))reject(422,'invalid_event_selection','Invalid browser event selection');
+          if(eventId!==null){const row=store.db.prepare('SELECT sequence FROM events WHERE id=? AND room_id=?').get(eventId,roomId);if(!row)reject(404,'event_not_found','Event is unavailable');after=row.sequence-1;limit=1;}
+          const page=redactSelectedEventPage(store,roomId,store.eventsAfter(selected.token,roomId,after,limit,{expectedSessionBinding:fence}));
+          if(eventId!==null&&!page.events.some(row=>row.event.id===eventId))reject(404,'event_not_found','Event is unavailable');
+          return json(res,200,{contractVersion:2,readKind:'event-window',roomId,viewerId:auth.member.id,viewerAccountId:auth.account?.id??null,viewerAuthEpoch:auth.account?.authEpoch??null,viewerSessionBinding:auth.sessionBinding,viewerSessionRevision:auth.sessionRevision??null,
+            selection:{after,limit,eventId},sourceWindow:{after,examinedThrough:page.next,hasMore:page.hasMore},...page});
+        }
         // `afterSequence` is not a cursor. Ignoring it used to restart the
         // page at sequence 0, so an agent that thought it was caught up
         // reread the whole log. Refuse it and name `after`.

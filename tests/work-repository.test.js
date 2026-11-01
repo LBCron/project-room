@@ -5,7 +5,7 @@ import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 import { RoomStore } from '../server/store.mjs';
 import { initialRoom } from '../server/bootstrap.mjs';
-import { hydrateWorkItems, readWorkItem } from '../server/work-repository.mjs';
+import { hydrateWorkItems, readWorkItem, readWorkItems } from '../server/work-repository.mjs';
 
 function fixture(t, options = {}) {
   const directory = mkdtempSync(join(tmpdir(), 'work-repository-'));
@@ -22,6 +22,33 @@ function fixture(t, options = {}) {
     reopen(opts) { store.close(); store = new RoomStore(filename, opts); } };
 }
 const raw = f => JSON.parse(f.store.db.prepare("SELECT projection FROM rooms WHERE id='commons'").get().projection);
+
+test('selected batch reads preserve reference proof and Worker bind limits without unrelated hydration', t => {
+  const f = fixture(t); f.propose('one'); f.propose('unrelated');
+  const expected = readWorkItem(f.store.db, 'commons', 'one');
+  f.store.db.prepare("UPDATE work_entities SET body='UNSELECTED_SYNTHETIC_SENTINEL' WHERE work_id='unrelated'").run();
+  const prepare = f.store.db.prepare;
+  const observed = [];
+  f.store.db.prepare = sql => {
+    const statement = prepare.call(f.store.db, sql);
+    return new Proxy(statement, { get(target, key) {
+      if (key !== 'all') { const value = Reflect.get(target, key); return typeof value === 'function' ? value.bind(target) : value; }
+      return (...args) => { const rows = target.all(...args); observed.push({ sql, binds: args.length, rows }); return rows; };
+    } });
+  };
+  try {
+    const ids = ['one', ...Array.from({ length: 110 }, (_, n) => 'missing-' + n), 'one'];
+    const selected = readWorkItems(f.store.db, 'commons', ids);
+    assert.deepEqual([...selected.keys()], ['one']);
+    assert.deepEqual(selected.get('one'), expected);
+    assert.equal(observed.length, 3, 'two carrier batches and one selected-entity batch');
+    assert.ok(observed.every(read => read.binds <= 100));
+    assert.equal(JSON.stringify(observed).includes('UNSELECTED_SYNTHETIC_SENTINEL'), false);
+    assert.throws(() => readWorkItems(f.store.db, 'commons', ['unrelated']), /work_projection_corrupt/);
+  } finally { f.store.db.prepare = prepare; }
+  f.store.db.prepare("UPDATE work_entities SET body='{}' WHERE work_id='one'").run();
+  assert.throws(() => readWorkItems(f.store.db, 'commons', ['one']), /work_projection_corrupt/);
+});
 
 test('canonical records preserve full work state and write only the changed payload', t => {
   const f = fixture(t);

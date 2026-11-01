@@ -1397,7 +1397,7 @@ export function createRoomServer({ store, origin, assetRoot = new URL("../", imp
         roomAuth, roomCredentials, expectedBinding, accountBinding,
         checkOrigin, protectWrite, exact, pathId, expectedOrigin,
         accountCookieName, roomCookieName, tokenPattern, accountView: sessionAccountView,
-        signInSlotToken, magicMailer, magicEmailLimit, passkeys, oauthProvider, inviteOAuth,
+        signInSlotToken, magicMailer, magicEmailLimit, passkeys, oauthProvider, inviteOAuth, oauthResource, mcpRedirects,
         githubClient: github, googleClient: google,
         magicRequestEmailLimiter, magicConsumeEmailLimiter,
         resetRequestEmailLimiter, resetConsumeEmailLimiter, signupEmailLimiter,
@@ -1749,30 +1749,6 @@ export function createRoomServer({ store, origin, assetRoot = new URL("../", imp
           scopes_supported: [...OAUTH_SCOPES],
           token_endpoint_auth_methods_supported: ["none"], // public clients with PKCE
         });
-      }
-      // Public PKCE clients may register only already configured exact callbacks.
-      // Registration is metadata, never membership, sponsorship or a grant.
-      if (url.pathname === "/oauth/register" && req.method === "POST" && oauthResource) {
-        rate(`oauth-register:${remoteAddress}`, 20);
-        const data = await body(req);
-        if (!Array.isArray(data.redirect_uris) || !data.redirect_uris.length || data.redirect_uris.length > 5
-          || data.redirect_uris.some(uri => typeof uri !== "string" || !mcpRedirects.has(uri))
-          || data.token_endpoint_auth_method && data.token_endpoint_auth_method !== "none"
-          || data.grant_types && (!Array.isArray(data.grant_types) || data.grant_types.some(type => !["authorization_code", "refresh_token"].includes(type)))
-          || data.response_types && (!Array.isArray(data.response_types) || data.response_types.some(type => type !== "code")))
-          return json(res, 400, {error:"invalid_client_metadata"});
-        if (store.db.prepare("SELECT count(*) n FROM (SELECT 1 FROM oauth_provider_clients LIMIT 1025)").get().n >= 1024)
-          return json(res, 503, {error:"temporarily_unavailable"});
-        const name = data.client_name ?? "MCP connector";
-        if (typeof name !== "string" || !name.trim() || name.length > 80)
-          return json(res, 400, {error:"invalid_client_metadata"});
-        const clientId = "mcp_dcr_" + randomBytes(18).toString("base64url");
-        const client = {clientId,name,redirectUris:[...new Set(data.redirect_uris)]};
-        oauthProvider.registerClient(client);
-        inviteOAuth?.provider.registerClient(client);
-        res.setHeader("Cache-Control", "no-store");
-        return json(res, 201, {client_id:clientId,client_name:name,redirect_uris:client.redirectUris,
-          token_endpoint_auth_method:"none",grant_types:["authorization_code","refresh_token"],response_types:["code"]});
       }
       // GET /.well-known/feedback — /feedback standard discovery metadata.
       // Mirrors docs/feedback-endpoint.md §7: version, intake URL template,

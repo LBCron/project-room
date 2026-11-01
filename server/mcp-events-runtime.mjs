@@ -7,17 +7,18 @@ import { createHash } from 'node:crypto';
 import { createMcpEventSubscriptions } from './mcp-event-subscriptions.mjs';
 import { authorizeMcpOAuthDescriptor } from './mcp-oauth.mjs';
 import { isWorkersRuntime } from './ip-blocklist.mjs';
+import { canonicalNativeMentionPolicyContext } from './native-mention-context.mjs';
 
 // A native event subscription is an explicit opt-in independent of desktop
 // host registration. Workers deliberately has no automatic egress fallback.
 export function createMcpEventsRuntime({ store, accountProvider, inviteProvider, resource, transport, dnsResolvers, externalScheduler = false }) {
   if (!resource || (isWorkersRuntime() && (!transport || !externalScheduler))) return null;
   const authorize = descriptor => authorizeMcpOAuthDescriptor({ store, accountProvider, inviteProvider, resource, descriptor });
-  const authorizeEvent = (descriptor, { context }) => {
+  const authorizeEvent = (descriptor, { event, context }) => store.transaction(() => {
     if (!context || typeof context.actorId !== 'string' || !['mention', 'squad-mention', 'dm', 'work', 'board'].includes(context.kind)) return false;
     if (store.wakeQueue?.pauseStatus(descriptor.roomId, descriptor.memberId)
       || store.agentHeartbeats?.pausedRoomsOf(descriptor.identityId).some(row => row.roomId === descriptor.roomId)) return false;
-    const state = store.room(descriptor.roomId).state;
+    const state = canonicalNativeMentionPolicyContext(store, descriptor, event, context) ?? store.room(descriptor.roomId).state;
     const actor = state.members[context.actorId], target = state.members[descriptor.memberId];
     if (!actor || actor.active === false || !target || target.active === false || context.actorId === descriptor.memberId || state.room.archivedAt
       || firstBlockedWakeTarget(state, context.actorId, [descriptor.memberId]) || mutedEvent(state, descriptor.memberId, { actorId: context.actorId })) return false;
@@ -31,7 +32,7 @@ export function createMcpEventsRuntime({ store, accountProvider, inviteProvider,
       return next.needsAttention && next.memberId === descriptor.memberId;
     }
     return mayWake(store.db, state, descriptor.roomId, context.actorId, descriptor.memberId);
-  };
+  });
   const manager = createMcpEventSubscriptions({ store, authorize, authorizeEvent, transport, dnsResolvers });
   const emit = ({ roomId, memberId, identityId, messageId, eventId = messageId, actorId, kind, workItemId, workRevision, workClaimId, claimBasis }) => {
     if (!memberId && identityId) memberId = store.db.prepare('SELECT member_id FROM identity_links WHERE room_id=? AND identity_id=?').get(roomId, identityId)?.member_id;

@@ -1,6 +1,6 @@
 // First agent-coordination slice: ordinary top-level posts in rooms carrying
-// canonical work references. Native callbacks and round-limit resumes retain
-// their existing full-context path; this is not a general coordination claim.
+// canonical work references. Native callback policy has a separate context;
+// round-limit resumes retain their full path. This is not a general claim.
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { RoomStore, PILOT_LIMITS } from '../server/store.mjs';
@@ -138,14 +138,14 @@ test('round-limit paused work retains the full path and the original worker-post
   assert.equal(store.headSequence('commons'), before + 2);
 });
 
-test('native mentions retain full context and inactive agent writes remain refused', t => {
+test('native mentions use bounded post context and inactive agent writes remain refused', t => {
   const { store, token } = fixture(t, { retained: 20 });
   store.enqueueNativeMcpEvent = () => { throw Error('an unresolved mention cannot call delivery'); };
   const native = command(); native.data.body = '@UnknownAgent checkpoint';
-  assert.equal(store.transaction(() => store.canonicalMessagePostContext('commons', native, 'coordinator')), null);
+  assert.ok(store.transaction(() => store.canonicalMessagePostContext('commons', native, 'coordinator')));
   const measured = census(store.db);
   try { store.command(token, 'commons', native); } finally { measured.stop(); }
-  assert.ok(measured.result.messageRows > 20, 'native mention fallback is preserved');
+  assert.ok(measured.result.messageRows <= 8, 'native mention admission does not hydrate history');
   const owner = store.issueAccessKey('commons', 'owner');
   store.command(owner, 'commons', { id: 'disable-agent', type: 'member.access_changed',
     data: { memberId: 'coordinator', expectedMemberRevision: store.room('commons').state.members.coordinator.revision, active: false, permissions: [] } });

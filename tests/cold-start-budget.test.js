@@ -21,7 +21,10 @@ const EMPTY_UNTIL_CRON = new Set([
   "room_access_auto_approve",
   "integrity_snapshot",
   "integrity_job_cursor",
-  "integrity_room_state",
+  // integrity_room_state is NOT empty until cron: since #5506 round 4
+  // a room's row is seeded by RoomStore.initialize at creation (and
+  // refreshed by the integrity passes thereafter), so the fixture's
+  // two rooms carry two rows. Same amendment as the recovery audit.
   // A public room page stays empty until an owner opts in, and the recorded
   // receipts setting is written only when an owner opts in or out. The
   // backfill cursor is written by cron. Same exceptions as the recovery audit.

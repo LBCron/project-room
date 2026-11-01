@@ -1187,7 +1187,7 @@ function roomSchemaStamp() {
     ownerDelegateSchema, agentRoomSchema, oauthPendingSchema, gmailSchema, requestRunSchema, roomAssistantSchema,
     directSendSchema, inboxStitchSchema, RETIRED_BOARD_V2_SCHEMA,
     agentKeyRegistrySchema, INTEGRITY_SNAPSHOT_SCHEMA, OPERATOR_ACTIONS_SCHEMA,
-    INTEGRITY_JOB_CURSOR_SCHEMA, INTEGRITY_ROOM_STATE_SCHEMA, INTEGRITY_SWEEP_COLUMN, INTEGRITY_ROOM_HASH_COLUMN, INTEGRITY_SNAPSHOT_WATERMARK_COLUMN,
+    INTEGRITY_JOB_CURSOR_SCHEMA, INTEGRITY_ROOM_STATE_SCHEMA, INTEGRITY_SWEEP_COLUMN, INTEGRITY_ROOM_HASH_COLUMN, INTEGRITY_SNAPSHOT_WATERMARK_COLUMN, INTEGRITY_SNAPSHOT_SEEDED_COLUMN,
     ROOM_SCHEMA_STAMP_SCHEMA, LOOKUP_INDEXES, MESSAGES_SCHEMA, MESSAGE_REPLAY_SNAPSHOT_SCHEMA, MESSAGES_BACKFILL_CURSOR_SCHEMA, MESSAGES_BACKFILL_BLOCKS_SCHEMA, WANTS_WORK_SCHEMA, CODE_DROPS_SCHEMA, PROJECTION_BODIES_SCHEMA, WORK_REPOSITORY_SCHEMA,
     PUBLIC_READ_MODEL_SCHEMA,
     // Additive tables converged outside the version bump. A warm wake whose
@@ -1245,6 +1245,15 @@ const INTEGRITY_ROOM_HASH_COLUMN = "ALTER TABLE integrity_room_state ADD COLUMN 
 // round-2 timestamp test as a bounded legacy bridge (see
 // verifyRoomIntegrity).
 const INTEGRITY_SNAPSHOT_WATERMARK_COLUMN = "ALTER TABLE integrity_snapshot ADD COLUMN covered_event_rowid INTEGER";
+// Round 4 (#5506): 1 on every snapshot written by code that seeds
+// integrity_room_state at room creation (RoomStore.initialize /
+// importEvents) and publishes only over complete per-room state.
+// On a seeded snapshot the scan performs no newness inference: a
+// room the baseline covers holds a row, and a room created later
+// was seeded at birth, so a missing row fails closed outright.
+// Absent/0 marks a pre-seed snapshot, which keeps the bounded
+// insertion-order bridge until the first seeded publication.
+const INTEGRITY_SNAPSHOT_SEEDED_COLUMN = "ALTER TABLE integrity_snapshot ADD COLUMN seeded_baseline INTEGER NOT NULL DEFAULT 0";
 // L05-C1: the integrity checksum covers projection CONTENT. A room's
 // content hash binds its id, its sequence and the exact stored projection
 // bytes; the snapshot's digest is a hash over the per-room hashes in id
@@ -2700,6 +2709,7 @@ this.slaBreachAlerts = new SlaBreachAlertJournal(this); // Task 26: durable in-a
     this.db.exec(INTEGRITY_SNAPSHOT_SCHEMA);
     const snapshotColumns = new Set(this.db.prepare("PRAGMA table_info(integrity_snapshot)").all().map(column => column.name));
     if (!snapshotColumns.has("covered_event_rowid")) this.db.exec(INTEGRITY_SNAPSHOT_WATERMARK_COLUMN);
+    if (!snapshotColumns.has("seeded_baseline")) this.db.exec(INTEGRITY_SNAPSHOT_SEEDED_COLUMN);
   }
 
   // #3896: the durable streak of consecutive verifyRoomIntegrity calls
@@ -2879,8 +2889,10 @@ this.slaBreachAlerts = new SlaBreachAlertJournal(this); // Task 26: durable in-a
         // the composition above is only sound when every current room
         // holds a state row, so every room that exists at this moment
         // is covered by the baseline being written, and any room whose
-        // first event is inserted later orders after this mark.
-        this.db.prepare("UPDATE integrity_snapshot SET checksum=?, verified_at=?, covered_event_rowid=? WHERE id=1").run(text, this.now(), this.eventLogHighWater());
+        // first event is inserted later orders after this mark. The
+        // same full-coverage precondition is what the seeded_baseline
+        // stamp asserts, so the advance stamps it too.
+        this.db.prepare("UPDATE integrity_snapshot SET checksum=?, verified_at=?, covered_event_rowid=?, seeded_baseline=1 WHERE id=1").run(text, this.now(), this.eventLogHighWater());
       }
       if (sweep) {
         this.db.prepare(`INSERT INTO integrity_job_cursor(singleton, step, sweep_after) VALUES(1, 0, ?)
@@ -2906,6 +2918,33 @@ this.slaBreachAlerts = new SlaBreachAlertJournal(this); // Task 26: durable in-a
       return { text, rooms: rooms.rooms, sequences: rooms.sequences, projectionBytes: rooms.projectionBytes, invitations: invitations.invitations, journalEntries: journal.entries, journalSequences: journal.sequences, contentHash };
     });
   }
+  // The snapshot the operator purge may publish after deleting rooms:
+  // recomposed from the surviving rooms' REMEMBERED hashes, never from
+  // the surviving projection bytes themselves — recomputing over the
+  // bytes would bless any drift a survivor carries, laundering it into
+  // a matched baseline. Returns false and writes nothing when any
+  // surviving room lacks a remembered hash: the stale snapshot then
+  // forces a full audit, the only act allowed to judge those bytes.
+  // The previous baseline's insertion mark is preserved (a purge only
+  // shrinks the log's live region; dropping the mark to NULL would
+  // reopen the legacy timestamp bridge) and so is its seeded_baseline
+  // stamp; a first snapshot composed here is stamped seeded, which is
+  // true of it: seed-era code is running and every surviving room
+  // holds remembered proof.
+  recomposeIntegritySnapshotFromState() {
+    this.ensureIntegrityRoomState();
+    const rooms = this.db.prepare("SELECT COUNT(*) AS rooms, COALESCE(SUM(sequence), 0) AS sequences, COALESCE(SUM(LENGTH(projection)), 0) AS projectionBytes FROM rooms").get();
+    const storedHashes = this.db.prepare("SELECT room_id AS id, projection_hash AS hash FROM integrity_room_state WHERE room_id IN (SELECT id FROM rooms) ORDER BY room_id").all();
+    if (storedHashes.length !== rooms.rooms || storedHashes.some(row => !row.hash)) return false;
+    const invitations = this.db.prepare("SELECT COUNT(*) AS invitations FROM membership_invitations").get();
+    const journal = this.db.prepare("SELECT COUNT(*) AS entries, COALESCE(SUM(sequence), 0) AS sequences FROM membership_invitation_journal").get();
+    const text = ["v2", rooms.rooms, rooms.sequences, rooms.projectionBytes, invitations.invitations, journal.entries, journal.sequences, integrityContentDigest(storedHashes)].join(":");
+    const previous = this.db.prepare("SELECT covered_event_rowid AS mark, seeded_baseline AS seeded FROM integrity_snapshot WHERE id=1").get();
+    this.db.prepare(`INSERT INTO integrity_snapshot(id, checksum, verified_at, covered_event_rowid, seeded_baseline) VALUES(1, ?, ?, ?, ?)
+      ON CONFLICT(id) DO UPDATE SET checksum=excluded.checksum, verified_at=excluded.verified_at, covered_event_rowid=excluded.covered_event_rowid, seeded_baseline=excluded.seeded_baseline`)
+      .run(text, this.now(), previous ? previous.mark : this.eventLogHighWater(), previous ? previous.seeded : 1);
+    return true;
+  }
   readIntegritySnapshot() {
     try { return this.db.prepare("SELECT checksum FROM integrity_snapshot WHERE id=1").get()?.checksum ?? null; }
     catch { return null; }
@@ -2923,7 +2962,7 @@ this.slaBreachAlerts = new SlaBreachAlertJournal(this); // Task 26: durable in-a
   writeIntegritySnapshot(text) {
     this.ensureIntegrityRoomState();
     this.transaction(() => {
-      this.db.prepare("INSERT INTO integrity_snapshot(id, checksum, verified_at, covered_event_rowid) VALUES(1, ?, ?, ?) ON CONFLICT(id) DO UPDATE SET checksum=excluded.checksum, verified_at=excluded.verified_at, covered_event_rowid=excluded.covered_event_rowid")
+      this.db.prepare("INSERT INTO integrity_snapshot(id, checksum, verified_at, covered_event_rowid, seeded_baseline) VALUES(1, ?, ?, ?, 1) ON CONFLICT(id) DO UPDATE SET checksum=excluded.checksum, verified_at=excluded.verified_at, covered_event_rowid=excluded.covered_event_rowid, seeded_baseline=1")
         .run(text, this.now(), this.eventLogHighWater());
     });
   }
@@ -3005,7 +3044,8 @@ this.slaBreachAlerts = new SlaBreachAlertJournal(this); // Task 26: durable in-a
     // a room is missing entirely, or whose hash is an empty string, has
     // no baseline the scan can trust for that room — an empty string is
     // a value no writer in this codebase produces, and the state table
-    // is written only by the integrity passes, so a covered room's row
+    // is written only by room creation, history import, and the
+    // integrity passes, so a covered room's row
     // does not go missing in normal operation. Unlike a NULL hash (a
     // row the digest never reached, transitioned explicitly above), a
     // missing or emptied baseline fails closed: the rooms are recorded
@@ -3015,41 +3055,54 @@ this.slaBreachAlerts = new SlaBreachAlertJournal(this); // Task 26: durable in-a
     // (importEvents, which rebuilds a room's baseline from its replayed
     // log) restores a room that fails closed.
     // The one exemption is a genuinely new room — one the baseline
-    // never covered — and Dot's round-3 review sets the standard for
-    // proving it: coverage is decided by INSERTION ORDER, never by the
-    // genesis event's body timestamp. A body timestamp is
-    // author-supplied data: a room constructed before the baseline but
-    // initialized into the store after it, or one whose genesis merely
-    // ties the baseline's verified_at, was still absent when the
-    // baseline was written, and round 2's timestamp test convicted
-    // exactly those rooms with a durable failure. The evidence used
-    // here is the store's own sequencing: the snapshot records the
-    // event log's insertion high-water mark (covered_event_rowid) when
-    // the baseline is written, and a room whose first-inserted event
+    // never covered — and round 4 (Dot seq 24405/24454) settles how
+    // newness is proven: it is not inferred at all. A baseline written
+    // by seed-era code (seeded_baseline=1) needs no inference: every
+    // room it covers holds a state row (publication requires complete
+    // per-room state), and every room created since was seeded with
+    // its baseline at creation (initialize / importEvents), so a
+    // missing row under a seeded snapshot is a lost baseline and
+    // fails closed outright — whatever the event log's rowids say.
+    // That matters because insertion order is NOT stable evidence:
+    // the operator purge physically deletes events, and SQLite then
+    // hands a genuinely new room rowids below the snapshot's
+    // covered_event_rowid mark, which convicted exactly those rooms
+    // under the round-3 test.
+    // The insertion-order test below therefore survives only as the
+    // bounded bridge for snapshots written BEFORE seeding existed
+    // (seeded_baseline absent or 0): the snapshot records the event
+    // log's insertion high-water mark (covered_event_rowid) when the
+    // baseline is written, and a room whose first-inserted event
     // orders after that mark entered the store after the baseline —
-    // whatever its bodies claim. A room with no events carries no
-    // insertion evidence and is treated as covered, the conservative
-    // side. The mark trusts the log's insertion order exactly as the
-    // recovery path trusts its content; rewriting the log itself is
-    // the authorised importEvents act, outside this check's model.
-    // (Events are deleted only by importEvents — which refreshes the
-    // room's state row itself, so its rooms are never candidates — and
-    // by operator purge, which removes the room with its events.)
+    // never the genesis event's body timestamp, which is
+    // author-supplied data (round 2's timestamp test convicted rooms
+    // constructed before the baseline but initialized after it).
+    // A room with no events carries no insertion evidence and is
+    // treated as covered, the conservative side. The mark trusts the
+    // log's insertion order exactly as the recovery path trusts its
+    // content; rewriting the log itself is the authorised importEvents
+    // act, outside this check's model. (Events are deleted only by
+    // importEvents — which refreshes the room's state row itself, so
+    // its rooms are never candidates — and by operator purge, which
+    // removes the room with its events.)
     // An emptied row never takes the exemption: the row's existence
     // proves a baseline pass wrote it, so the room was covered by
-    // construction. Snapshots written before the mark existed carry
-    // NULL and keep the round-2 timestamp test as a bounded legacy
-    // bridge — the first baseline this code writes records the mark,
-    // so the bridge governs only pre-cure snapshots.
+    // construction. Pre-mark snapshots carry a NULL mark and keep the
+    // round-2 timestamp test as their bridge. Both bridges are
+    // self-extinguishing: the first baseline the seed-era code writes
+    // records the mark and stamps seeded_baseline, after which no
+    // inference of either kind can fire again.
     const unverifiableRooms = [];
     if (snapshot?.format === "v2") {
-      const snapRow = this.db.prepare("SELECT verified_at, covered_event_rowid AS coveredMark FROM integrity_snapshot WHERE id=1").get();
+      const snapRow = this.db.prepare("SELECT verified_at, covered_event_rowid AS coveredMark, seeded_baseline AS seeded FROM integrity_snapshot WHERE id=1").get();
       const verifiedAt = snapRow?.verified_at;
       const coveredMark = snapRow?.coveredMark ?? null;
+      const seededBaseline = snapRow?.seeded === 1;
       const candidates = this.db.prepare(`SELECT r.id, s.room_id AS stateRoomId FROM rooms r LEFT JOIN integrity_room_state s ON s.room_id=r.id
         WHERE s.room_id IS NULL OR s.projection_hash='' ORDER BY r.id`).all();
       for (const { id, stateRoomId } of candidates) {
         if (stateRoomId !== null) { unverifiableRooms.push(id); continue; }
+        if (seededBaseline) { unverifiableRooms.push(id); continue; }
         let exempt;
         if (coveredMark !== null) {
           const firstInserted = this.db.prepare("SELECT MIN(rowid) AS mark FROM events WHERE room_id=?").get(id)?.mark;
@@ -3179,8 +3232,14 @@ this.slaBreachAlerts = new SlaBreachAlertJournal(this); // Task 26: durable in-a
       if (!blockedDrift.length) {
         try {
           after = this.integrityChecksum();
-          this.writeIntegritySnapshot(after.text);
-          this.rememberIntegrityRoomState();
+          // Round 4: the snapshot and the per-room baselines publish
+          // atomically — one transaction, so no crash and no reader
+          // can observe a snapshot whose per-room proof is only
+          // half-written (Dot seq 24454).
+          this.transaction(() => {
+            this.writeIntegritySnapshot(after.text);
+            this.rememberIntegrityRoomState();
+          });
         } catch (error) {
           throw tagIntegritySubcheck(error, "snapshot");
         }
@@ -4192,7 +4251,19 @@ this.slaBreachAlerts = new SlaBreachAlertJournal(this); // Task 26: durable in-a
     return this.transaction(() => {
       const state = replayEvents(emptyRoomState(), events);
       const stored = compact(state);
-      this.db.prepare("INSERT INTO rooms(id,sequence,projection,archived_at) VALUES(?,?,?,?)").run(state.room.id, events.length, this.storedProjection(state.room.id, stored), archivedAtOf(stored));
+      const projection = this.storedProjection(state.room.id, stored);
+      this.db.prepare("INSERT INTO rooms(id,sequence,projection,archived_at) VALUES(?,?,?,?)").run(state.room.id, events.length, projection, archivedAtOf(stored));
+      // Round 4 (#5506, Dot seq 24454): the room's integrity baseline
+      // is seeded in the same transaction that creates the room, over
+      // the exact projection bytes just stored — the importEvents
+      // precedent. A room born under this code carries its proof from
+      // birth, so the integrity scan never has to infer whether a
+      // baseline covered it from insertion order or timestamps.
+      this.ensureIntegrityRoomState();
+      this.db.prepare(`INSERT INTO integrity_room_state(room_id, sequence, projection_bytes, projection_hash)
+        VALUES(?, ?, LENGTH(?), ?)
+        ON CONFLICT(room_id) DO UPDATE SET sequence=excluded.sequence, projection_bytes=excluded.projection_bytes, projection_hash=excluded.projection_hash`)
+        .run(state.room.id, events.length, projection, projectionContentHash(state.room.id, events.length, projection));
       const insert = this.db.prepare("INSERT INTO events VALUES(?,?,?,?)");
       events.forEach((e, i) => insert.run(state.room.id, i + 1, e.id, JSON.stringify(e)));
       syncRoomPublication(this, { roomId: state.room.id, state: stored, previous: null, auth: null });

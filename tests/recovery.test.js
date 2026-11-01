@@ -104,10 +104,11 @@ test("online capture preserves all application tables, identity boundaries and e
       assert.equal(table.rows, 0, "a public room page stays empty until an owner opts in, the recorded receipts setting is written only when an owner opts in or out, and the backfill cursor is written by cron");
       continue;
     }
-    if (table.table === "integrity_room_state") {
-      assert.equal(table.rows, 0, "per-room integrity state is written by the cron, not on open");
-      continue;
-    }
+    // integrity_room_state needs no special case: since #5506 round 4
+    // a room's row is seeded by RoomStore.initialize at creation (and
+    // refreshed by the integrity passes thereafter), so the fixture's
+    // rooms carry rows and the table falls through to the default
+    // rows > 0 audit below. Same amendment as cold-start-budget.
     if (table.table === "guest_link_exchanges") {
       assert.equal(table.rows, 0, "link exchange records exist only after a guest joins via a single-use link (GA-2)");
       continue;

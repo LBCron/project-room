@@ -259,10 +259,13 @@ function orderedEntries(kind, phase) {
 }
 
 function writeSnapshot(store) {
-  const checksum = store.integrityChecksum();
-  store.db.prepare(`INSERT INTO integrity_snapshot(id, checksum, verified_at) VALUES(1, ?, ?)
-    ON CONFLICT(id) DO UPDATE SET checksum=excluded.checksum, verified_at=excluded.verified_at`)
-    .run(checksum.text, store.now());
+  // Round 4 (#5506): the purge must not recompute the snapshot over
+  // the surviving projection bytes — that would certify any drift a
+  // survivor carries. The store recomposes the snapshot from the
+  // survivors' remembered integrity hashes, preserving the covered
+  // mark, and writes nothing when a survivor has no remembered hash,
+  // leaving the stale snapshot to force a full audit of those bytes.
+  store.recomposeIntegritySnapshotFromState();
 }
 
 function dropCaches(store, identityIds) {

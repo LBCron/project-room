@@ -44,3 +44,10 @@ test('wall action reports actual modal state rather than mere button presence', 
   assert.equal(run({ open: false }, () => {}), false);
   assert.equal(run({ open: true }, () => {}), true);
 });
+test('arrival hook reports actual modal state even if open returns without throwing', () => {
+  const source = readFileSync(new URL('../src/app.js', import.meta.url), 'utf8');
+  const action = source.match(/openBoardFromEntrance = (\(\) => \{[^\n]+\})/)[1];
+  const run = dialog => Function('openBoard', '$', `return (${action})();`)(() => {}, () => dialog);
+  assert.equal(run({ open: false }), false);
+  assert.equal(run({ open: true }), true);
+});

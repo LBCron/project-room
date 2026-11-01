@@ -11,6 +11,8 @@ import { listedMcpTools } from "../server/mcp-discovery.mjs";
 import { MCP_TOOL_CONTRACTS, mcpToolContractLine, withMcpToolContract } from "../server/mcp-tool-contracts.mjs";
 import { CORE_REST_TWINS, CORE_REST_EXEMPT } from "./mcp-core-rest-parity.test.js";
 import { GUEST_WRITABLE_TOOLS, T1_WRITABLE_TOOLS } from "../server/capability-visibility.mjs";
+import { buildWorkCommand } from "../client/work-actions.mjs";
+import { planBegin } from "../client/begin-work.mjs";
 
 export const KNOWN_UNCOVERED = Object.freeze(new Set([
   "bounty_accept", "bounty_claim", "bounty_dispute",
@@ -34,6 +36,27 @@ export const KNOWN_UNCOVERED = Object.freeze(new Set([
   ]));
 
 const CONTRACT_RE = /Access: (read|write|same as)[^.]*\. Cost: [^.]+\. REST: .+\.$/s;
+
+test("text-result REST contract names the actual completion command, not a new post", () => {
+  const command = buildWorkCommand("room_submit_text_result", {
+    requestId: "contract-result", workItemId: "work", expectedRevision: 2,
+    summary: "done", nextAction: "none", evidenceMessageId: "message", evidenceMessageEventId: "event",
+    evidenceVersion: "sha256:" + "0".repeat(64), previousCompletionEventId: null, producerId: null
+  });
+  assert.ok(MCP_TOOL_CONTRACTS.room_submit_text_result.rest.includes(`(${command.type})`));
+});
+
+test("begin-work REST contract covers every actual planner stage", () => {
+  const member = { id: "member", active: true, permissions: ["accept_work", "write_external"] };
+  const scope = { repository: "repo", ref: "main", paths: ["src/file"], expiresAt: "2099-01-01T00:00:00.000Z" };
+  for (const [state, mode] of [["proposed", "write"], ["accepted", "write"], ["accepted", "read"]]) {
+    const item = { id: "work", accountableMemberId: member.id, revision: 0, state, mode };
+    const { stage } = planBegin(item, member, { scope });
+    assert.ok(stage);
+    const command = buildWorkCommand(stage.action, stage.args);
+    assert.ok(MCP_TOOL_CONTRACTS.room_begin_work.rest.includes(command.type), command.type);
+  }
+});
 
 test("full: every contracted tool states access, cost and REST twin", () => {
   const tools = listedMcpTools("full").filter(tool => MCP_TOOL_CONTRACTS[tool.name]);

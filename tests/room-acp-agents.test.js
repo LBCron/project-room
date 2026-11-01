@@ -40,7 +40,7 @@ test("candidates: custom command wins; npx fallback only when an agent is named"
   assert.throws(() => candidates({ agent: "nope" }), /unknown agent/);
 });
 
-test("spawnAgent: child env is an allowlist — no parent credential crosses (RES-0151/RES-0145, one site)", async t => {
+test("spawnAgent excludes unnamed ambient credential variables (RES-0151/RES-0145, one site)", async t => {
   // Dummy sentinels only; nothing here is a real credential.
   const env = {
     PATH: process.env.PATH, HOME: "/tmp/fakehome", CODEX_PATH: "/opt/codex", FAKE_ACP_MODE: "echo",

@@ -141,13 +141,16 @@ test("gate before driftedProjectionRooms defers it whole after repair", async t 
 test("gate before the certifying transaction defers the second checksum and the snapshot write whole", async t => {
   const clock = fakeClock(t);
   const store = freshStore(t, "certgate");
-  // Settle under the frozen fake clock first: a v2 snapshot exists.
+  // Settle under the frozen fake clock first: a v3 snapshot exists
+  // (the current format at the composed head — B3's v3 composition;
+  // this assertion carried B1's pre-B3 v2 literal, updated exactly as
+  // B3 updated the content-hash files' format literals).
   const settle1 = await store.verifyRoomIntegrity({ deadline: clock.now() + 60_000 });
   assert.equal(settle1.verified, 1);
   const settled = store.readIntegritySnapshot();
-  assert.ok(settled?.startsWith("v2:"), "settled snapshot is v2");
+  assert.ok(settled?.startsWith("v3:"), "settled snapshot is v3");
   // Tamper with the snapshot's content digest (format stays valid
-  // v2) so the next tick takes the full path instead of matching:
+  // v3) so the next tick takes the full path instead of matching:
   // the incremental path recomputes the digest from the per-room
   // hashes and cannot reproduce the tampered snapshot text.
   const parts = settled.split(":");

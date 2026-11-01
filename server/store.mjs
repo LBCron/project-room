@@ -1,5 +1,5 @@
 import { savedHistoricalReplayCheckpoint } from './historical-replay-contract.mjs';
-import { bootstrapLegacyWriteProofs, configureWriteIntegrity, beginWriteProofFrame, endWriteProofFrame, publishProjectionWrites, projectionDigest, projectionContentHash, projectionContentHashV2, servingContentProof, servingProofDrift, assertProjectionWrite, assertMessageWrite, recordMessageWrite, withVerifiedRoomReconstruction } from './write-integrity.mjs';
+import { bootstrapLegacyWriteProofs, configureWriteIntegrity, createServingContentScanner, beginWriteProofFrame, endWriteProofFrame, publishProjectionWrites, projectionDigest, projectionContentHash, projectionContentHashV2, servingContentProof, servingProofDrift, assertProjectionWrite, assertMessageWrite, recordMessageWrite, withVerifiedRoomReconstruction } from './write-integrity.mjs';
 const OPERATOR_QA_ARCHIVE = Symbol("operator QA room archive");
 import { authenticateMcpOAuthRequest } from './mcp-oauth.mjs';
 import { assertListenerFence } from "./listener-fence.mjs";
@@ -1220,6 +1220,72 @@ const INTEGRITY_ROOM_STATE_SCHEMA = `CREATE TABLE IF NOT EXISTS integrity_room_s
   sequence INTEGER NOT NULL,
   projection_bytes INTEGER NOT NULL
 )`;
+// P1 §3.2 (lane B4): durable progress for the chunked content scan — one
+// row per room, banked at range boundaries by driveRoomContentScan. The
+// scan bound is the room sequence + projection metadata digest captured
+// at scan start; the range cursor is the last message id whose range
+// digest is banked; attempt_seq fences every chunk commit and the final
+// baseline adoption as compare-and-swap on (room_id, attempt_seq) plus
+// the bound still being current (the #5625 §4 rule). The checkpoint is
+// an optimisation of when the proof runs, never an audit input: no
+// verdict is ever issued from a partial scan.
+// ⚠ SCHEMA FLAG (design §3.4): this is ONE additive table, created with
+// CREATE TABLE IF NOT EXISTS from ensureIntegrityRoomState — no ALTER,
+// no migration; downgrade = an orphaned table pre-B4 code never reads.
+const INTEGRITY_CONTENT_SCAN_CHECKPOINT_SCHEMA = `CREATE TABLE IF NOT EXISTS integrity_content_scan_checkpoint (
+  room_id TEXT PRIMARY KEY,
+  attempt_seq INTEGER NOT NULL,
+  phase TEXT NOT NULL,
+  bound_seq INTEGER NOT NULL,
+  bound_digest TEXT NOT NULL,
+  range_cursor TEXT NOT NULL DEFAULT '',
+  range_digests_json TEXT NOT NULL DEFAULT '[]',
+  drift INTEGER NOT NULL DEFAULT 0,
+  scanned_count INTEGER NOT NULL DEFAULT 0,
+  visible_count INTEGER NOT NULL DEFAULT 0,
+  result_hash TEXT,
+  scan_discards INTEGER NOT NULL DEFAULT 0,
+  updated_at INTEGER NOT NULL
+)`;
+// CHECKPOINT_BYTES family (design §3.3): the maximum serialized size of
+// a checkpoint row, measured at commit. Range digests are fixed-size
+// hex (64 chars; 67 bytes each in the JSON array with quotes + comma),
+// so a 100,000-message room banks 500 ranges = ~33.5 KB of digests plus
+// under 0.5 KB of fixed fields — ~34 KB against the 256 KiB bound, and
+// the bound itself is only reachable near ~3,900 ranges (~780k rows).
+export const CONTENT_SCAN_CHECKPOINT_BYTES = 256 * 1024;
+const CONTENT_SCAN_CHECKPOINT_PHASES = Object.freeze(["messages", "work", "done"]);
+function contentScanCheckpointPayloadBytes({ rangeCursor, rangeDigestsJson }) {
+  // Serialized-size measure at commit: the JSON digest array verbatim,
+  // the cursor, and a fixed allowance covering every other column
+  // (room id, two 64-char digests, the small integers, the phase text).
+  return Buffer.byteLength(rangeDigestsJson) + Buffer.byteLength(rangeCursor ?? "") + 512;
+}
+// A checkpoint row is trusted only in exactly the shape the writer
+// produces; anything else is corrupt state (discard, count, restart —
+// the row is an optimisation, never an audit input, so corruption never
+// throws the drive and never certifies anything).
+function parseContentScanCheckpoint(row) {
+  if (!row || typeof row.room_id !== "string") return null;
+  if (!Number.isSafeInteger(row.attempt_seq) || row.attempt_seq < 1) return null;
+  if (!CONTENT_SCAN_CHECKPOINT_PHASES.includes(row.phase)) return null;
+  if (!Number.isSafeInteger(row.bound_seq) || row.bound_seq < 0) return null;
+  if (!/^[0-9a-f]{64}$/.test(row.bound_digest ?? "")) return null;
+  if (typeof row.range_cursor !== "string") return null;
+  let rangeDigests;
+  try { rangeDigests = JSON.parse(row.range_digests_json); } catch { return null; }
+  if (!Array.isArray(rangeDigests) || rangeDigests.some(digest => typeof digest !== "string" || !/^[0-9a-f]{64}$/.test(digest))) return null;
+  if (!Number.isSafeInteger(row.scanned_count) || row.scanned_count < 0) return null;
+  if (!Number.isSafeInteger(row.visible_count) || row.visible_count < 0) return null;
+  if (row.drift !== 0 && row.drift !== 1) return null;
+  if (row.result_hash !== null && row.result_hash !== undefined && !/^[0-9a-f]{64}$/.test(row.result_hash)) return null;
+  if (row.phase === "done" && !/^[0-9a-f]{64}$/.test(row.result_hash ?? "")) return null;
+  return { roomId: row.room_id, attemptSeq: row.attempt_seq, phase: row.phase,
+    boundSeq: row.bound_seq, boundDigest: row.bound_digest, rangeCursor: row.range_cursor,
+    rangeDigests, drift: row.drift, scannedCount: row.scanned_count, visibleCount: row.visible_count,
+    resultHash: row.result_hash ?? null,
+    scanDiscards: Number.isSafeInteger(row.scan_discards) && row.scan_discards > 0 ? row.scan_discards : 0 };
+}
 // Durable record of isolated integrity failures: one row per (step, record)
 // that a check has failed. Rows are written when a failure is isolated and
 // deleted when the record next verifies clean, so an outstanding row always
@@ -2789,6 +2855,7 @@ this.slaBreachAlerts = new SlaBreachAlertJournal(this); // Task 26: durable in-a
     if (!roomColumns.has("projection_hash")) this.db.exec(INTEGRITY_ROOM_HASH_COLUMN);
     if (!roomColumns.has("metadata_hash")) this.db.exec(INTEGRITY_METADATA_HASH_COLUMN);
     this.db.exec(INTEGRITY_SNAPSHOT_SCHEMA);
+    this.db.exec(INTEGRITY_CONTENT_SCAN_CHECKPOINT_SCHEMA);
     const snapshotColumns = new Set(this.db.prepare("PRAGMA table_info(integrity_snapshot)").all().map(column => column.name));
     if (!snapshotColumns.has("covered_event_rowid")) this.db.exec(INTEGRITY_SNAPSHOT_WATERMARK_COLUMN);
   }
@@ -2849,7 +2916,191 @@ this.slaBreachAlerts = new SlaBreachAlertJournal(this); // Task 26: durable in-a
         update.run(projectionContentHash(this.db, row.id, row.sequence, row.projection), row.id);
       }
       this.db.prepare("DELETE FROM integrity_room_state WHERE room_id NOT IN (SELECT id FROM rooms)").run();
+      // A deleted room's content-scan checkpoint is moot exactly like
+      // its room state: swept with it, never resumed or adopted.
+      this.db.prepare("DELETE FROM integrity_content_scan_checkpoint WHERE room_id NOT IN (SELECT id FROM rooms)").run();
     });
+  }
+
+  // ------------------------------------------------------------------
+  // P1 §3.2 (lane B4): the durable content-scan checkpoint flow.
+  //
+  // driveRoomContentScan drives B2's chunked scanner (carrying B3's
+  // ranged composition) for one room and banks its bankedProgress() —
+  // state as of the last completed range — into
+  // integrity_content_scan_checkpoint after every drive. A later drive
+  // (a NEW scanner instance; the old one is discarded) resumes from the
+  // banked cursor/digests when the row is well-formed and its bound
+  // (room sequence + projection metadata digest at scan start) is still
+  // current. Discard semantics: bound moved or row corrupt -> discard,
+  // count it (scanDiscards), restart under a fresh attempt_seq (the row
+  // is reset in place so attempt generations never repeat); room
+  // deleted -> the row is moot-swept. Chunk commits are CAS on
+  // (room_id, attempt_seq) with the bound re-checked in the UPDATE's
+  // WHERE clause; a caller may pin attemptSeq to prove fencing (a
+  // superseded pin is rejected before any work is banked).
+  // ------------------------------------------------------------------
+  contentScanCheckpointRow(roomId) {
+    this.ensureIntegrityRoomState();
+    return this.db.prepare("SELECT * FROM integrity_content_scan_checkpoint WHERE room_id=?").get(roomId) ?? null;
+  }
+
+  discardContentScanCheckpoint(roomId, boundSeq, boundDigest) {
+    // Discard + restart in place: the fresh attempt carries the next
+    // generation, so a stale writer's CAS can never match it.
+    this.db.prepare(`UPDATE integrity_content_scan_checkpoint SET attempt_seq=attempt_seq+1, phase='messages',
+      bound_seq=?, bound_digest=?, range_cursor='', range_digests_json='[]', drift=0, scanned_count=0,
+      visible_count=0, result_hash=NULL, scan_discards=scan_discards+1, updated_at=? WHERE room_id=?`)
+      .run(boundSeq, boundDigest, this.now(), roomId);
+    return parseContentScanCheckpoint(this.contentScanCheckpointRow(roomId));
+  }
+
+  async driveRoomContentScan(roomId, { deadline = Infinity, yieldBetween = null, chunkRows, chunkBytes, attemptSeq = null } = {}) {
+    this.ensureIntegrityRoomState();
+    const room = this.db.prepare("SELECT sequence, projection FROM rooms WHERE id=?").get(roomId);
+    let row = this.contentScanCheckpointRow(roomId);
+    if (!room) {
+      if (row) this.db.prepare("DELETE FROM integrity_content_scan_checkpoint WHERE room_id=?").run(roomId);
+      return { moot: 1, roomId };
+    }
+    const boundSeq = room.sequence, boundDigest = projectionDigest(room.projection);
+    let parsed = row ? parseContentScanCheckpoint(row) : null;
+    let discarded = 0;
+    if (row && (!parsed || parsed.boundSeq !== boundSeq || parsed.boundDigest !== boundDigest)) {
+      parsed = this.discardContentScanCheckpoint(roomId, boundSeq, boundDigest);
+      discarded = 1;
+    }
+    if (!row) {
+      this.db.prepare(`INSERT INTO integrity_content_scan_checkpoint
+        (room_id, attempt_seq, phase, bound_seq, bound_digest, updated_at) VALUES(?, 1, 'messages', ?, ?, ?)`)
+        .run(roomId, boundSeq, boundDigest, this.now());
+      parsed = parseContentScanCheckpoint(this.contentScanCheckpointRow(roomId));
+    }
+    if (attemptSeq !== null && parsed.attemptSeq !== attemptSeq) {
+      return { casRejected: 1, reason: "stale_attempt", roomId, attemptSeq: parsed.attemptSeq, scanDiscards: parsed.scanDiscards };
+    }
+    if (parsed.phase === "done") {
+      // A completed scan's verdict, banked durably: issued from the
+      // COMPLETE scan the row records, never from a partial one.
+      return { done: 1, roomId, drift: Boolean(parsed.drift), hash: parsed.resultHash,
+        rangeDigests: parsed.rangeDigests, attemptSeq: parsed.attemptSeq,
+        scanDiscards: parsed.scanDiscards, bound: boundSeq };
+    }
+    const scanner = createServingContentScanner(this.db, roomId, boundSeq, room.projection, {
+      verify: true, hashContent: true,
+      ...(chunkRows !== undefined ? { chunkRows } : {}), ...(chunkBytes !== undefined ? { chunkBytes } : {}),
+      resume: { phase: parsed.phase, range_cursor: parsed.rangeCursor, rangeDigests: parsed.rangeDigests,
+        scanned_count: parsed.scannedCount, visible_count: parsed.visibleCount, drift: parsed.drift },
+    });
+    await scanner.drive({ deadline, yieldBetween });
+    const banked = scanner.bankedProgress();
+    const attempt = parsed.attemptSeq;
+    const casWhere = "WHERE room_id=? AND attempt_seq=? AND bound_seq=? AND bound_digest=?";
+    if (scanner.done) {
+      const outcome = scanner.outcome;
+      const rangeDigestsJson = JSON.stringify(outcome.rangeDigests);
+      if (contentScanCheckpointPayloadBytes({ rangeCursor: banked.range_cursor, rangeDigestsJson }) > CONTENT_SCAN_CHECKPOINT_BYTES)
+        return { checkpointOversize: 1, roomId, attemptSeq: attempt, scanDiscards: parsed.scanDiscards };
+      const committed = this.db.prepare(`UPDATE integrity_content_scan_checkpoint SET phase='done',
+        range_cursor=?, range_digests_json=?, drift=?, scanned_count=?, visible_count=?, result_hash=?, updated_at=? ${casWhere}`)
+        .run(banked.range_cursor, rangeDigestsJson, outcome.drift ? 1 : 0, banked.scanned_count, banked.visible_count,
+          outcome.hash, this.now(), roomId, attempt, boundSeq, boundDigest);
+      if (committed.changes !== 1)
+        return { casRejected: 1, reason: "stale_attempt", roomId, attemptSeq: attempt, scanDiscards: parsed.scanDiscards };
+      return { done: 1, roomId, drift: outcome.drift, hash: outcome.hash, rangeDigests: outcome.rangeDigests,
+        attemptSeq: attempt, scanDiscards: parsed.scanDiscards,
+        fetchedBytes: scanner.fetchedBytes, fetchOversize: scanner.fetchOversize };
+    }
+    const rangeDigestsJson = JSON.stringify(banked.rangeDigests);
+    if (contentScanCheckpointPayloadBytes({ rangeCursor: banked.range_cursor, rangeDigestsJson }) > CONTENT_SCAN_CHECKPOINT_BYTES)
+      return { checkpointOversize: 1, roomId, attemptSeq: attempt, scanDiscards: parsed.scanDiscards };
+    const committed = this.db.prepare(`UPDATE integrity_content_scan_checkpoint SET phase=?,
+      range_cursor=?, range_digests_json=?, drift=?, scanned_count=?, visible_count=?, result_hash=NULL, updated_at=? ${casWhere}`)
+      .run(banked.phase, banked.range_cursor, rangeDigestsJson, banked.drift ? 1 : 0, banked.scanned_count,
+        banked.visible_count, this.now(), roomId, attempt, boundSeq, boundDigest);
+    if (committed.changes !== 1)
+      return { casRejected: 1, reason: "stale_attempt", roomId, attemptSeq: attempt, scanDiscards: parsed.scanDiscards };
+    return { ...scanner.result(), roomId, attemptSeq: attempt,
+      scanDiscards: parsed.scanDiscards, checkpointBanked: 1 };
+  }
+
+  // The final baseline adoption for a completed durable scan, fenced by
+  // the checkpoint CAS: the write lands only for the attempt that
+  // completed the scan, with the bound still current at adoption time.
+  // A stale attempt, a moved bound, an incomplete or corrupt row adopts
+  // nothing — the remembered baseline is left exactly as it stood.
+  adoptContentScanBaseline(roomId, { attemptSeq = null } = {}) {
+    this.ensureIntegrityRoomState();
+    return this.transaction(() => {
+      const row = this.contentScanCheckpointRow(roomId);
+      if (!row) return { adopted: 0, reason: "no_checkpoint", roomId };
+      const parsed = parseContentScanCheckpoint(row);
+      if (!parsed) {
+        this.db.prepare("DELETE FROM integrity_content_scan_checkpoint WHERE room_id=?").run(roomId);
+        return { adopted: 0, reason: "corrupt_discarded", roomId,
+          scanDiscards: (Number.isSafeInteger(row.scan_discards) ? row.scan_discards : 0) + 1 };
+      }
+      if (attemptSeq !== null && parsed.attemptSeq !== attemptSeq)
+        return { adopted: 0, reason: "stale_attempt", roomId, attemptSeq: parsed.attemptSeq };
+      if (parsed.phase !== "done")
+        return { adopted: 0, reason: "incomplete", roomId, attemptSeq: parsed.attemptSeq };
+      const room = this.db.prepare("SELECT sequence, projection, LENGTH(projection) AS bytes FROM rooms WHERE id=?").get(roomId);
+      if (!room) {
+        this.db.prepare("DELETE FROM integrity_content_scan_checkpoint WHERE room_id=?").run(roomId);
+        return { adopted: 0, reason: "room_deleted", roomId };
+      }
+      if (parsed.boundSeq !== room.sequence || parsed.boundDigest !== projectionDigest(room.projection)) {
+        this.discardContentScanCheckpoint(roomId, room.sequence, projectionDigest(room.projection));
+        return { adopted: 0, reason: "bound_moved", roomId, scanDiscards: parsed.scanDiscards + 1 };
+      }
+      this.db.prepare(`INSERT INTO integrity_room_state(room_id, sequence, projection_bytes, projection_hash) VALUES(?,?,?,?)
+        ON CONFLICT(room_id) DO UPDATE SET sequence=excluded.sequence, projection_bytes=excluded.projection_bytes,
+        projection_hash=excluded.projection_hash`)
+        .run(roomId, room.sequence, room.bytes, parsed.resultHash);
+      const deleted = this.db.prepare("DELETE FROM integrity_content_scan_checkpoint WHERE room_id=? AND attempt_seq=?")
+        .run(roomId, parsed.attemptSeq);
+      if (deleted.changes !== 1) throw new Error("content scan checkpoint CAS failed during adoption");
+      return { adopted: 1, roomId, attemptSeq: parsed.attemptSeq, hash: parsed.resultHash };
+    });
+  }
+
+  // Runs inside verifyRoomIntegrity's adoption transaction, after the
+  // fresh audit has rewritten the remembered baselines: completed
+  // checkpoints whose banked hash IS the adopted baseline are consumed
+  // under their CAS; stale-bound or corrupt rows are discarded and
+  // counted; a completed row that disagrees with the fresh audit is
+  // discarded too — the checkpoint is never an audit input, so adoption
+  // proceeds on the audit alone. Partial rows at a still-current bound
+  // are left standing for resume. If a CAS delete misses, the whole
+  // adoption transaction writes nothing (#5625 §4).
+  consumeContentScanCheckpointsForAdoption() {
+    this.ensureIntegrityRoomState();
+    let scanDiscards = 0, consumed = 0;
+    for (const row of this.db.prepare("SELECT * FROM integrity_content_scan_checkpoint").all()) {
+      const room = this.db.prepare("SELECT sequence, projection FROM rooms WHERE id=?").get(row.room_id);
+      if (!room) {
+        this.db.prepare("DELETE FROM integrity_content_scan_checkpoint WHERE room_id=?").run(row.room_id);
+        continue;
+      }
+      const parsed = parseContentScanCheckpoint(row);
+      if (!parsed || parsed.boundSeq !== room.sequence || parsed.boundDigest !== projectionDigest(room.projection)) {
+        this.db.prepare("DELETE FROM integrity_content_scan_checkpoint WHERE room_id=?").run(row.room_id);
+        scanDiscards++;
+        continue;
+      }
+      if (parsed.phase !== "done") continue;
+      const remembered = this.db.prepare("SELECT projection_hash AS hash FROM integrity_room_state WHERE room_id=?").get(row.room_id)?.hash;
+      if (remembered !== parsed.resultHash) {
+        this.db.prepare("DELETE FROM integrity_content_scan_checkpoint WHERE room_id=?").run(row.room_id);
+        scanDiscards++;
+        continue;
+      }
+      const deleted = this.db.prepare("DELETE FROM integrity_content_scan_checkpoint WHERE room_id=? AND attempt_seq=?")
+        .run(row.room_id, parsed.attemptSeq);
+      if (deleted.changes !== 1) throw new Error("content scan checkpoint CAS failed during adoption");
+      consumed++;
+    }
+    return { scanDiscards, consumed };
   }
 
   // Internal owner-authorized history reconstruction, never ordinary write
@@ -3254,6 +3505,7 @@ this.slaBreachAlerts = new SlaBreachAlertJournal(this); // Task 26: durable in-a
     let blockedDrift = this.integrityFailures()
       .filter(row => row.step === "projection_content")
       .map(row => row.recordId);
+    let checkpointScanDiscards = 0;
     let after = before;
     let drifted = [];
     if (!outstanding.length) {
@@ -3295,6 +3547,15 @@ this.slaBreachAlerts = new SlaBreachAlertJournal(this); // Task 26: durable in-a
           this.transaction(() => {
             after = this.integrityChecksum();
             this.rememberIntegrityRoomState();
+            // B4 re-point (discharging B3's deferral): the baseline
+            // adoption now rides the content-scan checkpoint CAS —
+            // completed checkpoints are consumed under (room_id,
+            // attempt_seq) inside this transaction, stale or corrupt
+            // rows are discarded and counted, and a CAS miss aborts
+            // the adoption whole. The store-wide snapshot write below
+            // remains the transition's adoption surface; the per-room
+            // seam adoption is adoptContentScanBaseline.
+            checkpointScanDiscards = this.consumeContentScanCheckpointsForAdoption().scanDiscards;
             this.writeIntegritySnapshot(after.text);
           });
         } catch (error) {
@@ -3310,10 +3571,10 @@ this.slaBreachAlerts = new SlaBreachAlertJournal(this); // Task 26: durable in-a
     const baselineUpgraded = untrustedBaseline && !outstanding.length && !blockedDrift.length ? { baselineUpgraded: 1 } : {};
     const contentDrift = blockedDrift.length ? { contentDrift: 1 } : {};
     const baselineUnverifiable = unverifiableRooms.length ? { baselineUnverifiable: 1 } : {};
-    if (expired()) return defer("runDeferredIntegrityBatch", { verified, invitations: after.invitations, ...baselineUpgraded, ...contentDrift, ...baselineUnverifiable });
+    if (expired()) return defer("runDeferredIntegrityBatch", { verified, invitations: after.invitations, ...baselineUpgraded, ...contentDrift, ...baselineUnverifiable, ...(checkpointScanDiscards ? { scanDiscards: checkpointScanDiscards } : {}) });
     const deferred = await this.runDeferredIntegrityBatch({ deadline, yieldBetween });
     deferredProgressed = deferredProgressed || (deferred?.ran ?? 0) > 0;
-    return finish({ matched: 0, skipped: 0, verified, invitations: after.invitations, deferred, ...baselineUpgraded, ...contentDrift, ...baselineUnverifiable, failures: this.integrityFailures() });
+    return finish({ matched: 0, skipped: 0, verified, invitations: after.invitations, deferred, ...baselineUpgraded, ...contentDrift, ...baselineUnverifiable, ...(checkpointScanDiscards ? { scanDiscards: checkpointScanDiscards } : {}), failures: this.integrityFailures() });
   }
 
   // With `collect` (an array), a room whose help history does not reconcile

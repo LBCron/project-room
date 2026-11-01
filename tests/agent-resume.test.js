@@ -437,5 +437,21 @@ test('failed or old-server agent-work reads withhold requests and runs as unavai
     assert.equal(snapshot.observedThroughBySource.openRequests, undefined, failure);
     assert.ok(snapshot.incompleteSources.some(source => source.source === 'openRequests'));
     assert.ok(snapshot.incompleteSources.some(source => source.source === 'pendingReconciliations'));
-    if (failure === 'throttled') assert.equal(snapshot.pendingReconciliations.httpStatus, 429);
-  }});
+    if (failure === 'throttled') {
+      assert.equal(snapshot.pendingReconciliations.httpStatus, 429);
+      const throttled = snapshot.incompleteSources.find(source => source.source === 'openRequests');
+      assert.equal(throttled.retryAfterMs, 1000, 'Retry-After survives into the incomplete source');
+    }
+  }
+  // blockedBy reasons from the server are bounded: at most 8, each at most 80 characters.
+  const bounded = await resumeAgent({ connection: config, focus: 'replies', fetchImpl: async (url, init) => {
+    if (!String(url).endsWith('/agent-work')) return fetch(url, init);
+    const value = await (await fetch(url, init)).json();
+    value.blockedBy = { 'old-open': Array.from({ length: 12 }, (_, i) => `${i}-${'x'.repeat(200)}`) };
+    return Response.json(value);
+  } });
+  const request = bounded.openRequests.find(item => item.id === 'old-open');
+  assert.equal(request.blockedBy.length, 8);
+  assert.ok(request.blockedBy.every(reason => reason.length <= 80));
+  assert.equal(request.blockedBy[0], `0-${'x'.repeat(78)}`);
+});

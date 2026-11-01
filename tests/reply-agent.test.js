@@ -278,7 +278,7 @@ test("a lost 'delivered' run report is surfaced and retried until the service re
   // Sustained retryable failure keeps it pending and only re-reports (no reply replay).
   let replies = 0;
   const counting = { ...connection, fetchImpl: async (url, options) => {
-    if (options.method === "POST" && !new URL(url).pathname.endsWith("/request-runs")) replies++;
+    if (options.method === "POST" && new URL(url).pathname.endsWith("/commands")) replies++;
     return connection.fetchImpl(url, options);
   } };
   await assert.rejects(runRequestOnce({ ...args, connection: counting, requestMessageId, execute }), error => error.runReportPending === true);
@@ -338,7 +338,8 @@ for (const [label, respond] of [
   const connection = { ...f.config, fetchImpl: async (url, options) => {
     const path = new URL(url).pathname;
     if (options.method === "POST" && path.endsWith("/request-runs") && JSON.parse(options.body).action === "delivered") { reports++; if (failing) return respond(); }
-    if (options.method === "POST" && path.endsWith("/messages")) replies++;
+    // The reply is a room command (POST /commands), not a /messages write.
+    if (options.method === "POST" && path.endsWith("/commands")) replies++;
     return fetch(url, options);
   } };
   const execute = async () => { calls++; return { body: "Answer" }; };
@@ -346,6 +347,7 @@ for (const [label, respond] of [
   assert.deepEqual({ ...args.db.prepare("SELECT delivered, reported FROM request_runs").get() }, { delivered: 1, reported: 0 }, "not a definite refusal");
   assert.equal(args.db.prepare("SELECT count(*) AS n FROM request_runs WHERE (delivered=0 OR reported=0) AND delivery_refused=0").get().n, 1, "automatic scans still see it");
   const repliesAfterFirst = replies;
+  assert.equal(repliesAfterFirst, 1, "the counter sees the one real reply command");
   failing = false;
   const result = await runRequestOnce({ ...args, connection, requestMessageId, execute });
   assert.equal(result.reportOnly, true);

@@ -1,6 +1,6 @@
 # Follow-up production releases, 2026-11-01
 
-Current observation, 10:31 UTC: production and main are `21891d44372c7d24006ea37e312853517f5f9d73`. Deployment `41296448193` passed strict smoke 16/16, public smoke and runtime publication. Canonical build `2026-11-01T10:13:07.057Z`; entry build `2026-11-01T10:13:16.979Z`. Both Worker and Durable Object doors converged. A fresh live historical repair plan returned HTTP 409 `repair_projection_unavailable`: no repair executed and the quarantine remains. Corrected controlled post/retry/reversal QA on the prior d3e73 source passed at 10:10:43 UTC; it was not rerun on 21891.
+Current checkpoint: production is `54c92ab83616a5eb46dba7beaaf741da7088ecf0`. Native mention deployment `41298040713` passed strict smoke 16/16, public smoke and runtime publication. Canonical build `2026-11-01T10:34:42.587Z`; entry build `2026-11-01T10:34:51.586Z`. Root independently verified all four source doors and readiness on both origins. Main additionally contains diagnostic landing `1b99d27397c03e73ee134da221c783541d7c192c`; deployment `41298609743` is pending. The historical repair has not executed and its quarantine remains.
 
 The sections below are dated checkpoint history. Later receipts supersede earlier limitations explicitly; failed attempts remain preserved. Exact head qualification, merge, deployment and live checks are distinct. No skipped or cancelled job is called passed.
 
@@ -111,3 +111,14 @@ A separate future-only, sanitized canonical Worker observation decoded 617 event
 Deployment `41296448193` successfully published source `21891d44372c7d24006ea37e312853517f5f9d73`. Runtime verification at `2026-11-01T10:19:26.809500Z` records 663 files, 3,513,118 archive bytes and SHA256 `b25b04664b555127ed83bceb9751b6a277ff71bf68780217a4116ead7d7b7a34`. Root source readbacks converged; Jill independently reported readiness 10/10. The attached smoke and immutable runtime receipts preserve those checks.
 
 A source-pinned, journaled plan for the selected 25-event historical quarantine refused with `repair_projection_unavailable`. The script had no execute path. The private input and response remain preserved; only the sanitized refusal is published. The response does not distinguish missing proof, proof drift, content mismatch or hydration failure. Old private backup evidence cannot establish which applies now. No trust baseline was minted, serving row rewritten or quarantine cleared. The underlying provenance/recovery investigation remains open.
+
+
+### Native mention deployment and pending diagnostic
+
+PR #5595 exact head `859f96cadeb8e62bd4e58889ecd8db33b4c80206` passed hosted run `41297577796`, including all six browser shards, unit, Worker, contract, lint and friend-agent checks. Its merge is `54c92ab83616a5eb46dba7beaaf741da7088ecf0`. Deployment `41298040713` completed successfully. Runtime verification records 664 files, 3,514,701 archive bytes and SHA256 `f6f08c23ef418a9253fb4581e5fc6334e2b52766b0ff66a1b29b812a7f223271`, checked at `2026-11-01T10:41:03.704984Z`. A subsequent release-list readback confirms runtime-2026-11-01-54c92ab is latest. The immutable verification receipt precedes latest promotion and correctly records publicationPromoted=false.
+
+The bounded native mention path preserves fresh policy checks at every callback authorization barrier. Its actual Worker/local OAuth and signed transport qualification is source-pinned; this deployment's public smokes do not establish a new external host or closed-app wake. Account-agent OAuth binding retains a separate full-room read outside this slice.
+
+PR #5597 passed its exact head `f19b880fead1ca63c99e8d8ad9ca5e35ae779727` in hosted run `41298137674` and landed `1b99d27397c03e73ee134da221c783541d7c192c`. It attaches only fixed, code-owned proof refusal diagnostics. No eligibility, status, predicate ordering, SQL, transaction or trust-baseline change is included. Its deployment and fresh live diagnosis remain pending at this checkpoint.
+
+Attachment PR #5596's initial head `5d87a8b` failed hosted unit because both new Operator operations lacked required OpenAPI permission declarations. The exact guard failed locally before four source/generated annotation lines cured it. Current composed head `df8d76d41e9279ef0ed07bfb71683f55992515bb` has fresh checks running; no failure is waived and no optional index installed.

@@ -7,7 +7,7 @@ import { CURRENT_WRITER_FORMAT } from './current-room-format.mjs';
 // to a target, and no ordinary SQL writer may clear an interrupted restore.
 export const RESTORE_CONTROL_TABLE = 'current_restore_admission';
 export const RESTORE_AUDIT_TABLE='current_restore_audit_scratch';
-export const RESTORE_AUDIT_VERSION=2,RESTORE_REPORT_VERSION=1;
+export const RESTORE_AUDIT_VERSION=3,RESTORE_REPORT_VERSION=1;
 export const RESTORE_AUDIT_UNIT_BYTES=131072+2048;
 export const RESTORE_CONTROL_DEFINITIONS = [[RESTORE_CONTROL_TABLE, `CREATE TABLE IF NOT EXISTS current_restore_admission (
   singleton INTEGER PRIMARY KEY CHECK(singleton=1), state TEXT NOT NULL CHECK(state IN ('clear','pending')),
@@ -119,15 +119,18 @@ export function withRestoreAuditRows(db,restoreId,operation){
  verifyRestoreControl(db);
  const state=db.prepare('SELECT state,restore_id,phase FROM current_restore_admission WHERE singleton=1').get();
  if(state?.state!=='pending'||state.restore_id!==restoreId||state.phase!=='audit_pending')throw Error('Restore scratch authority differs');
- const guards=RESTORE_CONTROL_GUARDS.filter(([name])=>name.startsWith(RESTORE_AUDIT_TABLE+'_')),pending=[];let pendingBytes=0;
- const result=operation({deletePage(limit){return withExactRestoreGuards(db,guards,()=>{
+ const guards=RESTORE_CONTROL_GUARDS.filter(([name])=>name.startsWith(RESTORE_AUDIT_TABLE+'_')),pending=[],pendingByKey=new Map();let pendingBytes=0,active=true;
+ const assertActive=()=>{if(!active||!db.isTransaction||!scopes.has(db))throw Error('Restore scratch scope expired');};
+ const identity=(lane,roomId,domain,key,part)=>JSON.stringify([lane,roomId,domain,key,part]);
+ const read=(lane,roomId,domain,key,part=0)=>{assertActive();const queued=pendingByKey.get(identity(lane,roomId,domain,key,part));if(queued)return queued[7];const scalar=db.prepare('SELECT payload_bytes,length(CAST(payload AS BLOB)) bytes FROM current_restore_audit_scratch WHERE restore_id=? AND lane=? AND room_id=? AND domain=? AND unit_key=? AND part=?').get(restoreId,lane,roomId,domain,key,part);if(!scalar)return undefined;if(scalar.bytes!==scalar.payload_bytes||scalar.bytes<1||scalar.bytes>RESTORE_AUDIT_UNIT_BYTES)throw Error('Restore scratch representation changed');return db.prepare('SELECT payload FROM current_restore_audit_scratch WHERE restore_id=? AND lane=? AND room_id=? AND domain=? AND unit_key=? AND part=?').get(restoreId,lane,roomId,domain,key,part).payload;};
+ let result;try{result=operation({get remaining(){assertActive();return 128-pending.length;},get(lane,roomId,domain,key,part=0){const payload=read(lane,roomId,domain,key,part);return payload===undefined?undefined:JSON.parse(payload);},ensure(lane,roomId,domain,key,value,part=0){const actual=read(lane,roomId,domain,key,part),expected=JSON.stringify(value);if(actual!==undefined){if(actual!==expected)throw Error('Restore scratch independent value differs');return false;}this.put(lane,roomId,domain,key,value,part);return true;},deletePage(limit){assertActive();return withExactRestoreGuards(db,guards,()=>{
    let deleted=0;while(deleted<limit){const row=db.prepare('SELECT rowid,restore_id FROM current_restore_audit_scratch ORDER BY rowid LIMIT 1').get();if(!row)break;if(row.restore_id!==restoreId)throw Error('Restore scratch ownership differs');db.prepare('DELETE FROM current_restore_audit_scratch WHERE rowid=? AND restore_id=?').run(row.rowid,restoreId);deleted++;}
    return {deleted,done:!db.prepare('SELECT 1 FROM current_restore_audit_scratch LIMIT 1').get()};
   });},put(lane,roomId,domain,key,value,part=0){
-   const payload=JSON.stringify(value),bytes=Buffer.byteLength(payload);
+   assertActive();const payload=JSON.stringify(value),bytes=Buffer.byteLength(payload);
    if(bytes<1||bytes>RESTORE_AUDIT_UNIT_BYTES||pending.length>=128||pendingBytes+bytes>4*1024*1024+RESTORE_AUDIT_UNIT_BYTES)throw Error('Restore scratch unit exceeds admitted representation');
-   pending.push([restoreId,lane,roomId,domain,key,part,bytes,payload]);pendingBytes+=bytes;
-  }});
+   const row=[restoreId,lane,roomId,domain,key,part,bytes,payload];pending.push(row);pendingByKey.set(identity(lane,roomId,domain,key,part),row);pendingBytes+=bytes;
+  }});}finally{active=false;}
  if(result?.then)throw Error('Restore scratch must remain synchronous');
  if(pending.length)withExactRestoreGuards(db,guards,()=>{const insert=db.prepare('INSERT INTO current_restore_audit_scratch(restore_id,lane,room_id,domain,unit_key,part,payload_bytes,payload) VALUES(?,?,?,?,?,?,?,?)');for(const row of pending)insert.run(...row);});
  return result;

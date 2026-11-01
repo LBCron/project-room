@@ -1,4 +1,4 @@
-import { configureWriteIntegrity, beginWriteProofFrame, endWriteProofFrame, publishProjectionWrites, projectionDigest, servingProofDrift, assertProjectionWrite, assertMessageWrite, recordMessageWrite, withVerifiedRoomReconstruction } from './write-integrity.mjs';
+import { configureWriteIntegrity, beginWriteProofFrame, endWriteProofFrame, publishProjectionWrites, projectionDigest, projectionContentHash, servingContentProof, servingProofDrift, assertProjectionWrite, assertMessageWrite, recordMessageWrite, withVerifiedRoomReconstruction } from './write-integrity.mjs';
 const OPERATOR_QA_ARCHIVE = Symbol("operator QA room archive");
 import { authenticateMcpOAuthRequest } from './mcp-oauth.mjs';
 import { assertListenerFence } from "./listener-fence.mjs";
@@ -1251,30 +1251,6 @@ const INTEGRITY_SNAPSHOT_WATERMARK_COLUMN = "ALTER TABLE integrity_snapshot ADD 
 // is unchanged. Hashing runs over projection strings the scan already
 // reads (the full checksum) or the single swept / sequence-changed rooms
 // (the incremental path) — no extra file or network I/O.
-function projectionContentHash(db, roomId, sequence, projection) {
-  const hash = createHash("sha256").update(roomId).update("\0").update(String(sequence)).update("\0").update(projection ?? "");
-  // Canonical payloads no longer occur in projection bytes. Stream complete
-  // serving/index records in deterministic order, without a whole-room array.
-  // This is an integrity scan, never edit admission.
-  if (/"messageAuthority"\s*:/.test(projection ?? "") && hasMessageAuthority(JSON.parse(projection))) {
-    hash.update('\0canonical-messages-v1\0');
-    for (const row of db.prepare(`SELECT message_id,seq,channel_id,thread_root_id,reply_to_id,to_member_id,
-      work_item_id,author_id,body,created_at,edited_at,deleted_at,reactions_json,pinned,record_json,reducer_extras_json
-      FROM messages WHERE room_id=? ORDER BY message_id`).iterate(roomId)) {
-      const text = JSON.stringify(Object.values(row));
-      hash.update(String(Buffer.byteLength(text))).update(':').update(text);
-    }
-  }
-  if (/"_workEntity"\s*:/.test(projection ?? "")
-    && Object.values(JSON.parse(projection).workItems ?? {}).some(record=>record?._workEntity===1)) {
-    hash.update('\0canonical-work-v1\0');
-    for (const row of db.prepare('SELECT work_id,revision,digest,body FROM work_entities WHERE room_id=? ORDER BY work_id').iterate(roomId)) {
-      const text = JSON.stringify(Object.values(row));
-      hash.update(String(Buffer.byteLength(text))).update(':').update(text);
-    }
-  }
-  return hash.digest('hex');
-}
 function integrityContentDigest(roomHashes) {
   const digest = createHash("sha256");
   for (const row of roomHashes) digest.update(row.id).update("\0").update(row.hash).update("\n");
@@ -2940,7 +2916,12 @@ this.slaBreachAlerts = new SlaBreachAlertJournal(this); // Task 26: durable in-a
         ?? this.db.prepare(`${sweepSql} ORDER BY id LIMIT 1`).get();
       const changed = this.db.prepare(`SELECT r.id, r.sequence, LENGTH(r.projection) AS bytes, r.projection AS projection, s.sequence AS oldSequence, s.projection_bytes AS oldBytes
         FROM rooms r JOIN integrity_room_state s ON s.room_id=r.id WHERE r.sequence!=s.sequence`).all();
-      for (const row of changed) if (servingProofDrift(this.db,row.id,row.projection)) return { ok:false,contentDrift:row.id };
+      const checkedContent=new Map();
+      for (const row of changed) {
+        const content=servingContentProof(this.db,row.id,row.sequence,row.projection);
+        if(content.drift)return {ok:false,contentDrift:row.id};
+        checkedContent.set(row.id,content);
+      }
       const uncovered = this.db.prepare(`SELECT 1 FROM rooms r LEFT JOIN integrity_room_state s ON s.room_id=r.id WHERE s.room_id IS NULL
         UNION SELECT 1 FROM integrity_room_state s LEFT JOIN rooms r ON r.id=s.room_id WHERE r.id IS NULL LIMIT 1`).get();
       if (uncovered) return { ok: false };
@@ -2960,11 +2941,12 @@ this.slaBreachAlerts = new SlaBreachAlertJournal(this); // Task 26: durable in-a
       if (sweep) {
         const stored = this.db.prepare("SELECT sequence, projection_bytes AS bytes, projection_hash AS hash FROM integrity_room_state WHERE room_id=?").get(sweep.id);
         if (!stored) return { ok: false };
-        if (servingProofDrift(this.db,sweep.id,sweep.projection)) return { ok:false,contentDrift:sweep.id,swept:1 };
+        const content=checkedContent.get(sweep.id) ?? servingContentProof(this.db,sweep.id,sweep.sequence,sweep.projection);
+        if(content.drift)return {ok:false,contentDrift:sweep.id,swept:1};
         if (stored.sequence === sweep.sequence) {
           if (stored.bytes !== sweep.bytes) return { ok: false, contentDrift: sweep.id, swept: 1 };
           if (!stored.hash) return { ok: false };
-          if (projectionContentHash(this.db, sweep.id, sweep.sequence, sweep.projection) !== stored.hash) {
+          if (content.hash !== stored.hash) {
             return { ok: false, contentDrift: sweep.id, swept: 1 };
           }
           // The swept room hashes clean again: a repaired room's drift
@@ -2981,7 +2963,7 @@ this.slaBreachAlerts = new SlaBreachAlertJournal(this); // Task 26: durable in-a
       for (const row of changed) {
         sequences += row.sequence - row.oldSequence;
         projectionBytes += row.bytes - row.oldBytes;
-        update.run(row.sequence, row.bytes, projectionContentHash(this.db, row.id, row.sequence, row.projection), row.id);
+        update.run(row.sequence, row.bytes, checkedContent.get(row.id).hash, row.id);
       }
       // The snapshot digest must be reproducible from the remembered
       // per-room hashes; a state row without a hash, or a digest that no

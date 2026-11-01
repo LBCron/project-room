@@ -2,6 +2,7 @@
 // They detect unregistered mutation; this is not a defense against a database
 // administrator who can replace both data and proofs.
 import { createHash } from 'node:crypto';
+import { hasMessageAuthority } from './message-authority.mjs';
 const protocols = new WeakMap();
 const replacements = new WeakMap();
 const frames = new WeakMap();
@@ -77,33 +78,57 @@ export function recordMessageWrite(db,roomId,messageId) {
   const row=db.prepare(`SELECT ${MESSAGE_PROOF_SELECT} FROM messages WHERE room_id=? AND message_id=?`).get(roomId,messageId);
   if (row) db.prepare('UPDATE messages SET entity_hash=? WHERE room_id=? AND message_id=?').run(messageProofHash(row),roomId,messageId);
 }
-export function servingProofDrift(db,roomId,projection) {
-  if (!protocols.has(db)) return false;
-  const proof=db.prepare('SELECT metadata_hash FROM integrity_room_state WHERE room_id=?').get(roomId);
-  if (proof?.metadata_hash && proof.metadata_hash!==projectionDigest(projection)) return true;
+// One traversal can validate independent write proofs and reproduce the exact
+// existing v2 content digest. Streaming bounds memory, not total scan CPU.
+function scanServingContent(db,roomId,sequence,projection,{verify,hashContent}) {
+  const hash=hashContent ? createHash('sha256').update(roomId).update('\0').update(String(sequence)).update('\0').update(projection ?? '') : null;
   const state=JSON.parse(projection);
-  if (state.messageAuthority) {
-    const archive=state.messagesArchive, retained=new Set(archive?.retainedIds ?? []);
+  let drift=false;
+  if(verify) {
+    const proof=db.prepare('SELECT metadata_hash FROM integrity_room_state WHERE room_id=?').get(roomId);
+    drift=Boolean(proof?.metadata_hash && proof.metadata_hash!==projectionDigest(projection));
+    if(drift && !hash)return {drift};
+  }
+  if(hasMessageAuthority(state)) {
+    hash?.update('\0canonical-messages-v1\0');
+    const archive=state.messagesArchive,retained=new Set(archive?.retainedIds ?? []);
     let count=0,visible=0;
-    for (const row of db.prepare(`SELECT ${MESSAGE_PROOF_SELECT},entity_hash FROM messages WHERE room_id=? ORDER BY message_id`).iterate(roomId)) {
-      if (!messageProofMatches(row)) return true;
+    for(const row of db.prepare(`SELECT ${MESSAGE_PROOF_SELECT},entity_hash FROM messages WHERE room_id=? ORDER BY message_id`).iterate(roomId)) {
+      if(verify && !messageProofMatches(row)){drift=true;if(!hash)return {drift};}
+      if(hash) {
+        const text=JSON.stringify(MESSAGE_PROOF_FIELDS.map(key=>row[key]));
+        hash.update(String(Buffer.byteLength(text))).update(':').update(text);
+      }
       count++;
-      if (!archive || row.seq>archive.throughSeq || retained.has(row.message_id)) visible++;
+      if(!archive || row.seq>archive.throughSeq || retained.has(row.message_id))visible++;
     }
-    // Valid surviving rows cannot establish that a missing row never existed.
-    // Both retained and archived membership counts are bound by metadata.
-    if (visible!==state.messageAuthority.count || count!==state.messageAuthority.count+(archive?.count ?? 0)) return true;
+    if(verify && (visible!==state.messageAuthority.count || count!==state.messageAuthority.count+(archive?.count ?? 0)))drift=true;
+    if(drift && !hash)return {drift};
   }
   const references=state.workItems ?? {};
-  if (Object.values(references).some(record=>record?._workEntity===1)) {
+  if(Object.values(references).some(record=>record?._workEntity===1)) {
+    hash?.update('\0canonical-work-v1\0');
     const seen=new Set();
-    for (const row of db.prepare('SELECT work_id,revision,digest,body FROM work_entities WHERE room_id=? ORDER BY work_id').iterate(roomId)) {
+    for(const row of db.prepare('SELECT work_id,revision,digest,body FROM work_entities WHERE room_id=? ORDER BY work_id').iterate(roomId)) {
+      if(hash) {
+        const text=JSON.stringify(Object.values(row));
+        hash.update(String(Buffer.byteLength(text))).update(':').update(text);
+      }
       const reference=references[row.work_id];
-      if (reference?._workEntity!==1) continue;
+      if(!verify || reference?._workEntity!==1)continue;
       seen.add(row.work_id);
-      if (reference.digest!==row.digest || reference.revision!==row.revision || projectionDigest(row.body)!==row.digest) return true;
+      if(reference.digest!==row.digest || reference.revision!==row.revision || projectionDigest(row.body)!==row.digest){drift=true;if(!hash)return {drift};}
     }
-    if (Object.entries(references).some(([id,record])=>record?._workEntity===1&&!seen.has(id))) return true;
+    if(verify && Object.entries(references).some(([id,record])=>record?._workEntity===1&&!seen.has(id)))drift=true;
   }
-  return false;
+  return {drift,...(hash ? {hash:hash.digest('hex')} : {})};
+}
+export function projectionContentHash(db,roomId,sequence,projection) {
+  return scanServingContent(db,roomId,sequence,projection,{verify:false,hashContent:true}).hash;
+}
+export function servingContentProof(db,roomId,sequence,projection) {
+  return scanServingContent(db,roomId,sequence,projection,{verify:protocols.has(db),hashContent:true});
+}
+export function servingProofDrift(db,roomId,projection) {
+  return protocols.has(db) && scanServingContent(db,roomId,null,projection,{verify:true,hashContent:false}).drift;
 }

@@ -4,6 +4,14 @@ Pinned runtime: 4916afa843db76fa79474a194eda70b470c1efe2, exact landed #5635.
 No runtime changes, production data reads or production writes in this probe.
 This is an intentionally red evidence branch, not a merge candidate.
 
+Follow-up requested by Dot25581: the same regression now executes HTTP and
+hosted MCP full reads AND conditional full refreshes after a visible public
+task is proposed. Both conditional reads are asserted not-not_modified, so
+absence of a projection cannot pass the privacy control vacuously. All four
+surfaces expose the same title, while done/body stay absent. Observer identity
+is enrolled through real holder proof. Result remains 0 pass / 1 intended fail.
+Expanded log: context-private-definition-4916-protocols-red.log.
+
 Executable: tests/room-context-private-definition.test.mjs
 Result: 0 passed / 1 failed, at the intended whole-context sentinel assertion.
 Log: /Users/potter/Documents/ChatGPT/project room/context-private-definition-4916-final-red.log

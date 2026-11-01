@@ -7,17 +7,20 @@ import {emptyWorkPrivacy,validateWorkPrivacy,applyWorkPrivacyRequest,workRequest
 import {currentWorkCapacity} from './current-work-capacity.mjs';
 import {archiveRetains,validateCurrentArchive,validateArchiveRetainedSlot} from './current-room-archive.mjs';
 import {MESSAGE_PROOF_SELECT} from './write-integrity.mjs';
+import {advanceHistoryActivation,historyJoinPoint,historyExclusionIds} from './history-visibility.mjs';
+import {EVENT_TYPES,memberHistoryVisibility} from '../src/events.js';
 import {validId} from '../src/events.js';
 import {isCurrentRoom,withCurrentAuditUnits,currentAuditMessageRoot} from './current-room-repository.mjs';
 import {withRestoreAuditRows,RESTORE_AUDIT_VERSION,RESTORE_AUDIT_UNIT_BYTES} from './restore-admission.mjs';
-export const initialRecoveryCensus=()=>({version:RESTORE_AUDIT_VERSION,stage:'rooms',roomAfter:'',roomId:null,domainAfter:'',keyAfter:'',proofs:0,records:0,actualRecords:0,workAfter:'',workCount:0,workReferenceRecords:0,workSummaryRecords:0,workCapacityRecords:0,workPrivacyRecords:0,workRequestRecords:0,requestAfter:'',requestLinks:0,privacyAfter:'',privacyWork:null,privacyLinkAfter:'',privacyValue:null,privacyEntries:0,privacyLinks:0,messageAfterSeq:0,messageAfterId:'',messageCount:0,retainedMessages:0,witnessRecords:0,archiveRecords:0,participantRecords:0,expectedParticipants:0,memberRecords:0,requestRecords:0,archiveAfter:'',archiveSlots:0,rooms:0,legacyRooms:0,units:0,bytes:0});
+export const initialRecoveryCensus=()=>({version:RESTORE_AUDIT_VERSION,stage:'rooms',roomAfter:'',roomId:null,domainAfter:'',keyAfter:'',proofs:0,records:0,actualRecords:0,workAfter:'',workCount:0,workReferenceRecords:0,workSummaryRecords:0,workCapacityRecords:0,workPrivacyRecords:0,workRequestRecords:0,requestAfter:'',requestLinks:0,privacyAfter:'',privacyWork:null,privacyLinkAfter:'',privacyValue:null,privacyEntries:0,privacyLinks:0,messageAfterSeq:0,messageAfterId:'',messageCount:0,retainedMessages:0,witnessRecords:0,archiveRecords:0,participantRecords:0,expectedParticipants:0,memberRecords:0,requestRecords:0,archiveAfter:'',archiveSlots:0,historySequence:0,historyAfter:'',historyMember:null,historyJoinSequence:0,historyJoinAt:'',historyJoinFound:false,historyPart:0,historyExcluded:0,historyFloorRecords:0,historyExclusionRecords:0,expectedFloors:0,expectedExclusions:0,rooms:0,legacyRooms:0,units:0,bytes:0});
 const fail=()=>{throw Error('Independent recovery census requires reconciliation');};
 export function validateRecoveryCensus(value){
- if(!value||Object.keys(value).sort().join(',')!==Object.keys(initialRecoveryCensus()).sort().join(',')||value.version!==RESTORE_AUDIT_VERSION||!['rooms','proofs','records','work','request_links','privacy','archive','messages','cleanup','full_audit_pending'].includes(value.stage)
-  ||!['proofs','records','actualRecords','rooms','legacyRooms','units','bytes','workCount','workReferenceRecords','workSummaryRecords','workCapacityRecords','workPrivacyRecords','workRequestRecords','requestLinks','privacyEntries','privacyLinks','messageAfterSeq','messageCount','retainedMessages','witnessRecords','archiveRecords','participantRecords','expectedParticipants','memberRecords','requestRecords','archiveSlots'].every(key=>Number.isSafeInteger(value[key])&&value[key]>=0)
+ if(!value||Object.keys(value).sort().join(',')!==Object.keys(initialRecoveryCensus()).sort().join(',')||value.version!==RESTORE_AUDIT_VERSION||!['rooms','proofs','records','work','request_links','privacy','archive','messages','history_events','history_members','history_exclusions','cleanup','full_audit_pending'].includes(value.stage)
+  ||!['proofs','records','actualRecords','rooms','legacyRooms','units','bytes','workCount','workReferenceRecords','workSummaryRecords','workCapacityRecords','workPrivacyRecords','workRequestRecords','requestLinks','privacyEntries','privacyLinks','messageAfterSeq','messageCount','retainedMessages','witnessRecords','archiveRecords','participantRecords','expectedParticipants','memberRecords','requestRecords','archiveSlots','historySequence','historyJoinSequence','historyPart','historyExcluded','historyFloorRecords','historyExclusionRecords','expectedFloors','expectedExclusions'].every(key=>Number.isSafeInteger(value[key])&&value[key]>=0)
   ||typeof value.roomAfter!=='string'||Buffer.byteLength(value.roomAfter)>128||value.roomId!==null&&(!validId(value.roomId))
   ||typeof value.workAfter!=='string'||Buffer.byteLength(value.workAfter)>200
-  ||!['requestAfter','privacyAfter','privacyLinkAfter','messageAfterId','archiveAfter'].every(key=>typeof value[key]==='string'&&Buffer.byteLength(value[key])<=200)||value.privacyWork!==null&&(typeof value.privacyWork!=='string'||Buffer.byteLength(value.privacyWork)>200)
+  ||!['requestAfter','privacyAfter','privacyLinkAfter','messageAfterId','archiveAfter','historyAfter'].every(key=>typeof value[key]==='string'&&Buffer.byteLength(value[key])<=200)||value.privacyWork!==null&&(typeof value.privacyWork!=='string'||Buffer.byteLength(value.privacyWork)>200)
+  ||typeof value.historyJoinFound!=='boolean'||value.historyMember!==null&&(typeof value.historyMember!=='string'||Buffer.byteLength(value.historyMember)>200)||typeof value.historyJoinAt!=='string'||Buffer.byteLength(value.historyJoinAt)>128
   ||typeof value.domainAfter!=='string'||Buffer.byteLength(value.domainAfter)>64||typeof value.keyAfter!=='string'||Buffer.byteLength(value.keyAfter)>200)fail();
  if(value.privacyValue!==null){validateWorkPrivacy(value.privacyValue);if(Buffer.byteLength(JSON.stringify(value.privacyValue))>RESTORE_AUDIT_UNIT_BYTES)fail();}
  if((value.privacyWork===null)!==(value.privacyValue===null))fail();
@@ -39,7 +42,7 @@ export function advanceRecoveryCensus(store,restoreId,previous){
     const scalar=db.prepare('SELECT rowid,length(CAST(id AS BLOB)) bytes FROM rooms WHERE id>? ORDER BY id LIMIT 1').get(p.roomAfter);
     if(!scalar){p.stage='cleanup';break;}
     if(scalar.bytes<1||scalar.bytes>128)fail();const row=db.prepare('SELECT id FROM rooms WHERE rowid=?').get(scalar.rowid);if(!validId(row?.id))fail();
-    p.roomId=row.id;p.domainAfter='';p.keyAfter='';p.proofs=0;p.records=0;p.actualRecords=0;p.workAfter='';p.workCount=0;p.workReferenceRecords=0;p.workSummaryRecords=0;p.workCapacityRecords=0;p.workPrivacyRecords=0;p.workRequestRecords=0;p.requestAfter='';p.requestLinks=0;p.privacyAfter='';p.privacyWork=null;p.privacyLinkAfter='';p.privacyValue=null;p.privacyEntries=0;p.privacyLinks=0;p.messageAfterSeq=0;p.messageAfterId='';p.messageCount=0;p.retainedMessages=0;p.witnessRecords=0;p.archiveRecords=0;p.participantRecords=0;p.expectedParticipants=0;p.memberRecords=0;p.requestRecords=0;p.archiveAfter='';p.archiveSlots=0;
+    p.roomId=row.id;p.domainAfter='';p.keyAfter='';p.proofs=0;p.records=0;p.actualRecords=0;p.workAfter='';p.workCount=0;p.workReferenceRecords=0;p.workSummaryRecords=0;p.workCapacityRecords=0;p.workPrivacyRecords=0;p.workRequestRecords=0;p.requestAfter='';p.requestLinks=0;p.privacyAfter='';p.privacyWork=null;p.privacyLinkAfter='';p.privacyValue=null;p.privacyEntries=0;p.privacyLinks=0;p.messageAfterSeq=0;p.messageAfterId='';p.messageCount=0;p.retainedMessages=0;p.witnessRecords=0;p.archiveRecords=0;p.participantRecords=0;p.expectedParticipants=0;p.memberRecords=0;p.requestRecords=0;p.archiveAfter='';p.archiveSlots=0;p.historySequence=0;p.historyAfter='';p.historyMember=null;p.historyJoinSequence=0;p.historyJoinAt='';p.historyJoinFound=false;p.historyPart=0;p.historyExcluded=0;p.historyFloorRecords=0;p.historyExclusionRecords=0;p.expectedFloors=0;p.expectedExclusions=0;
     if(!isCurrentRoom(db,p.roomId)){p.legacyRooms++;p.roomAfter=p.roomId;p.roomId=null;units++;continue;}
     p.stage='proofs';
    }
@@ -47,6 +50,43 @@ export function advanceRecoveryCensus(store,restoreId,previous){
    const roomDone=withCurrentAuditUnits(store,p.roomId,reader=>{
     if(!reader.head)fail();
     while(units<128){
+     if(p.stage==='history_events'){
+      if(scratch.remaining<2)return false;
+      const scalar=db.prepare("SELECT rowid,sequence,length(CAST(json_extract(body,'$.at') AS BLOB)) at_bytes,length(CAST(json_extract(body,'$.id') AS BLOB)) id_bytes,length(CAST(json_extract(body,'$.data.messageId') AS BLOB)) message_bytes,length(CAST(json_extract(body,'$.data.memberId') AS BLOB)) member_bytes,length(CAST(json_extract(body,'$.type') AS BLOB)) type_bytes FROM events WHERE room_id=? AND sequence>? ORDER BY sequence LIMIT 1").get(p.roomId,p.historySequence);
+      if(!scalar){p.stage='history_members';continue;}
+      if(!Number.isSafeInteger(scalar.sequence)||scalar.sequence<1||scalar.at_bytes>128||scalar.id_bytes>200||scalar.message_bytes>200||scalar.member_bytes>200||scalar.type_bytes>100)fail();
+      const estimate=Object.entries(scalar).filter(([key])=>key.endsWith('_bytes')).reduce((sum,[,value])=>sum+(value??0),0)+4096;if(units&&bytes+estimate>4*1024*1024)return false;
+      const row=db.prepare("SELECT sequence,json_extract(body,'$.at') at,json_extract(body,'$.type') type,json_extract(body,'$.data.memberId') member_id,CASE WHEN json_extract(body,'$.data.active') IN (0,1) THEN json_extract(body,'$.data.active') ELSE NULL END active,json_extract(body,'$.id') id,json_extract(body,'$.data.messageId') messageId FROM events WHERE rowid=?").get(scalar.rowid);
+      if(typeof row.at==='string')scratch.put('history',p.roomId,'eventAt',row.at,{id:row.id,messageId:row.messageId},row.sequence);
+      if([EVENT_TYPES.MEMBER_ADDED,EVENT_TYPES.MEMBER_JOINED_VIA_INVITATION,EVENT_TYPES.MEMBER_ACCESS_CHANGED].includes(row.type)&&typeof row.member_id==='string'){
+       const previous=scratch.get('history',p.roomId,'activation',row.member_id)??{active:false,row:null};
+       const entry={sequence:row.sequence,at:row.at,type:row.type,active:row.active};scratch.set('history',p.roomId,'activation',row.member_id,advanceHistoryActivation(previous,entry));
+      }
+      p.historySequence=row.sequence;p.units++;p.bytes+=estimate;units++;bytes+=estimate;continue;
+     }
+     if(p.stage==='history_members'){
+      if(scratch.remaining<1)return false;
+      const scalar=db.prepare("SELECT rowid,length(CAST(record_key AS BLOB)) bytes FROM current_room_record_proofs WHERE room_id=? AND domain='members' AND present=1 AND record_key>? ORDER BY record_key LIMIT 1").get(p.roomId,p.historyAfter);
+      if(!scalar){if(p.expectedFloors!==p.historyFloorRecords||p.expectedFloors!==reader.head.counts.historyFloors||p.expectedExclusions!==p.historyExclusionRecords||p.expectedExclusions!==reader.head.counts.historyExclusions)fail();p.rooms++;p.roomAfter=p.roomId;p.roomId=null;p.stage='rooms';return true;}
+      if(scalar.bytes<1||scalar.bytes>200)fail();const id=db.prepare('SELECT record_key FROM current_room_record_proofs WHERE rowid=?').get(scalar.rowid).record_key;
+      const estimate=recordInputBytes(db,p.roomId,'members',id)+recordInputBytes(db,p.roomId,'metadata','room')+recordInputBytes(db,p.roomId,'historyFloors',id)+4096;if(units&&bytes+estimate>4*1024*1024)return false;
+      const member=reader.record('members',id),room=reader.record('metadata','room'),floor=reader.record('historyFloors',id);
+      if(memberHistoryVisibility({room,members:{[id]:member}},id)!=='since_join'){if(floor!==undefined)fail();p.historyAfter=id;}
+      else{const activation=scratch.get('history',p.roomId,'activation',id),join=historyJoinPoint(activation?.row,reader.head.sequence);p.historyMember=id;p.historyJoinSequence=join.sequence;p.historyJoinAt=join.at;p.historyJoinFound=join.found;p.historyPart=0;p.historyExcluded=0;p.stage='history_exclusions';}
+      p.units++;p.bytes+=estimate;units++;bytes+=estimate;continue;
+     }
+     if(p.stage==='history_exclusions'){
+      if(scratch.remaining<4)return false;
+      const scalar=p.historyJoinFound?db.prepare("SELECT part,payload_bytes,length(CAST(payload AS BLOB)) bytes FROM current_restore_audit_scratch WHERE restore_id=? AND lane='history' AND room_id=? AND domain='eventAt' AND unit_key=? AND part>? AND part<? ORDER BY part LIMIT 1").get(restoreId,p.roomId,p.historyJoinAt,p.historyPart,p.historyJoinSequence):null;
+      if(!scalar){
+       const estimate=recordInputBytes(db,p.roomId,'historyFloors',p.historyMember)+2048;if(units&&bytes+estimate>4*1024*1024)return false;
+       const expected={sequence:p.historyJoinSequence,at:p.historyJoinAt,sameInstantCount:p.historyExcluded};if(!isDeepStrictEqual(reader.record('historyFloors',p.historyMember),expected))fail();scratch.put('history',p.roomId,'expectedFloor',p.historyMember,expected);p.expectedFloors++;p.historyAfter=p.historyMember;p.historyMember=null;p.stage='history_members';p.units++;p.bytes+=estimate;units++;bytes+=estimate;continue;
+      }
+      if(scalar.bytes!==scalar.payload_bytes||scalar.bytes<1||scalar.bytes>RESTORE_AUDIT_UNIT_BYTES)fail();let estimate=scalar.bytes+4096;if(units&&bytes+estimate>4*1024*1024)return false;
+      const entry=scratch.get('history',p.roomId,'eventAt',p.historyJoinAt,scalar.part),ids=historyExclusionIds(entry);for(const id of ids)estimate+=recordInputBytes(db,p.roomId,'historyExclusions',p.historyMember+'\0'+id);if(units&&bytes+estimate>4*1024*1024)return false;
+      for(const id of ids){const key=p.historyMember+'\0'+id;if(reader.record('historyExclusions',key)!==true)fail();if(scratch.ensure('history',p.roomId,'expectedExclusion',key,true)){p.historyExcluded++;p.expectedExclusions++;}}
+      p.historyPart=scalar.part;p.units++;p.bytes+=estimate;units++;bytes+=estimate;continue;
+     }
      if(p.stage==='archive'){
       const marker=validateCurrentArchive(reader.record('metadata','messagesArchive'));
       const scalar=db.prepare("SELECT rowid,length(CAST(record_key AS BLOB)) bytes FROM current_room_record_proofs WHERE room_id=? AND domain='archiveRetained' AND present=1 AND record_key>? ORDER BY record_key LIMIT 1").get(p.roomId,p.archiveAfter);
@@ -61,7 +101,7 @@ export function advanceRecoveryCensus(store,restoreId,previous){
       if(!scalar){
        const marker=validateCurrentArchive(reader.record('metadata','messagesArchive'));
        if(p.messageCount!==reader.head.counts.messages||p.witnessRecords!==p.messageCount||p.retainedMessages+(marker?.count??0)!==p.messageCount||p.memberRecords!==reader.head.counts.members||p.requestRecords!==reader.head.counts.replyRequests||p.expectedParticipants!==p.participantRecords||p.expectedParticipants!==reader.head.counts.threadParticipants)fail();
-       p.rooms++;p.roomAfter=p.roomId;p.roomId=null;p.stage='rooms';return true;
+       p.stage='history_events';continue;
       }
       if(scalar.bytes<1||scalar.bytes>200)fail();if(scratch.remaining<2)return false;
       const id=db.prepare('SELECT message_id FROM messages WHERE rowid=?').get(scalar.rowid).message_id;
@@ -139,7 +179,7 @@ export function advanceRecoveryCensus(store,restoreId,previous){
      if(!Number.isSafeInteger(estimate)||estimate<0)fail();if(units&&bytes+estimate>4*1024*1024)return false;
      const value=reader.record(identity.domain,identity.record_key);
      if(p.stage==='proofs'){
-      p.proofs++;if(size.present===1){p.records++;if(identity.domain==='messageWitness')p.witnessRecords++;if(identity.domain==='archiveRetained')p.archiveRecords++;if(identity.domain==='threadParticipants')p.participantRecords++;if(identity.domain==='members')p.memberRecords++;if(identity.domain==='replyRequests')p.requestRecords++;if(identity.domain==='workItems')p.workReferenceRecords++;if(identity.domain==='workSummary')p.workSummaryRecords++;if(identity.domain==='workCapacity')p.workCapacityRecords++;if(identity.domain==='workPrivacy')p.workPrivacyRecords++;if(identity.domain==='workRequest')p.workRequestRecords++;scratch.put('actual',p.roomId,identity.domain,identity.record_key,value);}
+      p.proofs++;if(size.present===1){p.records++;if(identity.domain==='historyFloors')p.historyFloorRecords++;if(identity.domain==='historyExclusions')p.historyExclusionRecords++;if(identity.domain==='messageWitness')p.witnessRecords++;if(identity.domain==='archiveRetained')p.archiveRecords++;if(identity.domain==='threadParticipants')p.participantRecords++;if(identity.domain==='members')p.memberRecords++;if(identity.domain==='replyRequests')p.requestRecords++;if(identity.domain==='workItems')p.workReferenceRecords++;if(identity.domain==='workSummary')p.workSummaryRecords++;if(identity.domain==='workCapacity')p.workCapacityRecords++;if(identity.domain==='workPrivacy')p.workPrivacyRecords++;if(identity.domain==='workRequest')p.workRequestRecords++;scratch.put('actual',p.roomId,identity.domain,identity.record_key,value);}
      }else {if(value===undefined||size?.present!==1)fail();p.actualRecords++;}
      p.domainAfter=identity.domain;p.keyAfter=identity.record_key;p.units++;p.bytes+=estimate;units++;bytes+=estimate;
     }

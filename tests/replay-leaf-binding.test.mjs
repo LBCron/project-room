@@ -11,9 +11,10 @@ function fixture(t,patch={}){
   store.transaction(()=>store.db.prepare("UPDATE rooms SET projection=? WHERE id='commons'").run(store.storedProjection('commons',state)));
   store.db.exec(cutover.replayCutoverSchema());
   const captured=cutover.captureReplayWitness(store,{roomId:'commons',requestId:'capture',expectedHead:store.headSequence('commons'),reason:'Synthetic leaf provenance'});
+  const initialHash=store.db.prepare("SELECT * FROM message_replay_units WHERE domain='hash'").get();
   let step={bytes:0},n=0;
   while(step.phase!=='witness_verified')step=cutover.advanceReplayWitness(store,{roomId:'commons',generation:captured.generation,expectedBytes:step.bytes,requestId:'hash-'+n++});
-  return {store,captured};
+  return {store,captured,initialHash};
 }
 function partition(f){let step={bytes:0},n=0;while(step.phase!=='codec_partitioned')step=cutover.partitionReplayWitness(f.store,{roomId:'commons',generation:f.captured.generation,expectedBytes:step.bytes,requestId:'codec-'+n++});return step;}
 
@@ -78,4 +79,18 @@ test('receipt vectors and charged repeated source reads stay within admitted uni
     maxInput=Math.max(maxInput,step.inputBytes);assert.ok(step.inputBytes<=256*1024);
   }
   assert.ok(maxInput>128*1024,'spanning reads are included, not just the current chunk');
+});
+
+test('a partial fork receipt cannot masquerade as inclusion in an older completed hash chain',t=>{
+  const f=fixture(t,{messages:[{id:'large',body:'x'.repeat(50000)}]}),db=f.store.db;
+  const completed=db.prepare("SELECT * FROM message_replay_units WHERE domain='hash'").get();
+  const restore=row=>db.prepare("UPDATE message_replay_units SET payload=?,payload_bytes=?,payload_sha256=? WHERE domain='hash'").run(row.payload,row.payload_bytes,row.payload_sha256);
+  db.prepare("UPDATE message_replay_units SET payload=CAST(replace(CAST(payload AS TEXT),'Commons','Changed') AS BLOB) WHERE domain='witness'").run();
+  restore(f.initialHash);
+  db.prepare("DELETE FROM message_replay_units WHERE domain='source-chunk' AND unit_key='0'").run();
+  db.prepare("DELETE FROM message_replay_units WHERE domain='source-merkle'").run();
+  const partial=cutover.advanceReplayWitness(f.store,{roomId:'commons',generation:f.captured.generation,expectedBytes:0,requestId:'fork-hash'});
+  assert.equal(partial.phase,'hashing','the fork never passed the independent full digest');
+  restore(completed);
+  assert.throws(()=>partition(f),/source.*(inclusion|root|binding)/);
 });

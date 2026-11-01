@@ -31,6 +31,10 @@ test('logical restore preserves activation receipt and explicitly reinstalls adm
   assert.equal(target.db.prepare('SELECT counts_json FROM operator_actions WHERE id=?').get(WAKE_INDEX_RECEIPT).counts_json, bytes);
   assert.deepEqual(operatorWakeIndex(target, input, true), { ...installed, duplicate: true });
   assert.deepEqual(operatorWakeIndex(target, originalInput, true), { ...first, duplicate: true });
+  assert.throws(() => target.transaction(() => target.db.prepare('DELETE FROM operator_actions WHERE id=?').run(WAKE_INDEX_RECEIPT)), /operator audit is append-only/);
+  // Deliberately bypass the audit guard in this synthetic corruption fixture.
+  // Ordinary runtime SQL cannot remove the original activation authority.
+  target.db.exec('DROP TRIGGER operator_actions_append_only_delete');
   target.transaction(() => target.db.prepare('DELETE FROM operator_actions WHERE id=?').run(WAKE_INDEX_RECEIPT));
   assert.throws(() => operatorWakeIndex(target, input, true), { code: 'wake_index_conflict' });
 });

@@ -1,0 +1,82 @@
+{
+  "at": "2026-11-01T20:22:13.159Z",
+  "source": "0908cbcb76797601e878ee9f1f3b93bcb4afbfa1",
+  "sourceTree": "0144b314972b692480eb4ed38fcbdab76ec447cc",
+  "artifactRoot": "/Users/potter/Documents/ChatGPT/project-room-native-0908-runtime",
+  "node": "v24.22.1",
+  "manifestSha256": "853adc3fb838d2e7d7d1890512ca6368f3229eef5119b0dc37e0c4f6e7d50b2e",
+  "fileCount": 54,
+  "totalBytes": 908682,
+  "sourceFileMatches": 53,
+  "generatedFiles": [
+    "package.json"
+  ],
+  "manifestHasSourceRevision": false,
+  "noNodeModules": true,
+  "noGitMetadata": true,
+  "standalone": {
+    "helpStatus": 0,
+    "invalidSetupStatus": 1,
+    "setupResult": {
+      "status": "setup_failed"
+    }
+  },
+  "liveRead": {
+    "status": "answered",
+    "revision": 1,
+    "stamp": "room_credential",
+    "responseMessageId": "reply-3e0f32e687401fe3c0321dbc762f8036e4168d326a8c7eae519e1dd120c25a24",
+    "roomReads": 1,
+    "roomWrites": 0
+  },
+  "cases": [
+    {
+      "name": "valid_room_stamp",
+      "accepted": true,
+      "expected": true,
+      "pass": true
+    },
+    {
+      "name": "valid_session_stamp",
+      "accepted": true,
+      "expected": true,
+      "pass": true
+    },
+    {
+      "name": "legacy_unstamped",
+      "accepted": true,
+      "expected": true,
+      "pass": true
+    },
+    {
+      "name": "invalid_stamp",
+      "accepted": false,
+      "expected": false,
+      "pass": true
+    }
+  ],
+  "failures": [],
+  "limits": [
+    "Standalone Node runtime only, no Swift/native app rebuild, installation, signing or notarization.",
+    "No model turn, provider authentication, host restart, journal mutation or two-device execution.",
+    "Manifest does not pin source itself; this companion receipt independently verifies every source file against exact Git0908.",
+    "Live read retrieves existing scoped saved reply, not fresh-session auth or initial ACK-loss.",
+    "No private payload or credential copied into report."
+  ],
+  "focusedSourceTests": {
+    "command": "node --test tests/reply-request-attestation.test.js",
+    "source": "0908cbcb76797601e878ee9f1f3b93bcb4afbfa1",
+    "pass": 9,
+    "fail": 0,
+    "skip": 0,
+    "scope": "stamp source attribution, caller-forgery refusal, replay validation, valid/tampered read, historical unstamped behavior"
+  },
+  "reproduction": {
+    "source": "0908cbcb76797601e878ee9f1f3b93bcb4afbfa1",
+    "build": "node scripts/package-mac-runtime.mjs NEW_ABSOLUTE_OUTPUT_DIRECTORY",
+    "standaloneHelp": "node NEW_ABSOLUTE_OUTPUT_DIRECTORY/scripts/run-codex-room.mjs --help",
+    "invalidSetup": "run packaged scripts/native-agent-setup.mjs with stdin JSON action=invalid; expected exit1/setup_failed",
+    "manifestSha256": "853adc3fb838d2e7d7d1890512ca6368f3229eef5119b0dc37e0c4f6e7d50b2e",
+    "note": "Source qualification is reproducible from public Git source. Live-read response body intentionally not published; its full conversation contains scoped messages."
+  }
+}

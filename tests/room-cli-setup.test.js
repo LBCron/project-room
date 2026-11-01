@@ -282,6 +282,33 @@ test("login stores the connection as a private file and the printed result has n
   assert.equal(token.out, saved.token + "\n");
 });
 
+test("login without a room prints the choose_room memberships and directory, never secrets", async t => {
+  const root = mkdtempSync(join(tmpdir(), "room-choose-"));
+  const store = new RoomStore(":memory:");
+  store.initialize(initialRoom("commons"));
+  const key = store.issueAccessKey("commons", "owner");
+  const server = createRoomServer({ store });
+  await new Promise(resolve => server.listen(0, "127.0.0.1", resolve));
+  t.after(async () => { server.closeStreams(); server.closeAllConnections(); await new Promise(resolve => server.close(resolve)); store.close(); rmSync(root, { recursive: true, force: true }); });
+  const origin = `http://127.0.0.1:${server.address().port}`;
+  const invite = store.invites.create(key, "commons", { profile: "chat", displayName: "Ada" });
+  const home = join(root, "home"), project = join(root, "project");
+  mkdirSync(home); mkdirSync(project);
+  const env = envFor(home);
+  const joined = await run(["login", "--room", `${origin}/join/${invite.code}`, "--name", "Ada", "--accept"], { env, cwd: project });
+  assert.equal(joined.code, 0, joined.out);
+  const choose = await run(["login", "--room", origin, "--name", "Ada"], { env, cwd: project });
+  assert.equal(choose.code, 1, choose.out);
+  const printed = JSON.parse(choose.out.trim().split("\n").at(-1));
+  assert.equal(printed.status, "choose_room");
+  assert.deepEqual(printed.memberships.map(room => room.roomId), ["commons"]);
+  assert.deepEqual(Object.keys(printed.memberships[0]).sort(), ["archivedAt", "memberId", "roomId", "title"]);
+  assert.ok(Array.isArray(printed.directory.rooms));
+  assert.ok(Object.hasOwn(printed.directory, "nextCursor"));
+  assert.equal(choose.out.includes("pri_"), false);
+  assert.equal(choose.out.includes(invite.code), false);
+});
+
 
 test("dot-only agent names cannot escape the connections root (#2877)", t => {
   const root = mkdtempSync(join(tmpdir(), "room-cli-dots-"));

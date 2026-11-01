@@ -30,12 +30,18 @@ async function fixture(t) {
   return { root, store, keys, origin, directory, invite, connect };
 }
 test("the /a/<code> agent invite link the server emits parses and connects", async t => {
-  const f = await fixture(t), invite = f.invite();
-  // joinPageForAgentCode tells agents to read /a/<code>; the CLI must accept that same link.
-  const emitted = joinPageForAgentCode(JOIN_PAGE_AGENT_LINE, invite.code);
-  const path = /<code>(\/a\/[^<]+)<\/code>/.exec(emitted)?.[1];
-  assert.equal(path, `/a/${encodeURIComponent(invite.code)}`);
-  assert.deepEqual(setupTarget(`${f.origin}${path}`), { origin: f.origin, code: invite.code });
+  const f = await fixture(t);
+  // Contract: the url the real invite create endpoint returns goes into the CLI unchanged.
+  const response = await fetch(`${f.origin}/api/rooms/commons/agent-invites`, { method: "POST",
+    headers: { Authorization: `Bearer ${f.keys.commons}`, "Content-Type": "application/json" },
+    body: JSON.stringify({ profile: "chat", displayName: "Peer" }) });
+  assert.equal(response.status, 201);
+  const invite = await response.json();
+  assert.equal(new URL(invite.url).pathname, `/a/${encodeURIComponent(invite.code)}`);
+  assert.ok(invite.next.find(step => step?.action === "share-code")?.url === invite.url);
+  // The join page's no-JavaScript line points at the same path.
+  assert.ok(joinPageForAgentCode(JOIN_PAGE_AGENT_LINE, invite.code).includes(`<code>${new URL(invite.url).pathname}</code>`));
+  assert.deepEqual(setupTarget(invite.url), { origin: f.origin, code: invite.code });
   assert.deepEqual(setupTarget(`${f.origin}/room/a/${invite.code}/`), { origin: f.origin, code: invite.code });
   assert.deepEqual(setupTarget(`${f.origin}/a/${invite.code.toLowerCase()}`), { origin: f.origin, code: invite.code });
   assert.throws(() => setupTarget(`${f.origin}/a/${invite.code}#x`));
@@ -49,7 +55,7 @@ test("the /a/<code> agent invite link the server emits parses and connects", asy
   const userUrl = new URL(`${f.origin}/a/${invite.code}`); userUrl.username = "u"; userUrl.password = "leak";
   assert.throws(() => setupTarget(userUrl.href), /must not contain credentials/);
   assert.deepEqual(setupTarget(`${f.origin}/a/${invite.code}?ref=hn`), { origin: f.origin, code: invite.code });
-  const result = await f.connect({ target: `${f.origin}${path}` });
+  const result = await f.connect({ target: invite.url });
   assert.equal(result.status, "connected");
   assert.equal(result.roomId, "commons");
 });

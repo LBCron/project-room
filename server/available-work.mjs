@@ -45,7 +45,9 @@ export function availableBoardRows(board, { workItems = undefined } = {}) {
     && (item.kind ?? "work") === "work"
     && (item.dependsOn ?? []).every(dep => done.has(dep))
     && (!item.workItemId || workItems === undefined || (Object.hasOwn(workItems, item.workItemId)
-      && workItems[item.workItemId]?.state !== "proposed")));
+      && workItems[item.workItemId]?.id === item.workItemId
+      && typeof workItems[item.workItemId]?.state === "string"
+      && workItems[item.workItemId].state !== "proposed")));
 }
 
 // Inbox authority does not carry work payloads. Inspect only otherwise-ready

@@ -3,8 +3,9 @@ import assert from 'node:assert/strict';
 import { RoomStore } from '../server/store.mjs';
 import { initialRoom } from '../server/bootstrap.mjs';
 import { createWork } from '../server/work-claims.mjs';
-import { availableWorkInRoom } from '../server/available-work.mjs';
+import { availableClaimsFromBoard, availableWorkInRoom } from '../server/available-work.mjs';
 import { openWorkOf } from '../server/needs-me.mjs';
+import { createRoomServer } from '../server/http.mjs';
 
 for (const workEntities of [false, true]) {
   test(`discovery excludes dangling and unaccepted work links, preserving native and accepted work (entities=${workEntities})`, t => {
@@ -40,3 +41,30 @@ for (const workEntities of [false, true]) {
       'discovery does not rewrite historical ownership, scope or evidence');
   });
 }
+
+test('selected inline null work is not advertised while claim refusal preserves the historical card', async t => {
+  const store = new RoomStore(':memory:', { workEntities: false }); store.initialize(initialRoom());
+  const token = store.issueAccessKey('commons', 'owner');
+  const send = (id, type, data) => store.command(token, 'commons', { id, type, data });
+  send('proposal', 'work.proposed', { workItemId: 'accepted', title: 'Canonical inline record',
+    definitionOfDone: 'Explicit result', accountableMemberId: 'owner', mode: 'read' });
+  send('acceptance', 'work.accepted', { workItemId: 'accepted', expectedRevision: 0 });
+  const before = store.workClaims.get('commons', 'accepted');
+  // Corruption-only control: keep the key but replace its canonical value.
+  store.transaction(() => store.db.prepare("UPDATE rooms SET projection=json_set(projection,'$.workItems.accepted',NULL) WHERE id=?").run('commons'));
+  const workItems = JSON.parse(store.db.prepare('SELECT projection FROM rooms WHERE id=?').get('commons').projection).workItems;
+  assert.equal(Object.hasOwn(workItems, 'accepted'), true); assert.equal(workItems.accepted, null);
+  const server = createRoomServer({ store });
+  await new Promise(resolve => server.listen(0, '127.0.0.1', resolve));
+  t.after(async () => { server.closeStreams(); server.closeAllConnections(); await new Promise(resolve => server.close(resolve)); store.close(); });
+  const origin = `http://127.0.0.1:${server.address().port}`;
+  const refused = await fetch(origin + '/api/rooms/commons/work-claims/accepted/claim', { method: 'POST',
+    headers: { Origin: origin, Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' }, body: '{}' });
+  assert.equal(refused.status, 409);
+  assert.equal((await refused.json()).linkedWork.status, 'unavailable');
+  const authority = store.roomAuthority('commons'), board = store.workClaims.list('commons');
+  assert.deepEqual(availableClaimsFromBoard(board, 'commons', { viewerId: 'owner', state: {
+    room: { ownerId: authority.ownerId }, members: authority.members, workItems } }), []);
+  assert.equal(openWorkOf(store, 'commons', 'owner', authority), null);
+  assert.deepEqual(store.workClaims.get('commons', 'accepted'), before);
+});

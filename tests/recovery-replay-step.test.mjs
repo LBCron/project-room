@@ -47,3 +47,15 @@ test('addressed scalar policy, member preference and thin receipt handlers prese
 test('Muse-only development access uses exact addressed owner and rejects ordinary-room input',()=>{
  const incoming=event({roomId:'muse-room',actorId:'owner',type:'room.development_access_set',data:{enabled:true}}),actual=fold(),events=[...initialRoom('muse-room'),incoming];for(const entry of events)actual.apply(entry);assert.deepEqual(withoutJournal(actual.materialize()),withoutJournal(replayEvents(emptyRoomState(),structuredClone(events))));const ordinary=fold();for(const entry of initialRoom())ordinary.apply(entry);assert.throws(()=>ordinary.apply({...incoming,roomId:'commons'}),/only available in Muse/);
 });
+
+test('independently folded insertion ordinals preserve source order rather than lexical SQL order',()=>{
+ const actual=fold();for(const incoming of initialRoom())actual.apply(incoming);
+ for(const id of ['z-work','a-work'])actual.apply(event({roomId:'commons',actorId:'owner',type:'work.proposed',data:{workItemId:id,title:id,definitionOfDone:'Exact order',accountableMemberId:'owner'}}));
+ actual.apply(event({roomId:'commons',actorId:'owner',type:'work.accepted',data:{workItemId:'z-work',expectedRevision:0}}));
+ actual.apply(event({roomId:'commons',actorId:'owner',type:'message.posted',data:{messageId:'z-message',body:'Original first'}}));actual.apply(event({roomId:'commons',actorId:'owner',type:'message.posted',data:{messageId:'a-message',replyToId:'z-message',body:'Original second',alsoSendToChannel:true}}));
+ for(const[domain,expected]of [['workItems',['z-work','a-work']],['messages',['z-message','a-message','a-message:channel']],['channels',['general']],['members',['owner']]]){
+  assert.deepEqual(expected.map((_,index)=>actual.cells.get(address('replayOrder',JSON.stringify([domain,index])))),expected);assert.equal(actual.cells.get(address('replayOrder',JSON.stringify([domain,expected.length]))),undefined);
+ }
+ assert.equal(actual.counts.messages,3);assert.equal(actual.counts.workItems,2);
+ const incoming=initialRoom()[0];assert.throws(()=>applyRecoveryReplayStep(()=>undefined,incoming,{members:0,channels:0,workItems:0,replyRequests:0,messages:NaN}),/message count/);
+});

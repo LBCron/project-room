@@ -18,6 +18,7 @@ export function applyRecoveryReplayStep(reader,incoming,counts){
  if(!supported.has(incoming?.type))return{supported:false,reason:'event_dependency_plan_incomplete'};
  if(incoming.type==='member.added'&&[1,2].includes(incoming.data?.displayNamePolicyVersion))return{supported:false,reason:'member_name_census_incomplete'};
  if(!counts||!['members','channels','workItems','replyRequests'].every(key=>Number.isSafeInteger(counts[key])&&counts[key]>=0))throw Error('Invalid independently folded replay counts');
+ if(counts.messages!==undefined&&(!Number.isSafeInteger(counts.messages)||counts.messages<0))throw Error('Invalid independently folded replay message count');
  let active=true;
  const cache=new Map(),read=(domain,key)=>{
   if(!active)throw Error('Replay read scope expired');if(typeof key!=='string'||!key)return undefined;
@@ -50,14 +51,14 @@ export function applyRecoveryReplayStep(reader,incoming,counts){
   bindCurrentRecordContext(state,{replyRequestCount:counts.replyRequests,
    replyOwner:id=>{const value=read('messageOwner',id);if(value===undefined&&read('messages',id)!==undefined)throw Error('Missing independently folded reply owner');return value;},
    replyRootChannel:id=>{const value=read('messageRootChannel',id);if(value===undefined&&read('messages',id)!==undefined)throw Error('Missing independently folded root channel');return value;}});
-  const next=applyEvent(state,incoming),patches=[],nextCounts={...counts},put=(domain,key,value)=>patches.push({domain,key,value});
+  const next=applyEvent(state,incoming),patches=[],nextCounts={...counts,messages:counts.messages??0},put=(domain,key,value)=>patches.push({domain,key,value});
   if(!isDeepStrictEqual(next.room,room??null))put('metadata','room',next.room);
   for(const domain of ['members','channels','workItems','replyRequests']){
-   for(const[key,value]of Object.entries(next[domain]??{}))if(!isDeepStrictEqual(value,loaded[domain].get(key))){put(domain,key,value);if(loaded[domain].get(key)===undefined)nextCounts[domain]++;}
+   for(const[key,value]of Object.entries(next[domain]??{}))if(!isDeepStrictEqual(value,loaded[domain].get(key))){put(domain,key,value);if(loaded[domain].get(key)===undefined){put('replayOrder',JSON.stringify([domain,nextCounts[domain]]),key);nextCounts[domain]++;}}
    for(const[key,value]of loaded[domain])if(value!==undefined&&!own(next[domain]??{},key))throw Error('Replay map deletion needs explicit expansion');
   }
   const owners=replyContextOwners(next);
-  for(const message of next.messages)if(!isDeepStrictEqual(message,loaded.messages.get(message.id))){put('messages',message.id,message);put('messageOwner',message.id,owners.get(message.id)??null);put('messageRootChannel',message.id,messageChannelId(message));}
+  for(const message of next.messages)if(!isDeepStrictEqual(message,loaded.messages.get(message.id))){put('messages',message.id,message);if(loaded.messages.get(message.id)===undefined){put('replayOrder',JSON.stringify(['messages',nextCounts.messages]),message.id);nextCounts.messages++;}put('messageOwner',message.id,owners.get(message.id)??null);put('messageRootChannel',message.id,messageChannelId(message));}
   for(const[key,value]of Object.entries(next.seenEvents))if(value!==read('seenEvents',key))put('seenEvents',key,value);
   for(const[key,value]of Object.entries(next.seenIdempotencyKeys))if(value!==read('seenIdempotencyKeys',key))put('seenIdempotencyKeys',key,value);
   return{supported:true,patches,counts:nextCounts,applied:next.eventLog.length===1,reads:cache.size};

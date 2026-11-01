@@ -33,3 +33,11 @@ This remaining contract is also recorded in full-audit-20261031/EXECUTION-LEDGER
 One prior broad run had113/114 passes because a listener test created two different identities in the same credential home and relied on silent overwrite. It now gives the second independent agent a separate existing ROOM_ACP_HOME; the listener protection assertions remain unchanged. The final-save fault fixture now injects its directory blocker after redemption to exercise the actual interrupted-save path, since a preexisting invalid target is correctly refused before burning the invite. Full failed logs are preserved; no permission check was weakened.
 
 Root owns composition with5574 and Grok's /a parser, final head checks, merge, deployment and live journey qualification. No new release authorization is inferred from the local package test.
+
+## Composition with main c52db5878
+
+Normal merge a4da3f539be8cc46bf037aedacc8467a1f181c5b preserves every original candidate commit and exact main c52db58787467390042295b181b152ef3ba4de12. Main link/agents/parser sources, issuer selection and CODEX_HOME behavior remain byte-identical to main. The generated manifest already composes correctly without manual hash edits. INDEX now reaches both identity receipts and main’s legacy wake-drain removal receipt.
+
+The combined source passes 55 affected selection/recovery/join/agent/preflight/package/identity controls and preflight checks 667 runtime files. Changed-file ESLint has zero errors/warnings. Actual 20-input npm archive SHA256 is 174f731afc8594438fbca9373289aedb0ad3b794ef75de9f342ed6fe14dc68e1. Every extracted input matches source. The extracted CLI cold enrollment followed by selected same-room409 preserves identity count1, saved bytes and unused invitation. This remains local fixture evidence, not a host/model or deployed qualification. Selected SHARE new-target remains incomplete under the boundary above.
+
+CI=1 contract passes, including both cross-cutting catalog guards; the runner explicitly skips the full Node suite in this mode. The first contract run caught two candidate Markdown orphans; minimal INDEX links fix both (803 links pass). Repository ESLint reports 0 errors and 335 existing warnings. Both contract logs are retained. No push, PR, deployment, live key or schema change.

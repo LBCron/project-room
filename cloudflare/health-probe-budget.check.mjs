@@ -127,8 +127,8 @@ test('readiness provenance uses strict static stamps and refuses arbitrary stamp
     const f=await fixture(t,{},stamps);assert.equal((await f.fetch('/api/ready')).status,200);
     const rows=await (await f.fetch('/observations')).json();
     for(const row of rows) {
-      assert.equal(row.sourceRevision,stamps.sourceRevision===TEST_SOURCE?TEST_SOURCE:null);
-      assert.equal(row.buildId,stamps.buildId===TEST_BUILD?TEST_BUILD:null);
+      assert.equal(row.sourceRevision, stamps.sourceRevision === TEST_SOURCE ? TEST_SOURCE : null);
+      assert.equal(row.buildId, stamps.buildId === TEST_BUILD ? TEST_BUILD : null);
       assert.doesNotMatch(JSON.stringify(row),/PRIVATE_/);
     }
   }

@@ -1,4 +1,4 @@
-import { CURRENT_ROOM_SCHEMA, CURRENT_ROOM_GUARDS, initializeCurrentRoom, currentRoomAuthority, isCurrentRoom, currentCommandContext, prepareCurrentWrite, withCurrentServingWriter, readCurrentRecord, readCurrentHistoryFloor } from './current-room-repository.mjs';
+import { CURRENT_ROOM_SCHEMA, CURRENT_ROOM_GUARDS, initializeCurrentRoom, currentRoomAuthority, isCurrentRoom, currentCommandContext, prepareCurrentWrite, withCurrentServingWriter, readCurrentRecord, readCurrentHistoryFloor, withCurrentReadContext } from './current-room-repository.mjs';
 import {bindReplayAppend} from './replay-cutover.mjs';
 import { bootstrapLegacyWriteProofs, configureWriteIntegrity, beginWriteProofFrame, endWriteProofFrame, publishProjectionWrites, projectionDigest, projectionContentHash, servingContentProof, servingProofDrift, assertProjectionWrite, assertMessageWrite, recordMessageWrite, withVerifiedRoomReconstruction } from './write-integrity.mjs';
 const OPERATOR_QA_ARCHIVE = Symbol("operator QA room archive");
@@ -6937,7 +6937,7 @@ this.slaBreachAlerts = new SlaBreachAlertJournal(this); // Task 26: durable in-a
     // reducer, persistence, or the transaction commit itself.
     let floodSpend = null;
     try {
-    return this.transaction(() => withCurrentServingWriter(this.db,roomId,() => {
+    return this.transaction(() => withCurrentReadContext(this.db,roomId,() => {
       const auth = token === OPERATOR_QA_ARCHIVE && roomId === "qa-onb-10302113" && command.type === T.ROOM_ARCHIVED
         ? { member: ownMember(this.roomAuthority(roomId).members, this.roomAuthority(roomId).ownerId), kind: "operator" }
         : this.authenticate(token, roomId, expectedSessionBinding);
@@ -6968,6 +6968,7 @@ this.slaBreachAlerts = new SlaBreachAlertJournal(this); // Task 26: durable in-a
         if (prior.fingerprint !== fingerprint) fail(409, "idempotency_conflict", "Command ID already used for different content");
         return { sequence: prior.sequence, event: JSON.parse(prior.body), duplicate: true };
       }
+      return withCurrentServingWriter(this.db,roomId,() => {
       // Exact replays of commands committed before the pause returned above.
       refusePausedAgentWrite(this, roomId, auth.member, command);
       // Live chat posts and replies only. The replay above, importEvents,
@@ -7463,6 +7464,7 @@ this.slaBreachAlerts = new SlaBreachAlertJournal(this); // Task 26: durable in-a
       }
       return { sequence, event: incoming, duplicate: false, ...(note ? { note } : {}),
         ...((Array.isArray(mentionWarnings) && mentionWarnings.length > 0) ? { mentionWarnings } : {}) };
+      });
     }));
     } catch (error) {
       // The test doubles that replace roomFlood expose only consume(), so a

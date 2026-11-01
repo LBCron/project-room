@@ -28,7 +28,9 @@ test('explicit synthetic initialization selects actual normalized serving, not r
     const reply = store.command(token, 'commons', { id: 'first-normalized-reply', type: 'message.posted',
       data: { messageId: 'reply', body: 'Useful follow-through', replyToId: 'first' } });
     assert.equal(reply.sequence, first.sequence + 1);
+    const savedActions=store.db.prepare('SELECT count(*) AS n FROM operator_actions').get().n;
     const retry = store.command(token, 'commons', command);
+    assert.equal(store.db.prepare('SELECT count(*) AS n FROM operator_actions').get().n,savedActions,'exact retry must not mint admission/closing or transition receipts');
     assert.equal(retry.duplicate, true);
     assert.equal(retry.sequence, first.sequence);
     assert.deepEqual(raw(store).normalizedCurrent.version, 1);

@@ -10,9 +10,11 @@ import { isUnpublished } from "./legal-store.mjs"; // operator unpublish hides a
 import {
   OPERATOR_HIDDEN_RECEIPT_SQL,
   ownerHiddenReceiptSql,
+  recordedOptOutReceiptSql,
   receiptVisibilitySqlFor,
   ownerToggleReadable,
   publicWorkTablesReadable,
+  recordedSettingReadable,
   lotReceiptVisible,
 } from "./public-visibility.mjs"; // the one visibility definition every public read applies
 
@@ -871,9 +873,15 @@ export function queryPublicReceipts(store, { room = null, agent = null, cursor =
   // hidden (operator-unpublished, owner-toggled-off). The page query and
   // the cursor lookup apply the same set, so a served nextCursor always
   // names a receipt a follow-up request may anchor on.
+  const taskRoomLeg = publicWorkTablesReadable(store.db);
   const visibility = ownerToggleReadable(store.db)
-    ? [HIDDEN_RECEIPT, ownerHiddenReceiptSql({ taskRoomLeg: publicWorkTablesReadable(store.db) })]
+    ? [HIDDEN_RECEIPT, ownerHiddenReceiptSql({ taskRoomLeg })]
     : [HIDDEN_RECEIPT];
+  // The authoritative recorded opt-out leg, from the same definition
+  // receiptVisibilitySqlFor composes (this list builds its predicate
+  // by hand, so it must name the leg itself or an opted-out room's
+  // receipts would serve here while hidden everywhere else, R08-F1).
+  if (recordedSettingReadable(store.db)) visibility.push(recordedOptOutReceiptSql({ taskRoomLeg }));
   let after = "";
   const afterParams = [];
   if (cursor != null) {

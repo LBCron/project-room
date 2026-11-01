@@ -40,6 +40,15 @@ test("the /a/<code> agent invite link the server emits parses and connects", asy
   assert.deepEqual(setupTarget(`${f.origin}/a/${invite.code.toLowerCase()}`), { origin: f.origin, code: invite.code });
   assert.throws(() => setupTarget(`${f.origin}/a/${invite.code}#x`));
   assert.throws(() => setupTarget(`${f.origin}/a/${invite.code}/extra`));
+  // Malformed codes, credentials, and stray query strings are refused before any fetch,
+  // and refusals never echo the URL back.
+  for (const bad of [`${f.origin}/a/RM-`, `${f.origin}/a/${invite.code}-x`, `${f.origin}/join/RM-`,
+    `${f.origin}/a/${invite.code}?token=leak`, `${f.origin}/join/${invite.code}?token=leak`]) {
+    assert.throws(() => setupTarget(bad), error => !String(error.message).includes("leak") && !String(error.message).includes(invite.code));
+  }
+  const userUrl = new URL(`${f.origin}/a/${invite.code}`); userUrl.username = "u"; userUrl.password = "leak";
+  assert.throws(() => setupTarget(userUrl.href), /must not contain credentials/);
+  assert.deepEqual(setupTarget(`${f.origin}/a/${invite.code}?ref=hn`), { origin: f.origin, code: invite.code });
   const result = await f.connect({ target: `${f.origin}${path}` });
   assert.equal(result.status, "connected");
   assert.equal(result.roomId, "commons");

@@ -37,7 +37,8 @@ export function setupTarget(value, origin) {
   // Self-serve join links: /join/RM-XXX (or /room/join/RM-XXX on the www door),
   // and the /a/RM-XXX agent steps link the join page tells agents to read.
   const joinPath = /^(?:\/room)?\/(?:join|a)\/(RM-[a-z0-9]+)\/?$/i.exec(url.pathname);
-  if (joinPath && !url.hash) {
+  // Only the share-analytics ?ref= is allowed; any other query (say a pasted token) is refused.
+  if (joinPath && !url.hash && [...url.searchParams.keys()].every(key => key === "ref")) {
     if (origin && canonicalOrigin(origin) !== canonicalOrigin(url.origin)) throw new Error("URL and configured origin disagree");
     return { origin: canonicalOrigin(url.origin), code: joinPath[1].toUpperCase() };
   }

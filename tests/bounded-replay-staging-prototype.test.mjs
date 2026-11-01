@@ -251,3 +251,85 @@ test('metadata/unit lookups and next-event admission use indexed searches', () =
     }
   } finally { db.close(); }
 });
+
+for (const control of ['state_seq', 'head', 'next_sequence', 'cursor_id', 'anchor_id', 'next_id', 'format_version', 'metadata_sha', 'event_sha', 'message_sha']) {
+  test(`stored control ${control} corruption refuses before transferring a 2MiB scalar`, () => {
+    const { db } = fixture();
+    try {
+      append(db);
+      const oversized = 'x'.repeat(2 * 1024 * 1024);
+      if (control === 'state_seq') db.prepare('UPDATE messages_backfill_cursor SET state_seq=?').run(oversized);
+      if (control === 'head') db.prepare('UPDATE rooms SET sequence=?').run(oversized);
+      if (control === 'next_sequence') db.prepare('UPDATE events SET sequence=? WHERE sequence=2').run(oversized);
+      if (control === 'cursor_id') db.prepare('UPDATE messages_backfill_cursor SET replay_event_id=?').run(oversized);
+      if (control === 'anchor_id') db.prepare('UPDATE events SET id=? WHERE sequence=1').run(oversized);
+      if (control === 'next_id') db.prepare('UPDATE events SET id=? WHERE sequence=2').run(oversized);
+      if (control === 'format_version') {
+        db.exec('PRAGMA ignore_check_constraints=ON');
+        db.prepare('UPDATE message_replay_formats SET version=?').run(oversized);
+      }
+      if (control === 'metadata_sha') db.prepare('UPDATE message_replay_formats SET metadata_sha=?').run(oversized);
+      if (control === 'event_sha') db.prepare('UPDATE message_replay_formats SET event_sha=?').run(oversized);
+      if (control === 'message_sha') db.prepare('UPDATE message_replay_units SET sha=?').run(oversized);
+      let maxReturnedBytes = 0;
+      const guarded = { get isTransaction() { return db.isTransaction; }, prepare(sql) {
+        const statement = db.prepare(sql);
+        return { get(...args) {
+          const row = statement.get(...args);
+          for (const value of Object.values(row ?? {})) if (typeof value === 'string' || Buffer.isBuffer(value)) {
+            maxReturnedBytes = Math.max(maxReturnedBytes, Buffer.byteLength(value));
+          }
+          return row;
+        } };
+      } };
+      db.exec('BEGIN');
+      let outcome;
+      try { outcome = step(guarded, 'commons'); } catch (error) { outcome = { refused: error.message }; }
+      finally { db.exec('ROLLBACK'); }
+      assert.ok(!outcome.advanced);
+      assert.ok(maxReturnedBytes <= limits.message,
+        `unadmitted control crossed SQLite/JS boundary: ${maxReturnedBytes} bytes`);
+      assert.equal(read(db).revision, 0);
+    } finally { db.close(); }
+  });
+}
+
+test('full reducer and point edit agree with an existing top-level companion; companion stays unchanged', () => {
+  const f = fixture();
+  try {
+    // A top-level post does not normally create this copy, but imported/legacy
+    // shape must not make the point context diverge from the actual reducer.
+    const copy = { ...f.all[0], id: 'm0:channel', body: 'independent companion body' };
+    const json = JSON.stringify(copy);
+    f.db.prepare('INSERT INTO message_replay_units VALUES (?,?,?,?)').run('commons', copy.id, json, digest(json));
+    const incoming = append(f.db, 0, 'message.edited', { alsoSendToChannel: true });
+    const expected = applyEvent({ ...f.metadata, messages: [...f.all, copy], eventLog: [], seenEvents: {}, seenIdempotencyKeys: {} }, incoming).messages;
+    assert.deepEqual(expected[1], copy, 'actual edit handler does not rewrite a companion');
+    assert.equal(run(f.db).result.advanced, true);
+    const actual = f.db.prepare('SELECT json FROM message_replay_units ORDER BY message_id').all().map(row => JSON.parse(row.json));
+    assert.deepEqual(actual, expected);
+  } finally { f.db.close(); }
+});
+
+test('real reducer crosspost source and copy stay pending without advancing or changing either row', () => {
+  const f = fixture();
+  try {
+    const post = event({ id: 'crosspost', roomId: 'commons', actorId: 'owner', type: 'message.posted', data: { messageId: 'reply', replyToId: 'm0', alsoSendToChannel: true, body: 'crossposted reply' } });
+    const state = applyEvent({ ...f.metadata, messages: f.all, eventLog: [], seenEvents: {}, seenIdempotencyKeys: {} }, post);
+    assert.ok(state.messages.find(message => message.id === 'reply').replyToId);
+    assert.equal(state.messages.find(message => message.id === 'reply:channel').replyToId, null);
+    for (const message of state.messages.slice(1)) {
+      const json = JSON.stringify(message);
+      f.db.prepare('INSERT INTO message_replay_units VALUES (?,?,?,?)').run('commons', message.id, json, digest(json));
+    }
+    const before = f.db.prepare('SELECT * FROM message_replay_units ORDER BY message_id').all();
+    for (const id of ['reply', 'reply:channel']) {
+      f.db.prepare('DELETE FROM events WHERE sequence=2').run();
+      f.db.prepare('UPDATE rooms SET sequence=1').run();
+      append(f.db, 0, 'message.edited', { messageId: id });
+      assert.equal(run(f.db).result.reason, 'unsupported-message-context');
+      assert.equal(cursor(f.db).state_seq, 1);
+      assert.deepEqual(f.db.prepare('SELECT * FROM message_replay_units ORDER BY message_id').all(), before);
+    }
+  } finally { f.db.close(); }
+});

@@ -44,6 +44,16 @@ checksum/control fields. Variable event ids are SQL-filtered to at most 200
 UTF-8 bytes; room/message key input sizes are bounded. The next-event query
 returns one size/control row, then reads its body only after admission.
 
+All stored scalar controls are admitted inside SQLite before materialization:
+`CASE` returns cursor/head/next-event sequence only for integer storage and safe
+integer ranges, otherwise NULL. This matters because non-STRICT INTEGER
+affinity accepts arbitrarily large TEXT/BLOB values. Format version is also
+CASE-guarded. Cursor/event ids must be TEXT of at most 200 UTF-8 bytes; checksum
+fields must be TEXT of exactly 64 UTF-8 bytes. Bound room/message lookup keys
+are at most 200 UTF-8 bytes. No raw unknown control scalar is returned first
+for a later JavaScript type check. SQL size probes return numeric lengths or
+NULL, never an unadmitted payload.
+
 Reducer output message and metadata receive the same byte limits before any
 write. Their transient allocation is bounded by the admitted inputs and the
 existing reducer's bounded edit-history algorithm, not by total room history.
@@ -101,6 +111,25 @@ metadata updates; unsupported event families/contexts; source gaps; and an
 injected failure after all writes which rolls the message, anchor digest and
 existing cursor back together. This is Node/SQLite qualification, not a real
 workerd/isolate restart or process-kill experiment.
+
+Root's control-field review produced three fail-before regressions: corrupting
+`state_seq`, `rooms.sequence`, or the next event sequence with 2 MiB TEXT caused
+each original query to transfer the entire scalar before refusing it. Those
+three tests failed on `aae0fe0e6` with `2097152 bytes` observed at the result
+boundary. SQL CASE admission fixes them. Expanded controls also cover oversized
+cursor/anchor/next ids, format version (with fixture CHECK constraints explicitly
+disabled), metadata/event/message checksums; none of those strings crosses the
+SQLite/JavaScript result boundary.
+
+Companion dependency qualification compares the real full reducer to the point
+context with an existing `m0:channel` sibling and `alsoSendToChannel: true` in
+the edit input. `message.edited` updates only the named original; the sibling
+remains byte-equivalent, and the complete resulting message rows agree. Actual
+post reducer semantics create a channel copy only for a public thread reply;
+the original then has `replyToId`, so this prototype refuses it, and it also
+refuses direct edits to the `:channel` copy. A second test creates that real
+reply/copy pair through `applyEvent` and verifies both refusals preserve rows
+and cursor. Redaction has a different companion write set and remains unsupported.
 
 ## Proposed schema and writer ownership
 

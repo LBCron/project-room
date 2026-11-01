@@ -77,7 +77,8 @@ test("a committed file whose bound message is gone stays hidden from non-uploade
 });
 
 function visibilityFixture(t) {
-  const store = new RoomStore(":memory:");
+  const clock = { now: Date.now() };
+  const store = new RoomStore(":memory:", { now: () => clock.now });
   t.after(() => store.close());
   store.initialize(initialRoom());
   const keys = { owner: store.issueAccessKey("commons", "owner") };
@@ -93,7 +94,7 @@ function visibilityFixture(t) {
       data: { messageId: `message-${id}`, body: "File context", ...(toMemberId ? { toMemberId } : {}) } });
     return files.commit(keys.uploader, "commons", { id, messageId: `message-${id}` });
   };
-  return { store, keys, files, commit };
+  return { store, keys, files, commit, clock };
 }
 
 test("visible public files can be deleted by uploader or owner, with stable retries and no member deletion grant", t => {
@@ -195,5 +196,32 @@ for (const action of ["list", "delete", "download", "hidden download"]) {
       assert.equal(retry.bytes, 0);
     }
     if (action === "download") assert.equal(census.result.attachment.data, b64(size - 1));
+  });
+}
+
+for (const terminal of ["discarded", "expired"]) for (const operation of ["get", "discard"]) {
+  test(`unbound ${terminal} attachment ${operation} stays private to its uploader`, t => {
+    const { store, keys, files, clock } = visibilityFixture(t);
+    const id = "unbound-private";
+    files.stage(keys.uploader, "commons", { id, filename: "private.txt", mediaType: "text/plain", data: b64(4) });
+    for (const actor of ["owner", "observer"]) {
+      assert.throws(() => files.get(keys[actor], "commons", id), error => error.status === 404 && error.code === "attachment_not_found");
+    }
+    if (terminal === "discarded") {
+      // Owner administration of staged files does not grant permission to
+      // learn their later terminal state or read another uploader's bytes.
+      assert.equal(files.discard(keys.owner, "commons", id).status, "discarded");
+    } else {
+      clock.now += attachmentLimits.lifetimeMs + 1;
+      assert.deepEqual(files.list(keys.uploader, "commons").files, []);
+    }
+    assert.equal(store.db.prepare("SELECT state FROM room_attachments WHERE room_id=? AND id=?").get("commons", id).state, terminal);
+    assert.throws(() => files[operation](keys.uploader, "commons", id), error => error.status === 410 && error.code === "attachment_unavailable");
+    for (const actor of ["owner", "observer"]) {
+      for (const target of [id, "not-a-file"]) {
+        assert.throws(() => files[operation](keys[actor], "commons", target),
+          error => error.status === 404 && error.code === "attachment_not_found", `${actor} ${operation} ${target}`);
+      }
+    }
   });
 }

@@ -175,8 +175,9 @@ export class RoomAttachmentBytes {
     });
   }
 
-  // Visibility rule (2026-09-24, #983): a staged file is visible only to
-  // its uploader; a file committed onto a DM (toMemberId) is visible only
+  // Visibility rule (2026-09-24, #983): an unbound file stays visible only
+  // to its uploader, including after expiry/discard; a file committed onto
+  // a DM (toMemberId) is visible only
   // to the message author and recipient. Everything else stays room-wide.
   // Fail closed (#2950): a committed file whose bound message no longer
   // resolves in the projection (history replaced via importEvents, or the
@@ -186,7 +187,7 @@ export class RoomAttachmentBytes {
   // the uploader authored the bound message, so they were a party to it
   // whether it was a DM or a public post.
   visibleTo(row, messages, memberId) {
-    if (row.state === "staged") return row.uploader_id === memberId;
+    if (row.state === "staged" || !row.message_id) return row.uploader_id === memberId;
     if (row.message_id) {
       const message = messages.get(row.message_id);
       if (!message) return row.uploader_id === memberId;
@@ -266,7 +267,9 @@ export class RoomAttachmentBytes {
       // dropped and the row moves to the existing terminal 'deleted' state,
       // which no quota counts. Visibility is checked first so the id does
       // not leak a DM file's existence, including a deleted retry receipt.
-      if ((row.state === "committed" || row.state === "deleted")
+      // Expired/discarded unbound uploads also retain uploader-only privacy;
+      // the owner's staged-file administration grant is checked separately.
+      if (row.state !== "staged"
         && !this.visibleTo(row, this.messageIndex(roomId), auth.member.id))
         fail(404, "attachment_not_found", "Attachment not found");
       if (row.state === "deleted") {

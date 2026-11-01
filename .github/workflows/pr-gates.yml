@@ -17,7 +17,10 @@ name: pr-gates
 
 on:
   pull_request:
-    types: [opened, synchronize, reopened, ready_for_review, edited, labeled]
+    # unlabeled re-runs the workflow when a label is removed, so removing
+    # ready-to-land replaces the last gate results with skipped (NOT-RUN)
+    # ones instead of leaving them standing as the latest run.
+    types: [opened, synchronize, reopened, ready_for_review, edited, labeled, unlabeled]
   push:
     branches: [main]
   merge_group:

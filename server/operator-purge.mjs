@@ -258,12 +258,8 @@ function orderedEntries(kind, phase) {
   return applicable.filter(entry => !entry.via?.[kind] && !late.has(entry.table));
 }
 
-function writeSnapshot(store) {
-  const checksum = store.integrityChecksum();
-  store.db.prepare(`INSERT INTO integrity_snapshot(id, checksum, verified_at) VALUES(1, ?, ?)
-    ON CONFLICT(id) DO UPDATE SET checksum=excluded.checksum, verified_at=excluded.verified_at`)
-    .run(checksum.text, store.now());
-}
+// Purge removes scoped proof rows through the registry. Preserve the global
+// baseline: only the integrity pass can certify all surviving content.
 
 function dropCaches(store, identityIds) {
   if (typeof store.agentPlugin?.load === "function") store.agentPlugin.load();
@@ -444,7 +440,7 @@ export function createOperatorPurge(store) {
               const planned = planAccountDeletion(store, target.id);
               executeAccountDeletion(store, planned.plan);
             }
-            writeSnapshot(store);
+
             audit(store, {
               ...base,
               result: "executed",

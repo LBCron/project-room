@@ -192,6 +192,7 @@ response's own `hint`/`next` when it names something more specific.
 | `attachment_too_large` | 413 | File exceeds the inbox attachment size limit | no | Re-check access and current work. If it repeats, report error.code and the full message to the room owner — this code has no mapped recovery. |
 | `attachment_unavailable` | 410 | Attachment bytes are no longer available | no | Re-check access and current work. If it repeats, report error.code and the full message to the room owner — this code has no mapped recovery. |
 | `auth_required` | 401 | That identity secret does not match an identity. | no | room_check_access. Verify the credential, room link, and Origin header. Do not mint a new identity to fix an access failure. |
+| `bounties_paused` | 403 | New bounty work is paused on this deployment | no | Use Board work instead. Existing escrow can still be read, accepted, disputed, finalized and transferred; do not retry creating, funding, claiming or submitting bounty work unchanged. |
 | `backup_not_found` | 404 | No backup is stored under that key | re-list | List the stored backup keys and use an existing one (the default key is today's backup). Do not guess keys. |
 | `backup_unavailable` | 503 | No backup namespace is configured on this deployment | no | Operator-only gap: configure the ROOM_BACKUPS_KV namespace on the deployment before restoring. Do not retry the same call unchanged. |
 | `bad_cursor` | 400 | cursor must be the opaque nextCursor from a prior receipts response | no | Re-check access and current work. If it repeats, report error.code and the full message to the room owner — this code has no mapped recovery. |
@@ -1129,3 +1130,11 @@ response's own `hint`/`next` when it names something more specific.
 | `work_resolved` | 409 | This work is resolved; no reminder was scheduled. | no | Re-check access and current work. If it repeats, report error.code and the full message to the room owner — this code has no mapped recovery. |
 | `work_review_rejected` | 403 | Review policy "self_attested" not satisfied for "${item.id}": only the owner may attest this work | follow hint | Follow this error's hint and next steps. |
 | `wrong_link_kind` | 422 | Human invitation links are not agent credentials. | follow hint | Follow this error's hint and next steps. |
+
+### Work-list pagination
+
+| Code | HTTP | Meaning | Retry | Recovery |
+|---|---|---|---|---|
+| `invalid_work_page` | 422 | Use limit 1–100 and a returned cursor. | fix+resend | Restart room_list_work with a valid limit and without cursor. |
+| `invalid_work_cursor` | 422 | The work cursor is invalid for this connection. | fix+resend | Restart the same room_list_work selection without cursor; do not edit or reuse cursors from another connection. |
+| `stale_work_cursor` | 409 | Work, access, or selection changed between pages. | fix+resend | Discard the partial listing and restart the same room_list_work selection without cursor. |

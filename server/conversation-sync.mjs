@@ -1,3 +1,4 @@
+import { hasMessageAuthority } from './message-authority.mjs';
 import { messageRepository } from './message-repository.mjs';
 import { createHash, createCipheriv, createDecipheriv, randomBytes } from "node:crypto";
 import { hydrateRecordText } from "./projection-at-rest.mjs"; // Phase 1a
@@ -99,7 +100,9 @@ export function readConversation(store, token, roomId, { limit = 50, cursor = nu
     if (cursor !== null && ((!sameHead && !privateAppend) || !Number.isSafeInteger(saved.before) || saved.before < 0)) return reset();
     // Certification covers the full record and query columns at this exact
     // head. Never replay or perform a full parity scan on a read request.
-    const indexed = Boolean(store.db.prepare(`SELECT 1 FROM messages_backfill_cursor
+    const canonicalMarker = store.db.prepare("SELECT json_extract(projection,'$.messageAuthority') AS marker FROM rooms WHERE id=?").get(roomId)?.marker;
+    const canonical = canonicalMarker != null && hasMessageAuthority({ messageAuthority: JSON.parse(canonicalMarker) });
+    const indexed = canonical || Boolean(store.db.prepare(`SELECT 1 FROM messages_backfill_cursor
       WHERE room_id=? AND applied_seq=? AND parity_at_seq=? AND applied_event_id=?`)
       .get(roomId, head.sequence, head.sequence, anchor ?? ""));
     const marker=indexed ? null : archiveMarker(store.db,roomId);
@@ -221,7 +224,9 @@ export function readDirectConversations(store, token, roomId, { limit = 50, curs
     const base = { ...identity, directoryVersion: 1, sequence: head.sequence, limit };
     if (cursor !== null && (!saved || saved.scope !== scope || saved.sequence !== head.sequence || saved.anchor !== anchor || typeof saved.after !== 'string'))
       return { ...base, mode: 'reset', peers: [], nextCursor: null };
-    const indexed = Boolean(store.db.prepare(`SELECT 1 FROM messages_backfill_cursor
+    const canonicalMarker = store.db.prepare("SELECT json_extract(projection,'$.messageAuthority') AS marker FROM rooms WHERE id=?").get(roomId)?.marker;
+    const canonical = canonicalMarker != null && hasMessageAuthority({ messageAuthority: JSON.parse(canonicalMarker) });
+    const indexed = canonical || Boolean(store.db.prepare(`SELECT 1 FROM messages_backfill_cursor
       WHERE room_id=? AND applied_seq=? AND parity_at_seq=? AND applied_event_id=?`).get(roomId, head.sequence, head.sequence, anchor));
     const marker = indexed ? null : archiveMarker(store.db, roomId);
     let source, sourceParams;

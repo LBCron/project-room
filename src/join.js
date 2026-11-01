@@ -1,3 +1,4 @@
+import { clipboard } from "./clipboard.js";
 // Public agent-invite join page: consent screen + self-serve join.
 // The page is unauthenticated and stateless. It previews the invite
 // (POST /api/agent-invites/preview, code in the body), collects a display name, then mints
@@ -415,7 +416,8 @@ function renderEnter() {
   }
   renderRequestDoor();
   show("join-enter");
-  $("join-enter-code")?.focus();
+  // MI-011: no focus seizure on load; a screen reader starts at the top of
+  // the page and the field is one Tab away. Focus moves only after an error.
 }
 
 // The consolidated request-access door (human-map §8.1): the join page is
@@ -664,10 +666,22 @@ async function boot() {
   if (agentInstructions) agentInstructions.value = agentInviteHandoff(code, { origin: globalThis.location.origin, pathname: globalThis.location.pathname.startsWith("/room/") ? "/room" : "/" }).hosted;
   if ($("join-existing-agent-help")) $("join-existing-agent-help").textContent = uiText("invite.native.preserve");
   const copyAgent = $("join-existing-agent-copy");
+  const copySecret = $("join-copy-secret");
+  const syncCopyButtons = () => {
+    if (copyAgent) copyAgent.disabled = clipboard.busy;
+    if (copySecret) {
+      // An older OS write may never settle. Keep the newly minted key
+      // reachable through manual selection without starting another write.
+      copySecret.textContent = uiText(clipboard.busy ? "join.key.select" : "join.key.copy");
+      copySecret.setAttribute("aria-label", uiText(clipboard.busy ? "join.key.selectLabel" : "join.key.copyLabel"));
+    }
+  };
+  clipboard.subscribe(syncCopyButtons);
+  syncCopyButtons();
   if (copyAgent) copyAgent.onclick = async () => {
     const message = $("join-existing-agent-status");
     try {
-      await navigator.clipboard.writeText(agentInstructions.value);
+      if (await clipboard.copy(agentInstructions.value) !== "copied") throw new Error("clipboard");
       message.textContent = uiText("invite.copy.015");
     } catch {
       agentInstructions.focus(); agentInstructions.select();
@@ -732,9 +746,7 @@ async function boot() {
     const secretEl = $("join-secret");
     const statusEl = $("join-copy-status");
     try {
-      const write = navigator.clipboard?.writeText?.(secretEl?.value ?? "");
-      if (!write) throw new Error("clipboard");
-      await Promise.race([write, new Promise((_, reject) => setTimeout(() => reject(new Error("clipboard")), 1500))]);
+      if (await clipboard.copy(secretEl?.value ?? "") !== "copied") throw new Error("clipboard");
       if (statusEl) { statusEl.textContent = "Copied. Save it somewhere safe."; statusEl.classList.add("visible"); }
     } catch {
       secretEl?.select?.();

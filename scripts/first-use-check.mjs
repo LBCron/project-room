@@ -154,7 +154,13 @@ for (const touch of [false, true]) {
     await owner.locator('#reviewer-unavailable').waitFor({ state: 'hidden' });
     assert.equal(await owner.locator('#require-verification').isChecked(), true, 'available reviewer never changes the review requirement');
     await owner.locator('#assignee-select').selectOption('review-helper');
+    assert.equal(await owner.locator('#verifier-select option[value="owner"]').count(), 0,
+      'the final approver cannot also serve as independent verifier');
+    assert.equal(await owner.locator('#reviewer-unavailable').isVisible(), true);
+    if (!await owner.locator('#require-decision').isVisible()) await owner.locator('#work-options > summary').click();
+    await owner.locator('#require-decision').uncheck();
     assert.equal(await owner.locator('#verifier-select option[value="owner"]').count(), 1);
+    assert.equal(await owner.locator('#require-verification').isChecked(), true);
     assert.equal(await owner.locator('#reviewer-unavailable').isVisible(), false);
     await owner.locator('#cancel-work-button').click();
     store.command(ownerKey, 'commons', { id: crypto.randomUUID(), type: T.MESSAGE_POSTED,

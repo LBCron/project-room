@@ -162,7 +162,7 @@ const PUBLIC_BLOCK_TOKEN = /^[a-z][a-z0-9_]{0,40}$/i;
 
 function logIntegrity(integrity) {
   const line = { event: "room.integrity" };
-  for (const key of ["matched", "skipped", "verified", "budgetExceeded", "invitations", "paused", "checked", "swept", "blockedRooms", "quarantinedEvents", "deferredSkips", "verifiedRooms", "blockedFailures", "blockedSince"]) {
+  for (const key of ["matched", "skipped", "verified", "budgetExceeded", "invitations", "paused", "checked", "swept", "blockedRooms", "quarantinedEvents", "deferredSkips", "verifiedRooms", "blockedFailures", "blockedSince", "baselineUpgraded", "contentDrift", "baselineUnverifiable"]) {
     if (typeof integrity?.[key] === "number") line[key] = integrity[key];
   }
   for (const key of ["blockReason", "blockComponent"]) {
@@ -184,7 +184,7 @@ export const INTEGRITY_SUBCHECKS = Object.freeze([
   "share_links", "agent_connections", "inbox", "email", "channel_updates",
   "quarantine_splits", "room_lifecycle", "identity_expiry", "referral_depth",
   "messages_backfill", "messages_parity", "invitation_audit", "help_history",
-  "incremental", "snapshot", "unknown"
+  "projection_content", "incremental", "snapshot", "unknown"
 ]);
 const INTEGRITY_RECORD_CLASS = Object.freeze({
   share_links: "journal", agent_connections: "journal", inbox: "journal",
@@ -192,6 +192,7 @@ const INTEGRITY_RECORD_CLASS = Object.freeze({
   room_lifecycle: "room", identity_expiry: "unknown", referral_depth: "invitation",
   messages_backfill: "message", messages_parity: "message",
   invitation_audit: "invitation", help_history: "invitation",
+  projection_content: "room",
   incremental: "room", snapshot: "room", unknown: "unknown"
 });
 const SAFE_CARRIED_CODE = /^[a-z][a-z0-9_]{0,63}$/i;
@@ -207,7 +208,7 @@ const SAFE_CARRIED_CODE = /^[a-z][a-z0-9_]{0,63}$/i;
 // all) stays off every surface, exactly as #3334 required, as do message
 // bodies and secrets.
 export const INTEGRITY_ROOM_RECORD_STEPS = Object.freeze(new Set([
-  "messages_backfill", "messages_parity", "help_history"
+  "messages_backfill", "messages_parity", "help_history", "projection_content"
 ]));
 export const SAFE_RECORD_ID = /^[A-Za-z0-9][A-Za-z0-9_-]{0,63}$/;
 
@@ -636,7 +637,7 @@ export const JOBS = Object.freeze([
           scanParkedCount = parked.length;
           scanParkedRooms = new Set(parked.map(failure => failure.recordId));
           const summary = {};
-          for (const key of ["matched", "skipped", "verified", "invitations", "checked", "swept", "deferredSkips", "verifiedRooms", "budgetExceeded"]) {
+          for (const key of ["matched", "skipped", "verified", "invitations", "checked", "swept", "deferredSkips", "verifiedRooms", "budgetExceeded", "baselineUpgraded", "contentDrift", "baselineUnverifiable"]) {
             if (typeof integrity?.[key] === "number") summary[key] = integrity[key];
           }
           if (parked.length) {

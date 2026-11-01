@@ -117,3 +117,18 @@ test('normalized history drains excluded source windows and resumes checkpoint f
  validateReplyRead(late,{name:'room_request_history',args,roomId:'commons'});assert.deepEqual(late.page.items.map(r=>r.message.id),['late-question']);
  assert.throws(()=>store.replyRequests.history(keys.owner,'commons',args),e=>e.code==='reply_cursor_identity_changed');
 });
+test('same-member active credentials cannot transfer selected, list, or history continuations',t=>{
+ const {store,keys}=fixture(t,(_events,add)=>{for(let i=0;i<10;i++)add('message.posted',{messageId:`context-bound-${i}`,replyToId:'question',toMemberId:'reader',body:'Bound context'});});
+ const second=store.mintAccessKey('commons','reader');
+ assert.equal(store.authenticate(keys.reader,'commons').member.id,store.authenticate(second,'commons').member.id);
+ const selected=store.replyRequests.selected(keys.reader,'commons','question',{limit:1});
+ const history=store.replyRequests.history(keys.reader,'commons',{limit:1});
+ // Add one excluded request so the list also has a continuation.
+ store.command(keys.owner,'commons',{id:'excluded-bound',type:'message.posted',data:{messageId:'excluded-bound',toMemberId:'other',requestKind:'reply',body:'Excluded'}});
+ const list=store.replyRequests.list(keys.reader,'commons',{limit:1});
+ assert.ok(list.nextRead);assert.ok(selected.nextRead);assert.ok(history.nextRead);
+ for(const read of [selected,history,list]){
+  const args=read.nextRead.arguments;
+  assert.throws(()=>read.nextRead.tool==='room_read_request'?store.replyRequests.selected(second,'commons','question',args):read.nextRead.tool==='room_list_requests'?store.replyRequests.list(second,'commons',args):store.replyRequests.history(second,'commons',args),e=>e.code==='reply_cursor_identity_changed');
+ }
+});

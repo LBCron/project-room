@@ -223,3 +223,12 @@ repeated. These are local protocol observations, not a production release or a
 successful real Claude connection. Actual host configuration, human consent,
 callback handling and a harmless authenticated read in Claude remain external
 qualification gates.
+
+
+Documentation qualification distinguishes eight discoverable entries from the
+seven anonymous public actions. The eighth entry is the existing protected
+access check, which returns HTTP 401; discovery grants no additional Room
+permission. Saved bearer and CLI connections still work without OAuth. The
+69 focused packet, skill, mint-guidance and server-card guards pass, including
+the original short-packet size and card-description bounds. This documentation
+qualification does not establish actual Claude host configuration or consent.

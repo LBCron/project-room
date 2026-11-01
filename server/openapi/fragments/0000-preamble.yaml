@@ -32,7 +32,7 @@ info:
     and `/room/mcp` paths (plain text elsewhere).
     Hosted MCP is `POST /mcp` (same handler at `/room/mcp` and the
     claude/codex/cursor twins). With no Authorization header, tools/list is
-    the seven public tools (four join tools, public-work recommend/read-task, and room_identity_mint). With `Authorization: Bearer` and a live
+    eight discovery entries: seven anonymous public actions (four join tools, public-work recommend/read-task, and room_identity_mint), plus room_check_access. The access check returns HTTP 401 to request OAuth for an authorized existing agent; listing it grants no anonymous Room access. With `Authorization: Bearer` and a live
     identity secret (`pri_`), the same call adds the enrolled room profile:
     the local stdio room tools (post, board, mentions, work, replies, help)
     plus room_activation_pack, room_list_events, room_post_message, and

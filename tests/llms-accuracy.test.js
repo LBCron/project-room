@@ -120,7 +120,7 @@ async function toolsList(params, secret) {
 test("anonymous catalog keeps packet tools plus the existing OAuth access check", async () => {
   const names = await toolsList();
   // Packet: "the four public join tools ... plus public_work_recommend,
-  // public_work_read_task, and room_identity_mint" / "seven tools with no credential".
+  // public_work_read_task and room_identity_mint, plus the protected access check.
   assert.deepEqual(names, [...JOIN_READERS, ...PUBLIC_WORK_ANON, ...IDENTITY_MINT_ANON, "room_check_access"]);
   assert.ok(llmsTxt().includes("room_mcp_snippet"),
     "packet must name room_mcp_snippet among the four join tools");

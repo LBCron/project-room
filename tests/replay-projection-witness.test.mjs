@@ -8,6 +8,7 @@ import {storedProjection,hydrateProjection} from '../server/projection-at-rest.m
 import {messageProofMatches} from '../server/write-integrity.mjs';
 import {messageRowParityFields} from '../server/messages-store.mjs';
 import {WITNESS_SCHEMA,WITNESS_SLICE,captureProjectionWitness,witnessChunk} from '../scripts/prototypes/replay-projection-witness.mjs';
+import {initialReplayHash,advanceReplayHash,finishReplayHash,encodeReplayHash,decodeReplayHash} from '../server/replay-sha256.mjs';
 const sha=text=>createHash('sha256').update(text).digest('hex');
 function fixture(t,slim=false,archive=false){
   const events=[...initialRoom()];
@@ -108,4 +109,20 @@ test('ceiling plus one is refused by byte admission before CAST or capture write
   const original=db.prepare.bind(db);db.prepare=sql=>{assert.ok(!sql.includes('INSERT INTO replay_projection_witness'),'no capture copy');return original(sql);};
   assert.throws(()=>f.capture({ceilingBytes:bytes-1}),/byte ceiling/);db.prepare=original;
   assert.equal(db.prepare('SELECT count(*) AS n FROM replay_projection_witness').get().n,0);
+});
+
+for(const slim of [false,true])for(const archived of [false,true])test(`portable resumed hash binds captured H and independent proof: refs=${slim}, archive=${archived}`,t=>{
+  const f=fixture(t,slim,archived);const proof=f.s.db.prepare("SELECT sequence,metadata_hash FROM integrity_room_state WHERE room_id='commons'").get();
+  f.capture();if(archived)archiveWitness(f);
+  let state=initialReplayHash();
+  const key=f.s.issueAccessKey('commons','owner');
+  f.s.command(key,'commons',{id:'after-capture',type:'message.posted',data:{messageId:'after-capture',body:'A later independently proved event'}});
+  f.s.command(key,'commons',{id:'edit-retained',type:'message.edited',data:{messageId:'m4',body:'A later retained message edit',expectedMessageRevision:0}});
+  for(let offset=0;;offset+=WITNESS_SLICE){
+    const chunk=witnessChunk(f.s.db,'captured-head',offset);if(!chunk?.length)break;
+    state=decodeReplayHash(encodeReplayHash(advanceReplayHash(state,chunk)));
+  }
+  assert.equal(finishReplayHash(state),proof.metadata_hash,'old independent proof, not a captured self-hash');
+  assert.equal(f.s.db.prepare("SELECT head FROM replay_projection_witness WHERE unit_kind='header'").get().head,proof.sequence);
+  assert.ok(f.s.headSequence('commons')>proof.sequence);
 });

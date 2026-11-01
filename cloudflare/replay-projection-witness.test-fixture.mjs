@@ -5,8 +5,9 @@ import {sqliteValueLimit} from '../server/storage-limits.mjs';
 import {initialRoom} from '../server/bootstrap.mjs';
 import {DurableDatabase,durableStorage} from './storage.mjs';
 import {WITNESS_SCHEMA,captureProjectionWitness,witnessChunk} from '../scripts/prototypes/replay-projection-witness.mjs';
+import {initialReplayHash,advanceReplayHash,finishReplayHash,encodeReplayHash,decodeReplayHash} from '../server/replay-sha256.mjs';
 export class ReplayWitnessRoom extends DurableObject{
-  constructor(ctx,env){super(ctx,env);this.stats={statements:0,rowsRead:0,rowsWritten:0,unknown:0};const fixture=this,originalSql=ctx.storage.sql;const storage=new Proxy(ctx.storage,{get(target,key){if(key==='sql')return {exec(...args){try{return originalSql.exec(...args);}catch(error){fixture.nativeFailure={name:error.name,code:error.code??null,message:error.message,stack:String(error.stack).split('\n').slice(0,6)};throw error;}}};const value=Reflect.get(target,key,target);return typeof value==='function'?value.bind(target):value;}});this.db=new DurableDatabase(storage,{observeStatement:()=>sample=>{this.stats.statements++;this.stats.rowsRead+=sample.rowsRead??0;this.stats.rowsWritten+=sample.rowsWritten??0;if(sample.rowsRead===null||sample.rowsWritten===null)this.stats.unknown++;}});this.s=new RoomStore(null,{database:this.db,storagePlatform:durableStorage,integrity:"deferred"});this.db.exec(WITNESS_SCHEMA);}
+  constructor(ctx,env){super(ctx,env);this.ctx=ctx;this.stats={statements:0,rowsRead:0,rowsWritten:0,unknown:0};const fixture=this,originalSql=ctx.storage.sql;const storage=new Proxy(ctx.storage,{get(target,key){if(key==='sql')return {exec(...args){try{return originalSql.exec(...args);}catch(error){fixture.nativeFailure={name:error.name,code:error.code??null,message:error.message,stack:String(error.stack).split('\n').slice(0,6)};throw error;}}};const value=Reflect.get(target,key,target);return typeof value==='function'?value.bind(target):value;}});this.db=new DurableDatabase(storage,{observeStatement:()=>sample=>{this.stats.statements++;this.stats.rowsRead+=sample.rowsRead??0;this.stats.rowsWritten+=sample.rowsWritten??0;if(sample.rowsRead===null||sample.rowsWritten===null)this.stats.unknown++;}});this.s=new RoomStore(null,{database:this.db,storagePlatform:durableStorage,integrity:"deferred"});this.db.exec(WITNESS_SCHEMA);}
   async fetch(request){const u=new URL(request.url),s=this.s,db=this.db;try{
     if(u.pathname==='/seed'){
       s.initialize(initialRoom());const state=structuredClone(s.room('commons').state);state.room.syntheticPadding='';
@@ -28,6 +29,21 @@ export class ReplayWitnessRoom extends DurableObject{
       const cost=Object.fromEntries(Object.keys(before).map(key=>[key,this.stats[key]-before[key]]));return Response.json({result,cost});
     }
     if(u.pathname==='/slice'){const before={...this.stats},start=performance.now();const chunk=witnessChunk(db,'one-capture',Number(u.searchParams.get('offset')));return Response.json({wallMs:performance.now()-start,cost:Object.fromEntries(Object.keys(before).map(key=>[key,this.stats[key]-before[key]])),bytes:chunk?.byteLength??0,base64:chunk?Buffer.from(chunk).toString('base64'):''});}
+    if(u.pathname==='/hash-step'){
+      // Fixture KV only exercises portable state across isolate restarts. It
+      // does not implement the production checkpoint proof/epoch contract.
+      const header=db.prepare("SELECT head,metadata_hash,byte_length FROM replay_projection_witness WHERE capture_id='one-capture' AND unit_kind='header'").get();
+      const encoded=await this.ctx.storage.get('portable-hash-state');
+      const state=encoded?decodeReplayHash(encoded):initialReplayHash();
+      if(state.bytes>header.byte_length)throw Error('hash exceeds captured bytes');
+      const bytes=state.bytes===header.byte_length?null:witnessChunk(db,'one-capture',state.bytes);
+      const chunk=bytes?new Uint8Array(bytes):new Uint8Array();
+      const next=chunk.length?advanceReplayHash(state,chunk):state;
+      if(next.bytes>header.byte_length)throw Error('hash exceeds captured bytes');
+      await this.ctx.storage.put('portable-hash-state',encodeReplayHash(next));
+      const complete=next.bytes===header.byte_length;
+      return Response.json({head:header.head,bytes:next.bytes,controlBytes:encodeReplayHash(next).length,complete,matchesIndependentProof:complete?finishReplayHash(next)===header.metadata_hash:null});
+    }
     if(u.pathname==='/append'){
       const key=s.issueAccessKey('commons','owner');for(let i=0;i<4;i++)s.command(key,'commons',{id:'later-'+i,type:'message.posted',data:{messageId:'later-'+i,body:'Synthetic later '+i}});
       s.command(key,'commons',{id:'edit-later',type:'message.edited',data:{messageId:'later-0',body:'Edited synthetic append',expectedMessageRevision:0}});

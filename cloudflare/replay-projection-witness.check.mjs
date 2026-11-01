@@ -66,9 +66,21 @@ test('actual workerd measures admitted one-time SQL capture and immutable reads 
       for(let offset=0;;offset+=16384){const slice=(await call('/slice?offset='+offset)).body;maxSliceSqlWallMs=Math.max(maxSliceSqlWallMs,slice.wallMs);for(const key of Object.keys(sliceCost))sliceCost[key]+=slice.cost[key];if(!slice.bytes)break;const data=Buffer.from(slice.base64,'base64');transferred+=data.length;maxSlice=Math.max(maxSlice,data.length);hash.update(data);}
       const slicesWallMs=performance.now()-slicesStart,sliceProcessResources=stopSliceSampler?await stopSliceSampler():null;
       assert.equal(hash.digest('hex'),state.capture.metadata_hash);assert.equal(transferred,seed.body.bytes);assert.ok(maxSlice<=16384);
+      let portableHash=null;
+      if(process.env.WITNESS_PORTABLE_HASH==='1'){
+        for(let step=0;step<600;step++){
+          const advanced=await call('/hash-step');assert.equal(advanced.status,200);portableHash=advanced.body;
+          assert.equal(portableHash.head,2);assert.ok(portableHash.controlBytes<=1024);
+          if(portableHash.complete)break;
+          if(step===2||step===6){await mf.dispose();mf=makeWorker();}
+        }
+        assert.equal(portableHash.complete,true);assert.equal(portableHash.matchesIndependentProof,true);
+        assert.equal(portableHash.bytes,bytes);
+        assert.deepEqual((await call('/hash-step')).body,portableHash,'completed hash retry must not consume another chunk');
+      }
       const activeIds=new Set(profile?.nodes.filter(node=>!['(idle)','(root)'].includes(node.callFrame.functionName)).map(node=>node.id));
       let activeSampleUs=0;for(let i=0;i<(profile?.samples?.length??0);i++)if(activeIds.has(profile.samples[i]))activeSampleUs+=profile.timeDeltas?.[i]??0;
-      measurements.push({mode,requestedBytes:bytes,admitted:true,legacyFixture,runtime,seedFailure:seed.body.seedFailure??null,capturedBytes:captured.body.result.byte_length,cost:captured.body.cost,hostWallMs,processResources,standaloneSql,slicesWallMs,sliceProcessResources,sliceCost,maxSliceSqlWallMs,heapBefore,heapAfter,sampledActiveCpuUs:profile?activeSampleUs:null,inspectorLimitation,maxSlice,appendStatus:appended.status,appendError:appended.body.error??null,duplicateCost:duplicate.body.cost});
+      measurements.push({mode,requestedBytes:bytes,admitted:true,legacyFixture,runtime,seedFailure:seed.body.seedFailure??null,capturedBytes:captured.body.result.byte_length,cost:captured.body.cost,hostWallMs,processResources,standaloneSql,portableHash,slicesWallMs,sliceProcessResources,sliceCost,maxSliceSqlWallMs,heapBefore,heapAfter,sampledActiveCpuUs:profile?activeSampleUs:null,inspectorLimitation,maxSlice,appendStatus:appended.status,appendError:appended.body.error??null,duplicateCost:duplicate.body.cost});
     }finally{debug?.close();await mf.dispose();await rm(persistence,{recursive:true,force:true});}
   }
   console.log('ONE_TIME_SQL_CAPTURE_WORKER '+JSON.stringify(measurements));if(process.env.WITNESS_REQUIRE_MUSE==='1')assert.equal(measurements.find(row=>row.requestedBytes===2376000)?.admitted,true,'existing Muse-sized value must be capturable');else assert.ok(measurements.some(row=>row.admitted));

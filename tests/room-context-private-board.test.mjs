@@ -64,7 +64,7 @@ test('accepted private board work does not disclose its title through context di
   const claimedContext = await read('/api/rooms/commons/context');
   const mcpClaimedContext = await mcpRead();
   const pathsOf = (value, sentinel, path = '') => {
-    if (value === sentinel) return [path];
+    if (typeof value === 'string' && value.includes(sentinel)) return [path];
     if (!value || typeof value !== 'object') return [];
     return Object.entries(value).flatMap(([key, child]) => pathsOf(child, sentinel, path + '/' + key));
   };

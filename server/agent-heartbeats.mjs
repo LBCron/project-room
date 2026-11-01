@@ -1,3 +1,4 @@
+import { boundedWakeDeliveryActive, readWakeWindow, compareWakePosition } from './wake-delivery-window.mjs';
 // Agent host heartbeats and the durable mention/DM wake queue.
 //
 // Each agent identity has zero or more hosts. A host is wakeable (the
@@ -1105,17 +1106,28 @@ export class AgentHeartbeats {
     }
     const probe = limit + 1;
     const held = new Set(this.pausedRoomsOf(agentId).map(p => p.roomId));
-    const messages = this.db.prepare(`SELECT * FROM agent_wake_signals
+    const bounded = boundedWakeDeliveryActive(this.db);
+    const messageWindow = bounded ? readWakeWindow(this.db, 'agent_wake_signals', agentId, after, roomId) : null;
+    const messages = messageWindow ? messageWindow.rows.filter(row => (roomId === null || row.room_id === roomId) && !held.has(row.room_id)).map(signalView)
+      : this.db.prepare(`SELECT * FROM agent_wake_signals
       WHERE agent_id=? AND delivered_at IS NULL AND (? IS NULL OR room_id=?)
       AND (? IS NULL OR created_at>? OR (created_at=? AND signal_id>?))
       AND (room_id IS NULL OR room_id NOT IN (SELECT value FROM json_each(?)))
       ORDER BY created_at,signal_id LIMIT ?`)
       .all(agentId, roomId, roomId, after?.createdAt ?? null, after?.createdAt ?? 0,
         after?.createdAt ?? 0, after?.signalId ?? "", JSON.stringify([...held]), probe).map(signalView);
-    const work = this.store.workWakes?.pending(agentId, { roomId, hostId, limit: probe, after }) ?? [];
-    const combined = [...messages, ...work].filter(s => !held.has(s.roomId))
-      .sort((a, b) => a.createdAt - b.createdAt || (a.signalId < b.signalId ? -1 : a.signalId > b.signalId ? 1 : 0));
+    const workWindow = bounded ? this.store.workWakes?.pending(agentId, { roomId, hostId, limit: probe, after, bounded: true })
+      ?? { signals: [], more: false, through: null } : null;
+    const work = workWindow ? workWindow.signals : this.store.workWakes?.pending(agentId, { roomId, hostId, limit: probe, after }) ?? [];
+    // Never cross an unexamined source position. A fully filtered window may
+    // yield an empty page with an honest continuation, without acknowledging it.
+    const horizons = bounded ? [messageWindow, workWindow].filter(window => window.more).map(window => window.through).sort(compareWakePosition) : [];
+    const horizon = horizons[0] ?? null;
+    const combined = [...messages, ...work].filter(signal => !held.has(signal.roomId) && (!horizon || compareWakePosition(signal, horizon) <= 0))
+      .sort(compareWakePosition);
     const page = combined.slice(0, limit);
+    const more = combined.length > limit || horizons.length > 0;
+    const continuation = more ? combined.length > limit ? page.at(-1) : horizon : null;
     // #3345: a served page is a delivery on this door. Count presentations
     // per store/kind (batched) so emitted vs delivered vs acked reconciles.
     if (page.length > 0) {
@@ -1134,8 +1146,8 @@ export class AgentHeartbeats {
     }
     return Object.freeze({
       signals: Object.freeze(page),
-      more: combined.length > limit,
-      nextCursor: combined.length > limit ? Buffer.from(JSON.stringify([...scope, page.at(-1).createdAt, page.at(-1).signalId])).toString("base64url") : null,
+      more,
+      nextCursor: continuation ? Buffer.from(JSON.stringify([...scope, continuation.createdAt, continuation.signalId])).toString("base64url") : null,
     });
   }
 

@@ -203,6 +203,20 @@ test("exact-commit runtime package verifies cold, excludes private state and pre
   } finally { f.store.close(); }
   assert.deepEqual(verifyRuntimePackage(destination), receipt, "all generated state stays outside the immutable package");
 
+  // A manifest whose hashes match an unsupported schema must still refuse.
+  // Rehashing here is deliberate synthetic corruption, not a release stamp.
+  {
+    const damaged = join(directory, "unsupported-schema"); cpSync(destination, damaged, { recursive: true });
+    const relative = "server/writer-fence.mjs", path = join(damaged, relative);
+    const source = readFileSync(path, "utf8").replace(/STORE_SCHEMA_VERSION = \d+/, "STORE_SCHEMA_VERSION = 46");
+    writeFileSync(path, source);
+    const manifestPath = join(damaged, "runtime-manifest.json"), manifest = JSON.parse(readFileSync(manifestPath));
+    const entry = manifest.files.find(file => file.path === relative);
+    entry.bytes = Buffer.byteLength(source); entry.sha256 = createHash("sha256").update(source).digest("hex");
+    writeFileSync(manifestPath, JSON.stringify(manifest));
+    assert.throws(() => verifyRuntimePackage(damaged), /unsupported store schema 46/);
+  }
+
   for (const fault of ["missing", "changed", "extra", "symlink", "duplicate", "partial", "empty-directory"]) {
     const damaged = join(directory, fault); cpSync(destination, damaged, { recursive: true });
     const path = join(damaged, "server.mjs");
@@ -313,4 +327,45 @@ test("project preflight composes dependency, coverage and runtime checks", () =>
   assert.match(result.stdout, /check-deps: ok/);
   assert.match(result.stdout, /no new untested modules/);
   assert.match(result.stdout, /runtime source files checked/);
+});
+
+
+test("offline schema45 archive cold-imports normalized serving and refuses an omitted dependency", t => {
+  const directory = mkdtempSync(join(tmpdir(), "room-package-current-"));
+  t.after(() => rmSync(directory, { recursive: true, force: true }));
+  const commit = execFileSync("git", ["rev-parse", "HEAD"], { cwd: repository, encoding: "utf8" }).trim();
+  const destination = join(directory, "runtime"), receipt = createRuntimePackage({repository,commit,destination});
+  assert.equal(receipt.schemaVersion,45);
+  const program = `
+    import {RoomStore} from ${JSON.stringify(pathToFileURL(join(destination,"server/store.mjs")).href)};
+    import {initialRoom} from ${JSON.stringify(pathToFileURL(join(destination,"server/bootstrap.mjs")).href)};
+    import {event} from ${JSON.stringify(pathToFileURL(join(destination,"src/events.js")).href)};
+    // Explicit cold public-export probes identify which packaged modules this
+    // integration exercises; they do not replace their behavioral test suites.
+    import {readCurrentEventWindow} from ${JSON.stringify(pathToFileURL(join(destination,"server/current-room-events.mjs")).href)};
+    import {readCurrentWorkListing} from ${JSON.stringify(pathToFileURL(join(destination,"server/current-work-list.mjs")).href)};
+    import {validateCurrentArchive} from ${JSON.stringify(pathToFileURL(join(destination,"server/current-room-archive.mjs")).href)};
+    import {emptyWorkPrivacy,applyWorkPrivacyRequest} from ${JSON.stringify(pathToFileURL(join(destination,"server/current-work-privacy.mjs")).href)};
+    import {advanceCanonicalH} from ${JSON.stringify(pathToFileURL(join(destination,"server/replay-canonical-h.mjs")).href)};
+    import {assertRestoreAdmitted} from ${JSON.stringify(pathToFileURL(join(destination,"server/restore-admission.mjs")).href)};
+    if(validateCurrentArchive(null)!==null)throw Error('archive absence contract changed');
+    if(applyWorkPrivacyRequest(emptyWorkPrivacy(),{requesterId:'owner',recipientId:'reader'},1).requests!==1)throw Error('privacy counter export failed');
+    let rejected=false;try{advanceCanonicalH({state:{},header:{},readMetadata:()=>null});}catch(error){rejected=/Invalid protected canonical authority marker/.test(error.message);}
+    if(!rejected)throw Error('canonical source admission export failed closed');
+    const path=${JSON.stringify(join(directory,"normalized.sqlite"))};
+    let store=new RoomStore(path);
+    store.initialize([...initialRoom(),event({id:'packaged-post',roomId:'commons',actorId:'owner',type:'message.posted',data:{messageId:'saved',body:'Packaged useful result'}})],{representation:'normalized-current-v1'});
+    const key=store.issueAccessKey('commons','owner');store.close();
+    store=new RoomStore(path,{integrity:'deferred'});store.room=()=>{throw Error('whole room hydration');};
+    const page=store.eventsAfter(key,'commons');
+    if(page.events.find(row=>row.event.id==='packaged-post')?.event.data.body!=='Packaged useful result')throw Error('normalized archived import/read failed');
+    assertRestoreAdmitted(store.db);
+    const listed=readCurrentWorkListing(store,key,'commons');if(listed.work.length!==0)throw Error('empty normalized work export failed');
+    store.readTransaction(()=>{const direct=readCurrentEventWindow(store,'commons','owner');if(!direct.events.length)throw Error('event export failed');});
+    store.close(); console.log(JSON.stringify({normalized:true,restarted:true}));`;
+  const cold=spawnSync(process.execPath,["--input-type=module","-e",program],{cwd:directory,env:{PATH:"/unavailable"},encoding:"utf8"});
+  assert.equal(cold.status,0,cold.stderr);assert.deepEqual(JSON.parse(cold.stdout),{normalized:true,restarted:true});
+  assert.deepEqual(verifyRuntimePackage(destination,{expectedCommit:commit}),receipt);
+  rmSync(join(destination,"server/current-room-repository.mjs"));
+  assert.throws(()=>verifyRuntimePackage(destination),/missing|differ/);
 });

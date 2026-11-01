@@ -27,3 +27,13 @@ Validation on the runtime checkpoint: 33 affected tests passed, including ten ne
 The first package/manifest run was 9 pass / 7 fail. It exposed inherited schema45 metadata rejection, ten missing normalized/restore module allowlist entries, and a stale candidate manifest. Those failures are recorded separately; packaging reconciliation follows in a separate commit. No package readiness claim is based on this runtime checkpoint.
 
 Machine-readable receipts, exact source hashes and logs: `audit/evidence/current-events-reader-20261101.json`.
+
+## Separate offline package reconciliation
+
+Packaging source `4eb0d88f5072118276adcc0759d1208edfea343a` and cold-export controls `766f96bdb69486f43c3b1eb28441fa3e581acbff` close the recorded seven initial failures. The intermediate result was 16/17, with the existing test-reference census still refusing six modules exercised transitively. The cold package probe now names and executes the packaged event/work/restore exports and checks canonical/archive/privacy exports. This is explicit distribution/API qualification; it does not substitute for those modules' behavioral suites. No grandfather list or verifier check changed.
+
+The final package/manifest run is 17/17, including an archived normalized-room cold restart/read, omission of a normalized dependency, and a rehashed unsupported schema46 rejection. Schemas8–44 remain supported;45 is explicitly added. The runtime source hashes remain identical to the event runtime checkpoint. The actual Worker check rerun on exact766f also passes at1k/5k with the same215 warm /1801 cold query /566 HTTP rows. Focused packaging/helper lint passes without errors or warnings.
+
+A saved existing-packager output was put through tar creation, extraction and a copied standalone verifier: `/tmp/project-room-schema45-offline-766f96bdb.tar`, SHA256 `369cf02885b51a2e8f6657de83aab128e0f138bcd53cebfebe7236583a541af9`. The verified source is exact766f, schema45,682 files,142 nongenerated packaged assets, manifest SHA256 `cdf35753b36a9dd6565e1496ff17f1ca96326c4755ef83f9cc8da7f4411a7562`. The create and extracted-verify receipts match. An initial CLI call using an abbreviated SHA was correctly refused; the successful saved artifact uses the full40-character identifier.
+
+Exact commands/statuses, preserved intermediate failures and saved artifact receipts are in `audit/evidence/current-events-packaging-20261101.json`. This artifact is offline only. Root owns composition with later writer changes and the final whole-candidate package; this is not a schema45 production release or activation receipt.

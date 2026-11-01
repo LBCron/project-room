@@ -13,9 +13,11 @@ export function planRecoveryReplayValue(value,maximumBytes){
  const parts=Math.ceil(bytes.length/RECOVERY_VALUE_PART_BYTES),head={version:1,kind:'parts',bytes:bytes.length,parts,sha256:hash(bytes)};
  return{rows:parts+1,bytes:bytes.length,head,part(index){if(!Number.isSafeInteger(index)||index<1||index>parts)fail();return bytes.subarray((index-1)*RECOVERY_VALUE_PART_BYTES,index*RECOVERY_VALUE_PART_BYTES).toString('base64');}};
 }
-export function readRecoveryReplayValue(scratch,roomId,domain,key,maximumBytes){
+export function readRecoveryReplayValue(scratch,roomId,domain,key,maximumBytes,{admit}={}){
+ if(admit!==undefined&&typeof admit!=='function')fail();
  bound(maximumBytes);const head=scratch.get('replay',roomId,domain,key,0);if(head===undefined)return undefined;
  if(head?.version!==1||!Number.isSafeInteger(head.bytes)||head.bytes<1||head.bytes>maximumBytes)fail();
+ if(admit)admit(head.bytes);
  if(head.kind==='json'){
   if(Object.keys(head).sort().join(',') !== 'bytes,kind,value,version' || head.bytes > RECOVERY_VALUE_PART_BYTES || Buffer.byteLength(JSON.stringify(head.value)) !== head.bytes)fail();return head.value;
  }

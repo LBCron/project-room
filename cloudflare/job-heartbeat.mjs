@@ -196,6 +196,16 @@ export function applyOutcomes(previous, outcomes) {
       : { ...prior, lastRunAt: at, lastErrorAt: at, lastError: redactError(outcome.error), consecutiveFailures: (prior.consecutiveFailures ?? 0) + 1,
         lastDurationMs: outcome.durationMs ?? null, lastFailure: sanitizeFailureDetail(outcome.failure),
         ...(failureSummary ? { lastSummary: failureSummary, lastSummaryAt: at } : {}) };
+    // A committed outcome resolves the attempt recorded before this run:
+    // stamp it committed so only a run that never reaches this fold can
+    // leave an 'uncommitted' attempt behind. Jobs that never carry an
+    // attempt (attempts are committed for slow jobs only) gain no
+    // attempt fields from their outcomes.
+    if (Number.isFinite(prior.lastAttemptAt)) {
+      record.lastAttemptAt = at;
+      record.attemptOutcome = 'committed';
+      record.uncommittedAttemptSinceAt = null;
+    }
     // Overdue streak (guardian census F1): track consecutive observed
     // ticks whose summary reports overdue work, and when the current
     // streak began. Only a tick that actually carried a summary speaks:
@@ -214,6 +224,36 @@ export function applyOutcomes(previous, outcomes) {
       }
     }
     next[outcome.job] = record;
+  }
+  return next;
+}
+
+// Attempt-before-run (integrity-staleness cure, part 1). #runDueJobsBody
+// commits an attempt for a slow job BEFORE invoking it, folded through
+// here. A run killed inside its own invocation (Durable Object reset,
+// eviction, invocation limit) never reaches recordCronTick, so without
+// the attempt the stored record keeps presenting the previous success
+// as current until the 3x-period staleness line passes — the signature
+// the integrity job showed from 2026-10-31T19:00:35Z. The attempt
+// touches nothing else: lastRunAt, lastSuccessAt, consecutiveFailures,
+// the error fields and the summaries all stand exactly as the last
+// committed outcome left them. uncommittedAttemptSinceAt keeps the
+// FIRST attempt of an unbroken uncommitted streak (the overdue-streak
+// precedent above): later passes re-attempt and die too, and the view
+// grades the streak's age, not the freshest stamp's.
+export function applyAttempts(previous, attempts) {
+  const next = { ...(previous && typeof previous === 'object' ? previous : {}) };
+  for (const attempt of attempts ?? []) {
+    if (!attempt || !JOBS.has(attempt.job)) continue;
+    const prior = next[attempt.job] ?? {};
+    const at = Number.isFinite(attempt.at) ? attempt.at : Date.now();
+    next[attempt.job] = {
+      ...prior,
+      lastAttemptAt: at,
+      attemptOutcome: 'uncommitted',
+      uncommittedAttemptSinceAt: prior.attemptOutcome === 'uncommitted' && Number.isFinite(prior.uncommittedAttemptSinceAt)
+        ? prior.uncommittedAttemptSinceAt : at
+    };
   }
   return next;
 }
@@ -248,7 +288,17 @@ export function jobHealthView(stored, now = Date.now(), env = null, store = null
     const recentPending = Number.isFinite(pendingSince) && pendingSince <= now
       && now - pendingSince <= staleAfterSeconds * 1000;
     const stale = enabled && !waiting && !recentPending && (ageSeconds === null || ageSeconds > staleAfterSeconds);
-    const failing = enabled && (record.consecutiveFailures ?? 0) > 0;
+    // Attempted-and-died (integrity-staleness cure, part 1): the latest
+    // attempt never committed an outcome and the unbroken uncommitted
+    // streak is older than one period. The run is not still in flight —
+    // it is dead — and the previous success must not present as current
+    // while it stands. A job with no attempt fields at all is
+    // never-attempted, a different state the fields below expose; the
+    // ordinary stale rule alone grades it.
+    const attemptStuck = enabled && record.attemptOutcome === 'uncommitted'
+      && Number.isFinite(record.uncommittedAttemptSinceAt)
+      && now - record.uncommittedAttemptSinceAt > job.periodSeconds * 1000;
+    const failing = enabled && ((record.consecutiveFailures ?? 0) > 0 || attemptStuck);
     // A tick that succeeded but was held by GitHub's rate limit did no work.
     // Show it, without turning a recoverable wait into a 503.
     // Escrow overdue (guardian census F1): the keeper's own pass left due
@@ -265,6 +315,9 @@ export function jobHealthView(stored, now = Date.now(), env = null, store = null
       ...(source?.healthPendingSince ? { pendingSinceAt: iso(pendingSince) } : {}),
       lastRunAt: iso(record.lastRunAt),
       lastSuccessAt: iso(record.lastSuccessAt),
+      lastAttemptAt: iso(record.lastAttemptAt),
+      attemptOutcome: typeof record.attemptOutcome === 'string' ? record.attemptOutcome : null,
+      uncommittedAttemptSinceAt: iso(record.uncommittedAttemptSinceAt ?? null),
       secondsSinceSuccess: enabled ? ageSeconds : null,
       lastError: record.lastError ?? null,
       lastErrorAt: iso(record.lastErrorAt),

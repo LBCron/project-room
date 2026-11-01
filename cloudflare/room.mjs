@@ -36,7 +36,7 @@ import { progressEscrowEpochs as runEscrowEpochs } from '../server/bounty-epoch-
 import { pruneAbuseRateBuckets } from '../server/abuse-rate-buckets.mjs';
 import { pruneOAuthProvider } from '../server/oauth-provider-store.mjs';
 import { syncClaimPullRequests } from '../server/claim-pr-sync.mjs';
-import { CRON_JOB_BUDGET_MS, HEARTBEAT_STORAGE_KEY, applyOutcomes, jobHealthResponse, jobHealthUnavailable, jobHealthView, runCronJobs, selectWorkerJobs } from './job-heartbeat.mjs';
+import { CRON_JOB_BUDGET_MS, HEARTBEAT_STORAGE_KEY, applyAttempts, applyOutcomes, jobHealthResponse, jobHealthUnavailable, jobHealthView, runCronJobs, selectWorkerJobs } from './job-heartbeat.mjs';
 import { ALARM_RETRY_MS, JOBS, earliestFutureAlarm, jobIsDue, jobRetryCadence, lastRanFrom } from '../server/jobs.mjs';
 import { countOpenPublicReports } from '../server/legal-store.mjs'; // open public-report count on GET /api/health/jobs
 import { runPatrolTick } from '../server/patrol.mjs';
@@ -378,6 +378,25 @@ export class ProjectRoom extends DurableObject {
     try { return await pending; }
     finally { if (this.cronTickTail === pending) this.cronTickTail = null; }
   }
+  // Attempt-before-run: commit that a slow job was invoked BEFORE its body
+  // runs, so a run killed inside its own invocation — which never reaches
+  // recordCronTick — still leaves the trace the health view grades,
+  // instead of the previous success presenting as current. Serialized on
+  // the same tail as recordCronTick so attempt and outcome commits can
+  // never interleave.
+  async recordCronAttempt(jobName) {
+    const persist = async () => {
+      const previous = await this.ctx.storage.get(HEARTBEAT_STORAGE_KEY);
+      const next = applyAttempts(previous, [{ job: jobName, at: Date.now() }]);
+      await this.ctx.storage.put(HEARTBEAT_STORAGE_KEY, next);
+      this.jobHealthSnapshot = jobHealthView(next, Date.now(), this.env, this.store).jobs;
+      return { attempted: jobName };
+    };
+    const pending = (this.cronTickTail ?? Promise.resolve()).then(persist, persist);
+    this.cronTickTail = pending;
+    try { return await pending; }
+    finally { if (this.cronTickTail === pending) this.cronTickTail = null; }
+  }
   async refreshJobHealthSnapshot() {
     try { this.jobHealthSnapshot = jobHealthView(await this.ctx.storage.get(HEARTBEAT_STORAGE_KEY), Date.now(), this.env, this.store).jobs; }
     catch (error) { console.warn(`[job-heartbeat] snapshot failed: ${error?.message ?? error}`); }
@@ -608,6 +627,10 @@ export class ProjectRoom extends DurableObject {
       // Each runCronJobs call below contains one job, so its own between-job
       // yield never runs. Open the input gate before the next synchronous job.
       if (outcomes.length) await yieldToQueuedRequests();
+      // Slow jobs run in their own invocation and can be killed inside it
+      // before any outcome reaches recordCronTick. Commit the attempt
+      // first, so the kill leaves a trace (attempt-before-run).
+      if (job.slow) await this.recordCronAttempt(job.name);
       const result = await runCronJobs({ [job.name]: () => this.#sqlScope('job', job.name, () => job.run(this.store, {
         deadline: Date.now() + (job.budgetMs ?? CRON_JOB_BUDGET_MS),
         env: this.env, room: this, now: () => Date.now()

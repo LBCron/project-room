@@ -1,0 +1,18 @@
+{
+  "source": "108b5c1f90fa1c5d7c01ed6e17d8c8d41bc653ee",
+  "checkedAt": "2026-11-01T08:47:01.617Z",
+  "roomId": "qa-release-8835-1101",
+  "passed": true,
+  "authenticatedRead": true,
+  "anonymousReadStatus": 401,
+  "crossSiteWriteStatus": 403,
+  "crossSiteError": "origin_denied",
+  "nonSessionCookieWriteStatus": 401,
+  "nonSessionCookieError": "unauthenticated",
+  "pricingStateAndRevisionUnchanged": true,
+  "grantsMinted": false,
+  "pricingChanged": false,
+  "probeAdjustment": "The global cross-site Origin gate returns 403 before route authentication; a same-origin cookie probe separately verifies the non-session credential refusal.",
+  "rateExhaustionTested": false,
+  "readOnlyApiKeyWriteTestedLive": false
+}

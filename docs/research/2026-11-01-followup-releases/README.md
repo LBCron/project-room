@@ -46,3 +46,17 @@ Own-head hosted test runs 41287448887 and 41287495162 passed all substantive sel
 Five live public OAuth checks passed: anonymous initialization/eight-entry discovery, protected access entry's HTTP 401, registered Claude client reaching existing-agent approval, refusal of an unregistered callback, and unknown refresh credential returning invalid_grant. No consent submitted, credentials used or grants minted. The initial probe incorrectly expected generic account login; it was corrected to the resource-bound existing-agent approval prompt and this adjustment is retained. Actual Claude host consent, native runtime execution and background wake remain untested.
 
 Heartbeat success at 08:00:36.530Z predates this deployment and is not attributed to the new attempt instrumentation. No reset, threshold, schedule or grant changes occurred. The large-room blob problem and previously documented live conversion refusal remain open; no operator conversion occurred in this release.
+
+## Deployment 41289726348 — spend-pricing route single
+
+PR #5576 qualified at 5590d7dcb8f1e640817c455ebe1fecce368e0e33 (own-head hosted run 41289272386 succeeded), landed and deployed at 108b5c1f90fa1c5d7c01ed6e17d8c8d41bc653ee. Canonical buildId 2026-11-01T08:39:28.860Z; entry buildId 2026-11-01T08:39:38.068Z. Gate, deployment and runtime publication succeeded; strict smoke 16/16 and public smoke passed. Both Worker/DO doors adopted the source; Jill independently confirmed both DO doors and readiness 10/10 (Room 25132).
+
+Runtime latest runtime-2026-11-01-108b5c1 targets exact source: 661 files / 3,500,773 archive bytes / SHA256 0aa3129c474c6289649a0806b4a539803c11b09a667978c2695da1707f67635b. Immutable verification precedes promotion; subsequent release readback confirmed latest. Full/coverage/quarantined jobs were skipped, not passed.
+
+Dedicated existing QA-room live checks passed authorized pricing read, anonymous HTTP 401, cross-site origin_denied HTTP 403, and same-origin non-session room credential in cookie HTTP 401. Pricing state/revision remained identical; no grants minted or pricing changes. Initial source pin refused the old DO revision during propagation. A later test expectation incorrectly anticipated route HTTP 401 before the global Origin gate HTTP 403; this was corrected and both controls tested separately. Live rate exhaustion and a read-only API-key write were not tested. Local focused controls and hosted head qualification cover those behaviors.
+
+## Current storage qualification work
+
+PR #5588 landed at 0f83478a9d7646f8297547723b06802cedc1167b from qualified head 8e8a7a047eb023635a07a1b9cecdb1ecaf596a75 (run 41290057997). Deployment is separately pending; no live conversion yet. Its first hosted run 41289516117 failed a pinned census test. Exact-main source census confirms the previously unrecorded operator admission dependency was already present on 06e811ff (expected 62 sites / actual 63), not a new runtime regression. The explicit test and design record now include it; original failure retained, no waiver. Six census and eight manifest tests passed locally.
+
+The attachment SQL cost research is synthetic local workerd evidence, not production latency. Its concrete index/query improvement is held for a globally bounded index-install migration; index creation must not become hidden cold-start work. No schema or attachment source was changed by that research. The large-room JSON blob problem remains open.

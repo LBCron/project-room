@@ -1,0 +1,105 @@
+Attachment lifecycle SQL cost — read-only assessment, 2026-11-01
+
+Source: /Users/johnpotter/src/pr-webhook-selector-cure-1101 at
+413b338f6b372f24b6972c84edb6c5b78b5e16cf. Attachment source was unchanged by
+that branch's webhook work. No attachment source/schema/constructor changes
+were made for this assessment. An independently owned dirty server/store.mjs
+was observed and left untouched.
+
+Evidence (actual local workerd SQLite, not production measurements):
+- evidence/attachment-sql-row-cost.json
+- evidence/attachment-sql-row-cost.log
+These paths are relative to this note. Reproduction:
+/tmp/attachment-sql-row-cost.mjs using the existing pinned local Miniflare
+dependency. It creates only disposable local Durable Object storage.
+
+Fixture: 20,000 terminal rows (deleted/discarded/expired), 192 live rows
+(64 staged, 128 committed), eight uploaders, zero payload bytes. All rows
+satisfy the current attachment table constraints. Expiry measurements use
+an instant before every staged deadline, so no row is changed. Quota
+aggregates and ordered list IDs compare exactly equal across index variants.
+RowsRead below are workerd cursor counters, including query-engine work;
+they are not merely returned-row counts or a production CPU bound.
+
+Observed rowsRead:
+                                  quota   live-filtered quota  list  expiry
+Existing (room_id,uploader_id,state) 20192   20192                20384 20193
+Add (room_id,state)                  20192     195                  387    65
+Partial live (room_id,state)         20192     195                  387 20193
+Partial live ordered index           20192     192                  192 20193
+
+The owner index's observed plans constrain room_id only when uploader_id
+is unknown. stage() quota at server/room-attachment-bytes.mjs:143 aggregates
+every historical room row because live-state tests appear only inside SUM.
+list() at :214 filters live rows but still scans room history through the
+existing index and sorts the live candidates. expire() at :114 scans history
+before stage/list/get/discard/commit point operations.
+
+Minimum runtime query/index cure, once installation is safely admitted:
+1. Preserve the primary key, owner index, all terminal rows, all visibility
+   checks and all quota quantities. Add an index on (room_id,state).
+2. Add state IN ('staged','committed') to quota's WHERE clause. Keep the
+   per-uploader staged/byte conditions and existing expiry-before-quota
+   transaction order. Index alone or predicate alone leaves quota at 20,192
+   reads in this fixture. Together: quota195, list387, expiry65.
+3. Do not delete tombstones or place a lifetime-record cap on them: their
+   retained IDs provide conflict/idempotency and privacy behavior, while
+   the existing 4096-record quota intentionally counts only live rows.
+
+Partial-index alternatives were measured, not proposed as an automatic
+constructor fix. A partial (room_id,state) WHERE live index requires an
+explicit matching live predicate on expire() as well; the original expiry
+query does not select it. With that extra predicate expiry reads196 here.
+A partial (room_id,created_at DESC,id) WHERE live index removes list sorting;
+live-filtered quota reads192 and live-filtered expiry reads193. It keeps
+only live entries but has broader ordering/key considerations.
+
+Pagination: under existing/room-state indexes, LIMIT20 and LIMIT20 OFFSET100
+still read20384/387 respectively, the same as their full lists. The ordered
+partial index reads20 for first page and120 for OFFSET100. Current API has
+no pagination contract and applies DM/uploader visibility after SQL: adding
+LIMIT before visibility can return an apparently empty/incomplete page
+despite later visible files. A future cursor must preserve order and privacy;
+pagination is not needed to implement the minimum live-row selection cure.
+The current live-record cap bounds the normal full list to4096, but does not
+bound its historical scan or global index installation.
+
+Concrete migration prerequisite — remains open, not safely shipped here:
+CREATE INDEX is global to this SQLite database, across all room histories.
+Full room-state index construction measured40597 reads/20193 writes on20192
+rows. Partial index construction still measured20387 reads, though only193
+writes. The local full-index wall time was26ms; this is not a production CPU
+or maximum-history qualification. Terminal history has no lifetime cap.
+
+Before index construction, an explicit operator action must independently
+admit the complete database-wide attachment input: a bounded count+1 scan
+over the existing primary-key order, scalar/type checks and byte limits on
+every index key (room_id/state, plus created_at/id for an ordered variant),
+including tombstones and every room. Refuse over-budget inputs before DDL.
+The admitted bytes/count and schema/index identity must remain bound to
+execution under the same writer transaction; index creation must have a
+qualified worst-case budget and atomic rollback. A per-room bound or a
+LIMIT in the runtime query cannot admit this global operation. No arbitrary
+new thresholds have been selected or justified by this fixture.
+
+No existing operator tool with that global row/key-byte admission was found:
+operator-message-authority and legacy repair admit per-room message inputs;
+operator archive bounds message replay; scripts/schema-gate is a CI harness;
+scripts/herdr-migrate handles claim migration. None is an attachment-index
+installation door. Thus this is a concrete residual migration prerequisite,
+not a request to create a new subsystem in the current wave.
+
+Schema convergence details: server/attachment-schema.mjs:30 returns early
+for an already-current table. Appending index DDL alone will not install it
+on those databases. ensureAttachmentSchema@1 participates in the deferred
+startup schema stamp (server/store.mjs ADDITIVE_SCHEMA_ENSURES). Updating
+the helper/stamp to build the index on the next constructor would silently
+move the global scan onto a request's cold start. Keep installation explicit;
+only after admitted execution should schema/index verification recognize
+the intended index and reject a conflicting definition. The existing v28
+table-rebuild migration must continue preserving rows/bytes and old lineage.
+
+Scope limits: SQL plans and actual SQLite row counters were measured in
+local workerd. Authentication, message visibility and full endpoint costs
+were inspected from source but not requalified by this synthetic SQL probe.
+No production data, credentials, huge blobs or production storage were used.

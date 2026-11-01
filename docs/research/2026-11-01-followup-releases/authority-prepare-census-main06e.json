@@ -1,0 +1,10 @@
+{
+  "source": "06e811ff383283346251c8c2c7e9da12fdbee1d5",
+  "expectedSites": 62,
+  "actualSites": 63,
+  "unrecorded": [
+    "server/operator-message-authority.mjs"
+  ],
+  "stale": [],
+  "classification": "Inherited main census gap, not introduced by bounded preparation. Explicit record repaired without changing sync surface or runtime."
+}

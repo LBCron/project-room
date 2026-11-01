@@ -1,0 +1,15 @@
+{
+  "kind": "room.runtime-publication-verification.v1",
+  "checkedAt": "2026-11-01T08:45:49.518520+00:00",
+  "repository": "Uuriko/project-room",
+  "tag": "runtime-2026-11-01-108b5c1",
+  "sourceCommit": "108b5c1f90fa1c5d7c01ed6e17d8c8d41bc653ee",
+  "releaseId": 430458443,
+  "assetId": 697791771,
+  "assetBytes": 3500773,
+  "updatedAt": "2026-11-01T09:45:46Z",
+  "files": 661,
+  "archiveSha256": "0aa3129c474c6289649a0806b4a539803c11b09a667978c2695da1707f67635b",
+  "verified": true,
+  "publicationPromoted": false
+}

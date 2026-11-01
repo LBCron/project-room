@@ -2,7 +2,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import { execFileSync, spawn, spawnSync } from "node:child_process";
 import { createServer, request } from "node:http";
-import { mkdtempSync, mkdirSync, readFileSync, writeFileSync, rmSync, cpSync, symlinkSync, existsSync } from "node:fs";
+import { mkdtempSync, mkdirSync, readFileSync, writeFileSync, rmSync, cpSync, symlinkSync, existsSync, readdirSync, realpathSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
@@ -387,4 +387,38 @@ test("offline schema45 archive cold-serves nonempty native work and refuses an o
   assert.deepEqual(verifyRuntimePackage(destination,{expectedCommit:commit}),receipt);
   rmSync(join(destination,"server/current-room-repository.mjs"));
   assert.throws(()=>verifyRuntimePackage(destination),/missing|differ/);
+});
+
+
+test("verified offline archive runs the actual Native durable restore qualification", t => {
+  const directory=mkdtempSync(join(tmpdir(),"room-package-native-restore-"));
+  t.after(()=>rmSync(directory,{recursive:true,force:true}));
+  const commit=execFileSync("git",["rev-parse","HEAD"],{cwd:repository,encoding:"utf8"}).trim();
+  const destination=join(directory,"runtime"),receipt=createRuntimePackage({repository,commit,destination});
+  // Keep test-only harness files outside the immutable archive. Every production
+  // module resolves through the archive, whose complete import closure is verified.
+  const harness=join(directory,"harness"),worker=join(harness,"cloudflare");mkdirSync(worker,{recursive:true});
+  for(const entry of readdirSync(destination,{withFileTypes:true})){
+    if(entry.name==="cloudflare")continue;
+    symlinkSync(join(destination,entry.name),join(harness,entry.name),entry.isDirectory()?"dir":"file");
+  }
+  for(const entry of readdirSync(join(destination,"cloudflare"),{withFileTypes:true}))
+    symlinkSync(join(destination,"cloudflare",entry.name),join(worker,entry.name),entry.isDirectory()?"dir":"file");
+  const fixtureFiles=["durable-coverage.check.mjs","durable-coverage-seed.test-fixture.mjs","durable-coverage-native.test-fixture.mjs","current-room-serving.test-fixture.mjs"];
+  for(const name of fixtureFiles)cpSync(join(repository,"cloudflare",name),join(worker,name));
+  symlinkSync(realpathSync(join(repository,"cloudflare/node_modules")),join(harness,"node_modules"),"dir");
+  assert.equal(realpathSync(join(harness,"server/store.mjs")),join(destination,"server/store.mjs"));
+  assert.equal(realpathSync(join(worker,"room.mjs")),join(destination,"cloudflare/room.mjs"));
+  const result=spawnSync(process.execPath,["--test",join(worker,"durable-coverage.check.mjs")],{
+    cwd:harness,encoding:"utf8",timeout:180000,maxBuffer:16*1024*1024,
+    env:{PATH:process.env.PATH,...(process.env.MINIFLARE_WORKERD_PATH?{MINIFLARE_WORKERD_PATH:process.env.MINIFLARE_WORKERD_PATH}:{})}
+  });
+  assert.equal(result.status,0,result.stdout+"\n"+result.stderr);
+  assert.match(result.stdout,/DURABLE_COVERAGE_WORKER /);
+  const line=result.stdout.split("\n").find(value=>value.includes("DURABLE_COVERAGE_WORKER "));
+  const measured=JSON.parse(line.slice(line.indexOf("DURABLE_COVERAGE_WORKER ")+"DURABLE_COVERAGE_WORKER ".length));
+  assert.equal(measured.actualNative,true);assert.equal(measured.coldReady,true);assert.equal(measured.exactRetry,true);
+  assert.equal(measured.acceptedNativeWorkCapacity,true);assert.equal(measured.nativeWorkExactRetry,true);
+  assert.deepEqual(verifyRuntimePackage(destination,{expectedCommit:commit}),receipt);
+  t.diagnostic("PACKAGED_NATIVE_DURABLE_RESTORE "+JSON.stringify({sourceCommit:commit,package:receipt,qualification:measured,fixturesOutsideArchive:fixtureFiles,productionSource:"verified offline archive",archiveUnchanged:true}));
 });

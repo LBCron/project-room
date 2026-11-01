@@ -1,0 +1,49 @@
+{
+  "inputSha256": "a6c0a593b56588d4ba71fa18fb72c5a04a4676c657839a6a754ca7436ece28c4",
+  "collector": {
+    "observation": "finished",
+    "at": 1793537187.975992,
+    "elapsedSeconds": 600.01,
+    "decodedEvents": 2567,
+    "outputCapReached": false,
+    "exitCode": -9
+  },
+  "targetOnlyNotPerEventSourceAttestation": "8facbfe4389e6ecd23b1c1fb9c2fe398398ee2e4",
+  "events": 2567,
+  "outcomes": {
+    "canceled": 310,
+    "ok": 2257
+  },
+  "httpStatuses": {
+    "200": 2329,
+    "absent": 103,
+    "404": 18,
+    "201": 22,
+    "429": 66,
+    "304": 16,
+    "302": 2,
+    "301": 1,
+    "405": 4,
+    "401": 5,
+    "403": 1
+  },
+  "http5xx": 0,
+  "exceptionEntries": 0,
+  "readinessPhases": {
+    "worker_wait_started": 47,
+    "worker_rpc_started": 47,
+    "worker_rpc_settled": 47,
+    "worker_response": 47,
+    "do_entered": 7,
+    "sql_completed": 7,
+    "do_completed": 7
+  },
+  "readinessResponses": {
+    "ready": 47
+  },
+  "responseWaitMs": {
+    "min": 15,
+    "max": 1221
+  },
+  "limits": "Finite sampled observation only; target header is not source attestation. I/O clocks do not measure CPU; canceled/429 and collector termination remain separate."
+}

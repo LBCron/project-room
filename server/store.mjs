@@ -86,7 +86,7 @@ import { PUBLIC_READ_MODEL_SCHEMA, ensurePublicReceiptVerificationColumn, ensure
 import { NextActions, nextActionsSchema } from "./next-actions.mjs"; // RC-2026-09-25-911: ranked per-agent next actions.
 import { updatesSchema, projectRoomUpdates } from "./updates.mjs"; // Updates marks: private read/done/clear, additive.
 import { buildRoomDigest } from "./room-digest.mjs"; // C-06 room digest composition.
-import { roomAttention } from "./needs-me.mjs"; // C-06: per-room needs-me slice for the digest.
+import { roomAttentionSlice } from "./needs-me.mjs"; // C-06: per-room needs-me slice for the digest.
 import { DurableTelegramLiveStatus, telegramLiveStatusSchema } from "./channel-live-status.mjs";
 import { QuarantineThreadSplits, quarantineThreadSplitSchema } from "./quarantine-thread-splits.mjs";
 import { InboxCollabStore, inboxCollabSchema } from "./inbox-collab-store.mjs"; // Lane C inbox collaboration (task RC-2026-09-18-011).
@@ -6395,7 +6395,8 @@ this.slaBreachAlerts = new SlaBreachAlertJournal(this); // Task 26: durable in-a
         messages.push({ seq: row.seq, id, actorId: row.actorId, summary: pseudo.body });
         if (messages.length >= 10) break;
       }
-      const attention = roomAttention(this, roomId, viewerId, identityId, effectiveSince)
+      const attentionSlice = roomAttentionSlice(this, roomId, viewerId, identityId, effectiveSince);
+      const attention = attentionSlice.items
         .filter(item => !floor || item.seq >= floor.sequence)
         .map(({ kind, seq, id, summary }) => ({ kind, seq, id, summary }));
       const projected = projectRoomUpdates(this, roomId, viewerId, identityId);
@@ -6409,7 +6410,8 @@ this.slaBreachAlerts = new SlaBreachAlertJournal(this); // Task 26: durable in-a
       const digest = buildRoomDigest({
         roomId, viewerId, since: effectiveSince, requestedSince: since, through, now: this.now(),
         context, byType, workChanged, workChangedTotal: seenClaims.size,
-        attention, messages, decisions, actionable: { total: actionableTotal, byKind }
+        attention, attentionCoverage: { through: attentionSlice.attentionThrough, complete: attentionSlice.attentionComplete },
+        messages, decisions, actionable: { total: actionableTotal, byKind }
       });
       return digest;
     });

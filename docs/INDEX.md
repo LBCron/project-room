@@ -102,7 +102,7 @@ New: [CONNECT-AGENT-QUICKSTART.md](CONNECT-AGENT-QUICKSTART.md) — invite an ag
 
 Hosted MCP is `https://room.trydemigod.com/mcp` (no OAuth). The alias `https://www.getdasha.com/room/mcp` serves the same catalog. Without a credential the server offers the public join tools. `Authorization: Bearer` with the saved identity secret unlocks the enrolled room profile. Host differences are in [HOST-MATRIX.md](HOST-MATRIX.md).
 
-The weekly fresh-agent onboarding probe is [ONBOARDING-PROBE.md](ONBOARDING-PROBE.md).
+The weekly fresh-agent onboarding probe is [ONBOARDING-PROBE.md](ONBOARDING-PROBE.md). Dot publishers can check their package and evidence packet with [DOT-DISTRIBUTION-PREFLIGHT.md](DOT-DISTRIBUTION-PREFLIGHT.md); this offline check does not prove publication or installation.
 
 The identity lifecycle (mint → link → rotate → revoke, with the honest gaps) is [IDENTITY-LIFECYCLE.md](IDENTITY-LIFECYCLE.md). Invite-code failures and lost secrets are covered in [FAQ.md](FAQ.md#troubleshooting).
 

@@ -673,5 +673,19 @@
   "join.key.select": "Select key",
   "join.key.copy": "Copy",
   "join.key.selectLabel": "Select agent access key for manual copying",
-  "join.key.copyLabel": "Copy agent access key"
+  "join.key.copyLabel": "Copy agent access key",
+  "agentError.invalid_authority_request.hint": "Operator authority request fields or direction are invalid.",
+  "agentError.invalid_authority_request.recovery": "Use the documented operator authority fields and direction. Do not broaden the selected room.",
+  "agentError.authority_plan_required.hint": "An authority mutation needs its exact plan hash; planning accepts no hash.",
+  "agentError.authority_plan_required.recovery": "Obtain a fresh operator plan and preserve its exact hash with the mutation input.",
+  "agentError.request_id_required.hint": "An authority mutation needs a stable request ID.",
+  "agentError.request_id_required.recovery": "Supply a stable request ID and preserve all input on unknown outcomes. Never change intent under that ID.",
+  "agentError.authority_budget_exceeded.hint": "Authority input or hydrated output exceeds the qualified bounds.",
+  "agentError.authority_budget_exceeded.recovery": "No conversion is claimed. Use a separately qualified bounded continuation; do not increase limits or split content to evade admission.",
+  "agentError.authority_archive_not_supported.hint": "Archived history is outside the qualified authority conversion path.",
+  "agentError.authority_archive_not_supported.recovery": "Keep the existing representation and use a separately qualified archive migration.",
+  "agentError.authority_not_ready.hint": "Replay, checkpoint or exact-head parity needs reconciliation.",
+  "agentError.authority_not_ready.recovery": "Resolve the named replay, checkpoint or parity cause through its qualified path, then obtain a fresh plan. Do not reset or certify damaged source.",
+  "agentError.authority_integrity_failure.hint": "Stored content differs from independent serving proof.",
+  "agentError.authority_integrity_failure.recovery": "Stop conversion and reconcile through the qualified recovery path. Retrying or minting a new baseline is not repair."
 }

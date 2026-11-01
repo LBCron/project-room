@@ -1354,7 +1354,7 @@ export function createRoomServer({ store, origin, assetRoot = new URL("../", imp
       if (!enableDeferredInbox && (url.pathname === "/api/inbox" || url.pathname.startsWith("/api/inbox/")
         || url.pathname.startsWith("/api/auth/gmail/"))) reject(404, "not_found", "Not found");
       if (await dispatchRoute({
-        req, res, url, store, remoteAddress, loopback, operationId,
+        req, res, url, store, remoteAddress, loopback, operationId, operatorRoutes,
         // JDOT-MEMBER-PERMS begin: share quotas across request aliases.
         accessRequests,
         // JDOT-MEMBER-PERMS end

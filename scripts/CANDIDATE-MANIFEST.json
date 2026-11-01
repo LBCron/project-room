@@ -180,14 +180,14 @@
     "src/work-status.js": "sha256:fa3394eb7d8dfa39999d5f8b5c85f7b305f815bc573aa6e34be5a48e5ff34478",
     "src/workflow.js": "sha256:817422b3183d96e773f87bbe28b12453a1f761cd1bf024aecaa3e3e62438539a",
     "src/workspace-navigation.js": "sha256:9b36dd33d00c0015b61fdb2aeafdf22583658d9f04c758fca72e56233589aa4a",
-    "strings/en.js": "sha256:08ad89fa272adbdfa49d3426302db74610f015441da0306a290bdd21dcf271a9",
-    "strings/en.json": "sha256:a4fbc4ddae157432127d2528b1fb991ada6e96bc5900f94c37f790a55cb937d2"
+    "strings/en.js": "sha256:95a1e57761998eaef1c50e8de0790d4e73ef9581849cb0db66d24a688c1659c1",
+    "strings/en.json": "sha256:7e410c531b80a6df8342c0ccd431d7223f535cc386c45f049a9e32aab23d6856"
   },
   "deployment": {
     ".github/workflows/deploy-prod.yml": "sha256:4c4e1fd13d5d6daa135b05024cb682daa8e1b8a102f0b5282cefa338d43d48f1",
     "cloudflare/bootstrap.mjs": "sha256:ff6095ac5ab0332de1cacc5d5250ff71831ed8c360ec108b37ecc8effe211d6d",
     "cloudflare/build-assets.mjs": "sha256:7a204a775ed8aac33ff23d1d1c210de1a29efe84a47455db7e303e6fd4aff4d4",
-    "cloudflare/package.json": "sha256:7c61982a77f270a469cb8a7714d5110f3ac0b6e820f4cf1b366aa986cb0d2ddc",
+    "cloudflare/package.json": "sha256:aaee6774681933dde973c9267a5a6247171c6996f1d82f85f358ceda0f871c13",
     "cloudflare/pnpm-lock.yaml": "sha256:ccd56c35c71f2a0e696120d5db191035aea0b091c2f0b95935dd85a59bbf9248",
     "cloudflare/room.mjs": "sha256:37469f8ea742f42cbda306192435825a472459993996b960880366db66cdb0da",
     "cloudflare/storage.mjs": "sha256:efff85a064ff81ea5a863e4d11af5ca1711e28c9c424d724cf8812be35969e41",

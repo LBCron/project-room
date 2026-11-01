@@ -687,5 +687,9 @@
   "agentError.authority_not_ready.hint": "Replay, checkpoint or exact-head parity needs reconciliation.",
   "agentError.authority_not_ready.recovery": "Resolve the named replay, checkpoint or parity cause through its qualified path, then obtain a fresh plan. Do not reset or certify damaged source.",
   "agentError.authority_integrity_failure.hint": "Stored content differs from independent serving proof.",
-  "agentError.authority_integrity_failure.recovery": "Stop conversion and reconcile through the qualified recovery path. Retrying or minting a new baseline is not repair."
+  "agentError.authority_integrity_failure.recovery": "Stop conversion and reconcile through the qualified recovery path. Retrying or minting a new baseline is not repair.",
+  "agentError.attachment_index_budget_exceeded.hint": "This database exceeds the optional attachment index admission bounds or needs scalar reconciliation.",
+  "agentError.attachment_index_budget_exceeded.recovery": "Keep the existing attachment path. Inspect the operator plan; use separately qualified maintenance rather than increasing limits or deleting tombstones to evade admission.",
+  "agentError.attachment_index_conflict.hint": "Attachment table or optional index metadata does not match the supported definition.",
+  "agentError.attachment_index_conflict.recovery": "Reconcile the attachment schema with the operator. Do not replace the index, alter attachment rows or treat a schema stamp as installation proof."
 }

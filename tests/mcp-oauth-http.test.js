@@ -318,4 +318,40 @@ test('expired refresh HTTP response is invalid_grant and issues no access or ide
   assert.equal(f.store.db.prepare('SELECT count(*) n FROM oauth_provider_refresh_tokens').get().n, 0);
   assert.equal(f.store.db.prepare('SELECT count(*) n FROM agent_identities').get().n, identitiesBefore);
   assert.deepEqual(Object.keys(f.store.room('commons').state.members), membersBefore);
+  const retry = await f.exchange({ grant_type: 'refresh_token', refresh_token: f.tokens.refresh_token, client_id: CLIENT.clientId, resource });
+  assert.equal(retry.status, 400);
+  assert.equal((await retry.json()).error, 'invalid_grant', 'retrying an expired token stays an invalid grant after cleanup');
+  assert.equal(f.store.db.prepare('SELECT count(*) n FROM oauth_provider_access_tokens').get().n, accessBefore);
+  assert.equal(f.store.db.prepare('SELECT count(*) n FROM oauth_provider_refresh_tokens').get().n, 0);
 });
+
+for (const problem of ['unknown', 'revoked', 'wrong-client', 'missing-token', 'missing-client']) {
+  test(`refresh HTTP refusal for ${problem} preserves authority and the OAuth error contract`, async t => {
+    const f = await setup(t);
+    const before = {
+      access: f.store.db.prepare('SELECT count(*) n FROM oauth_provider_access_tokens').get().n,
+      refresh: f.store.db.prepare('SELECT count(*) n FROM oauth_provider_refresh_tokens').get().n,
+      identities: f.store.db.prepare('SELECT count(*) n FROM agent_identities').get().n,
+      members: Object.keys(f.store.room('commons').state.members),
+    };
+    const data = { grant_type: 'refresh_token', refresh_token: f.tokens.refresh_token, client_id: CLIENT.clientId, resource };
+    if (problem === 'unknown') data.refresh_token = 'oar_nonexistent_test_credential';
+    if (problem === 'wrong-client') data.client_id = 'different-client';
+    if (problem === 'missing-token') delete data.refresh_token;
+    if (problem === 'missing-client') delete data.client_id;
+    if (problem === 'revoked') f.store.transaction(() => f.store.db.prepare('UPDATE oauth_provider_refresh_tokens SET revoked=1 WHERE token_hash=?')
+      .run(createHash('sha256').update(f.tokens.refresh_token).digest('hex')));
+    const response = await f.exchange(data);
+    assert.equal(response.status, 400);
+    const body = await response.json();
+    assert.equal(body.error, problem.startsWith('missing-') ? 'invalid_request' : 'invalid_grant');
+    assert.equal(body.access_token, undefined);
+    assert.equal(body.refresh_token, undefined);
+    assert.deepEqual({
+      access: f.store.db.prepare('SELECT count(*) n FROM oauth_provider_access_tokens').get().n,
+      refresh: f.store.db.prepare('SELECT count(*) n FROM oauth_provider_refresh_tokens').get().n,
+      identities: f.store.db.prepare('SELECT count(*) n FROM agent_identities').get().n,
+      members: Object.keys(f.store.room('commons').state.members),
+    }, before);
+  });
+}

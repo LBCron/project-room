@@ -221,7 +221,7 @@ test("POST /oauth/token: reuse of a rotated refresh token is invalid_grant with 
   // theft was already signaled once at detection time).
   const dead = await tokenOf({ grant_type: "refresh_token", refresh_token: rt2, client_id: CLIENT.clientId });
   assert.equal(dead.status, 400);
-  assert.equal(dead.body.error, "invalid_request");
+  assert.equal(dead.body.error, "invalid_grant");
   assert.match(dead.body.error_description, /refresh token revoked/);
 });
 

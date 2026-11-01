@@ -195,3 +195,7 @@ test('mount shares existing management rate and body validation instead of addin
   assert.equal((await f.call('plan')).status, 429);
   assert.equal(attachmentLiveIndexState(f.store.db), 'absent');
 });
+test('a reserved index name occupied by another schema object is a conflict, not an absent index', t => {
+  const f = local(t); f.store.db.exec('CREATE TABLE room_attachments_live(unrelated TEXT)');
+  assert.throws(() => f.plan(), error => error.code === 'attachment_index_conflict');
+});

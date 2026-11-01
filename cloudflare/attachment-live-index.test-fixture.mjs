@@ -58,12 +58,14 @@ export class AttachmentIndexProbe extends DurableObject {
         return Response.json({ result, costs: this.costs });
       }
       if (path === '/over-row') {
-        db.prepare(`INSERT INTO room_attachments SELECT room_id,'zzzz',uploader_id,filename,media_type,0,sha256,NULL,'discarded',created_at,expires_at,NULL FROM room_attachments LIMIT 1`).run();
+        s.initialize(initialRoom('q', 'owner'));
+        db.prepare("UPDATE room_attachments SET room_id='q' WHERE id='0000'").run();
+        db.prepare(`INSERT INTO room_attachments SELECT room_id,'zzzz',uploader_id,filename,media_type,0,sha256,NULL,'discarded',created_at,expires_at,NULL FROM room_attachments WHERE id='0000'`).run();
         return Response.json({ changed: true });
       }
-      if (path === '/restore-row') { db.prepare("DELETE FROM room_attachments WHERE id='zzzz'").run(); return Response.json({ changed: true }); }
-      if (path === '/over-key') { db.prepare("UPDATE room_attachments SET id='extra' WHERE id='0000'").run(); return Response.json({ changed: true }); }
-      if (path === '/restore-key') { db.prepare("UPDATE room_attachments SET id='0000' WHERE id='extra'").run(); return Response.json({ changed: true }); }
+      if (path === '/restore-row') { db.prepare("DELETE FROM room_attachments WHERE id='zzzz'").run(); db.prepare("UPDATE room_attachments SET room_id=? WHERE id='0000'").run(room(0)); return Response.json({ changed: true }); }
+      if (path === '/over-key') { db.prepare("UPDATE room_attachments SET id='extra',bytes=zeroblob(1048575),byte_length=1048575 WHERE id='0000'").run(); return Response.json({ changed: true }); }
+      if (path === '/restore-key') { db.prepare("UPDATE room_attachments SET id='0000',bytes=zeroblob(1048576),byte_length=1048576 WHERE id='extra'").run(); return Response.json({ changed: true }); }
       if (path === '/over-stored') { db.prepare("UPDATE room_attachments SET bytes=zeroblob(1),byte_length=1 WHERE id='zzzz'").run(); return Response.json({ changed: true }); }
       if (path === '/stored-plus-one') {
         db.prepare("UPDATE room_attachments SET bytes=zeroblob(1),byte_length=1 WHERE id='0pa7'").run(); return Response.json({ changed: true });
@@ -83,6 +85,9 @@ export class AttachmentIndexProbe extends DurableObject {
       if (path === '/unfault-critical') { db.prepare = this.restorePrepare; return Response.json({ ready: true }); }
       if (path === '/fault') { db.exec("CREATE TRIGGER reject_attachment_index_receipt BEFORE INSERT ON operator_actions WHEN NEW.action='attachment_index_execute' BEGIN SELECT RAISE(ABORT,'synthetic receipt failure'); END"); return Response.json({ ready: true }); }
       if (path === '/unfault') { db.exec('DROP TRIGGER reject_attachment_index_receipt'); return Response.json({ ready: true }); }
+      if (path === '/sizes') return Response.json(db.prepare(`SELECT count(*) AS rows,
+        SUM(length(CAST(room_id AS BLOB))+length(CAST(id AS BLOB))+length(CAST(state AS BLOB))) AS keyBytes,
+        SUM(length(CAST(room_id AS BLOB))+length(CAST(id AS BLOB))+length(CAST(uploader_id AS BLOB))+length(CAST(filename AS BLOB))+length(CAST(media_type AS BLOB))+length(CAST(sha256 AS BLOB))+length(CAST(state AS BLOB))+COALESCE(length(bytes),0)+COALESCE(length(CAST(message_id AS BLOB)),0)) AS storedBytes FROM room_attachments`).get());
       if (path === '/state') return Response.json({ installed: attachmentLiveIndexState(db), keyReads: this.keyReads, builds: this.builds,
         rows: db.prepare('SELECT count(*) n FROM room_attachments').get().n, stamp: db.prepare('SELECT stamp FROM room_schema_stamp WHERE singleton=1').get().stamp,
         receipts: db.prepare("SELECT count(*) n FROM operator_actions WHERE action='attachment_index_execute'").get().n });

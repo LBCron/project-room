@@ -29,7 +29,11 @@ test('actual Workers admit optional index boundaries, preserve rollback/retry an
     assert.deepEqual(plan.admitted, { rows: 32768, keyBytes: 4194304, storedBytes: 67108864 });
     const state = await call('/state'); assert.equal(state.installed, 'absent');
     for (const [change, restore] of [['/over-row', '/restore-row'], ['/over-key', '/restore-key'], ['/stored-plus-one', '/stored-restore']]) {
-      await call(change); const refused = await call('/plan', {}, 409);
+      await call(change);
+      const sizes = await call('/sizes'), limits = { rows: 32768, keyBytes: 4194304, storedBytes: 67108864 };
+      const exceeded = Object.keys(limits).filter(key => sizes[key] > limits[key]);
+      assert.deepEqual(exceeded, [change === '/over-row' ? 'rows' : change === '/over-key' ? 'keyBytes' : 'storedBytes']);
+      const refused = await call('/plan', {}, 409);
       assert.equal(refused.error.code, 'attachment_index_budget_exceeded'); assert.equal(refused.keyReads, state.keyReads); assert.equal(refused.builds, 0);
       await call(restore);
     }

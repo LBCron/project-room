@@ -468,8 +468,8 @@ function cursorMatches(db, roomId, cursor, sequence) {
   return true;
 }
 
-function saveCursor(db, roomId, replaySeq, eventId, state) {
-  writeMessageReplaySnapshot(db,roomId,JSON.stringify(state));
+function saveCursor(db, roomId, replaySeq, eventId, state, json) {
+  writeMessageReplaySnapshot(db,roomId,json ?? JSON.stringify(state));
   db.prepare(`INSERT INTO messages_backfill_cursor
       (room_id, applied_seq, applied_event_id, state_seq, replay_event_id, parity_at_seq)
     VALUES (?, 0, '', ?, ?, NULL)
@@ -601,10 +601,10 @@ function discardDetachedSnapshot(db, key) {
   catch { /* a synthetic db with no snapshot table has nothing stashed */ }
 }
 
-function stashAnchor(db, roomId, state) {
+function stashAnchor(db, roomId, state, json) {
   const key = anchorKey(roomId);
   if (db.prepare("SELECT 1 FROM messages_backfill_state WHERE room_id=? AND part=-1").get(key)) return;
-  writeDetachedSnapshot(db, key, JSON.stringify(state));
+  writeDetachedSnapshot(db, key, json ?? JSON.stringify(state));
 }
 
 function rememberSkippedMessageIds(db, roomId, ids) {
@@ -1128,15 +1128,16 @@ function applyOrSkip(state, incoming, tries) {
   return { error: failure };
 }
 
-function publishRoom(store, roomId, sequence, state) {
+function publishRoom(store, roomId, sequence, state, admitState = null) {
   const db = store.db;
   const anchor = db.prepare("SELECT id FROM events WHERE room_id=? AND sequence=?").get(roomId, sequence)?.id ?? "";
-  if (sequence === 0) saveCursor(db, roomId, 0, "", state);
+  if (sequence === 0) saveCursor(db, roomId, 0, "", state, admitState?.(state));
   const overlaid = overlayProjectionMessages(db, roomId, state, skippedMessageIds(db, roomId));
+  admitState?.(overlaid);
   publishReplayMessages(store, roomId, sequence, anchor, overlaid);
 }
 
-function fillRoom(store, room, budget, expired, yieldBetween) {
+function fillRoom(store, room, budget, expired, yieldBetween, admitState = null) {
   const db = store.db;
   let cursor = readCursor(db, room.id, true);
   if (cursor && !cursorMatches(db, room.id, cursor, room.sequence)) {
@@ -1144,6 +1145,7 @@ function fillRoom(store, room, budget, expired, yieldBetween) {
     cursor = null;
   }
   let { state, seq } = loadState(db, room.id, cursor);
+  admitState?.(state);
   let events = 0;
   let freshBlock = false;
   while (events < budget) {
@@ -1158,7 +1160,7 @@ function fillRoom(store, room, budget, expired, yieldBetween) {
         // contain, then park the room. The event rows that do exist stay.
         const error = `messages backfill stopped at ${seq} before room ${room.id} reached sequence ${sequence}`;
         const recorded = store.transaction(() => {
-          if (seq > 0) publishRoom(store, room.id, seq, state);
+          if (seq > 0) publishRoom(store, room.id, seq, state, admitState);
           return recordBlock(store, room.id, { sequence: seq, eventId: null, error, ...classifyBackfillBlock(error), skipped: 0 });
         });
         return { events, stopped: false, budgetExceeded: false, replaySeq: seq, gap: true, freshBlock: freshBlock || recorded };
@@ -1170,7 +1172,7 @@ function fillRoom(store, room, budget, expired, yieldBetween) {
         // certificate rather than repeating the full overlay/prune pass and
         // clearing a parity check completed during that yield. An absent or
         // invalidated certificate still needs publication.
-        if (!messagesBackfillCaughtUp(db, room.id)) publishRoom(store, room.id, seq, state);
+        if (!messagesBackfillCaughtUp(db, room.id)) publishRoom(store, room.id, seq, state, admitState);
       });
       return { events, stopped: false, budgetExceeded: false, replaySeq: seq, freshBlock };
     }
@@ -1187,14 +1189,14 @@ function fillRoom(store, room, budget, expired, yieldBetween) {
         let incoming = null;
         try { incoming = JSON.parse(row.body); }
         catch {
-          if (!held) { snap = next; snapSeq = last?.sequence ?? seq; held = true; stashAnchor(db, room.id, snap); }
+          if (!held) { snap = next; snapSeq = last?.sequence ?? seq; held = true; stashAnchor(db, room.id, snap, admitState?.(snap)); }
           quarantine ??= { sequence: row.sequence, eventId: row.id, error: "malformed event body", eventType: null, anchorSeq: snapSeq };
           last = row;
           continue;
         }
         const applied = applyOrSkip(next, incoming, already === row.id ? 1 : 2);
         if (applied.error) {
-          if (!held) { snap = next; snapSeq = last?.sequence ?? seq; held = true; stashAnchor(db, room.id, snap); }
+          if (!held) { snap = next; snapSeq = last?.sequence ?? seq; held = true; stashAnchor(db, room.id, snap, admitState?.(snap)); }
           rememberSkippedMessageIds(db, room.id, affectedMessageIds(incoming));
           quarantine ??= {
             sequence: row.sequence, eventId: row.id, error: applied.error.message,
@@ -1203,6 +1205,7 @@ function fillRoom(store, room, budget, expired, yieldBetween) {
           last = row;
           continue;
         }
+        admitState?.(applied.state);
         next = applied.state;
         last = row;
         if (!held) { snap = next; snapSeq = row.sequence; }
@@ -1210,7 +1213,7 @@ function fillRoom(store, room, budget, expired, yieldBetween) {
       const sequence = db.prepare("SELECT sequence FROM rooms WHERE id=?").get(room.id).sequence;
       // The live snapshot moves past the skip so the next call does not
       // replay this chunk. The pre-skip state stays in the anchor stash.
-      saveCursor(db, room.id, last.sequence, last.id, next);
+      saveCursor(db, room.id, last.sequence, last.id, next, admitState?.(next));
       if (quarantine) {
         const classified = classifyBackfillBlock({ message: quarantine.error }, quarantine.eventType);
         recorded = recordBlock(store, room.id, {
@@ -1218,7 +1221,7 @@ function fillRoom(store, room, budget, expired, yieldBetween) {
           ...classified, skipped: 1, anchorSeq: quarantine.anchorSeq, countAttempt: already !== quarantine.eventId
         });
       }
-      if (last.sequence === sequence) publishRoom(store, room.id, sequence, next);
+      if (last.sequence === sequence) publishRoom(store, room.id, sequence, next, admitState);
       return { state: next, seq: last.sequence, freshBlock: recorded };
     });
     state = outcome.state;
@@ -1228,6 +1231,20 @@ function fillRoom(store, room, budget, expired, yieldBetween) {
     yieldBetween();
   }
   return { events, stopped: false, budgetExceeded: false, replaySeq: seq, freshBlock };
+}
+
+// Operator-only preparation reuses the existing fold without fleet healing,
+// diagnosis, room selection or yield hooks. Caller must inventory/admit the
+// complete target source and checkpoint before entering this transaction.
+export function runTargetedMessagesBackfill(store, room, admitState) {
+  if (store.readOnly || !store.db.isTransaction || typeof admitState !== 'function')
+    throw new Error('Targeted replay requires admitted state in a writer transaction');
+  const outcome=fillRoom(store,room,200,()=>false,()=>{},admitState);
+  if(outcome.gap || outcome.freshBlock || store.db.prepare('SELECT 1 FROM messages_backfill_blocks WHERE room_id=?').get(room.id))
+    throw new Error('Targeted replay requires unresolved source reconciliation');
+  return {events:outcome.events,replaySeq:outcome.replaySeq,
+    appliedSeq:readCursor(store.db,room.id)?.applied_seq??0,
+    caughtUp:outcome.replaySeq===room.sequence&&messagesBackfillCaughtUp(store.db,room.id)};
 }
 
 // Errors that indict the store itself (schema/storage), not one room's

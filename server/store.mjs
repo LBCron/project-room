@@ -105,7 +105,7 @@ import { ensureAttachmentSchema, verifyAttachmentSchema } from "./attachment-sch
 import { RoomAttachmentBytes } from "./room-attachment-bytes.mjs";
 import { InboxAttachmentBytes, inboxAttachmentBytesSchema } from "./inbox-attachment-bytes.mjs";
 import { BountyEscrow, bountyEscrowSchema, convergeBountyDeployedSchema } from "./bounty-escrow.mjs"; // Escrowed bounties, agent work exchange slice 1.
-import { selectedWorkContext, currentWorkRecord } from "./work-context.mjs";
+import { selectedWorkContext, currentWorkRecord, workRoleHolder } from "./work-context.mjs";
 import { workItemChanges, mayWriteBoardClaims } from "../src/workflow.js";
 import { assertDependsOnKnown } from "./work-claim-integrity.mjs";
 import { normalizeWorkDependencies } from "../src/work-dependencies.js";
@@ -7961,9 +7961,4 @@ function dmTalkAllowed(db, state, roomId, senderId, identityId, at) {
   const memberId = talkMemberForIdentity(db, roomId, identityId, at);
   if (!memberId) return true;
   return mayWake(db, state, roomId, senderId, memberId);
-}
-
-function workRoleHolder(item, memberId) {
-  if (!item || !memberId) return false;
-  return [item.proposedById, item.accountableMemberId, item.verifierMemberId, item.humanDecisionMakerId, item.claim?.holderId].includes(memberId);
 }

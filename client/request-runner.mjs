@@ -20,6 +20,13 @@ export function openRequestJournal(filename) {
       db.exec("ALTER TABLE request_runs ADD COLUMN attempt_id TEXT");
     if (!db.prepare("PRAGMA table_info(request_runs)").all().some(column => column.name === "delivery_refused"))
       db.exec("ALTER TABLE request_runs ADD COLUMN delivery_refused INTEGER NOT NULL DEFAULT 0");
+    // reported tracks the service run report separately from local delivery, so a
+    // lost "delivered" report stays pending. Rows delivered before this column
+    // existed count as reported; they cannot be reconciled retroactively.
+    if (!db.prepare("PRAGMA table_info(request_runs)").all().some(column => column.name === "reported")) {
+      db.exec("ALTER TABLE request_runs ADD COLUMN reported INTEGER NOT NULL DEFAULT 0");
+      db.exec("UPDATE request_runs SET reported=1 WHERE delivered=1");
+    }
     db.exec("CREATE INDEX IF NOT EXISTS request_runs_retryable_delivery ON request_runs(delivered, delivery_refused) WHERE response IS NOT NULL");
     db.exec("COMMIT");
   } catch (error) { db.exec("ROLLBACK"); db.close(); throw error; }
@@ -67,8 +74,11 @@ export async function runRequestOnce({ connection, requestMessageId, db, execute
     }
     if (receipt.status !== "recorded") throw new Error("Reply delivery is unconfirmed; retain the journal and retry unchanged");
     db.prepare("UPDATE request_runs SET delivered=1, delivery_refused=0 WHERE id=?").run(id);
-    if (record.attempt_id) await report(record.attempt_id, "delivered").catch(() => {});
-    return { status: "delivered", requestId: id, receipt, hostExecuted: false };
+    // The reply is recorded; a failed run report must not be hidden. Keep the row
+    // pending (reported=0) so a rerun or the queue reports it again.
+    const runReported = record.attempt_id ? await report(record.attempt_id, "delivered").then(() => true, () => false) : true;
+    if (runReported) db.prepare("UPDATE request_runs SET reported=1 WHERE id=?").run(id);
+    return { status: "delivered", requestId: id, receipt, hostExecuted: false, runReported };
   };
   if (savedRequestId !== undefined && savedRequestId !== id)
     throw Object.assign(new Error("Saved reply identity changed; reconcile the original attempt"), { code: "saved_reply_identity_mismatch" });
@@ -198,7 +208,7 @@ export async function runRequestQueue({ connection, db, execute, preflight, sign
   if (!Number.isInteger(intervalMs) || intervalMs < 1000 || intervalMs > 60000) throw new Error("Invalid polling interval");
   const client = new RoomAgentClient(connection);
   let delay = intervalMs, connectionUnavailable = false, pendingStatement, recoveryRow = 0;
-  const pending = request => (pendingStatement ??= db.prepare("SELECT 1 FROM request_runs WHERE delivered=0 AND delivery_refused=0 AND json_extract(response,'$.responseToRequestId')=?")).get(request.id);
+  const pending = request => (pendingStatement ??= db.prepare("SELECT 1 FROM request_runs WHERE (delivered=0 OR reported=0) AND delivery_refused=0 AND json_extract(response,'$.responseToRequestId')=?")).get(request.id);
   while (!signal?.aborted) {
     let cursor = null;
     try {
@@ -211,7 +221,7 @@ export async function runRequestQueue({ connection, db, execute, preflight, sign
       // committed while its acknowledgement was lost, so enumerate local saved
       // deliveries independently. Rotate the bounded scan past refused records.
       const scanSaved = after => db.prepare(`SELECT rowid AS recovery_row, id, response FROM request_runs
-        WHERE delivered=0 AND delivery_refused=0 AND response IS NOT NULL AND rowid > ?
+        WHERE (delivered=0 OR reported=0) AND delivery_refused=0 AND response IS NOT NULL AND rowid > ?
         ORDER BY rowid LIMIT 50`).all(after);
       let saved = scanSaved(recoveryRow);
       if (!saved.length && recoveryRow) { recoveryRow = 0; saved = scanSaved(0); }

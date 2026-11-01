@@ -261,6 +261,30 @@ test("lost delivery response reuses saved answer without executing host again", 
   assert.equal(recovered.receipt.duplicate, true);
   assert.equal(calls, 1);
 });
+test("a lost 'delivered' run report is surfaced and retried until the service records it", async t => {
+  const f = await fixture(t), args = runner(t, f), requestMessageId = f.open("host-report-lost").command.data.messageId;
+  let calls = 0, dropped = 0;
+  const connection = { ...f.config, fetchImpl: async (url, options) => {
+    if (options.method === "POST" && new URL(url).pathname.endsWith("/request-runs")
+      && JSON.parse(options.body).action === "delivered") { dropped++; throw new TypeError("lost run report"); }
+    return fetch(url, options);
+  } };
+  const execute = async () => { calls++; return { body: "Delivered while the run report was lost" }; };
+  const first = await runRequestOnce({ ...args, connection, requestMessageId, execute });
+  assert.equal(first.status, "delivered");
+  assert.equal(first.runReported, false, "a swallowed run report must not look fully delivered");
+  assert.equal(dropped, 1);
+  assert.equal((await f.client.requestRuns()).runs[requestMessageId].state, "result_ready");
+  // The automatic queue must still treat the row as pending and finish the report.
+  const controller = new AbortController(); t.after(() => controller.abort());
+  const seen = [];
+  await runRequestQueue({ ...args, signal: controller.signal, intervalMs: 1000, stream: false, execute,
+    emit: result => { seen.push(result); if (result.status === "delivered") controller.abort(); } });
+  assert.equal(seen.at(-1).runReported, true);
+  assert.equal(seen.at(-1).hostExecuted, false);
+  assert.equal((await f.client.requestRuns()).runs[requestMessageId].state, "delivered");
+  assert.equal(calls, 1);
+});
 test("host failure is unknown and is never automatically executed a second time", async t => {
   const f = await fixture(t), args = runner(t, f), q = f.open("host-unknown");
   let calls = 0;

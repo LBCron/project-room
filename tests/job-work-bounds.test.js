@@ -21,7 +21,9 @@ function freezeClock(t) {
   return frozen;
 }
 function storeWithRooms(count) {
-  const store = new RoomStore(join(mkdtempSync(join(tmpdir(), "project-room-bounds-")), "room.sqlite"));
+  const path = join(mkdtempSync(join(tmpdir(), "project-room-bounds-")), "room.sqlite");
+  const store = new RoomStore(path);
+  store.path = path;
   for (let i = 0; i < count; i++) {
     const roomId = `room-${String(i).padStart(3, "0")}`;
     store.initialize(initialRoom(roomId));
@@ -45,6 +47,18 @@ test("patrol stops at a per-tick room bound under a frozen clock, and later tick
   const caughtUp = runPatrolTick(store, { deadline: now + 5000 });
   assert.equal(caughtUp.rooms, 0);
   assert.equal(caughtUp.budgetExceeded, undefined);
+});
+
+test("the patrol's fair continuation survives a store reopen (DO restart)", t => {
+  const store = storeWithRooms(PATROL_TICK_ROOMS + 4);
+  const now = freezeClock(t);
+  runPatrolTick(store, { deadline: now + 5000 });
+  const path = store.path;
+  store.close();
+  const reopened = new RoomStore(path);
+  const second = runPatrolTick(reopened, { deadline: now + 5000 });
+  assert.equal(second.rooms, 4, "resumes after the last tailed room instead of restarting at the first");
+  assert.equal(reopened.db.prepare("SELECT COUNT(*) AS n FROM patrol_cursor WHERE sequence > 0").get().n, PATROL_TICK_ROOMS + 4);
 });
 
 test("an explicit single-room patrol is not limited by the tick room bound", t => {

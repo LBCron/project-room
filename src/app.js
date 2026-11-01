@@ -3443,7 +3443,9 @@ async function revealClaimRecord(id) {
   const opening = navigationBoardEpoch;
   if (!await navigationBoardReady?.() || opening !== navigationBoardEpoch || epoch !== workNavigationEpoch
     || !workNavigationContext()) return;
-  await navigationBoardRevealClaim?.(id);
+  // #3892: surface a failed reveal like the click path does instead of
+  // leaving the board open on nothing.
+  if (!await navigationBoardRevealClaim?.(id)) notice(SOURCE_UNAVAILABLE_NOTICE, true);
   syncWorkReturnControl();
 }
 function navigateWorkRecord(kind, id, extra = {}) {

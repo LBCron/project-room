@@ -1,3 +1,4 @@
+import { STORE_SCHEMA_VERSION } from '../server/writer-fence.mjs';
 import test from "node:test";
 import assert from "node:assert/strict";
 import { rmSync, mkdtempSync } from "node:fs";
@@ -183,7 +184,7 @@ test("genuine schema12 upgrade preserves old help-like message text and refuses 
       }
       const current = new RoomStore(f.filename, { now: f.now });
       try {
-        assert.equal(auditRecovery(current).schemaVersion, 42);
+        assert.equal(auditRecovery(current).schemaVersion, STORE_SCHEMA_VERSION);
         assert.equal(current.room("old-text").state.messages[0].body, "Help wanted, just ordinary text");
         assert.equal(Object.hasOwn(current.room("old-text").state.messages[0], "helpWanted"), false);
         assert.equal(Object.hasOwn(current.room("commons").state.workItems[Object.keys(row.state.workItems)[0]], "helpWanted"), false);

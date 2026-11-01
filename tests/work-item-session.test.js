@@ -1,3 +1,4 @@
+import { STORE_SCHEMA_VERSION } from '../server/writer-fence.mjs';
 import test from "node:test";
 import assert from "node:assert/strict";
 import { randomUUID } from "node:crypto";
@@ -206,7 +207,7 @@ test("strangers cannot mutate; commands are idempotent; writer stays 26", async 
     data: { workItemId: "session-one", expectedRevision: 1, status: "active" }
   });
   assert.equal(viaCommand.event.type, T.SESSION_STATUS_CHANGED);
-  assert.equal(store.storagePlatform.version(store.db), 42);
+  assert.equal(store.storagePlatform.version(store.db), STORE_SCHEMA_VERSION);
   assert.equal(store.db.prepare("SELECT name FROM sqlite_master WHERE name LIKE 'work_item_session%'").all().length, 0);
 });
 

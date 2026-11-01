@@ -1,3 +1,4 @@
+import { STORE_SCHEMA_VERSION } from '../server/writer-fence.mjs';
 import test from "node:test";
 import assert from "node:assert/strict";
 import { mkdtempSync, rmSync } from "node:fs";
@@ -359,7 +360,7 @@ test("v2 migration preserves credentials and never merges matching Room member i
 
   let store = new RoomStore(filename);
   const alpha = store.authenticate(tokens[0]), beta = store.authenticate(tokens[1]);
-  assert.equal(store.db.prepare("PRAGMA user_version").get().user_version, 42);
+  assert.equal(store.db.prepare("PRAGMA user_version").get().user_version, STORE_SCHEMA_VERSION);
   assert.notEqual(alpha.account.id, beta.account.id, "matching legacy member ids are not identity proof across Rooms");
   assert.equal(alpha.account.authEpoch, 0); assert.equal(beta.account.authEpoch, 0);
   assert.equal(store.authenticate(sessions[0]).account.id, alpha.account.id);

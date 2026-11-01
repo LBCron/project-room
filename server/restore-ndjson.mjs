@@ -1,4 +1,4 @@
-import { withRestoreTransaction, beginRestore, completeRestore } from './restore-admission.mjs';
+import { withRestoreTransaction, beginRestore, completeRestore, restorePending, verifyRestoreControl } from './restore-admission.mjs';
 import { verifyCurrentRoomSchema, invalidateCurrentRoomSchema, restoredCurrentFormatPresent } from './current-room-repository.mjs';
 // Whole-store NDJSON restore into an already-open store.
 //
@@ -73,6 +73,59 @@ function tableNames(db) {
 
 function tableColumns(db, table) {
   return db.prepare(`PRAGMA table_info(${quoteIdent(table)})`).all().map(column => column.name);
+}
+
+// Resume compares only indexed keys from the TARGET's code-owned schema.
+// No source DDL, row replacement, immutable deletion or table scan per row.
+function resumeCell(value) {
+  if(value===null)return ['null'];
+  if(value instanceof ArrayBuffer)return ['blob',Buffer.from(value).toString('base64')];
+  if(ArrayBuffer.isView(value))return ['blob',Buffer.from(value.buffer,value.byteOffset,value.byteLength).toString('base64')];
+  if(typeof value==='string')return ['text',value];
+  if(typeof value==='number'&&Number.isFinite(value))return ['number',value];
+  throw Error('Resume row contains an unsupported canonical cell');
+}
+const canonicalResumeRow=(row,columns)=>JSON.stringify(columns.map(name=>[name,resumeCell(row[name])]));
+function rowBag(){let rows=0,sum=0n,xor=0n;return{add(text){const n=BigInt('0x'+createHash('sha256').update(text).digest('hex'));rows++;sum=(sum+n)&((1n<<256n)-1n);xor^=n;},value(){return[rows,sum.toString(16),xor.toString(16)].join(':');}};}
+function createKeyedResume(db) {
+  const shapes=new Map(),expected=new Map();
+  function shape(table) {
+    if(shapes.has(table))return shapes.get(table);
+    const info=db.prepare(`PRAGMA table_info(${quoteIdent(table)})`).all(),columns=info.map(row=>row.name).sort();
+    const key=info.filter(row=>row.pk>0).sort((a,b)=>a.pk-b.pk).map(row=>row.name);
+    if(!key.length)throw Error('Resume requires a code-owned primary key: '+table);
+    const statement=db.prepare(`SELECT * FROM ${quoteIdent(table)} WHERE ${key.map(name=>quoteIdent(name)+'=?').join(' AND ')}`);
+    const result={columns,key,statement};shapes.set(table,result);return result;
+  }
+  function match(table,cells) {
+    const s=shape(table);
+    if(s.columns.length!==Object.keys(cells).length||s.columns.some(name=>!Object.hasOwn(cells,name)))throw Error('Resume requires complete canonical cells for table '+table);
+    if(s.key.some(name=>cells[name]===null||cells[name]===undefined))throw Error('Resume requires a non-null complete indexed key: '+table);
+    const encoded=canonicalResumeRow(cells,s.columns);let bag=expected.get(table);if(!bag){bag=rowBag();expected.set(table,bag);}bag.add(encoded);
+    const saved=s.statement.get(...s.key.map(name=>cells[name]));
+    if(!saved)return false;
+    if(canonicalResumeRow(saved,s.columns)!==encoded)throw Error('Resume row mismatch requires operator reconciliation: '+table);
+    return true;
+  }
+  function verify(counts,tables) {
+    for(const table of tables){
+      if(table.startsWith('_cf_')||RESTORE_SKIP_TABLES.has(table)||table===CLAIM_PERMIT_TABLE||REPLAY_SKIPPED_TABLES.includes(table))continue;
+      const count=db.prepare(`SELECT count(*) AS n FROM ${quoteIdent(table)}`).get().n,wanted=counts.get(table)??0;
+      if(count!==wanted)throw Error('Resume target count differs from complete source: '+table);
+      if(!count)continue;
+      const s=shape(table),actual=rowBag();let after=null;
+      // Keyset pages of ONE row also bound large BLOB/projection memory.
+      const first=db.prepare(`SELECT * FROM ${quoteIdent(table)} ORDER BY ${s.key.map(quoteIdent).join(',')} LIMIT 1`);
+      const next=db.prepare(`SELECT * FROM ${quoteIdent(table)} WHERE (${s.key.map(quoteIdent).join(',')}) > (${s.key.map(()=>'?').join(',')}) ORDER BY ${s.key.map(quoteIdent).join(',')} LIMIT 1`);
+      for(;;){const row=after?next.get(...after):first.get();if(!row)break;if(s.key.some(name=>row[name]===null))throw Error('Resume target has a nullable indexed key: '+table);actual.add(canonicalResumeRow(row,s.columns));after=s.key.map(name=>row[name]);}
+      if(actual.value()!==expected.get(table)?.value())throw Error('Resume target canonical rows differ from complete source: '+table);
+    }
+  }
+  return{match,verify};
+}
+function requireResumeSource(watermark,trailer,verification) {
+  if(!watermark||!Number.isSafeInteger(watermark.sourceSchemaVersion)||watermark.sanitizePolicy!==BACKUP_SANITIZE_POLICY||trailer?.version!==2||verification!=='full')
+    throw Error('Resume requires the original complete snapshot with source schema and full version2 table trailer');
 }
 
 export function parseNdjsonExport(ndjson) {
@@ -173,7 +226,9 @@ function topologicalTableOrder(names, deps) {
 // qualification on the result instead — the semantics of the file replay's
 // report mode (server/room-export.mjs replayNdjson), for backups whose
 // stored projections were written by older code.
-export function replayNdjsonInto(ndjson, store, { audit = "strict", sourceSchemaVersion = null } = {}) {
+export function replayNdjsonInto(ndjson, store, { audit = "strict", sourceSchemaVersion = null, resume = false } = {}) {
+  if(typeof resume!=="boolean")throw Error("resume must be boolean");
+  if(resume){const parsed=parseNdjsonExport(ndjson);requireResumeSource(parsed.watermark,parsed.trailer,contentVerificationLevel(parsed.trailer,parsed.tableDigests));verifyTrailer(parsed.trailer,parsed.byTable);const session=createBackupReplaySession(store,{audit,sourceSchemaVersion,resume:true});try{session.writeText(ndjson);return session.finish();}catch(error){session.abort();throw error;}}
   if (audit !== "strict" && audit !== "report") throw new Error("audit must be strict or report");
   if (!store?.db) throw new Error("Restore needs an open store");
   const { watermark, byTable, trailer, skippedTables, tableDigests } = parseNdjsonExport(ndjson);
@@ -264,7 +319,7 @@ export function replayNdjsonInto(ndjson, store, { audit = "strict", sourceSchema
         recovery = auditRecovery(store);
         invitations = store.verifyInvitationAudit();
       } catch (error) {
-        if (audit !== "report" || restoredCurrentFormatPresent(db)) throw error;
+        if (resume || audit !== "report" || restoredCurrentFormatPresent(db)) throw error;
         auditResult = auditFailure(error);
       }
       verifyCurrentRoomSchema(db);
@@ -288,16 +343,22 @@ export function replayNdjsonInto(ndjson, store, { audit = "strict", sourceSchema
 // needs — the total size is unbounded. Room transactions must stay
 // synchronous, so inserts commit in bounded batches; any failure runs
 // abort(), which deletes every table the replay touched (the target was
-// verified empty first), leaving the store empty and retryable.
+// verified empty first), leaving the store empty and retryable. Explicit resume
+// never deletes existing rows: failure retains the pending target for reconciliation.
 const REPLAY_BATCH_ROWS = 500;
 const REPLAY_BATCH_BYTES = 4 * 1024 * 1024;
 
-export function createBackupReplaySession(store, { audit = "strict", sourceSchemaVersion = null } = {}) {
+export function createBackupReplaySession(store, { audit = "strict", sourceSchemaVersion = null, resume = false } = {}) {
+  if(typeof resume!=="boolean")throw Error("resume must be boolean");
   restoreSourceSchemaVersion(null, sourceSchemaVersion);
   if (audit !== "strict" && audit !== "report") throw new Error("audit must be strict or report");
   if (!store?.db) throw new Error("Restore needs an open store");
   const db = store.db;
-  if (db.prepare("SELECT 1 FROM rooms LIMIT 1").get()) throw new Error("Refusing to replay into a non-empty store");
+  let resumeId=null;
+  if(resume){verifyRestoreControl(db);if(!restorePending(db))throw Error("Resume requires an explicitly pending restore target");resumeId=db.prepare("SELECT restore_id FROM current_restore_admission WHERE singleton=1").get().restore_id;}
+  else if (db.prepare("SELECT 1 FROM rooms LIMIT 1").get()) throw new Error("Refusing to replay into a non-empty store");
+  const keyed=resume?createKeyedResume(db):null;
+  const assertSameResume=()=>{verifyRestoreControl(db);const row=db.prepare("SELECT state,restore_id FROM current_restore_admission WHERE singleton=1").get();if(row?.state!=="pending"||row.restore_id!==resumeId)throw Error("Resume target admission changed; no further writes are allowed");};
   const existing = new Set(tableNames(db));
   const claimPermit = existing.has(CLAIM_PERMIT_TABLE);
   const skippedTables = {};
@@ -339,11 +400,27 @@ export function createBackupReplaySession(store, { audit = "strict", sourceSchem
   let tracker = null;
   const cellTracker = () => tracker ??= createSanitizedCellTracker(db, { legacySanitize: true });
 
-  beginRestore(store);
+  if(!resume)resumeId=beginRestore(store);
   db.exec("PRAGMA foreign_keys=OFF");
   // #3324, as in replayNdjsonInto: open the target's own permit for the
   // load; the exported permit row is skipped in writeLine and never lands.
-  if (claimPermit) db.prepare(`UPDATE ${CLAIM_PERMIT_TABLE} SET enabled=1 WHERE singleton=1`).run();
+  withRestoreTransaction(store,()=>{
+    assertSameResume();
+    if(claimPermit)db.prepare(`UPDATE ${CLAIM_PERMIT_TABLE} SET enabled=1 WHERE singleton=1`).run();
+    if(!resume){
+      // Remove target migration seeds before any source batch can persist.
+      // A cold resume must only encounter imported cells, never a conflicting
+      // target default for a source table that had not flushed at interruption.
+      db.exec("PRAGMA defer_foreign_keys=ON");
+      for(const table of [...topo].reverse()){
+        if(table.startsWith('_cf_')||RESTORE_SKIP_TABLES.has(table)||table===CLAIM_PERMIT_TABLE||REPLAY_SKIPPED_TABLES.includes(table))continue;
+        if(db.prepare(`SELECT 1 FROM ${quoteIdent(table)} LIMIT 1`).get()){
+          withRestoreTableRows(db,table,()=>db.prepare(`DELETE FROM ${quoteIdent(table)}`).run());
+          cleared.add(table);
+        }
+      }
+    }
+  });
 
   const columnsOf = table => {
     if (!knownColumns.has(table)) knownColumns.set(table, new Set(tableColumns(db, table)));
@@ -391,8 +468,9 @@ export function createBackupReplaySession(store, { audit = "strict", sourceSchem
     if (!insertable.length) return 0;
     let inserted = 0;
     withRestoreTransaction(store, () => {
+      assertSameResume();
       db.exec("PRAGMA defer_foreign_keys=ON");
-      if (!cleared.has(table)) {
+      if (!resume && !cleared.has(table)) {
         withRestoreTableRows(db,table,()=>db.prepare(`DELETE FROM ${quoteIdent(table)}`).run());
         cleared.add(table);
       }
@@ -404,9 +482,11 @@ export function createBackupReplaySession(store, { audit = "strict", sourceSchem
           // An empty row object carries no cells and never lands (the
           // buffered replay skips it the same way); count it so finish()'s
           // landed-count reconciliation stays exact.
+          if(resume&&!keys.length)throw Error("Resume source has an empty row");
           if (!keys.length) { unlandedEmpty.set(table, (unlandedEmpty.get(table) ?? 0) + 1); continue; }
           const cells = Object.fromEntries(keys.map(key => [key, cellTracker().resolve(table, key, cellOf(row[key]))]));
           checkStoredBytes(table, cells);
+          if(keyed?.match(table,cells))continue;
           db.prepare(`INSERT INTO ${quoteIdent(table)} (${keys.map(quoteIdent).join(", ")}) VALUES (${keys.map(() => "?").join(", ")})`)
             .run(...keys.map(key => cells[key]));
           inserted += 1;
@@ -435,6 +515,7 @@ export function createBackupReplaySession(store, { audit = "strict", sourceSchem
     let record;
     try { record = JSON.parse(line); }
     catch { throw new Error("Export line is not JSON"); }
+    if(resume&&trailer)throw Error("Resume complete snapshot has content after its trailer");
     if (record?.kind === "watermark") {
       if (watermark) throw new Error("Export has more than one watermark");
       restoreSourceSchemaVersion(record, sourceSchemaVersion);
@@ -450,6 +531,7 @@ export function createBackupReplaySession(store, { audit = "strict", sourceSchem
     }
     if (typeof record?.table !== "string" || !IDENT.test(record.table) || !record.row || typeof record.row !== "object" || Array.isArray(record.row))
       throw new Error("Export line is not a table row");
+    if(resume&&!watermark)throw Error("Resume requires watermark before source rows");
     // #3325: digest each loadable row as it streams past, before the skip
     // branch — finish() pins the whole stream against the trailer.
     digests.add(record.table, record.row);
@@ -507,9 +589,11 @@ export function createBackupReplaySession(store, { audit = "strict", sourceSchem
     if (abortResult) return abortResult;
     if (settled) return { cleaned: true, skipped: true };
     settled = true;
-    let cleanupError = null;
+    if(resume){try{withRestoreTransaction(store,()=>{assertSameResume();if(claimPermit)db.prepare(`UPDATE ${CLAIM_PERMIT_TABLE} SET enabled=0 WHERE singleton=1`).run();});db.exec("PRAGMA foreign_keys=ON");}catch(error){abortResult={cleaned:false,skipped:true,retained:true,error};return abortResult;}abortResult={cleaned:false,skipped:true,retained:true};return abortResult;}
+    let cleanupError = null,cleanupSucceeded=false;
     try {
       withRestoreTransaction(store, () => {
+        assertSameResume();
         // Children before parents (reverse topological order): the Worker
         // enforces foreign keys, so deleting a parent row while its child
         // rows remain fails the cleanup and leaves half-restored data.
@@ -517,13 +601,14 @@ export function createBackupReplaySession(store, { audit = "strict", sourceSchem
           withRestoreTableRows(db,table,()=>db.prepare(`DELETE FROM ${quoteIdent(table)}`).run());
         for(const table of cleared) if(db.prepare(`SELECT 1 FROM ${quoteIdent(table)} LIMIT 1`).get())throw Error("Restore cleanup left rows: "+table);
         if(db.prepare("SELECT 1 FROM rooms LIMIT 1").get())throw Error("Restore cleanup left rooms");
+        if(claimPermit)db.prepare(`UPDATE ${CLAIM_PERMIT_TABLE} SET enabled=0 WHERE singleton=1`).run();
         verifyCurrentRoomSchema(db);
         completeRestore(db);
       invalidateCurrentRoomSchema(db);
-      });
+      });cleanupSucceeded=true;
     } catch (error) { cleanupError = error; }
     try {
-      if (claimPermit) db.prepare(`UPDATE ${CLAIM_PERMIT_TABLE} SET enabled=0 WHERE singleton=1`).run();
+      if(!cleanupSucceeded&&claimPermit)withRestoreTransaction(store,()=>{assertSameResume();db.prepare(`UPDATE ${CLAIM_PERMIT_TABLE} SET enabled=0 WHERE singleton=1`).run();});
     } catch (error) { cleanupError ??= error; }
     try { db.exec("PRAGMA foreign_keys=ON"); } catch (error) { cleanupError ??= error; }
     // The caller reports a failed cleanup: the store was verified empty
@@ -554,10 +639,12 @@ export function createBackupReplaySession(store, { audit = "strict", sourceSchem
       // replay does — the tuples collected line by line are exactly the
       // rows verifyTrailer hashes.
       return withRestoreTransaction(store,()=>{
+      assertSameResume();
       if (trailer) verifyTrailer(trailer, new Map([["events", eventTuples]]));
       // #3325: the trailer's table digests pin the non-event rows the same
       // way; a mismatch aborts and wipes the replay like any other failure.
       const contentVerification = contentVerificationLevel(trailer, digests.finish());
+      if(resume){requireResumeSource(watermark,trailer,contentVerification);keyed.verify(counts,existing);}
       if (db.prepare("PRAGMA foreign_key_check").all().length) throw new Error("Restored store failed foreign key check");
       const events = db.prepare("SELECT count(*) AS n FROM events").get().n;
       if (events !== watermark.events) throw new Error("Export watermark does not match the restored event log");
@@ -596,7 +683,7 @@ export function createBackupReplaySession(store, { audit = "strict", sourceSchem
         recovery = auditRecovery(store);
         invitations = store.verifyInvitationAudit();
       } catch (error) {
-        if (audit !== "report" || restoredCurrentFormatPresent(db)) throw error;
+        if (resume || audit !== "report" || restoredCurrentFormatPresent(db)) throw error;
         auditResult = auditFailure(error);
       }
       db.exec("PRAGMA foreign_keys=ON");
@@ -604,7 +691,7 @@ export function createBackupReplaySession(store, { audit = "strict", sourceSchem
       completeRestore(db);
       invalidateCurrentRoomSchema(db);
       settled = true;
-      return { verified: true, trailer: trailer ? "verified" : "absent", contentVerification, writeProofs, events, tables: counts.size, backedUpAt: watermark.backedUpAt ?? null, skippedTables, sanitizedCells: cellTracker().report(), ...invitations, recovery, audit: auditResult };
+      return { verified: true, trailer: trailer ? "verified" : "absent", contentVerification, writeProofs, events, tables: counts.size, backedUpAt: watermark.backedUpAt ?? null, skippedTables, sanitizedCells: cellTracker().report(), ...(resume?{resumed:true}:{}), ...invitations, recovery, audit: auditResult };
       });
     } catch (error) {
       abort();
@@ -699,6 +786,7 @@ export async function operatorRestoreResponse(request, token, store) {
   if (!store) return jsonResponse(503, { error: { code: "unavailable", message: "Restore unavailable" } });
   // Explicit operator opt-in: ?audit=report lands a drifted backup with
   // the drift named on the result; anything else stays strict.
+  const resumeParam=url.searchParams.get("resume");if(url.searchParams.getAll("resume").length>1||(resumeParam!==null&&resumeParam!=="1"))return jsonResponse(422,{error:{code:"invalid_restore",message:"resume must be 1"}});const resume=resumeParam==="1";
   const auditParam = url.searchParams.get("audit");
   if (auditParam !== null && auditParam !== "strict" && auditParam !== "report")
     return jsonResponse(422, { error: { code: "invalid_restore", message: "audit must be strict or report" } });
@@ -720,18 +808,19 @@ export async function operatorRestoreResponse(request, token, store) {
   }
   let result;
   try {
-    result = replayNdjsonInto(ndjson, store, { audit: auditParam ?? "strict", sourceSchemaVersion });
+    result = replayNdjsonInto(ndjson, store, { audit: auditParam ?? "strict", sourceSchemaVersion, resume });
   } catch (error) {
     const message = error?.message ?? String(error);
     if (/non-empty/.test(message)) return jsonResponse(409, { error: { code: "restore_refused_nonempty", message: "Restore refuses a store that already holds rooms" } });
     if (/Export (is empty|line is not JSON|is missing its watermark|has more than one watermark|line is not a table row|has more than one trailer|trailer is malformed|BLOB cell|cell is an object|bytes do not match|names a table|row does not match)|sourceSchemaVersion|unrecognized placeholder/.test(message))
       return jsonResponse(422, { error: { code: "invalid_restore", message } });
-    if (/watermark does not match|torn|foreign key check|table digest does not match|trailer pins|does not pin|projection_corrupt|requires operator reconciliation/.test(message))
+    if (/Resume |watermark does not match|torn|foreign key check|table digest does not match|trailer pins|does not pin|projection_corrupt|requires operator reconciliation/.test(message))
       return jsonResponse(422, { error: { code: "restore_verification_failed", message } });
     return jsonResponse(500, { error: { code: "restore_failed", message: "Restore failed during replay" } });
   }
   return jsonResponse(200, {
     ok: true,
+    ...(result.resumed?{resumed:true}:{}),
     verified: result.verified,
     audit: result.audit,
     contentVerification: result.contentVerification,
@@ -780,6 +869,7 @@ export async function operatorRestoreFromBackupResponse(request, token, store, k
     return jsonResponse(503, { error: { code: "backup_unavailable", message: "No backup namespace is configured on this deployment" } });
   let key = url.searchParams.get("key");
   let auditMode = url.searchParams.get("audit");
+  const resumeParam=url.searchParams.get("resume");if(url.searchParams.getAll("resume").length>1||(resumeParam!==null&&resumeParam!=="1"))return jsonResponse(422,{error:{code:"invalid_restore",message:"resume must be 1"}});let resume=resumeParam==="1";
   const sourceParam = url.searchParams.get("sourceSchemaVersion");
   let sourceSchemaVersion = sourceParam === null ? null : sourceParam === "42" ? 42 : sourceParam === "43" ? 43 : NaN;
   try {
@@ -789,6 +879,7 @@ export async function operatorRestoreFromBackupResponse(request, token, store, k
       if (parsed && typeof parsed.key === "string") key = parsed.key;
       if (parsed && Object.hasOwn(parsed, "sourceSchemaVersion") && sourceParam === null) sourceSchemaVersion = parsed.sourceSchemaVersion;
       if (parsed && typeof parsed.audit === "string" && auditMode === null) auditMode = parsed.audit;
+      if(parsed&&Object.hasOwn(parsed,"resume")&&resumeParam===null){if(typeof parsed.resume!=="boolean")return jsonResponse(422,{error:{code:"invalid_restore",message:"resume must be boolean"}});resume=parsed.resume;}
     }
   } catch {
     return jsonResponse(400, { error: { code: "unreadable_body", message: "Could not read the restore body" } });
@@ -818,10 +909,11 @@ export async function operatorRestoreFromBackupResponse(request, token, store, k
 
   let session;
   try {
-    session = createBackupReplaySession(store, { audit: auditMode ?? "strict", sourceSchemaVersion });
+    session = createBackupReplaySession(store, { audit: auditMode ?? "strict", sourceSchemaVersion, resume });
   } catch (error) {
     const message = error?.message ?? String(error);
     if (/non-empty/.test(message)) return jsonResponse(409, { error: { code: "restore_refused_nonempty", message: "Restore refuses a store that already holds rooms" } });
+    if (/^Resume /.test(message)) return jsonResponse(422,{error:{code:"resume_refused",message}});
     return jsonResponse(500, { error: { code: "restore_failed", message: "Restore failed before replay" } });
   }
   const whole = createHash("sha256");
@@ -843,6 +935,7 @@ export async function operatorRestoreFromBackupResponse(request, token, store, k
     const result = session.finish();
     return jsonResponse(200, {
       ok: true,
+      ...(result.resumed?{resumed:true}:{}),
       verified: result.verified,
       audit: result.audit,
       contentVerification: result.contentVerification,
@@ -864,7 +957,7 @@ export async function operatorRestoreFromBackupResponse(request, token, store, k
     const message = error?.message ?? String(error);
     if (/Export (is empty|line is not JSON|is missing its watermark|has more than one watermark|line is not a table row|has more than one trailer|trailer is malformed|BLOB cell|cell is an object|bytes do not match|names a table|row does not match)|sourceSchemaVersion|unrecognized placeholder/.test(message))
       return jsonResponse(422, { error: { code: "invalid_restore", message, ...cleanupNote } });
-    if (/watermark does not match|torn|foreign key check|table digest does not match|trailer pins|does not pin|Backup (part|does not match)|projection_corrupt|requires operator reconciliation/.test(message))
+    if (/Resume |watermark does not match|torn|foreign key check|table digest does not match|trailer pins|does not pin|Backup (part|does not match)|projection_corrupt|requires operator reconciliation/.test(message))
       return jsonResponse(422, { error: { code: "restore_verification_failed", message, ...cleanupNote } });
     return jsonResponse(500, { error: { code: "restore_failed", message: "Restore failed during replay", ...cleanupNote } });
   }

@@ -5,9 +5,10 @@ import { build } from 'esbuild';
 import { Miniflare } from 'miniflare';
 import { HEALTH_PROBE_TIMEOUT_MS } from './health-probe.mjs';
 const origin = 'https://room.example.test';
-async function fixture(t, config) {
-  const bundle = await build({ entryPoints: [fileURLToPath(new URL('./health-probe-budget.test-fixture.mjs', import.meta.url))], bundle: true, write: false, format: 'esm', platform: 'neutral', external: ['node:*', 'cloudflare:*'] });
-  const mf = new Miniflare({ modules: true, script: bundle.outputFiles[0].text, compatibilityDate: '2026-07-30', compatibilityFlags: ['nodejs_compat'], bindings: { ROOM_ORIGIN: origin }, durableObjects: { ROOM: { className: 'BudgetProbe', useSQLite: true }, ACTUAL: { className: 'ObservedProjectRoom', useSQLite: true } } });
+const TEST_SOURCE = 'a'.repeat(40), TEST_BUILD = '2026-11-01T12:00:00.000Z';
+async function fixture(t, config, stamps = { sourceRevision: TEST_SOURCE, buildId: TEST_BUILD }) {
+  const bundle = await build({ entryPoints: [fileURLToPath(new URL('./health-probe-budget.test-fixture.mjs', import.meta.url))], bundle: true, write: false, format: 'esm', platform: 'neutral', external: ['node:*', 'cloudflare:*'], plugins: [{ name: 'synthetic-static-release-stamp', setup(build) { build.onLoad({ filter: /[\\/]server[\\/]version\.mjs$/ }, () => ({ contents: `export const SOURCE_REVISION=${JSON.stringify(stamps.sourceRevision)};export const BUILD_ID=${JSON.stringify(stamps.buildId)};export const PACKAGE_VERSION="0.1.0";`, loader: 'js' })); } }] });
+  const mf = new Miniflare({ modules: true, script: bundle.outputFiles[0].text, compatibilityDate: '2026-07-30', compatibilityFlags: ['nodejs_compat'], bindings: { ROOM_ORIGIN: origin }, durableObjects: { ROOM: { className: config.observationPeer === 'legacy' ? 'LegacyBudgetProbe' : 'BudgetProbe', useSQLite: true }, ACTUAL: { className: 'ObservedProjectRoom', useSQLite: true } } });
   t.after(() => mf.dispose());
   const fetch = (path, options) => mf.dispatchFetch(origin + path, options);
   await fetch('/configure', { method: 'POST', body: JSON.stringify(config) });
@@ -63,7 +64,7 @@ function assertObservation(row) {
   assert.doesNotMatch(JSON.stringify(row), /PRIVATE_|room.example|api\/|emailVerification/);
 }
 test('readiness observations distinguish shared callers and late RPC settlement without another probe', async t => {
-  const f = await fixture(t, { stalled: true });
+  const f = await fixture(t, { stalled: true, observationPeer: 'valid' });
   const get = f.fetch('/api/ready');
   await new Promise(resolve => setTimeout(resolve, 20));
   const head = f.fetch('/api/ready', { method: 'HEAD' });
@@ -87,6 +88,8 @@ test('readiness observations distinguish shared callers and late RPC settlement 
     await new Promise(resolve => setTimeout(resolve, 10));
   }
   assert.equal(rows.filter(row => row.stage === 'worker_rpc_settled' && row.outcome === 'ok').length, 1);
+  assert.equal(rows.find(row => row.stage === 'worker_rpc_settled').authoritySourceRevision, 'b'.repeat(40));
+  assert.equal(rows.find(row => row.stage === 'worker_rpc_settled').authorityDoElapsedMs, 3);
   assert.equal(rows.filter(row => row.stage === 'worker_response').length, 2, 'late settlement is not another response');
   assert.equal(await f.count(), 1);
   rows.forEach(assertObservation);
@@ -116,4 +119,64 @@ test('readiness logging failure preserves Worker success and original RPC error 
   const response = await f.fetch('/api/ready');
   assert.equal(response.status, 503); assert.equal((await response.json()).do.status, 'error');
   assert.equal(await f.count(), 2);
+});
+
+
+test('readiness provenance uses strict static stamps and refuses arbitrary stamp strings', async t => {
+  for (const stamps of [{sourceRevision:TEST_SOURCE,buildId:TEST_BUILD}, {sourceRevision:'PRIVATE_SOURCE',buildId:'PRIVATE_BUILD'}, {sourceRevision:TEST_SOURCE,buildId:'2026-02-31T12:00:00.000Z'}]) {
+    const f=await fixture(t,{},stamps);assert.equal((await f.fetch('/api/ready')).status,200);
+    const rows=await (await f.fetch('/observations')).json();
+    for(const row of rows) {
+      assert.equal(row.sourceRevision, stamps.sourceRevision === TEST_SOURCE ? TEST_SOURCE : null);
+      assert.equal(row.buildId, stamps.buildId === TEST_BUILD ? TEST_BUILD : null);
+      assert.doesNotMatch(JSON.stringify(row),/PRIVATE_/);
+    }
+  }
+});
+test('readiness provenance is opt-in on the actual DO and retains legacy shape and errors',async t=>{
+  const f=await fixture(t,{});
+  const legacy=await (await f.fetch('/actual?mode=ok')).json();
+  assert.deepEqual(legacy.result,{ok:true,emailVerification:'relaxed-no-mailer'});assert.equal(legacy.statements,1);
+  for(const mode of ['ok','paused','sql-error','emitter-error']) {
+    const value=await (await f.fetch('/actual?mode='+mode+'&diagnostics=1')).json();
+    assert.equal(value.statements,mode==='paused'?0:1);
+    if(mode==='sql-error'){assert.equal(value.originalError,true);continue;}
+    const diagnostic=value.result.readinessObservation;
+    assert.equal(diagnostic.sourceRevision,TEST_SOURCE);assert.equal(diagnostic.buildId,TEST_BUILD);
+    assert.equal(diagnostic.sqlOutcome,mode==='paused'?'not_run':'ok');
+    for(const key of ['sqlElapsedMs','doElapsedMs'])assert.ok(Number.isFinite(diagnostic[key])&&diagnostic[key]>=0);
+    if(mode==='emitter-error')assert.deepEqual(value.observations,[]);
+  }
+});
+test('readiness provenance validates new peers and preserves old or malicious peer public responses',async t=>{
+  for(const peer of ['legacy','valid','malicious']) {
+    const f=await fixture(t,{observationPeer:peer});const response=await f.fetch('/api/ready');
+    assert.equal(response.status,200);const body=await response.json();
+    assert.deepEqual({...body,do:{...body.do,ms:0}},{status:'ready',mode:'cloudflare-staging',emailVerification:'enforced',emailVerificationScope:'durable-object',do:{status:'ok',statusCode:200,ms:0}});
+    assert.doesNotMatch(JSON.stringify(body),/Observation|sourceRevision|buildId|PRIVATE_/);
+    const settled=(await (await f.fetch('/observations')).json()).find(row=>row.stage==='worker_rpc_settled');
+    assert.equal(settled.authorityObservation,peer==='valid'?'present':peer==='legacy'?'absent':'invalid');
+    assert.doesNotMatch(JSON.stringify(settled),/PRIVATE_/);
+    if(peer==='valid'){assert.equal(settled.authoritySourceRevision,'b'.repeat(40));assert.equal(settled.authoritySqlOutcome,'ok');assert.equal(settled.authorityDoElapsedMs,3);}
+  }
+});
+
+test('readiness provenance refuses each malformed callee field without altering readiness',async t=>{
+  const valid={sourceRevision:'b'.repeat(40),buildId:TEST_BUILD,sqlOutcome:'ok',sqlElapsedMs:1,doElapsedMs:3};
+  const f=await fixture(t,{});
+  for(const bad of [{sourceRevision:'PRIVATE_SOURCE'},{buildId:'PRIVATE_BUILD'},{sqlOutcome:'PRIVATE_OUTCOME'},{sqlElapsedMs:-1},{doElapsedMs:Number.MAX_VALUE},{extra:'PRIVATE_CONTENT'}]) {
+    await f.fetch('/configure',{method:'POST',body:JSON.stringify({observationPeer:'supplied',observationValue:{...valid,...bad}})});
+    assert.equal((await f.fetch('/api/ready')).status,200);
+    const settled=(await (await f.fetch('/observations')).json()).filter(row=>row.stage==='worker_rpc_settled').at(-1);
+    assert.equal(settled.authorityObservation,'invalid');assert.doesNotMatch(JSON.stringify(settled),/PRIVATE_/);
+    assert.ok(!Object.keys(settled).some(key=>key.startsWith('authority')&&key!=='authorityObservation'));
+  }
+});
+
+test('readiness provenance crosses actual Worker-to-ProjectRoom RPC without public diagnostic fields',async t=>{
+  const f=await fixture(t,{}),response=await f.fetch('/actual-ready');
+  assert.equal(response.status,200);const body=await response.json();assert.doesNotMatch(JSON.stringify(body),/Observation|sourceRevision|buildId/);
+  const rows=await (await f.fetch('/observations')).json(),settled=rows.find(row=>row.stage==='worker_rpc_settled');
+  assert.equal(settled.authorityObservation,'present');assert.equal(settled.authoritySourceRevision,TEST_SOURCE);assert.equal(settled.authorityBuildId,TEST_BUILD);assert.equal(settled.authoritySqlOutcome,'ok');
+  assert.equal(rows.filter(row=>row.stage==='do_entered').length,1);assert.equal(rows.filter(row=>row.stage==='sql_completed').length,1);
 });

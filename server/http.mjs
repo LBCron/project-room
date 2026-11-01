@@ -1785,7 +1785,7 @@ export function createRoomServer({ store, origin, assetRoot = new URL("../", imp
       // Native invitation consent is the default; a Room account is optional.
       const invitePage = (view, request) => renderInviteOAuthPage(res, view, request);
       if (url.pathname === "/oauth/authorize" && req.method === "GET" && inviteOAuth
-        && isMcpClient(url.searchParams.get("client_id")) && !isClaudeClient(url.searchParams.get("client_id")) && url.searchParams.get("connection") !== "account") {
+        && isMcpClient(url.searchParams.get("client_id")) && (url.searchParams.get("connection") === "invite" || !isClaudeClient(url.searchParams.get("client_id"))) && url.searchParams.get("connection") !== "account") {
         rate(`oauth-invite-start:${remoteAddress}`, 30);
         try {
           const started = inviteOAuth.begin(url.searchParams);

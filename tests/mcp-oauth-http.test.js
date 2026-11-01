@@ -459,3 +459,12 @@ test('in-flight consent cannot issue a code after browser account-slot logout',a
  const denied=await response;assert.equal(denied.status,401,denied.text);assert.equal(f.store.db.prepare('SELECT count(*) n FROM oauth_provider_codes').get().n,before);
  f.store.authenticateAccountSession=original;
 });
+
+test('Claude defaults to existing-account consent while explicit invitation and public discovery remain available',async t=>{
+ const f=await setup(t,{legacyOwned:true,client:CLAUDE});
+ const args={client_id:CLAUDE.clientId,redirect_uri:CLAUDE.redirectUris[0],scope:'rooms:read chat:read',state:'claude',code_challenge:challenge,code_challenge_method:'S256',resource};
+ const account=await fetch(f.base+'/oauth/authorize?'+new URLSearchParams(args));assert.equal(account.status,302);assert.match(account.headers.get('location'),/oauth=login/);
+ const invitation=await fetch(f.base+'/oauth/authorize?'+new URLSearchParams({...args,connection:'invite'}));assert.equal(invitation.status,200);
+ const init={jsonrpc:'2.0',id:1,method:'initialize',params:{protocolVersion:'2025-11-25',capabilities:{},clientInfo:{name:'Claude discovery',version:'1'}}};
+ const discovery=await fetch(f.base+'/mcp?auth=discovery',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(init)});assert.equal(discovery.status,200);assert.ok((await discovery.json()).result.capabilities.tools);
+});

@@ -2439,6 +2439,7 @@ this.slaBreachAlerts = new SlaBreachAlertJournal(this); // Task 26: durable in-a
       }
       const before = this.db.prepare('SELECT sequence,projection FROM rooms WHERE id=?').get(roomId);
       this.ensureIntegrityRoomState();
+      this.ensureIntegrityFailures();
       const proof = this.db.prepare('SELECT sequence,projection_hash AS hash FROM integrity_room_state WHERE room_id=?').get(roomId);
       const refreshProof = proof?.hash && proof.sequence === before.sequence
         && projectionContentHash(this.db,roomId,before.sequence,before.projection) === proof.hash

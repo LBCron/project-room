@@ -49,3 +49,11 @@ test('referral row, event, projection and proof stay atomic for standalone calle
  s.db.exec('DROP TRIGGER fail_referral_projection');assert.equal(s.referrals.record({roomId:'commons',referrerMemberId:'referrer',refereeMemberId:'referee',via:'invite'}).duplicate,false);
  assert.equal(s.db.prepare('SELECT count(*) AS n FROM referrals').get().n,1);
 });
+
+test('deferred-integrity runtime migrates before any failure journal has been created',t=>{
+ const s=new RoomStore(':memory:',{integrity:'deferred',maintainMessageCertification:true});t.after(()=>s.close());s.initialize(initialRoom());
+ assert.equal(s.db.prepare("SELECT 1 FROM sqlite_master WHERE name='integrity_failures'").get(),undefined);
+ const key=s.issueAccessKey('commons','owner');s.command(key,'commons',{id:'post',type:'message.posted',data:{messageId:'m',body:'Body'}});
+ while(!s.backfillMessages({limit:1000}).done){}s.checkMessagesParity({roomId:'commons'});
+ assert.equal(s.migrateMessageAuthority('commons').changed,true);assert.equal(s.room('commons').state.messages[0].body,'Body');
+});

@@ -86,3 +86,10 @@ test('unqualified delegation permission-strip dependency refuses before any tran
  const tables=['rooms','events','commands','current_room_records','current_room_record_proofs','operator_actions','membership_delegation_grants'];const rows=()=>Object.fromEntries(tables.map(table=>[table,s.db.prepare('SELECT * FROM '+table).all()])),before=rows();
  assert.throws(()=>rooms.transfer(owner,'commons',{toMemberId:'successor'}),e=>e.code==='current_room_context_unavailable'&&/Revoke membership delegation/.test(e.message));assert.deepEqual(rows(),before);
 });
+test('authorized replacement runtime resumes exact saved agent work after credential rotation and cold restart',t=>{
+ const dir=mkdtempSync(join(tmpdir(),'project-agent-replacement-'));t.after(()=>rmSync(dir,{recursive:true,force:true}));const filename=join(dir,'room.sqlite'),{s}=fixture(t,{filename});
+ const old=s.issueAccessKey('commons','worker');s.command(old,'commons',{id:'old-accept',type:'work.accepted',data:{workItemId:'task',expectedRevision:0}});
+ const current=s.issueAccessKey('commons','worker'),body=s.db.prepare("SELECT body FROM work_entities WHERE work_id='task'").get().body;assert.throws(()=>s.authenticate(old,'commons'),e=>e.status===401);s.close();
+ const cold=new RoomStore(filename);t.after(()=>cold.close());assert.equal(cold.db.prepare("SELECT body FROM work_entities WHERE work_id='task'").get().body,body);
+ assert.equal(cold.command(current,'commons',{id:'replacement-start',type:'work.started',data:{workItemId:'task',expectedRevision:1}}).event.actorId,'worker');
+});

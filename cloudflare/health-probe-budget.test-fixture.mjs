@@ -33,12 +33,17 @@ export class BudgetProbe extends DurableObject {
     if (config.error) throw new Error('fixture RPC failure');
     return config;
   }
-  async probeStorage() { const config = await this.result(); return { ok: config.ok !== false, emailVerification: 'enforced' }; }
+  async probeStorage(request) {
+    const config = await this.result(), result = { ok: config.ok !== false, emailVerification: 'enforced' };
+    if (request === 'readiness-observation-v1' && config.observationPeer === 'valid') result.readinessObservation = {sourceRevision:'b'.repeat(40),buildId:'2026-11-01T12:01:00.000Z',sqlOutcome:'ok',sqlElapsedMs:1,doElapsedMs:3};
+    if (config.observationPeer === 'malicious') result.readinessObservation = {sourceRevision:'PRIVATE_SOURCE',buildId:'PRIVATE_BUILD',sqlOutcome:'PRIVATE_OUTCOME',sqlElapsedMs:-1,doElapsedMs:Infinity,extra:'PRIVATE_CONTENT'};
+    return result;
+  }
   async readJobHealth() { await this.result(); return { schema: 'room.job-health/1', status: 'ok', jobs: [] }; }
   unblock() { this.release?.(); }
 }
 export class ObservedProjectRoom extends ProjectRoom {
-  exercise(mode) {
+  exercise(mode, diagnostics) {
     observations.length = 0;
     const originalPrepare = this.store.db.prepare;
     const originalPaused = this.paused;
@@ -52,7 +57,7 @@ export class ObservedProjectRoom extends ProjectRoom {
     this.paused = mode === 'paused';
     failTelemetry = mode === 'emitter-error';
     try {
-      const result = this.probeStorage();
+      const result = this.probeStorage(diagnostics ? 'readiness-observation-v1' : undefined);
       return { result, statements, observations: [...observations] };
     } catch (error) {
       return { originalError: error === sentinel, statements, observations: [...observations] };
@@ -68,7 +73,7 @@ export default {
     const path = new URL(request.url).pathname, stub = env.ROOM.getByName('invite-only-pilot');
     if (path === '/observations') return Response.json(observations);
     if (path === '/telemetry-failure') { failTelemetry = (await request.json()).enabled; return new Response('configured'); }
-    if (path === '/actual') return Response.json(await env.ACTUAL.getByName('actual').exercise(new URL(request.url).searchParams.get('mode')));
+    if (path === '/actual') return Response.json(await env.ACTUAL.getByName('actual').exercise(new URL(request.url).searchParams.get('mode'),new URL(request.url).searchParams.get('diagnostics')==='1'));
     if (path === '/configure') { await stub.configure(await request.json()); return new Response('configured'); }
     if (path === '/count') return Response.json({ count: await stub.count() });
     if (path === '/unblock') { await stub.unblock(); return new Response('released'); }

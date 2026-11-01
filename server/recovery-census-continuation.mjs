@@ -20,7 +20,7 @@ export function validateRecoveryCensus(value){
   ||typeof value.roomAfter!=='string'||Buffer.byteLength(value.roomAfter)>128||value.roomId!==null&&(!validId(value.roomId))
   ||typeof value.workAfter!=='string'||Buffer.byteLength(value.workAfter)>200
   ||!['requestAfter','privacyAfter','privacyLinkAfter','messageAfterId','archiveAfter','historyAfter'].every(key=>typeof value[key]==='string'&&Buffer.byteLength(value[key])<=200)||value.privacyWork!==null&&(typeof value.privacyWork!=='string'||Buffer.byteLength(value.privacyWork)>200)
-  ||typeof value.historyJoinFound!=='boolean'||value.historyMember!==null&&(typeof value.historyMember!=='string'||Buffer.byteLength(value.historyMember)>200)||typeof value.historyJoinAt!=='string'||Buffer.byteLength(value.historyJoinAt)>128
+  ||typeof value.historyJoinFound!=='boolean'||value.historyMember!==null&&(typeof value.historyMember!=='string'||Buffer.byteLength(value.historyMember)>200)||typeof value.historyJoinAt!=='string'||Buffer.byteLength(value.historyJoinAt)>RESTORE_AUDIT_UNIT_BYTES
   ||typeof value.domainAfter!=='string'||Buffer.byteLength(value.domainAfter)>64||typeof value.keyAfter!=='string'||Buffer.byteLength(value.keyAfter)>200)fail();
  if(value.privacyValue!==null){validateWorkPrivacy(value.privacyValue);if(Buffer.byteLength(JSON.stringify(value.privacyValue))>RESTORE_AUDIT_UNIT_BYTES)fail();}
  if((value.privacyWork===null)!==(value.privacyValue===null))fail();
@@ -53,15 +53,18 @@ export function advanceRecoveryCensus(store,restoreId,previous){
      if(p.stage==='history_events'){
       if(scratch.remaining<2)return false;
       const scalar=db.prepare("SELECT rowid,sequence,length(CAST(json_extract(body,'$.at') AS BLOB)) at_bytes,length(CAST(json_extract(body,'$.id') AS BLOB)) id_bytes,length(CAST(json_extract(body,'$.data.messageId') AS BLOB)) message_bytes,length(CAST(json_extract(body,'$.data.memberId') AS BLOB)) member_bytes,length(CAST(json_extract(body,'$.type') AS BLOB)) type_bytes FROM events WHERE room_id=? AND sequence>? ORDER BY sequence LIMIT 1").get(p.roomId,p.historySequence);
-      if(!scalar){p.stage='history_members';continue;}
-      if(!Number.isSafeInteger(scalar.sequence)||scalar.sequence<1||scalar.at_bytes>128||scalar.id_bytes>200||scalar.message_bytes>200||scalar.member_bytes>200||scalar.type_bytes>100)fail();
-      const estimate=Object.entries(scalar).filter(([key])=>key.endsWith('_bytes')).reduce((sum,[,value])=>sum+(value??0),0)+4096;if(units&&bytes+estimate>4*1024*1024)return false;
+      if(!scalar){p.stage='history_members';return false;}
+      if(!Number.isSafeInteger(scalar.sequence)||scalar.sequence<1||scalar.id_bytes>200||scalar.message_bytes>200||scalar.member_bytes>200||scalar.type_bytes>100)fail();
+      let estimate=Object.entries(scalar).filter(([key])=>key.endsWith('_bytes')).reduce((sum,[,value])=>sum+(value??0),0)+4096;if(units&&bytes+estimate>4*1024*1024)return false;
       const row=db.prepare("SELECT sequence,json_extract(body,'$.at') at,json_extract(body,'$.type') type,json_extract(body,'$.data.memberId') member_id,CASE WHEN json_extract(body,'$.data.active') IN (0,1) THEN json_extract(body,'$.data.active') ELSE NULL END active,json_extract(body,'$.id') id,json_extract(body,'$.data.messageId') messageId FROM events WHERE rowid=?").get(scalar.rowid);
-      if(typeof row.at==='string')scratch.put('history',p.roomId,'eventAt',row.at,{id:row.id,messageId:row.messageId},row.sequence);
       if([EVENT_TYPES.MEMBER_ADDED,EVENT_TYPES.MEMBER_JOINED_VIA_INVITATION,EVENT_TYPES.MEMBER_ACCESS_CHANGED].includes(row.type)&&typeof row.member_id==='string'){
-       const previous=scratch.get('history',p.roomId,'activation',row.member_id)??{active:false,row:null};
-       const entry={sequence:row.sequence,at:row.at,type:row.type,active:row.active};scratch.set('history',p.roomId,'activation',row.member_id,advanceHistoryActivation(previous,entry));
+       estimate+=recordInputBytes(db,p.roomId,'members',row.member_id)+recordInputBytes(db,p.roomId,'metadata','room');if(units&&bytes+estimate>4*1024*1024)return false;
+       const member=reader.record('members',row.member_id),room=reader.record('metadata','room');
+       if(member!==undefined&&memberHistoryVisibility({room,members:{[row.member_id]:member}},row.member_id)==='since_join'){
+        const previous=scratch.get('history',p.roomId,'activation',row.member_id)??{active:false,row:null},entry={sequence:row.sequence,at:row.at,type:row.type,active:row.active};scratch.set('history',p.roomId,'activation',row.member_id,advanceHistoryActivation(previous,entry));
+       }
       }
+      if(typeof row.at==='string')scratch.put('history',p.roomId,'eventAt',row.at,{id:row.id,messageId:row.messageId},row.sequence);
       p.historySequence=row.sequence;p.units++;p.bytes+=estimate;units++;bytes+=estimate;continue;
      }
      if(p.stage==='history_members'){

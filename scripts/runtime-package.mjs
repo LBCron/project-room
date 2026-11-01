@@ -318,6 +318,7 @@ optional.push("connectors/muse.md"); // Muse custom-connector brief (served at /
 optional.push("server/account-login-methods.mjs"); // Multi-method login model (imported by server/store.mjs)
 optional.push("server/account-deletion.mjs"); // RC-2026-09-19-078: deletion executor (imported by server/http.mjs; imports the src planner below)
 optional.push("server/operator-auth.mjs", "server/operator-actions.mjs", "server/purge-registry.mjs", "server/operator-purge.mjs", "server/operator-room-purge.mjs", "server/operator-status.mjs", "server/operator-parity-diagnostics.mjs", "server/operator-legacy-message-repair.mjs", "server/operator-routes.mjs", "server/operator-projection-repair.mjs", "server/operator-rooms.mjs"); // CP-ADMIN-0: operator auth, purge, and status (imported by server/http.mjs and server/store.mjs); projection repair and operator-rooms (MGMT-PANEL Slice 1) imported by server/operator-routes.mjs; operator-room-purge (MGMT-PANEL Slice 2 panel wrapper) imported by server/operator-routes.mjs
+optional.push("server/operator-legacy-session-repair.mjs", "server/legacy-session-replay.mjs"); // Explicit bounded historical reconciliation, imported by operator-legacy-message-repair.mjs.
 optional.push("src/account-deletion.mjs"); // RC-2026-09-19-078: pure purge planner (imported by server/account-deletion.mjs)
 optional.push("server/account-passkeys.mjs"); // Passkey auth wiring (slice 5; imported by server/http.mjs)
 optional.push("src/passkey-login.mjs"); // WebAuthn logic (imported by server/account-passkeys.mjs)
@@ -383,7 +384,7 @@ optional.push("server/spend-pricing.mjs", "server/routes/spend-pricing.mjs"); //
 optional.push("server/room-flood-guard.mjs"); // per (room, member) chat post budget (imported by server/store.mjs)
 optional.push("server/membership-delegation.mjs"); // RC-2026-09-18-038: owner-granted membership administration (imported by server/store.mjs)
 optional.push("server/usage-summary.mjs");
-optional.push("server/operator-message-authority.mjs", "server/operator-archive.mjs", "server/operator-qa-retirement.mjs"); // operator archive door for the projection cap (imported by server/operator-routes.mjs)
+optional.push("server/operator-attachment-index.mjs", "server/operator-message-authority.mjs", "server/operator-archive.mjs", "server/operator-qa-retirement.mjs"); // operator archive door for the projection cap (imported by server/operator-routes.mjs)
 optional.push("server/store-relief.mjs"); // store-growth automatic projection relief (imported by server/jobs.mjs)
 optional.push("server/channel-adapters/telegram-config.mjs", "server/channel-adapters/telegram-transport.mjs", "scripts/telegram-set-webhook.mjs", "scripts/telegram-rotate-webhook.mjs");
 optional.push("server/receipts-page.mjs", "server/receipts-live.mjs"); // public receipts page + live room reader (imported by server/http.mjs)

@@ -1,3 +1,4 @@
+import { savedHistoricalReplayCheckpoint, SavedHistoricalReplayError } from './historical-replay-contract.mjs';
 import { assertMessageWrite, recordMessageWrite, servingProofDrift, messageProofMatches, MESSAGE_PROOF_SELECT, MESSAGE_PROOF_FIELDS } from './write-integrity.mjs';
 import { writeMessageReplaySnapshot, discardMessageReplaySnapshot, decodeMessageReplaySnapshot } from './message-replay-snapshot.mjs';
 import { hydrateProjection, storedProjection } from "./projection-at-rest.mjs";
@@ -1045,11 +1046,26 @@ function refreshStaleBlocks(store, freshRooms = new Map(), { deadline = Infinity
   }
 }
 
-function loadState(db, roomId, cursor) {
+function loadState(store, room, cursor, budget, admitState) {
+  const db = store.db, roomId = room.id;
   if (cursor && typeof cursor.state_json === "string" && Number.isInteger(cursor.state_seq) && cursor.state_seq >= 0) {
     try { return { state: decodeMessageReplaySnapshot(db, roomId, cursor.state_json), seq: cursor.state_seq }; }
     catch { /* Rebuild a damaged staging snapshot through bounded chunks below. */ }
   }
+  const recovered = store.transaction(() => {
+    const saved = savedHistoricalReplayCheckpoint(db, roomId, room.sequence, budget);
+    if (!saved || saved.budgetExceeded) return saved;
+    admitState?.(saved.state);
+    // Restore only derived staging progress. Serving rows and their proofs are
+    // unchanged; parity remains unverified until the ordinary comparison.
+    saveCursor(db, roomId, saved.sequence, saved.eventId, saved.state, saved.json);
+    if (!cursor || cursor.applied_seq < saved.sequence) {
+      db.prepare('UPDATE messages_backfill_cursor SET applied_seq=?,applied_event_id=? WHERE room_id=?')
+        .run(saved.sequence,saved.eventId,roomId);
+    }
+    return saved;
+  });
+  if (recovered) return { ...recovered, seq: recovered.sequence, restored: !recovered.budgetExceeded };
   // Never eagerly replay to applied_seq here. That prefix can contain years of
   // history and previously ran before fillRoom's event/deadline budget. Keep
   // serving rows and applied_seq intact; saveCursor publishes only staging
@@ -1203,13 +1219,14 @@ function publishRoom(store, roomId, sequence, state, admitState = null) {
 function fillRoom(store, room, budget, expired, yieldBetween, admitState = null) {
   const db = store.db;
   let cursor = readCursor(db, room.id, true);
-  if (cursor && !cursorMatches(db, room.id, cursor, room.sequence)) {
-    resetRoom(store, room.id);
-    cursor = null;
-  }
-  let { state, seq } = loadState(db, room.id, cursor);
+  if (expired()) return { events: 0, stopped: true, budgetExceeded: true, replaySeq: cursor?.state_seq ?? 0, freshBlock: false };
+  const invalidCursor = cursor && !cursorMatches(db, room.id, cursor, room.sequence);
+  const loaded = loadState(store, room, invalidCursor ? null : cursor, budget, admitState);
+  if (loaded.budgetExceeded) return { events: 0, stopped: true, budgetExceeded: true, replaySeq: cursor?.state_seq ?? 0, freshBlock: false };
+  if (invalidCursor && !loaded.restored) { resetRoom(store, room.id); cursor = null; }
+  let { state, seq } = loaded;
   admitState?.(state);
-  let events = 0;
+  let events = loaded.events ?? 0;
   let freshBlock = false;
   while (events < budget) {
     if (expired()) return { events, stopped: true, budgetExceeded: true, replaySeq: seq, freshBlock };
@@ -1409,7 +1426,9 @@ export function runMessagesBackfill(store, { limit = MESSAGES_BACKFILL_BATCH, de
       wrote = fillRoom(store, room, cap - events, () => Date.now() > deadline, guardedYield);
     } catch (error) {
       if (yieldError) throw yieldError;
-      if (!isRoomDataError(error)) throw error;
+      // Invalid saved evidence is an authority refusal, never a fresh event
+      // diagnosis or permission to rewrite quarantine state.
+      if (error instanceof SavedHistoricalReplayError || !isRoomDataError(error)) throw error;
       const block = diagnoseFreshBlock(store.db, room.id);
       if (!block) throw error; // not a stored-event failure: propagate as before
       // Park the room durably (later calls skip it until the block goes

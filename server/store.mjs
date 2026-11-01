@@ -1,3 +1,4 @@
+import { savedHistoricalReplayCheckpoint } from './historical-replay-contract.mjs';
 import { bootstrapLegacyWriteProofs, configureWriteIntegrity, beginWriteProofFrame, endWriteProofFrame, publishProjectionWrites, projectionDigest, projectionContentHash, servingContentProof, servingProofDrift, assertProjectionWrite, assertMessageWrite, recordMessageWrite, withVerifiedRoomReconstruction } from './write-integrity.mjs';
 const OPERATOR_QA_ARCHIVE = Symbol("operator QA room archive");
 import { authenticateMcpOAuthRequest } from './mcp-oauth.mjs';
@@ -4216,6 +4217,7 @@ this.slaBreachAlerts = new SlaBreachAlertJournal(this); // Task 26: durable in-a
     return this._replayRoom(roomId, through ?? this.room(roomId).sequence);
   }
   _replayRoom(roomId, through) {
+    return this.readTransaction(() => {
     const head = this.db.prepare("SELECT sequence FROM rooms WHERE id=?").get(roomId);
     if (!head) fail(404, "room_not_found", "Room not found");
     const room = { sequence: head.sequence };
@@ -4237,6 +4239,10 @@ this.slaBreachAlerts = new SlaBreachAlertJournal(this); // Task 26: durable in-a
         console.error(`projection checkpoint for room ${roomId} is unreadable (${error.message}); replaying the full event history`);
       }
     }
+    if (sequence === 0) {
+      const saved = savedHistoricalReplayCheckpoint(this.db, roomId, through);
+      if (saved) { state = saved.state; sequence = saved.sequence; }
+    }
     // Work controls predate some stored projections and their checkpoints:
     // backfill the round/tool-call counters, suspension cause, and receipt
     // segments before replaying, so a checkpoint with no later events still
@@ -4254,6 +4260,7 @@ this.slaBreachAlerts = new SlaBreachAlertJournal(this); // Task 26: durable in-a
     })());
     if (sequence !== through) throw new Error("Event sequence does not reach the room projection");
     return { sequence, state: compact(state) };
+    });
   }
   // Administrative bootstrap, never exposed over HTTP. Historical demo events are test fixtures only.
   initialize(events) {

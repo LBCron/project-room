@@ -37,6 +37,106 @@ const BOND_DM_DATA_SHAPES = {
 // migrates surface by surface under the tracking issue filed with this PR.
 // ---------------------------------------------------------------------------
 export const ERROR_REGISTRY = {
+  // Bounded operator authority: no reset, limit increase or automatic retry.
+  invalid_authority_request: {
+    "status": "action_required",
+    "hint": "Operator authority request fields or direction are invalid.",
+    "next": [
+      {
+        "command": "Use the documented operator authority fields and direction. Do not broaden the selected room."
+      }
+    ],
+    "catalog": {
+      "http": 422,
+      "retry": "fix+resend",
+      "recovery": "Use the documented operator authority fields and direction. Do not broaden the selected room."
+    }
+  },
+  authority_plan_required: {
+    "status": "action_required",
+    "hint": "An authority mutation needs its exact plan hash; planning accepts no hash.",
+    "next": [
+      {
+        "command": "Obtain a fresh operator plan and preserve its exact hash with the mutation input."
+      }
+    ],
+    "catalog": {
+      "http": 422,
+      "retry": "fix+resend",
+      "recovery": "Obtain a fresh operator plan and preserve its exact hash with the mutation input."
+    }
+  },
+  request_id_required: {
+    "status": "action_required",
+    "hint": "An authority mutation needs a stable request ID.",
+    "next": [
+      {
+        "command": "Supply a stable request ID and preserve all input on unknown outcomes. Never change intent under that ID."
+      }
+    ],
+    "catalog": {
+      "http": 422,
+      "retry": "fix+resend",
+      "recovery": "Supply a stable request ID and preserve all input on unknown outcomes. Never change intent under that ID."
+    }
+  },
+  authority_budget_exceeded: {
+    "status": "action_required",
+    "hint": "Authority input or hydrated output exceeds the qualified bounds.",
+    "next": [
+      {
+        "command": "No conversion is claimed. Use a separately qualified bounded continuation; do not increase limits or split content to evade admission."
+      }
+    ],
+    "catalog": {
+      "http": 409,
+      "retry": "no",
+      "recovery": "No conversion is claimed. Use a separately qualified bounded continuation; do not increase limits or split content to evade admission."
+    }
+  },
+  authority_archive_not_supported: {
+    "status": "action_required",
+    "hint": "Archived history is outside the qualified authority conversion path.",
+    "next": [
+      {
+        "command": "Keep the existing representation and use a separately qualified archive migration."
+      }
+    ],
+    "catalog": {
+      "http": 409,
+      "retry": "no",
+      "recovery": "Keep the existing representation and use a separately qualified archive migration."
+    }
+  },
+  authority_not_ready: {
+    "status": "action_required",
+    "hint": "Replay, checkpoint or exact-head parity needs reconciliation.",
+    "next": [
+      {
+        "command": "Resolve the named replay, checkpoint or parity cause through its qualified path, then obtain a fresh plan. Do not reset or certify damaged source."
+      }
+    ],
+    "catalog": {
+      "http": 409,
+      "retry": "no",
+      "recovery": "Resolve the named replay, checkpoint or parity cause through its qualified path, then obtain a fresh plan. Do not reset or certify damaged source."
+    }
+  },
+  authority_integrity_failure: {
+    "status": "action_required",
+    "hint": "Stored content differs from independent serving proof.",
+    "next": [
+      {
+        "command": "Stop conversion and reconcile through the qualified recovery path. Retrying or minting a new baseline is not repair."
+      }
+    ],
+    "catalog": {
+      "http": 409,
+      "retry": "no",
+      "recovery": "Stop conversion and reconcile through the qualified recovery path. Retrying or minting a new baseline is not repair."
+    }
+  },
+
   invalid_work_page: {
     "status": "action_required",
     "hint": uiText("agentError.invalid_work_page.hint"),

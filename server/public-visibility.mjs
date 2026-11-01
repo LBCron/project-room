@@ -15,6 +15,30 @@
 //
 //   visible ⟺ NOT operator-unpublished
 //             AND NOT owner-hidden
+//             AND NOT authoritatively opted out
+//
+// Authoritatively opted out: the receipt's room has a RECORDED
+// public-receipts setting of enabled=false (room.public_receipts_set —
+// the in-room "public receipts" toggle sends exactly this event).
+// Public reads never touch rooms.projection (the read model's
+// founding invariant, pinned by tests/public-read-model.test.js), so
+// this leg reads the setting's read-model copy,
+// room_public_receipts_setting, which syncRoomPublication rewrites in
+// the same transaction as every recorded setting change (and the
+// backfill re-mirrors for every room, previous:null included). Before
+// this leg, stored rows consulted only the operator unpublish and the
+// directory toggle, so a public-work (pwr_) row — which no delete
+// path can remove — kept serving on every surface after the owner
+// opted out, and a drifted wcr_/wir_ row whose opt-out edge was
+// missed served forever (R08-F1/F3). Read-time and level-triggered:
+// the row's presence in public_receipts no longer decides anything,
+// so a stale row cannot outlive the recorded setting, and a later
+// recorded opt-in serves the row again with no rewrite. A room that
+// never recorded a setting keeps the directory toggle's default
+// (public-work receipts are public unless opted out); only a
+// recorded false hides. The deciding room is the receipt's task room
+// for a public-work receipt, else its room_id, else its origin
+// room — the same attribution the owner leg uses.
 //
 // Operator-unpublished: a public_unpublish row of kind 'receipt' naming
 // the receipt, or kind 'room' naming either of the receipt's rooms
@@ -99,11 +123,37 @@ export function ownerHiddenReceiptSql({ taskRoomLeg = true } = {}) {
   return taskRoomLeg ? OWNER_HIDDEN_RECEIPT_SQL : OWNER_HIDDEN_ORIGIN_RECEIPT_SQL;
 }
 
+// Authoritative opt-out: the deciding room's recorded public-receipts
+// setting is enabled=false in the setting's read-model copy
+// (room_public_receipts_setting — syncRoomPublication maintains it in
+// the same transaction as the recorded change; public reads never
+// touch rooms.projection).
+export const RECORDED_OPTOUT_RECEIPT_SQL = `NOT EXISTS (
+  SELECT 1 FROM room_public_receipts_setting s
+  WHERE s.enabled = 0
+    AND s.room_id = COALESCE(
+          (SELECT pwt.room_id FROM public_work_receipts pwr
+             JOIN public_work_tasks pwt ON pwt.offer_id = pwr.offer_id
+             WHERE pwr.receipt_id = public_receipts.id),
+          public_receipts.room_id, public_receipts.origin_room_id))`;
+
+// The opt-out leg without the task-record resolution, for stores that
+// predate the public-work tables (same degrade as the owner leg).
+export const RECORDED_OPTOUT_ORIGIN_RECEIPT_SQL = `NOT EXISTS (
+  SELECT 1 FROM room_public_receipts_setting s
+  WHERE s.enabled = 0
+    AND s.room_id = COALESCE(public_receipts.room_id, public_receipts.origin_room_id))`;
+
+export function recordedOptOutReceiptSql({ taskRoomLeg = true } = {}) {
+  return taskRoomLeg ? RECORDED_OPTOUT_RECEIPT_SQL : RECORDED_OPTOUT_ORIGIN_RECEIPT_SQL;
+}
+
 // The composed SQL predicate over a public_receipts row.
-export function receiptVisibilitySql({ ownerToggle = true, taskRoomLeg = true } = {}) {
-  return ownerToggle
-    ? `${OPERATOR_HIDDEN_RECEIPT_SQL} AND ${ownerHiddenReceiptSql({ taskRoomLeg })}`
-    : OPERATOR_HIDDEN_RECEIPT_SQL;
+export function receiptVisibilitySql({ ownerToggle = true, taskRoomLeg = true, recordedOptOut = false } = {}) {
+  const legs = [OPERATOR_HIDDEN_RECEIPT_SQL];
+  if (ownerToggle) legs.push(ownerHiddenReceiptSql({ taskRoomLeg }));
+  if (recordedOptOut) legs.push(recordedOptOutReceiptSql({ taskRoomLeg }));
+  return legs.join(" AND ");
 }
 
 // Whether the public-work tables the task leg reads can be read here.
@@ -118,12 +168,27 @@ export function publicWorkTablesReadable(db) {
   }
 }
 
+// Whether the recorded setting's read-model copy can be read here at
+// all: a store predating room_public_receipts_setting carries no
+// recorded setting the public read may consult, so the opt-out leg
+// cannot apply there.
+export function recordedSettingReadable(db) {
+  try {
+    db.prepare("SELECT room_id, enabled FROM room_public_receipts_setting LIMIT 0").all();
+    return true;
+  } catch (error) {
+    if (!/no such (column|table)/i.test(error?.message ?? "")) throw error;
+    return false;
+  }
+}
+
 // The composed predicate for a concrete store, with both schema probes
 // applied — the form consumers use.
 export function receiptVisibilitySqlFor(db) {
   return receiptVisibilitySql({
     ownerToggle: ownerToggleReadable(db),
     taskRoomLeg: publicWorkTablesReadable(db),
+    recordedOptOut: recordedSettingReadable(db),
   });
 }
 
@@ -148,8 +213,8 @@ export function ownerToggleReadable(db) {
 // the U5 obligation, pinned by the conformance corpus. For the lot rule
 // the settingEnabled fact is the AUTHORITATIVE recorded setting (the
 // room projection's publicReceipts leg), never a mirror of it.
-export function receiptVisibleFromFacts({ unpublished = false, receiptsPrivate = false } = {}) {
-  return !unpublished && !receiptsPrivate;
+export function receiptVisibleFromFacts({ unpublished = false, receiptsPrivate = false, recordedOptOut = false } = {}) {
+  return !unpublished && !receiptsPrivate && !recordedOptOut;
 }
 
 export function lotVisibleFromFacts({ unpublished = false, settingEnabled = null, receiptsPrivate = false } = {}) {
@@ -234,6 +299,25 @@ export function hiddenReceiptIds(db, receiptIds) {
       } catch { return new Set(receiptIds); } // readable a moment ago, unreadable now: fail closed
     }
   }
+  // The authoritative opt-out leg: a deciding room whose recorded
+  // setting is enabled=false hides the receipt, whatever the
+  // public_receipts row or the directory toggle says (R08-F1). The
+  // deciding room is the task room, else room_id, else origin — the
+  // SQL twin's attribution. The fact is read from the setting's
+  // read-model copy (mirroredReceiptsSetting), as the SQL twin does;
+  // a store that cannot produce one proves no opt-out.
+  const optedOutRooms = new Set();
+  {
+    const candidates = new Set();
+    for (const row of rowsById.values()) {
+      if (row.taskRoom) candidates.add(row.taskRoom);
+      if (row.roomId) candidates.add(row.roomId);
+      if (row.origin) candidates.add(row.origin);
+    }
+    for (const roomId of candidates) {
+      if (mirroredReceiptsSetting(db, roomId) === 0) optedOutRooms.add(roomId);
+    }
+  }
   for (const id of receiptIds) {
     const row = rowsById.get(id);
     if (!row || unpublishedReceipts.has(id)) { hidden.add(id); continue; }
@@ -241,6 +325,8 @@ export function hiddenReceiptIds(db, receiptIds) {
       hidden.add(id);
       continue;
     }
+    const decidingRoom = row.taskRoom ?? row.roomId ?? row.origin;
+    if (decidingRoom && optedOutRooms.has(decidingRoom)) { hidden.add(id); continue; }
     const toggleRooms = [];
     if (row.taskRoom) toggleRooms.push(row.taskRoom);
     if (row.origin && row.origin !== row.taskRoom) toggleRooms.push(row.origin);
@@ -282,8 +368,10 @@ export function recordedReceiptsSetting(db, roomId) {
   }
 }
 
-// The write-time mirror of the recorded setting, kept as the fallback
-// record for stores with no rooms table (see recordedReceiptsSetting).
+// The write-time mirror of the recorded setting: the fallback record
+// for stores with no rooms table (see recordedReceiptsSetting), and
+// the fact the stored-row opt-out leg reads — public reads consult
+// this copy, never rooms.projection.
 function mirroredReceiptsSetting(db, roomId) {
   try {
     const row = db.prepare("SELECT enabled FROM room_public_receipts_setting WHERE room_id=?").get(roomId);
@@ -298,6 +386,19 @@ function mirroredReceiptsSetting(db, roomId) {
 // drift — a stale, missing, or wrongly-polarity
 // room_public_receipts_setting row — cannot change the verdict
 // wherever the authoritative record can be read (B7-2-F1/F2, B2-4-F1).
+// Whether one room's owner recorded the authoritative public-receipts
+// opt-out (room.public_receipts_set with enabled:false), read from the
+// setting's read-model copy — the same fact the mirror surfaces'
+// opt-out leg applies, so the dedicated public-work receipt door and
+// the mirror can never disagree about an opt-out. Only a recorded
+// false counts: never-recorded is not an opt-out, and a store that
+// cannot produce the recorded setting proves none. The door composed
+// the directory toggle alone before (R08-F1).
+export function recordedReceiptsOptOut(db, roomId) {
+  if (typeof roomId !== "string" || !roomId) return false;
+  return mirroredReceiptsSetting(db, roomId) === 0;
+}
+
 export function lotReceiptVisible(db, { id, roomId } = {}) {
   if (typeof id !== "string" || !id || typeof roomId !== "string" || !roomId) return false;
   const unpublished = isUnpublished(db, "receipt", id) || isUnpublished(db, "room", roomId);

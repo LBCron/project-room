@@ -100,3 +100,17 @@ test('growing members, channels and work maps partition into bounded addressed e
     assert.ok(result.maxFetched<2048);assert.ok(result.maxControl<=REPLAY_CODEC_CONTROL_BYTES);
   }
 });
+
+test('growing archive retainedIds partition by exact nested array position without token growth',()=>{
+  const retainedIds=Array.from({length:6000},(_,i)=>'message-'+String(i).padStart(6,'0')+'-x'.repeat(12));
+  const source={room:{id:'synthetic'},messagesArchive:{throughSeq:9000,count:3000,retainedIds},messages:[]};
+  assert.ok(Buffer.byteLength(JSON.stringify(retainedIds))>131072);
+  const result=scan(JSON.stringify(source),4093,3);
+  const entries=result.out.filter(x=>x.kind==='metadata-index');
+  assert.equal(entries.length,retainedIds.length,'RED: retained identities must be independently addressed instead of one oversized archive token');
+  assert.deepEqual(entries.map(x=>x.value),retainedIds);
+  assert.deepEqual(entries.map(x=>x.index),retainedIds.map((_,i)=>i));
+  assert.equal(result.out.find(x=>x.kind==='metadata-array').entries,retainedIds.length);
+  assert.equal(result.out.find(x=>x.kind==='metadata-map'&&x.key==='messagesArchive').entries,3);
+  assert.ok(result.maxFetched<256);assert.ok(result.maxControl<=REPLAY_CODEC_CONTROL_BYTES);
+});

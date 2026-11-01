@@ -185,6 +185,8 @@ Dated plans, checkpoints, and working notes are in [history/](../archive/docs/hi
 
 [Architecture execution plan](ARCHITECTURE-EXECUTION-PLAN.md) defines the remaining overhaul, dependencies, and completion criteria.
 
+[Current state first; history on demand](research/2026-11-01-member2-current-state-alternative.md) compares normalized current authority with replay-led operation and records the conditional-context freshness falsifier.
+
 - [Message domain checkpoint](MESSAGE-DOMAIN-CHECKPOINT.md) — schema 39, extracted reducers, replay and measured restoration costs.
 
 - [Frontier infrastructure research](FRONTIER-INFRA-RESEARCH-2026-10-18.md): 2025–2026 papers, October engineering discussions, architecture decisions and measurable experiments.

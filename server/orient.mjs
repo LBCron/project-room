@@ -24,6 +24,37 @@ import { fleetSelf } from "./agent-fleet.mjs";
 import { ServiceError } from "./store.mjs";
 import { messageVisibleToViewer, summaryHistoryFloor } from "./history-visibility.mjs"; // QA4 Q4-SEC-1
 import { availableClaimsFromBoard, memoizeBoardList } from "./available-work.mjs";
+import { contextVersion } from "./room-context.mjs";
+
+// Context embeds current Board orientation as well as formal work. Decide
+// conditional freshness only after composing both under the same read view.
+// Transient updates, fleet assessments, next-action rankings and transport
+// clocks/cursors are not structural context; they have their own fresh reads.
+export function readComposedRoomContext(store, token, roomId, { sinceVersion = null, expectedSessionBinding = null } = {}) {
+  return store.readTransaction(() => {
+    let context = store.roomContext(token, roomId, { sinceVersion, expectedSessionBinding });
+    // A caller may still hold the old formal-only version from before this
+    // composition contract. Refresh it once rather than omit its projection.
+    if (context.not_modified) context = store.roomContext(token, roomId, { expectedSessionBinding });
+    const orient = buildOrient(store, roomId, context.viewerId, {
+      text: false, token, binding: expectedSessionBinding, boardList: memoizeBoardList(store)
+    });
+    const { room, member, instructions, claims, availableClaims, workItems, orientation, work, workTotal, links } = orient;
+    const version = contextVersion({ formal: context.context_version, orientation: {
+      room, member, instructions, claims, availableClaims, workItems, orientation, work, workTotal, links,
+      profile: orient.you.profile, capabilities: orient.you.capabilities
+    } });
+    if (sinceVersion === version) {
+      return {
+        not_modified: true, context_version: version, roomId,
+        evaluatedThrough: context.evaluatedThrough, evaluatedAt: context.evaluatedAt, cursors: context.cursors,
+        viewerId: context.viewerId, viewerAccountId: context.viewerAccountId, viewerAuthEpoch: context.viewerAuthEpoch,
+        viewerSessionBinding: context.viewerSessionBinding, viewerSessionRevision: context.viewerSessionRevision
+      };
+    }
+    return { ...context, context_version: version, orient };
+  });
+}
 
 // Work states that count as open; completed and superseded work is history,
 // not something an arriving agent should pick up.

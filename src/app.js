@@ -441,6 +441,7 @@ window.addEventListener("pagehide", cancelStartupRestore);
 window.addEventListener("popstate", cancelStartupRestore);
 window.addEventListener("hashchange", cancelStartupRestore);
 let snapshotAuditView = "full", recordLoading = null, recordLoadFailed = false;
+let nativeEventsWindow=null,recordPageReading=false;
 let submitControls = null, noticeTimer = null, noticeVersion = 0, workFormOpener = null;
 let accessEndContext = null;
 let lastComposerSelection = null;
@@ -505,6 +506,7 @@ const client = new RoomClient({
   },
   onSnapshot(snapshot, identity) {
     snapshotAuditView = snapshot.auditView ?? "full";
+    nativeEventsWindow=snapshot.snapshotVersion===2?snapshot.eventsWindow:null;
     const firstSnapshot = !state;
     const priorWorkDetailsOpen = activeWorkNavigationId ? workRecord(activeWorkNavigationId)?.querySelector(".work-details")?.open : false;
     const presenceBoundary = firstSnapshot || state.room?.id !== snapshot.state.room?.id || roomGeneration !== client.generation;
@@ -2293,22 +2295,32 @@ function renderRecordPanel() {
     return;
   }
   recordLoadFailed = false;
-  renderContent("#event-list", [...state.eventLog].reverse().map(e => `<li id="${recordDomId("event", e.id)}" tabindex="-1" data-event-record-id="${esc(e.id)}" data-focus-key="event:${esc(e.id)}"><span>${esc(humanize(e.type))}</span><strong>${esc(memberLabel(e.actorId))}</strong><time datetime="${esc(e.at)}">${esc(time(e.at))}</time><code>${esc(e.id)}</code></li>`).join(""));
+  const coverage=nativeEventsWindow?`<li class="rb-empty">${nativeEventsWindow.complete?'All retained record source windows examined.':'Partial record · older events are not loaded.'}${nativeEventsWindow.hasOlder?` <button type="button" data-record-older ${recordPageReading?'disabled':''}>${recordPageReading?'Loading…':'Load earlier records'}</button>`:''}</li>`:'';
+  renderContent("#event-list", coverage+[...state.eventLog].reverse().map(e => `<li id="${recordDomId("event", e.id)}" tabindex="-1" data-event-record-id="${esc(e.id)}" data-focus-key="event:${esc(e.id)}"><span>${esc(humanize(e.type))}</span><strong>${esc(memberLabel(e.actorId))}</strong><time datetime="${esc(e.at)}">${esc(time(e.at))}</time><code>${esc(e.id)}</code></li>`).join(""));
 
   // Decision register (backlog F2): the register is read from the event feed.
   const decisions = state.eventLog.filter(e => e.type === T.DECISION_RECORDED || e.type === T.OWNER_DECISION_RECORDED);
   setText("#decision-count", decisions.length || "");
   renderContent("#decision-list", [...decisions].reverse().map(e =>
     `<li><strong>${esc(e.type === T.DECISION_RECORDED ? e.data.statement : `${humanize(e.data.decision)}${e.data.reason ? `: ${e.data.reason}` : ""}`)}</strong>${e.data.sourceMessageId ? ` <a class="source-link" href="${esc(recordHref("message", e.data.sourceMessageId))}" data-open-message="${esc(e.data.sourceMessageId)}" data-focus-key="decision-source:${esc(e.id)}">source</a>` : ""}${e.data.note ? ` <span class="rb-detail">${esc(e.data.note)}</span>` : ""} <span class="rb-detail">${esc(memberLabel(e.actorId))} · ${esc(time(e.at))}</span></li>`).join("")
-    || '<li class="rb-empty">No decisions recorded yet.</li>');
+    || (nativeEventsWindow&&!nativeEventsWindow.complete?'<li class="rb-empty">No decisions in the loaded record window.</li>':'<li class="rb-empty">No decisions recorded yet.</li>'));
 }
 $("#record-panel").addEventListener("toggle", () => {
   if (!$("#record-panel").open) { recordLoadFailed = false; void client.setAuditView("activity").catch(() => {}); }
   renderRecordPanel();
 });
 $("#event-list").addEventListener("click", event => {
+  if(event.target.closest('[data-record-older]')){void loadEarlierRecord();return;}
   if (event.target.closest("[data-record-retry]")) { recordLoadFailed = false; void client.refresh(null, { revalidate: true }).catch(() => { recordLoadFailed = true; renderRecordPanel(); }); renderRecordPanel(); }
 });
+async function loadEarlierRecord(){
+ if(recordPageReading||!nativeEventsWindow?.hasOlder||!state||!session)return;
+ const anchor=nativeEventsWindow,generation=client.generation,identity=session,held=state;recordPageReading=true;renderRecordPanel();
+ try{const page=await client.recordPage({after:anchor.olderAfter});if(!page||client.generation!==generation||session!==identity||state!==held||nativeEventsWindow!==anchor)return;
+  const seen=new Set(state.eventLog.map(e=>e.id)),older=page.events.filter(row=>row.sequence<=anchor.after&&!seen.has(row.event.id)).map(row=>row.event);
+  state={...state,eventLog:[...older,...state.eventLog]};nativeEventsWindow={...anchor,after:anchor.olderAfter,olderAfter:anchor.olderAfter>0?Math.max(0,anchor.olderAfter-16):null,hasOlder:anchor.olderAfter>0,complete:anchor.olderAfter===0};
+ }catch(error){if(client.generation===generation)notice(error.message,true);}finally{recordPageReading=false;renderRecordPanel();}
+}
 // Phase 2 channels: one main channel plus user-created channels. Chat and work
 // share the timeline of the selected channel; work cards follow the channel of
 // their proposal message (the main channel when there is none).
@@ -3210,6 +3222,7 @@ async function openRequestMode(kind, id) {
     if (!current()) return;
     await client.refresh();
     if (!current()) return;
+    if(partialWorkSnapshot&&!state.replyRequests?.[id])state={...state,replyRequests:{...state.replyRequests,[id]:selected.request}};
     const request = state.replyRequests?.[id], basis = selected.current;
     if (!request || request.status !== "open" || selected.request.revision !== request.revision
       || selected.request.contextEventId !== request.contextEventId) throw new Error("Request changed. Open it again");
@@ -3728,9 +3741,14 @@ function revealEvent(id, requireExisting = false) {
   if (!state || busy) return;
   const generation = client.generation, navigationHash = location.hash;
   if (!requireExisting) openSettings("record-panel");
-  void client.setAuditView("full").then(() => {
+  void client.setAuditView("full").then(async () => {
     if (generation !== client.generation || !state) return;
     if (requireExisting && location.hash !== navigationHash) return;
+    if(nativeEventsWindow&&!state.eventLog.some(event=>event.id===id)){
+      const held=state,identity=session,page=await client.recordPage({eventId:id});
+      if(!page||generation!==client.generation||state!==held||session!==identity||requireExisting&&location.hash!==navigationHash)return;
+      state={...state,eventLog:[page.events[0].event,...state.eventLog]};renderRecordPanel();
+    }
     if (requireExisting && !state.eventLog.some(event => event.id === id)) {
       if (!$("#settings-dialog").open || !$("#record-panel").open) void client.setAuditView("activity").catch(() => {});
       return;
@@ -3740,7 +3758,9 @@ function revealEvent(id, requireExisting = false) {
     focusRecord([...$("#event-list").querySelectorAll("[data-event-record-id]")]
       .find(node => node.dataset.eventRecordId === id));
   }).catch(error => {
-    if (generation === client.generation && ([401, 403].includes(error.status) || error.code === "session_binding_changed")) client.handleFailure(error);
+    if(generation!==client.generation||requireExisting&&location.hash!==navigationHash)return;
+    if ([401, 403].includes(error.status) || error.code === "session_binding_changed") client.handleFailure(error);
+    else notice(error.message,true);
   });
 }
 function decodeFragment(value) {

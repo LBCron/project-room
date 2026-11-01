@@ -1,7 +1,7 @@
 import {ownMember} from '../src/events.js';
 // Normalized event-log compatibility reader. Candidate admission precedes all
 // residual/audience filters; an empty visible page can still have more source.
-import {currentRoomAuthority,readCurrentHead,readCurrentMessage,readCurrentHistoryFloor,withCurrentReadContext,chargeCurrentReadBudget} from './current-room-repository.mjs';
+import {currentRoomAuthority,readCurrentRecord,readCurrentHead,readCurrentMessage,readCurrentHistoryFloor,withCurrentReadContext,chargeCurrentReadBudget} from './current-room-repository.mjs';
 import {dmEventVisibility,dmConsentEventVisible,DM_FOLLOW_UP_TYPES} from './dm-event-visibility.mjs';
 import {peerEventVisible} from './bonds.mjs';
 import {rowInHistory,messageInHistory} from './history-visibility.mjs';
@@ -36,7 +36,7 @@ function compactEvent(event){
 export function readCurrentEventWindow(store,roomId,viewerId,{after=0,limit=100,...opts}={}){
  return withCurrentReadContext(store.db,roomId,b=>{
   validateCurrentEventSelection(after,limit,opts);
-  const db=store.db,head=readCurrentHead(db,roomId,b),authority=currentRoomAuthority(db,roomId);
+  const db=store.db,head=readCurrentHead(db,roomId,b),authority=currentRoomAuthority(db,roomId,{memberId:viewerId});
   if(!head||!ownMember(authority?.members,viewerId)||ownMember(authority.members,viewerId).active===false)fail(403,'member_required','Viewer must belong to this room');
   if(after>head.sequence)fail(409,'cursor_ahead','Cursor exceeds room history; fetch a fresh snapshot');
   const floor=readCurrentHistoryFloor(db,roomId,viewerId,b),isOwner=viewerId===authority.ownerId;
@@ -51,6 +51,7 @@ export function readCurrentEventWindow(store,roomId,viewerId,{after=0,limit=100,
    if(!e||Array.isArray(e)||e.id!==source.id||e.roomId!==roomId||typeof e.type!=='string'||typeof e.actorId!=='string'||typeof e.at!=='string'||Number.isNaN(Date.parse(e.at))||!e.data||typeof e.data!=='object'||Array.isArray(e.data))unavailable();
    return {sequence:row.sequence,event:e};
   });
+  const chipMembers=new Map(),chipMember=id=>{if(!chipMembers.has(id)){const member=readCurrentRecord(db,roomId,'members',id,b);if(member!==undefined&&member.id!==id)unavailable();chipMembers.set(id,member);}return chipMembers.get(id);};
   const messages=new Map(),load=id=>{
    if(typeof id!=='string'||!id||id.length>200)return undefined;
    if(!messages.has(id))messages.set(id,readCurrentMessage(db,roomId,id,b)?.value);
@@ -77,7 +78,7 @@ export function readCurrentEventWindow(store,roomId,viewerId,{after=0,limit=100,
    if(scalars.length>100||scalars.some(r=>r.memberBytes>512||r.stateBytes>128))unavailable();
    chargeCurrentReadBudget(b,scalars.reduce((n,r)=>n+r.memberBytes+r.stateBytes+32,0),scalars.length);
    const chips=db.prepare('SELECT mentioned_member_id AS memberId,state,timeout_at AS timeoutAt FROM mention_states WHERE room_id=? AND message_event_id=? LIMIT 101').all(roomId,e.id);
-   if(chips.length)e.mentions=chips.map(chip=>({memberId:chip.memberId,state:effectiveMentionState(chip,store.now()),displayName:ownMember(authority.members,chip.memberId)?.displayName??chip.memberId}));
+   if(chips.length)e.mentions=chips.map(chip=>({memberId:chip.memberId,state:effectiveMentionState(chip,store.now()),displayName:chipMember(chip.memberId)?.displayName??chip.memberId}));
   }
   const next=selected.length?selected.at(-1).sequence:head.sequence;
   let page=redactEventPage({events:visible,next,hasMore:next<head.sequence},[...messages.values()].filter(Boolean));

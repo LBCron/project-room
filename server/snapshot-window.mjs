@@ -2,7 +2,7 @@
 // The default GET /api/rooms/{id} and ?messages=recent are this window.
 // ?full=1 is the retired unbounded document, and only while
 // ROOM_SNAPSHOT_FULL_COMPAT=1. Older history pages through /messages.
-import { isCurrentRoom, withCurrentReadContext,readCurrentRecord,chargeCurrentReadBudget } from './current-room-repository.mjs';
+import { isCurrentRoom, withCurrentReadContext,readCurrentRecord,readCurrentHistoryFloor,chargeCurrentReadBudget } from './current-room-repository.mjs';
 import {readCurrentEventWindow} from './current-room-events.mjs';
 import { readConversation } from './conversation-sync.mjs';
 import { messageSequences } from "./message-queries.mjs";
@@ -142,22 +142,26 @@ export function readRoomSnapshot(store, token, roomId, fence, { view = "full", h
       const sourceAfter=Math.max(0,overview.sequence-16),eventPage=readCurrentEventWindow(store,roomId,auth.member.id,{after:sourceAfter,limit:16});
       const events=eventPage.events.map(row=>row.event),eventLog=auditView==='activity'?events.filter(e=>e.type==='decision.recorded'||/^(work\.|work_claim\.|verification\.|owner_decision\.)/.test(e.type)||e.data?.workItemId!==undefined):events;
       const cursor=store.db.prepare('SELECT sequence FROM cursors WHERE room_id=? AND member_id=?').get(roomId,auth.member.id)?.sequence??0;
+      const floor=readCurrentHistoryFloor(store.db,roomId,auth.member.id,b),catchUpCursor=Math.max(cursor,floor?floor.sequence-1:0);
+      const replyRequests=Object.create(null),requestIds=new Set(conversation.messages.flatMap(m=>[m.id,m.responseToRequestId]).filter(Boolean));
+      for(const id of requestIds){const request=readCurrentRecord(store.db,roomId,'replyRequests',id,b);if(request&&[request.requesterId,request.recipientId].includes(auth.member.id))Object.defineProperty(replyRequests,id,{value:request,enumerable:true});}
+
 
       // This is explicitly a partial current view. Neither omitted counts nor
       // absent request/work records mean that the room contains no more work.
       return {
         snapshotVersion: 2, representation: "normalized-current-v1", roomId,
-        sequence: overview.sequence, viewerId: auth.member.id,cursor,catchUpCursor:cursor,
+        sequence: overview.sequence, viewerId: auth.member.id,cursor,catchUpCursor,
         ...(auditView==='activity'?{auditView,auditVersion:1}:{}),
         viewerAccountId: auth.account?.id ?? null, viewerAuthEpoch: auth.account?.authEpoch ?? null,
         viewerSessionBinding: auth.sessionBinding, viewerSessionRevision: auth.sessionRevision ?? null,
-        state: { ...overview.state,channels,eventLog, messages: conversation.messages },
+        state: { ...overview.state,channels,eventLog,replyRequests, messages: conversation.messages },
         channelsWindow:{complete:true,shown:channelKeys.length},
         eventsWindow:{complete:sourceAfter===0,after:sourceAfter,examinedThrough:eventPage.next,hasOlder:sourceAfter>0,olderAfter:sourceAfter>0?Math.max(0,sourceAfter-16):null,sourceLimit:16},
         messagesWindow: { mode: "recent", omitted: null, complete: conversation.nextCursor === null },
         messagesPage: { cursor: conversation.nextCursor, hasMore: conversation.nextCursor !== null, contractVersion: 2, limit: 8 },
         workWindow: overview.workWindow,
-        sections: { helpOffers: { available: false, code: "current_help_offers_unavailable" }, replyRequests: { available: false, nextRead: { tool: "room_list_requests", arguments: { direction: "incoming", status: "open" } } } }
+        sections: { helpOffers: { available: false, code: "current_help_offers_unavailable" }, replyRequests: { available: true,complete:false,coverage:"visible-conversation-records", nextRead: { tool: "room_list_requests", arguments: { direction: "incoming", status: "open" } } } }
       };
     }, { maxRecords: 1024 }));
   }

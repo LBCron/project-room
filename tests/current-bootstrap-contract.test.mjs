@@ -61,8 +61,10 @@ test('ordinary HTTP room read opens normalized storage without legacy room hydra
  assert.equal(snapshot.snapshotVersion,2);
  assert.equal(snapshot.state.messages.find(m=>m.id==='http-saved')?.body,'HTTP saved result');
  assert.equal(snapshot.messagesWindow.omitted,null);
- assert.equal(snapshot.sections.replyRequests.available,false);
- assert.equal(Object.hasOwn(snapshot.state,'replyRequests'),false,'unavailable request coverage is not an empty request map');
+ assert.equal(snapshot.sections.replyRequests.available,true);
+ assert.equal(snapshot.sections.replyRequests.complete,false);
+ assert.equal(snapshot.sections.replyRequests.coverage,'visible-conversation-records');
+ assert.deepEqual(snapshot.state.replyRequests,{},'empty selected page is explicitly not a complete request census');
 });
 
 

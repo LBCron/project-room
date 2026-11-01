@@ -757,6 +757,16 @@ export class RoomClient {
     this.onSnapshot(snapshot, session);
     return true;
   }
+  async recordPage({after=0,eventId=null}={}) {
+    const query=new URLSearchParams({view:'browser',...(eventId===null?{after:String(after),limit:'16'}:{eventId})});
+    const result=await this.roomRead('/events?'+query);if(!result)return null;
+    const rows=result.events;
+    if(result.contractVersion!==2||result.readKind!=='event-window'||result.selection?.eventId!==eventId||eventId===null&&result.selection.after!==after
+      ||!Array.isArray(rows)||rows.length>16||!Number.isSafeInteger(result.next)||result.next<result.selection.after||typeof result.hasMore!=='boolean'
+      ||rows.some((row,i)=>!Number.isSafeInteger(row.sequence)||row.sequence<=result.selection.after||row.sequence>result.next||i&&row.sequence<=rows[i-1].sequence||typeof row.event?.id!=='string')
+      ||eventId!==null&&(rows.length!==1||rows[0].event.id!==eventId))throw Error('Record window could not be confirmed');
+    return result;
+  }
   async bootstrap() {
     return this.request(this.path("/bootstrap"), { fresh: true });
   }
@@ -888,6 +898,16 @@ export class RoomClient {
       if (!current()) throw new Error("Room identity changed");
       if (!this.ownsResponse(result, session)) { this.endAccess(); throw new Error("Room identity changed"); }
       const page = result?.page;
+      if(result.contractVersion===2){
+        const invalid=()=>{throw Error('Request context could not be confirmed. Refresh context');};
+        const anchor=JSON.stringify([result.request?.revision,result.request?.contextEventId,result.current?.contextSequence]);
+        if(result.selection?.requestMessageId!==requestMessageId||result.request?.id!==requestMessageId||!page||page.cursor!==cursor||page.limit!==50||!Array.isArray(page.items)||page.items.length>8||typeof page.hasMore!=='boolean'||result.sourceWindow?.complete!==!page.hasMore||horizon!==null&&anchor!==horizon)invalid();
+        horizon=anchor;for(const item of page.items){if(item.requestMessageId!==requestMessageId||!Number.isSafeInteger(item.sequence)||item.sequence<=last)invalid();last=item.sequence;}
+        if(!page.hasMore){if(page.nextCursor!==null||result.nextRead!==null)invalid();return result;}
+        const next=result.nextRead,args=next?.arguments;
+        if(typeof page.nextCursor!=='string'||!page.nextCursor||seen.has(page.nextCursor)||next?.tool!=='room_read_request'||args?.requestMessageId!==requestMessageId||args.limit!==50||args.cursor!==page.nextCursor||Object.keys(args).sort().join(',')!=='cursor,limit,requestMessageId')invalid();
+        seen.add(page.nextCursor);cursor=page.nextCursor;continue;
+      }
       const anchor = JSON.stringify([page?.horizonSequence, page?.horizonEventId]);
       if (result.contractVersion !== 1 || result.selection?.requestMessageId !== requestMessageId
         || result.request?.id !== requestMessageId || !page || !Array.isArray(page.items)

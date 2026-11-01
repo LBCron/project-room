@@ -551,6 +551,7 @@ export function createRoomServer({ store, origin, assetRoot = new URL("../", imp
     // whole token family inside the provider; log it as a structured
     // security line so operators see it, and the token endpoint already
     // answers the reuse attempt with a distinct invalid_grant.
+    onAccessRejected: ({reason}) => console.info(JSON.stringify({event:"room.oauth_access_rejected",reason})),
     onSecurityEvent: event => {
       console.warn(`oauth security event: ${JSON.stringify(event)}`);
     },
@@ -562,10 +563,30 @@ export function createRoomServer({ store, origin, assetRoot = new URL("../", imp
       } catch { return false; }
     },
   });
+  const commitOAuthOperation = operation => {
+    let refusal;
+    const result = store.transaction(() => {
+      try {return operation();}
+      catch(error) {
+        // Protocol refusals can deliberately revoke a replayed token family.
+        // Commit those fences; roll back unexpected/incomplete database saves.
+        if (error.name !== "OAuthProviderError") throw error;
+        refusal=error;return null;
+      }
+    });
+    if(refusal)throw refusal;
+    return result;
+  };
   const oauthResource = mcpOAuthClients.length ? new URL("/mcp", origin).href : null;
   if (oauthResource) mcpOAuthResourceMetadata(oauthResource, origin);
   const oauthMetadataUrl = oauthResource ? new URL("/.well-known/oauth-protected-resource/mcp", origin).href : null;
   const mcpClientIds = new Set(mcpOAuthClients.map(client => client.clientId));
+  const mcpRedirects = new Set(mcpOAuthClients.flatMap(client => client.redirectUris));
+  const isMcpClient = id => mcpClientIds.has(id) || typeof id === "string" && id.startsWith("mcp_dcr_")
+    && Boolean(oauthProvider.getClient(id)?.redirectUris.every(uri => mcpRedirects.has(uri)));
+  const isClaudeClient = id => isMcpClient(id) && oauthProvider.getClient(id)?.redirectUris
+    .includes("https://claude.ai/api/mcp/auth_callback");
+
   for (const c of [...connectorClients, ...mcpOAuthClients]) {
     oauthProvider.registerClient(c);
   }
@@ -1708,12 +1729,37 @@ export function createRoomServer({ store, origin, assetRoot = new URL("../", imp
           authorization_response_iss_parameter_supported: true,
           token_endpoint: issuer + "/oauth/token",
           revocation_endpoint: issuer + "/oauth/revoke",
+          ...(oauthResource ? {registration_endpoint: issuer + "/oauth/register"} : {}),
           response_types_supported: ["code"],
           grant_types_supported: ["authorization_code", "refresh_token"],
           code_challenge_methods_supported: ["S256"],
           scopes_supported: [...OAUTH_SCOPES],
           token_endpoint_auth_methods_supported: ["none"], // public clients with PKCE
         });
+      }
+      // Public PKCE clients may register only already configured exact callbacks.
+      // Registration is metadata, never membership, sponsorship or a grant.
+      if (url.pathname === "/oauth/register" && req.method === "POST" && oauthResource) {
+        rate(`oauth-register:${remoteAddress}`, 20);
+        const data = await body(req);
+        if (!Array.isArray(data.redirect_uris) || !data.redirect_uris.length || data.redirect_uris.length > 5
+          || data.redirect_uris.some(uri => typeof uri !== "string" || !mcpRedirects.has(uri))
+          || data.token_endpoint_auth_method && data.token_endpoint_auth_method !== "none"
+          || data.grant_types && (!Array.isArray(data.grant_types) || data.grant_types.some(type => !["authorization_code", "refresh_token"].includes(type)))
+          || data.response_types && (!Array.isArray(data.response_types) || data.response_types.some(type => type !== "code")))
+          return json(res, 400, {error:"invalid_client_metadata"});
+        if (store.db.prepare("SELECT count(*) n FROM (SELECT 1 FROM oauth_provider_clients LIMIT 1025)").get().n >= 1024)
+          return json(res, 503, {error:"temporarily_unavailable"});
+        const name = data.client_name ?? "MCP connector";
+        if (typeof name !== "string" || !name.trim() || name.length > 80)
+          return json(res, 400, {error:"invalid_client_metadata"});
+        const clientId = "mcp_dcr_" + randomBytes(18).toString("base64url");
+        const client = {clientId,name,redirectUris:[...new Set(data.redirect_uris)]};
+        oauthProvider.registerClient(client);
+        inviteOAuth?.provider.registerClient(client);
+        res.setHeader("Cache-Control", "no-store");
+        return json(res, 201, {client_id:clientId,client_name:name,redirect_uris:client.redirectUris,
+          token_endpoint_auth_method:"none",grant_types:["authorization_code","refresh_token"],response_types:["code"]});
       }
       // GET /.well-known/feedback — /feedback standard discovery metadata.
       // Mirrors docs/feedback-endpoint.md §7: version, intake URL template,
@@ -1739,7 +1785,7 @@ export function createRoomServer({ store, origin, assetRoot = new URL("../", imp
       // Native invitation consent is the default; a Room account is optional.
       const invitePage = (view, request) => renderInviteOAuthPage(res, view, request);
       if (url.pathname === "/oauth/authorize" && req.method === "GET" && inviteOAuth
-        && mcpClientIds.has(url.searchParams.get("client_id")) && url.searchParams.get("connection") !== "account") {
+        && isMcpClient(url.searchParams.get("client_id")) && !isClaudeClient(url.searchParams.get("client_id")) && url.searchParams.get("connection") !== "account") {
         rate(`oauth-invite-start:${remoteAddress}`, 30);
         try {
           const started = inviteOAuth.begin(url.searchParams);
@@ -1782,12 +1828,16 @@ export function createRoomServer({ store, origin, assetRoot = new URL("../", imp
           const code = error instanceof ServiceError ? error.code : "invalid_request";
           return json(res, 400, { error: code, error_description: error.message });
         }
-        const mcpConsent = mcpClientIds.has(validated.client.clientId);
+        const mcpConsent = isMcpClient(validated.client.clientId);
         if (mcpConsent && url.searchParams.get("resource") !== oauthResource)
           return json(res, 400, { error: "invalid_target", error_description: "Select the advertised MCP resource" });
         if (!mcpConsent && url.searchParams.has("resource"))
           return json(res, 400, { error: "invalid_target", error_description: "This client is not enabled for MCP" });
-        const agentChoices = mcpConsent ? listMcpOAuthAgents(store, auth.account.id, oauthResource) : [];
+        const preference = mcpOAuthClients.find(client => client.clientId === validated.client.clientId)
+          ?? (isClaudeClient(validated.client.clientId) ? mcpOAuthClients.find(client => client.clientId === "project-room-claude") : null);
+        const agentChoices = mcpConsent ? listMcpOAuthAgents(store, auth.account.id, oauthResource, preference ?? {}) : [];
+        if (preference?.preferredMemberId) agentChoices.sort((a,b) => Number(b.binding.memberId === preference.preferredMemberId && b.binding.roomId === preference.preferredRoomId)
+          - Number(a.binding.memberId === preference.preferredMemberId && a.binding.roomId === preference.preferredRoomId));
         if (mcpConsent && !agentChoices.length)
           return json(res, 409, { error: "agent_connection_required", error_description: "Join the room as yourself, then create your own connected agent before authorizing it" });
         const scopeLabels = {
@@ -1892,7 +1942,7 @@ export function createRoomServer({ store, origin, assetRoot = new URL("../", imp
         };
         if (decision !== "allow") return failRedirect("access_denied", "The user denied the request");
         let binding;
-        if (mcpClientIds.has(validated.client.clientId)) {
+        if (isMcpClient(validated.client.clientId)) {
           if (data.resource !== oauthResource) return failRedirect("invalid_target", "Wrong MCP resource");
           try { binding = JSON.parse(data.agent_binding); } catch { return failRedirect("invalid_request", "Choose your connected agent"); }
           if (binding?.resource !== oauthResource || !validateMcpOAuthBinding(store, accountId, binding))
@@ -1935,19 +1985,19 @@ export function createRoomServer({ store, origin, assetRoot = new URL("../", imp
           const tokenProvider = typeof invitationToken === "string" && /^(iac|iar)_/.test(invitationToken) ? inviteOAuth?.provider : oauthProvider;
           if (!tokenProvider) return json(res, 400, { error: "invalid_grant" });
           if (grantType === "authorization_code") {
-            tokens = tokenProvider.exchangeCode({
+            tokens = commitOAuthOperation(() => tokenProvider.exchangeCode({
               code: data.code,
               clientId: data.client_id,
               redirectUri: data.redirect_uri,
               codeVerifier: data.code_verifier,
               session: sessionMeta, resource: data.resource,
-            });
+            }));
           } else if (grantType === "refresh_token") {
-            tokens = tokenProvider.refresh({
+            tokens = commitOAuthOperation(() => tokenProvider.refresh({
               refreshToken: data.refresh_token,
               clientId: data.client_id,
               session: sessionMeta, resource: data.resource,
-            });
+            }));
           } else {
             return json(res, 400, { error: "unsupported_grant_type" });
           }
@@ -1959,6 +2009,7 @@ export function createRoomServer({ store, origin, assetRoot = new URL("../", imp
             scope: tokens.scopes.join(" "),
           });
         } catch (error) {
+          if (error.name !== "OAuthProviderError") throw error;
           const code = error.code === "invalid_request" ? "invalid_request" : "invalid_grant";
           const nativeInvitation = /^(iac|iar)_/.test(String(data.code ?? data.refresh_token ?? ""));
           return json(res, 400, { error: code, error_description: nativeInvitation ? `${error.message}. ${MCP_INVITE_RECOVERY}` : error.message,

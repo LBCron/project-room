@@ -1216,7 +1216,7 @@ export function createHostedRoomMcp(store, { agentRooms, spendCredential, oauthP
       const options = { store, provider, token, resource: oauthResource, roomId: grant?.binding?.roomId };
       const principal = grant && resolveMcpOAuthPrincipal(options);
       if (!principal) return rpcError(message, MCP_AUTH_REQUIRED, "OAuth grant no longer grants access to this agent");
-      const identity = { identityId: principal.identityId, displayName: store.room(principal.roomId).state.members[principal.memberId].displayName };
+      const identity = { identityId: principal.identityId, displayName: store.roomAuthority(principal.roomId,{memberId:principal.memberId}).members[principal.memberId].displayName };
       return runMcpOAuthRequest(options, () => {
         if (typeof nativeHandler === "function" && typeof message?.method === "string" && message.method.startsWith("events/"))
           return nativeHandler(message, { principal, descriptor: mcpOAuthPrincipalDescriptor(principal),

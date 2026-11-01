@@ -27,11 +27,13 @@ export function mcpOAuthChallenge(metadataUrl) {
 
 // Binding authorization consumes only membership metadata, never history. This
 // does not certify unrelated message rows or change their recovery/count proof.
-function canonicalOAuthBindingMembers(store, roomId) {
+function canonicalOAuthBindingMembers(store, roomId, memberId) {
   // Existing lightweight store adapters retain their original room reader.
   if (typeof store.roomAuthority !== 'function' || typeof store.readTransaction !== 'function') return null;
   return store.readTransaction(() => {
     const db = store.db;
+    const current = db.prepare("SELECT json_extract(projection,'$.normalizedCurrent.version') version FROM rooms WHERE id=?").get(roomId);
+    if(current?.version === 1) return store.roomAuthority(roomId,{memberId}).members;
     const sizes = db.prepare(`SELECT length(CAST(r.projection AS BLOB)) AS projection_bytes,
       length(CAST(i.metadata_hash AS BLOB)) AS metadata_hash_bytes,
       COALESCE(length(CAST(i.projection_hash AS BLOB)),0) AS projection_hash_bytes,
@@ -58,7 +60,8 @@ function canonicalOAuthBindingMembers(store, roomId) {
 // here so a provider built without isAccountActive cannot bypass it.
 export function validateMcpOAuthBinding(store, userId, binding) {
   if (!binding || !userId) return null;
-  const fields = ['resource', 'roomId', 'identityId', 'memberId', 'humanMemberId', 'identityEpoch'];
+  const direct = binding.principalType === 'account-owned-agent';
+  const fields = ['resource', 'roomId', 'identityId', 'memberId', 'humanMemberId', 'identityEpoch', ...(direct ? ['principalType'] : [])];
   if (Object.keys(binding).length !== fields.length || fields.some(key => typeof binding[key] !== 'string' || !binding[key] || binding[key].length > 512)) return null;
   const { roomId, identityId, memberId, humanMemberId } = binding;
   const currentEpoch = mcpOAuthIdentityEpoch(store, identityId);
@@ -71,11 +74,22 @@ export function validateMcpOAuthBinding(store, userId, binding) {
   if (identityLink?.member_id !== memberId) return null;
   let state;
   try {
-    const members = canonicalOAuthBindingMembers(store, roomId);
-    state = members === null ? store.room(roomId).state : { members };
+    const members = canonicalOAuthBindingMembers(store, roomId, memberId);
+    state = members === null ? store.room(roomId).state : { members, room: store.roomAuthority(roomId,{memberId}) };
   } catch { return null; }
   const human = state.members?.[humanMemberId];
   const agent = state.members?.[memberId];
+  if (direct) {
+    // Explicit account consent sponsors this existing seat, not its old API key.
+    // Legacy rooms may bind the owner's account to an agent-shaped member.
+    // The verified account link, current room ownership and accountable link
+    // are all mandatory; neither a display name nor an owner bearer suffices.
+    const ownerId = state.room?.ownerId;
+    if (ownerId !== humanMemberId || human?.active !== true || memberId === humanMemberId
+      || agent?.kind !== 'agent' || agent.active !== true
+      || agent.accountableHumanId !== humanMemberId || agent.identityId !== identityId) return null;
+    return Object.freeze({userId,roomId,identityId,memberId,humanMemberId,principalType:'account-owned-agent'});
+  }
   if (human?.kind !== 'human' || human.active !== true || agent?.kind !== 'agent' || agent.active !== true
     || agent.accountableHumanId !== humanMemberId || agent.identityId !== identityId) return null;
   const connection = store.agentConnections?.row?.(roomId, memberId);
@@ -128,7 +142,7 @@ const scopeTools = {
   'chat:read': ['room_read_messages', 'room_read_inbox', 'room_list_requests', 'room_read_request'],
   'chat:write': ['room_post_message', 'room_reply', 'room_request_reply', 'room_respond_to_request'],
   'work:read': ['room_list_work', 'room_read_board', 'room_read_work', 'room_read_work_discussion', 'room_read_result'],
-  'work:write': ['room_claim', 'room_accept_work', 'room_start_work', 'room_block_work', 'room_resolve_blocker', 'room_handoff', 'room_submit_text_result'],
+  'work:write': ['room_claim', 'room_acquire_claim', 'room_release_claim', 'room_renew_claim', 'room_accept_work', 'room_start_work', 'room_block_work', 'room_resolve_blocker', 'room_handoff', 'room_submit_text_result'],
 };
 // Mixed projections must satisfy every data category, in discovery and dispatch.
 // Keep this separate from membership checks: OAuth consent cannot widen them.
@@ -145,17 +159,24 @@ export function mcpOAuthToolAllowed(name, scopes) {
   return Object.entries(scopeTools).some(([scope, names]) => scopes.includes(scope) && names.includes(name));
 }
 
-export function listMcpOAuthAgents(store, userId, resource) {
+export function listMcpOAuthAgents(store, userId, resource, {preferredRoomId,preferredMemberId}={}) {
   const humans = store.db.prepare('SELECT room_id,member_id FROM member_accounts WHERE account_id=?').all(userId);
   const result = [];
   for (const human of humans) {
     let state;
-    try { state = store.room(human.room_id).state; } catch { continue; }
+    try {
+      if(preferredRoomId === human.room_id && preferredMemberId) {
+        const authority=store.roomAuthority(human.room_id,{memberId:preferredMemberId});
+        state={room:{id:human.room_id,ownerId:authority.ownerId},members:authority.members};
+      } else state = store.room(human.room_id).state;
+    } catch { continue; }
     for (const member of Object.values(state.members ?? {})) {
       if (member.kind !== 'agent' || member.accountableHumanId !== human.member_id || !member.identityId) continue;
       const binding = { resource, roomId: human.room_id, identityId: member.identityId, memberId: member.id, humanMemberId: human.member_id, identityEpoch: mcpOAuthIdentityEpoch(store, member.identityId) };
-      if (validateMcpOAuthBinding(store, userId, binding)) result.push({ binding,
-        label: `${member.displayName || member.id} — ${state.room?.title || human.room_id}` });
+      const directBinding = {...binding, principalType:'account-owned-agent'};
+      const selected = validateMcpOAuthBinding(store,userId,directBinding) ? directBinding
+        : validateMcpOAuthBinding(store,userId,binding) ? binding : null;
+      if (selected) result.push({binding:selected, label:`${member.displayName || member.id} — ${state.room?.title || human.room_id}`});
     }
   }
   return result;

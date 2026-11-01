@@ -40,100 +40,100 @@ export const ERROR_REGISTRY = {
   // Bounded operator authority: no reset, limit increase or automatic retry.
   invalid_authority_request: {
     "status": "action_required",
-    "hint": "Operator authority request fields or direction are invalid.",
+    "hint": uiText("agentError.invalid_authority_request.hint"),
     "next": [
       {
-        "command": "Use the documented operator authority fields and direction. Do not broaden the selected room."
+        "command": uiText("agentError.invalid_authority_request.recovery")
       }
     ],
     "catalog": {
       "http": 422,
       "retry": "fix+resend",
-      "recovery": "Use the documented operator authority fields and direction. Do not broaden the selected room."
+      "recovery": uiText("agentError.invalid_authority_request.recovery")
     }
   },
   authority_plan_required: {
     "status": "action_required",
-    "hint": "An authority mutation needs its exact plan hash; planning accepts no hash.",
+    "hint": uiText("agentError.authority_plan_required.hint"),
     "next": [
       {
-        "command": "Obtain a fresh operator plan and preserve its exact hash with the mutation input."
+        "command": uiText("agentError.authority_plan_required.recovery")
       }
     ],
     "catalog": {
       "http": 422,
       "retry": "fix+resend",
-      "recovery": "Obtain a fresh operator plan and preserve its exact hash with the mutation input."
+      "recovery": uiText("agentError.authority_plan_required.recovery")
     }
   },
   request_id_required: {
     "status": "action_required",
-    "hint": "An authority mutation needs a stable request ID.",
+    "hint": uiText("agentError.request_id_required.hint"),
     "next": [
       {
-        "command": "Supply a stable request ID and preserve all input on unknown outcomes. Never change intent under that ID."
+        "command": uiText("agentError.request_id_required.recovery")
       }
     ],
     "catalog": {
       "http": 422,
       "retry": "fix+resend",
-      "recovery": "Supply a stable request ID and preserve all input on unknown outcomes. Never change intent under that ID."
+      "recovery": uiText("agentError.request_id_required.recovery")
     }
   },
   authority_budget_exceeded: {
     "status": "action_required",
-    "hint": "Authority input or hydrated output exceeds the qualified bounds.",
+    "hint": uiText("agentError.authority_budget_exceeded.hint"),
     "next": [
       {
-        "command": "No conversion is claimed. Use a separately qualified bounded continuation; do not increase limits or split content to evade admission."
+        "command": uiText("agentError.authority_budget_exceeded.recovery")
       }
     ],
     "catalog": {
       "http": 409,
       "retry": "no",
-      "recovery": "No conversion is claimed. Use a separately qualified bounded continuation; do not increase limits or split content to evade admission."
+      "recovery": uiText("agentError.authority_budget_exceeded.recovery")
     }
   },
   authority_archive_not_supported: {
     "status": "action_required",
-    "hint": "Archived history is outside the qualified authority conversion path.",
+    "hint": uiText("agentError.authority_archive_not_supported.hint"),
     "next": [
       {
-        "command": "Keep the existing representation and use a separately qualified archive migration."
+        "command": uiText("agentError.authority_archive_not_supported.recovery")
       }
     ],
     "catalog": {
       "http": 409,
       "retry": "no",
-      "recovery": "Keep the existing representation and use a separately qualified archive migration."
+      "recovery": uiText("agentError.authority_archive_not_supported.recovery")
     }
   },
   authority_not_ready: {
     "status": "action_required",
-    "hint": "Replay, checkpoint or exact-head parity needs reconciliation.",
+    "hint": uiText("agentError.authority_not_ready.hint"),
     "next": [
       {
-        "command": "Resolve the named replay, checkpoint or parity cause through its qualified path, then obtain a fresh plan. Do not reset or certify damaged source."
+        "command": uiText("agentError.authority_not_ready.recovery")
       }
     ],
     "catalog": {
       "http": 409,
       "retry": "no",
-      "recovery": "Resolve the named replay, checkpoint or parity cause through its qualified path, then obtain a fresh plan. Do not reset or certify damaged source."
+      "recovery": uiText("agentError.authority_not_ready.recovery")
     }
   },
   authority_integrity_failure: {
     "status": "action_required",
-    "hint": "Stored content differs from independent serving proof.",
+    "hint": uiText("agentError.authority_integrity_failure.hint"),
     "next": [
       {
-        "command": "Stop conversion and reconcile through the qualified recovery path. Retrying or minting a new baseline is not repair."
+        "command": uiText("agentError.authority_integrity_failure.recovery")
       }
     ],
     "catalog": {
       "http": 409,
       "retry": "no",
-      "recovery": "Stop conversion and reconcile through the qualified recovery path. Retrying or minting a new baseline is not repair."
+      "recovery": uiText("agentError.authority_integrity_failure.recovery")
     }
   },
 

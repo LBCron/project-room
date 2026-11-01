@@ -1,4 +1,4 @@
-import {createHmac,timingSafeEqual} from 'node:crypto';
+import {createHash,createCipheriv,createDecipheriv,randomBytes} from 'node:crypto';
 import {isCurrentRoom,readCurrentHead,readCurrentWorkItem,readCurrentOverviewWindow,readCurrentReplyRequestWindow,currentVisibleHorizon,withCurrentReadContext} from './current-room-repository.mjs';
 import {validWorkPage} from './work-list-page.mjs';
 import {nextWorkStep} from '../src/workflow.js';
@@ -8,16 +8,20 @@ import {messageInHistory} from './history-visibility.mjs';
 import {ServiceError} from './service-error.mjs';
 
 const fail=(code,message,status=422)=>{throw new ServiceError(status,code,message);};
-const encode=value=>Buffer.from(JSON.stringify(value)).toString('base64url');
 const keys='v roomId viewerId head focus limit at workAfter requestAfter workDone requestsDone'.split(' ');
-const signature=(secret,payload)=>createHmac('sha256',secret).update('current-work-source-v1:'+payload).digest();
+const cursorKey=secret=>createHash('sha256').update('current-work-source-v1:'+secret).digest();
+function encode(value,secret) {
+  // Source keys include excluded private requests. Authenticate AND encrypt
+  // them; a readable signed token would disclose another exchange's ID.
+  const nonce=randomBytes(12),cipher=createCipheriv('aes-256-gcm',cursorKey(secret),nonce);
+  return Buffer.concat([nonce,cipher.update(JSON.stringify(value),'utf8'),cipher.final(),cipher.getAuthTag()]).toString('base64url');
+}
 function decode(cursor,secret) {
   try {
-    const [payload,sig,...extra]=cursor.split('.');if(extra.length||!payload||!sig)throw Error();
-    const actual=Buffer.from(sig,'base64url'),expected=signature(secret,payload);
-    if(actual.length!==expected.length||!timingSafeEqual(actual,expected)||actual.toString('base64url')!==sig)throw Error();
-    const value=JSON.parse(Buffer.from(payload,'base64url').toString('utf8'));
-    if(encode(value)!==payload||Object.keys(value).join(' ')!==keys.join(' '))throw Error();
+    const bytes=Buffer.from(cursor,'base64url');if(bytes.toString('base64url')!==cursor||bytes.length<29)throw Error();
+    const decipher=createDecipheriv('aes-256-gcm',cursorKey(secret),bytes.subarray(0,12));decipher.setAuthTag(bytes.subarray(-16));
+    const text=Buffer.concat([decipher.update(bytes.subarray(12,-16)),decipher.final()]).toString('utf8'),value=JSON.parse(text);
+    if(JSON.stringify(value)!==text||Object.keys(value).join(' ')!==keys.join(' '))throw Error();
     return value;
   } catch {fail('invalid_work_cursor','Invalid work cursor. Restart room_list_work without cursor.');}
 }
@@ -65,7 +69,7 @@ export function readCurrentWorkListing(store,secret,roomId,args={}) {
       const workDone=saved.workDone||overview.workWindow.nextAfter===null,requestsDone=saved.requestsDone||!requests.hasMore;
       const next={...saved,workAfter:saved.workDone?saved.workAfter:overview.workWindow.nextAfter??items.at(-1)?.id??saved.workAfter,
         requestAfter:requests?.examinedAfter??saved.requestAfter,workDone,requestsDone};
-      const hasMore=!workDone||!requestsDone,payload=encode(next),nextCursor=hasMore?`${payload}.${signature(secret,payload).toString('base64url')}`:null;
+      const hasMore=!workDone||!requestsDone,nextCursor=hasMore?encode(next,secret):null;
       const evaluatedThrough=currentVisibleHorizon(store,roomId,member.id,head.sequence);
       return {contractVersion:1,roomId,viewerId:member.id,viewerAccountId:auth.account?.id??null,viewerAuthEpoch:auth.account?.authEpoch??null,
         viewerSessionBinding:auth.sessionBinding??null,viewerSessionRevision:auth.sessionRevision??null,

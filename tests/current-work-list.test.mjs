@@ -33,6 +33,7 @@ test('current work source pages traverse excluded backlog without false completi
   assert.deepEqual(listed.flatMap(x=>x.work.map(w=>w.id)),['task-18']);
   assert.deepEqual(listed.flatMap(x=>x.replyRequests.map(r=>r.id)),['request-12']);
   assert.ok(listed.every(x=>x.selection.examinedWork<=4&&x.selection.examinedRequests<=4&&x.page.totalWork===null));
+  for(const page of listed)if(page.page.nextCursor)assert.equal(Buffer.from(page.page.nextCursor,'base64url').toString('utf8').includes('request-'),false,'excluded private request keys must not be readable cursor payloads');
   assert.equal(JSON.stringify(listed).includes('NO-DEFINITION-BLOB'),false);assert.equal(JSON.stringify(listed).includes('NO-REQUEST-BODY'),false);
   const all=pages(store,keys.worker);assert.equal(all.flatMap(p=>p.work).length,19);assert.equal(new Set(all.flatMap(p=>p.work.map(w=>w.id))).size,19);
   const audit=store.db.prepare('SELECT * FROM operator_actions ORDER BY id').all();pages(store,keys.worker);assert.deepEqual(store.db.prepare('SELECT * FROM operator_actions ORDER BY id').all(),audit);
@@ -49,6 +50,12 @@ test('work continuation binds credential, selection, head, and requested limit',
 test('unsupported global selections refuse instead of silently searching one page',t=>{
   const {store,keys}=fixture(t);
   for(const args of [{query:'Title'},{sort:'curiosity'},{focus:'help_wanted'}])assert.throws(()=>store.currentWorkListing(keys.worker,'commons',args),e=>e.code==='current_work_selection_unavailable');
+});
+test('work source pages retain private title boundaries for an unrelated viewer',t=>{
+  const {store,keys}=fixture(t);
+  store.command(keys.owner,'commons',{id:'private-work-request',type:'message.posted',data:{messageId:'private-work-request',toMemberId:'other',workItemId:'task-00',requestKind:'reply',body:'A private task question'}});
+  const hidden=pages(store,keys.worker).flatMap(p=>p.work).find(w=>w.id==='task-00');assert.equal(hidden.title,null);
+  assert.equal(pages(store,keys.other).flatMap(p=>p.work).find(w=>w.id==='task-00').title,'Title 0');
 });
 
 test('hosted MCP room_list_work uses the actual current source pager',async t=>{

@@ -1,0 +1,54 @@
+{
+  "checkedAt": "2026-11-01T09:02:33.025Z",
+  "sourceRevision": "0f83478a9d7646f8297547723b06802cedc1167b",
+  "buildId": "2026-11-01T08:51:02.029Z",
+  "status": 200,
+  "jobsStatus": "ok",
+  "jobs": [
+    {
+      "name": "retention",
+      "status": "ok",
+      "lastRunAt": "2026-11-01T09:00:41.016Z",
+      "lastSuccessAt": "2026-11-01T09:00:41.016Z",
+      "lastAttemptAt": "2026-11-01T09:00:41.016Z",
+      "attemptOutcome": "committed",
+      "uncommittedAttemptSinceAt": null,
+      "consecutiveFailures": 0,
+      "lastErrorAt": "2026-10-01T00:19:50.115Z",
+      "lastErrorCurrent": false,
+      "lastSummary": {
+        "dryRun": false,
+        "liveStoreScanned": true,
+        "deleted": 0,
+        "deletionRequested": true,
+        "deletionApplied": true,
+        "budgetExceeded": false,
+        "batchLimit": 100
+      }
+    },
+    {
+      "name": "integrity",
+      "status": "ok",
+      "lastRunAt": "2026-11-01T09:00:43.001Z",
+      "lastSuccessAt": "2026-11-01T09:00:43.001Z",
+      "lastAttemptAt": "2026-11-01T09:00:43.001Z",
+      "attemptOutcome": "committed",
+      "uncommittedAttemptSinceAt": null,
+      "consecutiveFailures": 0,
+      "lastErrorAt": "2026-10-31T07:00:39.529Z",
+      "lastErrorCurrent": false,
+      "lastSummary": {
+        "matched": 0,
+        "skipped": 0,
+        "verified": 1,
+        "invitations": 78,
+        "deferredSkips": 0,
+        "verifiedRooms": 77,
+        "blockedRooms": 0,
+        "quarantinedEvents": 1,
+        "blockReason": "reducer_rejected",
+        "blockComponent": "board"
+      }
+    }
+  ]
+}

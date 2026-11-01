@@ -1,0 +1,18 @@
+{
+  "passed": true,
+  "phase": "reverse",
+  "source": "0f83478a9d7646f8297547723b06802cedc1167b",
+  "roomId": "qa-release-c1c92-1101",
+  "checkedAt": "2026-11-01T09:01:08.995Z",
+  "intentionalResponseBodyCancellation": true,
+  "physicalNetworkLoss": false,
+  "workerdRestartDuringConversion": false,
+  "privateStateExcluded": true,
+  "separateNodeProcesses": true,
+  "preparedCanonicalThenReversed": true,
+  "originalReceiptReturnedAfterEdit": true,
+  "originalSavedResultPreserved": true,
+  "editedProbePreserved": true,
+  "forwardPrepareSteps": 1,
+  "reversePrepareSteps": 1
+}

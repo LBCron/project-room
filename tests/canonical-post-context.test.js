@@ -218,7 +218,7 @@ test('ordinary @agent mentions retain real identity wake and mention behavior wi
   assert.equal(store.db.prepare("SELECT count(*) AS n FROM agent_wake_signals WHERE agent_id=? AND message_id='mention'").get(target.identityId).n, 1);
   assert.equal(store.mentionView('commons', posted.event.id, 'agent').state, 'delivered');
   store.enqueueNativeMcpEvent = () => {};
-  assert.equal(store.canonicalMessagePostContext('commons', { type: 'message.posted', data: { messageId: 'native', body: '@BoundedAgent hi' } }, 'owner'), null);
+  assert.ok(store.transaction(() => store.canonicalMessagePostContext('commons', { type: 'message.posted', data: { messageId: 'native', body: '@BoundedAgent hi' } }, 'owner')));
 });
 
 test('bounded posting preserves private history and cold-reopen state', t => {

@@ -256,3 +256,38 @@ test("an import interleaved mid-export cannot leave a restore with stale coverag
     assert.ok(dupsOf(restored).some(([seq, first]) => seq === head && first === reused.sequence), JSON.stringify(dupsOf(restored)));
   } finally { restored.close(); store.close(); }
 });
+
+// Dot 25625: a target with zero rooms but stale derived rows (keys and
+// coverage left from an earlier use) must not certify the restored history,
+// on both the buffered and the streaming restore paths.
+for (const mode of ["buffered", "streaming"]) {
+  test(`a ${mode} restore into a target with stale derived patrol rows starts uncovered and finds the duplicate`, async () => {
+    const { exportNdjsonText } = await import("../server/room-export.mjs");
+    const { replayNdjsonInto, createBackupReplaySession } = await import("../server/restore-ndjson.mjs");
+    const store = new RoomStore(join(mkdtempSync(join(tmpdir(), `project-room-idem-stale-${mode}-`)), "room.sqlite"));
+    store.initialize(initialRoom("idem"));
+    const key = store.issueAccessKey("idem", "owner");
+    for (let i = 0; i < 6; i++) store.command(key, "idem", { id: `c-${i}`, type: "message.posted", data: { body: "b", messageId: `m-${i}` } });
+    steady(store);
+    const exported = exportNdjsonText(store.db);
+    const restored = new RoomStore(":memory:");
+    try {
+      ensurePatrolSchema(restored);
+      // Stale cache: full coverage over an index that lacks every real key.
+      restored.db.prepare("INSERT INTO patrol_idem_coverage (room_id, through) VALUES ('idem', 1000000)").run();
+      restored.db.prepare("INSERT INTO patrol_idem_keys (room_id, idem_key, first_sequence) VALUES ('idem', 'stale-key', 1)").run();
+      if (mode === "buffered") replayNdjsonInto(exported, restored, { audit: "report" });
+      else { const session = createBackupReplaySession(restored, { audit: "report" }); session.writeText(exported); session.finish(); }
+      assert.equal(restored.db.prepare("SELECT COUNT(*) AS n FROM patrol_idem_coverage").get().n, 0, "stale coverage cleared");
+      assert.equal(restored.db.prepare("SELECT COUNT(*) AS n FROM patrol_idem_keys").get().n, 0, "stale keys cleared");
+      const first = restored.db.prepare("SELECT sequence, body FROM events WHERE room_id='idem' ORDER BY sequence").all()
+        .map(row => ({ sequence: row.sequence, k: JSON.parse(row.body).idempotencyKey })).find(row => typeof row.k === "string" && row.sequence > 1);
+      const head = restored.db.prepare("SELECT sequence FROM rooms WHERE id='idem'").get().sequence + 1;
+      restored.db.prepare("INSERT INTO events VALUES(?,?,?,?)").run("idem", head, `ev-${head}`,
+        JSON.stringify({ id: `ev-${head}`, roomId: "idem", sequence: head, type: "test.noop", idempotencyKey: first.k }));
+      restored.db.prepare("UPDATE rooms SET sequence=? WHERE id='idem'").run(head);
+      steady(restored);
+      assert.ok(dupsOf(restored).some(([seq, f]) => seq === head && f === first.sequence), JSON.stringify(dupsOf(restored)));
+    } finally { restored.close(); store.close(); }
+  });
+}

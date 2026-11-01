@@ -527,6 +527,14 @@ function insertOrder(names) {
 // replay. Replay skips these and reports the row counts; the export itself
 // still holds the rows.
 export const PATROL_DERIVED_TABLES = Object.freeze(["patrol_idem_keys", "patrol_idem_coverage"]);
+// Dot 25625: a restore target with zero rooms may still hold derived patrol
+// rows; skipped incoming rows would leave them certifying restored history.
+// Clearing a rebuildable cache is always safe, whatever the export holds.
+export function clearPatrolDerivedTables(db) {
+  for (const table of PATROL_DERIVED_TABLES) {
+    if (db.prepare("SELECT 1 FROM sqlite_master WHERE type='table' AND name=?").get(table)) db.prepare(`DELETE FROM ${table}`).run();
+  }
+}
 export const REPLAY_SKIPPED_TABLES = Object.freeze([
   "room_runtime_version", "room_writer_permit",
   "emissary_drops", "emissary_idempotency", "emissary_invite_attribution",

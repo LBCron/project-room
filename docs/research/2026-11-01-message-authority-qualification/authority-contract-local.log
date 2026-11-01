@@ -1,0 +1,725 @@
+
+> project-room@0.1.0 check
+> node scripts/check.mjs
+
+journey-coverage: 23 claimed capabilities, every one linked to executable evidence
+no shadowed imports
+OpenAPI route gate: document parses, and every documented operation is served.
+Schema version 44 is stated consistently.
+server.json OK io.github.Uuriko/project-room 1.1.0
+skills-sync-check: OK
+
+/Users/johnpotter/src/pr-canonical-activation-1101/client/codex-queue.mjs
+  18:16  warning  'timer' is never reassigned. Use 'const' instead  prefer-const
+
+/Users/johnpotter/src/pr-canonical-activation-1101/relay/checks/replay-guard.check.mjs
+  17:7  warning  'seen' is never reassigned. Use 'const' instead  prefer-const
+  29:7  warning  'seen' is never reassigned. Use 'const' instead  prefer-const
+
+/Users/johnpotter/src/pr-canonical-activation-1101/scripts/accessibility-check.mjs
+  54:7  warning  'browser' is never reassigned. Use 'const' instead  prefer-const
+  61:3  warning  'page' is never reassigned. Use 'const' instead     prefer-const
+
+/Users/johnpotter/src/pr-canonical-activation-1101/scripts/accountless-join-restore-browser-check.mjs
+  28:7  warning  'browser' is never reassigned. Use 'const' instead  prefer-const
+
+/Users/johnpotter/src/pr-canonical-activation-1101/scripts/activity-feed-browser-check.mjs
+   19:9  warning  'browser' is never reassigned. Use 'const' instead  prefer-const
+  133:9  warning  'browser' is never reassigned. Use 'const' instead  prefer-const
+
+/Users/johnpotter/src/pr-canonical-activation-1101/scripts/agent-pause-browser-check.mjs
+  35:7  warning  'browser' is never reassigned. Use 'const' instead  prefer-const
+
+/Users/johnpotter/src/pr-canonical-activation-1101/scripts/agent-work-access-browser-check.mjs
+  32:7  warning  'browser' is never reassigned. Use 'const' instead  prefer-const
+
+/Users/johnpotter/src/pr-canonical-activation-1101/scripts/assisted-work-browser-check.mjs
+  17:9  warning  'browser' is never reassigned. Use 'const' instead  prefer-const
+
+/Users/johnpotter/src/pr-canonical-activation-1101/scripts/auth-return-browser-check.mjs
+  37:7  warning  'browser' is never reassigned. Use 'const' instead  prefer-const
+
+/Users/johnpotter/src/pr-canonical-activation-1101/scripts/browser-check.mjs
+   43:9   warning  'browser' is never reassigned. Use 'const' instead  prefer-const
+   43:18  warning  'page' is never reassigned. Use 'const' instead     prefer-const
+   60:37  warning  'other' is never reassigned. Use 'const' instead    prefer-const
+  246:9   warning  'browser' is never reassigned. Use 'const' instead  prefer-const
+  246:18  warning  'page' is never reassigned. Use 'const' instead     prefer-const
+
+/Users/johnpotter/src/pr-canonical-activation-1101/scripts/calm-return-browser-check.mjs
+  18:9  warning  'browser' is never reassigned. Use 'const' instead  prefer-const
+
+/Users/johnpotter/src/pr-canonical-activation-1101/scripts/chat-performance-browser-check.mjs
+  161:7  warning  'browser' is never reassigned. Use 'const' instead  prefer-const
+
+/Users/johnpotter/src/pr-canonical-activation-1101/scripts/composer-browser-check.mjs
+  34:9  warning  'browser' is never reassigned. Use 'const' instead  prefer-const
+
+/Users/johnpotter/src/pr-canonical-activation-1101/scripts/composer-live-files-browser-check.mjs
+  27:7  warning  'browser' is never reassigned. Use 'const' instead  prefer-const
+
+/Users/johnpotter/src/pr-canonical-activation-1101/scripts/contribution-journey-check.mjs
+  14:7  warning  'browser' is never reassigned. Use 'const' instead  prefer-const
+
+/Users/johnpotter/src/pr-canonical-activation-1101/scripts/credit-question-browser-check.mjs
+  16:74  warning  'browser' is never reassigned. Use 'const' instead  prefer-const
+  16:83  warning  'mcp' is never reassigned. Use 'const' instead      prefer-const
+
+/Users/johnpotter/src/pr-canonical-activation-1101/scripts/direct-conversation-browser-check.mjs
+  32:7  warning  'browser' is never reassigned. Use 'const' instead  prefer-const
+
+/Users/johnpotter/src/pr-canonical-activation-1101/scripts/disclosure-check.mjs
+  33:7   warning  'browser' is never reassigned. Use 'const' instead  prefer-const
+  41:3   warning  'page' is never reassigned. Use 'const' instead     prefer-const
+  41:35  warning  'other' is never reassigned. Use 'const' instead    prefer-const
+
+/Users/johnpotter/src/pr-canonical-activation-1101/scripts/discovery-contribution-browser-check.mjs
+  19:54  warning  'browser' is never reassigned. Use 'const' instead  prefer-const
+
+/Users/johnpotter/src/pr-canonical-activation-1101/scripts/dm-consent-browser-check.mjs
+  36:7  warning  'browser' is never reassigned. Use 'const' instead  prefer-const
+
+/Users/johnpotter/src/pr-canonical-activation-1101/scripts/fallback-draft-browser-check.mjs
+  32:7  warning  'browser' is never reassigned. Use 'const' instead  prefer-const
+
+/Users/johnpotter/src/pr-canonical-activation-1101/scripts/first-result-journey-check.mjs
+  16:7  warning  'browser' is never reassigned. Use 'const' instead  prefer-const
+
+/Users/johnpotter/src/pr-canonical-activation-1101/scripts/first-use-check.mjs
+  35:9  warning  'browser' is never reassigned. Use 'const' instead  prefer-const
+
+/Users/johnpotter/src/pr-canonical-activation-1101/scripts/friend-bond-browser-check.mjs
+   70:7  warning  'browser' is never reassigned. Use 'const' instead  prefer-const
+  211:7  warning  'browser' is never reassigned. Use 'const' instead  prefer-const
+
+/Users/johnpotter/src/pr-canonical-activation-1101/scripts/growth-invite-browser-check.mjs
+  17:7  warning  'browser' is never reassigned. Use 'const' instead  prefer-const
+
+/Users/johnpotter/src/pr-canonical-activation-1101/scripts/help-contribution-browser-check.mjs
+  22:133  warning  'browser' is never reassigned. Use 'const' instead  prefer-const
+
+/Users/johnpotter/src/pr-canonical-activation-1101/scripts/help-offer-browser-check.mjs
+  28:7  warning  'agent' is never reassigned. Use 'const' instead  prefer-const
+
+/Users/johnpotter/src/pr-canonical-activation-1101/scripts/human-conversation-work-browser-check.mjs
+  45:9  warning  'browser' is never reassigned. Use 'const' instead  prefer-const
+
+/Users/johnpotter/src/pr-canonical-activation-1101/scripts/human-push-browser-check.mjs
+  26:9  warning  'browser' is never reassigned. Use 'const' instead  prefer-const
+
+/Users/johnpotter/src/pr-canonical-activation-1101/scripts/invitation-check.mjs
+  82:7  warning  'mailer' is never reassigned. Use 'const' instead   prefer-const
+  91:7  warning  'browser' is never reassigned. Use 'const' instead  prefer-const
+
+/Users/johnpotter/src/pr-canonical-activation-1101/scripts/invitation-note-browser-check.mjs
+  15:7  warning  'browser' is never reassigned. Use 'const' instead  prefer-const
+
+/Users/johnpotter/src/pr-canonical-activation-1101/scripts/invitation-recovery-check.mjs
+  18:7  warning  'browser' is never reassigned. Use 'const' instead  prefer-const
+
+/Users/johnpotter/src/pr-canonical-activation-1101/scripts/join-next-browser-check.mjs
+  20:7  warning  'browser' is never reassigned. Use 'const' instead  prefer-const
+
+/Users/johnpotter/src/pr-canonical-activation-1101/scripts/loop-warning-browser-check.mjs
+  19:7  warning  'browser' is never reassigned. Use 'const' instead  prefer-const
+
+/Users/johnpotter/src/pr-canonical-activation-1101/scripts/member-perms-browser-check.mjs
+  50:7  warning  'browser' is never reassigned. Use 'const' instead  prefer-const
+
+/Users/johnpotter/src/pr-canonical-activation-1101/scripts/mobile-header-check.mjs
+  17:7  warning  'browser' is never reassigned. Use 'const' instead  prefer-const
+
+/Users/johnpotter/src/pr-canonical-activation-1101/scripts/muse-invite-browser-check.mjs
+  28:9  warning  'browser' is never reassigned. Use 'const' instead  prefer-const
+
+/Users/johnpotter/src/pr-canonical-activation-1101/scripts/narrow-navigation-browser-check.mjs
+  32:7  warning  'browser' is never reassigned. Use 'const' instead  prefer-const
+
+/Users/johnpotter/src/pr-canonical-activation-1101/scripts/native-draft-browser-check.mjs
+  28:7  warning  'reviewer' is never reassigned. Use 'const' instead  prefer-const
+
+/Users/johnpotter/src/pr-canonical-activation-1101/scripts/native-invite-oauth-browser-check.mjs
+  26:7  warning  'backend' is never reassigned. Use 'const' instead     prefer-const
+  59:3  warning  'invitation' is never reassigned. Use 'const' instead  prefer-const
+
+/Users/johnpotter/src/pr-canonical-activation-1101/scripts/native-wake-bridge-browser-check.mjs
+   48:7  warning  'browser' is never reassigned. Use 'const' instead  prefer-const
+   55:3  warning  'page' is never reassigned. Use 'const' instead     prefer-const
+  137:7  warning  'browser' is never reassigned. Use 'const' instead  prefer-const
+  144:3  warning  'page' is never reassigned. Use 'const' instead     prefer-const
+
+/Users/johnpotter/src/pr-canonical-activation-1101/scripts/notification-feed-browser-check.mjs
+   19:9  warning  'browser' is never reassigned. Use 'const' instead  prefer-const
+  138:7  warning  'browser' is never reassigned. Use 'const' instead  prefer-const
+
+/Users/johnpotter/src/pr-canonical-activation-1101/scripts/people-rail-browser-check.mjs
+  71:7  warning  'browser' is never reassigned. Use 'const' instead  prefer-const
+  78:3  warning  'page' is never reassigned. Use 'const' instead     prefer-const
+
+/Users/johnpotter/src/pr-canonical-activation-1101/scripts/person-remove-browser-check.mjs
+  29:7  warning  'browser' is never reassigned. Use 'const' instead  prefer-const
+
+/Users/johnpotter/src/pr-canonical-activation-1101/scripts/portable-work-browser-check.mjs
+  18:9  warning  'browser' is never reassigned. Use 'const' instead  prefer-const
+
+/Users/johnpotter/src/pr-canonical-activation-1101/scripts/purpose-invite-check.mjs
+  19:7  warning  'browser' is never reassigned. Use 'const' instead  prefer-const
+
+/Users/johnpotter/src/pr-canonical-activation-1101/scripts/quiet-attribution-browser-check.mjs
+  15:7  warning  'browser' is never reassigned. Use 'const' instead  prefer-const
+
+/Users/johnpotter/src/pr-canonical-activation-1101/scripts/quiet-copy-browser-check.mjs
+  25:7  warning  'browser' is never reassigned. Use 'const' instead  prefer-const
+
+/Users/johnpotter/src/pr-canonical-activation-1101/scripts/quiet-design-check.mjs
+  19:9  warning  'browser' is never reassigned. Use 'const' instead  prefer-const
+
+/Users/johnpotter/src/pr-canonical-activation-1101/scripts/quiet-focus-a34-check.mjs
+   28:7  warning  'browser' is never reassigned. Use 'const' instead  prefer-const
+   34:3  warning  'page' is never reassigned. Use 'const' instead     prefer-const
+  105:7  warning  'browser' is never reassigned. Use 'const' instead  prefer-const
+  111:3  warning  'page' is never reassigned. Use 'const' instead     prefer-const
+
+/Users/johnpotter/src/pr-canonical-activation-1101/scripts/quiet-invites-check.mjs
+  18:9  warning  'browser' is never reassigned. Use 'const' instead  prefer-const
+
+/Users/johnpotter/src/pr-canonical-activation-1101/scripts/reconnect-collaboration-browser-check.mjs
+   22:7   warning  'browser' is never reassigned. Use 'const' instead     prefer-const
+  142:74  warning  'browser' is never reassigned. Use 'const' instead     prefer-const
+  297:15  warning  'discussion' is never reassigned. Use 'const' instead  prefer-const
+
+/Users/johnpotter/src/pr-canonical-activation-1101/scripts/recovery-browser-check.mjs
+  20:23  warning  'browser' is never reassigned. Use 'const' instead  prefer-const
+
+/Users/johnpotter/src/pr-canonical-activation-1101/scripts/refine-draft-browser-check.mjs
+  12:51  warning  'browser' is never reassigned. Use 'const' instead  prefer-const
+
+/Users/johnpotter/src/pr-canonical-activation-1101/scripts/release-polish-check.mjs
+  18:7  warning  'browser' is never reassigned. Use 'const' instead  prefer-const
+
+/Users/johnpotter/src/pr-canonical-activation-1101/scripts/reminders-browser-check.mjs
+  19:9  warning  'browser' is never reassigned. Use 'const' instead  prefer-const
+
+/Users/johnpotter/src/pr-canonical-activation-1101/scripts/reply-request-browser-check.mjs
+  18:7  warning  'browser' is never reassigned. Use 'const' instead  prefer-const
+
+/Users/johnpotter/src/pr-canonical-activation-1101/scripts/result-diff-browser-check.mjs
+  19:7  warning  'browser' is never reassigned. Use 'const' instead  prefer-const
+
+/Users/johnpotter/src/pr-canonical-activation-1101/scripts/room-actions-browser-check.mjs
+  15:7  warning  'browser' is never reassigned. Use 'const' instead  prefer-const
+
+/Users/johnpotter/src/pr-canonical-activation-1101/scripts/room-door-browser-check.mjs
+  17:9  warning  'browser' is never reassigned. Use 'const' instead  prefer-const
+
+/Users/johnpotter/src/pr-canonical-activation-1101/scripts/room-results-browser-check.mjs
+  41:7  warning  'browser' is never reassigned. Use 'const' instead  prefer-const
+
+/Users/johnpotter/src/pr-canonical-activation-1101/scripts/selfhost-onboarding-browser-check.mjs
+  19:22  warning  'browser' is never reassigned. Use 'const' instead  prefer-const
+
+/Users/johnpotter/src/pr-canonical-activation-1101/scripts/session-boundary-check.mjs
+  47:7  warning  'browser' is never reassigned. Use 'const' instead  prefer-const
+
+/Users/johnpotter/src/pr-canonical-activation-1101/scripts/stream-recovery-browser-check.mjs
+  119:9   warning  'browser' is never reassigned. Use 'const' instead         prefer-const
+  119:24  warning  'cdp' is never reassigned. Use 'const' instead             prefer-const
+  119:76  warning  'targetSequence' is never reassigned. Use 'const' instead  prefer-const
+  120:9   warning  'finalView' is never reassigned. Use 'const' instead       prefer-const
+  120:20  warning  'journal' is never reassigned. Use 'const' instead         prefer-const
+  135:5   warning  'page' is never reassigned. Use 'const' instead            prefer-const
+
+/Users/johnpotter/src/pr-canonical-activation-1101/scripts/unified-journey-check.mjs
+  19:7  warning  'browser' is never reassigned. Use 'const' instead  prefer-const
+
+/Users/johnpotter/src/pr-canonical-activation-1101/scripts/updates-browser-check.mjs
+  47:7  warning  'browser' is never reassigned. Use 'const' instead  prefer-const
+
+/Users/johnpotter/src/pr-canonical-activation-1101/scripts/work-changes-browser-check.mjs
+  18:7  warning  'browser' is never reassigned. Use 'const' instead  prefer-const
+
+/Users/johnpotter/src/pr-canonical-activation-1101/scripts/work-resume-browser-check.mjs
+  15:7  warning  'browser' is never reassigned. Use 'const' instead  prefer-const
+
+/Users/johnpotter/src/pr-canonical-activation-1101/scripts/work-search-browser-check.mjs
+  16:7  warning  'browser' is never reassigned. Use 'const' instead  prefer-const
+
+/Users/johnpotter/src/pr-canonical-activation-1101/scripts/workflow-browser-check.mjs
+  28:9  warning  'browser' is never reassigned. Use 'const' instead  prefer-const
+
+/Users/johnpotter/src/pr-canonical-activation-1101/server/account-deletion.mjs
+  577:20  warning  Raw members index. Resolve members through ownMember(members, id) from src/events.js so prototype ids ("toString", "constructor", …) cannot pose as members  room/no-raw-members-index
+  727:24  warning  Raw members index. Resolve members through ownMember(members, id) from src/events.js so prototype ids ("toString", "constructor", …) cannot pose as members  room/no-raw-members-index
+
+/Users/johnpotter/src/pr-canonical-activation-1101/server/activity.mjs
+  178:21  warning  Raw members index. Resolve members through ownMember(members, id) from src/events.js so prototype ids ("toString", "constructor", …) cannot pose as members  room/no-raw-members-index
+  503:45  warning  Raw members index. Resolve members through ownMember(members, id) from src/events.js so prototype ids ("toString", "constructor", …) cannot pose as members  room/no-raw-members-index
+
+/Users/johnpotter/src/pr-canonical-activation-1101/server/agent-collisions.mjs
+  129:18  warning  Raw members index. Resolve members through ownMember(members, id) from src/events.js so prototype ids ("toString", "constructor", …) cannot pose as members  room/no-raw-members-index
+  137:18  warning  Raw members index. Resolve members through ownMember(members, id) from src/events.js so prototype ids ("toString", "constructor", …) cannot pose as members  room/no-raw-members-index
+  147:9   warning  Raw members index. Resolve members through ownMember(members, id) from src/events.js so prototype ids ("toString", "constructor", …) cannot pose as members  room/no-raw-members-index
+  154:10  warning  Raw members index. Resolve members through ownMember(members, id) from src/events.js so prototype ids ("toString", "constructor", …) cannot pose as members  room/no-raw-members-index
+  154:58  warning  Raw members index. Resolve members through ownMember(members, id) from src/events.js so prototype ids ("toString", "constructor", …) cannot pose as members  room/no-raw-members-index
+  196:9   warning  Raw members index. Resolve members through ownMember(members, id) from src/events.js so prototype ids ("toString", "constructor", …) cannot pose as members  room/no-raw-members-index
+  196:48  warning  Raw members index. Resolve members through ownMember(members, id) from src/events.js so prototype ids ("toString", "constructor", …) cannot pose as members  room/no-raw-members-index
+
+/Users/johnpotter/src/pr-canonical-activation-1101/server/agent-fleet.mjs
+  148:18  warning  Raw members index. Resolve members through ownMember(members, id) from src/events.js so prototype ids ("toString", "constructor", …) cannot pose as members  room/no-raw-members-index
+  171:98  warning  Raw members index. Resolve members through ownMember(members, id) from src/events.js so prototype ids ("toString", "constructor", …) cannot pose as members  room/no-raw-members-index
+
+/Users/johnpotter/src/pr-canonical-activation-1101/server/agent-identities.mjs
+  147:69  warning  Raw members index. Resolve members through ownMember(members, id) from src/events.js so prototype ids ("toString", "constructor", …) cannot pose as members  room/no-raw-members-index
+
+/Users/johnpotter/src/pr-canonical-activation-1101/server/agent-invites.mjs
+   47:52  warning  Raw members index. Resolve members through ownMember(members, id) from src/events.js so prototype ids ("toString", "constructor", …) cannot pose as members  room/no-raw-members-index
+  212:28  warning  Raw members index. Resolve members through ownMember(members, id) from src/events.js so prototype ids ("toString", "constructor", …) cannot pose as members  room/no-raw-members-index
+  317:18  warning  Raw members index. Resolve members through ownMember(members, id) from src/events.js so prototype ids ("toString", "constructor", …) cannot pose as members  room/no-raw-members-index
+  417:50  warning  Raw members index. Resolve members through ownMember(members, id) from src/events.js so prototype ids ("toString", "constructor", …) cannot pose as members  room/no-raw-members-index
+  504:34  warning  Raw members index. Resolve members through ownMember(members, id) from src/events.js so prototype ids ("toString", "constructor", …) cannot pose as members  room/no-raw-members-index
+  666:32  warning  Raw members index. Resolve members through ownMember(members, id) from src/events.js so prototype ids ("toString", "constructor", …) cannot pose as members  room/no-raw-members-index
+  668:21  warning  Raw members index. Resolve members through ownMember(members, id) from src/events.js so prototype ids ("toString", "constructor", …) cannot pose as members  room/no-raw-members-index
+  737:21  warning  Raw members index. Resolve members through ownMember(members, id) from src/events.js so prototype ids ("toString", "constructor", …) cannot pose as members  room/no-raw-members-index
+
+/Users/johnpotter/src/pr-canonical-activation-1101/server/agent-plugin-store.mjs
+   989:13  warning  'slug' is never reassigned. Use 'const' instead                                                                                                              prefer-const
+  1361:14  warning  Raw members index. Resolve members through ownMember(members, id) from src/events.js so prototype ids ("toString", "constructor", …) cannot pose as members  room/no-raw-members-index
+
+/Users/johnpotter/src/pr-canonical-activation-1101/server/agent-talk-policy.mjs
+  49:18   warning  Raw members index. Resolve members through ownMember(members, id) from src/events.js so prototype ids ("toString", "constructor", …) cannot pose as members  room/no-raw-members-index
+  56:18   warning  Raw members index. Resolve members through ownMember(members, id) from src/events.js so prototype ids ("toString", "constructor", …) cannot pose as members  room/no-raw-members-index
+  78:18   warning  Raw members index. Resolve members through ownMember(members, id) from src/events.js so prototype ids ("toString", "constructor", …) cannot pose as members  room/no-raw-members-index
+  85:128  warning  Raw members index. Resolve members through ownMember(members, id) from src/events.js so prototype ids ("toString", "constructor", …) cannot pose as members  room/no-raw-members-index
+
+/Users/johnpotter/src/pr-canonical-activation-1101/server/autonomy-tiers.mjs
+  150:41  warning  Raw members index. Resolve members through ownMember(members, id) from src/events.js so prototype ids ("toString", "constructor", …) cannot pose as members  room/no-raw-members-index
+
+/Users/johnpotter/src/pr-canonical-activation-1101/server/available-work.mjs
+  85:18  warning  Raw members index. Resolve members through ownMember(members, id) from src/events.js so prototype ids ("toString", "constructor", …) cannot pose as members  room/no-raw-members-index
+
+/Users/johnpotter/src/pr-canonical-activation-1101/server/bounty-escrow-routes.mjs
+  111:52  warning  Raw members index. Resolve members through ownMember(members, id) from src/events.js so prototype ids ("toString", "constructor", …) cannot pose as members  room/no-raw-members-index
+  115:51  warning  Raw members index. Resolve members through ownMember(members, id) from src/events.js so prototype ids ("toString", "constructor", …) cannot pose as members  room/no-raw-members-index
+
+/Users/johnpotter/src/pr-canonical-activation-1101/server/bounty-escrow.mjs
+   788:46  warning  Raw members index. Resolve members through ownMember(members, id) from src/events.js so prototype ids ("toString", "constructor", …) cannot pose as members  room/no-raw-members-index
+   792:49  warning  Raw members index. Resolve members through ownMember(members, id) from src/events.js so prototype ids ("toString", "constructor", …) cannot pose as members  room/no-raw-members-index
+   805:17  warning  Raw members index. Resolve members through ownMember(members, id) from src/events.js so prototype ids ("toString", "constructor", …) cannot pose as members  room/no-raw-members-index
+  1217:21  warning  Raw members index. Resolve members through ownMember(members, id) from src/events.js so prototype ids ("toString", "constructor", …) cannot pose as members  room/no-raw-members-index
+
+/Users/johnpotter/src/pr-canonical-activation-1101/server/capability-visibility.mjs
+  176:22  warning  Raw members index. Resolve members through ownMember(members, id) from src/events.js so prototype ids ("toString", "constructor", …) cannot pose as members  room/no-raw-members-index
+
+/Users/johnpotter/src/pr-canonical-activation-1101/server/demigod-contracts.mjs
+  113:108  warning  Raw members index. Resolve members through ownMember(members, id) from src/events.js so prototype ids ("toString", "constructor", …) cannot pose as members  room/no-raw-members-index
+
+/Users/johnpotter/src/pr-canonical-activation-1101/server/feedback-routes.mjs
+  110:36  warning  Raw members index. Resolve members through ownMember(members, id) from src/events.js so prototype ids ("toString", "constructor", …) cannot pose as members  room/no-raw-members-index
+
+/Users/johnpotter/src/pr-canonical-activation-1101/server/guest-invites.mjs
+  347:22  warning  Raw members index. Resolve members through ownMember(members, id) from src/events.js so prototype ids ("toString", "constructor", …) cannot pose as members  room/no-raw-members-index
+  361:20  warning  Raw members index. Resolve members through ownMember(members, id) from src/events.js so prototype ids ("toString", "constructor", …) cannot pose as members  room/no-raw-members-index
+  509:37  warning  Raw members index. Resolve members through ownMember(members, id) from src/events.js so prototype ids ("toString", "constructor", …) cannot pose as members  room/no-raw-members-index
+  613:38  warning  Raw members index. Resolve members through ownMember(members, id) from src/events.js so prototype ids ("toString", "constructor", …) cannot pose as members  room/no-raw-members-index
+  645:13  warning  Raw members index. Resolve members through ownMember(members, id) from src/events.js so prototype ids ("toString", "constructor", …) cannot pose as members  room/no-raw-members-index
+  687:22  warning  Raw members index. Resolve members through ownMember(members, id) from src/events.js so prototype ids ("toString", "constructor", …) cannot pose as members  room/no-raw-members-index
+  714:19  warning  Raw members index. Resolve members through ownMember(members, id) from src/events.js so prototype ids ("toString", "constructor", …) cannot pose as members  room/no-raw-members-index
+  775:22  warning  Raw members index. Resolve members through ownMember(members, id) from src/events.js so prototype ids ("toString", "constructor", …) cannot pose as members  room/no-raw-members-index
+  799:24  warning  Raw members index. Resolve members through ownMember(members, id) from src/events.js so prototype ids ("toString", "constructor", …) cannot pose as members  room/no-raw-members-index
+  847:22  warning  Raw members index. Resolve members through ownMember(members, id) from src/events.js so prototype ids ("toString", "constructor", …) cannot pose as members  room/no-raw-members-index
+
+/Users/johnpotter/src/pr-canonical-activation-1101/server/http.mjs
+  1036:9  warning  'timer' is never reassigned. Use 'const' instead  prefer-const
+
+/Users/johnpotter/src/pr-canonical-activation-1101/server/human-push.mjs
+  371:24  warning  Raw members index. Resolve members through ownMember(members, id) from src/events.js so prototype ids ("toString", "constructor", …) cannot pose as members  room/no-raw-members-index
+  390:26  warning  Raw members index. Resolve members through ownMember(members, id) from src/events.js so prototype ids ("toString", "constructor", …) cannot pose as members  room/no-raw-members-index
+
+/Users/johnpotter/src/pr-canonical-activation-1101/server/inbox.mjs
+   940:73  warning  Raw members index. Resolve members through ownMember(members, id) from src/events.js so prototype ids ("toString", "constructor", …) cannot pose as members  room/no-raw-members-index
+   948:22  warning  Raw members index. Resolve members through ownMember(members, id) from src/events.js so prototype ids ("toString", "constructor", …) cannot pose as members  room/no-raw-members-index
+  1249:11  warning  'receipt' is never reassigned. Use 'const' instead                                                                                                           prefer-const
+
+/Users/johnpotter/src/pr-canonical-activation-1101/server/listener-fence.mjs
+  11:26  warning  Raw members index. Resolve members through ownMember(members, id) from src/events.js so prototype ids ("toString", "constructor", …) cannot pose as members  room/no-raw-members-index
+
+/Users/johnpotter/src/pr-canonical-activation-1101/server/mcp-events-runtime.mjs
+  21:19  warning  Raw members index. Resolve members through ownMember(members, id) from src/events.js so prototype ids ("toString", "constructor", …) cannot pose as members  room/no-raw-members-index
+  21:60  warning  Raw members index. Resolve members through ownMember(members, id) from src/events.js so prototype ids ("toString", "constructor", …) cannot pose as members  room/no-raw-members-index
+
+/Users/johnpotter/src/pr-canonical-activation-1101/server/mcp-modern.mjs
+  46:7  warning  'reply' is never reassigned. Use 'const' instead  prefer-const
+
+/Users/johnpotter/src/pr-canonical-activation-1101/server/mcp-oauth.mjs
+  44:17  warning  Raw members index. Resolve members through ownMember(members, id) from src/events.js so prototype ids ("toString", "constructor", …) cannot pose as members  room/no-raw-members-index
+  45:17  warning  Raw members index. Resolve members through ownMember(members, id) from src/events.js so prototype ids ("toString", "constructor", …) cannot pose as members  room/no-raw-members-index
+
+/Users/johnpotter/src/pr-canonical-activation-1101/server/mcp-room-profile.mjs
+   394:18  warning  Raw members index. Resolve members through ownMember(members, id) from src/events.js so prototype ids ("toString", "constructor", …) cannot pose as members  room/no-raw-members-index
+  1220:73  warning  Raw members index. Resolve members through ownMember(members, id) from src/events.js so prototype ids ("toString", "constructor", …) cannot pose as members  room/no-raw-members-index
+
+/Users/johnpotter/src/pr-canonical-activation-1101/server/membership-delegation.mjs
+   15:18  warning  Raw members index. Resolve members through ownMember(members, id) from src/events.js so prototype ids ("toString", "constructor", …) cannot pose as members  room/no-raw-members-index
+   75:22  warning  Raw members index. Resolve members through ownMember(members, id) from src/events.js so prototype ids ("toString", "constructor", …) cannot pose as members  room/no-raw-members-index
+  209:18  warning  Raw members index. Resolve members through ownMember(members, id) from src/events.js so prototype ids ("toString", "constructor", …) cannot pose as members  room/no-raw-members-index
+  237:31  warning  Raw members index. Resolve members through ownMember(members, id) from src/events.js so prototype ids ("toString", "constructor", …) cannot pose as members  room/no-raw-members-index
+
+/Users/johnpotter/src/pr-canonical-activation-1101/server/mention-lifecycle.mjs
+  258:18  warning  Raw members index. Resolve members through ownMember(members, id) from src/events.js so prototype ids ("toString", "constructor", …) cannot pose as members  room/no-raw-members-index
+
+/Users/johnpotter/src/pr-canonical-activation-1101/server/mention-receipts.mjs
+  38:22  warning  Raw members index. Resolve members through ownMember(members, id) from src/events.js so prototype ids ("toString", "constructor", …) cannot pose as members  room/no-raw-members-index
+
+/Users/johnpotter/src/pr-canonical-activation-1101/server/needs-me.mjs
+  369:18  warning  Raw members index. Resolve members through ownMember(members, id) from src/events.js so prototype ids ("toString", "constructor", …) cannot pose as members  room/no-raw-members-index
+  422:18  warning  Raw members index. Resolve members through ownMember(members, id) from src/events.js so prototype ids ("toString", "constructor", …) cannot pose as members  room/no-raw-members-index
+  719:20  warning  Raw members index. Resolve members through ownMember(members, id) from src/events.js so prototype ids ("toString", "constructor", …) cannot pose as members  room/no-raw-members-index
+
+/Users/johnpotter/src/pr-canonical-activation-1101/server/notifications.mjs
+  246:22  warning  Raw members index. Resolve members through ownMember(members, id) from src/events.js so prototype ids ("toString", "constructor", …) cannot pose as members  room/no-raw-members-index
+
+/Users/johnpotter/src/pr-canonical-activation-1101/server/open-questions.mjs
+  219:20  warning  Raw members index. Resolve members through ownMember(members, id) from src/events.js so prototype ids ("toString", "constructor", …) cannot pose as members  room/no-raw-members-index
+
+/Users/johnpotter/src/pr-canonical-activation-1101/server/orient.mjs
+  144:18  warning  Raw members index. Resolve members through ownMember(members, id) from src/events.js so prototype ids ("toString", "constructor", …) cannot pose as members  room/no-raw-members-index
+
+/Users/johnpotter/src/pr-canonical-activation-1101/server/owner-overview.mjs
+  647:18  warning  Raw members index. Resolve members through ownMember(members, id) from src/events.js so prototype ids ("toString", "constructor", …) cannot pose as members  room/no-raw-members-index
+
+/Users/johnpotter/src/pr-canonical-activation-1101/server/project-offers.mjs
+  80:39  warning  Raw members index. Resolve members through ownMember(members, id) from src/events.js so prototype ids ("toString", "constructor", …) cannot pose as members  room/no-raw-members-index
+  91:42  warning  Raw members index. Resolve members through ownMember(members, id) from src/events.js so prototype ids ("toString", "constructor", …) cannot pose as members  room/no-raw-members-index
+  91:86  warning  Raw members index. Resolve members through ownMember(members, id) from src/events.js so prototype ids ("toString", "constructor", …) cannot pose as members  room/no-raw-members-index
+  94:22  warning  Raw members index. Resolve members through ownMember(members, id) from src/events.js so prototype ids ("toString", "constructor", …) cannot pose as members  room/no-raw-members-index
+
+/Users/johnpotter/src/pr-canonical-activation-1101/server/public-agent-page.mjs
+  181:20  warning  Raw members index. Resolve members through ownMember(members, id) from src/events.js so prototype ids ("toString", "constructor", …) cannot pose as members  room/no-raw-members-index
+  188:20  warning  Raw members index. Resolve members through ownMember(members, id) from src/events.js so prototype ids ("toString", "constructor", …) cannot pose as members  room/no-raw-members-index
+  204:20  warning  Raw members index. Resolve members through ownMember(members, id) from src/events.js so prototype ids ("toString", "constructor", …) cannot pose as members  room/no-raw-members-index
+  246:18  warning  Raw members index. Resolve members through ownMember(members, id) from src/events.js so prototype ids ("toString", "constructor", …) cannot pose as members  room/no-raw-members-index
+  251:24  warning  Raw members index. Resolve members through ownMember(members, id) from src/events.js so prototype ids ("toString", "constructor", …) cannot pose as members  room/no-raw-members-index
+  322:20  warning  Raw members index. Resolve members through ownMember(members, id) from src/events.js so prototype ids ("toString", "constructor", …) cannot pose as members  room/no-raw-members-index
+
+/Users/johnpotter/src/pr-canonical-activation-1101/server/public-face.mjs
+  53:18  warning  Raw members index. Resolve members through ownMember(members, id) from src/events.js so prototype ids ("toString", "constructor", …) cannot pose as members  room/no-raw-members-index
+
+/Users/johnpotter/src/pr-canonical-activation-1101/server/public-read-model.mjs
+  191:18  warning  Raw members index. Resolve members through ownMember(members, id) from src/events.js so prototype ids ("toString", "constructor", …) cannot pose as members  room/no-raw-members-index
+  462:28  warning  Raw members index. Resolve members through ownMember(members, id) from src/events.js so prototype ids ("toString", "constructor", …) cannot pose as members  room/no-raw-members-index
+
+/Users/johnpotter/src/pr-canonical-activation-1101/server/public-work-claims.mjs
+  719:22  warning  Raw members index. Resolve members through ownMember(members, id) from src/events.js so prototype ids ("toString", "constructor", …) cannot pose as members  room/no-raw-members-index
+
+/Users/johnpotter/src/pr-canonical-activation-1101/server/public-work-reviews.mjs
+  43:17   warning  Raw members index. Resolve members through ownMember(members, id) from src/events.js so prototype ids ("toString", "constructor", …) cannot pose as members  room/no-raw-members-index
+  85:112  warning  Raw members index. Resolve members through ownMember(members, id) from src/events.js so prototype ids ("toString", "constructor", …) cannot pose as members  room/no-raw-members-index
+  92:52   warning  Raw members index. Resolve members through ownMember(members, id) from src/events.js so prototype ids ("toString", "constructor", …) cannot pose as members  room/no-raw-members-index
+  96:19   warning  Raw members index. Resolve members through ownMember(members, id) from src/events.js so prototype ids ("toString", "constructor", …) cannot pose as members  room/no-raw-members-index
+
+/Users/johnpotter/src/pr-canonical-activation-1101/server/public-work-settlement.mjs
+  104:70  warning  Raw members index. Resolve members through ownMember(members, id) from src/events.js so prototype ids ("toString", "constructor", …) cannot pose as members  room/no-raw-members-index
+  106:20  warning  Raw members index. Resolve members through ownMember(members, id) from src/events.js so prototype ids ("toString", "constructor", …) cannot pose as members  room/no-raw-members-index
+
+/Users/johnpotter/src/pr-canonical-activation-1101/server/public-work-successors.mjs
+  33:84  warning  Raw members index. Resolve members through ownMember(members, id) from src/events.js so prototype ids ("toString", "constructor", …) cannot pose as members  room/no-raw-members-index
+
+/Users/johnpotter/src/pr-canonical-activation-1101/server/receipt-cards.mjs
+  27:20  warning  Raw members index. Resolve members through ownMember(members, id) from src/events.js so prototype ids ("toString", "constructor", …) cannot pose as members  room/no-raw-members-index
+  94:17  warning  Raw members index. Resolve members through ownMember(members, id) from src/events.js so prototype ids ("toString", "constructor", …) cannot pose as members  room/no-raw-members-index
+  95:32  warning  Raw members index. Resolve members through ownMember(members, id) from src/events.js so prototype ids ("toString", "constructor", …) cannot pose as members  room/no-raw-members-index
+  95:72  warning  Raw members index. Resolve members through ownMember(members, id) from src/events.js so prototype ids ("toString", "constructor", …) cannot pose as members  room/no-raw-members-index
+  96:88  warning  Raw members index. Resolve members through ownMember(members, id) from src/events.js so prototype ids ("toString", "constructor", …) cannot pose as members  room/no-raw-members-index
+
+/Users/johnpotter/src/pr-canonical-activation-1101/server/recovery.mjs
+  219:54  warning  Raw members index. Resolve members through ownMember(members, id) from src/events.js so prototype ids ("toString", "constructor", …) cannot pose as members  room/no-raw-members-index
+
+/Users/johnpotter/src/pr-canonical-activation-1101/server/referral-invites.mjs
+  251:9   warning  Raw members index. Resolve members through ownMember(members, id) from src/events.js so prototype ids ("toString", "constructor", …) cannot pose as members  room/no-raw-members-index
+  361:12  warning  Raw members index. Resolve members through ownMember(members, id) from src/events.js so prototype ids ("toString", "constructor", …) cannot pose as members  room/no-raw-members-index
+  414:68  warning  Raw members index. Resolve members through ownMember(members, id) from src/events.js so prototype ids ("toString", "constructor", …) cannot pose as members  room/no-raw-members-index
+  527:39  warning  Raw members index. Resolve members through ownMember(members, id) from src/events.js so prototype ids ("toString", "constructor", …) cannot pose as members  room/no-raw-members-index
+
+/Users/johnpotter/src/pr-canonical-activation-1101/server/referrals.mjs
+   68:22  warning  Raw members index. Resolve members through ownMember(members, id) from src/events.js so prototype ids ("toString", "constructor", …) cannot pose as members  room/no-raw-members-index
+   69:21  warning  Raw members index. Resolve members through ownMember(members, id) from src/events.js so prototype ids ("toString", "constructor", …) cannot pose as members  room/no-raw-members-index
+  134:28  warning  Raw members index. Resolve members through ownMember(members, id) from src/events.js so prototype ids ("toString", "constructor", …) cannot pose as members  room/no-raw-members-index
+
+/Users/johnpotter/src/pr-canonical-activation-1101/server/reply-requests.mjs
+  266:31   warning  Raw members index. Resolve members through ownMember(members, id) from src/events.js so prototype ids ("toString", "constructor", …) cannot pose as members  room/no-raw-members-index
+  266:104  warning  Raw members index. Resolve members through ownMember(members, id) from src/events.js so prototype ids ("toString", "constructor", …) cannot pose as members  room/no-raw-members-index
+  338:78   warning  Raw members index. Resolve members through ownMember(members, id) from src/events.js so prototype ids ("toString", "constructor", …) cannot pose as members  room/no-raw-members-index
+  361:7    warning  Raw members index. Resolve members through ownMember(members, id) from src/events.js so prototype ids ("toString", "constructor", …) cannot pose as members  room/no-raw-members-index
+
+/Users/johnpotter/src/pr-canonical-activation-1101/server/request-runs.mjs
+  66:67  warning  Raw members index. Resolve members through ownMember(members, id) from src/events.js so prototype ids ("toString", "constructor", …) cannot pose as members  room/no-raw-members-index
+
+/Users/johnpotter/src/pr-canonical-activation-1101/server/room-activation-pack.mjs
+  200:51  warning  Raw members index. Resolve members through ownMember(members, id) from src/events.js so prototype ids ("toString", "constructor", …) cannot pose as members  room/no-raw-members-index
+
+/Users/johnpotter/src/pr-canonical-activation-1101/server/room-assistant.mjs
+  104:57   warning  Raw members index. Resolve members through ownMember(members, id) from src/events.js so prototype ids ("toString", "constructor", …) cannot pose as members  room/no-raw-members-index
+  191:92   warning  Raw members index. Resolve members through ownMember(members, id) from src/events.js so prototype ids ("toString", "constructor", …) cannot pose as members  room/no-raw-members-index
+  191:155  warning  Raw members index. Resolve members through ownMember(members, id) from src/events.js so prototype ids ("toString", "constructor", …) cannot pose as members  room/no-raw-members-index
+  191:208  warning  Raw members index. Resolve members through ownMember(members, id) from src/events.js so prototype ids ("toString", "constructor", …) cannot pose as members  room/no-raw-members-index
+  216:31   warning  Raw members index. Resolve members through ownMember(members, id) from src/events.js so prototype ids ("toString", "constructor", …) cannot pose as members  room/no-raw-members-index
+  263:33   warning  Raw members index. Resolve members through ownMember(members, id) from src/events.js so prototype ids ("toString", "constructor", …) cannot pose as members  room/no-raw-members-index
+  426:23   warning  Raw members index. Resolve members through ownMember(members, id) from src/events.js so prototype ids ("toString", "constructor", …) cannot pose as members  room/no-raw-members-index
+
+/Users/johnpotter/src/pr-canonical-activation-1101/server/room-guide.mjs
+  107:17  warning  Raw members index. Resolve members through ownMember(members, id) from src/events.js so prototype ids ("toString", "constructor", …) cannot pose as members  room/no-raw-members-index
+
+/Users/johnpotter/src/pr-canonical-activation-1101/server/routes/work-claims.mjs
+  47:18  warning  Raw members index. Resolve members through ownMember(members, id) from src/events.js so prototype ids ("toString", "constructor", …) cannot pose as members  room/no-raw-members-index
+
+/Users/johnpotter/src/pr-canonical-activation-1101/server/share-links.mjs
+  174:78  warning  Raw members index. Resolve members through ownMember(members, id) from src/events.js so prototype ids ("toString", "constructor", …) cannot pose as members  room/no-raw-members-index
+  229:80  warning  Raw members index. Resolve members through ownMember(members, id) from src/events.js so prototype ids ("toString", "constructor", …) cannot pose as members  room/no-raw-members-index
+  474:13  warning  Raw members index. Resolve members through ownMember(members, id) from src/events.js so prototype ids ("toString", "constructor", …) cannot pose as members  room/no-raw-members-index
+  531:51  warning  Raw members index. Resolve members through ownMember(members, id) from src/events.js so prototype ids ("toString", "constructor", …) cannot pose as members  room/no-raw-members-index
+  557:57  warning  Raw members index. Resolve members through ownMember(members, id) from src/events.js so prototype ids ("toString", "constructor", …) cannot pose as members  room/no-raw-members-index
+  582:20  warning  Raw members index. Resolve members through ownMember(members, id) from src/events.js so prototype ids ("toString", "constructor", …) cannot pose as members  room/no-raw-members-index
+  605:20  warning  Raw members index. Resolve members through ownMember(members, id) from src/events.js so prototype ids ("toString", "constructor", …) cannot pose as members  room/no-raw-members-index
+  610:19  warning  Raw members index. Resolve members through ownMember(members, id) from src/events.js so prototype ids ("toString", "constructor", …) cannot pose as members  room/no-raw-members-index
+
+/Users/johnpotter/src/pr-canonical-activation-1101/server/sleeper-wake.mjs
+  136:18  warning  Raw members index. Resolve members through ownMember(members, id) from src/events.js so prototype ids ("toString", "constructor", …) cannot pose as members  room/no-raw-members-index
+
+/Users/johnpotter/src/pr-canonical-activation-1101/server/squads.mjs
+   93:15  warning  Raw members index. Resolve members through ownMember(members, id) from src/events.js so prototype ids ("toString", "constructor", …) cannot pose as members  room/no-raw-members-index
+  125:17  warning  Raw members index. Resolve members through ownMember(members, id) from src/events.js so prototype ids ("toString", "constructor", …) cannot pose as members  room/no-raw-members-index
+
+/Users/johnpotter/src/pr-canonical-activation-1101/server/starter-room.mjs
+  73:12  warning  Raw members index. Resolve members through ownMember(members, id) from src/events.js so prototype ids ("toString", "constructor", …) cannot pose as members  room/no-raw-members-index
+
+/Users/johnpotter/src/pr-canonical-activation-1101/server/store.mjs
+  1108:9    warning  Raw members index. Resolve members through ownMember(members, id) from src/events.js so prototype ids ("toString", "constructor", …) cannot pose as members  room/no-raw-members-index
+  1114:11   warning  Raw members index. Resolve members through ownMember(members, id) from src/events.js so prototype ids ("toString", "constructor", …) cannot pose as members  room/no-raw-members-index
+  1119:21   warning  Raw members index. Resolve members through ownMember(members, id) from src/events.js so prototype ids ("toString", "constructor", …) cannot pose as members  room/no-raw-members-index
+  1132:31   warning  Raw members index. Resolve members through ownMember(members, id) from src/events.js so prototype ids ("toString", "constructor", …) cannot pose as members  room/no-raw-members-index
+  4725:20   warning  Raw members index. Resolve members through ownMember(members, id) from src/events.js so prototype ids ("toString", "constructor", …) cannot pose as members  room/no-raw-members-index
+  4760:77   warning  Raw members index. Resolve members through ownMember(members, id) from src/events.js so prototype ids ("toString", "constructor", …) cannot pose as members  room/no-raw-members-index
+  4804:9    warning  Raw members index. Resolve members through ownMember(members, id) from src/events.js so prototype ids ("toString", "constructor", …) cannot pose as members  room/no-raw-members-index
+  4897:30   warning  Raw members index. Resolve members through ownMember(members, id) from src/events.js so prototype ids ("toString", "constructor", …) cannot pose as members  room/no-raw-members-index
+  4923:31   warning  Raw members index. Resolve members through ownMember(members, id) from src/events.js so prototype ids ("toString", "constructor", …) cannot pose as members  room/no-raw-members-index
+  5037:28   warning  Raw members index. Resolve members through ownMember(members, id) from src/events.js so prototype ids ("toString", "constructor", …) cannot pose as members  room/no-raw-members-index
+  5117:79   warning  Raw members index. Resolve members through ownMember(members, id) from src/events.js so prototype ids ("toString", "constructor", …) cannot pose as members  room/no-raw-members-index
+  5135:79   warning  Raw members index. Resolve members through ownMember(members, id) from src/events.js so prototype ids ("toString", "constructor", …) cannot pose as members  room/no-raw-members-index
+  5164:20   warning  Raw members index. Resolve members through ownMember(members, id) from src/events.js so prototype ids ("toString", "constructor", …) cannot pose as members  room/no-raw-members-index
+  5249:61   warning  Raw members index. Resolve members through ownMember(members, id) from src/events.js so prototype ids ("toString", "constructor", …) cannot pose as members  room/no-raw-members-index
+  5299:22   warning  Raw members index. Resolve members through ownMember(members, id) from src/events.js so prototype ids ("toString", "constructor", …) cannot pose as members  room/no-raw-members-index
+  5345:76   warning  Raw members index. Resolve members through ownMember(members, id) from src/events.js so prototype ids ("toString", "constructor", …) cannot pose as members  room/no-raw-members-index
+  5345:101  warning  Raw members index. Resolve members through ownMember(members, id) from src/events.js so prototype ids ("toString", "constructor", …) cannot pose as members  room/no-raw-members-index
+  5827:74   warning  Raw members index. Resolve members through ownMember(members, id) from src/events.js so prototype ids ("toString", "constructor", …) cannot pose as members  room/no-raw-members-index
+  5833:17   warning  Raw members index. Resolve members through ownMember(members, id) from src/events.js so prototype ids ("toString", "constructor", …) cannot pose as members  room/no-raw-members-index
+  6124:17   warning  Raw members index. Resolve members through ownMember(members, id) from src/events.js so prototype ids ("toString", "constructor", …) cannot pose as members  room/no-raw-members-index
+  6959:22   warning  Raw members index. Resolve members through ownMember(members, id) from src/events.js so prototype ids ("toString", "constructor", …) cannot pose as members  room/no-raw-members-index
+  7020:23   warning  Raw members index. Resolve members through ownMember(members, id) from src/events.js so prototype ids ("toString", "constructor", …) cannot pose as members  room/no-raw-members-index
+  7149:15   warning  Raw members index. Resolve members through ownMember(members, id) from src/events.js so prototype ids ("toString", "constructor", …) cannot pose as members  room/no-raw-members-index
+  7397:62   warning  Raw members index. Resolve members through ownMember(members, id) from src/events.js so prototype ids ("toString", "constructor", …) cannot pose as members  room/no-raw-members-index
+  7447:22   warning  Raw members index. Resolve members through ownMember(members, id) from src/events.js so prototype ids ("toString", "constructor", …) cannot pose as members  room/no-raw-members-index
+  7522:21   warning  Raw members index. Resolve members through ownMember(members, id) from src/events.js so prototype ids ("toString", "constructor", …) cannot pose as members  room/no-raw-members-index
+  7688:10   warning  Raw members index. Resolve members through ownMember(members, id) from src/events.js so prototype ids ("toString", "constructor", …) cannot pose as members  room/no-raw-members-index
+  7838:24   warning  Raw members index. Resolve members through ownMember(members, id) from src/events.js so prototype ids ("toString", "constructor", …) cannot pose as members  room/no-raw-members-index
+  7857:20   warning  Raw members index. Resolve members through ownMember(members, id) from src/events.js so prototype ids ("toString", "constructor", …) cannot pose as members  room/no-raw-members-index
+  7884:58   warning  Raw members index. Resolve members through ownMember(members, id) from src/events.js so prototype ids ("toString", "constructor", …) cannot pose as members  room/no-raw-members-index
+
+/Users/johnpotter/src/pr-canonical-activation-1101/server/trial-task-store.mjs
+   28:46   warning  Raw members index. Resolve members through ownMember(members, id) from src/events.js so prototype ids ("toString", "constructor", …) cannot pose as members  room/no-raw-members-index
+  101:278  warning  Raw members index. Resolve members through ownMember(members, id) from src/events.js so prototype ids ("toString", "constructor", …) cannot pose as members  room/no-raw-members-index
+
+/Users/johnpotter/src/pr-canonical-activation-1101/server/updates.mjs
+  165:18  warning  Raw members index. Resolve members through ownMember(members, id) from src/events.js so prototype ids ("toString", "constructor", …) cannot pose as members  room/no-raw-members-index
+  310:22  warning  Raw members index. Resolve members through ownMember(members, id) from src/events.js so prototype ids ("toString", "constructor", …) cannot pose as members  room/no-raw-members-index
+  475:22  warning  Raw members index. Resolve members through ownMember(members, id) from src/events.js so prototype ids ("toString", "constructor", …) cannot pose as members  room/no-raw-members-index
+
+/Users/johnpotter/src/pr-canonical-activation-1101/server/wake-queue.mjs
+  142:19  warning  Raw members index. Resolve members through ownMember(members, id) from src/events.js so prototype ids ("toString", "constructor", …) cannot pose as members  room/no-raw-members-index
+
+/Users/johnpotter/src/pr-canonical-activation-1101/server/work-claim-events.mjs
+  273:17  warning  Raw members index. Resolve members through ownMember(members, id) from src/events.js so prototype ids ("toString", "constructor", …) cannot pose as members  room/no-raw-members-index
+
+/Users/johnpotter/src/pr-canonical-activation-1101/server/work-claim-routes.mjs
+   268:44  warning  Raw members index. Resolve members through ownMember(members, id) from src/events.js so prototype ids ("toString", "constructor", …) cannot pose as members  room/no-raw-members-index
+   999:20  warning  Raw members index. Resolve members through ownMember(members, id) from src/events.js so prototype ids ("toString", "constructor", …) cannot pose as members  room/no-raw-members-index
+  1045:20  warning  Raw members index. Resolve members through ownMember(members, id) from src/events.js so prototype ids ("toString", "constructor", …) cannot pose as members  room/no-raw-members-index
+  1078:20  warning  Raw members index. Resolve members through ownMember(members, id) from src/events.js so prototype ids ("toString", "constructor", …) cannot pose as members  room/no-raw-members-index
+  1167:53  warning  Raw members index. Resolve members through ownMember(members, id) from src/events.js so prototype ids ("toString", "constructor", …) cannot pose as members  room/no-raw-members-index
+  1652:55  warning  Raw members index. Resolve members through ownMember(members, id) from src/events.js so prototype ids ("toString", "constructor", …) cannot pose as members  room/no-raw-members-index
+
+/Users/johnpotter/src/pr-canonical-activation-1101/server/work-context.mjs
+   92:54  warning  Raw members index. Resolve members through ownMember(members, id) from src/events.js so prototype ids ("toString", "constructor", …) cannot pose as members  room/no-raw-members-index
+  129:54  warning  Raw members index. Resolve members through ownMember(members, id) from src/events.js so prototype ids ("toString", "constructor", …) cannot pose as members  room/no-raw-members-index
+  130:12  warning  Raw members index. Resolve members through ownMember(members, id) from src/events.js so prototype ids ("toString", "constructor", …) cannot pose as members  room/no-raw-members-index
+
+/Users/johnpotter/src/pr-canonical-activation-1101/server/work-discussion.mjs
+  139:40  warning  Raw members index. Resolve members through ownMember(members, id) from src/events.js so prototype ids ("toString", "constructor", …) cannot pose as members  room/no-raw-members-index
+  139:65  warning  Raw members index. Resolve members through ownMember(members, id) from src/events.js so prototype ids ("toString", "constructor", …) cannot pose as members  room/no-raw-members-index
+
+/Users/johnpotter/src/pr-canonical-activation-1101/server/work-help.mjs
+  50:57   warning  Raw members index. Resolve members through ownMember(members, id) from src/events.js so prototype ids ("toString", "constructor", …) cannot pose as members  room/no-raw-members-index
+  50:113  warning  Raw members index. Resolve members through ownMember(members, id) from src/events.js so prototype ids ("toString", "constructor", …) cannot pose as members  room/no-raw-members-index
+  68:29   warning  Raw members index. Resolve members through ownMember(members, id) from src/events.js so prototype ids ("toString", "constructor", …) cannot pose as members  room/no-raw-members-index
+  69:29   warning  Raw members index. Resolve members through ownMember(members, id) from src/events.js so prototype ids ("toString", "constructor", …) cannot pose as members  room/no-raw-members-index
+  80:7    warning  Raw members index. Resolve members through ownMember(members, id) from src/events.js so prototype ids ("toString", "constructor", …) cannot pose as members  room/no-raw-members-index
+  84:50   warning  Raw members index. Resolve members through ownMember(members, id) from src/events.js so prototype ids ("toString", "constructor", …) cannot pose as members  room/no-raw-members-index
+
+/Users/johnpotter/src/pr-canonical-activation-1101/server/work-item-board.mjs
+  1102:22  warning  Raw members index. Resolve members through ownMember(members, id) from src/events.js so prototype ids ("toString", "constructor", …) cannot pose as members  room/no-raw-members-index
+
+/Users/johnpotter/src/pr-canonical-activation-1101/server/work-wakes.mjs
+  55:20  warning  Raw members index. Resolve members through ownMember(members, id) from src/events.js so prototype ids ("toString", "constructor", …) cannot pose as members  room/no-raw-members-index
+
+/Users/johnpotter/src/pr-canonical-activation-1101/server/work-wants.mjs
+  120:20  warning  Raw members index. Resolve members through ownMember(members, id) from src/events.js so prototype ids ("toString", "constructor", …) cannot pose as members  room/no-raw-members-index
+
+/Users/johnpotter/src/pr-canonical-activation-1101/tests/activity.test.js
+  433:7  warning  'lines' is never reassigned. Use 'const' instead  prefer-const
+
+/Users/johnpotter/src/pr-canonical-activation-1101/tests/agent-connections-identityid.test.js
+  14:7  warning  'now' is never reassigned. Use 'const' instead  prefer-const
+
+/Users/johnpotter/src/pr-canonical-activation-1101/tests/agent-enrollment-atomic.test.js
+  236:7  warning  'now' is never reassigned. Use 'const' instead  prefer-const
+
+/Users/johnpotter/src/pr-canonical-activation-1101/tests/agent-heartbeats.test.js
+  195:7  warning  'at' is never reassigned. Use 'const' instead  prefer-const
+  354:7  warning  'at' is never reassigned. Use 'const' instead  prefer-const
+
+/Users/johnpotter/src/pr-canonical-activation-1101/tests/agent-mentions-inbox.test.js
+   90:7  warning  'mcp' is never reassigned. Use 'const' instead  prefer-const
+  180:7  warning  'mcp' is never reassigned. Use 'const' instead  prefer-const
+
+/Users/johnpotter/src/pr-canonical-activation-1101/tests/agent-plugin-api-keys.test.js
+  6:7  warning  't' is never reassigned. Use 'const' instead  prefer-const
+
+/Users/johnpotter/src/pr-canonical-activation-1101/tests/agent-plugin-directory.test.js
+  7:7  warning  't' is never reassigned. Use 'const' instead  prefer-const
+
+/Users/johnpotter/src/pr-canonical-activation-1101/tests/agent-write-guide.test.js
+  31:7  warning  'server' is never reassigned. Use 'const' instead  prefer-const
+
+/Users/johnpotter/src/pr-canonical-activation-1101/tests/begin-scope-retry.test.js
+  301:7  warning  'mcp' is never reassigned. Use 'const' instead  prefer-const
+
+/Users/johnpotter/src/pr-canonical-activation-1101/tests/bounty-disputability-reads.test.js
+  33:5  warning  'nowMs' is never reassigned. Use 'const' instead  prefer-const
+
+/Users/johnpotter/src/pr-canonical-activation-1101/tests/bounty-dispute-decider-visibility.test.js
+  27:5  warning  'nowMs' is never reassigned. Use 'const' instead  prefer-const
+
+/Users/johnpotter/src/pr-canonical-activation-1101/tests/bounty-ensure-partial-migration.test.js
+  27:5  warning  'nowMs' is never reassigned. Use 'const' instead  prefer-const
+
+/Users/johnpotter/src/pr-canonical-activation-1101/tests/bounty-escrow-atomicity.test.js
+  29:5  warning  'nowMs' is never reassigned. Use 'const' instead  prefer-const
+
+/Users/johnpotter/src/pr-canonical-activation-1101/tests/bounty-identity.test.js
+  27:5  warning  'nowMs' is never reassigned. Use 'const' instead  prefer-const
+
+/Users/johnpotter/src/pr-canonical-activation-1101/tests/bounty-review-packets.test.js
+  22:5  warning  'nowMs' is never reassigned. Use 'const' instead  prefer-const
+
+/Users/johnpotter/src/pr-canonical-activation-1101/tests/bounty-rubrics.test.js
+  19:5  warning  'nowMs' is never reassigned. Use 'const' instead  prefer-const
+
+/Users/johnpotter/src/pr-canonical-activation-1101/tests/bounty-slug-collision.test.js
+  26:5  warning  'nowMs' is never reassigned. Use 'const' instead  prefer-const
+
+/Users/johnpotter/src/pr-canonical-activation-1101/tests/ci-workflow-concurrency.test.js
+  65:9  warning  'left' is never reassigned. Use 'const' instead  prefer-const
+
+/Users/johnpotter/src/pr-canonical-activation-1101/tests/claim-autolink.test.js
+  319:7  warning  'item' is never reassigned. Use 'const' instead  prefer-const
+
+/Users/johnpotter/src/pr-canonical-activation-1101/tests/client.test.js
+  215:5  warning  'client' is never reassigned. Use 'const' instead  prefer-const
+
+/Users/johnpotter/src/pr-canonical-activation-1101/tests/codex-shared-assistant.test.js
+  531:7  warning  'fixture' is never reassigned. Use 'const' instead  prefer-const
+
+/Users/johnpotter/src/pr-canonical-activation-1101/tests/feedback-store.test.js
+  191:7  warning  'nowMs' is never reassigned. Use 'const' instead  prefer-const
+
+/Users/johnpotter/src/pr-canonical-activation-1101/tests/fulltext-search.test.js
+  192:7  warning  'r' is never reassigned. Use 'const' instead  prefer-const
+
+/Users/johnpotter/src/pr-canonical-activation-1101/tests/invitation-note.test.js
+  7:7  warning  'doc' is never reassigned. Use 'const' instead  prefer-const
+
+/Users/johnpotter/src/pr-canonical-activation-1101/tests/invite-flow-abuse.test.js
+  21:7  warning  'now' is never reassigned. Use 'const' instead  prefer-const
+
+/Users/johnpotter/src/pr-canonical-activation-1101/tests/mcp-work-context.test.js
+  18:7  warning  'stdio' is never reassigned. Use 'const' instead  prefer-const
+
+/Users/johnpotter/src/pr-canonical-activation-1101/tests/mint-retry-after-truth.test.js
+  46:7  warning  'now' is never reassigned. Use 'const' instead  prefer-const
+
+/Users/johnpotter/src/pr-canonical-activation-1101/tests/oauth-provider-attack-cases.test.js
+  117:7  warning  't' is never reassigned. Use 'const' instead  prefer-const
+  291:7  warning  't' is never reassigned. Use 'const' instead  prefer-const
+
+/Users/johnpotter/src/pr-canonical-activation-1101/tests/oauth-provider-durable.test.js
+  36:7  warning  'now' is never reassigned. Use 'const' instead  prefer-const
+  85:7  warning  'now' is never reassigned. Use 'const' instead  prefer-const
+
+/Users/johnpotter/src/pr-canonical-activation-1101/tests/pairing-flow.test.js
+  79:7  warning  'nowWait' is never reassigned. Use 'const' instead  prefer-const
+
+/Users/johnpotter/src/pr-canonical-activation-1101/tests/peer-dm-room-scope.test.js
+  17:7  warning  'now' is never reassigned. Use 'const' instead  prefer-const
+
+/Users/johnpotter/src/pr-canonical-activation-1101/tests/provision.test.js
+  14:7  warning  'store' is never reassigned. Use 'const' instead  prefer-const
+
+/Users/johnpotter/src/pr-canonical-activation-1101/tests/receipt-dispute-decider.test.js
+  43:7  warning  'clock' is never reassigned. Use 'const' instead  prefer-const
+
+/Users/johnpotter/src/pr-canonical-activation-1101/tests/request-attention.test.js
+  197:71  warning  'state' is never reassigned. Use 'const' instead  prefer-const
+
+/Users/johnpotter/src/pr-canonical-activation-1101/tests/room-channels.test.js
+  55:7  warning  'state' is never reassigned. Use 'const' instead  prefer-const
+
+/Users/johnpotter/src/pr-canonical-activation-1101/tests/share-link-access.test.js
+  16:7  warning  'now' is never reassigned. Use 'const' instead  prefer-const
+
+/Users/johnpotter/src/pr-canonical-activation-1101/tests/wake-path.test.js
+  572:7  warning  'at' is never reassigned. Use 'const' instead  prefer-const
+
+/Users/johnpotter/src/pr-canonical-activation-1101/tests/web-research-quota-race.test.js
+  28:7  warning  'now' is never reassigned. Use 'const' instead  prefer-const
+
+/Users/johnpotter/src/pr-canonical-activation-1101/tests/work-claim-provenance.test.js
+  103:7  warning  'x' is never reassigned. Use 'const' instead  prefer-const
+
+/Users/johnpotter/src/pr-canonical-activation-1101/tests/work-discussion.test.js
+  90:23  warning  'all' is never reassigned. Use 'const' instead  prefer-const
+
+✖ 336 problems (0 errors, 336 warnings)
+  0 errors and 38 warnings potentially fixable with the `--fix` option.
+
+secret-scan: ok — 1679 files scanned, no findings.
+Open-route inventory: 95 routes declared security: [] in docs/openapi.yaml are listed in both documents.
+wiki-check: OK (7 entries, schema + order valid)
+wiki-check: traces OK (12 traces, schema + order valid)
+wiki-build: OK (server/wiki-data.mjs current: 5 procedures, 7 entries, 2 runbooks)
+check-workflow-pins: all refs pinned
+docs-link-check: OK (796 links)
+github-app-check: manifest matches the shared core; credentials are not set, so the integration stays off
+design contrast: 22 pairs meet WCAG 2.2 AA
+sync-design-tokens-css: styles.css already in sync
+✔ every 'Same … as' route claim resolves to a documented OpenAPI operation (3.721542ms)
+✔ known drift entries still describe reality (0.31475ms)
+✔ MCP tool request shapes agree with their OpenAPI operations (2.910875ms)
+✔ registry surface sanity: the compared tools are the documented MCP catalog (0.0515ms)
+ℹ tests 4
+ℹ suites 0
+ℹ pass 4
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 314.267625
+check: skipping node --test in CI (covered by test jobs)

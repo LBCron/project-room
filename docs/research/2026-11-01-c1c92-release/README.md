@@ -40,3 +40,5 @@ Private backups, SQL databases, provider logs and credential files are deliberat
 Subsequent sanitized tail extraction records one fast-jobs RPC failure near the recovered tick and a later successful scheduled invocation. The specific RPC cause and relationship to the brief health transient remain unproven; see live-c1c92-cron-observation.json. The full private tail is excluded.
 
 Source refinement: canonical authority is a separate per-room marker activated by migrateMessageAuthority; it does not require turning on the rolling entity/window flags. Production has not undergone this explicit conversion. Blindly enabling the rolling window would disable the currently qualified targeted canonical edit path.
+
+Second real scheduled integrity success observed07:00:35.759Z after06:00:38.852Z; noreset/threshold/schedule mutation. Jobstatusintegrityok/failures0. Overallhealthdegradedonlyforclaim-prsgithub_rate_limited. Historicalerrorstringsarenotcurrentfailures.

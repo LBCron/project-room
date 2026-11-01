@@ -1,0 +1,18 @@
+✔ vendored sanitizer license version matches the locked package (3.084708ms)
+✔ vendored sanitizer matches pinned package: safe formatting (1.743ms)
+✔ vendored sanitizer matches pinned package: refresh script URL (0.232542ms)
+✔ vendored sanitizer matches pinned package: refresh data URL (0.099042ms)
+✔ vendored sanitizer matches pinned package: implied noscript close (0.163291ms)
+✔ vendored sanitizer matches pinned package: malformed comment (0.25875ms)
+✔ Room HTML policy removes active elements and keeps safe links protected (0.327792ms)
+✔ vendored sanitizer blocks namespace-prefixed SMIL URL retargeting (1.33575ms)
+✔ Gmail HTML rejects deeply repeated discarded iframe fallback without overflowing (1.889541ms)
+✔ discarded iframe fallback cannot reset the configured nesting limit (0.319541ms)
+ℹ tests 10
+ℹ suites 0
+ℹ pass 10
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 134.15175

@@ -1,0 +1,57 @@
+✖ Gmail HTML rejects deeply repeated discarded iframe fallback without overflowing (69.976459ms)
+✖ discarded iframe fallback cannot reset the configured nesting limit (1.083708ms)
+ℹ tests 2
+ℹ suites 0
+ℹ pass 0
+ℹ fail 2
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 199.428708
+
+✖ failing tests:
+
+test at tests/gmail-sanitizer-bundle.test.js:54:1
+✖ Gmail HTML rejects deeply repeated discarded iframe fallback without overflowing (69.976459ms)
+  AssertionError [ERR_ASSERTION]: Got unwanted exception.
+  Actual message: "Maximum call stack size exceeded"
+      at TestContext.<anonymous> (file:///Users/johnpotter/src/pr-dependency-security-1101/tests/gmail-sanitizer-bundle.test.js:56:10)
+      at Test.runInAsyncScope (node:async_hooks:227:14)
+      at Test.run (node:internal/test_runner/test:1402:25)
+      at Test.start (node:internal/test_runner/test:1262:17)
+      at startSubtestAfterBootstrap (node:internal/test_runner/harness:387:17) {
+    generatedMessage: false,
+    code: 'ERR_ASSERTION',
+    actual: RangeError: Maximum call stack size exceeded
+        at file:///Users/johnpotter/src/pr-dependency-security-1101/server/vendor/gmail-html-sanitizer.mjs:41:13865
+        at Array.forEach (<anonymous>)
+        at yt (file:///Users/johnpotter/src/pr-dependency-security-1101/server/vendor/gmail-html-sanitizer.mjs:41:13849)
+        at Object.ontext (file:///Users/johnpotter/src/pr-dependency-security-1101/server/vendor/gmail-html-sanitizer.mjs:41:19765)
+        at Ve.ontext (file:///Users/johnpotter/src/pr-dependency-security-1101/server/vendor/gmail-html-sanitizer.mjs:2:47718)
+        at Ye.cleanup (file:///Users/johnpotter/src/pr-dependency-security-1101/server/vendor/gmail-html-sanitizer.mjs:2:40268)
+        at Ye.parse (file:///Users/johnpotter/src/pr-dependency-security-1101/server/vendor/gmail-html-sanitizer.mjs:2:42334)
+        at Ye.write (file:///Users/johnpotter/src/pr-dependency-security-1101/server/vendor/gmail-html-sanitizer.mjs:2:30597)
+        at Ve.write (file:///Users/johnpotter/src/pr-dependency-security-1101/server/vendor/gmail-html-sanitizer.mjs:2:52594)
+        at yt (file:///Users/johnpotter/src/pr-dependency-security-1101/server/vendor/gmail-html-sanitizer.mjs:41:20788),
+    expected: undefined,
+    operator: 'doesNotThrow',
+    diff: 'simple'
+  }
+
+test at tests/gmail-sanitizer-bundle.test.js:59:1
+✖ discarded iframe fallback cannot reset the configured nesting limit (1.083708ms)
+  AssertionError [ERR_ASSERTION]: configured depth 3 was bypassed: 150
+      at TestContext.<anonymous> (file:///Users/johnpotter/src/pr-dependency-security-1101/tests/gmail-sanitizer-bundle.test.js:63:10)
+      at Test.runInAsyncScope (node:async_hooks:227:14)
+      at Test.run (node:internal/test_runner/test:1402:25)
+      at Test.processPendingSubtests (node:internal/test_runner/test:974:18)
+      at Test.postRun (node:internal/test_runner/test:1542:19)
+      at Test.run (node:internal/test_runner/test:1467:12)
+      at async startSubtestAfterBootstrap (node:internal/test_runner/harness:387:3) {
+    generatedMessage: false,
+    code: 'ERR_ASSERTION',
+    actual: false,
+    expected: true,
+    operator: '==',
+    diff: 'simple'
+  }

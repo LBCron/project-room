@@ -1,0 +1,157 @@
+✔ boardSkeletonHtml marks itself decorative and mirrors the five columns (1.144083ms)
+✔ pendingOutcome narrates each action with the claim title (0.381709ms)
+✔ pendingOutcome handles sweep (no title) and unknown actions (0.089791ms)
+✔ boardHtml with loading and no items shows the skeleton, not the empty copy (1.384084ms)
+✔ boardHtml with items still loading keeps stale items and says refreshing (1.53375ms)
+✔ boardHtml with loadError and no items shows the error with a retry button (0.289875ms)
+✔ boardHtml default (no flags) keeps the existing empty-board behavior (0.137375ms)
+✔ a failed refresh with a board already shown still says so, with retry (0.18625ms)
+✔ Board completion is announced with fresh claims, never during held writes, reads or filter paints (26.367833ms)
+✔ Board readback failure reports an error without a deferred success leaking into a later paint (1.256916ms)
+✔ Board reset retires completion during a held write (0.717833ms)
+✔ Board reset retires completion during a held readback (1.819333ms)
+✔ initial Board read preserves focus on Save cap (5.266666ms)
+✔ initial Board read preserves focus on claim cap (1.8455ms)
+✔ initial Board read preserves focus on new title (2.85725ms)
+✔ initial Board read preserves focus on new note (0.782875ms)
+✔ initial Board read preserves focus on new files (0.771958ms)
+✔ initial Board read preserves focus on Add item (0.907417ms)
+✔ initial Board read preserves focus on Close stale (0.963416ms)
+✔ Board refresh preserves Mine only focus (2.698875ms)
+✔ Board refresh preserves already-keyed search focus (3.80375ms)
+✔ Board refresh follows the current static control after focus moves from a previously restored control (4.162792ms)
+✔ a completed Board action moves focus to the finished card when its button is gone (6.4635ms)
+✔ deploy chip: matching shas read as matching (0.312958ms)
+✔ deploy chip: both shas known and different is its own state, not unknown (0.174625ms)
+✔ deploy chip: a missing sha, no status, or a held (stale) read stays unknown (0.196541ms)
+{"event":"room.cold_start","clockSemantics":"runtime-dependent","durationMs":49,"integrity":"eager","phases":{"schema":{"ms":11,"rowsRead":0},"plugin":{"ms":21,"rowsRead":0},"fence":{"ms":8,"rowsRead":0},"verifies":{"ms":3,"rowsRead":0},"checksum":{"ms":0,"rowsRead":0}},"cpuMs":49,"heapBytes":41681968,"rooms":0,"sequences":0,"projectionBytes":0,"events":0}
+{"event":"room.store_initialized","initializationMs":49,"legacyColdStartMs":49,"clockSemantics":"runtime-dependent","cpuMeasured":false}
+{"event":"room.cold_start","clockSemantics":"runtime-dependent","durationMs":49,"integrity":"eager","phases":{"schema":{"ms":9,"rowsRead":0},"plugin":{"ms":24,"rowsRead":0},"fence":{"ms":7,"rowsRead":0},"verifies":{"ms":1,"rowsRead":0},"checksum":{"ms":0,"rowsRead":0}},"cpuMs":53,"heapBytes":38440656,"rooms":0,"sequences":0,"projectionBytes":0,"events":0}
+{"event":"room.store_initialized","initializationMs":49,"legacyColdStartMs":49,"clockSemantics":"runtime-dependent","cpuMeasured":false}
+{"event":"room.cold_start","clockSemantics":"runtime-dependent","durationMs":43,"integrity":"eager","phases":{"schema":{"ms":9,"rowsRead":0},"plugin":{"ms":22,"rowsRead":0},"fence":{"ms":6,"rowsRead":0},"verifies":{"ms":1,"rowsRead":0},"checksum":{"ms":0,"rowsRead":0}},"cpuMs":43,"heapBytes":46845040,"rooms":0,"sequences":0,"projectionBytes":0,"events":0}
+{"event":"room.store_initialized","initializationMs":44,"legacyColdStartMs":43,"clockSemantics":"runtime-dependent","cpuMeasured":false}
+{"event":"room.cold_start","clockSemantics":"runtime-dependent","durationMs":43,"integrity":"eager","phases":{"schema":{"ms":11,"rowsRead":0},"plugin":{"ms":20,"rowsRead":0},"fence":{"ms":8,"rowsRead":0},"verifies":{"ms":1,"rowsRead":0},"checksum":{"ms":0,"rowsRead":0}},"cpuMs":46,"heapBytes":40470176,"rooms":0,"sequences":0,"projectionBytes":0,"events":0}
+{"event":"room.store_initialized","initializationMs":43,"legacyColdStartMs":43,"clockSemantics":"runtime-dependent","cpuMeasured":false}
+{"event":"room.cold_start","clockSemantics":"runtime-dependent","durationMs":41,"integrity":"eager","phases":{"schema":{"ms":9,"rowsRead":0},"plugin":{"ms":22,"rowsRead":0},"fence":{"ms":6,"rowsRead":0},"verifies":{"ms":1,"rowsRead":0},"checksum":{"ms":0,"rowsRead":0}},"cpuMs":42,"heapBytes":47616832,"rooms":0,"sequences":0,"projectionBytes":0,"events":0}
+{"event":"room.store_initialized","initializationMs":42,"legacyColdStartMs":41,"clockSemantics":"runtime-dependent","cpuMeasured":false}
+{"event":"room.cold_start","clockSemantics":"runtime-dependent","durationMs":42,"integrity":"eager","phases":{"schema":{"ms":9,"rowsRead":0},"plugin":{"ms":22,"rowsRead":0},"fence":{"ms":7,"rowsRead":0},"verifies":{"ms":1,"rowsRead":0},"checksum":{"ms":0,"rowsRead":0}},"cpuMs":44,"heapBytes":41035040,"rooms":0,"sequences":0,"projectionBytes":0,"events":0}
+{"event":"room.store_initialized","initializationMs":43,"legacyColdStartMs":42,"clockSemantics":"runtime-dependent","cpuMeasured":false}
+[boot-config] ERROR: the agent card is UNSIGNED and no explicit opt-in was recorded at build time — members fetching /.well-known/agent-card.json will see an unsigned card (marked signed:false). To fix: set ROOM_AGENT_CARD_SIGNING_KEY and re-run scripts/sign-agent-card.mjs, or pass --allow-unsigned explicitly to record the choice.
+ROOM_SECURITY_CONTACT is unset; /.well-known/security.txt returns 404
+No magic-link mailer is configured: email-verification gates are relaxed (agent-invite escape hatch); /api/health reports emailVerification: relaxed-no-mailer
+✔ live compose delivers bounded MIME with CC/BCC and stable replay without storing body (83.200375ms)
+✔ reply uses provider thread, Message-ID and Reply-To; save/reopen/update/send provider draft (75.545375ms)
+✔ ambiguous send reconciles against Sent across service restart without resending (60.880375ms)
+✔ old read-only consent rejects writes; header injection and unsupported draft attachments never mutate (61.122208ms)
+✔ mailbox search, archive/read/star/trash reflect Gmail and session changes block dispatch (64.260875ms)
+{"event":"room.cold_start","clockSemantics":"runtime-dependent","durationMs":40,"integrity":"eager","phases":{"schema":{"ms":10,"rowsRead":0},"plugin":{"ms":20,"rowsRead":0},"fence":{"ms":6,"rowsRead":0},"verifies":{"ms":1,"rowsRead":0},"checksum":{"ms":0,"rowsRead":0}},"cpuMs":51,"heapBytes":50746576,"rooms":0,"sequences":0,"projectionBytes":0,"events":0}
+{"event":"room.store_initialized","initializationMs":41,"legacyColdStartMs":40,"clockSemantics":"runtime-dependent","cpuMeasured":false}
+{"event":"room.cold_start","clockSemantics":"runtime-dependent","durationMs":36,"integrity":"eager","phases":{"schema":{"ms":8,"rowsRead":0},"plugin":{"ms":18,"rowsRead":0},"fence":{"ms":6,"rowsRead":0},"verifies":{"ms":1,"rowsRead":0},"checksum":{"ms":0,"rowsRead":0}},"cpuMs":37,"heapBytes":44087104,"rooms":0,"sequences":0,"projectionBytes":0,"events":0}
+{"event":"room.store_initialized","initializationMs":37,"legacyColdStartMs":36,"clockSemantics":"runtime-dependent","cpuMeasured":false}
+✔ mailbox HTTP rejects missing CSRF before provider access and projects owner (85.389208ms)
+✔ formatted drafts preserve explicit attachment review and sanitize executable HTML (68.006958ms)
+✔ search pagination forwards Gmail cursor and remains scoped to each account (51.73525ms)
+✔ gmail messages normalize onto the shared email envelope (15.158542ms)
+✔ a recorded mailbox pages by page token; the bound adapter hydrates one message per id (2.023791ms)
+✔ submit and lookup refuse with channel_sending_unavailable (0.149917ms)
+✔ malformed gmail resources are contract errors, never silent misreads (3.4095ms)
+✔ the gmail adapter is registered without disturbing the existing email default (0.116167ms)
+{"event":"room.cold_start","clockSemantics":"runtime-dependent","durationMs":48,"integrity":"eager","phases":{"schema":{"ms":11,"rowsRead":0},"plugin":{"ms":20,"rowsRead":0},"fence":{"ms":7,"rowsRead":0},"verifies":{"ms":2,"rowsRead":0},"checksum":{"ms":0,"rowsRead":0}},"cpuMs":48,"heapBytes":40507704,"rooms":0,"sequences":0,"projectionBytes":0,"events":0}
+{"event":"room.store_initialized","initializationMs":49,"legacyColdStartMs":48,"clockSemantics":"runtime-dependent","cpuMeasured":false}
+{"event":"room.cold_start","clockSemantics":"runtime-dependent","durationMs":45,"integrity":"eager","phases":{"schema":{"ms":10,"rowsRead":0},"plugin":{"ms":22,"rowsRead":0},"fence":{"ms":6,"rowsRead":0},"verifies":{"ms":1,"rowsRead":0},"checksum":{"ms":0,"rowsRead":0}},"cpuMs":46,"heapBytes":50930976,"rooms":0,"sequences":0,"projectionBytes":0,"events":0}
+{"event":"room.store_initialized","initializationMs":45,"legacyColdStartMs":45,"clockSemantics":"runtime-dependent","cpuMeasured":false}
+{"event":"room.cold_start","clockSemantics":"runtime-dependent","durationMs":40,"integrity":"eager","phases":{"schema":{"ms":9,"rowsRead":0},"plugin":{"ms":21,"rowsRead":0},"fence":{"ms":6,"rowsRead":0},"verifies":{"ms":1,"rowsRead":0},"checksum":{"ms":0,"rowsRead":0}},"cpuMs":40,"heapBytes":46539080,"rooms":0,"sequences":0,"projectionBytes":0,"events":0}
+{"event":"room.store_initialized","initializationMs":40,"legacyColdStartMs":40,"clockSemantics":"runtime-dependent","cpuMeasured":false}
+{"event":"room.cold_start","clockSemantics":"runtime-dependent","durationMs":43,"integrity":"eager","phases":{"schema":{"ms":10,"rowsRead":0},"plugin":{"ms":23,"rowsRead":0},"fence":{"ms":6,"rowsRead":0},"verifies":{"ms":1,"rowsRead":0},"checksum":{"ms":0,"rowsRead":0}},"cpuMs":43,"heapBytes":53728192,"rooms":0,"sequences":0,"projectionBytes":0,"events":0}
+{"event":"room.store_initialized","initializationMs":44,"legacyColdStartMs":43,"clockSemantics":"runtime-dependent","cpuMeasured":false}
+{"event":"room.cold_start","clockSemantics":"runtime-dependent","durationMs":45,"integrity":"eager","phases":{"schema":{"ms":9,"rowsRead":0},"plugin":{"ms":23,"rowsRead":0},"fence":{"ms":8,"rowsRead":0},"verifies":{"ms":1,"rowsRead":0},"checksum":{"ms":0,"rowsRead":0}},"cpuMs":47,"heapBytes":48692816,"rooms":0,"sequences":0,"projectionBytes":0,"events":0}
+{"event":"room.store_initialized","initializationMs":45,"legacyColdStartMs":45,"clockSemantics":"runtime-dependent","cpuMeasured":false}
+{"event":"room.cold_start","clockSemantics":"runtime-dependent","durationMs":42,"integrity":"eager","phases":{"schema":{"ms":12,"rowsRead":0},"plugin":{"ms":20,"rowsRead":0},"fence":{"ms":6,"rowsRead":0},"verifies":{"ms":1,"rowsRead":0},"checksum":{"ms":0,"rowsRead":0}},"cpuMs":41,"heapBytes":55901264,"rooms":0,"sequences":0,"projectionBytes":0,"events":0}
+{"event":"room.store_initialized","initializationMs":42,"legacyColdStartMs":42,"clockSemantics":"runtime-dependent","cpuMeasured":false}
+{"event":"room.cold_start","clockSemantics":"runtime-dependent","durationMs":40,"integrity":"eager","phases":{"schema":{"ms":10,"rowsRead":0},"plugin":{"ms":18,"rowsRead":0},"fence":{"ms":6,"rowsRead":0},"verifies":{"ms":1,"rowsRead":0},"checksum":{"ms":0,"rowsRead":0}},"cpuMs":39,"heapBytes":62939256,"rooms":0,"sequences":0,"projectionBytes":0,"events":0}
+{"event":"room.store_initialized","initializationMs":40,"legacyColdStartMs":40,"clockSemantics":"runtime-dependent","cpuMeasured":false}
+[boot-config] ERROR: the agent card is UNSIGNED and no explicit opt-in was recorded at build time — members fetching /.well-known/agent-card.json will see an unsigned card (marked signed:false). To fix: set ROOM_AGENT_CARD_SIGNING_KEY and re-run scripts/sign-agent-card.mjs, or pass --allow-unsigned explicitly to record the choice.
+ROOM_SECURITY_CONTACT is unset; /.well-known/security.txt returns 404
+No magic-link mailer is configured: email-verification gates are relaxed (agent-invite escape hatch); /api/health reports emailVerification: relaxed-no-mailer
+✔ Gmail connect uses Gmail modify consent and PKCE, survives a new service, encrypts credentials, imports idempotently, disconnects (85.342833ms)
+✔ manual sync walks every list page before replacing folder membership (108.646209ms)
+✔ denied or missing scopes never creates a connection (57.941ms)
+✔ account switch invalidates consent before provider access (59.491917ms)
+✔ disconnect during an OAuth exchange prevents the callback from restoring access (61.97225ms)
+✔ tampered ciphertext is rejected and explicit enablement requires encryption key (63.197542ms)
+{"event":"room.cold_start","clockSemantics":"runtime-dependent","durationMs":37,"integrity":"eager","phases":{"schema":{"ms":9,"rowsRead":0},"plugin":{"ms":19,"rowsRead":0},"fence":{"ms":6,"rowsRead":0},"verifies":{"ms":1,"rowsRead":0},"checksum":{"ms":0,"rowsRead":0}},"cpuMs":44,"heapBytes":72894816,"rooms":0,"sequences":0,"projectionBytes":0,"events":0}
+{"event":"room.store_initialized","initializationMs":38,"legacyColdStartMs":37,"clockSemantics":"runtime-dependent","cpuMeasured":false}
+{"event":"room.cold_start","clockSemantics":"runtime-dependent","durationMs":37,"integrity":"eager","phases":{"schema":{"ms":8,"rowsRead":0},"plugin":{"ms":17,"rowsRead":0},"fence":{"ms":7,"rowsRead":0},"verifies":{"ms":1,"rowsRead":0},"checksum":{"ms":0,"rowsRead":0}},"cpuMs":46,"heapBytes":59263920,"rooms":0,"sequences":0,"projectionBytes":0,"events":0}
+{"event":"room.store_initialized","initializationMs":38,"legacyColdStartMs":37,"clockSemantics":"runtime-dependent","cpuMeasured":false}
+{"event":"room.cold_start","clockSemantics":"runtime-dependent","durationMs":44,"integrity":"eager","phases":{"schema":{"ms":10,"rowsRead":0},"plugin":{"ms":21,"rowsRead":0},"fence":{"ms":5,"rowsRead":0},"verifies":{"ms":1,"rowsRead":0},"checksum":{"ms":0,"rowsRead":0}},"cpuMs":38,"heapBytes":66284336,"rooms":0,"sequences":0,"projectionBytes":0,"events":0}
+{"event":"room.store_initialized","initializationMs":44,"legacyColdStartMs":44,"clockSemantics":"runtime-dependent","cpuMeasured":false}
+{"event":"room.cold_start","clockSemantics":"runtime-dependent","durationMs":38,"integrity":"eager","phases":{"schema":{"ms":9,"rowsRead":0},"plugin":{"ms":19,"rowsRead":0},"fence":{"ms":5,"rowsRead":0},"verifies":{"ms":1,"rowsRead":0},"checksum":{"ms":0,"rowsRead":0}},"cpuMs":38,"heapBytes":73159384,"rooms":0,"sequences":0,"projectionBytes":0,"events":0}
+{"event":"room.store_initialized","initializationMs":38,"legacyColdStartMs":38,"clockSemantics":"runtime-dependent","cpuMeasured":false}
+{"event":"room.cold_start","clockSemantics":"runtime-dependent","durationMs":36,"integrity":"eager","phases":{"schema":{"ms":8,"rowsRead":0},"plugin":{"ms":18,"rowsRead":0},"fence":{"ms":5,"rowsRead":0},"verifies":{"ms":1,"rowsRead":0},"checksum":{"ms":0,"rowsRead":0}},"cpuMs":36,"heapBytes":79972376,"rooms":0,"sequences":0,"projectionBytes":0,"events":0}
+{"event":"room.store_initialized","initializationMs":36,"legacyColdStartMs":36,"clockSemantics":"runtime-dependent","cpuMeasured":false}
+✔ HTTP enforces CSRF and ownership, persists setup and reports disabled Gmail honestly (84.278125ms)
+✔ account deletion removes grants, pending connections and setup answers (56.745208ms)
+✔ revoked refresh grant offers reconnect instead of an endless sync retry (52.423416ms)
+✔ forwarded authorization links cannot attach someone else’s Gmail mailbox (58.980834ms)
+✔ mailbox credentials stay account-scoped and expired consent never calls Google (52.327042ms)
+✔ operator-only Gmail pilot does not expose OAuth or background grants to other accounts (50.700709ms)
+✔ Gmail pilot can select an explicit account without replacing the operator identity (0.120125ms)
+✔ vendored sanitizer license version matches the locked package (0.873333ms)
+✔ vendored sanitizer matches pinned package: safe formatting (2.152334ms)
+✔ vendored sanitizer matches pinned package: refresh script URL (0.253333ms)
+✔ vendored sanitizer matches pinned package: refresh data URL (0.167666ms)
+✔ vendored sanitizer matches pinned package: implied noscript close (0.235416ms)
+✔ vendored sanitizer matches pinned package: malformed comment (0.297042ms)
+✔ Room HTML policy removes active elements and keeps safe links protected (0.358875ms)
+✔ vendored sanitizer blocks namespace-prefixed SMIL URL retargeting (2.019417ms)
+✔ Gmail HTML rejects deeply repeated discarded iframe fallback without overflowing (2.958875ms)
+✔ discarded iframe fallback cannot reset the configured nesting limit (0.298208ms)
+{"event":"room.cold_start","clockSemantics":"runtime-dependent","durationMs":48,"integrity":"eager","phases":{"schema":{"ms":11,"rowsRead":0},"plugin":{"ms":20,"rowsRead":0},"fence":{"ms":7,"rowsRead":0},"verifies":{"ms":2,"rowsRead":0},"checksum":{"ms":0,"rowsRead":0}},"cpuMs":49,"heapBytes":45506656,"rooms":0,"sequences":0,"projectionBytes":0,"events":0}
+{"event":"room.store_initialized","initializationMs":49,"legacyColdStartMs":48,"clockSemantics":"runtime-dependent","cpuMeasured":false}
+{"event":"room.cold_start","clockSemantics":"runtime-dependent","durationMs":44,"integrity":"eager","phases":{"schema":{"ms":10,"rowsRead":0},"plugin":{"ms":20,"rowsRead":0},"fence":{"ms":7,"rowsRead":0},"verifies":{"ms":1,"rowsRead":0},"checksum":{"ms":0,"rowsRead":0}},"cpuMs":45,"heapBytes":46588808,"rooms":0,"sequences":0,"projectionBytes":0,"events":0}
+{"event":"room.store_initialized","initializationMs":45,"legacyColdStartMs":44,"clockSemantics":"runtime-dependent","cpuMeasured":false}
+{"event":"room.cold_start","clockSemantics":"runtime-dependent","durationMs":40,"integrity":"eager","phases":{"schema":{"ms":9,"rowsRead":0},"plugin":{"ms":19,"rowsRead":0},"fence":{"ms":6,"rowsRead":0},"verifies":{"ms":1,"rowsRead":0},"checksum":{"ms":0,"rowsRead":0}},"cpuMs":41,"heapBytes":43563920,"rooms":0,"sequences":0,"projectionBytes":0,"events":0}
+{"event":"room.store_initialized","initializationMs":41,"legacyColdStartMs":40,"clockSemantics":"runtime-dependent","cpuMeasured":false}
+{"event":"room.cold_start","clockSemantics":"runtime-dependent","durationMs":40,"integrity":"eager","phases":{"schema":{"ms":9,"rowsRead":0},"plugin":{"ms":20,"rowsRead":0},"fence":{"ms":6,"rowsRead":0},"verifies":{"ms":1,"rowsRead":0},"checksum":{"ms":0,"rowsRead":0}},"cpuMs":41,"heapBytes":52588184,"rooms":0,"sequences":0,"projectionBytes":0,"events":0}
+{"event":"room.store_initialized","initializationMs":41,"legacyColdStartMs":40,"clockSemantics":"runtime-dependent","cpuMeasured":false}
+{"event":"room.cold_start","clockSemantics":"runtime-dependent","durationMs":44,"integrity":"eager","phases":{"schema":{"ms":10,"rowsRead":0},"plugin":{"ms":22,"rowsRead":0},"fence":{"ms":7,"rowsRead":0},"verifies":{"ms":1,"rowsRead":0},"checksum":{"ms":0,"rowsRead":0}},"cpuMs":44,"heapBytes":43675592,"rooms":0,"sequences":0,"projectionBytes":0,"events":0}
+{"event":"room.store_initialized","initializationMs":44,"legacyColdStartMs":44,"clockSemantics":"runtime-dependent","cpuMeasured":false}
+{"event":"room.cold_start","clockSemantics":"runtime-dependent","durationMs":45,"integrity":"eager","phases":{"schema":{"ms":11,"rowsRead":0},"plugin":{"ms":19,"rowsRead":0},"fence":{"ms":6,"rowsRead":0},"verifies":{"ms":1,"rowsRead":0},"checksum":{"ms":0,"rowsRead":0}},"cpuMs":44,"heapBytes":44839544,"rooms":0,"sequences":0,"projectionBytes":0,"events":0}
+{"event":"room.store_initialized","initializationMs":46,"legacyColdStartMs":45,"clockSemantics":"runtime-dependent","cpuMeasured":false}
+✔ background history sync imports without session and propagates read/archive/delete changes (92.176167ms)
+✔ expired Gmail history rescans; revoked grants back off; disconnect during sync cannot reimport (72.02325ms)
+✔ multiple mailboxes retain separate encrypted grants, sender identities and disconnects (66.581084ms)
+✔ background import capability is unforgeable, account-bound, import-only and epoch-fenced (60.301875ms)
+✔ reset sync follows nextPageToken past the first 50 messages (H-8) (98.124875ms)
+✔ reset sync resumes past the 200-id per-tick budget instead of completing early (#2845) (104.147834ms)
+✔ extractEmailAddresses pulls every address from reply headers (2.07675ms)
+✔ extractEmailAddresses returns [] when nothing matches (0.080708ms)
+✔ isBlockedEmailUrl blocks plain scriptable URLs (0.096375ms)
+✔ isBlockedEmailUrl sees through tab/newline/control characters in the scheme (0.0525ms)
+✔ isBlockedEmailUrl allows ordinary links and non-HTML data URLs (0.0485ms)
+✔ gmailErrorText: reconnect-required codes map to the recovery message (0.045417ms)
+✔ gmailErrorText: a changed draft gets its own message (0.033083ms)
+✔ gmailErrorText: unknown codes fall back to the server message, then generic (0.036084ms)
+✔ mime fuzz corpus: pathological inputs parse or raise the pinned MimeError (45.278334ms)
+✔ mime fuzz CLI rejects invalid numeric options instead of false-greening (206.763209ms)
+✔ mime fuzz: bounded deterministic random sweep holds the invariant (441.075167ms)
+✔ simple text message: headers, addresses, date and body (12.973333ms)
+✔ multipart/alternative prefers text/plain; html-only falls back to a text preview (2.333375ms)
+✔ nested multipart/mixed lists attachments by name, type and size without keeping bytes (2.117083ms)
+✔ quoted-printable UTF-8 and base64 bodies decode; Latin-1 charset is honoured (0.6485ms)
+✔ RFC 2047 encoded-words: Q and B, UTF-8 and ISO-8859-1, adjacent words, malformed left alone (2.138084ms)
+✔ address lists: names, quotes, comments, groups, multiple headers and invalid entries (0.748375ms)
+✔ caps: oversized raw, header count and length, part count, depth, attachments, text truncation (15.93425ms)
+✔ malformed boundaries and header lines are rejected; prefix-sharing boundaries are not confused (0.272792ms)
+✔ header injection: CR/LF and other control characters never survive into header values (0.348666ms)
+✔ structured headers and html-to-text handle quoting, RFC 2231, comments and pathological input in linear time (29.052666ms)
+✔ request confirmation stays visible; delayed resume=false (12.225959ms)
+✔ request confirmation stays visible; delayed resume=true (6.223375ms)
+ℹ tests 91
+ℹ suites 0
+ℹ pass 91
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 1114.630541

@@ -1,0 +1,86 @@
+{"event":"room.cold_start","clockSemantics":"runtime-dependent","durationMs":43,"integrity":"eager","phases":{"schema":{"ms":11,"rowsRead":0},"plugin":{"ms":18,"rowsRead":0},"fence":{"ms":9,"rowsRead":0},"verifies":{"ms":4,"rowsRead":0},"checksum":{"ms":0,"rowsRead":0}},"cpuMs":66,"heapBytes":34886144,"rooms":0,"sequences":0,"projectionBytes":0,"events":0}
+{"event":"room.store_initialized","initializationMs":44,"legacyColdStartMs":43,"clockSemantics":"runtime-dependent","cpuMeasured":false}
+[boot-config] ERROR: the agent card is UNSIGNED and no explicit opt-in was recorded at build time — members fetching /.well-known/agent-card.json will see an unsigned card (marked signed:false). To fix: set ROOM_AGENT_CARD_SIGNING_KEY and re-run scripts/sign-agent-card.mjs, or pass --allow-unsigned explicitly to record the choice.
+ROOM_SECURITY_CONTACT is unset; /.well-known/security.txt returns 404
+No magic-link mailer is configured: email-verification gates are relaxed (agent-invite escape hatch); /api/health reports emailVerification: relaxed-no-mailer
+{"event":"room.cold_start","clockSemantics":"runtime-dependent","durationMs":32,"integrity":"eager","phases":{"schema":{"ms":9,"rowsRead":0},"plugin":{"ms":17,"rowsRead":0},"fence":{"ms":5,"rowsRead":0},"verifies":{"ms":1,"rowsRead":0},"checksum":{"ms":0,"rowsRead":0}},"cpuMs":42,"heapBytes":44589336,"rooms":0,"sequences":0,"projectionBytes":0,"events":0}
+{"event":"room.store_initialized","initializationMs":32,"legacyColdStartMs":32,"clockSemantics":"runtime-dependent","cpuMeasured":false}
+✔ operator plans and executes explicit canonical conversion, preserving head and contents (78.5595ms)
+{"event":"room.cold_start","clockSemantics":"runtime-dependent","durationMs":31,"integrity":"eager","phases":{"schema":{"ms":8,"rowsRead":0},"plugin":{"ms":16,"rowsRead":0},"fence":{"ms":5,"rowsRead":0},"verifies":{"ms":1,"rowsRead":0},"checksum":{"ms":0,"rowsRead":0}},"cpuMs":31,"heapBytes":52529896,"rooms":0,"sequences":0,"projectionBytes":0,"events":0}
+{"event":"room.store_initialized","initializationMs":31,"legacyColdStartMs":31,"clockSemantics":"runtime-dependent","cpuMeasured":false}
+✔ operator access and exact plan binding refuse unauthorized or changed input (43.376667ms)
+{"event":"room.cold_start","clockSemantics":"runtime-dependent","durationMs":32,"integrity":"eager","phases":{"schema":{"ms":9,"rowsRead":0},"plugin":{"ms":16,"rowsRead":0},"fence":{"ms":5,"rowsRead":0},"verifies":{"ms":1,"rowsRead":0},"checksum":{"ms":0,"rowsRead":0}},"cpuMs":36,"heapBytes":50489280,"rooms":0,"sequences":0,"projectionBytes":0,"events":0}
+{"event":"room.store_initialized","initializationMs":32,"legacyColdStartMs":32,"clockSemantics":"runtime-dependent","cpuMeasured":false}
+✔ lost execute response can be retried after later writes without another effect (42.237ms)
+{"event":"room.cold_start","clockSemantics":"runtime-dependent","durationMs":31,"integrity":"eager","phases":{"schema":{"ms":9,"rowsRead":0},"plugin":{"ms":16,"rowsRead":0},"fence":{"ms":5,"rowsRead":0},"verifies":{"ms":1,"rowsRead":0},"checksum":{"ms":0,"rowsRead":0}},"cpuMs":31,"heapBytes":56262544,"rooms":0,"sequences":0,"projectionBytes":0,"events":0}
+{"event":"room.store_initialized","initializationMs":31,"legacyColdStartMs":31,"clockSemantics":"runtime-dependent","cpuMeasured":false}
+✔ planning never hydrates, certifies or replays a room (35.471292ms)
+{"event":"room.cold_start","clockSemantics":"runtime-dependent","durationMs":31,"integrity":"eager","phases":{"schema":{"ms":8,"rowsRead":0},"plugin":{"ms":16,"rowsRead":0},"fence":{"ms":5,"rowsRead":0},"verifies":{"ms":1,"rowsRead":0},"checksum":{"ms":0,"rowsRead":0}},"cpuMs":31,"heapBytes":65103232,"rooms":0,"sequences":0,"projectionBytes":0,"events":0}
+{"event":"room.store_initialized","initializationMs":31,"legacyColdStartMs":31,"clockSemantics":"runtime-dependent","cpuMeasured":false}
+✔ oversized projections, event heads and message payloads refuse before hydration (37.546ms)
+{"event":"room.cold_start","clockSemantics":"runtime-dependent","durationMs":32,"integrity":"eager","phases":{"schema":{"ms":8,"rowsRead":0},"plugin":{"ms":17,"rowsRead":0},"fence":{"ms":6,"rowsRead":0},"verifies":{"ms":1,"rowsRead":0},"checksum":{"ms":0,"rowsRead":0}},"cpuMs":33,"heapBytes":71662504,"rooms":0,"sequences":0,"projectionBytes":0,"events":0}
+{"event":"room.store_initialized","initializationMs":33,"legacyColdStartMs":32,"clockSemantics":"runtime-dependent","cpuMeasured":false}
+✔ archive conversion is refused rather than trusting unverified archived history (37.9675ms)
+service diagnostic op_Ucins3q5 500 ERR_SQLITE_ERROR internal /api/operator/messages/authority/execute
+error-trace eid_6OMrLiNo90RD fp=ba7e4d78c09b54aa status=500 code=request_failed
+{"event":"room.cold_start","clockSemantics":"runtime-dependent","durationMs":31,"integrity":"eager","phases":{"schema":{"ms":9,"rowsRead":0},"plugin":{"ms":16,"rowsRead":0},"fence":{"ms":5,"rowsRead":0},"verifies":{"ms":1,"rowsRead":0},"checksum":{"ms":0,"rowsRead":0}},"cpuMs":31,"heapBytes":78018424,"rooms":0,"sequences":0,"projectionBytes":0,"events":0}
+{"event":"room.store_initialized","initializationMs":31,"legacyColdStartMs":31,"clockSemantics":"runtime-dependent","cpuMeasured":false}
+✔ failed audit publication rolls back conversion and the same request can recover (40.500416ms)
+{"event":"room.cold_start","clockSemantics":"runtime-dependent","durationMs":32,"integrity":"eager","phases":{"schema":{"ms":9,"rowsRead":0},"plugin":{"ms":17,"rowsRead":0},"fence":{"ms":5,"rowsRead":0},"verifies":{"ms":1,"rowsRead":0},"checksum":{"ms":0,"rowsRead":0}},"cpuMs":33,"heapBytes":63221560,"rooms":0,"sequences":0,"projectionBytes":0,"events":0}
+{"event":"room.store_initialized","initializationMs":32,"legacyColdStartMs":32,"clockSemantics":"runtime-dependent","cpuMeasured":false}
+✔ same-head entity drift invalidates the plan without laundering source rows (38.861542ms)
+{"event":"room.cold_start","clockSemantics":"runtime-dependent","durationMs":32,"integrity":"eager","phases":{"schema":{"ms":8,"rowsRead":0},"plugin":{"ms":16,"rowsRead":0},"fence":{"ms":6,"rowsRead":0},"verifies":{"ms":1,"rowsRead":0},"checksum":{"ms":0,"rowsRead":0}},"cpuMs":32,"heapBytes":69170608,"rooms":0,"sequences":0,"projectionBytes":0,"events":0}
+{"event":"room.store_initialized","initializationMs":32,"legacyColdStartMs":32,"clockSemantics":"runtime-dependent","cpuMeasured":false}
+✔ reverse cannot launder canonical row drift into newly trusted inline metadata (39.643125ms)
+{"event":"room.cold_start","clockSemantics":"runtime-dependent","durationMs":33,"integrity":"eager","phases":{"schema":{"ms":9,"rowsRead":0},"plugin":{"ms":17,"rowsRead":0},"fence":{"ms":6,"rowsRead":0},"verifies":{"ms":1,"rowsRead":0},"checksum":{"ms":0,"rowsRead":0}},"cpuMs":34,"heapBytes":76356232,"rooms":0,"sequences":0,"projectionBytes":0,"events":0}
+{"event":"room.store_initialized","initializationMs":33,"legacyColdStartMs":33,"clockSemantics":"runtime-dependent","cpuMeasured":false}
+{"event":"room.cold_start","clockSemantics":"runtime-dependent","durationMs":30,"integrity":"eager","phases":{"schema":{"ms":8,"rowsRead":0},"plugin":{"ms":16,"rowsRead":0},"fence":{"ms":5,"rowsRead":0},"verifies":{"ms":1,"rowsRead":0},"checksum":{"ms":0,"rowsRead":0}},"cpuMs":31,"heapBytes":81713408,"rooms":0,"sequences":0,"projectionBytes":0,"events":0}
+{"event":"room.store_initialized","initializationMs":31,"legacyColdStartMs":30,"clockSemantics":"runtime-dependent","cpuMeasured":false}
+{"event":"room.cold_start","clockSemantics":"runtime-dependent","durationMs":34,"integrity":"eager","phases":{"schema":{"ms":8,"rowsRead":0},"plugin":{"ms":17,"rowsRead":0},"fence":{"ms":8,"rowsRead":0},"verifies":{"ms":1,"rowsRead":0},"checksum":{"ms":0,"rowsRead":0}},"cpuMs":43,"heapBytes":70906896,"rooms":0,"sequences":0,"projectionBytes":0,"events":0}
+{"event":"room.store_initialized","initializationMs":34,"legacyColdStartMs":34,"clockSemantics":"runtime-dependent","cpuMeasured":false}
+{"event":"room.cold_start","clockSemantics":"runtime-dependent","durationMs":30,"integrity":"eager","phases":{"schema":{"ms":9,"rowsRead":0},"plugin":{"ms":15,"rowsRead":0},"fence":{"ms":5,"rowsRead":0},"verifies":{"ms":1,"rowsRead":0},"checksum":{"ms":0,"rowsRead":0}},"cpuMs":30,"heapBytes":77854856,"rooms":0,"sequences":0,"projectionBytes":0,"events":0}
+{"event":"room.store_initialized","initializationMs":30,"legacyColdStartMs":30,"clockSemantics":"runtime-dependent","cpuMeasured":false}
+▶ every normalized domain refuses cap-plus-one before any hydration or certification
+  ✔ messages (39.881208ms)
+{"event":"room.cold_start","clockSemantics":"runtime-dependent","durationMs":31,"integrity":"eager","phases":{"schema":{"ms":8,"rowsRead":0},"plugin":{"ms":16,"rowsRead":0},"fence":{"ms":5,"rowsRead":0},"verifies":{"ms":1,"rowsRead":0},"checksum":{"ms":0,"rowsRead":0}},"cpuMs":31,"heapBytes":84189888,"rooms":0,"sequences":0,"projectionBytes":0,"events":0}
+{"event":"room.store_initialized","initializationMs":31,"legacyColdStartMs":31,"clockSemantics":"runtime-dependent","cpuMeasured":false}
+  ✔ work_entities (35.305959ms)
+  ✔ projection_bodies (34.823541ms)
+  ✔ events (42.877708ms)
+✔ every normalized domain refuses cap-plus-one before any hydration or certification (153.2615ms)
+✔ multibyte work payload bytes are bounded even with tiny inline metadata (33.343958ms)
+{"event":"room.cold_start","clockSemantics":"runtime-dependent","durationMs":30,"integrity":"eager","phases":{"schema":{"ms":8,"rowsRead":0},"plugin":{"ms":16,"rowsRead":0},"fence":{"ms":5,"rowsRead":0},"verifies":{"ms":1,"rowsRead":0},"checksum":{"ms":0,"rowsRead":0}},"cpuMs":30,"heapBytes":90386808,"rooms":0,"sequences":0,"projectionBytes":0,"events":0}
+{"event":"room.store_initialized","initializationMs":30,"legacyColdStartMs":30,"clockSemantics":"runtime-dependent","cpuMeasured":false}
+✔ a fresh reverse plan cannot authorize corrupted canonical serving proofs (37.3245ms)
+{"event":"room.cold_start","clockSemantics":"runtime-dependent","durationMs":30,"integrity":"eager","phases":{"schema":{"ms":8,"rowsRead":0},"plugin":{"ms":16,"rowsRead":0},"fence":{"ms":5,"rowsRead":0},"verifies":{"ms":1,"rowsRead":0},"checksum":{"ms":0,"rowsRead":0}},"cpuMs":30,"heapBytes":97608736,"rooms":0,"sequences":0,"projectionBytes":0,"events":0}
+{"event":"room.store_initialized","initializationMs":30,"legacyColdStartMs":30,"clockSemantics":"runtime-dependent","cpuMeasured":false}
+{"event":"room.cold_start","clockSemantics":"runtime-dependent","durationMs":34,"integrity":"eager","phases":{"schema":{"ms":8,"rowsRead":0},"plugin":{"ms":16,"rowsRead":0},"fence":{"ms":9,"rowsRead":0},"verifies":{"ms":1,"rowsRead":0},"checksum":{"ms":0,"rowsRead":0}},"cpuMs":43,"heapBytes":82315776,"rooms":0,"sequences":0,"projectionBytes":0,"events":0}
+{"event":"room.store_initialized","initializationMs":35,"legacyColdStartMs":34,"clockSemantics":"runtime-dependent","cpuMeasured":false}
+{"event":"room.cold_start","clockSemantics":"runtime-dependent","durationMs":30,"integrity":"eager","phases":{"schema":{"ms":8,"rowsRead":0},"plugin":{"ms":16,"rowsRead":0},"fence":{"ms":5,"rowsRead":0},"verifies":{"ms":1,"rowsRead":0},"checksum":{"ms":0,"rowsRead":0}},"cpuMs":31,"heapBytes":89649528,"rooms":0,"sequences":0,"projectionBytes":0,"events":0}
+{"event":"room.store_initialized","initializationMs":30,"legacyColdStartMs":30,"clockSemantics":"runtime-dependent","cpuMeasured":false}
+{"event":"room.cold_start","clockSemantics":"runtime-dependent","durationMs":31,"integrity":"eager","phases":{"schema":{"ms":8,"rowsRead":0},"plugin":{"ms":16,"rowsRead":0},"fence":{"ms":5,"rowsRead":0},"verifies":{"ms":1,"rowsRead":0},"checksum":{"ms":0,"rowsRead":0}},"cpuMs":31,"heapBytes":96815624,"rooms":0,"sequences":0,"projectionBytes":0,"events":0}
+{"event":"room.store_initialized","initializationMs":31,"legacyColdStartMs":31,"clockSemantics":"runtime-dependent","cpuMeasured":false}
+▶ numeric-affinity storage corruption is refused before payload materialization
+  ✔ rooms.sequence (33.1635ms)
+{"event":"room.cold_start","clockSemantics":"runtime-dependent","durationMs":30,"integrity":"eager","phases":{"schema":{"ms":8,"rowsRead":0},"plugin":{"ms":16,"rowsRead":0},"fence":{"ms":5,"rowsRead":0},"verifies":{"ms":1,"rowsRead":0},"checksum":{"ms":0,"rowsRead":0}},"cpuMs":30,"heapBytes":104051264,"rooms":0,"sequences":0,"projectionBytes":0,"events":0}
+{"event":"room.store_initialized","initializationMs":30,"legacyColdStartMs":30,"clockSemantics":"runtime-dependent","cpuMeasured":false}
+{"event":"room.cold_start","clockSemantics":"runtime-dependent","durationMs":30,"integrity":"eager","phases":{"schema":{"ms":8,"rowsRead":0},"plugin":{"ms":16,"rowsRead":0},"fence":{"ms":5,"rowsRead":0},"verifies":{"ms":1,"rowsRead":0},"checksum":{"ms":0,"rowsRead":0}},"cpuMs":30,"heapBytes":111300808,"rooms":0,"sequences":0,"projectionBytes":0,"events":0}
+{"event":"room.store_initialized","initializationMs":30,"legacyColdStartMs":30,"clockSemantics":"runtime-dependent","cpuMeasured":false}
+  ✔ events.sequence (33.78375ms)
+{"event":"room.cold_start","clockSemantics":"runtime-dependent","durationMs":31,"integrity":"eager","phases":{"schema":{"ms":8,"rowsRead":0},"plugin":{"ms":16,"rowsRead":0},"fence":{"ms":6,"rowsRead":0},"verifies":{"ms":1,"rowsRead":0},"checksum":{"ms":0,"rowsRead":0}},"cpuMs":31,"heapBytes":118524768,"rooms":0,"sequences":0,"projectionBytes":0,"events":0}
+{"event":"room.store_initialized","initializationMs":31,"legacyColdStartMs":31,"clockSemantics":"runtime-dependent","cpuMeasured":false}
+  ✔ messages.seq (41.475917ms)
+  ✔ work_entities.revision (33.233542ms)
+  ✔ integrity_room_state.sequence (33.581208ms)
+  ✔ messages_backfill_cursor.applied_seq (32.753792ms)
+  ✔ messages_backfill_cursor.state_seq (33.0805ms)
+  ✔ messages_backfill_cursor.parity_at_seq (33.577417ms)
+✔ numeric-affinity storage corruption is refused before payload materialization (275.0985ms)
+ℹ tests 25
+ℹ suites 0
+ℹ pass 25
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 1046.511708

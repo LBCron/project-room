@@ -298,3 +298,24 @@ test('anonymous discovery offers existing access check and challenges without cr
   assert.deepEqual((await f.rpc('tools/list')).body.result.tools, authedBefore.body.result.tools, 'public discovery does not change the authenticated catalog');
   assert.deepEqual(counts(), before, 'discovery, refusal and access read create no identity, seat or credential');
 });
+
+
+test('expired refresh HTTP response is invalid_grant and issues no access or identity', async t => {
+  const f = await setup(t);
+  const accessBefore = f.store.db.prepare('SELECT count(*) n FROM oauth_provider_access_tokens').get().n;
+  const identitiesBefore = f.store.db.prepare('SELECT count(*) n FROM agent_identities').get().n;
+  const membersBefore = Object.keys(f.store.room('commons').state.members);
+  f.store.transaction(() => f.store.db.prepare('UPDATE oauth_provider_refresh_tokens SET expires_at=? WHERE token_hash=?')
+    .run(f.store.now(), createHash('sha256').update(f.tokens.refresh_token).digest('hex')));
+  const response = await f.exchange({ grant_type: 'refresh_token', refresh_token: f.tokens.refresh_token, client_id: CLIENT.clientId, resource });
+  assert.equal(response.status, 400);
+  const body = await response.json();
+  assert.equal(body.error, 'invalid_grant');
+  assert.match(body.error_description, /expired/);
+  assert.equal(body.access_token, undefined);
+  assert.equal(body.refresh_token, undefined);
+  assert.equal(f.store.db.prepare('SELECT count(*) n FROM oauth_provider_access_tokens').get().n, accessBefore);
+  assert.equal(f.store.db.prepare('SELECT count(*) n FROM oauth_provider_refresh_tokens').get().n, 0);
+  assert.equal(f.store.db.prepare('SELECT count(*) n FROM agent_identities').get().n, identitiesBefore);
+  assert.deepEqual(Object.keys(f.store.room('commons').state.members), membersBefore);
+});

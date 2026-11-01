@@ -347,7 +347,7 @@ export function createOAuthProvider({ clients, codes, accessTokens, refreshToken
       fail("invalid_grant", "refresh token reuse detected: token family revoked");
     }
     check(!record.revoked, "refresh token revoked");
-    if (isExpired(record, now)) { refreshStore.delete(record.tokenHash); fail("invalid_request", "refresh token expired"); }
+    if (isExpired(record, now)) { refreshStore.delete(record.tokenHash); fail("invalid_grant", "refresh token expired"); }
     if (isAccountActive && !isAccountActive(record.userId)) fail("invalid_grant", "account is no longer active");
     check(record.clientId === clientId, "client_id mismatch");
     checkResource(record, resource);

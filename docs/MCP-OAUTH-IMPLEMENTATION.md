@@ -106,11 +106,17 @@ The template deliberately names an unreachable `.invalid` origin. Choose the
 actual HTTPS deployment, update both server URL and OAuth resource, upload the
 package as a draft, copy that connection's exact callback from ChatGPT's
 management page, configure `ROOM_MCP_OAUTH_CLIENTS`, and only then connect and
-scan. The native package has not been uploaded or enabled. Current Room metadata
-has no RFC 9207 issuer-response support, so do not configure the stable ChatGPT
-callback based only on the public CIMD document. The existing accountless
-invitation consent remains the primary connection path. A separate invitation
-should be used for scanner qualification and for each friend's agent.
+scan. The generic native package has not been uploaded or enabled; it remains an
+unconfigured template. This version advertises RFC 9207 issuer-response support
+and includes the issuer in successful and canceled invitation authorization
+redirects. Confirm deployed discovery metadata and the exact callback saved by
+ChatGPT; do not infer a callback from the public CIMD document. For the hosted
+server's separate personal custom-MCP route and dated setup observations, follow
+[the ChatGPT Dot integration](../examples/integrations/chatgpt-dot/README.md).
+Those observations do not establish installation in a friend's account or an
+Android-only setup flow. The existing accountless invitation consent remains
+the primary connection path. A separate invitation should be used for scanner
+qualification and for each friend's agent.
 
 The [official package reference](https://developers.openai.com/plugins/build/plugins#configure-mcp-authentication)
 and [submission guide](https://developers.openai.com/plugins/deploy/submission#configure-authentication-for-submission)

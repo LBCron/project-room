@@ -17,6 +17,7 @@ import { getTier, DEFAULT_AUTONOMY_TIER } from "./autonomy-tiers.mjs";
 import { ServiceError } from "./service-error.mjs";
 import { canonicalLane, normalizeActor } from "./bounty-escrow.mjs";
 import { enforceAutonomyTierForAction } from "./autonomy-tiers.mjs";
+import { bountyNewWorkEnabled, BOUNTY_NEW_WORK_TOOLS, BOUNTIES_PAUSED_CODE, BOUNTIES_PAUSED_MESSAGE } from "./bounty-flag.mjs";
 import { publishBountyEvent, mayWorkOnBounties, WORK_CLAIMS_GATE_MESSAGE } from "./bounty-escrow-routes.mjs";
 import { isGuestAgentMemberId } from "./guest-agent-links.mjs";
 import { linkWorkClaimPullRequest, closeWorkClaim } from "./work-claim-routes.mjs";
@@ -394,12 +395,19 @@ async function dispatchHostedStdioTool(store, secret, name, args) {
     // Dispatch and agentInbox already authenticate; OAuth also requires work:read.
     // Read fresh membership without materializing the full formal-work snapshot.
     const { members } = store.roomAuthority(roomId);
-    const boardItems = store.workClaims.list(roomId);
-    const owned = boardItems.filter(item => item.owner === auth.member.id
+    const firstMatches = (items, predicate) => {
+      const matches = [];
+      for (const item of items) {
+        if (predicate(item)) matches.push(item);
+        if (matches.length === 51) break;
+      }
+      return matches;
+    };
+    const owned = firstMatches(store.workClaims.inboxCandidates(roomId, auth.member.id), item => item.owner === auth.member.id
       && ["claimed", "in_progress", "blocked", "delivered"].includes(item.state) && !item.supersededBy);
     const boardAssignments = owned.slice(0, 50).map(item => ({ claimId: item.id, state: item.state,
       nextRead: { tool: "room_read_board", arguments: { roomId } } }));
-    const reviews = auth.member.permissions.includes("verify") ? boardItems.filter(item => item.owner
+    const reviews = auth.member.permissions.includes("verify") ? firstMatches(store.workClaims.inboxCandidates(roomId, auth.member.id, { review: true }), item => item.owner
       && item.owner !== auth.member.id && !["done", "closed"].includes(item.state) && !item.supersededBy
       && (item.state === "in_progress" || item.pullRequest || item.pullRequests?.length)
       && resolveNamedReviewers(item, members).includes(auth.member.id)
@@ -441,6 +449,8 @@ async function dispatchHostedStdioTool(store, secret, name, args) {
 // the credit movement. EscrowError propagates untouched: the transport maps
 // its code, and there is one error contract.
 function callBountyTool(store, secret, roomId, auth, name, rest) {
+  if (BOUNTY_NEW_WORK_TOOLS.has(name) && !bountyNewWorkEnabled())
+    throw new ServiceError(403, BOUNTIES_PAUSED_CODE, BOUNTIES_PAUSED_MESSAGE);
   const escrow = store.bountyEscrow;
   const caller = canonicalLane(auth.member.id);
   const actor = normalizeActor(null, caller);

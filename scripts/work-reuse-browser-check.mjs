@@ -220,6 +220,8 @@ test("uncommitted original retry rejection unlocks correction without creating a
   await page.locator("#retry-work-button").click(); await f.form.locator('button[type="submit"]').waitFor({ state: "visible" });
   assert.equal(await f.title.isDisabled(), false);
   assert.equal(await page.locator("#verifier-select").evaluate(node => node.checkValidity()), false);
+  if (!await page.locator("#require-decision").isVisible()) await page.locator("#work-options > summary").click();
+    await page.locator("#require-decision").uncheck();
   await page.locator("#verifier-select").selectOption("owner"); await f.title.fill("Corrected after original refusal");
   await f.form.locator('button[type="submit"]').click(); await f.form.waitFor({ state: "hidden" });
   assert.deepEqual(attempts[0], attempts[1]); assert.notEqual(attempts[1].id, attempts[2].id);

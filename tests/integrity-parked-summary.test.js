@@ -79,10 +79,10 @@ function poisonedRoom(store, roomId) {
   const roomRow = store.db.prepare("SELECT projection FROM rooms WHERE id=?").get(roomId);
   const projection = JSON.parse(roomRow.projection);
   projection.messages.find(message => message.id === "standin").id = "bad id@x";
-  store.db.prepare("UPDATE rooms SET projection=? WHERE id=?").run(JSON.stringify(projection), roomId);
+  store.transaction(() => store.db.prepare("UPDATE rooms SET projection=? WHERE id=?").run(store.storedProjection(roomId, projection), roomId));
   // The messages table publishes the serving projection's copy, so the
   // table and the projection stay in parity; the log alone disagrees.
-  store.db.prepare("UPDATE messages SET message_id='bad id@x' WHERE room_id=? AND message_id='standin'").run(roomId);
+  store.db.prepare("UPDATE messages SET message_id='bad id@x',entity_hash=NULL WHERE room_id=? AND message_id='standin'").run(roomId);
   // Move the head: a live post lands on the room while it is parked, so
   // the parked room is behind its head and never counts as verified.
   const key = store.issueAccessKey(roomId, "owner");

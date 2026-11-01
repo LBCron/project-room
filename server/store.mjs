@@ -58,7 +58,7 @@ import { WANTS_WORK_SCHEMA } from "./work-wants.mjs"; // BOARD-WAKE-2
 import { CODE_DROPS_SCHEMA, CodeDrops } from "./code-drops.mjs"; // room-native patch exchange
 import { PROJECTION_BODIES_SCHEMA, storedProjection, hydrateProjection } from "./projection-at-rest.mjs"; // Phase 1a
 import { MESSAGES_SCHEMA, MESSAGES_BACKFILL_CURSOR_SCHEMA, MESSAGES_BACKFILL_BLOCKS_SCHEMA, archivedMessageRow, archiveMarker, archivedMatchingRecords, archivedThreadRecords, archiveRoomMessages, restoreArchivedMessages, runMessagesBackfill, checkMessagesParity as verifyMessagesParity, runMessagesParityCheck, messagesBackfillCaughtUp, resyncRoomMessageRows, syncMessageRows } from "./messages-store.mjs";
-import { hasMessageAuthority, canonicalMessageEditContext } from './message-authority.mjs';
+import { hasMessageAuthority, canonicalMessageEditContext, canonicalMessagePostContext } from './message-authority.mjs';
 import { runLegacyMessageShapeUpgrade } from "./legacy-message-shape.mjs";
 import { commitMessageRedaction } from "./message-redaction.mjs";
 import { runPatrolTick, patrolFindings as listPatrolFindings, patrolBlocks as listPatrolBlocks } from "./patrol.mjs";
@@ -4155,6 +4155,12 @@ this.slaBreachAlerts = new SlaBreachAlertJournal(this); // Task 26: durable in-a
     if (context) context.room.state = hydrateWorkItems(this.db, roomId, context.room.state);
     return context;
   }
+  canonicalMessagePostContext(roomId, command, actorId) {
+    if (this.messageProjectionWindow !== null || this.maintainMessageCertification) return null;
+    // Native mention callback authorization still reads full room visibility.
+    if (this.enqueueNativeMcpEvent && typeof command.data?.body === 'string' && command.data.body.includes('@')) return null;
+    return canonicalMessagePostContext(this.db, roomId, command, { actorId, humanPushEnabled: Boolean(this.humanPush?.vapid) });
+  }
   // Phase 1a: the one serializer for rooms.projection. Every writer uses it.
   storedProjection(roomId, state) {
     return storedProjection(this.db, roomId, state, { enabled: this.bodiesAtRest });
@@ -6960,8 +6966,9 @@ this.slaBreachAlerts = new SlaBreachAlertJournal(this); // Task 26: durable in-a
         const listed = this.room(roomId);
         return { sequence: listed.sequence, duplicate: false, event: null, bonds: this.bonds.listForMember(roomId, auth.member.id) };
       }
-      const editContext = this.canonicalMessageEditContext(roomId, command);
-      let room = editContext?.room ?? this.room(roomId);
+      const messageContext = this.canonicalMessagePostContext(roomId, command, auth.member.id)
+        ?? this.canonicalMessageEditContext(roomId, command);
+      let room = messageContext?.room ?? this.room(roomId);
       refuseArchivedWrite(room.state);
       room = prepareMessageCommand(this, roomId, room, command, auth.member.id);
       if (command.type === T.MESSAGE_POSTED && typeof command.data.toMemberId === "string" && command.data.toMemberId) {
@@ -7236,7 +7243,7 @@ this.slaBreachAlerts = new SlaBreachAlertJournal(this); // Task 26: durable in-a
         if (conflict) fail(409, "claim_conflict", `Scope is reserved by work ${conflict.id}. Coordinate or release that reservation first; no new claim was saved.`);
       }
       const sequence = room.sequence + 1;
-      const messageWrite = prepareMessageWrite(this, {roomId,previous:room,state,event:incoming,sequence,messageAuthorityCount:editContext?.count});
+      const messageWrite = prepareMessageWrite(this, {roomId,previous:room,state,event:incoming,sequence,messageAuthorityCount:messageContext?.count});
       const { projection } = messageWrite;
       if (Buffer.byteLength(projection) > PILOT_LIMITS.projectionBytes && !cleanup) fail(409, "pilot_limit", "Room projection limit reached; no data was changed. Ask the room owner to have older messages archived to free space.");
       // R1 delivery-path tracing (RC-2026-09-26-966): delivery.log spans the

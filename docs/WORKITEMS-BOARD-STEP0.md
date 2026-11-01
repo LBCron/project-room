@@ -59,7 +59,7 @@ signed evidence or checks (§4.4).
 ## 2. Census — every live reader and writer
 
 Method: full-text scan for `workItems` over the shipped tree at the Step 0
-base, pinned file-by-file in the Step 0 census test (63 files under
+base, pinned file-by-file in the Step 0 census test (64 files under
 `server/` + `src/`; outside those trees: `client/` 2, `machine/` 1,
 `cloudflare/` 4 check/fixture files, `scripts/` ≈60 operational and
 browser-check scripts that consume the client/store shapes).
@@ -83,7 +83,7 @@ test). Work-mutating events **not** synced: `work.proposed` (deliberate,
 §1), `work.help_updated`, `work.public_set`, `work.halt_cleared` — the
 last three carry state with no board field (§4.5).
 
-### Readers, by family (63 pinned sites)
+### Readers, by family (64 pinned sites)
 
 - **Kernel/reducer:** `src/events.js`, `src/workflow.js`,
   `src/work-item-session.js`, `server/claim-scopes.mjs`.
@@ -92,6 +92,11 @@ last three carry state with no board field (§4.5).
   `server/writer-fence.mjs`, `server/purge-registry.mjs`,
   `server/messages-store.mjs`, `server/message-redaction.mjs`,
   `server/content-trust.mjs`, `server/write-integrity.mjs` (checks normalized work payload/reference digests without changing work state).
+- **Canonical message admission:** `server/message-authority.mjs` reads inline
+  work metadata to decline round-limit resumes and canonical work references
+  before selecting a bounded ordinary-post context (2026-11-01). It does not
+  hydrate normalized work bodies, mutate work, add a board mapping, or change
+  the board sync event set; those contexts retain the full command path.
 - **Operator conversion admission:** `server/operator-message-authority.mjs`
   caps normalized `work_entities` rows and bytes before preparing or converting
   message authority (2026-11-01). This is a bounded dependency census, not a new

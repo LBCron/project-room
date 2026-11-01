@@ -36,9 +36,9 @@
     "server/agent-heartbeats.mjs": "1f051efa7336e7d40bd37fa69b723734a1098ace5126e14058e5e0e1f8d2516a",
     "server/agent-plugin-routes.mjs": "06d44d956cbc5df62f30c8489ce88d0c1bc32577ebd97e5f7bb9b70eac52cf70",
     "server/operator-routes.mjs": "84d4f41442c5fce7136bcb51407fe5a00e5491779798a9239c1843e0f8c92a36",
-    "server/operator-wake-index.mjs": "34936caed539340efac8e6756dee501b598117df9613f03654870dae04304d4e",
+    "server/operator-wake-index.mjs": "f171c19e9ca86173652a5f9afc2780fc54d753d31a1162b40b2dc1266d762b17",
     "server/routes/table.mjs": "fabc861772d7a0ec1007ea1255007dc8944dc1bc4b124ea84bf773f72f943e4f",
-    "server/wake-delivery-window.mjs": "5e6239d528d9a8b48b0e2bf6622309075392647a79a7107f711f873abb74bf8d",
+    "server/wake-delivery-window.mjs": "c5d223adb932f94c42a673eb54e162eb2ef44dd7e424ee304fd97e6a84530b3a",
     "server/work-wakes.mjs": "da744a4cf2c41ca26139d813e52c7bd20663c37a5b350120589f081bf4fa43d9",
     "src/agent-error.mjs": "5b8be5bf18e3e69053dbc3bccb7b8770b614cefaa053cffa63a31079a950673c"
   },
@@ -755,6 +755,62 @@
       "ciContract": "931b97eca51a94ac2e0e7ae310cfa402c4d7cfff85c1c4e6dc06fb8b79db2e29",
       "runtimePreflight": "0460502a76704df9d0f119833e02d2fd4f21eab3e1070524360063be86debe80"
     },
+    "runtimePreflightFiles": 669
+  },
+  "currentSourceCommit": "d5fe9531f9a9ad8d367bee8ca96ecad878e5e5f4",
+  "inactiveRolloutCorrection": {
+    "sourceCommit": "d5fe9531f9a9ad8d367bee8ca96ecad878e5e5f4",
+    "absentReceipt": "Indexed original-receipt lookup first; absent receipt returns legacy false without optional catalog inspection. No absence cache. Operator plan/execute still diagnose/refuse unreceipted adoption.",
+    "activatedReceipt": "Present malformed receipt refuses; valid receipt requires all four exact indexes, including after logical restore.",
+    "node": {
+      "tests": 19,
+      "pass": 19,
+      "fail": 0
+    },
+    "actualWorker": {
+      "checks": 3,
+      "pass": 3,
+      "fail": 0
+    },
+    "baseline": "Exact main c52db58787467390042295b181b152ef3ba4de12 agent-heartbeats module bundled with the same current fixture/shared dependencies, not an independently packaged main artifact.",
+    "catalogRows": 782,
+    "baselineTotalReads": [
+      10,
+      11,
+      11
+    ],
+    "beforeFixTotalReads": [
+      792,
+      793,
+      793
+    ],
+    "beforeFixCatalogReads": [
+      782,
+      782,
+      782
+    ],
+    "afterFixTotalReads": [
+      10,
+      11,
+      11
+    ],
+    "afterFixCatalogReads": [
+      0,
+      0,
+      0
+    ],
+    "ciContract": "CI=1 scripts/check.mjs passed on exact d5fe9531f9a9ad8d367bee8ca96ecad878e5e5f4 source, I18N_BASE_REF=c52db58787467390042295b181b152ef3ba4de12",
+    "logSha256": {
+      "mainModuleBaseline": "ba0649ca7bdb9f009497cddeb2ef3090f6f4718ebeea3ae6236af289b7195e30",
+      "causalRed": "c8affdebf0cdec9f4bbc15cf6030a157d583dc8e88404b0ad9e8ee38b2dd92c9",
+      "node": "e4b80f96ce423a82e8e5d83a032d3b1055b677c9b8f21ec583a7aaeae5208526",
+      "worker": "077a1020474aacf589fb9bd54cf16b6f189540697108f654b4f6dbae0d77b574",
+      "repairReplayMissingOriginalRed": "cad203a1e747943876d383fd6b59d7c2b6f45516dabcc3d7934ab953c0376142",
+      "initialReceiptFirstCi": "8f242244b2560e02e86c0c66a764be64b514929b21f40df8ff39e9f55a899f94",
+      "ciContract": "2807c898c33980664ea506ec2e40823c059154b557fdc72d6910f4b8e54917df",
+      "runtimePreflight": "d12c5eb46bd6418e0400744aa7985eca40d15ec14bc7d9decd2f70c4385cb3d9"
+    },
+    "repairReplay": "Requires verified original receipt explicitly before duplicate repair receipt replay, with causal original-deletion typed-refusal control.",
     "runtimePreflightFiles": 669
   }
 }

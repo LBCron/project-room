@@ -407,8 +407,8 @@ test("verified offline archive runs the actual Native durable restore qualificat
   const fixtureFiles=["durable-coverage.check.mjs","durable-coverage-seed.test-fixture.mjs","durable-coverage-native.test-fixture.mjs","current-room-serving.test-fixture.mjs"];
   for(const name of fixtureFiles)cpSync(join(repository,"cloudflare",name),join(worker,name));
   symlinkSync(realpathSync(join(repository,"cloudflare/node_modules")),join(harness,"node_modules"),"dir");
-  assert.equal(realpathSync(join(harness,"server/store.mjs")),join(destination,"server/store.mjs"));
-  assert.equal(realpathSync(join(worker,"room.mjs")),join(destination,"cloudflare/room.mjs"));
+  assert.equal(realpathSync(join(harness,"server/store.mjs")),realpathSync(join(destination,"server/store.mjs")));
+  assert.equal(realpathSync(join(worker,"room.mjs")),realpathSync(join(destination,"cloudflare/room.mjs")));
   const result=spawnSync(process.execPath,["--test",join(worker,"durable-coverage.check.mjs")],{
     cwd:harness,encoding:"utf8",timeout:180000,maxBuffer:16*1024*1024,
     env:{PATH:process.env.PATH,...(process.env.MINIFLARE_WORKERD_PATH?{MINIFLARE_WORKERD_PATH:process.env.MINIFLARE_WORKERD_PATH}:{})}

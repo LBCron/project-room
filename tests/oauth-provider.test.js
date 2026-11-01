@@ -195,6 +195,41 @@ test("refresh issuance failure does not consume the old refresh token (#2944)", 
     /reuse detected/);
 });
 
+test("exchange issuance failure does not consume the authorization code (T2-L02c-C1)", () => {
+  const events = [];
+  const provider = createOAuthProvider({ clock: () => 1_000_000, onSecurityEvent: e => events.push(e) });
+  provider.registerClient({
+    clientId: "muse", name: "Muse", redirectUris: ["https://muse.ai/oauth/callback"],
+  });
+  const verifier = "exchange-verifier-".padEnd(43, "g");
+  const { code } = provider.issueCode({
+    clientId: "muse", userId: "u1",
+    redirectUri: "https://muse.ai/oauth/callback",
+    scopes: ["rooms:read"],
+    codeChallenge: challengeFor(verifier),
+  });
+  const exchange = session => provider.exchangeCode({
+    code, clientId: "muse",
+    redirectUri: "https://muse.ai/oauth/callback",
+    codeVerifier: verifier, ...(session === undefined ? {} : { session }),
+  });
+  // A non-object session makes issueTokenPair throw (normalizeSessionMeta).
+  // The old ordering had already marked — and persisted — the code used,
+  // so the grant was stranded with no token ever issued.
+  assert.throws(() => exchange("not-an-object"), /session must be an object/);
+  // The code survives the failed issuance: a valid retry succeeds and is
+  // NOT answered as code theft (no reuse event, no family revocation).
+  const tokens = exchange();
+  assert.ok(provider.verifyAccessToken(tokens.accessToken));
+  assert.deepEqual(events, []);
+  // The code is still single-use afterwards: replaying it after a real
+  // issuance is reuse and revokes the family.
+  assert.throws(() => exchange(), /authorization code already used/);
+  assert.equal(events.length, 1);
+  assert.equal(events[0].type, "authorization_code_reuse_detected");
+  assert.equal(provider.verifyAccessToken(tokens.accessToken), null);
+});
+
 test("revokes tokens (RFC 7009)", () => {
   const { provider } = setup();
   const verifier = "v-".padEnd(43, "f");

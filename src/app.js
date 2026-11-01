@@ -472,6 +472,7 @@ let leavingPage = false;
 let composerFiles = [];
 let composerReselectId = null;
 let roomFilesByMessage = new Map();
+let roomFilesSelection = [], roomFilesNextCursor = null, roomFilesLoading = false, roomFilesAttemptKey = null, roomFilesFlight = null;
 const messageFileDownloads = new Map();
 try { recovery = new DraftRecovery(navigator.userAgent.includes("ProjectRoomMac/") ? window.localStorage : window.sessionStorage); } catch { recovery = new DraftRecovery(null); }
 const draftScope = draftRecoveryScope;
@@ -560,6 +561,7 @@ const client = new RoomClient({
     agentConnectionsUI?.sync();
     agentInvitesUI?.sync();
     if (presenceBoundary) startPresencePoll();
+    if(partialWorkSnapshot&&!firstSnapshot)void refreshRoomFiles();
     if (firstSnapshot) {
       rememberLastRoom(roomId, undefined, state.room?.title);
       const accountId = accountClient.session?.account?.id ?? session?.account?.id;
@@ -704,7 +706,7 @@ const client = new RoomClient({
     showSigninMethods();
     clearStoredPasswords();
     composerFiles = [];
-    roomFilesByMessage = new Map();
+    roomFilesByMessage = new Map();roomFilesSelection=[];roomFilesNextCursor=null;roomFilesLoading=false;roomFilesAttemptKey=null;roomFilesFlight=null;
     messageFileDownloads.clear();
     renderComposerFiles();
     $("#work-dialog").close();
@@ -2550,6 +2552,7 @@ function renderMessages() {
   directWindow.pin(activeDirectMemberId ? currentThreadId : null);
   if (activeDirectMemberId) directWindow.sync(client.sequence);
   const pairWindow = directWindow.view();
+  if(partialWorkSnapshot&&session&&!roomFilesLoading){const key=JSON.stringify([client.generation,client.sequence,visibleConversationMessages().filter(m=>!m.pendingSend&&!m.deletedAt).slice(-8).map(m=>m.id).sort()]);if(key!==roomFilesAttemptKey){roomFilesAttemptKey=key;queueMicrotask(()=>void refreshRoomFiles());}}
   const list = $("#message-list"), view = conversationViewKey();
   const sameView = list.dataset.view === view;
   if (!sameView) syncChatSuggestions();
@@ -2843,11 +2846,13 @@ function messageLinksHTML(m, { linked, moderation, count, muted }) {
 }
 function messageFileChips(messageId) {
   const files = roomFilesByMessage.get(messageId) ?? [];
-  if (!files.length) return "";
+  const more=partialWorkSnapshot&&roomFilesNextCursor&&roomFilesSelection[0]===messageId?`<button type="button" data-more-message-files${roomFilesLoading?" disabled":""}>More files for loaded messages</button>`:"";
+  const inspect=partialWorkSnapshot&&!roomFilesSelection.includes(messageId)?`<button type="button" data-check-message-files="${esc(messageId)}">Check files</button>`:"";
+  if (!files.length&&!more&&!inspect) return "";
   return `<div class="message-files">${files.map(file => {
     const download = messageFileDownloads.get(file.id);
     return `<span class="file-chip"><button type="button" data-download-file="${esc(file.id)}" data-file-message="${esc(messageId)}" data-focus-key="file-download:${esc(file.id)}" aria-label="${esc(uiText("file.download.action", { filename: fileChipLabel(file.filename) }))}"${download?.busy ? ' aria-disabled="true" aria-busy="true"' : ""}>${esc(fileChipLabel(file.filename))}</button>${download?.status ? `<span role="status">${esc(download.status)}</span>` : ""}</span>`;
-  }).join("")}</div>`;
+  }).join("")}${more}${inspect}</div>`;
 }
 async function downloadMessageFile(id, messageId) {
   const file = roomFilesByMessage.get(messageId)?.find(entry => entry.id === id);
@@ -2927,23 +2932,32 @@ function scheduleRoomFilesRefresh() {
   roomFilesRefreshTimers.forEach(clearTimeout);
   roomFilesRefreshTimers = ROOM_FILE_REFRESH_DELAYS_MS.map(delay => setTimeout(() => void refreshRoomFiles(), delay));
 }
-async function refreshRoomFiles() {
-  if (!state || !session || !client.session) return;
+async function refreshRoomFiles(more=false, selectedIds=null) {
+  if (!state || !session || !client.session || roomFilesLoading) return;
   const generation = client.generation;
-  const roomId = state.room?.id;
+  const roomId = state.room?.id, authSession=client.session, viewKey=conversationViewKey(), ticket={};
   try {
-    const body = await client.request(client.path("/files"));
-    if (generation !== client.generation || state?.room?.id !== roomId) return;
-    const next = new Map();
+    const selection=partialWorkSnapshot?more?roomFilesSelection:selectedIds??[...new Set(visibleConversationMessages().filter(m=>!m.pendingSend&&!m.deletedAt).slice(-8).map(m=>m.id))].sort():[];
+    if(partialWorkSnapshot&&!selection.length)return;
+    const cursor=more?roomFilesNextCursor:null;
+    if(more&&JSON.stringify(selection)!==JSON.stringify(roomFilesSelection))return;
+    const query=new URLSearchParams();for(const id of selection)query.append('messageId',id);if(cursor)query.set('cursor',cursor);
+    roomFilesFlight=ticket;roomFilesLoading=true;renderMessages();
+    const body = await client.request(client.path("/files")+(query.size?'?'+query:''));
+    if (generation !== client.generation || state?.room?.id !== roomId || client.session!==authSession || session!==authSession || !client.ownsAccountSession() || conversationViewKey()!==viewKey) return;
+    if(partialWorkSnapshot&&(body.contractVersion!==2||body.coverage?.kind!=='selected-messages'||JSON.stringify(body.coverage.messageIds)!==JSON.stringify(selection)||body.coverage.complete!==!body.page?.hasMore||Boolean(body.page?.nextCursor)!==body.page?.hasMore))throw Error('Invalid file selection');
+    const next = partialWorkSnapshot?new Map(roomFilesByMessage):new Map();
+    if(partialWorkSnapshot&&!more)for(const id of selection)next.delete(id);
     for (const file of body.files ?? []) {
       if (file.state !== "committed" || !file.messageId) continue;
       const list = next.get(file.messageId) ?? [];
-      list.push(file);
+      if(!list.some(held=>held.id===file.id))list.push(file);
       next.set(file.messageId, list);
     }
-    roomFilesByMessage = next;
+    roomFilesByMessage = next;roomFilesSelection=selection;roomFilesNextCursor=body.page?.nextCursor??null;
     if (state) renderMessages();
   } catch { /* The last chips stay until the next successful read. */ }
+  finally{if(roomFilesFlight===ticket){roomFilesFlight=null;roomFilesLoading=false;if(generation===client.generation&&state?.room?.id===roomId)renderMessages();}}
 }
 function composerFileOwner(file) {
   const authSession = client.session, generation = client.generation, roomId = state?.room?.id;
@@ -2955,6 +2969,7 @@ function composerFileOwner(file) {
   return { authSession, owns };
 }
 async function attachComposerFiles(fileList) {
+  if(client.sectionAvailability('fileUploads')?.available===false){setComposerError('New file uploads are unavailable in this storage view. Existing files remain downloadable from their messages.');return;}
   if (!state || !client.session || isRoomArchived(state)) return;
   const batch = composerFileOwner();
   for (const file of [...(fileList ?? [])]) {
@@ -3120,6 +3135,7 @@ function restoreComposer(draft) {
   autosizeComposer();
 }
 function requestRunLabel(id) {
+  if(client.sectionAvailability('requestRuns')?.available===false)return 'Execution status unavailable';
   const run = requestRuns[id];
   if (!run || state?.replyRequests?.[id]?.status !== "open") return "";
   const status = run.state === "working" && Date.now() - run.updatedAt > 120000 ? "unknown" : run.state;
@@ -3127,6 +3143,7 @@ function requestRunLabel(id) {
     needs_attention: "Host needs attention · original attempt retained", unknown: "Host connection lost · original attempt retained" })[status] ?? "";
 }
 async function refreshRequestRuns({ force = false } = {}) {
+  if(client.sectionAvailability('requestRuns')?.available===false)return;
   if (!state || !session || requestRunsReading || document.hidden) return;
   const openIds = Object.values(state.replyRequests ?? {}).filter(request => request.status === "open").map(request => request.id).sort();
   if (!openIds.length) { requestRuns = {}; requestRunsReadKey = ""; return; }
@@ -4844,6 +4861,8 @@ $("#message-list").addEventListener("click", e => {
     renderMessages();
     return;
   }
+  const checkFiles=e.target.closest('[data-check-message-files]');if(checkFiles){const id=checkFiles.dataset.checkMessageFiles;if(visibleConversationMessages().some(m=>m.id===id))void refreshRoomFiles(false,[id]);return;}
+  if(e.target.closest("[data-more-message-files]")){void refreshRoomFiles(true);return;}
   const file = e.target.closest("[data-download-file]");
   if (file) { void downloadMessageFile(file.dataset.downloadFile, file.dataset.fileMessage); return; }
   if (e.target.closest("[data-empty-write]")) { $("#message-input").focus(); return; }
@@ -7103,7 +7122,7 @@ window.addEventListener("pageshow", e => {
 // Return brief: one compact entry before conversation. Fetch on return and
 // on open; history stays fixed through the frozen horizon H, the action sections are live
 // through N, and only the explicit button acknowledges - exactly H, never the latest event.
-function loadReturnBrief() { return briefView.refresh(); }
+function loadReturnBrief() { if(client.sectionAvailability('returnBrief')?.available===false){renderReturnBrief();return;}return briefView.refresh(); }
 // Notification feed (B4): items are derived on the server from events after your
 // caught-up marker and filtered by your notification preferences. Fetching never
 // acknowledges; "Mark read" moves the marker to exactly the sequence the list was
@@ -7197,6 +7216,7 @@ humanPushUi = installHumanPush({
   eligible: () => Boolean(state) && ownsNotifications(notificationOwner) && client.session?.member?.kind !== "agent"
 });
 async function loadNotifications() {
+  if(client.sectionAvailability('notifications')?.available===false){setText('#notification-status','Combined notifications are unavailable. Inspect conversations, work and History; this does not mean there are no unread requests.');return;}
   const pagingFocus = ["notification-older", "notification-newest"].includes(document.activeElement?.id) ? document.activeElement : null;
   const ticket = notificationOwner, request = ++notificationSerial;
   if (!ownsNotifications(ticket)) return;
@@ -7444,6 +7464,7 @@ $("#later-list").addEventListener("click", async event => {
   }
 });
 function syncNotifications() {
+  if(client.sectionAvailability('notifications')?.available===false){clearTimeout(notificationTimer);notificationTimer=null;return;}
   if (!client.session || !client.ownsAccountSession() || !state) { resetNotifications(); return; }
   if (!ownsNotifications(notificationOwner)) { resetNotifications(); notificationOwner = { generation: client.generation, session: client.session, inputs: null, sequence: null }; }
   // Inputs that change the feed directly refetch at once: your cursor, your membership
@@ -7911,7 +7932,7 @@ function renderReturnBrief({ timelineRendered = false } = {}) {
     const items = Object.values(state.workItems);
     if (!timelineRendered) syncTimelineWork();
     const resultFocus = $("#room-results-list").contains(document.activeElement) ? document.activeElement : null;
-    preserveResultFocus($("#room-results-list"), () => renderContent("#room-results-list", completedResults(state).map(resultRow).join("") || '<li class="empty-note">No completed results yet.</li>'));
+    preserveResultFocus($("#room-results-list"), () => renderContent("#room-results-list", completedResults(state).map(resultRow).join("") || (partialWorkSnapshot?'<li class="empty-note">No completed results in the loaded window. Open Results to inspect more.</li>':'<li class="empty-note">No completed results yet.</li>')));
     if (resultFocus && !resultFocus.isConnected && document.activeElement === document.body) $("#room-results-list").focus({ preventScroll: true });
     resultStatus();
     syncResultComparisons();
@@ -7923,8 +7944,8 @@ function renderReturnBrief({ timelineRendered = false } = {}) {
   const newer = returnBrief && client.sequence > returnBrief.history.evaluatedThrough;
   // The reconciliation note comes first: it is the one thing here that says
   // what was already saved, which the generic brief message does not.
-  setText("#rb-status", owned ? briefReconcileNote || briefView.message || (newer ? "New changes available. Refresh catch-up." : "") : "");
-  $("#rb-refresh-button").disabled = !owned || briefView.busy;
+  setText("#rb-status", owned && client.sectionAvailability('returnBrief')?.available===false ? 'Partial storage view: use conversations, personal work and History. Combined catch-up and assistant automation are unavailable; unseen work and saved history may remain.' : owned ? briefReconcileNote || briefView.message || (newer ? "New changes available. Refresh catch-up." : "") : "");
+  $("#rb-refresh-button").disabled = !owned || briefView.busy || client.sectionAvailability('returnBrief')?.available===false;
   $("#return-brief-panel").setAttribute("aria-busy", briefView.busy ? "true" : "false");
   $("#rb-more-button").disabled = briefView.busy;
   $("#rb-ack-button").disabled = true;

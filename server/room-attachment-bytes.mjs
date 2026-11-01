@@ -1,3 +1,6 @@
+import {isCurrentRoom,withCurrentReadContext,readCurrentMessage,readCurrentHead,readCurrentHistoryFloor,chargeCurrentReadBudget} from './current-room-repository.mjs';
+import {conversationCursorCodec} from './conversation-sync.mjs';
+import {messageInHistory} from './history-visibility.mjs';
 import { messageRepository } from "./message-repository.mjs";
 // Room file bytes on the existing room_attachments table.
 //
@@ -199,13 +202,34 @@ export class RoomAttachmentBytes {
   }
 
   messageIndex(roomId) {
+    if(isCurrentRoom(this.db,roomId))return{get:id=>readCurrentMessage(this.db,roomId,id)?.value};
     const byId = messageRepository(this.store, roomId);
     // A file committed onto an archived DM must keep the DM's visibility rule:
     // a missing message would read as room-wide.
     return byId;
   }
 
-  list(token, roomId) {
+  listCurrent(token,roomId,{messageIds,cursor=null}={}){
+    if(!Array.isArray(messageIds)||messageIds.length<1||messageIds.length>8||new Set(messageIds).size!==messageIds.length||messageIds.some(id=>!validId(id)))fail(422,'attachment_selection_required','Select one to eight visible messages for files');
+    const ids=[...messageIds].sort();
+    return this.store.transaction(()=>withCurrentReadContext(this.db,roomId,b=>{
+      const auth=this.store.authenticate(token,roomId),head=readCurrentHead(this.db,roomId),floor=readCurrentHistoryFloor(this.db,roomId,auth.member.id);
+      for(const id of ids){const source=readCurrentMessage(this.db,roomId,id),m=source?.value;
+        if(!m||!messageInHistory(m,floor)||(m.toMemberId&&m.authorId!==auth.member.id&&m.toMemberId!==auth.member.id))fail(404,'attachment_not_found','Attachment selection not found');}
+      const codec=conversationCursorCodec(this.store),scope=createHash('sha256').update(JSON.stringify([roomId,auth.member.id,token,head.head_sha256,ids])).digest('hex');
+      let after=['',''];if(cursor!==null){const decoded=codec.decode(cursor);if(decoded?.scope!==scope||!Array.isArray(decoded.after)||decoded.after.length!==2||decoded.after.some(v=>typeof v!=='string'))fail(409,'attachment_cursor_reset','Files changed or the server restarted; refresh this selection');after=decoded.after;}
+      const rows=this.db.prepare(`SELECT id,message_id,length(CAST(id AS BLOB))+length(CAST(message_id AS BLOB))+length(CAST(filename AS BLOB))+length(CAST(media_type AS BLOB))+length(CAST(uploader_id AS BLOB))+length(CAST(sha256 AS BLOB))+128 AS metadata_bytes FROM room_attachments INDEXED BY current_room_attachments_message WHERE room_id=? AND message_id IN (${ids.map(()=>'?').join(',')}) AND (message_id,id)>(?,?) ORDER BY message_id,id LIMIT 9`).all(roomId,...ids,...after);
+      chargeCurrentReadBudget(b,rows.length*256,rows.length);
+      const selected=rows.slice(0,8),files=[];
+      for(const key of selected){if(!Number.isSafeInteger(key.metadata_bytes)||key.metadata_bytes>4096)fail(409,'attachment_metadata_unavailable','File metadata requires recovery');chargeCurrentReadBudget(b,key.metadata_bytes);
+        const row=this.db.prepare(`SELECT ${FILE_METADATA} FROM room_attachments WHERE room_id=? AND id=?`).get(roomId,key.id);
+        if(row?.message_id!==key.message_id)fail(409,'attachment_metadata_unavailable','File selection changed');if(row.state==='committed')files.push(view(row));}
+      const more=rows.length>8,last=selected.at(-1),nextCursor=more?codec.encode({scope,after:[last.message_id,last.id]}):null;
+      return{roomId,files,contractVersion:2,coverage:{kind:'selected-messages',messageIds:ids,complete:!more,examined:selected.length},page:{hasMore:more,nextCursor}};
+    }));
+  }
+  list(token, roomId, options={}) {
+    if(isCurrentRoom(this.db,roomId))return this.listCurrent(token,roomId,options);
     return this.store.transaction(() => {
       const auth = this.store.authenticate(token, roomId);
       this.expire(roomId, this.store.now());
@@ -221,10 +245,11 @@ export class RoomAttachmentBytes {
   }
 
   get(token, roomId, id) {
-    return this.store.transaction(() => {
+    return this.store.transaction(() => withCurrentReadContext(this.db,roomId,() => {
       const auth = this.store.authenticate(token, roomId);
       if (!validId(id)) fail(422, "invalid_attachment", "Attachment id is not valid");
-      this.expire(roomId, this.store.now());
+      if(!isCurrentRoom(this.db,roomId))this.expire(roomId, this.store.now());
+      if(isCurrentRoom(this.db,roomId)){const scalar=this.db.prepare('SELECT CASE WHEN length(CAST(uploader_id AS BLOB))<=512 THEN uploader_id END uploader_id,CASE WHEN length(CAST(message_id AS BLOB))<=512 THEN message_id END message_id,state,length(CAST(filename AS BLOB))+length(CAST(media_type AS BLOB))+length(CAST(uploader_id AS BLOB))+coalesce(length(CAST(message_id AS BLOB)),0)+length(CAST(sha256 AS BLOB))+128 AS n FROM room_attachments WHERE room_id=? AND id=?').get(roomId,id);if(scalar){if(!this.visibleTo(scalar,this.messageIndex(roomId),auth.member.id))fail(404,'attachment_not_found','Attachment not found');if(!Number.isSafeInteger(scalar.n)||scalar.n>4096)fail(409,'attachment_metadata_unavailable','File metadata requires recovery');}}
       const row = this.db.prepare(`SELECT ${FILE_METADATA},bytes IS NOT NULL AS has_bytes
         FROM room_attachments WHERE room_id=? AND id=?`).get(roomId, id);
       if (!row) fail(404, "attachment_not_found", "Attachment not found");
@@ -233,7 +258,7 @@ export class RoomAttachmentBytes {
       if (!this.visibleTo(row, this.messageIndex(roomId), auth.member.id)) {
         fail(404, "attachment_not_found", "Attachment not found");
       }
-      if ((row.state !== "staged" && row.state !== "committed") || !row.has_bytes) {
+      if ((row.state !== "staged" && row.state !== "committed") || (row.state==="staged"&&row.expires_at<=this.store.now()) || !row.has_bytes) {
         fail(410, "attachment_unavailable", "Attachment bytes are no longer available");
       }
       const payload = this.db.prepare("SELECT bytes FROM room_attachments WHERE room_id=? AND id=?").get(roomId, id);
@@ -241,7 +266,7 @@ export class RoomAttachmentBytes {
         roomId,
         attachment: { ...view(row), encoding: "base64", data: Buffer.from(payload.bytes).toString("base64") }
       };
-    });
+    }));
   }
 
   discard(token, roomId, id) {

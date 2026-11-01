@@ -1,5 +1,5 @@
 import { assertRestoreAdmitted, restorePending, verifyRestoreControl } from './restore-admission.mjs';
-import { CURRENT_ROOM_SCHEMA, CURRENT_ROOM_GUARDS, initializeCurrentRoom, currentRoomAuthority, isCurrentRoom, currentCommandContext, prepareCurrentWrite, withCurrentServingWriter, readCurrentRecord, readCurrentHistoryFloor, withCurrentReadContext } from './current-room-repository.mjs';
+import { CURRENT_ROOM_SCHEMA, CURRENT_ROOM_GUARDS, initializeCurrentRoom, currentRoomAuthority, isCurrentRoom, currentCommandContext, prepareCurrentWrite, withCurrentServingWriter, readCurrentRecord, readCurrentHistoryFloor, withCurrentReadContext, readCurrentSelectedWorkState } from './current-room-repository.mjs';
 import {bindReplayAppend} from './replay-cutover.mjs';
 import { bootstrapLegacyWriteProofs, configureWriteIntegrity, beginWriteProofFrame, endWriteProofFrame, publishProjectionWrites, projectionDigest, projectionContentHash, servingContentProof, servingProofDrift, assertProjectionWrite, assertMessageWrite, recordMessageWrite, withVerifiedRoomReconstruction } from './write-integrity.mjs';
 const OPERATOR_QA_ARCHIVE = Symbol("operator QA room archive");
@@ -6448,12 +6448,25 @@ this.slaBreachAlerts = new SlaBreachAlertJournal(this); // Task 26: durable in-a
     });
   }
   workContext(token, roomId, workItemId, { includeSource = false, includeOffers = false, sourceObservation = undefined, expectedSessionBinding = null } = {}) {
-    return this.readTransaction(() => {
+    return this.readTransaction(() => withCurrentReadContext(this.db,roomId,() => {
       const auth = this.authenticate(token, roomId, expectedSessionBinding);
       if (!validId(workItemId) || typeof includeSource !== "boolean" || typeof includeOffers !== "boolean") fail(422, "invalid_work_context", "Choose one work ID and boolean context options");
       if (sourceObservation !== undefined && (!includeSource || !validSourceObservation(sourceObservation)
         || sourceObservation.roomId !== roomId || sourceObservation.workItemId !== workItemId || sourceObservation.viewerId !== auth.member.id))
         fail(422, "invalid_source_observation", "Use an observation from this room, work and viewer with includeSource=true");
+      const current=readCurrentSelectedWorkState(this,roomId,workItemId,auth.member.id,{includeOffers});
+      if(current) {
+        if(!Object.hasOwn(current.state.workItems,workItemId))fail(404,'work_not_found','Work item not found in this Room');
+        const item=current.state.workItems[workItemId],target=item.supersededBy;
+        const value=selectedWorkContext({state:current.state,workItemId,viewerId:auth.member.id,sequence:current.sequence,now:this.now(),includeSource,includeOffers,sourceObservation,
+          floor:this.historyFloor(roomId,auth.member.id,current.sequence),messageRecords:{get:id=>selectedMessageRecord(this,roomId,id,false)},
+          replacementAvailable:validId(target)&&target!==workItemId&&Boolean(readWorkItem(this.db,roomId,target))});
+        const claim=this.workClaims.get(roomId,boardClaimId(workItemId)),ids=claim?.dependsOn??item.dependsOn??[];
+        if(ids.length>32)fail(409,'current_room_context_unavailable','Selected dependency list exceeds bounded context');
+        const dependencies=ids.map(id=>{const dep=this.workClaims.get(roomId,id);return{id,state:dep?.state??'missing',satisfied:Boolean(dep&&dep.state==='done'&&!dep.premiseFlag&&!dep.supersededBy)};});
+        return {...value,dependencies,viewerId:auth.member.id,viewerAccountId:auth.account?.id??null,viewerAuthEpoch:auth.account?.authEpoch??null,
+          viewerSessionBinding:auth.sessionBinding,viewerSessionRevision:auth.sessionRevision??null};
+      }
       // Default selected reads hydrate only the selected work payload. Offers
       // validate cross-work references and still require the broader aggregate.
       // Both paths scan legacy room JSON; neither is a bounded SQL-work claim.
@@ -6487,7 +6500,7 @@ this.slaBreachAlerts = new SlaBreachAlertJournal(this); // Task 26: durable in-a
         })(),
         viewerId: auth.member.id, viewerAccountId: auth.account?.id ?? null, viewerAuthEpoch: auth.account?.authEpoch ?? null,
         viewerSessionBinding: auth.sessionBinding, viewerSessionRevision: auth.sessionRevision ?? null };
-    });
+    }));
   }
   workDiscussion(token, roomId, workItemId, { cursor = null, since, limit, consistent = false, resumeToken = null, expectedSessionBinding = null } = {}) {
     return this.readTransaction(() => {

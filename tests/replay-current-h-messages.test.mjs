@@ -53,6 +53,7 @@ test('existing room H plus independently bound tail activates actual normalized 
  const posted=f.store.command(f.key,'commons',{id:'after-current',type:'message.posted',data:{messageId:'after-current',body:'Useful normalized reply',replyToId:'tail-message'}});assert.equal(posted.duplicate,false);
  assert.equal(readConversation(f.store,f.key,'commons',{messageId:'after-current',limit:5}).messages[0].body,'Useful normalized reply');
  const proposed=f.store.command(f.key,'commons',{id:'existing-work',type:'work.proposed',data:{workItemId:'existing-work',title:'Save useful evidence',definitionOfDone:'A saved room result',mode:'read',accountableMemberId:'owner'}});assert.equal(proposed.duplicate,false);
+ const selected=f.store.workContext(f.key,'commons','existing-work',{includeSource:true});assert.equal(selected.work.id,'existing-work');assert.equal(selected.context.omitted.includes('other_work'),true);
  const item=()=>readWorkItem(f.store.db,'commons','existing-work');
  f.store.command(f.key,'commons',{id:'accept-existing',type:'work.accepted',data:{workItemId:'existing-work',expectedRevision:item().revision}});
  f.store.command(f.key,'commons',{id:'start-existing',type:'work.started',data:{workItemId:'existing-work',expectedRevision:item().revision}});

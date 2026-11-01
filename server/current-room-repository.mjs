@@ -151,7 +151,7 @@ function admitCurrentSchema(db,b) {
   if(permit.length!==1||permit[0].singleton!==1||permit[0].enabled!==(scope?1:0)||permit[0].room_id!==(scope??null)||(!scope&&permit[0].receipt_id!==null))corrupt('unregistered format writer permit');
   b.schemaVerified=true;
 }
-export function readCurrentHead(db,roomId,b=budget()) {
+export function readCurrentHead(db,roomId,b=contextBudgets.get(db)??budget()) {
   const scalar=db.prepare('SELECT length(CAST(counts_json AS BLOB)) AS bytes FROM current_room_head WHERE room_id=?').get(roomId);
   if(!scalar){isCurrentRoom(db,roomId);return null;}admitCurrentSchema(db,b);if(scalar.bytes>4096)corrupt('oversized head');charge(b,scalar.bytes+1024);
   const row=db.prepare('SELECT * FROM current_room_head WHERE room_id=?').get(roomId);
@@ -164,7 +164,7 @@ export function readCurrentHead(db,roomId,b=budget()) {
     corrupt('carrier differs from independent head');
   return {...row,counts:JSON.parse(row.counts_json)};
 }
-export function readCurrentRecord(db,roomId,domain,key,b=budget()) {
+export function readCurrentRecord(db,roomId,domain,key,b=contextBudgets.get(db)??budget()) {
   if(!b.schemaVerified&&!readCurrentHead(db,roomId,b))corrupt('record namespace is not initialized');
   if(typeof key!=='string'||Buffer.byteLength(key)>200)refuse('Current record identity is too large');
   charge(b,1024,2);
@@ -282,7 +282,7 @@ function currentAuthorityFromHead(db,roomId,head,b) {
   if(!room||!Object.hasOwn(members,room.ownerId))corrupt('missing owner authority');
   return {sequence:head.sequence,ownerId:room.ownerId,members,historyVisibility:room.historyVisibility??null,historyDefaultsVersion:room.historyDefaultsVersion??null};
 }
-export function readCurrentMessage(db,roomId,messageId,b=budget()) {
+export function readCurrentMessage(db,roomId,messageId,b=contextBudgets.get(db)??budget()) {
   if(!b.schemaVerified&&!readCurrentHead(db,roomId,b))corrupt('message namespace is not initialized');
   const witness=readCurrentRecord(db,roomId,'messageWitness',messageId,b);
   const scalar=db.prepare(`SELECT ${MESSAGE_PROOF_SELECT.split(',').map(key=>`length(CAST(${key} AS BLOB)) AS ${key}`).join(',')}
@@ -445,7 +445,7 @@ export function currentThreadParticipants(db,roomId,rootId) {
     if(!value||value.threadRootId!==rootId||key!==rootId+'\0'+value.memberId)corrupt('thread participant identity differs');return value.memberId;});
 }
 
-export function readCurrentWorkItem(db,roomId,id,b=budget()) {
+export function readCurrentWorkItem(db,roomId,id,b=contextBudgets.get(db)??budget()) {
   const head=readCurrentHead(db,roomId,b);if(!head)return null;
   const ref=readCurrentRecord(db,roomId,'workItems',id,b);if(ref===undefined)return null;
   const scalar=db.prepare('SELECT length(CAST(body AS BLOB)) AS bytes FROM work_entities WHERE room_id=? AND work_id=?').get(roomId,id);
@@ -676,3 +676,20 @@ export function publishCurrentCandidate(store,head,{generation,qualificationRece
 }
 
 export function admitCurrentCandidateBudget(db,b) { admitCurrentSchema(db,b); return b; }
+
+// Selected work context never opens the legacy room or unrelated work bodies.
+export function readCurrentSelectedWorkState(store,roomId,workId,viewerId,{includeOffers=false}={}) {
+  const db=store.db,b=contextBudgets.get(db)??budget(),head=readCurrentHead(db,roomId,b);if(!head)return null;
+  if(includeOffers)refuse('Cross-work offers require an indexed selected dependency context');
+  const room=readCurrentRecord(db,roomId,'metadata','room',b),item=readCurrentWorkItem(db,roomId,workId,b);
+  if(!room)corrupt('missing selected room authority');if(!item)return {sequence:head.sequence,state:{room,members:{},workItems:{}}};
+  const ids=new Set([viewerId,room.ownerId,item.accountableMemberId,item.verifierMemberId,item.humanDecisionMakerId,item.proposedById,
+    item.claim?.holderId,item.receipt?.producerId,item.receipt?.reportedById].filter(id=>typeof id==='string'));
+  const members={};for(const id of ids){const member=readCurrentRecord(db,roomId,'members',id,b);if(member!==undefined)members[id]=member;}
+  const replyRequests={};
+  if(head.counts.replyRequests>8)refuse('Selected work reply metadata needs an indexed window for this room');
+  const requests=db.prepare("SELECT record_key FROM current_room_record_proofs WHERE room_id=? AND domain='replyRequests' AND present=1 ORDER BY record_key LIMIT 9").all(roomId);
+  charge(b,requests.length*256,requests.length);if(requests.length!==head.counts.replyRequests)corrupt('selected request census differs');
+  for(const {record_key:id} of requests)replyRequests[id]=readCurrentRecord(db,roomId,'replyRequests',id,b);
+  return {sequence:head.sequence,state:{room,members,workItems:{[workId]:item},replyRequests}};
+}

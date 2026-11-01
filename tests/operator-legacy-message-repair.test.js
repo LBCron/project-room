@@ -111,3 +111,11 @@ test('failed execution invalidation does not touch unrelated room certificate',t
   assert.throws(()=>repairLegacyMessages(f.store,execute,true));
   assert.equal(f.store.db.prepare("SELECT parity_at_seq FROM messages_backfill_cursor WHERE room_id='other'").get().parity_at_seq,before);
 });
+
+test('an unregistered projection overwrite cannot authorize a legacy index repair',t=>{
+ const f=fixture(t);
+ f.store.db.exec("UPDATE rooms SET projection=json_set(projection,'$.room.title','Unregistered title') WHERE id='target'");
+ const before=rows(f.store),actions=f.store.db.prepare('SELECT count(*) AS n FROM operator_actions').get().n;
+ assert.throws(()=>repairLegacyMessages(f.store,f.input),error=>error.code==='repair_projection_unavailable');
+ assert.equal(rows(f.store),before);assert.equal(f.store.db.prepare('SELECT count(*) AS n FROM operator_actions').get().n,actions);
+});

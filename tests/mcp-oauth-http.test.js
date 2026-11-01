@@ -222,3 +222,39 @@ test('native text schemas accept complete prose under substring and whole-string
     for (const value of ['', ' ', '\t\r\n', '\u00a0']) assert.equal(pattern.test(value), false, `${path}: refuse blank input`);
   }
 });
+
+test('native invitation issuance needs new consent and current room authority without widening old grants',async t=>{
+ const f=await setup(t),tool='room_create_agent_invite';
+ const scopes='rooms:read chat:read chat:write work:read work:write members:invite';
+ const allowed=await f.consent({scope:scopes});assert.equal(allowed.status,302);
+ const code=new URL(allowed.headers.get('location')).searchParams.get('code');assert.ok(code,'explicit invitation consent must be supported');
+ const response=await f.exchange({grant_type:'authorization_code',code,client_id:CLIENT.clientId,redirect_uri:CLIENT.redirectUris[0],code_verifier:verifier,resource});
+ assert.equal(response.status,200);const tokens=await response.json();
+ const call=(args={},token=tokens.access_token)=>f.rpc('tools/call',{name:tool,arguments:args},token);
+ const inviteCount=()=>f.store.db.prepare("SELECT count(*) AS n FROM agent_invite_codes WHERE room_id='commons'").get().n;
+ const before=inviteCount();
+ const noAuthority=await call({profile:'chat'});assert.ok(noAuthority.body.error || noAuthority.body.result?.isError);assert.equal(inviteCount(),before);
+ let member=f.store.room('commons').state.members['friend-dot'];
+ f.store.command(f.ownerKey,'commons',{id:'grant-native-invite',type:'member.access_changed',data:{memberId:member.id,expectedMemberRevision:member.revision,active:true,permissions:[...member.permissions,'invite_member']}});
+ // A membership revision intentionally fences its sponsored connection.
+ // The owner must explicitly approve a connection rotation at the new revision.
+ const owner=f.store.createSession(f.ownerKey),connection=f.store.agentConnections.row('commons','friend-dot');
+ member=f.store.room('commons').state.members['friend-dot'];
+ f.store.agentConnections.apply(owner.token,'commons',{action:'rotate',requestId:'approve-native-invite-connection',memberId:member.id,
+  expectedOwnerRevision:f.store.room('commons').state.members.owner.revision,expectedGeneration:connection.generation,expectedMemberRevision:member.revision,
+  keyHash:createHash('sha256').update('synthetic-native-invite-connection').digest('hex'),expiresAt:connection.expires_at},owner.session.sessionBinding);
+ const old=await call({profile:'chat'},f.tokens.access_token);assert.ok(old.body.error || old.body.result?.isError);assert.equal(inviteCount(),before,'room authority alone cannot expand existing OAuth consent');
+ const oldTools=await f.rpc('tools/list');assert.equal(oldTools.response.status,200);assert.ok(!oldTools.body.result.tools.some(item=>item.name===tool));
+ const listed=await f.rpc('tools/list',{},tokens.access_token);assert.ok(listed.body.result.tools.some(item=>item.name===tool));
+ const created=await call({profile:'chat'});assert.equal(created.body.error,undefined,JSON.stringify(created.body));assert.notEqual(created.body.result?.isError,true,JSON.stringify(created.body));
+ assert.equal(inviteCount(),before+1);const issued=created.body.result.structuredContent;assert.equal(issued.roomId,'commons');assert.equal(issued.ownerEquivalent,false);assert.ok(!issued.permissions.includes('invite_member'));
+ for(const args of [{roomId:'other-room',profile:'chat'},{ownerEquivalent:true},{permissions:['invite_member']}]){
+  const denied=await call(args);assert.ok(denied.body.error || denied.body.result?.isError);assert.equal(inviteCount(),before+1);
+ }
+ const widened=await f.exchange({grant_type:'refresh_token',refresh_token:f.tokens.refresh_token,client_id:CLIENT.clientId,resource,scope:scopes});
+ assert.equal(widened.status,200);const refreshed=await widened.json();assert.ok(!refreshed.scope.split(' ').includes('members:invite'));
+ const refreshTools=await f.rpc('tools/list',{},refreshed.access_token);assert.ok(!refreshTools.body.result.tools.some(item=>item.name===tool));
+ member=f.store.room('commons').state.members['friend-dot'];
+ f.store.command(f.ownerKey,'commons',{id:'remove-native-invite',type:'member.access_changed',data:{memberId:member.id,expectedMemberRevision:member.revision,active:true,permissions:member.permissions.filter(p=>p!=='invite_member')}});
+ const revoked=await call({profile:'chat'});assert.ok(revoked.body.error || revoked.body.result?.isError);assert.equal(inviteCount(),before+1);
+});

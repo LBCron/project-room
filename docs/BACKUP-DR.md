@@ -216,3 +216,26 @@ the same way: rebuilds fall back to a full event-history replay.
   the production-scale KV restore test in
   `tests/restore-from-backup.test.js` (2026-10-16, above) are the
   standing proofs instead.
+
+
+### Legacy backups and write proofs
+
+New NDJSON exports record the actual database `sourceSchemaVersion` in their
+watermark. Old unmarked exports from schema42/43 require an explicit operator
+attestation to establish prospective metadata write proofs on a fresh schema44
+restore target. Confirm the source version from the backup's deployment history;
+do not infer it from missing proof rows.
+
+For a local rehearsal, add `--source-schema-version 42` (or `43`) to
+`scripts/restore-room-backup.mjs`. For the authenticated NDJSON restore door,
+use `?sourceSchemaVersion=42`; the authenticated KV restore also accepts
+`"sourceSchemaVersion": 42` in its JSON body. A conflicting marked source is
+refused, and current-schema missing proofs receive no automatic bootstrap.
+
+Bootstrap runs after backup content, foreign-key, and landed-count checks. It
+validates existing strong content baselines, adds only prospective metadata
+protection, and leaves a NULL historical content hash NULL. The result's
+`writeProofs` reports the source version and added metadata-proof count;
+`historicalVerification` remains `unchanged`. This does not clear a recovery
+audit failure or a quarantine. `audit=report` retains its existing qualifications.
+Default restore behavior and authentication remain unchanged.

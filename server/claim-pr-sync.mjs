@@ -428,6 +428,11 @@ function ciReadDue(item, nowMs) {
 // Reading the current row first makes the retry a no-op: the links are
 // already stamped, so `linked` misses and the function returns false.
 export function commitPullRequestLookup(store, registry, roomId, item, result, nowMs) {
+  // The network lookup is already complete. Commit registry, event and
+  // projection together, including standalone webhook/retry callers.
+  if (store.db && !store.db.isTransaction && typeof store.transaction === "function") {
+    return store.transaction(() => commitPullRequestLookup(store, registry, roomId, item, result, nowMs));
+  }
   if (isPublicClaimNamespace(store, roomId)) return false;
   const current = registry?.get?.(roomId, item?.id) ?? item;
   const linked = pullLinks(current).find(pull => pull.url === result.url && !pull.outcome);
@@ -1001,9 +1006,11 @@ function applyDeployedClose(store, roomId, claimId, nowMs, skipped) {
   try {
     const closed = closeWhenLive(item, SOURCE_REVISION, nowMs);
     if (!closed) return;
-    store.workClaims.set(roomId, closed);
-    emitWorkClaimEvent(store, roomId, {
-      actorId: item.owner ?? "system", item: closed, action: "state_changed", atMs: nowMs
+    store.workClaims.transaction(() => {
+      store.workClaims.set(roomId, closed);
+      emitWorkClaimEvent(store, roomId, {
+        actorId: item.owner ?? "system", item: closed, action: "state_changed", atMs: nowMs
+      });
     });
   } catch (error) {
     noteSkippedInvalidClaim(skipped, roomId, item?.id, error);

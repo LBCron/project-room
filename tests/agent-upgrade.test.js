@@ -56,6 +56,10 @@ for (const [version, baseline] of [[8, v8ConnectionBaseline], [9, v9TextBaseline
   assert.deepEqual(catalog(), oldCatalog); assert.deepEqual(oldAudit(f.store), before);
   assert.equal(cached.run(f.owner.session.account.id).changes, 1);
   const current = new RoomStore(f.filename, { now: f.now }); t.after(() => current.close());
+  const writeProofs = current.db.prepare("SELECT projection_hash,metadata_hash FROM integrity_room_state").all();
+  assert.equal(writeProofs.length, roomsBefore.length);
+  assert.ok(writeProofs.every(row => /^[a-f0-9]{64}$/.test(row.metadata_hash)), "legacy metadata gets prospective write protection");
+  assert.ok(writeProofs.every(row => row.projection_hash === null), "opening an old schema does not certify its historical content");
   // v28 adds rooms.archived_at, so the rooms digest differs by construction; its rows are compared column-wise below.
   // Channels arrived after these baselines were frozen, and opening an old
   // database materialises the default "general" channel into each room's
@@ -150,11 +154,11 @@ for (const [version, baseline] of [[8, v8ConnectionBaseline], [9, v9TextBaseline
   assert.deepEqual(auditRecovery(current).tables.filter(comparable), before.tables.filter(comparable));
   assert.deepEqual(current.email.verify(), version >= 18 ? { connections: 1, folders: 1, sources: 1 } : { connections: 0, folders: 0, sources: 0 });
   assert.equal(current.authenticate(f.keys.agent).member.id, "agent");
-  assert.throws(() => cached.run(f.owner.session.account.id), /project_room_writer_v42|unsupported database writer/);
+  assert.throws(() => cached.run(f.owner.session.account.id), /project_room_writer_v44|unsupported database writer/);
   assert.throws(() => new OldStore(f.filename), /newer than this service/);
   current.createAccount("after-v36-upgrade");
   assert.equal(current.account("after-v36-upgrade").active, true);
-  assert.equal(auditRecovery(current).schemaVersion, 42);
+  assert.equal(auditRecovery(current).schemaVersion, STORE_SCHEMA_VERSION);
   if (version >= 21) {
     f.replyRequests.forEach((request, index) => assert.deepEqual(current.inbox.reply(f.owner.token, request, f.owner.session.sessionBinding).receipt, f.replyReceipts[index]));
     const attempt = current.inbox.replyAttempts(f.owner.token, f.emailEnvelope.sourceId, f.owner.session.sessionBinding).attempts[0];

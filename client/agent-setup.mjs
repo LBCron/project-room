@@ -8,6 +8,7 @@ import { edgeDoorApiPath, ROOM_ORIGIN } from "../src/service-origin.js";
 import { parseShareInviteCode } from "../src/share-invite-code.js";
 import { ACCESS_PRESETS } from "../src/access-presets.js";
 import { validId } from "../src/events.js";
+import { agentConnectionReadiness } from "../src/agent-connection-readiness.js";
 
 const canonicalOrigin = value => {
   const origin = assertServiceOrigin(value);
@@ -200,7 +201,11 @@ export async function connectRoom({ target, directory, origin, name = "Room agen
     }
     const config = { version: 1, origin: saved.origin, roomId: step.roomId, memberId: membership.memberId, token };
     const client = new RoomAgentClient({ ...config, fetchImpl });
-    const connectionAccess = await client.checkConnection(), orientation = await client.activationPack({ view: "brief" });
+    const observedAfter = Date.now();
+    const connectionAccess = await client.checkConnection();
+    const accessObservedAt = Date.now();
+    const orientation = await client.activationPack({ view: "brief" });
+    const activationObservedAt = Date.now();
     try {
       const existing = readAgentConnection(configDirectory);
       if (JSON.stringify(existing) !== JSON.stringify(config)) throw new Error("Existing connection differs; nothing was replaced");
@@ -233,7 +238,8 @@ export async function connectRoom({ target, directory, origin, name = "Room agen
       configDirectory, permissions: connectionAccess.permissions, orientation, requestedAccess, accessRequest,
       host: { transport: "stdio", command: process.execPath, args: [fileURLToPath(new URL("../scripts/agent-mcp.mjs", import.meta.url))],
         env: { ROOM_AGENT_CONFIG: configDirectory }, installed: false },
-      readiness: { access: "verified", read: "verified", listening: "not_tested", execution: "not_tested" },
+      readiness: agentConnectionReadiness({ expected: { roomId: config.roomId, memberId: config.memberId },
+        access: connectionAccess, accessObservedAt, activationPack: orientation, activationObservedAt, observedAfter, now: Date.now() }),
       next: "Import host into your MCP client; it contains no secret. Run room_check_access, then room_list_work. Listening and execution require a running host" };
   } finally { journal.close(); }
 }

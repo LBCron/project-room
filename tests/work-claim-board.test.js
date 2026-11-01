@@ -212,7 +212,7 @@ test("an ownerless room refuses a non-member and a member without a claim profil
   const row = store.db.prepare("SELECT projection FROM rooms WHERE id=?").get("commons");
   const projection = JSON.parse(row.projection);
   projection.room.ownerId = "";
-  store.db.prepare("UPDATE rooms SET projection=? WHERE id=?").run(JSON.stringify(projection), "commons");
+  store.transaction(() => store.db.prepare("UPDATE rooms SET projection=? WHERE id=?").run(store.storedProjection("commons", projection), "commons"));
   const chat = await call(chatKey, "/work-claims", { id: "chat-no" });
   assert.equal(chat.status, 403);
   assert.equal(chat.value.error.code, "work_claims_not_permitted");

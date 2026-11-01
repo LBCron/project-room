@@ -175,8 +175,8 @@ test("a draft redacted by the account-deletion machinery does not poison the wor
     // through a message.deleted command. Apply it exactly as the deletion
     // executor does, then cold-reopen the store so the served state is
     // rebuilt by replaying the rewritten log.
-    commitMessageRedaction(f.store.db, { roomId: "commons", state: f.store.room("commons").state,
-      actorId: "producer", at: new Date().toISOString(), messageId: "redact-draft-1", bodiesAtRest: f.store.bodiesAtRest });
+    f.store.transaction(() => commitMessageRedaction(f.store.db, { roomId: "commons", state: f.store.room("commons").state,
+      actorId: "producer", at: new Date().toISOString(), messageId: "redact-draft-1", bodiesAtRest: f.store.bodiesAtRest }));
     f.store.close();
     f.store = new RoomStore(join(f.directory, "room.sqlite"));
   });

@@ -1,3 +1,4 @@
+import {redactSelectedEventPage} from './current-room-events.mjs';
 import {isCurrentRoom,readCurrentRecord} from './current-room-repository.mjs';
 import { SQL_BIND_CHUNK } from "./sql-binds.mjs";
 import { pageWorkListing, validWorkPage } from "./work-list-page.mjs";
@@ -60,7 +61,6 @@ import {
 import { listedMcpTools, MCP_TOOL_FOCUSES } from "./mcp-discovery.mjs";
 import { ACTION_META_TOOL_NAMES, SEARCH_ACTIONS_TOOL, RUN_ACTION_TOOL, actionMetaToolDefs, isRunnableAction, searchActions, validRunActionArgs, validSearchActionsArgs } from "./mcp-action-search.mjs";
 import { stampAccessRequests, stampAttachmentGet, stampEvents, stampRoomContext, stampWorkListing, withContentTrust } from "./content-trust.mjs";
-import { redactEventPage } from "./redact-read.mjs";
 import { resolveCatalogAgent, catalogCallDenial } from "./capability-visibility.mjs";
 import { listSquads, getSquad, createSquad, updateSquadMembers, disbandSquad } from "./squads.mjs"; // plan-squads: squad roster
 import { runRoomMap } from "./project-map-store.mjs";
@@ -634,11 +634,11 @@ function dispatchRoomToolCall(store, secret, identity, name, args, agentRooms) {
     // B4 agent read-path: same filters as GET /events — type (comma-separated
     // event types), mentions (a member id, or "me"), compact (drop envelope
     // noise). All optional; omitting them keeps the legacy page.
-    return stampEvents(redactEventPage(store.eventsAfter(secret, roomId, args.after ?? 0, args.limit ?? 50, {
+    return stampEvents(redactSelectedEventPage(store, roomId, store.eventsAfter(secret, roomId, args.after ?? 0, args.limit ?? 50, {
       types: typeof args.type === "string" ? args.type.split(",").map(part => part.trim()).filter(part => part.length > 0) : null,
       mentions: typeof args.mentions === "string" ? args.mentions : null,
       compact: args.compact === true
-    }), store.redactionMessages(roomId)), auth.member.id);
+    })), auth.member.id);
   }
   if (name === "room_work_claim_thread") {
     // #5378: same data as GET /api/rooms/:roomId/work-claims/:claimId/thread.

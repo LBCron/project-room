@@ -416,8 +416,7 @@ function receipt(store, input, phase, operation) {
     : phase==='cleanup'
       ? {phase,roomId:input.roomId,requestId:input.requestId,generation:input.generation,expectedDeleted:input.expectedDeleted}
       : phase==='capture'
-    ? { phase, roomId: input.roomId, requestId: input.requestId, expectedHead: input.expectedHead,
-        reason: input.reason, ceilingBytes: input.ceilingBytes ?? REPLAY_CAPTURE_BYTES,
+    ? { phase , roomId : input . roomId , requestId : input . requestId , expectedHead : input . expectedHead , reason : input . reason , ceilingBytes : input . ceilingBytes ?? REPLAY_CAPTURE_BYTES ,
         ...(input.contentBasis === undefined ? {} : { contentBasis: input.contentBasis, contentPlanHash: input.contentPlanHash }) }
     : {phase,roomId:input.roomId,requestId:input.requestId,generation:input.generation,expectedBytes:input.expectedBytes};
   const fingerprint = hash(JSON.stringify(intent));

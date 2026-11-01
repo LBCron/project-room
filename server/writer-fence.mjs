@@ -661,3 +661,32 @@ export function verifyWriterFence(db, version = STORE_SCHEMA_VERSION) {
     }
   }
 }
+
+// Target-owned transient guard family for a sealed restore. The imported
+// source never supplies these definitions or permission to suspend them.
+export const RESTORE_OPERATIONAL_TABLES = Object.freeze(['current_restore_admission','current_room_writer_permit',
+  'public_work_claim_writer_permit','room_runtime_version','room_writer_permit']);
+const restoreTableInventory=new Set([...applicationTables,...lazyAdditiveTables]);
+export function restoreFreezeDefinitions(tables) {
+  const selected=[...tables].filter(table=>!table.startsWith('_cf_')&&!RESTORE_OPERATIONAL_TABLES.includes(table)).sort();
+  if(selected.some(table=>!restoreTableInventory.has(table)||!/^[_a-z][_a-z0-9]*$/.test(table)))throw Error('Restore freeze names an unknown business table');
+  return selected.flatMap(table=>['INSERT','UPDATE','DELETE'].map(operation=>{
+    const name=`restore_frozen_${table}_${operation.toLowerCase()}`;
+    return {name,sql:`CREATE TRIGGER ${name} BEFORE ${operation} ON ${table} WHEN EXISTS(SELECT 1 FROM current_restore_admission WHERE singleton=1 AND state='pending' AND phase IN ('coverage','audit_pending')) BEGIN SELECT RAISE(ABORT,'restore target is sealed'); END`};
+  }));
+}
+export function verifyRestoreFreeze(db,tables,catalog=null) {
+  const expected=restoreFreezeDefinitions(tables),rows=catalog?catalog.filter(row=>row.type==='trigger'&&row.name.startsWith('restore_frozen_')):db.prepare("SELECT name,sql FROM sqlite_master WHERE type='trigger' AND name GLOB 'restore_frozen_*' ORDER BY name").all();
+  if(rows.length!==expected.length||expected.some(def=>rows.find(row=>row.name===def.name)?.sql!==def.sql))throw Error('Restore freeze schema requires reconciliation');
+}
+export function installRestoreFreeze(db,tables) {
+  if(!db.isTransaction)throw Error('Restore freeze requires an existing transaction');
+  if(db.prepare("SELECT 1 FROM sqlite_master WHERE type='trigger' AND name GLOB 'restore_frozen_*' LIMIT 1").get())throw Error('Restore freeze already requires reconciliation');
+  for(const def of restoreFreezeDefinitions(tables))db.exec(def.sql);
+  verifyRestoreFreeze(db,tables);
+}
+export function removeRestoreFreeze(db,tables) {
+  if(!db.isTransaction)throw Error('Restore freeze removal requires an existing transaction');
+  verifyRestoreFreeze(db,tables);
+  for(const def of restoreFreezeDefinitions(tables))db.exec(`DROP TRIGGER ${def.name}`);
+}

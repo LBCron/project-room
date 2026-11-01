@@ -1,4 +1,5 @@
-import { withRestoreTransaction, beginRestore, completeRestore, restorePending, verifyRestoreControl } from './restore-admission.mjs';
+import { applicationTables, lazyAdditiveTables, RESTORE_OPERATIONAL_TABLES, installRestoreFreeze, verifyRestoreFreeze, removeRestoreFreeze } from './writer-fence.mjs';
+import { withRestoreTransaction, beginRestore, completeRestore, restorePending, verifyRestoreControl, restoreProgress, checkpointRestore } from './restore-admission.mjs';
 import { verifyCurrentRoomSchema, invalidateCurrentRoomSchema, restoredCurrentFormatPresent } from './current-room-repository.mjs';
 // Whole-store NDJSON restore into an already-open store.
 //
@@ -86,9 +87,9 @@ function resumeCell(value) {
   throw Error('Resume row contains an unsupported canonical cell');
 }
 const canonicalResumeRow=(row,columns)=>JSON.stringify(columns.map(name=>[name,resumeCell(row[name])]));
-function rowBag(){let rows=0,sum=0n,xor=0n;return{add(text){const n=BigInt('0x'+createHash('sha256').update(text).digest('hex'));rows++;sum=(sum+n)&((1n<<256n)-1n);xor^=n;},value(){return[rows,sum.toString(16),xor.toString(16)].join(':');}};}
+function rowBag(saved=null){let rows=saved?.rows??0,sum=BigInt('0x'+(saved?.sum??'0')),xor=BigInt('0x'+(saved?.xor??'0'));const addDigest=hex=>{rows++;sum=(sum+BigInt('0x'+hex))&((1n<<256n)-1n);xor^=BigInt('0x'+hex);};return{add(text){addDigest(createHash('sha256').update(text).digest('hex'));},addDigest,value(){return[rows,sum.toString(16),xor.toString(16)].join(':');},snapshot(){return{rows,sum:sum.toString(16).padStart(64,'0'),xor:xor.toString(16).padStart(64,'0')};}};}
 function createKeyedResume(db) {
-  const shapes=new Map(),expected=new Map();
+  const shapes=new Map(),expected=new Map(),maximumBytes=new Map();
   function shape(table) {
     if(shapes.has(table))return shapes.get(table);
     const info=db.prepare(`PRAGMA table_info(${quoteIdent(table)})`).all(),columns=info.map(row=>row.name).sort();
@@ -102,6 +103,7 @@ function createKeyedResume(db) {
     if(s.columns.length!==Object.keys(cells).length||s.columns.some(name=>!Object.hasOwn(cells,name)))throw Error('Resume requires complete canonical cells for table '+table);
     if(s.key.some(name=>cells[name]===null||cells[name]===undefined))throw Error('Resume requires a non-null complete indexed key: '+table);
     const encoded=canonicalResumeRow(cells,s.columns);let bag=expected.get(table);if(!bag){bag=rowBag();expected.set(table,bag);}bag.add(encoded);
+    maximumBytes.set(table,Math.max(maximumBytes.get(table)??0,canonicalCellBytes(cells)));
     const saved=s.statement.get(...s.key.map(name=>cells[name]));
     if(!saved)return false;
     if(canonicalResumeRow(saved,s.columns)!==encoded)throw Error('Resume row mismatch requires operator reconciliation: '+table);
@@ -121,11 +123,138 @@ function createKeyedResume(db) {
       if(actual.value()!==expected.get(table)?.value())throw Error('Resume target canonical rows differ from complete source: '+table);
     }
   }
-  return{match,verify};
+  function observe(table,cells){const info=shape(table);if(info.columns.length!==Object.keys(cells).length||info.columns.some(name=>!Object.hasOwn(cells,name)))throw Error('Staged restore requires complete canonical cells: '+table);let bag=expected.get(table);if(!bag){bag=rowBag();expected.set(table,bag);}bag.add(canonicalResumeRow(cells,info.columns));maximumBytes.set(table,Math.max(maximumBytes.get(table)??0,canonicalCellBytes(cells)));}
+  function manifest(tables){return tables.filter(table=>!table.startsWith('_cf_')&&!RESTORE_SKIP_TABLES.has(table)&&table!==CLAIM_PERMIT_TABLE&&!REPLAY_SKIPPED_TABLES.includes(table)).sort().map(table=>{const info=shape(table),ddl=db.prepare("SELECT sql FROM sqlite_master WHERE type='table' AND name=?").get(table)?.sql;if(/WITHOUT\s+ROWID/i.test(ddl??'')||info.columns.some(name=>name.toLowerCase()==='rowid'||name==='__restore_rid'))throw Error('Staged restore needs the code-owned stable rowid layout: '+table);return{name:table,columns:info.columns,expected:(expected.get(table)??rowBag()).snapshot(),maxRowBytes:maximumBytes.get(table)??0};});}
+  return{match,verify,observe,manifest};
 }
 function requireResumeSource(watermark,trailer,verification) {
   if ( ! watermark || ! Number . isSafeInteger ( watermark . sourceSchemaVersion ) || watermark . sanitizePolicy !== BACKUP_SANITIZE_POLICY || trailer ?. version !== 2 || verification !== 'full' )
     throw Error('Resume requires the original complete snapshot with source schema and full version2 table trailer');
+}
+
+
+const COVERAGE_ROWS=128,COVERAGE_BYTES=4*1024*1024;
+const restoreTablesKnown=new Set([...applicationTables,...lazyAdditiveTables,...RESTORE_OPERATIONAL_TABLES]);
+function canonicalCellBytes(row){return Object.values(row).reduce((bytes,value)=>bytes+(typeof value==='string'?Buffer.byteLength(value):value instanceof ArrayBuffer?value.byteLength:ArrayBuffer.isView(value)?value.byteLength:value===null?0:16),0);}
+// Same canonical JSON as canonicalResumeRow; chunk encoding avoids a large
+// base64/escaped temporary string for one otherwise legal SQLite row.
+function canonicalResumeDigest(row,columns){
+ const digest=createHash('sha256');digest.update('[');
+ for(let n=0;n<columns.length;n++){
+  const name=columns[n],value=row[name];if(n)digest.update(',');digest.update('['+JSON.stringify(name)+',');
+  if(value===null)digest.update('["null"]');
+  else if(typeof value==='number'&&Number.isFinite(value))digest.update('["number",'+JSON.stringify(value)+']');
+  else if(typeof value==='string'){
+   digest.update('["text","');for(let offset=0;offset<value.length;){let end=Math.min(value.length,offset+8192);if(end<value.length&&value.charCodeAt(end-1)>=0xd800&&value.charCodeAt(end-1)<=0xdbff)end--;digest.update(JSON.stringify(value.slice(offset,end)).slice(1,-1));offset=end;}digest.update('"]');
+  }else if(value instanceof ArrayBuffer||ArrayBuffer.isView(value)){
+   const bytes=value instanceof ArrayBuffer?Buffer.from(value):Buffer.from(value.buffer,value.byteOffset,value.byteLength);digest.update('["blob","');for(let offset=0;offset<bytes.length;offset+=12288)digest.update(bytes.subarray(offset,offset+12288).toString('base64'));digest.update('"]');
+  }else throw Error('Restore coverage has an unsupported canonical cell');
+  digest.update(']');
+ }
+ digest.update(']');return digest.digest('hex');
+}
+const normalizedRestoreSql=sql=>sql?.trim().replace(/;$/,'').replace(/IF NOT EXISTS /g,'').replace(/\s+/g,' ');
+// Like replay-cutover's catalogDefinition: RAM stores a current-definition
+// admission, never durable authority. Every warm use revalidates exact tuples in
+// SQLite; Durable SQLite does not authorize a schema_version cookie.
+const restoreCatalogAdmissions=new WeakMap();
+const restoreRecreatedGuards=new Set(['current_restore_admission_insert','current_restore_admission_update','current_restore_admission_delete']);
+function restoreSchemaHash(db,binding=null,{expectedHash=null,tables=null}={}){
+ const scalar=db.prepare("SELECT count(*) AS count,coalesce(sum(length(CAST(sql AS BLOB))),0) AS bytes FROM sqlite_master WHERE name NOT LIKE 'sqlite_%' AND name NOT GLOB '_cf_*'").get();
+ if(!Number.isSafeInteger(scalar.count)||scalar.count>restoreTablesKnown.size*20+128||!Number.isSafeInteger(scalar.bytes)||scalar.bytes>16*1024*1024)throw Error('Restore schema inventory scalar bytes require reconciliation');
+ const saved=restoreCatalogAdmissions.get(db);
+ if(binding&&saved?.binding===binding){
+  const refuse=()=>{saved.invalid=true;throw Error('Restore sealed schema changed; exact cold readmission required');};
+  if(saved.invalid||scalar.count!==saved.count||scalar.bytes!==saved.bytes)refuse();
+  // Twelve tuples keep each statement below existing adapter binding limits.
+  // Only exact target-owned control guards are addressed by name: checkpoints
+  // legitimately recreate them. All definitions are compared byte-for-byte;
+  // same-rowid identical recreate proves current definitions, not history.
+  for(const group of saved.groups){
+   const matches=db.prepare(group.sql).all(...group.args);
+   if(matches.length!==group.size||matches.some(row=>row.matches!==1))refuse();
+  }
+  if(saved.hash!==expectedHash)refuse();
+  return saved.hash;
+ }
+ const rows=db.prepare("SELECT rowid,type,name,tbl_name,sql FROM sqlite_master WHERE name NOT LIKE 'sqlite_%' AND name NOT GLOB '_cf_*' ORDER BY type,name").all();
+ const hash=sha256Hex(JSON.stringify(rows.map(row=>[row.type,row.name,row.tbl_name,normalizedRestoreSql(row.sql)])));
+ if(binding){
+  if(hash!==expectedHash)throw Error('Restore sealed schema changed');
+  verifyRestoreFreeze(db,tables,rows);
+  const groups=[],byRowid=rows.filter(row=>!restoreRecreatedGuards.has(row.name));
+  for(let offset=0;offset<byRowid.length;offset+=12){
+   const selected=byRowid.slice(offset,offset+12),args=selected.flatMap(row=>[row.rowid,row.type,row.name,row.tbl_name,row.sql===null?null:Buffer.byteLength(row.sql),row.sql]);
+   const sql=`WITH expected(catalog_id,kind,name,table_name,sql_bytes,definition) AS (VALUES ${selected.map(()=>'(?,?,?,?,?,?)').join(',')})
+    SELECT CASE WHEN s.type=e.kind AND s.name=e.name AND s.tbl_name=e.table_name AND octet_length(s.sql) IS e.sql_bytes AND s.sql IS e.definition COLLATE BINARY THEN 1 ELSE 0 END AS matches
+    FROM expected e LEFT JOIN sqlite_master s ON s.rowid=e.catalog_id`;
+   groups.push({sql,args,size:selected.length});
+  }
+  for(const row of rows.filter(row=>restoreRecreatedGuards.has(row.name)))groups.push({
+   sql:'SELECT CASE WHEN type=? AND name=? AND tbl_name=? AND octet_length(sql) IS ? AND sql IS ? COLLATE BINARY THEN 1 ELSE 0 END AS matches FROM sqlite_master WHERE name=?',
+   args:[row.type,row.name,row.tbl_name,Buffer.byteLength(row.sql),row.sql,row.name],size:1});
+  restoreCatalogAdmissions.set(db,{binding,hash,count:scalar.count,bytes:scalar.bytes,groups});
+ }
+ return hash;
+}
+const sealId=seal=>sha256Hex(JSON.stringify({...seal,id:undefined}));
+function coverageResponse(state){return{ok:true,verified:false,pending:true,restoreId:state.restore_id,sourceSeal:state.seal.id,revision:state.revision,phase:state.phase,progress:{tableIndex:state.progress.tableIndex,tables:state.seal.tables.length,rows:state.progress.rows,bytes:state.progress.bytes},note:'Coverage is incomplete recovery; the independent full audit still must pass before admission'};}
+function validateCoverageState(db,state){
+ const seal=state.seal,p=state.progress;
+ if(state.state!=='pending'||!['coverage','audit_pending'].includes(state.phase)||!seal||Object.keys(seal).sort().join(',')!=='backedUpAt,events,id,inventory,sanitizePolicy,schemaHash,sourceSchemaVersion,sourceSha256,tables,trailerSha256,version,watermarkSha256'||seal.version!==1||seal.id!==sealId(seal)||!/^[0-9a-f]{64}$/.test(seal.sourceSha256??'')||!['sourceSha256','watermarkSha256','trailerSha256','schemaHash','id'].every(key=>/^[0-9a-f]{64}$/.test(seal[key]??''))||!Number.isSafeInteger(seal.events)||seal.events<0||(seal.backedUpAt!==null&&(!Number.isSafeInteger(seal.backedUpAt)||seal.backedUpAt<0))||seal.sourceSchemaVersion!==45||seal.sanitizePolicy!==BACKUP_SANITIZE_POLICY||!Array.isArray(seal.inventory)||!Array.isArray(seal.tables))throw Error('Restore source seal requires reconciliation');
+ if(seal.inventory.some(name=>typeof name!=='string'||!restoreTablesKnown.has(name))||new Set(seal.inventory).size!==seal.inventory.length||JSON.stringify(tableNames(db).filter(name=>!name.startsWith('_cf_')))!==JSON.stringify(seal.inventory))throw Error('Restore source schema inventory differs');
+ if(!p||Object.keys(p).sort().join(',')!=='after,bag,bytes,rows,tableIndex'||!Number.isSafeInteger(p.tableIndex)||p.tableIndex<0||p.tableIndex>seal.tables.length||!Number.isSafeInteger(p.after)||!Number.isSafeInteger(p.rows)||p.rows<0||!Number.isSafeInteger(p.bytes)||p.bytes<0)throw Error('Restore coverage cursor requires reconciliation');
+ const bagValid=bag=>bag&&Object.keys(bag).sort().join(',')==='rows,sum,xor'&&Number.isSafeInteger(bag.rows)&&bag.rows>=0&&/^[0-9a-f]{64}$/.test(bag.sum)&&/^[0-9a-f]{64}$/.test(bag.xor);
+ if(!bagValid(p.bag)||seal.tables.some(entry=>Object.keys(entry).sort().join(',')!=='columns,expected,maxRowBytes,name'||!seal.inventory.includes(entry.name)||!IDENT.test(entry.name)||!Array.isArray(entry.columns)||entry.columns.some(name=>!IDENT.test(name))||!bagValid(entry.expected)||!Number.isSafeInteger(entry.maxRowBytes)||entry.maxRowBytes<0))throw Error('Restore coverage shape requires reconciliation');
+ const expectedNames=seal.inventory.filter(table=>!RESTORE_OPERATIONAL_TABLES.includes(table)&&!RESTORE_SKIP_TABLES.has(table)&&table!==CLAIM_PERMIT_TABLE&&!REPLAY_SKIPPED_TABLES.includes(table)).sort();
+ if(JSON.stringify(seal.tables.map(entry=>entry.name))!==JSON.stringify(expectedNames)||new Set(seal.tables.map(entry=>entry.name)).size!==seal.tables.length||(state.phase==='audit_pending'&&p.tableIndex!==seal.tables.length)||(state.phase==='coverage'&&p.tableIndex===seal.tables.length))throw Error('Restore phase inventory requires reconciliation');
+ restoreSchemaHash(db,state.restore_id+':'+seal.id+':'+state.phase,{expectedHash:seal.schemaHash,tables:seal.inventory});
+}
+function sealRestoreCoverage(store,{restoreId,sourceSha256,watermark,trailer,tables}){
+ const db=store.db,state=restoreProgress(db);if(state.state!=='pending'||state.phase!=='loading'||state.restore_id!==restoreId)throw Error('Restore source seal is stale');
+ const inventory=tableNames(db);if(inventory.some(name=>!name.startsWith('_cf_')&&!restoreTablesKnown.has(name)))throw Error('Restore source inventory includes unknown table');
+ installRestoreFreeze(db,inventory);
+ const seal={version:1,sourceSha256,sourceSchemaVersion:45,sanitizePolicy:BACKUP_SANITIZE_POLICY,watermarkSha256:sha256Hex(JSON.stringify(watermark)),trailerSha256:sha256Hex(JSON.stringify(trailer)),events:watermark.events,backedUpAt:watermark.backedUpAt??null,inventory:inventory.filter(name=>!name.startsWith('_cf_')),tables,schemaHash:restoreSchemaHash(db)};seal.id=sealId(seal);
+ const progress={tableIndex:0,after:Number.MIN_SAFE_INTEGER,bag:rowBag().snapshot(),rows:0,bytes:0},next={restore_id:restoreId,revision:state.revision+1,phase:'coverage',seal,progress};const result=coverageResponse(next);
+ checkpointRestore(db,{restoreId,expectedRevision:state.revision,phase:'coverage',seal,progress,latest:{requestId:'seal_'+sourceSha256,expectedRevision:state.revision,restoreId,sourceSeal:seal.id,result}});
+ return result;
+}
+function validateContinuation(input){
+ if(!input||Object.keys(input).sort().join(',')!=='expectedRevision,requestId,restoreId,sourceSeal'||typeof input.restoreId!=='string'||input.restoreId.length>128||!/^[0-9a-f]{64}$/.test(input.sourceSeal??'')||!Number.isSafeInteger(input.expectedRevision)||input.expectedRevision<0||!/^[-_a-zA-Z0-9]{1,128}$/.test(input.requestId??''))throw Error('Invalid restore continuation');
+}
+export function continueRestoreCoverage(store,input){
+ validateContinuation(input);return withRestoreTransaction(store,()=>{
+  const db=store.db,state=restoreProgress(db),latest=state.latest;
+  if(latest&&latest.requestId===input.requestId&&latest.expectedRevision===input.expectedRevision&&latest.restoreId===input.restoreId&&latest.sourceSeal===input.sourceSeal){if(state.state==='pending')validateCoverageState(db,state);return latest.result;}
+  if(latest?.requestId===input.requestId)throw Error('Restore request ID binding differs');
+  if(state.state!=='pending'||state.restore_id!==input.restoreId||state.seal?.id!==input.sourceSeal||state.revision!==input.expectedRevision)throw Error('Restore continuation is stale or source differs');
+  validateCoverageState(db,state);
+  if(state.phase==='audit_pending'){
+   // Intentionally still the existing full census. Do not describe this phase
+   // as bounded until its replay/SQLite/subsystem/report scans are resumable.
+   const recovery=auditRecovery(store),invitations=store.verifyInvitationAudit();validateCoverageState(db,state);verifyCurrentRoomSchema(db);
+   const result={ok:true,verified:true,pending:false,resumed:true,contentVerification:'full',events:state.seal.events,tables:state.seal.tables.length,backedUpAt:state.seal.backedUpAt,recovery,audit:{ok:true},...invitations};
+   removeRestoreFreeze(db,state.seal.inventory);completeRestore(db,{...input,result});invalidateCurrentRoomSchema(db);return result;
+  }
+  const p={...state.progress,bag:{...state.progress.bag}};let rows=0,bytes=0;
+  while(p.tableIndex<state.seal.tables.length&&rows<COVERAGE_ROWS){
+   const entry=state.seal.tables[p.tableIndex],name=quoteIdent(entry.name),scalarSql=entry.columns.map((column,n)=>`length(CAST(${quoteIdent(column)} AS BLOB)) AS c${n}`).join(',');
+   const scalar=db.prepare(`SELECT rowid AS __restore_rid,${scalarSql} FROM ${name} WHERE rowid>? ORDER BY rowid LIMIT 1`).get(p.after);
+   if(!scalar){if(rowBag(p.bag).value()!==rowBag(entry.expected).value())throw Error('Resume target canonical rows differ from complete sealed source: '+entry.name);p.tableIndex++;p.after=Number.MIN_SAFE_INTEGER;p.bag=rowBag().snapshot();continue;}
+   if(!Number.isSafeInteger(scalar.__restore_rid))throw Error('Restore coverage rowid requires exact integer reconciliation');
+   const scalarBytes=entry.columns.reduce((sum,_,n)=>sum+(scalar['c'+n]??0),0);
+   // Numeric SQLite CAST bytes differ from JS accounting; a fixed allowance
+   // per code-owned column bounds this without excluding legal numeric cells.
+   if(!Number.isSafeInteger(scalarBytes)||scalarBytes<0||scalarBytes>entry.maxRowBytes+entry.columns.length*32)throw Error('Resume target scalar bytes differ from sealed source: '+entry.name);
+   // A first legal row can exceed the remaining work quantum; its size is
+   // still bounded by the sealed original row and SQLite's existing limit.
+   if(rows&&bytes+scalarBytes>COVERAGE_BYTES)break;
+   const row=db.prepare(`SELECT ${entry.columns.map(quoteIdent).join(',')} FROM ${name} WHERE rowid=?`).get(scalar.__restore_rid);if(!row)throw Error('Restore sealed row disappeared');
+   const bag=rowBag(p.bag);bag.addDigest(canonicalResumeDigest(row,entry.columns));p.bag=bag.snapshot();p.after=scalar.__restore_rid;p.rows++;p.bytes+=scalarBytes;rows++;bytes+=scalarBytes;
+  }
+  const phase=p.tableIndex===state.seal.tables.length?'audit_pending':'coverage',next={...state,progress:p,phase,revision:state.revision+1},result=coverageResponse(next);
+  checkpointRestore(db,{restoreId:input.restoreId,expectedRevision:input.expectedRevision,phase,seal:state.seal,progress:p,latest:{...input,result}});return result;
+ });
 }
 
 export function parseNdjsonExport(ndjson) {
@@ -226,9 +355,9 @@ function topologicalTableOrder(names, deps) {
 // qualification on the result instead — the semantics of the file replay's
 // report mode (server/room-export.mjs replayNdjson), for backups whose
 // stored projections were written by older code.
-export function replayNdjsonInto(ndjson, store, { audit = "strict", sourceSchemaVersion = null, resume = false } = {}) {
+export function replayNdjsonInto(ndjson, store, { audit = "strict", sourceSchemaVersion = null, resume = false, staged = false } = {}) {
   if(typeof resume!=="boolean")throw Error("resume must be boolean");
-  if(resume){const parsed=parseNdjsonExport(ndjson);requireResumeSource(parsed.watermark,parsed.trailer,contentVerificationLevel(parsed.trailer,parsed.tableDigests));verifyTrailer(parsed.trailer,parsed.byTable);const session=createBackupReplaySession(store,{audit,sourceSchemaVersion,resume:true});try{session.writeText(ndjson);return session.finish();}catch(error){session.abort();throw error;}}
+  if(resume||staged){const parsed=parseNdjsonExport(ndjson);if(staged&&!resume&&parsed.watermark?.sourceSchemaVersion!==45)return replayNdjsonInto(ndjson,store,{audit,sourceSchemaVersion,resume,staged:false});requireResumeSource(parsed.watermark,parsed.trailer,contentVerificationLevel(parsed.trailer,parsed.tableDigests));verifyTrailer(parsed.trailer,parsed.byTable);const session=createBackupReplaySession(store,{audit,sourceSchemaVersion,resume,staged});try{session.writeText(ndjson);return session.finish({sourceSha256:sha256Hex(ndjson)});}catch(error){session.abort();throw error;}}
   if (audit !== "strict" && audit !== "report") throw new Error("audit must be strict or report");
   if (!store?.db) throw new Error("Restore needs an open store");
   const { watermark, byTable, trailer, skippedTables, tableDigests } = parseNdjsonExport(ndjson);
@@ -348,7 +477,7 @@ export function replayNdjsonInto(ndjson, store, { audit = "strict", sourceSchema
 const REPLAY_BATCH_ROWS = 500;
 const REPLAY_BATCH_BYTES = 4 * 1024 * 1024;
 
-export function createBackupReplaySession(store, { audit = "strict", sourceSchemaVersion = null, resume = false } = {}) {
+export function createBackupReplaySession(store, { audit = "strict", sourceSchemaVersion = null, resume = false, staged = false } = {}) {
   if(typeof resume!=="boolean")throw Error("resume must be boolean");
   restoreSourceSchemaVersion(null, sourceSchemaVersion);
   if (audit !== "strict" && audit !== "report") throw new Error("audit must be strict or report");
@@ -357,8 +486,8 @@ export function createBackupReplaySession(store, { audit = "strict", sourceSchem
   let resumeId=null;
   if(resume){verifyRestoreControl(db);if(!restorePending(db))throw Error("Resume requires an explicitly pending restore target");resumeId=db.prepare("SELECT restore_id FROM current_restore_admission WHERE singleton=1").get().restore_id;}
   else if (db.prepare("SELECT 1 FROM rooms LIMIT 1").get()) throw new Error("Refusing to replay into a non-empty store");
-  const keyed=resume?createKeyedResume(db):null;
-  const assertSameResume=()=>{verifyRestoreControl(db);const row=db.prepare("SELECT state,restore_id FROM current_restore_admission WHERE singleton=1").get();if(row?.state!=="pending"||row.restore_id!==resumeId)throw Error("Resume target admission changed; no further writes are allowed");};
+  const keyed=resume||staged?createKeyedResume(db):null;
+  const assertSameResume=()=>{verifyRestoreControl(db);const row=db.prepare("SELECT state,restore_id,phase FROM current_restore_admission WHERE singleton=1").get();if(row?.state!=="pending"||row.restore_id!==resumeId||row.phase!=='loading')throw Error("Resume target admission changed; no further writes are allowed");};
   const existing = new Set(tableNames(db));
   const claimPermit = existing.has(CLAIM_PERMIT_TABLE);
   const skippedTables = {};
@@ -486,7 +615,8 @@ export function createBackupReplaySession(store, { audit = "strict", sourceSchem
           if (!keys.length) { unlandedEmpty.set(table, (unlandedEmpty.get(table) ?? 0) + 1); continue; }
           const cells = Object.fromEntries(keys.map(key => [key, cellTracker().resolve(table, key, cellOf(row[key]))]));
           checkStoredBytes(table, cells);
-          if(keyed?.match(table,cells))continue;
+          if(resume&&keyed.match(table,cells))continue;
+          if(!resume&&staged&&watermark?.sourceSchemaVersion===45)keyed.observe(table,cells);
           db.prepare(`INSERT INTO ${quoteIdent(table)} (${keys.map(quoteIdent).join(", ")}) VALUES (${keys.map(() => "?").join(", ")})`)
             .run(...keys.map(key => cells[key]));
           inserted += 1;
@@ -618,7 +748,7 @@ export function createBackupReplaySession(store, { audit = "strict", sourceSchem
     return abortResult;
   }
 
-  function finish() {
+  function finish({sourceSha256=null}={}) {
     try {
       if (carry) { writeLine(carry); carry = ""; }
       if (!watermark || watermark.version !== 1 || !Number.isSafeInteger(watermark.events))
@@ -644,6 +774,14 @@ export function createBackupReplaySession(store, { audit = "strict", sourceSchem
       // #3325: the trailer's table digests pin the non-event rows the same
       // way; a mismatch aborts and wipes the replay like any other failure.
       const contentVerification = contentVerificationLevel(trailer, digests.finish());
+      if(staged&&watermark.sourceSchemaVersion===45){
+        requireResumeSource(watermark,trailer,contentVerification);
+        if(!/^[0-9a-f]{64}$/.test(sourceSha256??''))throw Error('Staged restore requires its complete original source SHA');
+        if((counts.get('events')??0)!==watermark.events)throw Error('Export watermark does not match source event count');
+        if(claimPermit){db.prepare(`UPDATE ${CLAIM_PERMIT_TABLE} SET enabled=0 WHERE singleton=1`).run();verifyPublicWorkClaimFence(db);}
+        verifyCurrentRoomSchema(db);
+        const result=sealRestoreCoverage(store,{restoreId:resumeId,sourceSha256,watermark,trailer,tables:keyed.manifest([...existing])});settled=true;return result;
+      }
       if(resume){requireResumeSource(watermark,trailer,contentVerification);keyed.verify(counts,existing);}
       if (db.prepare("PRAGMA foreign_key_check").all().length) throw new Error("Restored store failed foreign key check");
       const events = db.prepare("SELECT count(*) AS n FROM events").get().n;
@@ -738,7 +876,7 @@ function utf8ByteLengthExceeds(text, limit) {
 // Content-Length for the pre-read guard) is never buffered in full.
 // Bodies without a stream (e.g. test doubles exposing only text()) fall back
 // to a byte-accurate check on the decoded string.
-async function readRestoreBody(request) {
+async function readRestoreBody(request, limit = RESTORE_MAX_BYTES) {
   if (request.body && typeof request.body.getReader === "function") {
     const reader = request.body.getReader();
     const chunks = [];
@@ -747,7 +885,7 @@ async function readRestoreBody(request) {
       const { done, value } = await reader.read();
       if (done) break;
       total += value.byteLength;
-      if (total > RESTORE_MAX_BYTES) {
+      if (total > limit) {
         try { await reader.cancel(); } catch { /* already errored/closed */ }
         return { tooLarge: true, text: "" };
       }
@@ -759,7 +897,7 @@ async function readRestoreBody(request) {
     return { tooLarge: false, text: new TextDecoder().decode(bytes) };
   }
   const text = await request.text();
-  return { tooLarge: utf8ByteLengthExceeds(text, RESTORE_MAX_BYTES), text };
+  return { tooLarge: utf8ByteLengthExceeds(text, limit), text };
 }
 
 const jsonHeaders = { "Content-Type": "application/json; charset=utf-8", "Cache-Control": "no-store", "X-Content-Type-Options": "nosniff" };
@@ -784,6 +922,10 @@ export async function operatorRestoreResponse(request, token, store) {
   if (request.method !== "POST") return jsonResponse(405, { error: { code: "method_not_allowed", message: "Use POST" } });
   if (auth === "denied") return jsonResponse(401, { error: { code: "unauthorized", message: "Operator token required" } });
   if (!store) return jsonResponse(503, { error: { code: "unavailable", message: "Restore unavailable" } });
+  if(/^application\/json(?:;|$)/i.test(request.headers.get('content-type')??'')){
+    try{const body=await readRestoreBody(request,8192);if(body.tooLarge)return jsonResponse(413,{error:{code:'too_large',message:'Restore continuation metadata is too large'}});const result=continueRestoreCoverage(store,JSON.parse(body.text));return jsonResponse(result.verified?200:202,result);}
+    catch(error){const message=error?.message??String(error);return jsonResponse(/stale|binding differs|source differs/.test(message)?409:422,{error:{code:'restore_continuation_refused',message}});}
+  }
   // Explicit operator opt-in: ?audit=report lands a drifted backup with
   // the drift named on the result; anything else stays strict.
   const resumeParam=url.searchParams.get("resume");if(url.searchParams.getAll("resume").length>1||(resumeParam!==null&&resumeParam!=="1"))return jsonResponse(422,{error:{code:"invalid_restore",message:"resume must be 1"}});const resume=resumeParam==="1";
@@ -808,7 +950,11 @@ export async function operatorRestoreResponse(request, token, store) {
   }
   let result;
   try {
-    result = replayNdjsonInto(ndjson, store, { audit: auditParam ?? "strict", sourceSchemaVersion, resume });
+    const active=restoreProgress(store.db);
+    if(active.state==='pending'&&active.phase!=='loading'){
+      if(active.seal?.sourceSha256!==sha256Hex(ndjson))throw Error('Resume source differs from sealed original snapshot');
+      result=withRestoreTransaction(store,()=>{validateCoverageState(store.db,active);return coverageResponse(active);});
+    }else result = replayNdjsonInto(ndjson, store, { audit: auditParam ?? "strict", sourceSchemaVersion, resume, staged:auditParam!=="report" });
   } catch (error) {
     const message = error?.message ?? String(error);
     if (/non-empty/.test(message)) return jsonResponse(409, { error: { code: "restore_refused_nonempty", message: "Restore refuses a store that already holds rooms" } });
@@ -818,6 +964,7 @@ export async function operatorRestoreResponse(request, token, store) {
       return jsonResponse(422, { error: { code: "restore_verification_failed", message } });
     return jsonResponse(500, { error: { code: "restore_failed", message: "Restore failed during replay" } });
   }
+  if(result.pending)return jsonResponse(202,result);
   return jsonResponse(200, {
     ok: true,
     ...(result.resumed?{resumed:true}:{}),
@@ -907,9 +1054,13 @@ export async function operatorRestoreFromBackupResponse(request, token, store, k
     && typeof manifest?.sha256 === "string" && /^[0-9a-f]{64}$/.test(manifest.sha256);
   if (!partsValid) return jsonResponse(422, { error: { code: "invalid_restore", message: "Backup manifest is malformed" } });
 
+  const active=restoreProgress(store.db);
+  if(active.state==='pending'&&active.phase!=='loading'){
+    try{if(active.seal?.sourceSha256!==manifest.sha256)throw Error('Resume source differs from sealed original snapshot');const result=withRestoreTransaction(store,()=>{validateCoverageState(store.db,active);return coverageResponse(active);});return jsonResponse(202,result);}catch(error){return jsonResponse(409,{error:{code:'restore_continuation_refused',message:error.message}});}
+  }
   let session;
   try {
-    session = createBackupReplaySession(store, { audit: auditMode ?? "strict", sourceSchemaVersion, resume });
+    session = createBackupReplaySession(store, { audit: auditMode ?? "strict", sourceSchemaVersion, resume, staged:auditMode!=="report" });
   } catch (error) {
     const message = error?.message ?? String(error);
     if (/non-empty/.test(message)) return jsonResponse(409, { error: { code: "restore_refused_nonempty", message: "Restore refuses a store that already holds rooms" } });
@@ -932,7 +1083,8 @@ export async function operatorRestoreFromBackupResponse(request, token, store, k
     session.writeText(decoder.decode());
     if (total !== manifest.bytes || whole.digest("hex") !== manifest.sha256)
       throw new Error("Backup does not match its manifest sha256");
-    const result = session.finish();
+    const result = session.finish({sourceSha256:manifest.sha256});
+    if(result.pending)return jsonResponse(202,result);
     return jsonResponse(200, {
       ok: true,
       ...(result.resumed?{resumed:true}:{}),

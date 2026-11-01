@@ -1,3 +1,4 @@
+import {redactSelectedEventPage} from './current-room-events.mjs';
 import { resolveNamedReviewers, hasCurrentReview } from "./work-claims.mjs";
 import { RoomAssistant } from "./room-assistant.mjs";
 import { isAssistantTool } from "../client/assistant-tools.mjs";
@@ -26,7 +27,6 @@ import { readBoard } from "./board-read.mjs";
 import { readWorkSelection, workReadRefusal } from "../client/work-preparation.mjs";
 import { beginSelectedWork, findBeginReceipt } from "../client/begin-work.mjs";
 import { validId } from "../src/events.js";
-import { redactEventPage } from "./redact-read.mjs";
 import { confirmsWorkReturn } from "../src/workflow.js";
 import { paginateRoomMessages, latestSnapshotPage } from "../client/room-agent.mjs";
 import { roomTools, validRoomToolArguments, buildDraftCommand } from "../client/mcp-stdio.mjs";
@@ -95,9 +95,8 @@ async function roomMessages(store, secret, roomId, args, memberId) {
   const latest = args.latest ?? false;
   // Edit/delete redaction is per-event (projection-indexed), so applying it
   // per scanned page is equivalent to applying it to the whole log.
-  const currentMessages = store.redactionMessages(roomId);
   const fetchPage = (cursor, pageLimit) =>
-    redactEventPage(store.eventsAfter(secret, roomId, cursor, pageLimit), currentMessages);
+    redactSelectedEventPage(store, roomId, store.eventsAfter(secret, roomId, cursor, pageLimit));
   const mapMessage = ({ sequence, event }) => ({
     sequence, eventId: event.id, messageId: event.data?.messageId ?? event.id, from: event.actorId, at: event.at,
     body: event.data?.body ?? "", replyToId: event.data?.replyToId ?? null, workItemId: event.data?.workItemId ?? null, private: Boolean(event.data?.toMemberId),

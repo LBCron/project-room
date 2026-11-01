@@ -1,3 +1,4 @@
+import {redactSelectedEventPage} from './current-room-events.mjs';
 import { renderInviteOAuthPage } from "./routes/mcp-invite-oauth.mjs";
 import { createMcpInviteOAuth, MCP_INVITE_RECOVERY } from "./mcp-invite-oauth.mjs";
 import { createMcpEventsRuntime } from "./mcp-events-runtime.mjs";
@@ -45,7 +46,7 @@ import { SOURCE_REVISION, BUILD_ID } from "./version.mjs";
 import { agentErrorBody, errorCategory, mergeErrorDetail, ERROR_COMMAND_TYPE } from "../src/agent-error.mjs";
 import { DiagnosticsLog, supportExportBundle } from "./diagnostics.mjs";
 import { renderRoomExportHtml, EXPORT_HTML_CSP } from "./room-export-html.mjs";
-import { redactEventPage, redactEventRows, redactMessageTree } from "./redact-read.mjs";
+import { redactEventRows, redactMessageTree } from "./redact-read.mjs";
 import { messageInHistory, eventInHistory, requireExportOwner, recordRoomExport } from "./history-visibility.mjs"; // PRIV-2
 import { discoveryDoc, isHealthAliasPath, rewriteRoomApiPrefix, EDGE_DOOR_HOSTS, ROOM_ORIGIN, agentCardSignatureState } from "./agent-discovery.mjs";
 import { validateCriticalConfig } from "./boot-config.mjs";
@@ -1074,10 +1075,9 @@ export function createRoomServer({ store, origin, assetRoot = new URL("../", imp
       const backlog = res.writableLength;
       try {
         const raw = store.eventsAfter(token, roomId, cursor, 100, binding);
-        // An empty page needs no redaction — and redactionMessages() copies
-        // the room's whole message array, so skipping it on idle ticks is
-        // most of the per-tick saving.
-        const batch = raw.events.length ? redactEventPage(raw, store.redactionMessages(roomId)) : raw;
+        // Empty pages need no redaction. Normalized pages retain only their
+        // selected point-read context; legacy pages use the existing lookup.
+        const batch = raw.events.length ? redactSelectedEventPage(store, roomId, raw) : raw;
         if (!batch.events.length) res.write(": connected transport only\n\n");
         let queued = 0, partial = false, lagged = false;
         for (const item of batch.events) {
@@ -5475,7 +5475,7 @@ export function createRoomServer({ store, origin, assetRoot = new URL("../", imp
             reject(422, "invalid_event_cursor", "tail is used alone, as an integer from 1 to 200");
           }
           const tail = Number(params.get("tail"));
-          return json(res, 200, redactEventPage(readEventTail(store, selected.token, roomId, tail, fence), store.redactionMessages(roomId)));
+          return json(res, 200, redactSelectedEventPage(store, roomId, readEventTail(store, selected.token, roomId, tail, fence)));
         }
         // B4 agent read-path: server-side type/mentions filters + an opt-in
         // compact shape. With none of the new parameters present the
@@ -5500,7 +5500,7 @@ export function createRoomServer({ store, origin, assetRoot = new URL("../", imp
         if (sinceRaw !== null && sinceMs === null) reject(422, "invalid_event_cursor", eventTimestampMessage("since"));
         if (untilRaw !== null && untilMs === null) reject(422, "invalid_event_cursor", eventTimestampMessage("until"));
         if (sinceMs !== null && untilMs !== null && sinceMs > untilMs) reject(422, "invalid_event_cursor", "since is after until");
-        return json(res, 200, redactEventPage(store.eventsAfter(selected.token, roomId,
+        return json(res, 200, redactSelectedEventPage(store, roomId, store.eventsAfter(selected.token, roomId,
           afterRaw === null ? 0 : Number(afterRaw), limitRaw === null ? 100 : Number(limitRaw),
           { actor: params.get("actor"),
             since: sinceMs === null ? null : new Date(sinceMs).toISOString(),
@@ -5508,7 +5508,7 @@ export function createRoomServer({ store, origin, assetRoot = new URL("../", imp
             types: typeParam === null ? null : typeParam.split(",").map(part => part.trim()).filter(part => part.length > 0),
             mentions: params.get("mentions"),
             compact: compactParam === "1" || compactParam === "true",
-            expectedSessionBinding: fence }), store.redactionMessages(roomId)));
+            expectedSessionBinding: fence })));
       }
       if (route === "agent-inbox" && req.method === "GET") {
         // RC-2026-09-18-012: agent-scoped unified inbox. Agent members only

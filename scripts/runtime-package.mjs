@@ -460,6 +460,8 @@ optional.push("src/direct-conversation-window.js");
 // The hosted build creates this archive; exact-source recovery packages omit it.
 optional.push("room-acp.tgz");
 optional.push("server/claim-thread.mjs"); // Shared claimer thread receipt in the hosted MCP profile.
+optional.push("server/current-room-events.mjs"); // bounded normalized event windows and page-selected redaction
+
 export const allowed = new Set([...required, ...optional, ...historicalAssets]);
 const sha256 = bytes => createHash("sha256").update(bytes).digest("hex");
 // The contract stays exact: any mismatch fails. Each failure now names the

@@ -10,7 +10,7 @@ const fail=()=>{throw Error('Recovery checkpoint source requires reconciliation'
 const raw=value=>value instanceof Uint8Array?value:value instanceof ArrayBuffer?new Uint8Array(value):fail();
 export function initialRecoveryCheckpointSeed(sequence,sourceBytes){
  if(!Number.isSafeInteger(sequence)||sequence<0||!Number.isSafeInteger(sourceBytes)||sourceBytes<2)fail();
- return{version:1,stage:'scan',sequence,sourceBytes,scan:initialRecoveryProjectionScan(sourceBytes),counts:{members:0,channels:0,workItems:0,replyRequests:0,messages:0,replyRequestsPresent:false},index:0,target:null,node:null,reason:null};
+ return{version:1,stage:'scan',sequence,sourceBytes,scan:initialRecoveryProjectionScan(sourceBytes),counts:{members:0,channels:0,workItems:0,replyRequests:0,messages:0,replyRequestsPresent:false},index:0,target:null,node:null,pathLength:0,fixup:0,channel:null,reason:null};
 }
 function source(db,roomId,cursor,offset,length){
  if(!Number.isSafeInteger(offset)||offset<0||!Number.isSafeInteger(length)||length<1||offset+length>cursor.sourceBytes)fail();
@@ -21,20 +21,22 @@ function source(db,roomId,cursor,offset,length){
 // scope. It advances original checkpoint byte framing, not source authority.
 // Message context indexes and final independent replay/drift are later phases.
 export function validateRecoveryCheckpointSeed(cursor){
- if(!cursor||Object.keys(cursor).sort().join(',')!=='counts,index,node,reason,scan,sequence,sourceBytes,stage,target,version'||cursor.version!==1||!['scan','defaults','owners','roots','complete','deferred'].includes(cursor.stage)||!Number.isSafeInteger(cursor.sequence)||cursor.sequence<0||!Number.isSafeInteger(cursor.sourceBytes)||cursor.sourceBytes<2||cursor.scan?.sourceBytes!==cursor.sourceBytes||!Number.isSafeInteger(cursor.index)||cursor.index<0||cursor.index>cursor.counts?.messages||!cursor.counts||Object.keys(cursor.counts).sort().join(',')!=='channels,members,messages,replyRequests,replyRequestsPresent,workItems'||!['members','channels','messages','workItems','replyRequests'].every(key=>Number.isSafeInteger(cursor.counts[key])&&cursor.counts[key]>=0)||typeof cursor.counts.replyRequestsPresent!=='boolean'||[cursor.target,cursor.node].some(value=>value!==null&&(typeof value!=='string'||new TextEncoder().encode(value).length>200))||(cursor.target===null)!==(cursor.node===null)||((cursor.stage==='deferred')!==(typeof cursor.reason==='string'))||cursor.reason!==null&&(typeof cursor.reason!=='string'||cursor.reason.length>128))fail();
+ if(!cursor||Object.keys(cursor).sort().join(',')!=='channel,counts,fixup,index,node,pathLength,reason,scan,sequence,sourceBytes,stage,target,version'||cursor.version!==1||!['scan','defaults','owners','roots','root_fixup','complete','deferred'].includes(cursor.stage)||!Number.isSafeInteger(cursor.sequence)||cursor.sequence<0||!Number.isSafeInteger(cursor.sourceBytes)||cursor.sourceBytes<2||cursor.scan?.sourceBytes!==cursor.sourceBytes||!Number.isSafeInteger(cursor.index)||cursor.index<0||cursor.index>cursor.counts?.messages||!cursor.counts||Object.keys(cursor.counts).sort().join(',')!=='channels,members,messages,replyRequests,replyRequestsPresent,workItems'||!['members','channels','messages','workItems','replyRequests'].every(key=>Number.isSafeInteger(cursor.counts[key])&&cursor.counts[key]>=0)||typeof cursor.counts.replyRequestsPresent!=='boolean'||[cursor.target,cursor.node].some(value=>value!==null&&(typeof value!=='string'||new TextEncoder().encode(value).length>200))||(cursor.target===null)!==(cursor.node===null)||((cursor.stage==='deferred')!==(typeof cursor.reason==='string'))||cursor.reason!==null&&(typeof cursor.reason!=='string'||cursor.reason.length>128))fail();
+ if(!Number.isSafeInteger(cursor.pathLength)||cursor.pathLength<0||cursor.pathLength>cursor.counts.messages||!Number.isSafeInteger(cursor.fixup)||cursor.fixup<0||cursor.fixup>cursor.pathLength||cursor.channel!==null&&(typeof cursor.channel!=='string'||new TextEncoder().encode(cursor.channel).length>200)||(cursor.stage==='root_fixup'&&(cursor.target===null||cursor.channel===null||cursor.pathLength<1)))fail();
  scanRecoveryProjectionChunk(cursor.scan,new Uint8Array());
 }
 export function advanceRecoveryCheckpointSeed(db,scratch,roomId,previous,maximumValueBytes){
- validateRecoveryCheckpointSeed(previous);const cursor=structuredClone(previous);if(cursor.version!==1||!['scan','defaults','owners','roots','complete','deferred'].includes(cursor.stage)||!Number.isSafeInteger(maximumValueBytes)||maximumValueBytes<1)fail();
+ validateRecoveryCheckpointSeed(previous);const cursor=structuredClone(previous);if(cursor.version!==1||!['scan','defaults','owners','roots','root_fixup','complete','deferred'].includes(cursor.stage)||!Number.isSafeInteger(maximumValueBytes)||maximumValueBytes<1)fail();
  const held=db.prepare('SELECT sequence,length(CAST(projection AS BLOB)) bytes FROM projection_checkpoints WHERE room_id=?').get(roomId);if(held?.sequence!==cursor.sequence||held.bytes!==cursor.sourceBytes)fail();
  let units=0,bytes=0;
  const defer=reason=>{cursor.stage='deferred';cursor.reason=reason;return{cursor,units,bytes};};
  if(cursor.stage==='scan'){
-  const start=cursor.scan.offset,input=source(db,roomId,cursor,start,Math.min(REPLAY_CODEC_INPUT_BYTES,cursor.sourceBytes-start));bytes+=input.length;let position=0;
-  while(position<input.length&&units<32){
+  let start=cursor.scan.offset,input=source(db,roomId,cursor,start,Math.min(REPLAY_CODEC_INPUT_BYTES,cursor.sourceBytes-start)),position=0;bytes+=input.length;
+  while(units<128){
+   if(position===input.length){if(cursor.scan.offset===cursor.sourceBytes||bytes+REPLAY_CODEC_INPUT_BYTES>4*1024*1024)break;start=cursor.scan.offset;input=source(db,roomId,cursor,start,Math.min(REPLAY_CODEC_INPUT_BYTES,cursor.sourceBytes-start));position=0;bytes+=input.length;}
    let step;try{step=scanRecoveryProjectionChunk(cursor.scan,input.subarray(position),{maximumRecords:1});}catch(error){if(error.message==='unsupported or corrupt replay projection codec')return defer('checkpoint_shape_requires_original_oracle');throw error;}
    const record=step.records[0];
-   if(!record){cursor.scan=step.state;position+=step.consumed;break;}
+   if(!record){cursor.scan=step.state;position+=step.consumed;continue;}
    if(['metadata-map','metadata-array'].includes(record.kind)){recoveryProjectionFrame(record,cursor.sourceBytes);cursor.scan=step.state;position+=step.consumed;units++;continue;}
    if(bytes+record.length>4*1024*1024){if(units)break;return defer('checkpoint_atom_requires_staging');}
    let value;try{value=decodeRecoveryProjectionSpan(source(db,roomId,cursor,record.offset,record.length),record,cursor.sourceBytes);}catch(error){if(error instanceof SyntaxError||error.message==='unsupported or corrupt replay projection codec')return defer('checkpoint_shape_requires_original_oracle');throw error;}
@@ -70,11 +72,16 @@ export function advanceRecoveryCheckpointSeed(db,scratch,roomId,previous,maximum
   for(const entry of plans)if(!writeRecoveryReplayValue(scratch,roomId,entry.domain,entry.key,entry.plan))fail();
   if(general===undefined)cursor.counts.channels++;cursor.counts.replyRequestsPresent=cursor.scan.keys.includes('replyRequests');cursor.stage='owners';units=values.length;bytes+=plans.reduce((sum,entry)=>sum+entry.plan.bytes,0);
  }
- if(['owners','roots'].includes(cursor.stage)){
+ if(['owners','roots','root_fixup'].includes(cursor.stage)){
   const quantum=Symbol('checkpoint_context_input_quantum');
   const get=(domain,key)=>readRecoveryReplayValue(scratch,roomId,domain,key,maximumValueBytes,{admit(size){if(bytes+size>4*1024*1024)throw quantum;bytes+=size;}});
   while(units<128&&scratch.remaining>2){
    if(bytes+4096>4*1024*1024)break;
+   if(cursor.stage==='root_fixup'){
+    const id=get('checkpointPath',JSON.stringify([cursor.index,cursor.fixup]));if(typeof id!=='string')fail();
+    if(!writeRecoveryReplayValue(scratch,roomId,'messageRootChannel',id,planRecoveryReplayValue(cursor.channel,maximumValueBytes)))break;cursor.fixup++;units++;
+    if(cursor.fixup===cursor.pathLength){cursor.index++;cursor.target=null;cursor.node=null;cursor.pathLength=0;cursor.fixup=0;cursor.channel=null;cursor.stage='roots';}continue;
+   }
    if(cursor.index===cursor.counts.messages){if(cursor.stage==='owners'){cursor.stage='roots';cursor.index=0;continue;}cursor.stage='complete';break;}
    const id=get('replayOrder',JSON.stringify(['messages',cursor.index]));if(typeof id!=='string')fail();
    if(cursor.stage==='owners'){
@@ -82,12 +89,13 @@ export function advanceRecoveryCheckpointSeed(db,scratch,roomId,previous,maximum
     if(!message||message.id!==id)fail();const requests=Object.create(null);if(ownRequest!==undefined)requests[id]=ownRequest;if(parentOwner&&request!==undefined)requests[parentOwner]=request;
     const owner=deriveReplyContextOwner(message,requests,parentOwner);writeRecoveryReplayValue(scratch,roomId,'messageOwner',id,planRecoveryReplayValue(owner,maximumValueBytes));cursor.index++;units++;continue;
    }
-   if(cursor.target===null){cursor.target=id;cursor.node=id;}
+   if(cursor.target===null){if(get('messageRootChannel',id)!==undefined){cursor.index++;units++;continue;}cursor.target=id;cursor.node=id;}
    if(cursor.target!==id||typeof cursor.node!=='string')fail();
    const visited=JSON.stringify([cursor.index,cursor.node]);if(scratch.get('replay',roomId,'checkpointWalk',visited)!==undefined)return defer('checkpoint_ancestry_requires_original_oracle');
    let message,parent,known;try{message=get('messages',cursor.node);parent=message?.replyToId&&scratch.get('replay',roomId,'messages',message.replyToId,0)!==undefined?message.replyToId:null;known=parent?get('messageRootChannel',parent):undefined;}catch(error){if(error!==quantum)throw error;if(units)break;return defer('checkpoint_atom_requires_staging');}
    if(!message||message.id!==cursor.node)fail();
-   if(!parent||known!==undefined){const channel=known??messageChannelId(message);if(typeof channel!=='string'||!channel)fail();writeRecoveryReplayValue(scratch,roomId,'messageRootChannel',id,planRecoveryReplayValue(channel,maximumValueBytes));cursor.index++;cursor.target=null;cursor.node=null;}
+   if(!writeRecoveryReplayValue(scratch,roomId,'checkpointPath',JSON.stringify([cursor.index,cursor.pathLength]),planRecoveryReplayValue(cursor.node,maximumValueBytes)))break;cursor.pathLength++;
+   if(!parent||known!==undefined){const channel=known??messageChannelId(message);if(typeof channel!=='string'||!channel)fail();if(new TextEncoder().encode(channel).length>200)return defer('checkpoint_channel_requires_original_oracle');cursor.channel=channel;cursor.stage='root_fixup';}
    else{scratch.put('replay',roomId,'checkpointWalk',visited,true);cursor.node=parent;}
    units++;
   }

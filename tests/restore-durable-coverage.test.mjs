@@ -179,8 +179,8 @@ for(const unsupported of [false,true])test('actual operator addressed replay pro
  t.diagnostic(JSON.stringify({unsupported,steps,pointFoldDeferred:response.body.replayContinuation.deferred,requiredOriginalOracle:true,wholeRecoveryBounded:false}));
 });
 
-test('actual operator seeds retained checkpoint through original spans and resumes strict tail across cold stores',async t=>{
- const {emptyRoomState,replayEvents}=await import('../src/events.js'),f=setup(t,70),prefix=19,history=f.source.db.prepare('SELECT body FROM events ORDER BY sequence').all().map(row=>JSON.parse(row.body)),checkpoint=replayEvents(emptyRoomState(),history.slice(0,prefix));
+for(const checkpointChoice of [19,'head'])test('actual operator seeds retained checkpoint through original spans and resumes strict tail across cold stores; prefix='+checkpointChoice,async t=>{
+ const {emptyRoomState,replayEvents}=await import('../src/events.js'),f=setup(t,70),history=f.source.db.prepare('SELECT body FROM events ORDER BY sequence').all().map(row=>JSON.parse(row.body)),prefix=checkpointChoice==='head'?history.length:checkpointChoice,checkpoint=replayEvents(emptyRoomState(),history.slice(0,prefix));
  f.source.transaction(()=>f.source.db.prepare('INSERT INTO projection_checkpoints(room_id,sequence,projection) VALUES(?,?,?)').run('commons',prefix,JSON.stringify(checkpoint)));auditRecovery(f.source);f.text=exportNdjsonText(f.source.db);
  let store=new RoomStore(f.filename);t.after(()=>store.close());let response=await post(store,f.text),steps=0,sawSeed=false,sawTail=false;
  while(response.body.pending){const input=request(response.body,'checkpoint_wired_'+steps++);response=await post(store,input,{json:true});assert.ok([200,202].includes(response.status),JSON.stringify(response.body));assert.deepEqual(await post(store,input,{json:true}),response);

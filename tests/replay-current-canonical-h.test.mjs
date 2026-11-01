@@ -74,3 +74,13 @@ test('existing canonical H work summary reaches actual context Begin and selecte
  assert.equal(f.store.workContext(key,'commons','existing-work').work.id,'existing-work');
  assert.doesNotThrow(()=>f.store.readTransaction(()=>readCurrentRoomForAudit(f.store,'commons')));
 });
+
+test('canonical H private request indexes preserve party and role boundaries after migration',t=>{
+ const initialWork=[];for(const memberId of ['producer','observer'])initialWork.push(event({roomId:'commons',actorId:'owner',type:'member.added',data:{memberId,displayName:memberId,kind:'agent',permissions:[]}}));
+ initialWork.push(event({roomId:'commons',actorId:'owner',type:'work.proposed',data:{workItemId:'private-work',title:'CANONICAL-PRIVATE-TITLE',definitionOfDone:'Private evidence',accountableMemberId:'producer'}}));
+ initialWork.push(event({roomId:'commons',actorId:'owner',type:'message.posted',data:{messageId:'private-request',toMemberId:'producer',workItemId:'private-work',requestKind:'reply',requestPolicyVersion:1,body:'Private scoped question'}}));
+ const f=setup(t,()=>{},{initialWork});qualify(f);convert(f);f.store.room=()=>{throw Error('full canonical room');};
+ for(const memberId of ['owner','producer'])assert.ok(JSON.stringify(buildOrient(f.store,'commons',memberId)).includes('CANONICAL-PRIVATE-TITLE'));
+ assert.ok(!JSON.stringify(buildOrient(f.store,'commons','observer')).includes('CANONICAL-PRIVATE-TITLE'));
+ assert.doesNotThrow(()=>auditRecovery(f.store));
+});

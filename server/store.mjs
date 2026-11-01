@@ -1,5 +1,5 @@
 import { assertRestoreAdmitted, restorePending, verifyRestoreControl } from './restore-admission.mjs';
-import { CURRENT_ROOM_SCHEMA, CURRENT_ROOM_GUARDS, initializeCurrentRoom, currentRoomAuthority, isCurrentRoom, currentCommandContext, prepareCurrentWrite, withCurrentServingWriter, readCurrentRecord, readCurrentHistoryFloor, withCurrentReadContext, readCurrentSelectedWorkState, readCurrentOverviewWindow, currentVisibleHorizon } from './current-room-repository.mjs';
+import { CURRENT_ROOM_SCHEMA, CURRENT_ROOM_GUARDS, initializeCurrentRoom, currentRoomAuthority, isCurrentRoom, currentCommandContext, prepareCurrentWrite, withCurrentServingWriter, readCurrentRecord, readCurrentHistoryFloor, withCurrentReadContext, readCurrentSelectedWorkState, readCurrentOverviewWindow, currentVisibleHorizon, readCurrentPrivateWorkParties } from './current-room-repository.mjs';
 import {bindReplayAppend} from './replay-cutover.mjs';
 import { savedHistoricalReplayCheckpoint } from './historical-replay-contract.mjs';
 import { bootstrapLegacyWriteProofs, configureWriteIntegrity, beginWriteProofFrame, endWriteProofFrame, publishProjectionWrites, projectionDigest, projectionContentHash, servingContentProof, servingProofDrift, assertProjectionWrite, assertMessageWrite, recordMessageWrite, withVerifiedRoomReconstruction } from './write-integrity.mjs';
@@ -5421,7 +5421,8 @@ this.slaBreachAlerts = new SlaBreachAlertJournal(this); // Task 26: durable in-a
   // Members the work item itself names (proposer, accountable, verifier,
   // decision maker, claim holder) already hold its title and definition of
   // done; a private request on the item must not lock them out of it.
-  privateWorkParties(roomId) {
+  privateWorkParties(roomId,{workIds=null}={}) {
+    if(isCurrentRoom(this.db,roomId))return readCurrentPrivateWorkParties(this,roomId,workIds);
     const requestSlice = this.db.prepare("SELECT json_extract(projection,'$.replyRequests') AS requests FROM rooms WHERE id=?").get(roomId)?.requests;
     const privatePartiesByWork = new Map();
     for (const request of Object.values(requestSlice ? JSON.parse(requestSlice) : {})) {
@@ -6329,7 +6330,7 @@ this.slaBreachAlerts = new SlaBreachAlertJournal(this); // Task 26: durable in-a
   }
   currentOverview(roomId,viewerId,options={}) {
     return this.readTransaction(()=>withCurrentReadContext(this.db,roomId,()=>{
-      const overview=readCurrentOverviewWindow(this,roomId,options);if(!overview)return null;
+      const overview=readCurrentOverviewWindow(this,roomId,{...options,viewerId});if(!overview)return null;
       if(!Object.hasOwn(overview.state.members,viewerId))fail(403,'member_required','Viewer must belong to this room');
       return {...overview,visibleSequence:currentVisibleHorizon(this,roomId,viewerId,overview.sequence)};
     }));

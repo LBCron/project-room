@@ -1,3 +1,4 @@
+import {emptyWorkPrivacy,applyWorkPrivacyRequest,workRequestKey,workRequestValue} from './current-work-privacy.mjs';
 import {currentWorkSummary} from './current-work-summary.mjs';
 import {advanceCanonicalH} from './replay-canonical-h.mjs';
 import {purgeCurrentCandidateForPrivacy,assertCurrentCandidateEmpty,cleanupCurrentCandidateRecords,stageCurrentCandidateRecords,currentCandidateCommandContext,applyCurrentCandidateEvent,publishCurrentCandidate,readCurrentRecord,admitCurrentCandidateBudget} from './current-room-repository.mjs';
@@ -1375,6 +1376,12 @@ export function advanceCurrentRoomConversion(store,input) {
                 if(item?.suspended_by==='round_limit')nextCounts.roundLimitPauses++;
                 if(value?._workEntity!==1)throw Error('Inline work requires code-owned target reference conversion');
                 changes.push({domain:'workSummary',key:address[1],value:currentWorkSummary(item,value)});
+                if(readCurrentRecord(db,input.roomId,'workPrivacy',address[1],budget)===undefined)changes.push({domain:'workPrivacy',key:address[1],value:emptyWorkPrivacy()});
+              }
+              if(key==='replyRequests'&&typeof value?.workItemId==='string'&&value.workItemId) {
+                const id=value.workItemId,prior=readCurrentRecord(db,input.roomId,'workPrivacy',id,budget)??emptyWorkPrivacy();
+                changes.push({domain:'workPrivacy',key:id,value:applyWorkPrivacyRequest(prior,value,1)},
+                  {domain:'workRequest',key:workRequestKey(id,address[1]),value:workRequestValue(id,address[1])});
               }
               stage(changes,nextCounts);state={...state,metadataEntry:next.key};
             } else {

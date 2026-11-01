@@ -1,4 +1,4 @@
-import {boardStateForWorkItem} from './work-item-board.mjs';
+import {boardStateForWorkItem} from './work-item-state.mjs';
 import {countsTowardOpenCap,roomWorkClaimConfig,STALE_UNCLAIMED_DAYS} from './work-claims.mjs';
 import {ServiceError} from './service-error.mjs';
 

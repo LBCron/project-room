@@ -78,3 +78,11 @@ Reminder PR #5590 landed at `acedbeedc0de9cceb924fc763c5e85b45de8fa10`. Own-head
 The actual installed native Codex binary is version `0.159.2`, while the adapter protocol pin is `rust-v0.162.1`. In a fresh dedicated credential profile, two separate real app-server processes initialized, exited cleanly and initialized again using that same profile. The allowlisted metadata receipt excludes private protocol output. This establishes only initialization and process restart; no model turn, thread recovery, Room publication, closed-app wake or OS isolation qualification is claimed. The existing generic Darwin isolation blocker remains.
 
 The older main unit failure at `06e811ff` (`41288050088`) was a stale work-item census: `server/operator-message-authority.mjs` was missing from the expected file inventory. Current main includes explicit census correction `8e8a7a047`; the original failure remains preserved. This was not evidence of a runtime failure, and no job-wide quarantine was adopted.
+
+### Webhook release rolled back (09:45 UTC)
+
+Deployment `41293524688` uploaded source `9eec755f351ebdbcb3c5d8cf86f967aad6824f60` (canonical build `2026-11-01T09:32:34.897Z`, entry build `2026-11-01T09:32:44.989Z`) but failed strict smoke: canonical readiness returned 503 after a 2.5-second Durable Object probe timeout. The other 15 checks passed. No runtime was published for this candidate.
+
+Automatic recovery verified both prior Worker allocations and both Worker/DO source doors back at `acedbeedc0de9cceb924fc763c5e85b45de8fa10` at `2026-11-01T09:43:34.918Z`. Root independently ran post-rollback strict smoke: 16/16 passed. This is recovery confirmation; the timeout cause is still under investigation. The original failed smoke and recovery artifacts are preserved.
+
+PRs #5589, #5591 and #5592 subsequently landed sequentially with their own heads green, ending at `3d22e0944ad8dbc82d1084b2cc54b5b62b07c6c7`; none is deployed at this checkpoint. No timeout was widened or failed deployment relabeled successful.

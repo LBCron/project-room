@@ -1,0 +1,46 @@
+{
+  "candidateSource": "9eec755f351ebdbcb3c5d8cf86f967aad6824f60",
+  "workflowRun": 41293524688,
+  "deploymentConclusion": "failure",
+  "strictSmokeFailures": [
+    {
+      "name": "ready https://room.trydemigod.com/api/ready",
+      "pass": false,
+      "status": 503,
+      "body": "degraded",
+      "emailVerification": "unknown",
+      "emailVerificationScope": "unknown",
+      "do": {
+        "status": "timeout",
+        "ms": 2500,
+        "timeoutMs": 2500
+      },
+      "elapsedMs": 2519
+    }
+  ],
+  "otherChecksPassed": 15,
+  "runtimePublished": false,
+  "recovery": {
+    "status": "ROLLBACK VERIFIED",
+    "recordedAt": "2026-11-01T09:43:34.918Z",
+    "workers": {
+      "prod": {
+        "source": "acedbeedc0de9cceb924fc763c5e85b45de8fa10",
+        "allocationRollbackVerified": true,
+        "sourceConvergenceVerified": true
+      },
+      "entry": {
+        "source": "acedbeedc0de9cceb924fc763c5e85b45de8fa10",
+        "allocationRollbackVerified": true,
+        "sourceConvergenceVerified": true
+      }
+    }
+  },
+  "independentRecoverySmoke": {
+    "ok": true,
+    "source": "acedbeedc0de9cceb924fc763c5e85b45de8fa10",
+    "passedChecks": 16
+  },
+  "causeEstablished": false,
+  "laterQueueDeployed": false
+}

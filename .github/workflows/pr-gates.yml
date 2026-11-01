@@ -6,9 +6,9 @@
 #   - invariant suite, with the PR comment and JSONL artifact
 #
 # schema-gate stays its own workflow: deploy-prod and auto-revert select the
-# workflow by the name `schema-gate`. None of these checks are in the merge
-# gate's required set (test, contract, lint, browser, cloudflare, plus the
-# room/release-lease status).
+# workflow by the name `schema-gate`. Check triggers and merge qualification
+# are documented in docs/RELEASE-MERGE-GATE.md; GitHub required-status
+# configuration is separate from these workflow definitions.
 #
 # Quarantined tests are slow and non-blocking. They run on the nightly
 # schedule and on workflow_dispatch, not on every main push.

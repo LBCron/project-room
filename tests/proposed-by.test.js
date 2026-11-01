@@ -103,7 +103,8 @@ test("reopening a pre-upgrade database separates legacy reporters from unknown p
     receipt.producerId = "human"; // the old reducer's unsupported reporter=producer guess
     delete receipt.producerAttribution;
   }
-  store.db.prepare("UPDATE rooms SET projection=? WHERE id=?").run(JSON.stringify(state), "commons");
+  store.transaction(() => store.db.prepare("UPDATE rooms SET projection=? WHERE id=?")
+    .run(store.storedProjection("commons", state), "commons"));
   store.close();
 
   store = new RoomStore(filename);
@@ -142,7 +143,8 @@ test("reopening backfills verification independence only from explicit producer 
   const state = structuredClone(store.room("commons").state);
   delete state.workItems["w-known-producer"].verification.independenceConfirmed;
   delete state.workItems["w-unknown-producer"].verification.independenceConfirmed;
-  store.db.prepare("UPDATE rooms SET projection=? WHERE id=?").run(JSON.stringify(state), "commons");
+  store.transaction(() => store.db.prepare("UPDATE rooms SET projection=? WHERE id=?")
+    .run(store.storedProjection("commons", state), "commons"));
   store.close();
 
   store = new RoomStore(filename);
@@ -409,7 +411,8 @@ test("an item with no authoritative proposal envelope stays honestly unknown aft
   // Inject an imported legacy item with NO proposal envelope anywhere in the log.
   const state = structuredClone(store.room("commons").state);
   state.workItems["w-imported"] = { id: "w-imported", title: "Imported", state: "proposed", accountableMemberId: "owner" };
-  store.db.prepare("UPDATE rooms SET projection=? WHERE id=?").run(JSON.stringify(state), "commons");
+  store.transaction(() => store.db.prepare("UPDATE rooms SET projection=? WHERE id=?")
+    .run(store.storedProjection("commons", state), "commons"));
   store.close();
   store = new RoomStore(filename);
   try {

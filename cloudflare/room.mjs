@@ -327,6 +327,7 @@ export class ProjectRoom extends DurableObject {
   }
   #probeStorage() {
     if (this.paused || !this.store) return { ok: false };
+    try { this.store.assertRestoreAdmitted(); } catch { return {ok:false,reason:'restore_incomplete'}; }
     const row = this.store.db.prepare("SELECT 1 AS ok").get();
     return { ok: row?.ok === 1, emailVerification: magicLinkMailerFromEnv(this.env) ? 'enforced' : 'relaxed-no-mailer' };
   }

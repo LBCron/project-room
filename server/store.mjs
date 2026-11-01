@@ -1,3 +1,4 @@
+import { assertRestoreAdmitted, restorePending, verifyRestoreControl } from './restore-admission.mjs';
 import { CURRENT_ROOM_SCHEMA, CURRENT_ROOM_GUARDS, initializeCurrentRoom, currentRoomAuthority, isCurrentRoom, currentCommandContext, prepareCurrentWrite, withCurrentServingWriter, readCurrentRecord, readCurrentHistoryFloor, withCurrentReadContext } from './current-room-repository.mjs';
 import {bindReplayAppend} from './replay-cutover.mjs';
 import { bootstrapLegacyWriteProofs, configureWriteIntegrity, beginWriteProofFrame, endWriteProofFrame, publishProjectionWrites, projectionDigest, projectionContentHash, servingContentProof, servingProofDrift, assertProjectionWrite, assertMessageWrite, recordMessageWrite, withVerifiedRoomReconstruction } from './write-integrity.mjs';
@@ -1477,6 +1478,7 @@ export class RoomStore {
     workEntities = true, bodiesAtRest = globalThis.process?.env?.["ROOM_BODIES_AT_REST"] === "1",
     verifyProjectionCache = globalThis.process?.env?.["ROOM_VERIFY_PROJECTION_CACHE"] === "1", maintainMessageCertification = false, messageProjectionWindow = null, messageEntityProjection = false, workItemBoardBackfill = "auto" } = {}) {
     const initializationStarted = performance.now();
+    this._restoreOpening = true;
     // Phase 1a: store large message bodies outside rooms.projection.
     this.bodiesAtRest = bodiesAtRest === true;
     this.verifyProjectionCache = verifyProjectionCache === true;
@@ -1595,6 +1597,16 @@ this.slaBreachAlerts = new SlaBreachAlertJournal(this); // Task 26: durable in-a
       this.db.close();
       throw new Error(version > STORE_SCHEMA_VERSION ? "Database schema is newer than this service" : "Database schema version is unsupported");
     }
+    if(version===STORE_SCHEMA_VERSION && this.db.prepare("SELECT 1 FROM sqlite_master WHERE type='table' AND name='current_restore_admission'").get()
+      && restorePending(this.db)) {
+      this.storagePlatform.configure(this.db,readOnly);
+      if(!readOnly)this.storagePlatform.registerWriter(this.db);
+      this.storagePlatform.verifyWriterFence(this.db,version);
+      verifyRestoreControl(this.db);
+      this._restoreOpening=false;
+      this.initializationMs=Math.round(performance.now()-initializationStarted);
+      return;
+    }
     if (readOnly) {
       try {
         if (version !== STORE_SCHEMA_VERSION) throw new Error(`Read-only invitation audit requires schema v${STORE_SCHEMA_VERSION}; migrate a backed-up database through the service first`);
@@ -1647,6 +1659,7 @@ this.slaBreachAlerts = new SlaBreachAlertJournal(this); // Task 26: durable in-a
         verifyRoomLifecycle(this);
         this.moderation.verifySchema({ allowAbsent: true }); // E4 message reports: additive at v27 as well.
         this.bountyEscrow.verifySchema({ allowAbsent: true }); // Escrowed bounties: additive, read-only never migrates.
+        this._restoreOpening=false;
         logColdStart(coldStart, this.db, false);
         return;
       } catch (error) { logColdStart(coldStart, this.db, error); this.db.close(); throw error; }
@@ -2292,6 +2305,7 @@ this.slaBreachAlerts = new SlaBreachAlertJournal(this); // Task 26: durable in-a
     // Legacy coldStart.durationMs ends before the backfill above. Keep it
     // comparable; this separate successful writable-store total includes all
     // initialization through work repository setup and migration.
+    this._restoreOpening=false;
     this.initializationMs = Math.round(performance.now() - initializationStarted);
     const logInitialized = this.storagePlatform.clockSemantics === "io-bound" ? console.info : console.error;
     logInitialized(JSON.stringify({ event: "room.store_initialized", initializationMs: this.initializationMs,
@@ -3976,11 +3990,14 @@ this.slaBreachAlerts = new SlaBreachAlertJournal(this); // Task 26: durable in-a
   }
   // The room's committed head sequence in one primary-key read — the stream
   // probe's change check, three orders of magnitude cheaper than a page read.
+  assertRestoreAdmitted() { return assertRestoreAdmitted(this.db); }
   headSequence(roomId) {
+    if(!this._restoreOpening)assertRestoreAdmitted(this.db);
     const row = this.db.prepare("SELECT sequence FROM rooms WHERE id=?").get(roomId);
     return row?.sequence ?? 0;
   }
   transaction(fn, { isolated = false } = {}) {
+    if(!this._restoreOpening)assertRestoreAdmitted(this.db);
     // Nested startup helpers share the outer migration transaction and its rollback.
     const outermost = !this.db.isTransaction;
     this._armProjectionWatch();
@@ -4028,6 +4045,7 @@ this.slaBreachAlerts = new SlaBreachAlertJournal(this); // Task 26: durable in-a
     return result;
   }
   readTransaction(fn) {
+    if(!this._restoreOpening)assertRestoreAdmitted(this.db);
     const outermost = !this.db.isTransaction;
     // Shared across storage platforms: opportunistic auth migrations must
     // not turn a read into a write (including nested read transactions).
@@ -4054,6 +4072,7 @@ this.slaBreachAlerts = new SlaBreachAlertJournal(this); // Task 26: durable in-a
     return { failures: this.storageFailures, threshold: this.storageFailureThreshold, unavailable: this.storageFailures >= this.storageFailureThreshold };
   }
   room(roomId, { verifyBodyHashes = false } = {}) {
+    if(!this._restoreOpening)assertRestoreAdmitted(this.db);
     // MSG-0 projection cache. The hit path reads sequence only.
     this._armProjectionWatch();
     const cache = this._projectionCache ??= new ProjectionCache();
@@ -4194,6 +4213,7 @@ this.slaBreachAlerts = new SlaBreachAlertJournal(this); // Task 26: durable in-a
     });
   }
   roomAuthority(roomId, { includeHistory = false } = {}) {
+    if(!this._restoreOpening)assertRestoreAdmitted(this.db);
     const current = currentRoomAuthority(this.db, roomId);
     if (current) return { sequence: current.sequence, ownerId: current.ownerId, members: current.members,
       ...(includeHistory ? {historyVisibility: current.historyVisibility, historyDefaultsVersion: current.historyDefaultsVersion} : {}) };
@@ -5199,6 +5219,7 @@ this.slaBreachAlerts = new SlaBreachAlertJournal(this); // Task 26: durable in-a
     return token;
   }
   authenticate(token, roomId, expectedSessionBinding = null, { allowAccountSession = true } = {}) {
+    if(!this._restoreOpening)assertRestoreAdmitted(this.db);
     if (typeof token === "string" && /^(oat|iat)_/.test(token)) {
       const principal = authenticateMcpOAuthRequest(this, token, roomId);
       if (!principal) fail(401, "unauthenticated", "OAuth grant is expired, revoked, outside its resource, or no longer owns this agent");

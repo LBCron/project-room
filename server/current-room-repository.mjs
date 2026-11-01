@@ -1,3 +1,4 @@
+import { RESTORE_CONTROL_DEFINITIONS, RESTORE_CONTROL_GUARDS, RESTORE_CONTROL_SCHEMA, inRestoreContext, withExactRestoreGuards } from './restore-admission.mjs';
 import { messageInHistory, historyFloor as deriveHistoryFloor } from './history-visibility.mjs';
 import { bindCurrentRecordContext } from '../src/current-record-context.js';
 // Current serving metadata, never replay staging. Version/fences are storage
@@ -36,7 +37,7 @@ const definitions = [
   ['current_room_writer_permit',`CREATE TABLE IF NOT EXISTS current_room_writer_permit (
     singleton INTEGER PRIMARY KEY CHECK(singleton=1), enabled INTEGER NOT NULL CHECK(enabled IN (0,1)), room_id TEXT, receipt_id TEXT)`]
 ];
-export const CURRENT_ROOM_SCHEMA = definitions.map(([,sql])=>sql+';').join('\n')
+export const CURRENT_ROOM_SCHEMA = definitions.map(([,sql])=>sql+';').join('\n') + '\n' + RESTORE_CONTROL_SCHEMA
   + '\nINSERT OR IGNORE INTO current_room_writer_permit VALUES(1,0,NULL,NULL);';
 const permitFor = row => `(SELECT enabled=1 AND room_id=${row}.room_id FROM current_room_writer_permit WHERE singleton=1) IS 1`;
 const guardDefinitions = [];
@@ -74,7 +75,7 @@ guardDefinitions.push(['current_room_permit_update',`CREATE TRIGGER IF NOT EXIST
       THEN RAISE(ABORT,'unsupported current room permit') END; END`],
   ['current_room_permit_delete',`CREATE TRIGGER IF NOT EXISTS current_room_permit_delete BEFORE DELETE ON current_room_writer_permit BEGIN
     SELECT RAISE(ABORT,'unsupported current room permit'); END`]);
-export const CURRENT_ROOM_GUARDS = guardDefinitions.map(([,sql])=>sql+';').join('\n') + `
+export const CURRENT_ROOM_GUARDS = [...guardDefinitions,...RESTORE_CONTROL_GUARDS].map(([,sql])=>sql+';').join('\n') + `
 CREATE INDEX IF NOT EXISTS current_messages_public_seq ON messages(room_id,seq DESC,message_id DESC) WHERE to_member_id IS NULL OR to_member_id='';
 CREATE INDEX IF NOT EXISTS current_messages_channel_public_seq ON messages(room_id,channel_id,seq DESC,message_id DESC) WHERE to_member_id IS NULL OR to_member_id='';
 CREATE INDEX IF NOT EXISTS current_messages_incoming_seq ON messages(room_id,to_member_id,seq DESC,message_id DESC);
@@ -82,7 +83,7 @@ CREATE INDEX IF NOT EXISTS current_messages_outgoing_seq ON messages(room_id,aut
 CREATE INDEX IF NOT EXISTS current_messages_pair_seq ON messages(room_id,author_id,to_member_id,seq DESC,message_id DESC);
 `;
 export function verifyCurrentRoomSchema(db) {
-  for(const [name,sql] of [...definitions,...guardDefinitions])
+  for(const [name,sql] of [...definitions,...RESTORE_CONTROL_DEFINITIONS,...guardDefinitions,...RESTORE_CONTROL_GUARDS])
     if(normalized(db.prepare('SELECT sql FROM sqlite_master WHERE name=?').get(name)?.sql)!==normalized(sql))
       corrupt('schema requires reconciliation: '+name);
   const permit=db.prepare('SELECT singleton,enabled,room_id,receipt_id FROM current_room_writer_permit').all();
@@ -133,7 +134,7 @@ function receipt(db,id,b) {
 const headValue = row => [1,row.room_id,row.sequence,row.event_id,row.revision,JSON.parse(row.counts_json)];
 function admitCurrentSchema(db,b) {
   if(b.schemaVerified)return;
-  const expected=new Map([...definitions,...guardDefinitions].map(([name,sql])=>[name,normalized(sql)]));
+  const expected=new Map([...definitions,...RESTORE_CONTROL_DEFINITIONS,...guardDefinitions,...RESTORE_CONTROL_GUARDS].map(([name,sql])=>[name,normalized(sql)]));
   // Include the exact owned visibility indexes as well as mutation guards.
   for(const sql of CURRENT_ROOM_GUARDS.split(';').map(sql=>sql.trim()).filter(sql=>sql.startsWith('CREATE INDEX')))
     expected.set(/CREATE INDEX IF NOT EXISTS ([a-z_]+)/.exec(sql)[1],normalized(sql));
@@ -566,4 +567,21 @@ export function readCurrentHistoryFloor(db,roomId,memberId) {
     has(id){if(!db.isTransaction)throw Error('Addressed history membership requires its read transaction');
       return readCurrentRecord(db,roomId,'historyExclusions',memberId+'\0'+id,b)===true;},
     [Symbol.iterator](){refuse('Use addressed history exclusion membership; full exclusion hydration is unavailable');}}};
+}
+
+// The only bulk-load exception: code-owned exact guards, synchronously restored
+// before each batch commits. The global schema writer fence remains installed.
+export function withCurrentRestoreTableRows(db,table,operation) {
+  if(!inRestoreContext(db))throw Error('Bulk current restore requires privileged target context');
+  const guards=guardDefinitions.filter(([name])=>name.startsWith('current_room_guard_'+table+'_'));
+  schemaCache.delete(db);
+  try { return withExactRestoreGuards(db,guards,operation); }
+  finally { schemaCache.delete(db); }
+}
+
+export function invalidateCurrentRoomSchema(db) { schemaCache.delete(db); }
+
+export function restoredCurrentFormatPresent(db) {
+  return Boolean(db.prepare("SELECT 1 FROM current_room_head UNION ALL SELECT 1 FROM current_room_records UNION ALL SELECT 1 FROM current_room_record_proofs LIMIT 1").get()
+    || db.prepare("SELECT 1 FROM rooms WHERE instr(projection,'\"normalizedCurrent\"')>0 LIMIT 1").get());
 }

@@ -2025,6 +2025,7 @@ export function createRoomServer({ store, origin, assetRoot = new URL("../", imp
           // #3273: this used to also require a rooms row, so a fresh, healthy,
           // empty workspace reported 503 until someone created a room while
           // the Worker reported the same state ready.
+          store.assertRestoreAdmitted();
           store.db.prepare("SELECT 1").get();
           return json(res, 200, { status: "ready" }, req.method === "HEAD");
         } catch { return json(res, 503, { status: "unavailable" }, req.method === "HEAD"); }

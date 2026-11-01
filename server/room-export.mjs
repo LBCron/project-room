@@ -1,3 +1,5 @@
+import { assertRestoreAdmitted, withRestoreTransaction, beginRestore, completeRestore } from './restore-admission.mjs';
+import { withCurrentRestoreTableRows, verifyCurrentRoomSchema, invalidateCurrentRoomSchema, restoredCurrentFormatPresent } from './current-room-repository.mjs';
 // Durable Object export. The on-disk server copies its sqlite file
 // (scripts/backup-room.mjs). A Durable Object cannot hand that file out, so
 // this streams the same store as NDJSON and replays it into a fresh file.
@@ -186,6 +188,7 @@ function* exportTableRows(db, table, columns, pageRows) {
 }
 
 export function* exportNdjsonLines(db, { pageRows = EXPORT_PAGE_ROWS } = {}) {
+  assertRestoreAdmitted(db);
   const rooms = db.prepare("SELECT id, sequence FROM rooms ORDER BY id").all();
   const events = db.prepare("SELECT count(*) AS n FROM events").get().n;
   const durable = db.prepare("SELECT 1 FROM sqlite_master WHERE type='table' AND name='room_runtime_version'").get();
@@ -538,7 +541,7 @@ function insertOrder(names) {
 // replay. Replay skips these and reports the row counts; the export itself
 // still holds the rows.
 export const REPLAY_SKIPPED_TABLES = Object.freeze([
-  "room_runtime_version", "room_writer_permit",
+  "room_runtime_version", "room_writer_permit", "current_room_writer_permit", "current_restore_admission",
   "emissary_drops", "emissary_idempotency", "emissary_invite_attribution",
   "emissary_journal", "external_identities", "external_receipts",
   "abuse_rate_buckets", "agent_wake_counters", "agent_wake_failures"
@@ -584,7 +587,7 @@ export function ensureNativeAgentRestoreSchema(db, names) {
 // writer fences and deletion guards stay active. Real exported pending evidence
 // is loaded unchanged, and the target's original trigger is restored on failure.
 export function withRestoreTableRows(db, table, insert) {
-  if (table !== "membership_delegation_grants") return insert();
+  if (table !== "membership_delegation_grants") return withCurrentRestoreTableRows(db,table,insert);
   const trigger = db.prepare("SELECT sql FROM sqlite_master WHERE type='trigger' AND name='membership_delegation_pending_insert'").get();
   if (!trigger?.sql) throw new Error("Restore requires the membership delegation insertion trigger");
   db.exec("DROP TRIGGER membership_delegation_pending_insert");
@@ -655,6 +658,9 @@ export function replayNdjson(ndjson, filename, { audit = "strict", retainTables 
       skipped[table] = byTable.get(table).length;
       byTable.delete(table);
     }
+    for(const table of ["current_room_writer_permit","current_restore_admission"]) {
+      if(byTable.has(table)){skipped[table]=byTable.get(table).length;byTable.delete(table);}
+    }
     const order = insertOrder(new Set(byTable.keys()));
     for (const table of order) if (!existing.has(table)) throw new Error("Export names a table this store does not have");
     store.db.exec("PRAGMA foreign_keys=OFF");
@@ -665,8 +671,10 @@ export function replayNdjson(ndjson, filename, { audit = "strict", retainTables 
     const claimPermit = existing.has(CLAIM_PERMIT_TABLE);
     byTable.delete(CLAIM_PERMIT_TABLE);
     const loadOrder = order.filter(table => table !== CLAIM_PERMIT_TABLE);
+    return withRestoreTransaction(store,()=>{
+    beginRestore(store);
     store.transaction(() => {
-      for (const table of loadOrder) store.db.prepare(`DELETE FROM ${quoteIdent(table)}`).run();
+      for (const table of loadOrder) withRestoreTableRows(store.db,table,()=>store.db.prepare(`DELETE FROM ${quoteIdent(table)}`).run());
       if (claimPermit) store.db.prepare(`UPDATE ${CLAIM_PERMIT_TABLE} SET enabled=1 WHERE singleton=1`).run();
       for (const table of loadOrder) {
         const rows = byTable.get(table);
@@ -706,10 +714,14 @@ export function replayNdjson(ndjson, filename, { audit = "strict", retainTables 
       recovery = auditRecovery(store);
       invitations = store.verifyInvitationAudit();
     } catch (error) {
-      if (audit === "strict") throw error;
+      if (audit === "strict" || restoredCurrentFormatPresent(store.db)) throw error;
       auditResult = { ok: false, error: String(error?.message ?? error).split("\n")[0].slice(0, 200) };
     }
+    verifyCurrentRoomSchema(store.db);
+    completeRestore(store.db);
+    invalidateCurrentRoomSchema(store.db);
     chmodSync(filename, 0o600);
     return { verified: true, events, trailer: trailerState, contentVerification, writeProofs, ...invitations, recovery, audit: auditResult, skippedTables: skipped, sanitizedCells: tracker.report() };
+    });
   } finally { store.close(); }
 }

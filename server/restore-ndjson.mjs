@@ -1,3 +1,5 @@
+import { withRestoreTransaction, beginRestore, completeRestore } from './restore-admission.mjs';
+import { verifyCurrentRoomSchema, invalidateCurrentRoomSchema, restoredCurrentFormatPresent } from './current-room-repository.mjs';
 // Whole-store NDJSON restore into an already-open store.
 //
 // Sibling of server/room-export.mjs (which owns the export format). The export
@@ -197,7 +199,8 @@ export function replayNdjsonInto(ndjson, store, { audit = "strict", sourceSchema
   // of half-restored.
   db.exec("PRAGMA foreign_keys=OFF");
   try {
-    return store.transaction(() => {
+    return withRestoreTransaction(store, () => {
+      beginRestore(store);
       // Workers enforce foreign keys even with the PRAGMA above (the DO
       // SQLite engine ignores foreign_keys=OFF). Deferring the checks to the
       // COMMIT makes the whole-row replay order-safe there: row order inside
@@ -205,7 +208,7 @@ export function replayNdjsonInto(ndjson, store, { audit = "strict", sourceSchema
       // parent-first sort) no longer matters, because every referenced row is
       // present before the single COMMIT.
       db.exec("PRAGMA defer_foreign_keys=ON");
-      for (const table of order) db.prepare(`DELETE FROM ${quoteIdent(table)}`).run();
+      for (const table of order) withRestoreTableRows(db,table,()=>db.prepare(`DELETE FROM ${quoteIdent(table)}`).run());
       // #3324: the claim fence aborts any write to a public namespace's
       // claims unless the permit is open. Mirror the file replay: open the
       // TARGET's own seeded permit for the bulk load (the exported permit
@@ -261,9 +264,12 @@ export function replayNdjsonInto(ndjson, store, { audit = "strict", sourceSchema
         recovery = auditRecovery(store);
         invitations = store.verifyInvitationAudit();
       } catch (error) {
-        if (audit !== "report") throw error;
+        if (audit !== "report" || restoredCurrentFormatPresent(db)) throw error;
         auditResult = auditFailure(error);
       }
+      verifyCurrentRoomSchema(db);
+      completeRestore(db);
+      invalidateCurrentRoomSchema(db);
       return { verified: true, trailer: trailer ? "verified" : "absent", contentVerification, writeProofs, events, tables: order.length, backedUpAt: watermark.backedUpAt ?? null, skippedTables, sanitizedCells: tracker.report(), ...invitations, recovery, audit: auditResult };
     });
   } finally {
@@ -333,6 +339,7 @@ export function createBackupReplaySession(store, { audit = "strict", sourceSchem
   let tracker = null;
   const cellTracker = () => tracker ??= createSanitizedCellTracker(db, { legacySanitize: true });
 
+  beginRestore(store);
   db.exec("PRAGMA foreign_keys=OFF");
   // #3324, as in replayNdjsonInto: open the target's own permit for the
   // load; the exported permit row is skipped in writeLine and never lands.
@@ -383,10 +390,10 @@ export function createBackupReplaySession(store, { audit = "strict", sourceSchem
     }
     if (!insertable.length) return 0;
     let inserted = 0;
-    store.transaction(() => {
+    withRestoreTransaction(store, () => {
       db.exec("PRAGMA defer_foreign_keys=ON");
       if (!cleared.has(table)) {
-        db.prepare(`DELETE FROM ${quoteIdent(table)}`).run();
+        withRestoreTableRows(db,table,()=>db.prepare(`DELETE FROM ${quoteIdent(table)}`).run());
         cleared.add(table);
       }
       const known = columnsOf(table);
@@ -502,12 +509,17 @@ export function createBackupReplaySession(store, { audit = "strict", sourceSchem
     settled = true;
     let cleanupError = null;
     try {
-      store.transaction(() => {
+      withRestoreTransaction(store, () => {
         // Children before parents (reverse topological order): the Worker
         // enforces foreign keys, so deleting a parent row while its child
         // rows remain fails the cleanup and leaves half-restored data.
         for (const table of [...cleared].sort((a, b) => topoIndex.get(b) - topoIndex.get(a)))
-          db.prepare(`DELETE FROM ${quoteIdent(table)}`).run();
+          withRestoreTableRows(db,table,()=>db.prepare(`DELETE FROM ${quoteIdent(table)}`).run());
+        for(const table of cleared) if(db.prepare(`SELECT 1 FROM ${quoteIdent(table)} LIMIT 1`).get())throw Error("Restore cleanup left rows: "+table);
+        if(db.prepare("SELECT 1 FROM rooms LIMIT 1").get())throw Error("Restore cleanup left rooms");
+        verifyCurrentRoomSchema(db);
+        completeRestore(db);
+      invalidateCurrentRoomSchema(db);
       });
     } catch (error) { cleanupError = error; }
     try {
@@ -541,6 +553,7 @@ export function createBackupReplaySession(store, { audit = "strict", sourceSchem
       // Torn export (a write landed mid-stream): refuse, as the buffered
       // replay does — the tuples collected line by line are exactly the
       // rows verifyTrailer hashes.
+      return withRestoreTransaction(store,()=>{
       if (trailer) verifyTrailer(trailer, new Map([["events", eventTuples]]));
       // #3325: the trailer's table digests pin the non-event rows the same
       // way; a mismatch aborts and wipes the replay like any other failure.
@@ -583,12 +596,16 @@ export function createBackupReplaySession(store, { audit = "strict", sourceSchem
         recovery = auditRecovery(store);
         invitations = store.verifyInvitationAudit();
       } catch (error) {
-        if (audit !== "report") throw error;
+        if (audit !== "report" || restoredCurrentFormatPresent(db)) throw error;
         auditResult = auditFailure(error);
       }
       db.exec("PRAGMA foreign_keys=ON");
+      verifyCurrentRoomSchema(db);
+      completeRestore(db);
+      invalidateCurrentRoomSchema(db);
       settled = true;
       return { verified: true, trailer: trailer ? "verified" : "absent", contentVerification, writeProofs, events, tables: counts.size, backedUpAt: watermark.backedUpAt ?? null, skippedTables, sanitizedCells: cellTracker().report(), ...invitations, recovery, audit: auditResult };
+      });
     } catch (error) {
       abort();
       throw error;

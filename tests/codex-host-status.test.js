@@ -155,3 +155,19 @@ test("single-request CLI refuses absent or plural selection before reading runti
     assert.doesNotMatch(child.stderr, /ENOENT/);
   }
 });
+
+// A run whose result is saved but whose report the room has not settled is a
+// durable host phase: the writer must record it, and a reader (the next
+// process, or `status`) must read it back instead of rejecting the record.
+test("report_reconciliation_pending is written, persisted and read back with its run id", t => {
+  const f = setup(t), directory = `${f.journal}.watch`, owner = new WatchJournal(directory);
+  const writer = createCodexStatusWriter(directory, { origin: "https://room.example", roomId: "room", memberId: "agent" });
+  t.after(() => { writer.close(); owner.close(); });
+  writer.event({ type: "host_status", status: "report_reconciliation_pending", runId: "run-1" });
+  const stored = JSON.parse(readFileSync(join(directory, "status.json"), "utf8"));
+  assert.equal(stored.phase, "report_reconciliation_pending");
+  const status = readCodexHostStatus(f.journal);
+  assert.equal(status.fresh, true);
+  assert.equal(status.phase, "report_reconciliation_pending");
+  assert.equal(status.runId, "run-1");
+});

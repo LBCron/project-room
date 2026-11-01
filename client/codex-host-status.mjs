@@ -2,7 +2,7 @@ import { existsSync, lstatSync, readFileSync, realpathSync, renameSync, unlinkSy
 import { isAbsolute, join } from "node:path";
 import { WatchJournal } from "./watch-journal.mjs";
 
-const phases = new Set(["watching_room", "assistant_not_selected", "protocol_qualified", "running", "settled", "recovery_pending", "retrying_room", "stopped"]);
+const phases = new Set(["watching_room", "assistant_not_selected", "protocol_qualified", "running", "settled", "recovery_pending", "report_reconciliation_pending", "retrying_room", "stopped"]);
 const credentials = new Set(["unknown", "present", "login_required", "not_required"]);
 const privatePath = (path, directory = false) => {
   const stat = lstatSync(path);

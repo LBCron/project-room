@@ -38,4 +38,5 @@ test("GROWTH_FORCE_ARMS pins a known arm and ignores an unknown one", () => {
   const natural = assignVariant("pr_footer_placement", "rcpt:1", {});
   assert.equal(assignVariant("pr_footer_placement", "rcpt:1", { GROWTH_FORCE_ARMS: "pr_footer_placement:nope" }), natural);
   assert.equal(assignVariant("pr_footer_placement", "pr:1", { GROWTH_FORCE_ARMS: "pr_footer_placement:top" }), "top");
+  assert.equal(assignVariant("pr_footer_placement", "pr:1", { GROWTH_FORCE_ARMS: "unknown:ignored, pr_footer_placement:top" }), "top");
 });

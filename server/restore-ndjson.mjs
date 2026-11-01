@@ -1,6 +1,7 @@
+import {initialRecoveryCensus,validateRecoveryCensus,advanceRecoveryCensus} from './recovery-census-continuation.mjs';
 import { CURRENT_WRITER_FORMAT } from './current-room-format.mjs';
 import { applicationTables, lazyAdditiveTables, RESTORE_OPERATIONAL_TABLES, installRestoreFreeze, verifyRestoreFreeze, removeRestoreFreeze } from './writer-fence.mjs';
-import { withRestoreTransaction, beginRestore, completeRestore, restorePending, verifyRestoreControl, restoreProgress, checkpointRestore } from './restore-admission.mjs';
+import { RESTORE_AUDIT_VERSION, RESTORE_REPORT_VERSION, withRestoreTransaction, beginRestore, completeRestore, restorePending, verifyRestoreControl, restoreProgress, checkpointRestore } from './restore-admission.mjs';
 import { verifyCurrentRoomSchema, invalidateCurrentRoomSchema, restoredCurrentFormatPresent } from './current-room-repository.mjs';
 // Whole-store NDJSON restore into an already-open store.
 //
@@ -159,7 +160,7 @@ const normalizedRestoreSql=sql=>sql?.trim().replace(/;$/,'').replace(/IF NOT EXI
 // admission, never durable authority. Every warm use revalidates exact tuples in
 // SQLite; Durable SQLite does not authorize a schema_version cookie.
 const restoreCatalogAdmissions=new WeakMap();
-const restoreRecreatedGuards=new Set(['current_restore_admission_insert','current_restore_admission_update','current_restore_admission_delete']);
+const restoreRecreatedGuards=new Set(['current_restore_admission_insert','current_restore_admission_update','current_restore_admission_delete','current_restore_audit_scratch_insert','current_restore_audit_scratch_update','current_restore_audit_scratch_delete']);
 function restoreSchemaHash(db,binding=null,{expectedHash=null,tables=null}={}){
  const scalar=db.prepare("SELECT count(*) AS count,coalesce(sum(length(CAST(sql AS BLOB))),0) AS bytes FROM sqlite_master WHERE name NOT LIKE 'sqlite_%' AND name NOT GLOB '_cf_*'").get();
  if ( ! Number . isSafeInteger ( scalar . count ) || scalar . count > restoreTablesKnown . size * 20 + 128 || ! Number . isSafeInteger ( scalar . bytes ) || scalar . bytes > 16 * 1024 * 1024 ) throw Error ( 'Restore schema inventory scalar bytes require reconciliation' ) ;
@@ -199,12 +200,13 @@ function restoreSchemaHash(db,binding=null,{expectedHash=null,tables=null}={}){
  return hash;
 }
 const sealId=seal=>sha256Hex(JSON.stringify({...seal,id:undefined}));
-function coverageResponse(state){return{ok:true,verified:false,pending:true,restoreId:state.restore_id,sourceSeal:state.seal.id,revision:state.revision,phase:state.phase,progress:{tableIndex:state.progress.tableIndex,tables:state.seal.tables.length,rows:state.progress.rows,bytes:state.progress.bytes},note:'Coverage is incomplete recovery; the independent full audit still must pass before admission'};}
+function coverageResponse(state){return{ok:true,verified:false,pending:true,restoreId:state.restore_id,sourceSeal:state.seal.id,revision:state.revision,phase:state.phase,progress:{tableIndex:state.progress.tableIndex,tables:state.seal.tables.length,rows:state.progress.rows,bytes:state.progress.bytes},auditProgress:state.progress.audit?{stage:state.progress.audit.stage,rooms:state.progress.audit.rooms,units:state.progress.audit.units,bytes:state.progress.audit.bytes}:null,note:'Coverage is incomplete recovery; the independent full audit still must pass before admission'};}
 function validateCoverageState(db,state){
  const seal=state.seal,p=state.progress;
- if ( state . state !== 'pending' || ! [ 'coverage' , 'audit_pending' ] . includes ( state . phase ) || ! seal || Object . keys ( seal ) . sort ( ) . join ( ',' ) !== 'backedUpAt,events,id,inventory,sanitizePolicy,schemaHash,sourceSchemaVersion,sourceSha256,tables,trailerSha256,version,watermarkSha256,writerFormat' || seal . version !== 1 || seal . writerFormat !== CURRENT_WRITER_FORMAT || seal . id !== sealId ( seal ) || ! /^[0-9a-f]{64}$/ . test ( seal . sourceSha256 ?? '' ) || ! [ 'sourceSha256' , 'watermarkSha256' , 'trailerSha256' , 'schemaHash' , 'id' ] . every ( key => /^[0-9a-f]{64}$/ . test ( seal [ key ] ?? '' ) ) || ! Number . isSafeInteger ( seal . events ) || seal . events < 0 || ( seal . backedUpAt !== null && ( ! Number . isSafeInteger ( seal . backedUpAt ) || seal . backedUpAt < 0 ) ) || seal . sourceSchemaVersion !== 45 || seal . sanitizePolicy !== BACKUP_SANITIZE_POLICY || ! Array . isArray ( seal . inventory ) || ! Array . isArray ( seal . tables ) ) throw Error ( 'Restore source seal requires reconciliation' ) ;
+ if(state.state!=='pending'||!['coverage','audit_pending'].includes(state.phase)||!seal||Object.keys(seal).sort().join(',')!=='auditVersion,backedUpAt,events,id,inventory,reportVersion,sanitizePolicy,schemaHash,sourceSchemaVersion,sourceSha256,tables,trailerSha256,version,watermarkSha256,writerFormat'||seal.version!==1||seal.auditVersion!==RESTORE_AUDIT_VERSION||seal.reportVersion!==RESTORE_REPORT_VERSION||seal.writerFormat!==CURRENT_WRITER_FORMAT||seal.id!==sealId(seal)||!/^[0-9a-f]{64}$/.test(seal.sourceSha256??'')||!['sourceSha256','watermarkSha256','trailerSha256','schemaHash','id'].every(key=>/^[0-9a-f]{64}$/.test(seal[key]??''))||!Number.isSafeInteger(seal.events)||seal.events<0||(seal.backedUpAt!==null&&(!Number.isSafeInteger(seal.backedUpAt)||seal.backedUpAt<0))||seal.sourceSchemaVersion!==45||seal.sanitizePolicy!==BACKUP_SANITIZE_POLICY||!Array.isArray(seal.inventory)||!Array.isArray(seal.tables))throw Error('Restore source seal requires reconciliation');
  if(seal.inventory.some(name=>typeof name!=='string'||!restoreTablesKnown.has(name))||new Set(seal.inventory).size!==seal.inventory.length||JSON.stringify(tableNames(db).filter(name=>!name.startsWith('_cf_')))!==JSON.stringify(seal.inventory))throw Error('Restore source schema inventory differs');
- if(!p||Object.keys(p).sort().join(',')!=='after,bag,bytes,rows,tableIndex'||!Number.isSafeInteger(p.tableIndex)||p.tableIndex<0||p.tableIndex>seal.tables.length||!Number.isSafeInteger(p.after)||!Number.isSafeInteger(p.rows)||p.rows<0||!Number.isSafeInteger(p.bytes)||p.bytes<0)throw Error('Restore coverage cursor requires reconciliation');
+ if(!p||Object.keys(p).sort().join(',')!=='after,audit,bag,bytes,rows,tableIndex'||!Number.isSafeInteger(p.tableIndex)||p.tableIndex<0||p.tableIndex>seal.tables.length||!Number.isSafeInteger(p.after)||!Number.isSafeInteger(p.rows)||p.rows<0||!Number.isSafeInteger(p.bytes)||p.bytes<0)throw Error('Restore coverage cursor requires reconciliation');
+ if(state.phase==='coverage'){if(p.audit!==null)throw Error('Audit started before coverage');}else validateRecoveryCensus(p.audit);
  const bagValid=bag=>bag&&Object.keys(bag).sort().join(',')==='rows,sum,xor'&&Number.isSafeInteger(bag.rows)&&bag.rows>=0&&/^[0-9a-f]{64}$/.test(bag.sum)&&/^[0-9a-f]{64}$/.test(bag.xor);
  if(!bagValid(p.bag)||seal.tables.some(entry=>Object.keys(entry).sort().join(',')!=='columns,expected,maxRowBytes,name'||!seal.inventory.includes(entry.name)||!IDENT.test(entry.name)||!Array.isArray(entry.columns)||entry.columns.some(name=>!IDENT.test(name))||!bagValid(entry.expected)||!Number.isSafeInteger(entry.maxRowBytes)||entry.maxRowBytes<0))throw Error('Restore coverage shape requires reconciliation');
  const expectedNames = seal . inventory . filter ( table => ! RESTORE_OPERATIONAL_TABLES . includes ( table ) && ! RESTORE_SKIP_TABLES . has ( table ) && table !== CLAIM_PERMIT_TABLE && ! REPLAY_SKIPPED_TABLES . includes ( table ) ) . sort ( ) ;
@@ -215,8 +217,8 @@ function sealRestoreCoverage(store,{restoreId,sourceSha256,watermark,trailer,tab
  const db=store.db,state=restoreProgress(db);if(state.state!=='pending'||state.phase!=='loading'||state.restore_id!==restoreId)throw Error('Restore source seal is stale');
  const inventory=tableNames(db);if(inventory.some(name=>!name.startsWith('_cf_')&&!restoreTablesKnown.has(name)))throw Error('Restore source inventory includes unknown table');
  installRestoreFreeze(db,inventory);
- const seal = { version : 1 , writerFormat : CURRENT_WRITER_FORMAT , sourceSha256 , sourceSchemaVersion : 45 , sanitizePolicy : BACKUP_SANITIZE_POLICY , watermarkSha256 : sha256Hex ( JSON . stringify ( watermark ) ) , trailerSha256 : sha256Hex ( JSON . stringify ( trailer ) ) , events : watermark . events , backedUpAt : watermark . backedUpAt ?? null , inventory : inventory . filter ( name => ! name . startsWith ( '_cf_' ) ) , tables , schemaHash : restoreSchemaHash ( db ) } ; seal . id = sealId ( seal ) ;
- const progress={tableIndex:0,after:Number.MIN_SAFE_INTEGER,bag:rowBag().snapshot(),rows:0,bytes:0},next={restore_id:restoreId,revision:state.revision+1,phase:'coverage',seal,progress};const result=coverageResponse(next);
+ const seal={version:1,auditVersion:RESTORE_AUDIT_VERSION,reportVersion:RESTORE_REPORT_VERSION,writerFormat:CURRENT_WRITER_FORMAT,sourceSha256,sourceSchemaVersion:45,sanitizePolicy:BACKUP_SANITIZE_POLICY,watermarkSha256:sha256Hex(JSON.stringify(watermark)),trailerSha256:sha256Hex(JSON.stringify(trailer)),events:watermark.events,backedUpAt:watermark.backedUpAt??null,inventory:inventory.filter(name=>!name.startsWith('_cf_')),tables,schemaHash:restoreSchemaHash(db)};seal.id=sealId(seal);
+ const progress={tableIndex:0,after:Number.MIN_SAFE_INTEGER,bag:rowBag().snapshot(),rows:0,bytes:0,audit:null},next={restore_id:restoreId,revision:state.revision+1,phase:'coverage',seal,progress};const result=coverageResponse(next);
  checkpointRestore(db,{restoreId,expectedRevision:state.revision,phase:'coverage',seal,progress,latest:{requestId:'seal_'+sourceSha256,expectedRevision:state.revision,restoreId,sourceSeal:seal.id,result}});
  return result;
 }
@@ -230,6 +232,10 @@ export function continueRestoreCoverage(store,input){
   if(latest?.requestId===input.requestId)throw Error('Restore request ID binding differs');
   if(state.state!=='pending'||state.restore_id!==input.restoreId||state.seal?.id!==input.sourceSeal||state.revision!==input.expectedRevision)throw Error('Restore continuation is stale or source differs');
   validateCoverageState(db,state);
+  if(state.phase==='audit_pending'&&state.progress.audit.stage!=='full_audit_pending'){
+   const progress={...state.progress,audit:advanceRecoveryCensus(store,state.restore_id,state.progress.audit)},next={...state,progress,revision:state.revision+1},result=coverageResponse(next);
+   checkpointRestore(db,{restoreId:input.restoreId,expectedRevision:input.expectedRevision,phase:'audit_pending',seal:state.seal,progress,latest:{...input,result}});invalidateCurrentRoomSchema(db);return result;
+  }
   if(state.phase==='audit_pending'){
    // Intentionally still the existing full census. Do not describe this phase
    // as bounded until its replay/SQLite/subsystem/report scans are resumable.
@@ -253,7 +259,7 @@ export function continueRestoreCoverage(store,input){
    const row=db.prepare(`SELECT ${entry.columns.map(quoteIdent).join(',')} FROM ${name} WHERE rowid=?`).get(scalar.__restore_rid);if(!row)throw Error('Restore sealed row disappeared');
    const bag=rowBag(p.bag);bag.addDigest(canonicalResumeDigest(row,entry.columns));p.bag=bag.snapshot();p.after=scalar.__restore_rid;p.rows++;p.bytes+=scalarBytes;rows++;bytes+=scalarBytes;
   }
-  const phase=p.tableIndex===state.seal.tables.length?'audit_pending':'coverage',next={...state,progress:p,phase,revision:state.revision+1},result=coverageResponse(next);
+  const phase=p.tableIndex===state.seal.tables.length?'audit_pending':'coverage';if(phase==='audit_pending')p.audit=initialRecoveryCensus();const next={...state,progress:p,phase,revision:state.revision+1},result=coverageResponse(next);
   checkpointRestore(db,{restoreId:input.restoreId,expectedRevision:input.expectedRevision,phase,seal:state.seal,progress:p,latest:{...input,result}});return result;
  });
 }

@@ -1,0 +1,118 @@
+// First independent audit phase: shared current-record checks plus complete
+// proof/payload membership. The remaining full audit is still REQUIRED.
+import {Buffer} from 'node:buffer';
+import {isDeepStrictEqual} from 'node:util';
+import {currentWorkSummary} from './current-work-summary.mjs';
+import {emptyWorkPrivacy,validateWorkPrivacy,applyWorkPrivacyRequest,workRequestPrefix,workRequestKey,workRequestValue} from './current-work-privacy.mjs';
+import {currentWorkCapacity} from './current-work-capacity.mjs';
+import {validId} from '../src/events.js';
+import {isCurrentRoom,withCurrentAuditUnits} from './current-room-repository.mjs';
+import {withRestoreAuditRows,RESTORE_AUDIT_VERSION,RESTORE_AUDIT_UNIT_BYTES} from './restore-admission.mjs';
+export const initialRecoveryCensus=()=>({version:RESTORE_AUDIT_VERSION,stage:'rooms',roomAfter:'',roomId:null,domainAfter:'',keyAfter:'',proofs:0,records:0,actualRecords:0,workAfter:'',workCount:0,workReferenceRecords:0,workSummaryRecords:0,workCapacityRecords:0,workPrivacyRecords:0,workRequestRecords:0,requestAfter:'',requestLinks:0,privacyAfter:'',privacyWork:null,privacyLinkAfter:'',privacyValue:null,privacyEntries:0,privacyLinks:0,rooms:0,legacyRooms:0,units:0,bytes:0});
+const fail=()=>{throw Error('Independent recovery census requires reconciliation');};
+export function validateRecoveryCensus(value){
+ if(!value||Object.keys(value).sort().join(',')!==Object.keys(initialRecoveryCensus()).sort().join(',')||value.version!==RESTORE_AUDIT_VERSION||!['rooms','proofs','records','work','request_links','privacy','cleanup','full_audit_pending'].includes(value.stage)
+  ||!['proofs','records','actualRecords','rooms','legacyRooms','units','bytes','workCount','workReferenceRecords','workSummaryRecords','workCapacityRecords','workPrivacyRecords','workRequestRecords','requestLinks','privacyEntries','privacyLinks'].every(key=>Number.isSafeInteger(value[key])&&value[key]>=0)
+  ||typeof value.roomAfter!=='string'||Buffer.byteLength(value.roomAfter)>128||value.roomId!==null&&(!validId(value.roomId))
+  ||typeof value.workAfter!=='string'||Buffer.byteLength(value.workAfter)>200
+  ||!['requestAfter','privacyAfter','privacyLinkAfter'].every(key=>typeof value[key]==='string'&&Buffer.byteLength(value[key])<=200)||value.privacyWork!==null&&(typeof value.privacyWork!=='string'||Buffer.byteLength(value.privacyWork)>200)
+  ||typeof value.domainAfter!=='string'||Buffer.byteLength(value.domainAfter)>64||typeof value.keyAfter!=='string'||Buffer.byteLength(value.keyAfter)>200)fail();
+ if(value.privacyValue!==null){validateWorkPrivacy(value.privacyValue);if(Buffer.byteLength(JSON.stringify(value.privacyValue))>RESTORE_AUDIT_UNIT_BYTES)fail();}
+ if((value.privacyWork===null)!==(value.privacyValue===null))fail();
+}
+function recordInputBytes(db,roomId,domain,key){
+ const row=db.prepare(`SELECT r.payload_bytes,(SELECT length(CAST(a.counts_json AS BLOB)) FROM operator_actions a WHERE a.id=p.receipt_id AND a.action='current_room_transition') receipt_bytes
+  FROM current_room_record_proofs p LEFT JOIN current_room_records r ON r.room_id=p.room_id AND r.domain=p.domain AND r.record_key=p.record_key WHERE p.room_id=? AND p.domain=? AND p.record_key=?`).get(roomId,domain,key);
+ const bytes=(row?.payload_bytes??0)+(row?.receipt_bytes??0)+1024;if(!Number.isSafeInteger(bytes)||bytes<0)fail();return bytes;
+}
+export function advanceRecoveryCensus(store,restoreId,previous){
+ validateRecoveryCensus(previous);const p={...previous},db=store.db;let units=0,bytes=0;
+ return withRestoreAuditRows(db,restoreId,scratch=>{
+  if(p.stage==='cleanup'){
+   const result=scratch.deletePage(128);p.units+=result.deleted;if(result.done)p.stage='full_audit_pending';return p;
+  }
+  if(p.stage==='full_audit_pending')return p;
+  while(units<128){
+   if(p.stage==='rooms'){
+    const scalar=db.prepare('SELECT rowid,length(CAST(id AS BLOB)) bytes FROM rooms WHERE id>? ORDER BY id LIMIT 1').get(p.roomAfter);
+    if(!scalar){p.stage='cleanup';break;}
+    if(scalar.bytes<1||scalar.bytes>128)fail();const row=db.prepare('SELECT id FROM rooms WHERE rowid=?').get(scalar.rowid);if(!validId(row?.id))fail();
+    p.roomId=row.id;p.domainAfter='';p.keyAfter='';p.proofs=0;p.records=0;p.actualRecords=0;p.workAfter='';p.workCount=0;p.workReferenceRecords=0;p.workSummaryRecords=0;p.workCapacityRecords=0;p.workPrivacyRecords=0;p.workRequestRecords=0;p.requestAfter='';p.requestLinks=0;p.privacyAfter='';p.privacyWork=null;p.privacyLinkAfter='';p.privacyValue=null;p.privacyEntries=0;p.privacyLinks=0;
+    if(!isCurrentRoom(db,p.roomId)){p.legacyRooms++;p.roomAfter=p.roomId;p.roomId=null;units++;continue;}
+    p.stage='proofs';
+   }
+   // Every callback/receipt cache ends before this synchronous transaction ends.
+   const roomDone=withCurrentAuditUnits(store,p.roomId,reader=>{
+    if(!reader.head)fail();
+    while(units<128){
+     if(p.stage==='work'){
+      const scalar=db.prepare("SELECT rowid,length(CAST(record_key AS BLOB)) bytes FROM current_room_record_proofs WHERE room_id=? AND domain='workItems' AND present=1 AND record_key>? ORDER BY record_key LIMIT 1").get(p.roomId,p.workAfter);
+      if(!scalar){
+       if(p.workCount!==reader.head.counts.workItems||p.workCount!==reader.head.counts.workCapacity||p.workCount!==p.workReferenceRecords||p.workCount!==p.workSummaryRecords||p.workCount!==p.workCapacityRecords)fail();
+       p.stage='request_links';continue;
+      }
+      if(scalar.bytes<1||scalar.bytes>200)fail();const id=db.prepare('SELECT record_key FROM current_room_record_proofs WHERE rowid=?').get(scalar.rowid).record_key;
+      const sizes=db.prepare("SELECT r.payload_bytes,(SELECT length(CAST(a.counts_json AS BLOB)) FROM operator_actions a WHERE a.id=p.receipt_id AND a.action='current_room_transition') receipt_bytes FROM current_room_record_proofs p LEFT JOIN current_room_records r ON r.room_id=p.room_id AND r.domain=p.domain AND r.record_key=p.record_key WHERE p.room_id=? AND p.record_key=? AND p.domain IN ('workItems','workSummary','workCapacity','workPrivacy') LIMIT 4").all(p.roomId,id);
+      const body=db.prepare('SELECT length(CAST(body AS BLOB)) bytes FROM work_entities WHERE room_id=? AND work_id=?').get(p.roomId,id);
+      const estimate=(body?.bytes??0)+sizes.reduce((sum,row)=>sum+(row.payload_bytes??0)+(row.receipt_bytes??0)+1024,0);
+      if(!Number.isSafeInteger(estimate)||estimate<0)fail();if(units&&bytes+estimate>4*1024*1024)return false;
+      const ref=reader.record('workItems',id),item=reader.work(id,ref),summary=reader.record('workSummary',id),capacity=reader.record('workCapacity',id),privacy=reader.record('workPrivacy',id);
+      if(privacy===undefined||!isDeepStrictEqual(summary,currentWorkSummary(item,ref))||!isDeepStrictEqual(capacity,currentWorkCapacity(item)))fail();
+      scratch.put('actual',p.roomId,'workBody',id,item);p.workAfter=id;p.workCount++;p.units++;p.bytes+=estimate;units++;bytes+=estimate;continue;
+     }
+     if(p.stage==='request_links'){
+      const scalar=db.prepare("SELECT rowid,length(CAST(record_key AS BLOB)) bytes FROM current_room_record_proofs WHERE room_id=? AND domain='replyRequests' AND present=1 AND record_key>? ORDER BY record_key LIMIT 1").get(p.roomId,p.requestAfter);
+      if(!scalar){p.stage='privacy';continue;}
+      if(scalar.bytes<1||scalar.bytes>200)fail();const id=db.prepare('SELECT record_key FROM current_room_record_proofs WHERE rowid=?').get(scalar.rowid).record_key;
+      let estimate=recordInputBytes(db,p.roomId,'replyRequests',id);if(units&&bytes+estimate>4*1024*1024)return false;
+      const request=reader.record('replyRequests',id);
+      if(typeof request?.workItemId==='string'&&request.workItemId){const key=workRequestKey(request.workItemId,id);estimate+=recordInputBytes(db,p.roomId,'workRequest',key);if(units&&bytes+estimate>4*1024*1024)return false;const expected=workRequestValue(request.workItemId,id),link=reader.record('workRequest',key);if(!isDeepStrictEqual(link,expected))fail();p.requestLinks++;}
+      p.requestAfter=id;p.units++;p.bytes+=estimate;units++;bytes+=estimate;continue;
+     }
+     if(p.stage==='privacy'){
+      if(p.privacyWork===null){
+       const scalar=db.prepare("SELECT rowid,length(CAST(record_key AS BLOB)) bytes FROM current_room_record_proofs WHERE room_id=? AND domain='workPrivacy' AND present=1 AND record_key>? ORDER BY record_key LIMIT 1").get(p.roomId,p.privacyAfter);
+       if(!scalar){if(p.privacyEntries!==p.workPrivacyRecords||p.privacyLinks!==p.workRequestRecords||p.requestLinks!==p.workRequestRecords)fail();p.rooms++;p.roomAfter=p.roomId;p.roomId=null;p.stage='rooms';return true;}
+       if(scalar.bytes<1||scalar.bytes>200)fail();p.privacyWork=db.prepare('SELECT record_key FROM current_room_record_proofs WHERE rowid=?').get(scalar.rowid).record_key;p.privacyLinkAfter='';p.privacyValue=emptyWorkPrivacy();
+      }
+      const prefix=workRequestPrefix(p.privacyWork),after=p.privacyLinkAfter||prefix,scalar=db.prepare("SELECT rowid,length(CAST(record_key AS BLOB)) bytes FROM current_room_record_proofs WHERE room_id=? AND domain='workRequest' AND present=1 AND record_key>? AND record_key<? ORDER BY record_key LIMIT 1").get(p.roomId,after,prefix+'g');
+      if(!scalar){
+       const estimate=recordInputBytes(db,p.roomId,'workPrivacy',p.privacyWork)+recordInputBytes(db,p.roomId,'workItems',p.privacyWork)+Buffer.byteLength(JSON.stringify(p.privacyValue));if(units&&bytes+estimate>4*1024*1024)return false;
+       const actual=reader.record('workPrivacy',p.privacyWork),ref=reader.record('workItems',p.privacyWork);
+       if(!isDeepStrictEqual(actual,p.privacyValue)||!ref&&p.privacyValue.requests===0)fail();
+       scratch.put('actual',p.roomId,'expectedWorkPrivacy',p.privacyWork,p.privacyValue);p.privacyEntries++;p.privacyAfter=p.privacyWork;p.privacyWork=null;p.privacyLinkAfter='';p.privacyValue=null;p.units++;p.bytes+=estimate;units++;bytes+=estimate;continue;
+      }
+      if(scalar.bytes<1||scalar.bytes>200)fail();const key=db.prepare('SELECT record_key FROM current_room_record_proofs WHERE rowid=?').get(scalar.rowid).record_key;let estimate=recordInputBytes(db,p.roomId,'workRequest',key);if(units&&bytes+estimate>4*1024*1024)return false;const link=reader.record('workRequest',key);
+      if(!link||link.workItemId!==p.privacyWork||key!==workRequestKey(link.workItemId,link.requestId)||!isDeepStrictEqual(link,workRequestValue(link.workItemId,link.requestId)))fail();
+      estimate+=recordInputBytes(db,p.roomId,'replyRequests',link.requestId)+2*Buffer.byteLength(JSON.stringify(p.privacyValue))+2048;if(units&&bytes+estimate>4*1024*1024)return false;
+      const request=reader.record('replyRequests',link.requestId);if(request?.workItemId!==p.privacyWork)fail();
+      const value=applyWorkPrivacyRequest(p.privacyValue,request,1);if(Buffer.byteLength(JSON.stringify(value))>RESTORE_AUDIT_UNIT_BYTES)fail();
+      p.privacyValue=value;p.privacyLinkAfter=key;p.privacyLinks++;p.units++;p.bytes+=estimate;units++;bytes+=estimate;continue;
+     }
+     const table=p.stage==='proofs'?'current_room_record_proofs':'current_room_records';
+     const scalar=db.prepare(`SELECT rowid,length(CAST(domain AS BLOB)) domain_bytes,length(CAST(record_key AS BLOB)) key_bytes FROM ${table} WHERE room_id=? AND (domain,record_key)>(?,?) ORDER BY domain,record_key LIMIT 1`).get(p.roomId,p.domainAfter,p.keyAfter);
+     if(!scalar){
+      if(p.stage==='proofs'){
+       if(p.proofs!==reader.head.counts.metadataProofs||p.records!==reader.head.counts.metadataRecords)fail();p.stage='records';p.domainAfter='';p.keyAfter='';continue;
+      }
+      if(p.actualRecords!==p.records)fail();p.stage='work';continue;
+     }
+     if(scalar.domain_bytes<1||scalar.domain_bytes>64||scalar.key_bytes<1||scalar.key_bytes>200)fail();
+     const identity=db.prepare(`SELECT domain,record_key FROM ${table} WHERE rowid=?`).get(scalar.rowid);
+     const size=db.prepare(`SELECT p.present,r.payload_bytes,(SELECT length(CAST(a.counts_json AS BLOB)) FROM operator_actions a WHERE a.id=p.receipt_id AND a.action='current_room_transition') receipt_bytes
+       FROM current_room_record_proofs p LEFT JOIN current_room_records r ON r.room_id=p.room_id AND r.domain=p.domain AND r.record_key=p.record_key WHERE p.room_id=? AND p.domain=? AND p.record_key=?`).get(p.roomId,identity.domain,identity.record_key);
+     const estimate=(size?.payload_bytes??0)+(size?.receipt_bytes??0)+1024;
+     if(!Number.isSafeInteger(estimate)||estimate<0)fail();if(units&&bytes+estimate>4*1024*1024)return false;
+     const value=reader.record(identity.domain,identity.record_key);
+     if(p.stage==='proofs'){
+      p.proofs++;if(size.present===1){p.records++;if(identity.domain==='workItems')p.workReferenceRecords++;if(identity.domain==='workSummary')p.workSummaryRecords++;if(identity.domain==='workCapacity')p.workCapacityRecords++;if(identity.domain==='workPrivacy')p.workPrivacyRecords++;if(identity.domain==='workRequest')p.workRequestRecords++;scratch.put('actual',p.roomId,identity.domain,identity.record_key,value);}
+     }else {if(value===undefined||size?.present!==1)fail();p.actualRecords++;}
+     p.domainAfter=identity.domain;p.keyAfter=identity.record_key;p.units++;p.bytes+=estimate;units++;bytes+=estimate;
+    }
+    return false;
+   });
+   if(!roomDone)break;
+  }
+  return p;
+ });
+}

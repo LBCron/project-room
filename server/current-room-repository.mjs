@@ -593,21 +593,51 @@ export function currentConversationRows(store,roomId,{viewerId,limit,before,befo
   return {rows,continuation:!complete?last:null,examined,complete};
 }
 
+const auditDerivedDomains=Object.freeze(['workPrivacy','workRequest','workSummary','workCapacity','messageWitness','archiveRetained','threadParticipants','historyFloors','historyExclusions']);
+function currentAuditFieldKind(domain,key,value) {
+ if(domain==='shape'){if(!maps.has(key)||value!=='object')corrupt('invalid recovered map shape');return 'shape';}
+ if(domain==='metadata'){if(omitted.has(key)||maps.has(key)&&value!==null&&typeof value==='object'&&!Array.isArray(value))corrupt('competing recovered state');return 'metadata';}
+ if(maps.has(domain))return 'map';
+ if(auditDerivedDomains.includes(domain))return 'derived';
+ corrupt('unknown recovered metadata domain');
+}
+function readCurrentAuditWorkBody(db,roomId,id,ref) {
+ const scalar=db.prepare('SELECT length(CAST(body AS BLOB)) AS bytes FROM work_entities WHERE room_id=? AND work_id=?').get(roomId,id);
+ if(!scalar||scalar.bytes>MAX_RECORD)corrupt('recovered work payload missing/oversized');
+ const row=db.prepare('SELECT revision,digest,body FROM work_entities WHERE room_id=? AND work_id=?').get(roomId,id);
+ if(ref._workEntity!==1||ref.id!==id||ref.revision!==row.revision||ref.digest!==row.digest||hash(row.body)!==ref.digest)corrupt('recovered work reference changed');
+ const item=JSON.parse(row.body);if(item.id!==id||item.revision!==ref.revision)corrupt('recovered work identity changed');return item;
+}
+
+// Shared independent census leaf reads. One factory lives only inside the
+// current synchronous transaction; no reconstructed source state is trusted.
+export function withCurrentAuditUnits(store,roomId,operation) {
+  const db=store.db;
+  if(!db.isTransaction)throw Error('Current room census requires a consistent recovery transaction');
+  const head=readCurrentHead(db,roomId),auditReceipts=new Map();
+  if(head)assertLegacyWorkReconciled(db,roomId);
+  let active=true;
+  const assertActive=()=>{if(!active||!db.isTransaction)throw Error('Current audit unit scope expired');};
+  const unitBudget=()=>{assertActive();return {...budget(),schemaVerified:true,auditReceipts};};
+  try {const result=operation({head,record:(domain,key)=>{const value=readCurrentRecord(db,roomId,domain,key,unitBudget());if(value!==undefined)currentAuditFieldKind(domain,key,value);return value;},
+    work:(id,ref)=>{assertActive();return readCurrentAuditWorkBody(db,roomId,id,ref);},message:id=>readCurrentMessage(db,roomId,id,unitBudget())});if(result?.then)throw Error('Current census must remain synchronous');return result;}
+  finally {active=false;auditReceipts.clear();}
+}
+
 // Explicit independent recovery census. This full scan is deliberately absent
 // from serving admission, command contexts and conversation pagination.
 export function readCurrentRoomForAudit(store,roomId) {
   const db=store.db;
   if(!db.isTransaction)throw Error('Current room census requires a consistent recovery transaction');
-  const head=readCurrentHead(db,roomId);if(!head)return null;
-  assertLegacyWorkReconciled(db,roomId);
-  const state=emptyRoomState(),refs=new Map(),participants=new Map(),floors=new Map(),exclusions=new Map(),messageWitnesses=new Map(),workSummaries=new Map(),workCapacities=new Map(),workPrivacy=new Map(),workRequests=new Map(),archiveRetained=new Map(),canonicalMessages=[];let proofs=0,records=0;
-  const auditReceipts=new Map();
-  const unitBudget=()=>({...budget(),schemaVerified:true,auditReceipts});
+  return withCurrentAuditUnits(store,roomId,units=>{
+  const head=units.head;if(!head)return null;
+  const state=emptyRoomState(),refs=new Map(),derived=new Map(auditDerivedDomains.map(domain=>[domain,new Map()])),canonicalMessages=[];let proofs=0,records=0;
+  const {threadParticipants:participants,historyFloors:floors,historyExclusions:exclusions,messageWitness:messageWitnesses,workSummary:workSummaries,workCapacity:workCapacities,workPrivacy,workRequest:workRequests,archiveRetained}=Object.fromEntries(derived);
   for(const scalar of db.prepare(`SELECT rowid,length(CAST(domain AS BLOB)) AS domain_bytes,
     length(CAST(record_key AS BLOB)) AS key_bytes FROM current_room_record_proofs WHERE room_id=? ORDER BY domain,record_key`).iterate(roomId)) {
     if(scalar.domain_bytes<1||scalar.domain_bytes>64||scalar.key_bytes<1||scalar.key_bytes>200)corrupt('invalid recovery membership identity');
     const proof=db.prepare('SELECT domain,record_key,present FROM current_room_record_proofs WHERE rowid=?').get(scalar.rowid);
-    const value=readCurrentRecord(db,roomId,proof.domain,proof.record_key,unitBudget());proofs++;
+    const value=units.record(proof.domain,proof.record_key);proofs++;
     if(!proof.present)continue;records++;
     const key=proof.record_key;
     if(proof.domain==='shape') {
@@ -618,25 +648,13 @@ export function readCurrentRoomForAudit(store,roomId) {
     } else if(maps.has(proof.domain)) {
       if(proof.domain==='workItems')refs.set(key,value);
       else Object.defineProperty(state[proof.domain]??={},key,{value,enumerable:true,writable:true,configurable:true});
-    } else if(proof.domain==='workPrivacy')workPrivacy.set(key,value);
-    else if(proof.domain==='workRequest')workRequests.set(key,value);
-    else if(proof.domain==='workSummary')workSummaries.set(key,value);
-    else if(proof.domain==='workCapacity')workCapacities.set(key,value);
-    else if(proof.domain==='messageWitness')messageWitnesses.set(key,value);
-    else if(proof.domain==='archiveRetained')archiveRetained.set(key,value);
-    else if(proof.domain==='threadParticipants')participants.set(key,value);
-    else if(proof.domain==='historyFloors')floors.set(key,value);
-    else if(proof.domain==='historyExclusions')exclusions.set(key,value);
+    } else if(derived.has(proof.domain))derived.get(proof.domain).set(key,value);
     else corrupt('unknown recovered metadata domain');
   }
   const actualRecords=db.prepare('SELECT count(*) AS count FROM current_room_records WHERE room_id=?').get(roomId).count;
   if(proofs!==head.counts.metadataProofs||records!==head.counts.metadataRecords||actualRecords!==records)corrupt('complete metadata census differs');
   for(const [id,ref] of refs) {
-    const scalar=db.prepare('SELECT length(CAST(body AS BLOB)) AS bytes FROM work_entities WHERE room_id=? AND work_id=?').get(roomId,id);
-    if(!scalar||scalar.bytes>MAX_RECORD)corrupt('recovered work payload missing/oversized');
-    const row=db.prepare('SELECT revision,digest,body FROM work_entities WHERE room_id=? AND work_id=?').get(roomId,id);
-    if(ref._workEntity!==1||ref.id!==id||ref.revision!==row.revision||ref.digest!==row.digest||hash(row.body)!==ref.digest)corrupt('recovered work reference changed');
-    const item=JSON.parse(row.body);if(item.id!==id||item.revision!==ref.revision)corrupt('recovered work identity changed');
+    const item=units.work(id,ref);
     Object.defineProperty(state.workItems,id,{value:item,enumerable:true,writable:true,configurable:true});
   }
   const expectedPrivacy=deriveWorkPrivacy(state);
@@ -646,7 +664,7 @@ export function readCurrentRoomForAudit(store,roomId) {
   for(const scalar of db.prepare('SELECT rowid,length(CAST(message_id AS BLOB)) AS bytes FROM messages WHERE room_id=? ORDER BY seq,message_id').iterate(roomId)) {
     if(scalar.bytes<1||scalar.bytes>200)corrupt('invalid recovered message identity');
     const {message_id:id}=db.prepare('SELECT message_id FROM messages WHERE rowid=?').get(scalar.rowid);
-    const source=readCurrentMessage(db,roomId,id,unitBudget());canonicalMessages.push(source.value);
+    const source=units.message(id);canonicalMessages.push(source.value);
     if(archiveRetains(state.messagesArchive,source.row.seq,archiveRetained.get(id)))state.messages.push(source.value);
   }
   if(messageWitnesses.size!==head.counts.messages||canonicalMessages.length!==head.counts.messages||state.messages.length+(state.messagesArchive?.count??0)!==head.counts.messages||Object.keys(state.workItems).length!==head.counts.workItems
@@ -671,6 +689,7 @@ export function readCurrentRoomForAudit(store,roomId) {
   if(floors.size!==head.counts.historyFloors||exclusions.size!==head.counts.historyExclusions
     ||!isDeepStrictEqual(floors,expectedFloors)||!isDeepStrictEqual(exclusions,expectedExclusions))corrupt('complete history floor/exclusion census differs');
   return {sequence:head.sequence,state};
+  });
 }
 
 export function withCurrentReadContext(db,roomId,operation,{maxRecords=200}={}) {

@@ -62,6 +62,7 @@ function liveCodes() {
 // against the live definitions. If one of these definitions changes, this
 // test's list must change too, which is the point.
 const VARIABLE_CODES = new Map([
+  ["bounties_paused", /BOUNTIES_PAUSED_CODE = "bounties_paused"/],
   ["trust_off", /TRUST_OFF_CODE = "trust_off"/],                    // src/events.js
   ["rate_limited", /limitCode = "rate_limited"/],                    // server/agent-identities.mjs default
   ["invalid_signing_input", /"invalid_signing_input"/],              // agent-plugin-routes signingCode
@@ -134,7 +135,7 @@ test("variable-passed codes resolve to live definitions and are catalogued", () 
   const pluginRoutes = readFileSync(join(SERVER, "agent-plugin-routes.mjs"), "utf8");
   const passwordAuth = readFileSync(join(ROOT, "src/password-auth.mjs"), "utf8");
   const outsideAgents = readFileSync(join(ROOT, "src/outside-agents.mjs"), "utf8");
-  const sources = { "src/events.js": events, "server/agent-identities.mjs": identities, "server/agent-plugin-routes.mjs": pluginRoutes, "src/password-auth.mjs": passwordAuth, "src/outside-agents.mjs": outsideAgents };
+  const sources = { "server/bounty-flag.mjs": readFileSync(join(SERVER, "bounty-flag.mjs"), "utf8"), "src/events.js": events, "server/agent-identities.mjs": identities, "server/agent-plugin-routes.mjs": pluginRoutes, "src/password-auth.mjs": passwordAuth, "src/outside-agents.mjs": outsideAgents };
   for (const [code, pattern] of VARIABLE_CODES) {
     const found = Object.values(sources).some(t => pattern.test(t));
     assert.ok(found, `variable-passed code '${code}' no longer resolves to a live definition`);
@@ -334,6 +335,11 @@ const REGISTRY_FIXTURES = [
       assert.match(ax.hint, /SHA-256/);
       assert.match(nextTextOf(ax), /agent-invites\/redeem/);
     }],
+  ...["invalid_work_page", "invalid_work_cursor", "stale_work_cursor"].map(code => [code, { httpStatus: ERROR_REGISTRY[code].catalog.http }, ax => {
+    assert.equal(ax.reason, code);
+    assert.equal(ax.status, "action_required");
+    assert.match(nextTextOf(ax), /room_list_work.*without cursor/);
+  }]),
   // MGMT-PANEL Slice 2: operator-purge codes are registry-born here.
   ...["money_bearing_room", "export_required", "room_not_archived", "confirmation_mismatch"].map(code => [code, { httpStatus: ERROR_REGISTRY[code].catalog.http }, ax => {
     assert.equal(ax.reason, code);
@@ -347,8 +353,8 @@ test("registry-migrated codes: shipped envelope equals the registry resolution (
   assert.ok(ERROR_REGISTRY && typeof ERROR_REGISTRY === "object", "ERROR_REGISTRY must be exported from src/agent-error.mjs");
   assert.ok(typeof errorRegistryAx === "function", "errorRegistryAx must be exported from src/agent-error.mjs");
   const migrated = Object.keys(ERROR_REGISTRY);
-  assert.deepEqual(migrated.sort(), ["agent_not_registered", "archive_not_ready", "confirmation_mismatch", "dry_run_required", "export_required", "guest_invite_account_session_required", "guest_scope_denied", "invalid_archive_request", "invalid_keep_newest", "invalid_room_id", "invalid_wake_poll", "money_bearing_room", "proof_required",
-    "public_work_already_submitted", "public_work_claim_conflict", "public_work_claim_limit", "public_work_deadline_passed", "public_work_renewal_limit", "read_only", "reason_required", "referral_invites_parked", "room_not_archived", "stale_card", "stale_public_claim", "stale_public_work"],
+  assert.deepEqual(migrated.sort(), ["agent_not_registered", "archive_not_ready", "confirmation_mismatch", "dry_run_required", "export_required", "guest_invite_account_session_required", "guest_scope_denied", "invalid_archive_request", "invalid_keep_newest", "invalid_room_id", "invalid_wake_poll", "invalid_work_cursor", "invalid_work_page", "money_bearing_room", "proof_required",
+    "public_work_already_submitted", "public_work_claim_conflict", "public_work_claim_limit", "public_work_deadline_passed", "public_work_renewal_limit", "read_only", "reason_required", "referral_invites_parked", "room_not_archived", "stale_card", "stale_public_claim", "stale_public_work", "stale_work_cursor"],
     "the migrated set is the joining-path set; growing it is a deliberate edit here too (MGMT-PANEL Slice 2 added the four operator-purge codes)");
   for (const [code, ctx, check] of REGISTRY_FIXTURES) {
     const shipped = agentErrorAx({ code, ...ctx });

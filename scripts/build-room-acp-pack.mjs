@@ -9,7 +9,7 @@ import { fileURLToPath, pathToFileURL } from 'node:url';
 export const roomAcpInputs = Object.freeze(['package.json', 'README.md',
   ...['agent-host', 'agents', 'args', 'bridge', 'cli', 'credentials', 'join',
     'jsonrpc', 'link', 'permission', 'prompt', 'queue', 'redact', 'render',
-    'room', 'run', 'sessions'].map(name => `src/${name}.mjs`)]);
+    'room', 'run', 'sessions', 'private-state'].map(name => `src/${name}.mjs`)]);
 
 export function buildRoomAcpPack(root) {
   const out = mkdtempSync(join(tmpdir(), 'room-acp-pack-'));

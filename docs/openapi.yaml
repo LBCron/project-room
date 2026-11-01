@@ -9359,8 +9359,11 @@ paths:
     get:
       summary: Liveness
       description: >-
-        Open (also HEAD). Returns `{ status: "ok", mode, emailVerification }`;
-        operational metadata only. `emailVerification` is `enforced` when a
+        Open (also HEAD). HTTP 200 reports liveness. Node returns `status: ok`;
+        Worker adds `liveness: ok` and `jobs.status`, with `status: degraded`
+        when its bounded job-health probe is unhealthy, unknown, or times out.
+        Use `/api/health/jobs` for job details and `/api/ready` for storage readiness.
+        `emailVerification` is `enforced` when a
         magic-link mailer is configured, or `relaxed-no-mailer` when it is not
         and the email-verification gates follow the agent-invites escape hatch.
         Worker liveness adds `emailVerificationScope: worker`: this describes
@@ -9368,7 +9371,7 @@ paths:
         bound Durable Object. Use `/api/ready` for the authority policy.
       security: []
       responses:
-        '200': { description: "{ status: ok, mode, emailVerification: enforced | relaxed-no-mailer }" }
+        '200': { description: "Liveness; Worker status ok or degraded, liveness ok, jobs.status; Node status ok" }
     head:
       summary: Read public response headers
       description: Uses the same public GET policy and status with no response body.
@@ -9386,7 +9389,7 @@ paths:
         Public Host aliases are served identically.
       security: []
       responses:
-        '200': { description: "{ status: ok, mode, emailVerification: enforced | relaxed-no-mailer }" }
+        '200': { description: "Liveness; same payload and bounded job-health classification as /api/health" }
     head:
       summary: Read public response headers
       description: Uses the same public GET policy and status with no response body.
@@ -9524,13 +9527,19 @@ paths:
         Other methods are 405.
       security:
         - bearerAuth: []
+      parameters:
+        - in: query
+          name: sourceSchemaVersion
+          required: false
+          schema: { type: integer, enum: [42, 43] }
+          description: Explicit legacy source attestation for an old unmarked export. Conflicting/current export markers are refused; historical verification is unchanged.
       requestBody:
         required: true
         content:
           application/x-ndjson:
             schema: { type: string }
       responses:
-        '200': { description: "{ ok, verified, events, ... } restore summary" }
+        '200': { description: "{ ok, verified, events, writeProofs, ... } restore summary; writeProofs reports prospective metadata adoption and unchanged historical verification" }
         '400': { description: Body could not be read }
         '401': { description: Wrong operator token }
         '404': { description: Restore is not configured }
@@ -9563,6 +9572,12 @@ paths:
         Other methods are 405.
       security:
         - bearerAuth: []
+      parameters:
+        - in: query
+          name: sourceSchemaVersion
+          required: false
+          schema: { type: integer, enum: [42, 43] }
+          description: Explicit legacy source attestation for an old unmarked export. Conflicting/current export markers are refused; historical verification is unchanged.
       requestBody:
         required: false
         content:
@@ -9571,8 +9586,12 @@ paths:
               type: object
               properties:
                 key: { type: string }
+                sourceSchemaVersion:
+                  type: integer
+                  enum: [42, 43]
+                  description: Legacy source attestation, used when the query parameter is absent.
       responses:
-        '200': { description: "{ ok, verified, events, ... } restore summary" }
+        '200': { description: "{ ok, verified, events, writeProofs, ... } restore summary; writeProofs reports prospective metadata adoption and unchanged historical verification" }
         '400': { description: Body could not be read }
         '401': { description: Wrong operator token }
         '404': { description: Restore is not configured, or no backup under that key }
@@ -9614,14 +9633,15 @@ paths:
       summary: Readiness
       description: >-
         Open (also HEAD). On the Worker, 200 `{ status: ready, mode, do }`
-        only when invite-only-pilot answers `SELECT 1` within one second;
+        only when invite-only-pilot answers `SELECT 1` within the 2.5-second probe budget;
         otherwise 503 `{ status: degraded, do }` (`do.status` is `timeout` or
         `error`). The Node process answers 200 `{ status: ready }` when its
         store answers and 503 `{ status: unavailable }` when storage is down.
         Worker readiness also reports the bound authority's `emailVerification`
         and `emailVerificationScope: durable-object` when that authority supports
         policy reporting. Missing policy is unknown, never proof of enforcement.
-        `/api/health` stays Worker and Node liveness and does not run this probe.
+        `/api/health` retains HTTP liveness semantics; its Worker job-health probe
+        is separate from this storage-readiness probe.
       security: []
       responses:
         '200': { description: "{ status: ready }" }

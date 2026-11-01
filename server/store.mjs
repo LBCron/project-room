@@ -1,3 +1,4 @@
+import { bootstrapLegacyWriteProofs, configureWriteIntegrity, beginWriteProofFrame, endWriteProofFrame, publishProjectionWrites, projectionDigest, projectionContentHash, servingContentProof, servingProofDrift, assertProjectionWrite, assertMessageWrite, recordMessageWrite, withVerifiedRoomReconstruction } from './write-integrity.mjs';
 const OPERATOR_QA_ARCHIVE = Symbol("operator QA room archive");
 import { authenticateMcpOAuthRequest } from './mcp-oauth.mjs';
 import { assertListenerFence } from "./listener-fence.mjs";
@@ -56,7 +57,8 @@ import { STORE_SCHEMA_VERSION, fenceDefinitions, registerWriter, installWriterFe
 import { WANTS_WORK_SCHEMA } from "./work-wants.mjs"; // BOARD-WAKE-2
 import { CODE_DROPS_SCHEMA, CodeDrops } from "./code-drops.mjs"; // room-native patch exchange
 import { PROJECTION_BODIES_SCHEMA, storedProjection, hydrateProjection } from "./projection-at-rest.mjs"; // Phase 1a
-import { MESSAGES_SCHEMA, MESSAGES_BACKFILL_CURSOR_SCHEMA, MESSAGES_BACKFILL_BLOCKS_SCHEMA, archivedMessageRow, archiveMarker, archivedMatchingRecords, archivedThreadRecords, archiveRoomMessages, restoreArchivedMessages, runMessagesBackfill, checkMessagesParity as verifyMessagesParity, runMessagesParityCheck, messagesBackfillCaughtUp } from "./messages-store.mjs";
+import { MESSAGES_SCHEMA, MESSAGES_BACKFILL_CURSOR_SCHEMA, MESSAGES_BACKFILL_BLOCKS_SCHEMA, archivedMessageRow, archiveMarker, archivedMatchingRecords, archivedThreadRecords, archiveRoomMessages, restoreArchivedMessages, runMessagesBackfill, checkMessagesParity as verifyMessagesParity, runMessagesParityCheck, messagesBackfillCaughtUp, resyncRoomMessageRows, syncMessageRows } from "./messages-store.mjs";
+import { hasMessageAuthority, canonicalMessageEditContext } from './message-authority.mjs';
 import { runLegacyMessageShapeUpgrade } from "./legacy-message-shape.mjs";
 import { commitMessageRedaction } from "./message-redaction.mjs";
 import { runPatrolTick, patrolFindings as listPatrolFindings, patrolBlocks as listPatrolBlocks } from "./patrol.mjs";
@@ -77,7 +79,7 @@ import { roomAssistantSchema } from "./room-assistant.mjs";
 import { RequestRuns, requestRunSchema } from "./request-runs.mjs";
 import { WakeQueue, wakeQueueSchema, wakeQueuePauseSchema, wakeQueuePauseBySchema } from "./wake-queue.mjs";
 import { Attention, attentionSchema } from "./attention.mjs";
-import { createDurableWorkClaimRegistry, workClaimSchema } from "./work-claim-sqlite.mjs";
+import { createDurableWorkClaimRegistry, workClaimSchema, workClaimInboxIndexSchema } from "./work-claim-sqlite.mjs";
 import { validSourceObservation } from "../src/work-packet.js";
 import { PUBLIC_READ_MODEL_SCHEMA, ensurePublicReceiptVerificationColumn, ensurePublicReceiptAgentIdsColumn, noteWorkClaimChange, syncRoomPublication } from "./public-read-model.mjs";
 import { NextActions, nextActionsSchema } from "./next-actions.mjs"; // RC-2026-09-25-911: ranked per-agent next actions.
@@ -1173,7 +1175,7 @@ function roomSchemaStamp() {
     shareLinkSchema, shareLinkCodeSchema, shareLinkAccessSchema, reminderSchema, agentConnectionSchema,
     inboxSchema, inboxReadSchema, emailImportSchema, wakeQueueSchema, wakeQueuePauseSchema,
     wakeQueuePauseBySchema,
-    attentionSchema, workClaimSchema, nextActionsSchema, agentHeartbeatSchema, workWakeSchema,
+    attentionSchema, workClaimSchema, workClaimInboxIndexSchema, nextActionsSchema, agentHeartbeatSchema, workWakeSchema,
     landQueueSchema, inboxAttachmentBytesSchema, membersDirectorySchema, channelJournalSchema,
     telegramLiveStatusSchema, spamQuarantineSchema, jevShadowSchema, dmConsentSchema, bondSchema,
     roomPublicFaceSchema, agentPublicPageSchema, roomDirectorySchema, guestInviteSchema, guestSelfServeSchema, guestInviteAuthoritySchema,
@@ -1187,7 +1189,7 @@ function roomSchemaStamp() {
     ownerDelegateSchema, agentRoomSchema, oauthPendingSchema, gmailSchema, requestRunSchema, roomAssistantSchema,
     directSendSchema, inboxStitchSchema, RETIRED_BOARD_V2_SCHEMA,
     agentKeyRegistrySchema, INTEGRITY_SNAPSHOT_SCHEMA, OPERATOR_ACTIONS_SCHEMA,
-    INTEGRITY_JOB_CURSOR_SCHEMA, INTEGRITY_ROOM_STATE_SCHEMA, INTEGRITY_SWEEP_COLUMN,
+    INTEGRITY_JOB_CURSOR_SCHEMA, INTEGRITY_ROOM_STATE_SCHEMA, INTEGRITY_SWEEP_COLUMN, INTEGRITY_ROOM_HASH_COLUMN, INTEGRITY_METADATA_HASH_COLUMN, INTEGRITY_SNAPSHOT_WATERMARK_COLUMN,
     ROOM_SCHEMA_STAMP_SCHEMA, LOOKUP_INDEXES, MESSAGES_SCHEMA, MESSAGE_REPLAY_SNAPSHOT_SCHEMA, MESSAGES_BACKFILL_CURSOR_SCHEMA, MESSAGES_BACKFILL_BLOCKS_SCHEMA, WANTS_WORK_SCHEMA, CODE_DROPS_SCHEMA, PROJECTION_BODIES_SCHEMA, WORK_REPOSITORY_SCHEMA,
     PUBLIC_READ_MODEL_SCHEMA,
     // Additive tables converged outside the version bump. A warm wake whose
@@ -1235,6 +1237,47 @@ export const INTEGRITY_FAILURES_SCHEMA = `CREATE TABLE IF NOT EXISTS integrity_f
 )`;
 const INTEGRITY_SWEEP_COLUMN = "ALTER TABLE integrity_job_cursor ADD COLUMN sweep_after TEXT NOT NULL DEFAULT ''";
 const INTEGRITY_DEFERRED_SKIPS_COLUMN = "ALTER TABLE integrity_job_cursor ADD COLUMN deferred_skips INTEGER NOT NULL DEFAULT 0";
+const INTEGRITY_METADATA_HASH_COLUMN = "ALTER TABLE integrity_room_state ADD COLUMN metadata_hash TEXT";
+const INTEGRITY_ROOM_HASH_COLUMN = "ALTER TABLE integrity_room_state ADD COLUMN projection_hash TEXT";
+// Retain #5506's snapshot column for compatibility and diagnostics only.
+// MAX(rowid) can decrease after purge; this value never proves room newness.
+const INTEGRITY_SNAPSHOT_WATERMARK_COLUMN = "ALTER TABLE integrity_snapshot ADD COLUMN covered_event_rowid INTEGER";
+// L05-C1: the integrity checksum covers projection CONTENT. A room's
+// content hash binds its id, its sequence and the exact stored projection
+// bytes; the snapshot's digest is a hash over the per-room hashes in id
+// order, so the incremental path can rebuild it from the state table when
+// individual rooms move, and any same-length in-place mutation of a
+// projection changes the digest even though every count and byte length
+// is unchanged. Hashing runs over projection strings the scan already
+// reads (the full checksum) or the single swept / sequence-changed rooms
+// (the incremental path) — no extra file or network I/O.
+function integrityContentDigest(roomHashes) {
+  const digest = createHash("sha256");
+  for (const row of roomHashes) digest.update(row.id).update("\0").update(row.hash).update("\n");
+  return digest.digest("hex");
+}
+// Snapshot text shapes: the current "v2" shape appends the content digest
+// to the six legacy counts. A pre-cure snapshot is exactly those six
+// counts and carries NO digest: it is parsed as "legacy" and never
+// trusted as a content baseline (see verifyRoomIntegrity's transition
+// rule). Anything else is "invalid" and likewise untrusted.
+function parseIntegritySnapshot(text) {
+  if (typeof text !== "string" || text === "") return null;
+  if (text.startsWith("v2:")) {
+    const parts = text.slice(3).split(":");
+    if (parts.length !== 7) return { format: "invalid", counts: null, contentHash: null, text };
+    const counts = parts.slice(0, 6).map(Number);
+    if (counts.some(part => !Number.isSafeInteger(part)) || !/^[0-9a-f]{64}$/.test(parts[6])) {
+      return { format: "invalid", counts: null, contentHash: null, text };
+    }
+    return { format: "v2", counts, contentHash: parts[6], text };
+  }
+  const parts = text.split(":").map(Number);
+  if (parts.length === 6 && parts.every(part => Number.isSafeInteger(part))) {
+    return { format: "legacy", counts: parts, contentHash: null, text };
+  }
+  return { format: "invalid", counts: null, contentHash: null, text };
+}
 // #3896: consecutive verifyRoomIntegrity calls in which the deferred
 // batch may complete zero steps before the batch is run FIRST instead.
 // Two starved ticks are tolerated (a single heavy tick is ordinary);
@@ -1613,6 +1656,8 @@ this.slaBreachAlerts = new SlaBreachAlertJournal(this); // Task 26: durable in-a
     // Those scans are the integrity job's work. An older schema still migrates
     // and repairs here; that path runs once per upgrade, not on every wake.
     const deferIntegrity = this.integrityMode === "deferred" && version === STORE_SCHEMA_VERSION;
+    configureWriteIntegrity(this.db,(id,row,proof)=>Boolean(proof?.projection_hash && proof.sequence===row.sequence
+      && projectionContentHash(this.db,id,row.sequence,row.projection)===proof.projection_hash));
     try { this.transaction(() => {
     // Reread under the write lock: another startup may have upgraded while we waited.
     if (this.storagePlatform.version(this.db) !== version) throw new Error("Database changed during startup; retry with the current service");
@@ -1685,6 +1730,16 @@ this.slaBreachAlerts = new SlaBreachAlertJournal(this); // Task 26: durable in-a
       || this.db.prepare("SELECT 1 FROM rooms,json_tree(rooms.projection) WHERE json_tree.key='externalProducer' LIMIT 1").get()
       || version >= 2 && this.db.prepare("SELECT 1 FROM projection_checkpoints,json_tree(projection_checkpoints.projection) WHERE json_tree.key='externalProducer' LIMIT 1").get()))
       throw new Error("Pre-v26 outside credit history requires operator reconciliation");
+    // Establish prospective proofs before startup repairs, in the same
+    // transaction as schema/fence changes. Refusal must roll all of it back.
+    this.db.exec(INTEGRITY_JOB_CURSOR_SCHEMA);
+    this.ensureIntegrityRoomState();
+    // A genuine older schema has no prospective write proof. Record its
+    // current metadata before the first new writer, without inventing a
+    // historical content baseline: projection_hash deliberately stays NULL.
+    // Existing strong baselines must still match; current-schema missing
+    // proofs never enter this one-time format transition.
+    if (version < 44) bootstrapLegacyWriteProofs(this.db);
     if (!deferIntegrity) this.repairProjectionProvenance({ upgradeV1: version === 1 });
     if (version === 1 || version === 2) this.migrateIdentityV3(version);
     if (version === 1 || version === 2 || version === 3) this.migrateInvitationsV4();
@@ -1832,6 +1887,7 @@ this.slaBreachAlerts = new SlaBreachAlertJournal(this); // Task 26: durable in-a
       this.db.exec(updatesSchema);
       this.workClaims.verifySchema({ allowAbsent: true });
       this.db.exec(workClaimSchema);
+      this.db.exec(workClaimInboxIndexSchema);
       this.workClaims.verifySchema();
       // RC-2026-09-18-051: wakeable agent presence — host heartbeats and the
       // wake-signal queue are purely additive as well: IF NOT EXISTS is
@@ -2106,6 +2162,9 @@ this.slaBreachAlerts = new SlaBreachAlertJournal(this); // Task 26: durable in-a
       if (!this.db.prepare("SELECT 1 FROM pragma_table_info('messages') WHERE name='reducer_extras_json'").get()) {
         this.db.exec("ALTER TABLE messages ADD COLUMN reducer_extras_json TEXT");
       }
+      if (!this.db.prepare("SELECT 1 FROM pragma_table_info('messages') WHERE name='entity_hash'").get()) {
+        this.db.exec("ALTER TABLE messages ADD COLUMN entity_hash TEXT");
+      }
       // MSG-2: replay cursor. Unfenced. The integrity cron fills it. A warm
       // wake whose stamp matches skips this block; the stamp includes this DDL.
       this.db.exec(MESSAGES_BACKFILL_CURSOR_SCHEMA);
@@ -2333,6 +2392,62 @@ this.slaBreachAlerts = new SlaBreachAlertJournal(this); // Task 26: durable in-a
   }
   checkMessagesParity(options = {}) {
     return verifyMessagesParity(this, options);
+  }
+  // Explicit maintainer migration only. No hosted flag or automatic activation.
+  // The existing parity gate establishes the source before authority changes;
+  // the same transaction publishes complete reducer history and small metadata.
+  migrateMessageAuthority(roomId, { reverse = false } = {}) {
+    if (this.readOnly) throw new Error('Read-only stores cannot migrate message authority');
+    if (typeof reverse !== 'boolean') throw new TypeError('reverse must be boolean');
+    return this.transaction(() => {
+      const room = this.room(roomId, { verifyBodyHashes: true });
+      const enabled = hasMessageAuthority(room.state);
+      // Reverse is representation change, never permission to trust changed
+      // canonical payloads. Hydration checks shape/body agreement, not the
+      // independent writer proof; validate that proof before removing authority.
+      if (enabled && reverse && servingProofDrift(this.db, roomId,
+        this.db.prepare('SELECT projection FROM rooms WHERE id=?').get(roomId).projection))
+        throw Error('projection_corrupt: reverse authority requires intact serving proofs');
+      const missingProof = enabled && (this.db.prepare('SELECT 1 FROM messages WHERE room_id=? AND entity_hash IS NULL LIMIT 1').get(roomId)
+        || !this.db.prepare('SELECT metadata_hash FROM integrity_room_state WHERE room_id=?').get(roomId)?.metadata_hash);
+      if (enabled === !reverse && (reverse || !missingProof)) return { changed: false, sequence: room.sequence };
+      if (missingProof && !reverse) {
+        const raw=this.db.prepare('SELECT sequence,projection FROM rooms WHERE id=?').get(roomId);
+        const proof=this.db.prepare('SELECT sequence,projection_hash AS hash FROM integrity_room_state WHERE room_id=?').get(roomId);
+        if (!proof?.hash || proof.sequence!==raw.sequence || projectionContentHash(this.db,roomId,raw.sequence,raw.projection)!==proof.hash)
+          throw Error('projection_corrupt: write proof migration requires a verified exact-head baseline');
+      }
+      assertProjectionWrite(this.db,roomId);
+      if (!reverse) {
+        const parity = this.checkMessagesParity({ roomId });
+        if (!parity.ok || parity.checked !== 1) throw new Error('Message authority requires exact-head parity');
+        withVerifiedRoomReconstruction(this.db,roomId,()=>{
+          resyncRoomMessageRows(this.db, roomId, room.state);
+          for(const row of this.db.prepare('SELECT message_id FROM messages WHERE room_id=?').all(roomId)) {
+            assertMessageWrite(this.db,roomId,row.message_id);
+            recordMessageWrite(this.db,roomId,row.message_id);
+          }
+        });
+      }
+      const before = this.db.prepare('SELECT sequence,projection FROM rooms WHERE id=?').get(roomId);
+      this.ensureIntegrityRoomState();
+      this.ensureIntegrityFailures();
+      const proof = this.db.prepare('SELECT sequence,projection_hash AS hash FROM integrity_room_state WHERE room_id=?').get(roomId);
+      const refreshProof = proof?.hash && proof.sequence === before.sequence
+        && projectionContentHash(this.db,roomId,before.sequence,before.projection) === proof.hash
+        && !this.db.prepare("SELECT 1 FROM integrity_failures WHERE step='projection_content' AND record_id=?").get(roomId);
+      const state = { ...room.state };
+      if (reverse) delete state.messageAuthority;
+      else state.messageAuthority = { version: 1, count: state.messages.length };
+      const projection = this.storedProjection(roomId, state);
+      this.db.prepare('UPDATE rooms SET projection=? WHERE id=?').run(projection, roomId);
+      // Read the committed format inside the same transaction, refusing missing
+      // records or a malformed marker before conversion can become visible.
+      this.room(roomId, { verifyBodyHashes: true });
+      if (refreshProof) this.db.prepare('UPDATE integrity_room_state SET projection_bytes=LENGTH(?),projection_hash=? WHERE room_id=?')
+        .run(projection,projectionContentHash(this.db,roomId,room.sequence,projection),roomId);
+      return { changed: true, sequence: room.sequence, messages: state.messages.length, projectionBytes: Buffer.byteLength(projection) };
+    });
   }
   // ClueBot phase 1: the resident per-event invariant patrol. Read-only —
   // it writes only patrol_* tables and files findings; see server/patrol.mjs.
@@ -2646,6 +2761,12 @@ this.slaBreachAlerts = new SlaBreachAlertJournal(this); // Task 26: durable in-a
     const columns = new Set(this.db.prepare("PRAGMA table_info(integrity_job_cursor)").all().map(column => column.name));
     if (!columns.has("sweep_after")) this.db.exec(INTEGRITY_SWEEP_COLUMN);
     if (!columns.has("deferred_skips")) this.db.exec(INTEGRITY_DEFERRED_SKIPS_COLUMN);
+    const roomColumns = new Set(this.db.prepare("PRAGMA table_info(integrity_room_state)").all().map(column => column.name));
+    if (!roomColumns.has("projection_hash")) this.db.exec(INTEGRITY_ROOM_HASH_COLUMN);
+    if (!roomColumns.has("metadata_hash")) this.db.exec(INTEGRITY_METADATA_HASH_COLUMN);
+    this.db.exec(INTEGRITY_SNAPSHOT_SCHEMA);
+    const snapshotColumns = new Set(this.db.prepare("PRAGMA table_info(integrity_snapshot)").all().map(column => column.name));
+    if (!snapshotColumns.has("covered_event_rowid")) this.db.exec(INTEGRITY_SNAPSHOT_WATERMARK_COLUMN);
   }
 
   // #3896: the durable streak of consecutive verifyRoomIntegrity calls
@@ -2691,58 +2812,167 @@ this.slaBreachAlerts = new SlaBreachAlertJournal(this); // Task 26: durable in-a
     return next;
   }
 
-  // Remember each room's sequence and projection size after a full check so
-  // the next tick does not read every projection again.
+  // Remember each room's sequence, projection size and content hash after
+  // a full check so the next tick does not read every projection again.
   rememberIntegrityRoomState() {
     this.ensureIntegrityRoomState();
     this.transaction(() => {
       this.db.prepare(`INSERT INTO integrity_room_state(room_id, sequence, projection_bytes)
         SELECT id, sequence, LENGTH(projection) FROM rooms WHERE 1
         ON CONFLICT(room_id) DO UPDATE SET sequence=excluded.sequence, projection_bytes=excluded.projection_bytes`).run();
+      const update = this.db.prepare("UPDATE integrity_room_state SET projection_hash=? WHERE room_id=?");
+      for (const row of this.db.prepare("SELECT id, sequence, projection FROM rooms").all()) {
+        update.run(projectionContentHash(this.db, row.id, row.sequence, row.projection), row.id);
+      }
       this.db.prepare("DELETE FROM integrity_room_state WHERE room_id NOT IN (SELECT id FROM rooms)").run();
     });
   }
 
+  // Internal owner-authorized history reconstruction, never ordinary write
+  // admission. The repair caller has replayed and checked its exact head in
+  // this transaction; refresh only this room and preserve the fleet snapshot.
+  rememberReconstructedRoomProof(roomId) {
+    if (!this.db.isTransaction) throw Error("Reconstruction proof requires its transaction");
+    const row=this.db.prepare('SELECT sequence,projection,LENGTH(projection) AS bytes FROM rooms WHERE id=?').get(roomId);
+    if (!row) throw Error("Reconstructed room is missing");
+    this.db.prepare(`INSERT INTO integrity_room_state(room_id,sequence,projection_bytes,projection_hash,metadata_hash) VALUES(?,?,?,?,?)
+      ON CONFLICT(room_id) DO UPDATE SET sequence=excluded.sequence,projection_bytes=excluded.projection_bytes,
+      projection_hash=excluded.projection_hash,metadata_hash=excluded.metadata_hash`)
+      .run(roomId,row.sequence,row.bytes,projectionContentHash(this.db,roomId,row.sequence,row.projection),projectionDigest(row.projection));
+    this.clearIntegrityFailure("projection_content",roomId);
+  }
+
+  // Retire projection_content failure records whose room once again
+  // hashes to the remembered baseline (an operator repaired the bytes),
+  // or no longer exists. A room whose stored hash still disagrees keeps
+  // its record: the failure is live, not a leftover.
+  reconcileProjectionContentFailures() {
+    const outstanding = this.integrityFailures().filter(row => row.step === "projection_content");
+    if (!outstanding.length) return;
+    this.ensureIntegrityRoomState();
+    for (const row of outstanding) {
+      const current = this.db.prepare("SELECT sequence, projection FROM rooms WHERE id=?").get(row.recordId);
+      if (!current) { this.clearIntegrityFailure("projection_content", row.recordId); continue; }
+      const stored = this.db.prepare("SELECT sequence, projection_hash AS hash,metadata_hash FROM integrity_room_state WHERE room_id=?").get(row.recordId);
+      const sameBaseline=stored?.hash && stored.sequence===current.sequence
+        && projectionContentHash(this.db,row.recordId,current.sequence,current.projection)===stored.hash;
+      // A valid edit elsewhere may have advanced the head after corruption.
+      // Canonical metadata binds membership; every payload still needs its
+      // independent proof. Never retire a lost/empty baseline or an unproved
+      // legacy reference by trusting only the surviving rows.
+      const independentlyRepaired=stored?.hash && stored.sequence!==current.sequence
+        && stored.metadata_hash===projectionDigest(current.projection)
+        && hasMessageAuthority(JSON.parse(current.projection))
+        && !servingProofDrift(this.db,row.recordId,current.projection);
+      if (sameBaseline || independentlyRepaired) this.clearIntegrityFailure("projection_content", row.recordId);
+    }
+  }
+
+  // Rooms whose stored projection no longer hashes to the remembered
+  // per-room baseline while their sequence stands still: the projection
+  // bytes were rewritten in place with no event behind them (L05-C1).
+  // Rooms with no remembered hash (state rows predating the digest) and
+  // rooms whose sequence moved (a legitimate event, import or repair
+  // path accounts for them) are not drift by this measure.
+  driftedProjectionRooms() {
+    this.ensureIntegrityRoomState();
+    return this.readTransaction(() => {
+      const stored = new Map(this.db.prepare("SELECT room_id AS id, sequence, projection_hash AS hash FROM integrity_room_state").all().map(row => [row.id, row]));
+      return this.db.prepare("SELECT id, sequence, projection FROM rooms").all()
+        .filter(row => servingProofDrift(this.db,row.id,row.projection) || stored.get(row.id)?.hash && stored.get(row.id).sequence === row.sequence
+          && projectionContentHash(this.db, row.id, row.sequence, row.projection) !== stored.get(row.id).hash)
+        .map(row => row.id);
+    });
+  }
+
   // Changed rooms, plus one room of the rolling sweep. A sequence change
-  // updates the stored checksum. Projection bytes that move without a
-  // sequence change, or a state table that does not cover every room, fall
-  // through to the full repair.
+  // updates the stored checksum. Projection bytes — or, since L05-C1, the
+  // projection CONTENT — that move without a sequence change are drift,
+  // not a new baseline: the sweep reports them as contentDrift and the
+  // caller fails verification instead of adopting them. A state table
+  // that does not cover every room, or a snapshot with no content digest,
+  // falls through to the full check.
   incrementalIntegrityCheck() {
     this.ensureIntegrityRoomState();
     return this.transaction(() => {
-      const snapshot = this.readIntegritySnapshot();
+      const snapshotText = this.readIntegritySnapshot();
+      const snapshot = parseIntegritySnapshot(snapshotText);
       const roomCount = this.db.prepare("SELECT COUNT(*) AS n FROM rooms").get().n;
       const stateCount = this.db.prepare("SELECT COUNT(*) AS n FROM integrity_room_state").get().n;
-      if (!snapshot || stateCount !== roomCount) return { ok: false };
-      const parts = snapshot.split(":").map(Number);
-      if (parts.length !== 6 || parts.some(part => !Number.isSafeInteger(part))) return { ok: false };
+      // The composition below rebuilds the snapshot text from the
+      // snapshot's own counts plus per-room deltas, so it is only sound
+      // when the snapshot covers exactly the current room set: the
+      // snapshot's room count must match the current one too, and a
+      // room the snapshot does not cover belongs to the full check.
+      if (!snapshot || snapshot.format !== "v2" || stateCount !== roomCount || snapshot.counts[0] !== roomCount) return { ok: false };
+      const parts = snapshot.counts;
       const sweepAfter = this.db.prepare("SELECT sweep_after FROM integrity_job_cursor WHERE singleton=1").get()?.sweep_after ?? "";
-      const sweepSql = "SELECT id, sequence, LENGTH(projection) AS bytes FROM rooms";
+      const sweepSql = "SELECT id, sequence, LENGTH(projection) AS bytes, projection FROM rooms";
       const sweep = this.db.prepare(`${sweepSql} WHERE id>? ORDER BY id LIMIT 1`).get(sweepAfter)
         ?? this.db.prepare(`${sweepSql} ORDER BY id LIMIT 1`).get();
-      const changed = this.db.prepare(`SELECT r.id, r.sequence, LENGTH(r.projection) AS bytes, s.sequence AS oldSequence, s.projection_bytes AS oldBytes
+      const changed = this.db.prepare(`SELECT r.id, r.sequence, LENGTH(r.projection) AS bytes, r.projection AS projection, s.sequence AS oldSequence, s.projection_bytes AS oldBytes
         FROM rooms r JOIN integrity_room_state s ON s.room_id=r.id WHERE r.sequence!=s.sequence`).all();
+      const checkedContent=new Map();
+      for (const row of changed) {
+        const content=servingContentProof(this.db,row.id,row.sequence,row.projection);
+        if(content.drift)return {ok:false,contentDrift:row.id};
+        checkedContent.set(row.id,content);
+      }
       const uncovered = this.db.prepare(`SELECT 1 FROM rooms r LEFT JOIN integrity_room_state s ON s.room_id=r.id WHERE s.room_id IS NULL
         UNION SELECT 1 FROM integrity_room_state s LEFT JOIN rooms r ON r.id=s.room_id WHERE r.id IS NULL LIMIT 1`).get();
       if (uncovered) return { ok: false };
+      // Dot review of #5506: an outstanding projection_content record is
+      // a live failure, not a leftover. Reconcile the rooms whose bytes
+      // returned to their baseline; any record that remains blocks the
+      // incremental shortcut — in particular a sequence change (an
+      // ordinary event appended over drifted bytes) must not adopt the
+      // room's new hash here and launder the failure into a match.
+      this.reconcileProjectionContentFailures();
+      const blockedDrift = this.integrityFailures().find(row => row.step === "projection_content");
+      if (blockedDrift) return { ok: false, contentDrift: blockedDrift.recordId };
+      // A remembered row with no content hash is no baseline for that
+      // room: the full check runs the explicit, uncertified transition
+      // instead of this path adopting a hash for the room in passing.
+      if (this.db.prepare("SELECT 1 FROM integrity_room_state WHERE projection_hash IS NULL LIMIT 1").get()) return { ok: false };
       if (sweep) {
-        const stored = this.db.prepare("SELECT sequence, projection_bytes AS bytes FROM integrity_room_state WHERE room_id=?").get(sweep.id);
-        if (!stored || (stored.sequence === sweep.sequence && stored.bytes !== sweep.bytes)) return { ok: false };
+        const stored = this.db.prepare("SELECT sequence, projection_bytes AS bytes, projection_hash AS hash FROM integrity_room_state WHERE room_id=?").get(sweep.id);
+        if (!stored) return { ok: false };
+        const content=checkedContent.get(sweep.id) ?? servingContentProof(this.db,sweep.id,sweep.sequence,sweep.projection);
+        if(content.drift)return {ok:false,contentDrift:sweep.id,swept:1};
+        if (stored.sequence === sweep.sequence) {
+          if (stored.bytes !== sweep.bytes) return { ok: false, contentDrift: sweep.id, swept: 1 };
+          if (!stored.hash) return { ok: false };
+          if (content.hash !== stored.hash) {
+            return { ok: false, contentDrift: sweep.id, swept: 1 };
+          }
+          // The swept room hashes clean again: a repaired room's drift
+          // record retires here instead of riding every later tick.
+          this.db.prepare("DELETE FROM integrity_failures WHERE step='projection_content' AND record_id=?").run(sweep.id);
+        }
       }
       const invitations = this.db.prepare("SELECT COUNT(*) AS invitations FROM membership_invitations").get().invitations;
       const journal = this.db.prepare("SELECT COUNT(*) AS entries, COALESCE(SUM(sequence), 0) AS sequences FROM membership_invitation_journal").get();
       if (invitations !== parts[3] || journal.entries !== parts[4] || journal.sequences !== parts[5]) return { ok: false };
       let sequences = parts[1];
       let projectionBytes = parts[2];
-      const update = this.db.prepare("UPDATE integrity_room_state SET sequence=?, projection_bytes=? WHERE room_id=?");
+      const update = this.db.prepare("UPDATE integrity_room_state SET sequence=?, projection_bytes=?, projection_hash=? WHERE room_id=?");
       for (const row of changed) {
         sequences += row.sequence - row.oldSequence;
         projectionBytes += row.bytes - row.oldBytes;
-        update.run(row.sequence, row.bytes, row.id);
+        update.run(row.sequence, row.bytes, checkedContent.get(row.id).hash, row.id);
       }
-      const text = [parts[0], sequences, projectionBytes, invitations, journal.entries, journal.sequences].join(":");
-      if (text !== snapshot) {
-        this.db.prepare("UPDATE integrity_snapshot SET checksum=?, verified_at=? WHERE id=1").run(text, this.now());
+      // The snapshot digest must be reproducible from the remembered
+      // per-room hashes; a state row without a hash, or a digest that no
+      // longer composes, means the baseline itself cannot be trusted and
+      // the full check decides.
+      const storedHashes = this.db.prepare("SELECT room_id AS id, projection_hash AS hash FROM integrity_room_state ORDER BY room_id").all();
+      if (storedHashes.some(row => !row.hash)) return { ok: false };
+      const text = ["v2", parts[0], sequences, projectionBytes, invitations, journal.entries, journal.sequences, integrityContentDigest(storedHashes)].join(":");
+      if (changed.length && text === snapshotText) return { ok: false };
+      if (!changed.length && text !== snapshotText) return { ok: false };
+      if (text !== snapshotText) {
+        // Retain the diagnostic watermark alongside the atomic snapshot.
+        this.db.prepare("UPDATE integrity_snapshot SET checksum=?, verified_at=?, covered_event_rowid=? WHERE id=1").run(text, this.now(), this.eventLogHighWater());
       }
       if (sweep) {
         this.db.prepare(`INSERT INTO integrity_job_cursor(singleton, step, sweep_after) VALUES(1, 0, ?)
@@ -2752,24 +2982,36 @@ this.slaBreachAlerts = new SlaBreachAlertJournal(this); // Task 26: durable in-a
     });
   }
 
-  // Rooms, projection bytes, and invitation rows. Not the event log.
+  // Rooms, projection bytes, invitation rows — and, since L05-C1, a
+  // sha256 digest over every room's projection content in id order. Not
+  // the event log. The digest is computed over the projection strings
+  // this scan reads; it adds hashing CPU (roughly one sha256 pass over
+  // the stored projection bytes) and no I/O beyond the scan itself.
   integrityChecksum() {
     return this.readTransaction(() => {
       const rooms = this.db.prepare("SELECT COUNT(*) AS rooms, COALESCE(SUM(sequence), 0) AS sequences, COALESCE(SUM(LENGTH(projection)), 0) AS projectionBytes FROM rooms").get();
+      const projections = this.db.prepare("SELECT id, sequence, projection FROM rooms ORDER BY id").all();
+      const contentHash = integrityContentDigest(projections.map(row => ({ id: row.id, hash: projectionContentHash(this.db, row.id, row.sequence, row.projection) })));
       const invitations = this.db.prepare("SELECT COUNT(*) AS invitations FROM membership_invitations").get();
       const journal = this.db.prepare("SELECT COUNT(*) AS entries, COALESCE(SUM(sequence), 0) AS sequences FROM membership_invitation_journal").get();
-      const text = [rooms.rooms, rooms.sequences, rooms.projectionBytes, invitations.invitations, journal.entries, journal.sequences].join(":");
-      return { text, rooms: rooms.rooms, sequences: rooms.sequences, projectionBytes: rooms.projectionBytes, invitations: invitations.invitations };
+      const text = ["v2", rooms.rooms, rooms.sequences, rooms.projectionBytes, invitations.invitations, journal.entries, journal.sequences, contentHash].join(":");
+      return { text, rooms: rooms.rooms, sequences: rooms.sequences, projectionBytes: rooms.projectionBytes, invitations: invitations.invitations, journalEntries: journal.entries, journalSequences: journal.sequences, contentHash };
     });
   }
   readIntegritySnapshot() {
     try { return this.db.prepare("SELECT checksum FROM integrity_snapshot WHERE id=1").get()?.checksum ?? null; }
     catch { return null; }
   }
+  // Largest currently allocated rowid, retained as compatibility metadata.
+  // Purge/recreation can reuse it; never use it to establish baseline coverage.
+  eventLogHighWater() {
+    return this.db.prepare("SELECT COALESCE(MAX(rowid), 0) AS mark FROM events").get().mark;
+  }
   writeIntegritySnapshot(text) {
+    this.ensureIntegrityRoomState();
     this.transaction(() => {
-      this.db.prepare("INSERT INTO integrity_snapshot(id, checksum, verified_at) VALUES(1, ?, ?) ON CONFLICT(id) DO UPDATE SET checksum=excluded.checksum, verified_at=excluded.verified_at")
-        .run(text, this.now());
+      this.db.prepare("INSERT INTO integrity_snapshot(id, checksum, verified_at, covered_event_rowid) VALUES(1, ?, ?, ?) ON CONFLICT(id) DO UPDATE SET checksum=excluded.checksum, verified_at=excluded.verified_at, covered_event_rowid=excluded.covered_event_rowid")
+        .run(text, this.now(), this.eventLogHighWater());
     });
   }
   helpProjectionPresent() {
@@ -2804,6 +3046,7 @@ this.slaBreachAlerts = new SlaBreachAlertJournal(this); // Task 26: durable in-a
     if (this.integrityDeferredSkips() >= DEFERRED_STARVATION_LIMIT) {
       const first = await this.runDeferredIntegrityBatch({ deadline, yieldBetween });
       deferredProgressed = (first?.ran ?? 0) > 0;
+      if (Date.now() > deadline) return finish({ matched: 0, skipped: 0, verified: 0, budgetExceeded: 1, checked: 0, swept: 0, failures: this.integrityFailures() });
     }
     let incremental;
     try {
@@ -2819,13 +3062,53 @@ this.slaBreachAlerts = new SlaBreachAlertJournal(this); // Task 26: durable in-a
       return finish({ matched: 1, skipped: 1, verified: 0, invitations: incremental.invitations, checked: incremental.checked, swept: incremental.swept, deferred, failures: deferred.failures });
     }
     const before = this.integrityChecksum();
-    if (this.readIntegritySnapshot() === before.text) {
+    const snapshotText = this.readIntegritySnapshot();
+    const snapshot = parseIntegritySnapshot(snapshotText);
+    if (snapshot?.format === "v2" && snapshotText === before.text) {
       await yieldBetween();
       if (Date.now() > deadline) return finish({ matched: 1, skipped: 1, verified: 0, invitations: before.invitations, budgetExceeded: 1, failures: this.integrityFailures() });
       const deferred = await this.runDeferredIntegrityBatch({ deadline, yieldBetween });
       deferredProgressed = deferredProgressed || (deferred?.ran ?? 0) > 0;
       return finish({ matched: 1, skipped: 1, verified: 0, invitations: before.invitations, deferred, failures: deferred.failures });
     }
+    // L05-C1 baseline transition: a snapshot recorded before the content
+    // digest existed (the six-count legacy shape, or an unparseable one)
+    // carries no content baseline, so it can never certify or match. The
+    // first post-cure scan runs the full audit below; if that audit is
+    // clean it writes a v2 digest baseline, but the transition scan
+    // itself reports verified:0 with baselineUpgraded:1 — the new
+    // baseline is adopted explicitly, never silently as a verification
+    // (the rebaseline trap the L05 probe exploited). A store with no
+    // snapshot at all is a first baseline, not a transition, and keeps
+    // the historical verified:1 on a clean audit.
+    // Dot review of #5506: a v2 snapshot is only as trustworthy as its
+    // per-room hashes. A remembered row whose hash is NULL leaves that
+    // room with no content baseline at all, so the scan is a transition
+    // for the store exactly like a legacy snapshot: it may adopt a
+    // digest explicitly (baselineUpgraded) but it must not certify.
+    const hashlessRoomState = snapshot?.format === "v2"
+      && Boolean(this.db.prepare("SELECT 1 FROM integrity_room_state WHERE projection_hash IS NULL LIMIT 1").get());
+    const untrustedBaseline = (snapshot !== null && snapshot.format !== "v2") || hashlessRoomState;
+    // Dot round-2 review of #5506: a v2 snapshot whose per-room row for
+    // a room is missing entirely, or whose hash is an empty string, has
+    // no baseline the scan can trust for that room — an empty string is
+    // a value no writer in this codebase produces, and the state table
+    // is written only by the integrity passes, so a covered room's row
+    // does not go missing in normal operation. Unlike a NULL hash (a
+    // row the digest never reached, transitioned explicitly above), a
+    // missing or emptied baseline fails closed: the rooms are recorded
+    // below as standing content failures, the scan certifies nothing
+    // and adopts nothing for them, and the result names the state
+    // baselineUnverifiable. Only an authorised history replacement
+    // (importEvents, which rebuilds a room's baseline from its replayed
+    // log) restores a room that fails closed.
+    // Initializers and validated imports seed their own room proof in the
+    // creating transaction. Missing proof is never evidence of a new room:
+    // rowids can be reused after purge, and event times are caller data.
+    const unverifiableRooms = snapshot?.format === "v2"
+      ? this.db.prepare(`SELECT r.id FROM rooms r LEFT JOIN integrity_room_state s ON s.room_id=r.id
+          WHERE s.room_id IS NULL OR s.projection_hash='' ORDER BY r.id`).all().map(row=>row.id)
+      : [];
     await yieldBetween();
     if (Date.now() > deadline) return finish({ matched: 0, skipped: 0, verified: 0, budgetExceeded: 1, failures: this.integrityFailures() });
     // Per-record isolation for the full path's audits: one inconsistent
@@ -2890,9 +3173,30 @@ this.slaBreachAlerts = new SlaBreachAlertJournal(this); // Task 26: durable in-a
     // path's audits, not only what this run happened to collect: a
     // record left outstanding by an earlier run blocks certification
     // until the reconciliation above retires it or it verifies clean.
+    this.reconcileProjectionContentFailures();
+    // A lost per-room baseline (see unverifiableRooms above) stands as
+    // a content failure exactly like drift: reconciliation cannot
+    // retire it — there is no remembered hash for the bytes to return
+    // to — so it joins blockedDrift below, blocks certification, and
+    // keeps the snapshot frozen until importEvents rebuilds the room.
+    for (const roomId of unverifiableRooms) {
+      this.recordIntegrityFailure("projection_content", roomId,
+        new Error("Projection content has no integrity baseline to verify against"));
+    }
     const outstanding = this.integrityFailures()
       .filter(row => row.step === "invitation_audit" || row.step === "help_history");
+    // Dot review of #5506: a projection_content record that survived
+    // reconciliation is live drift. It blocks certification and keeps
+    // the snapshot frozen even when the room's sequence has since moved
+    // (an ordinary event over drifted bytes does not retire it); only a
+    // return to the baseline bytes (reconciled above), a rehydration
+    // the store performs itself, or an importEvents history replacement
+    // retires the record.
+    let blockedDrift = this.integrityFailures()
+      .filter(row => row.step === "projection_content")
+      .map(row => row.recordId);
     let after = before;
+    let drifted = [];
     if (!outstanding.length) {
       try {
         this.repairProjectionProvenance({ upgradeV1: false, ensureIndex: false });
@@ -2900,19 +3204,44 @@ this.slaBreachAlerts = new SlaBreachAlertJournal(this); // Task 26: durable in-a
         throw tagIntegritySubcheck(error, "snapshot");
       }
       await yieldBetween();
-      try {
-        after = this.integrityChecksum();
-        this.writeIntegritySnapshot(after.text);
-        this.rememberIntegrityRoomState();
-      } catch (error) {
-        throw tagIntegritySubcheck(error, "snapshot");
+      // L05-C1: with the audits clean and this path's own repairs applied,
+      // any room whose projection content still disagrees with its
+      // remembered digest at an unchanged sequence is drift. It is
+      // recorded durably and blocks certification exactly like the
+      // audits above — the snapshot is NOT advanced over it, so the
+      // drifted bytes are never adopted as the new baseline and every
+      // later tick fails the same way until the bytes are repaired or
+      // the room's history is replaced through importEvents (which
+      // refreshes the room's baseline from the replayed log).
+      drifted = snapshot?.format === "v2" ? this.driftedProjectionRooms() : [];
+      for (const roomId of drifted) {
+        this.recordIntegrityFailure("projection_content", roomId,
+          new Error("Projection content does not match its integrity baseline"));
+      }
+      blockedDrift = [...new Set([...blockedDrift, ...drifted])];
+      if (!blockedDrift.length) {
+        try {
+          this.transaction(() => {
+            after = this.integrityChecksum();
+            this.rememberIntegrityRoomState();
+            this.writeIntegritySnapshot(after.text);
+          });
+        } catch (error) {
+          throw tagIntegritySubcheck(error, "snapshot");
+        }
       }
     }
-    const verified = outstanding.length ? 0 : 1;
-    if (Date.now() > deadline) return finish({ matched: 0, skipped: 0, verified, invitations: after.invitations, budgetExceeded: 1, failures: this.integrityFailures() });
+    // A clean audit over an untrusted (digest-less) baseline establishes
+    // the v2 baseline above but does not certify it: verified stays 0 and
+    // the transition is named on the result as baselineUpgraded.
+    const verified = outstanding.length || blockedDrift.length || untrustedBaseline ? 0 : 1;
+    const baselineUpgraded = untrustedBaseline && !outstanding.length && !blockedDrift.length ? { baselineUpgraded: 1 } : {};
+    const contentDrift = blockedDrift.length ? { contentDrift: 1 } : {};
+    const baselineUnverifiable = unverifiableRooms.length ? { baselineUnverifiable: 1 } : {};
+    if (Date.now() > deadline) return finish({ matched: 0, skipped: 0, verified, invitations: after.invitations, budgetExceeded: 1, ...baselineUpgraded, ...contentDrift, ...baselineUnverifiable, failures: this.integrityFailures() });
     const deferred = await this.runDeferredIntegrityBatch({ deadline, yieldBetween });
     deferredProgressed = deferredProgressed || (deferred?.ran ?? 0) > 0;
-    return finish({ matched: 0, skipped: 0, verified, invitations: after.invitations, deferred, failures: this.integrityFailures() });
+    return finish({ matched: 0, skipped: 0, verified, invitations: after.invitations, deferred, ...baselineUpgraded, ...contentDrift, ...baselineUnverifiable, failures: this.integrityFailures() });
   }
 
   // With `collect` (an array), a room whose help history does not reconcile
@@ -3406,6 +3735,9 @@ this.slaBreachAlerts = new SlaBreachAlertJournal(this); // Task 26: durable in-a
     // Additive. Expression indexes do not fire writer triggers. Durable Object
     // SQL rejects SAVEPOINT, so this runs inside the open transaction itself.
     this.db.exec("CREATE INDEX IF NOT EXISTS events_room_type ON events(room_id, json_extract(body, '$.type'))");
+    // Work history and text-result provenance select one work item's events;
+    // without this they scan and JSON-parse every event in the room.
+    this.db.exec("CREATE INDEX IF NOT EXISTS events_room_work ON events(room_id, json_extract(body, '$.data.workItemId'), sequence)");
   }
   roomsNeedingProvenanceReplay() {
     const ids = this.db.prepare(`
@@ -3529,7 +3861,7 @@ this.slaBreachAlerts = new SlaBreachAlertJournal(this); // Task 26: durable in-a
   }
   _queueProjectionCache(roomId, sequence, state, projection) {
     const pending = this._pendingProjectionFrames?.at(-1);
-    if (!pending || state.messages?.some(message => typeof message?.bodyRef === "string" || message?._nul === 1)
+    if (!pending || hasMessageAuthority(state) || state.messages?.some(message => typeof message?.bodyRef === "string" || message?._nul === 1)
       || !freezeJsonState(state)) return;
     const bodyWeight = (state.messages ?? []).reduce((n, m) => n + (m?.body?.length ?? 0), 0);
     pending.set(roomId, { messageEntities: this.messageEntityProjection, sequence, value: Object.freeze({ sequence, state }), weight: Buffer.byteLength(projection) + bodyWeight + Buffer.byteLength(JSON.stringify(state.workItems ?? {})) });
@@ -3577,6 +3909,7 @@ this.slaBreachAlerts = new SlaBreachAlertJournal(this); // Task 26: durable in-a
         if (roomsWrite) {
           const roomIndex = scopedUpdates.get(sql);
           const roomId = roomIndex === undefined ? null : args[roomIndex];
+          if (ROOMS_WRITE.test(sql)) publishProjectionWrites(this.db,typeof roomId==='string'?roomId:null);
           this._dropProjectionCache(typeof roomId === "string" && args.length === roomIndex + 1 ? roomId : null);
         }
         // Every events insert in the codebase binds (roomId, sequence, ...)
@@ -3594,6 +3927,7 @@ this.slaBreachAlerts = new SlaBreachAlertJournal(this); // Task 26: durable in-a
         let result;
         try { result = exec(sql); }
         finally { if (entityWrite) this._dropMessageEntityCache(); }
+        if (typeof sql === "string" && ROOMS_WRITE.test(sql)) publishProjectionWrites(this.db);
         if (typeof sql === "string" && (ROOMS_WRITE.test(sql) || /\b(?:INSERT(?: OR \w+)? INTO|UPDATE|DELETE FROM) work_entities\b/i.test(sql))) invalidate();
         return result;
       };
@@ -3648,15 +3982,16 @@ this.slaBreachAlerts = new SlaBreachAlertJournal(this); // Task 26: durable in-a
     // unknown writes and rollbacks invalidate every candidate.
     const boundary = outermost || isolated;
     const frames = this._pendingProjectionFrames ??= [];
-    if (boundary) frames.push(new Map());
+    if (boundary) { frames.push(new Map()); beginWriteProofFrame(this.db); }
     let result;
     try { result = this.storagePlatform.transaction(this.db, fn, false, { isolated }); }
     catch (error) {
       this._dropProjectionCache();
-      if (boundary) { frames.pop(); this._pendingAppends.clear(); }
+      if (boundary) { frames.pop(); endWriteProofFrame(this.db,false); this._pendingAppends.clear(); }
       throw this.storageFailure(error, outermost);
     }
     if (boundary) {
+      endWriteProofFrame(this.db,true);
       const pending = frames.pop();
       // ROOMS_WRITE invalidates immediately in the projection watch. A commit
       // of heartbeat/cursor/claim metadata must not discard unrelated parses.
@@ -3732,7 +4067,7 @@ this.slaBreachAlerts = new SlaBreachAlertJournal(this); // Task 26: durable in-a
     const row = (this._roomProjectionStmt ??= this.db.prepare("SELECT projection FROM rooms WHERE id=?")).get(roomId);
     if (!row) fail(404, "room_not_found", "Room not found");
     const raw = JSON.parse(row.projection);
-    const messageEntities = raw.messages?.some(message => message?._entity === 1) ?? false;
+    const messageEntities = hasMessageAuthority(raw) || (raw.messages?.some(message => message?._entity === 1) ?? false);
     const { state: parsed, missing } = hydrateProjection(this.db, roomId, raw, { verifyBodyHashes });
     if (missing.length) this._restoreBodiesFromLog(roomId, sequence, parsed, missing);
     const state = deepFreeze(parsed);
@@ -3765,16 +4100,53 @@ this.slaBreachAlerts = new SlaBreachAlertJournal(this); // Task 26: durable in-a
     return this.transaction(() => {
       let count = 0;
       for (const { id } of this.db.prepare("SELECT id FROM rooms WHERE projection LIKE '%\"bodyRef\"%' OR instr(projection, '\"_entity\":1') > 0 OR instr(projection, '\"_nul\":1') > 0 OR instr(projection, '\"messagesArchive\"') > 0").all()) {
+        // The stored row as the baseline last saw it, captured before
+        // anything in this loop rewrites it: whether the room's baseline
+        // may be refreshed is decided over THESE bytes, not over the
+        // bytes the rewrite produces.
+        const before = this.db.prepare("SELECT sequence, projection FROM rooms WHERE id=?").get(id);
         // Migration validates stored authority, never a previously hydrated cache.
         this._dropProjectionCache();
         restoreArchivedMessages(this, id);
         const state = this.room(id).state;
         this.db.prepare("UPDATE rooms SET projection=? WHERE id=?").run(storedProjection(this.db, id, state, { enabled: false }), id);
+        // L05-C1 (Dot reviews of #5506): this rewrite is the store's own
+        // representation change — full bodies restored inline at an
+        // unchanged sequence — not content drift. Refresh the room's
+        // remembered content hash from the rewritten row, or the next
+        // integrity scan manufactures a drift verdict on unchanged
+        // content. The refresh is allowed only when it is provably
+        // representational: no outstanding projection_content record
+        // (round 1 — rehydration must not launder drift that was
+        // detected before it ran), a remembered baseline exists, and
+        // the PRE-REWRITE bytes still hash to that baseline at an
+        // unchanged sequence (round 2 — a mutation that landed before
+        // any detecting sweep leaves no record for the first check to
+        // see, but it cannot pass the baseline comparison). Anything
+        // else keeps its old baseline untouched: undetected drift stays
+        // detectable by the next scan, and no baseline is manufactured
+        // for a room that never had a trustworthy one.
+        this.ensureIntegrityRoomState();
+        this.ensureIntegrityFailures();
+        const remembered = this.db.prepare("SELECT sequence, projection_hash AS hash FROM integrity_room_state WHERE room_id=?").get(id);
+        const outstanding = this.db.prepare("SELECT 1 FROM integrity_failures WHERE step='projection_content' AND record_id=?").get(id);
+        if (!outstanding && remembered?.hash && before && remembered.sequence === before.sequence
+          && projectionContentHash(this.db, id, before.sequence, before.projection) === remembered.hash) {
+          const row = this.db.prepare("SELECT sequence, projection, LENGTH(projection) AS bytes FROM rooms WHERE id=?").get(id);
+          this.db.prepare("UPDATE integrity_room_state SET sequence=?, projection_bytes=?, projection_hash=? WHERE room_id=?")
+            .run(row.sequence, row.bytes, projectionContentHash(this.db, id, row.sequence, row.projection), id);
+        }
         this._projectionCache?.clear?.();
         count += 1;
       }
       return count;
     });
+  }
+  canonicalMessageEditContext(roomId, command) {
+    if (this.messageProjectionWindow !== null) return null;
+    const context = canonicalMessageEditContext(this.db, roomId, command);
+    if (context) context.room.state = hydrateWorkItems(this.db, roomId, context.room.state);
+    return context;
   }
   // Phase 1a: the one serializer for rooms.projection. Every writer uses it.
   storedProjection(roomId, state) {
@@ -3880,6 +4252,12 @@ this.slaBreachAlerts = new SlaBreachAlertJournal(this); // Task 26: durable in-a
       this.db.prepare("INSERT INTO rooms(id,sequence,projection,archived_at) VALUES(?,?,?,?)").run(state.room.id, events.length, this.storedProjection(state.room.id, stored), archivedAtOf(stored));
       const insert = this.db.prepare("INSERT INTO events VALUES(?,?,?,?)");
       events.forEach((e, i) => insert.run(state.room.id, i + 1, e.id, JSON.stringify(e)));
+      // The just-replayed initial history establishes this room's content in
+      // the creation transaction. A rollback removes its proof too.
+      this.ensureIntegrityRoomState();
+      const created = this.db.prepare('SELECT projection,LENGTH(projection) AS bytes FROM rooms WHERE id=?').get(state.room.id);
+      this.db.prepare('INSERT INTO integrity_room_state(room_id,sequence,projection_bytes,projection_hash,metadata_hash) VALUES(?,?,?,?,?)')
+        .run(state.room.id, events.length, created.bytes, projectionContentHash(this.db, state.room.id,events.length,created.projection),projectionDigest(created.projection));
       syncRoomPublication(this, { roomId: state.room.id, state: stored, previous: null, auth: null });
       return state.room.id;
     });
@@ -5665,6 +6043,16 @@ this.slaBreachAlerts = new SlaBreachAlertJournal(this); // Task 26: durable in-a
       try { state = compact(replayEvents(emptyRoomState(), events)); }
       catch (error) { fail(422, "invalid_import", `Export does not replay: ${error.message}`); }
       if (new Set(events.map(e => e.id)).size !== events.length) fail(422, "invalid_import", "Import has duplicate event ids");
+      // RES-0126 (L05-C2): an import is a room write, so the replayed end
+      // state must satisfy the same pilot caps command() enforces — the
+      // events/member/work counts here, and the projection byte cap on
+      // the final stored projection below, with the same 409 pilot_limit
+      // shapes. A refusal throws inside this transaction, so no data
+      // changes. There is no cleanup exemption here: an import replaces
+      // the whole history rather than ending individual items, and
+      // larger restores go through database backup (see the HTTP import
+      // route), not this path.
+      if (events.length > PILOT_LIMITS.eventsPerRoom || activeMemberCount(state.members) > PILOT_LIMITS.membersPerRoom || Object.keys(state.workItems ?? {}).length > PILOT_LIMITS.workItemsPerRoom) fail(409, "pilot_limit", "Bounded pilot capacity reached; no data was changed");
       // Dependent rows reference event ids/sequences; a history replacement
       // drops them. Pending invitations are lost on restore (documented).
       this.db.prepare("DELETE FROM commands WHERE room_id=?").run(roomId);
@@ -5691,8 +6079,36 @@ this.slaBreachAlerts = new SlaBreachAlertJournal(this); // Task 26: durable in-a
       this.db.prepare("DELETE FROM events WHERE room_id=?").run(roomId);
       const insert = this.db.prepare("INSERT INTO events VALUES(?,?,?,?)");
       events.forEach((e, i) => insert.run(roomId, i + 1, e.id, JSON.stringify(e)));
-      this.db.prepare("UPDATE rooms SET sequence=?,projection=?,archived_at=? WHERE id=?").run(events.length, this.storedProjection(roomId, state), archivedAtOf(state), roomId);
-      this.db.prepare("INSERT INTO projection_checkpoints(room_id,sequence,projection) VALUES(?,?,?)").run(roomId, events.length, JSON.stringify(state));
+      if (hasMessageAuthority(previous)) {
+        // Replaced history owns a new set of posting positions. Reusing old
+        // minimum sequences or publishing before these rows exist is unsafe.
+        this.db.prepare('DELETE FROM messages WHERE room_id=?').run(roomId);
+        events.forEach((incoming, index) => {
+          if (incoming.type === T.MESSAGE_POSTED) syncMessageRows(this.db,
+            { roomId, sequence: index + 1, event: incoming, state });
+        });
+        state.messageAuthority = { version: 1, count: state.messages.length };
+      }
+      const projection = withVerifiedRoomReconstruction(this.db,roomId,()=>this.storedProjection(roomId,state));
+      // RES-0126 (L05-C2): the projection byte cap, measured on the exact
+      // stored projection like command() and appendSideTableEvent() do.
+      // Throwing here rolls back the whole import transaction above.
+      if (Buffer.byteLength(projection) > PILOT_LIMITS.projectionBytes) fail(409, "pilot_limit", "Room projection limit reached; no data was changed. Ask the room owner to have older messages archived to free space.");
+      this.db.prepare("UPDATE rooms SET sequence=?,projection=?,archived_at=? WHERE id=?").run(events.length, projection, archivedAtOf(state), roomId);
+      // L05-C1: the imported projection is rebuilt from the replayed log
+      // above, so it is verified against its history by construction.
+      // Refresh the room's integrity baseline row (and retire any drift
+      // record against the replaced history) or the content digest would
+      // report the authorised replacement as drift forever.
+      this.ensureIntegrityRoomState();
+      this.ensureIntegrityFailures();
+      this.db.prepare(`INSERT INTO integrity_room_state(room_id, sequence, projection_bytes, projection_hash,metadata_hash)
+        SELECT id, sequence, LENGTH(projection), ?,? FROM rooms WHERE id=?
+        ON CONFLICT(room_id) DO UPDATE SET sequence=excluded.sequence, projection_bytes=excluded.projection_bytes, projection_hash=excluded.projection_hash,metadata_hash=excluded.metadata_hash`)
+        .run(projectionContentHash(this.db, roomId, events.length, projection),projectionDigest(projection), roomId);
+      this.db.prepare("DELETE FROM integrity_failures WHERE step='projection_content' AND record_id=?").run(roomId);
+      const { messageAuthority: _authority, ...checkpointState } = state;
+      this.db.prepare("INSERT INTO projection_checkpoints(room_id,sequence,projection) VALUES(?,?,?)").run(roomId, events.length, JSON.stringify(checkpointState));
       syncRoomPublication(this, { roomId, state, previous, auth: null });
       return { imported: events.length, sequence: events.length };
     });
@@ -6212,11 +6628,11 @@ this.slaBreachAlerts = new SlaBreachAlertJournal(this); // Task 26: durable in-a
     return this.readTransaction(() => {
       const auth = this.authenticate(token, roomId, expectedSessionBinding);
       const memberId = auth.member.id;
-      const floor = this.historyFloor(roomId, memberId, this.room(roomId).sequence);
+      const floor = this.historyFloor(roomId, memberId, this.roomAuthority(roomId).sequence);
       const historyAfter = floor ? floor.sequence - 1 : 0;
       const messageAfter = Math.max(after, historyAfter);
       const directMessages = [];
-      const currentMessages = messageRepository(this, roomId);
+      let currentMessages;
       const dmStatement = this.db.prepare(
         `SELECT sequence, body FROM events WHERE room_id=? AND sequence>? AND sequence<=?
          AND json_extract(body,'$.type')=? AND json_extract(body,'$.data.toMemberId')=?
@@ -6234,6 +6650,7 @@ this.slaBreachAlerts = new SlaBreachAlertJournal(this); // Task 26: durable in-a
           const parsed = JSON.parse(row.body);
           return { row, parsed, messageId: parsed.data.messageId ?? parsed.id };
         });
+        currentMessages ??= messageRepository(this, roomId);
         const records = currentMessages.getMany(decoded.map(item => item.messageId));
         for (const { row, parsed, messageId } of decoded) {
           if (directMessages.length === limit) break;
@@ -6303,6 +6720,11 @@ this.slaBreachAlerts = new SlaBreachAlertJournal(this); // Task 26: durable in-a
       const cursorAfter = Math.max(after, dmScannedAfter,
         ...directMessages.map(row => row.sequence),
         ...directMentions.map(row => row.sequence));
+      // Idle polling needs no conversation/work hydration. A formal request
+      // candidate already loaded canonical records; reuse that room cache.
+      const requestStates = [...directMessages, ...directMentions].some(item => item.nextRead)
+        ? this.room(roomId).state.replyRequests
+        : {};
       const inbox = stampInbox({
         agentId: memberId,
         roomId,
@@ -6314,7 +6736,7 @@ this.slaBreachAlerts = new SlaBreachAlertJournal(this); // Task 26: durable in-a
         bondProposals,
         peerMessages,
         cursor: { after: cursorAfter },
-        next: inboxNext(roomId, directMessages, assignments, mentions, directMentions, bondProposals, peerMessages, this.room(roomId).state.replyRequests),
+        next: inboxNext(roomId, directMessages, assignments, mentions, directMentions, bondProposals, peerMessages, requestStates),
         dmRequests,
       }, memberId);
       for (const key of ["directMessages", "assignments", "mentions", "directMentions", "bondProposals", "peerMessages", "cursor", "next", "dmRequests"]) {
@@ -6337,9 +6759,18 @@ this.slaBreachAlerts = new SlaBreachAlertJournal(this); // Task 26: durable in-a
     // text. Archived messages resolve through current normalized records;
     // only genuinely absent legacy records fall back to the logged body. Deleted rows are skipped
     // inside the scan so they never consume one of the caller's limit slots.
-    let currentById = { get: () => undefined, hasReply: () => false };
-    try { currentById = messageRepository(this, roomId); }
-    catch (error) { if (error?.code !== 'room_not_found') throw error; }
+    let repository;
+    const records = () => {
+      if (!repository) {
+        try { repository = messageRepository(this, roomId); }
+        catch (error) {
+          if (error?.code !== 'room_not_found') throw error;
+          repository = { get: () => undefined, hasReply: () => false };
+        }
+      }
+      return repository;
+    };
+    const currentById = { get: id => records().get(id), hasReply: (author, id) => records().hasReply(author, id) };
     const rows = [];
     try {
       const stmt = this.db.prepare(
@@ -6522,7 +6953,8 @@ this.slaBreachAlerts = new SlaBreachAlertJournal(this); // Task 26: durable in-a
         const listed = this.room(roomId);
         return { sequence: listed.sequence, duplicate: false, event: null, bonds: this.bonds.listForMember(roomId, auth.member.id) };
       }
-      let room = this.room(roomId);
+      const editContext = this.canonicalMessageEditContext(roomId, command);
+      let room = editContext?.room ?? this.room(roomId);
       refuseArchivedWrite(room.state);
       room = prepareMessageCommand(this, roomId, room, command, auth.member.id);
       if (command.type === T.MESSAGE_POSTED && typeof command.data.toMemberId === "string" && command.data.toMemberId) {
@@ -6797,7 +7229,7 @@ this.slaBreachAlerts = new SlaBreachAlertJournal(this); // Task 26: durable in-a
         if (conflict) fail(409, "claim_conflict", `Scope is reserved by work ${conflict.id}. Coordinate or release that reservation first; no new claim was saved.`);
       }
       const sequence = room.sequence + 1;
-      const messageWrite = prepareMessageWrite(this, {roomId,previous:room,state,event:incoming,sequence});
+      const messageWrite = prepareMessageWrite(this, {roomId,previous:room,state,event:incoming,sequence,messageAuthorityCount:editContext?.count});
       const { projection } = messageWrite;
       if (Buffer.byteLength(projection) > PILOT_LIMITS.projectionBytes && !cleanup) fail(409, "pilot_limit", "Room projection limit reached; no data was changed. Ask the room owner to have older messages archived to free space.");
       // R1 delivery-path tracing (RC-2026-09-26-966): delivery.log spans the

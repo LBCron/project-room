@@ -1,8 +1,10 @@
+import { assertMessageWrite, recordMessageWrite } from './write-integrity.mjs';
 import { readMessageReplaySnapshot, writeMessageReplaySnapshot, discardMessageReplaySnapshot } from './message-replay-snapshot.mjs';
 // PRIV-1: rewrite a message out of the log, the projection, and the messages
 // table in one transaction. Read-time masking stays; this is the write that
 // makes the old text unreadable in storage.
 
+import { hasMessageAuthority } from './message-authority.mjs';
 import { storedProjection } from "./projection-at-rest.mjs"; // Phase 1a
 import { applyEvent, event, EVENT_TYPES, isRoomArchived } from "../src/events.js";
 import { syncMessageRows } from "./messages-store.mjs";
@@ -138,10 +140,17 @@ export function commitMessageRedaction(db, { roomId, state, actorId, at, message
 
   const ids = messageId.endsWith(":channel") ? [messageId] : [messageId, `${messageId}:channel`];
   try {
+    for (const id of ids) assertMessageWrite(db,roomId,id);
     db.prepare(`UPDATE messages SET body=NULL, reducer_extras_json=NULL, deleted_at=COALESCE(deleted_at, ?) WHERE room_id=? AND message_id IN (${ids.map(() => "?").join(",")})`).run(at, roomId, ...ids);
     if (isRoomArchived(state)) {
       db.prepare(`UPDATE messages SET record_json=NULL WHERE room_id=? AND message_id IN (${ids.map(() => "?").join(",")})`).run(roomId, ...ids);
     }
+    for (const id of ids) recordMessageWrite(db,roomId,id);
+    // Canonical rows are the serving record, including the scrubbed reducer
+    // metadata. Keep their redacted tombstone usable instead of nulling the
+    // only authoritative payload. This writes only the affected IDs.
+    if (hasMessageAuthority(next)) syncMessageRows(db, { roomId, sequence,
+      event: { type: EVENT_TYPES.MESSAGE_REDACTED, data: { messageId } }, state: next });
     // A replay snapshot may retain old edit text and attachment metadata.
     // Redact the message inside it in the same deletion transaction, the way
     // the rewritten log now replays it. Discarding the snapshot instead made

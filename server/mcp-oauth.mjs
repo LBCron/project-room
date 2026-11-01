@@ -87,7 +87,10 @@ export function authenticateMcpOAuthRequest(store, token, roomId) {
   return resolveMcpOAuthPrincipal(current);
 }
 
+// Invitation consent is separate from chat/work. Existing grants gain no
+// invitation tools; current Room authority is still checked by the service.
 const scopeTools = {
+  'members:invite': ['room_create_agent_invite'],
   'rooms:read': ['room_check_access'],
   'chat:read': ['room_read_messages', 'room_read_inbox', 'room_list_requests', 'room_read_request'],
   'chat:write': ['room_post_message', 'room_reply', 'room_request_reply', 'room_respond_to_request'],

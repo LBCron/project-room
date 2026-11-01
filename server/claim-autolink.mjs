@@ -164,6 +164,9 @@ function autoLinkShape(parsed) {
 // exists (the owner can still link more by hand). Emits one
 // work_claim.updated receipt with reason pr_autolinked.
 export function autoLinkPullRequest(store, roomId, claimId, { url, source = "unknown" } = {}, { nowMs = Date.now() } = {}) {
+  if (store?.db && !store.db.isTransaction && typeof store.transaction === "function") {
+    return store.transaction(() => autoLinkPullRequest(store, roomId, claimId, { url, source }, { nowMs }));
+  }
   // A public-work namespace claim must never gain a pull link: the door
   // settles by receipt and escrow attach, not by PR outcome, and a link
   // would arm the claim-pr poll to settle it with room semantics — no

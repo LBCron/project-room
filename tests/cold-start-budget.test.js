@@ -21,7 +21,6 @@ const EMPTY_UNTIL_CRON = new Set([
   "room_access_auto_approve",
   "integrity_snapshot",
   "integrity_job_cursor",
-  "integrity_room_state",
   // A public room page stays empty until an owner opts in, and the recorded
   // receipts setting is written only when an owner opts in or out. The
   // backfill cursor is written by cron. Same exceptions as the recovery audit.
@@ -170,7 +169,7 @@ test("reopen still repairs a legacy channel and a missing proposer", () => {
     delete legacy.channels;
     legacy.workItems = { "legacy-job": { id: "legacy-job", title: "Legacy", state: "proposed", revision: 0 } };
     const sequence = store.db.prepare("SELECT sequence FROM rooms WHERE id='commons'").get().sequence;
-    store.db.prepare("UPDATE rooms SET projection=? WHERE id='commons'").run(JSON.stringify(legacy));
+    store.transaction(() => store.db.prepare("UPDATE rooms SET projection=? WHERE id='commons'").run(store.storedProjection("commons", legacy)));
     store.db.prepare("INSERT INTO events(room_id, sequence, id, body) VALUES(?,?,?,?)").run(
       "commons", sequence + 1, "legacy-propose",
       JSON.stringify({ id: "legacy-propose", type: "work.proposed", roomId: "commons", actorId: "owner", data: { workItemId: "legacy-job" } })
@@ -196,7 +195,7 @@ test("deferred open leaves a legacy projection until the integrity job repairs i
     delete legacy.channels;
     legacy.workItems = { "legacy-job": { id: "legacy-job", title: "Legacy", state: "proposed", revision: 0 } };
     const sequence = store.db.prepare("SELECT sequence FROM rooms WHERE id='commons'").get().sequence;
-    store.db.prepare("UPDATE rooms SET projection=? WHERE id='commons'").run(JSON.stringify(legacy));
+    store.transaction(() => store.db.prepare("UPDATE rooms SET projection=? WHERE id='commons'").run(store.storedProjection("commons", legacy)));
     store.db.prepare("INSERT INTO events(room_id, sequence, id, body) VALUES(?,?,?,?)").run(
       "commons", sequence + 1, "legacy-propose",
       JSON.stringify({ id: "legacy-propose", type: "work.proposed", roomId: "commons", actorId: "owner", data: { workItemId: "legacy-job" } })

@@ -33,7 +33,7 @@ export function referenceMessageEntities(db, roomId, messages, pendingIds = []) 
     ? { id: message.id, [MESSAGE_ENTITY_REF]: 1 } : message);
 }
 
-function decodeEntity(row) {
+export function decodeMessageEntity(row) {
   let record, extras;
   try {
     record = JSON.parse(row.record_json);
@@ -58,7 +58,7 @@ export function hydrateMessageEntities(db, roomId, messages) {
     const rows = db.prepare(`SELECT message_id,body,record_json,reducer_extras_json FROM messages
       WHERE room_id=? AND message_id IN (SELECT value FROM json_each(?))`)
       .all(roomId, JSON.stringify(ids.slice(start, start + BATCH_SIZE)));
-    for (const row of rows) records.set(row.message_id, decodeEntity(row));
+    for (const row of rows) records.set(row.message_id, decodeMessageEntity(row));
   }
   return messages.map(message => {
     if (!isMessageEntityRef(message)) return message;

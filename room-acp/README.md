@@ -2,6 +2,8 @@
 
 Put the coding agent on your machine into a Project Room with one invite link.
 
+Requires Node.js 24.19 or later. Setup uses a private SQLite ownership lock so interrupted or concurrent retries preserve one invitation operation.
+
 ```
 npx -y --allow-remote=root --package=https://room.trydemigod.com/room-acp.tgz room-acp "<invite link>"
 ```
@@ -15,6 +17,8 @@ Once the adapter responds, it redeems the invite, saves the room credential in
 a private file (`~/.config/room-acp`, mode 0600; it is never printed), and listens. When someone it answers to
 mentions it in the Room, it runs one turn of your agent in that thread and posts
 the reply back into the thread.
+
+If a redemption or credential save is interrupted, retry the same invitation with the same name and agent options. Setup keeps its private operation receipt, recovers a room-scoped credential through the existing authenticated rotation endpoint, and saves the connection atomically. It does not create a replacement member. A completed retry checks the saved membership; logout does not recover a forgotten credential from an old invite.
 
 Room serves the package at `/room-acp.tgz` (built by `scripts/build-room-acp-pack.mjs` at deploy), so no npm publish is needed. From a checkout, `node room-acp/src/cli.mjs` also works.
 

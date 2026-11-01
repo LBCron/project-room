@@ -262,16 +262,72 @@ export function withWorkDeprecation(name, recorded) {
       ? `Use ${deprecated.successor} with action="${deprecated.action}".`
       : `Use ${deprecated.successor}.` }, successor: deprecated.successor } : recorded;
 }
+// Recover only the revision that this adapter supplied for a prior operation.
+// This is a bounded read of authenticated durable history, not a local cache or
+// a replacement success receipt. A missing/redacted/incomplete read fails closed.
+const RECONCILABLE_WORK_ACTIONS = new Set([
+  "room_accept_work", "room_start_work", "room_submit_text_result", "room_record_verification"
+]);
+async function reconcileWorkRevision(client, identity, name, args, command, observedThrough, signal) {
+  if (typeof client.changes !== "function" || !Number.isSafeInteger(observedThrough) || observedThrough < 0) return null;
+  const key = createHash("sha256").update(`${identity.memberId}:${command.id}`).digest("hex");
+  // Reuse the authenticated work-context horizon already read by the normal
+  // path. Search the newest 100-sequence window first, then older windows.
+  // Follow a concurrently advancing tail before walking back; all reads share
+  // one five-page budget. Event bodies never supply this starting horizon.
+  let windowStart = Math.max(0, observedThrough - 100), after = windowStart, tail = true;
+  for (let page = 0; page < 5; page += 1) {
+    const result = await client.changes(after, 100, { signal });
+    if (!Array.isArray(result?.events) || result.events.length > 100
+        || typeof result.hasMore !== "boolean" || !Number.isSafeInteger(result.next)
+        || result.next < after || (result.hasMore && result.next <= after)) return null;
+    for (const row of result.events) {
+      const event = row?.event;
+      if (!Number.isSafeInteger(row?.sequence) || row.sequence <= after || row.sequence > result.next) return null;
+      if (event?.idempotencyKey !== key || event.roomId !== identity.roomId || event.actorId !== identity.memberId) continue;
+      // A different intent under this ID is still a conflict. Only the omitted
+      // adapter-filled revision may be reconstructed; evidence and all other
+      // caller fields must match the original event exactly.
+      if (!Number.isSafeInteger(event.data?.expectedRevision) || event.data.expectedRevision < 0) return null;
+      const original = buildWorkCommand(name, args, identity, { expectedRevision: event.data.expectedRevision });
+      if (!confirmsAgentCommand({ sequence: row.sequence, event, duplicate: true }, original, identity)) return null;
+      return original;
+    }
+    if (tail && result.hasMore) {
+      after = result.next;
+      continue;
+    }
+    tail = false;
+    if (windowStart === 0) return null;
+    windowStart = Math.max(0, windowStart - 100);
+    after = windowStart;
+  }
+  return null;
+}
+
 export async function submitWorkAction(client, identity, name, args, { signal } = {}) {
   if (!validId(identity?.roomId) || !validId(identity?.memberId)) throw new Error("Pinned agent identity required");
-  let expectedRevision;
+  let expectedRevision, observedThrough;
   if (workUsesExpectedRevision(name) && args && typeof args === "object" && !Array.isArray(args)
       && args.expectedRevision === undefined && validId(args.workItemId)) {
     const context = await client.workContext(args.workItemId, { signal });
     if (!Number.isSafeInteger(context?.work?.revision)) throw Object.assign(new Error("Current work revision unavailable"), { code: "invalid_work_action" });
     expectedRevision = context.work.revision;
+    observedThrough = context.evaluatedThrough;
   }
-  const command = buildWorkCommand(name, args, identity, { expectedRevision }), receipt = await client.command(command, { signal });
+  let command = buildWorkCommand(name, args, identity, { expectedRevision }), receipt;
+  try {
+    receipt = await client.command(command, { signal });
+  } catch (error) {
+    if (error?.status !== 409 || error.code !== "idempotency_conflict"
+        || args.expectedRevision !== undefined || !RECONCILABLE_WORK_ACTIONS.has(name)) throw error;
+    const original = await reconcileWorkRevision(client, identity, name, args, command, observedThrough, signal);
+    if (!original) throw error;
+    command = original;
+    // Reauthenticate and check the complete command fingerprint at the normal
+    // write boundary. Reading an old event never grants present authority.
+    receipt = await client.command(command, { signal });
+  }
   if (!confirmsAgentCommand(receipt, command, identity)) return { status: "unconfirmed", requestId: command.id,
     message: "Outcome unknown. Retain and retry the exact original input; do not create a replacement requestId." };
   return withWorkDeprecation(name, recordedWorkAction(name, command, receipt));

@@ -23,7 +23,7 @@
 import { createHash, timingSafeEqual } from "node:crypto";
 import { sqlChunks, sqlPlaceholders } from "./sql-binds.mjs";
 import { auditRecovery } from "./recovery.mjs";
-import { ensureNativeAgentRestoreSchema, cellOf, checkStoredBytes, verifyTrailer, assertTrailerShape, createTableDigests, contentVerificationLevel, REPLAY_SKIPPED_TABLES, createSanitizedCellTracker, BACKUP_SANITIZE_POLICY } from "./room-export.mjs";
+import { withRestoreTableRows, ensureNativeAgentRestoreSchema, cellOf, checkStoredBytes, verifyTrailer, assertTrailerShape, createTableDigests, contentVerificationLevel, REPLAY_SKIPPED_TABLES, createSanitizedCellTracker, BACKUP_SANITIZE_POLICY } from "./room-export.mjs";
 import { verifyPublicWorkClaimFence } from "./public-work-claim-fence.mjs";
 import { BACKUP_MANIFEST_VERSION, backupObjectKey, backupPartKey } from "../cloudflare/room-backup.mjs";
 
@@ -217,16 +217,18 @@ export function replayNdjsonInto(ndjson, store, { audit = "strict" } = {}) {
         // Parents before children, matching the exporter's credentials order.
         if (table === "credentials") rows.sort((a, b) => Number(a.parent_hash != null) - Number(b.parent_hash != null));
         const known = new Set(tableColumns(db, table));
-        for (const row of rows) {
-          const keys = Object.keys(row);
-          if (keys.some(key => !known.has(key))) throw new Error("Export row does not match the store schema");
-          if (!keys.length) continue;
-          // Binary cells leave the exporter as {$base64}; decode and prove them.
-          const cells = Object.fromEntries(keys.map(key => [key, tracker.resolve(table, key, cellOf(row[key]))]));
-          checkStoredBytes(table, cells);
-          db.prepare(`INSERT INTO ${quoteIdent(table)} (${keys.map(quoteIdent).join(", ")}) VALUES (${keys.map(() => "?").join(", ")})`)
-            .run(...keys.map(key => cells[key]));
-        }
+        withRestoreTableRows(db, table, () => {
+          for (const row of rows) {
+            const keys = Object.keys(row);
+            if (keys.some(key => !known.has(key))) throw new Error("Export row does not match the store schema");
+            if (!keys.length) continue;
+            // Binary cells leave the exporter as {$base64}; decode and prove them.
+            const cells = Object.fromEntries(keys.map(key => [key, tracker.resolve(table, key, cellOf(row[key]))]));
+            checkStoredBytes(table, cells);
+            db.prepare(`INSERT INTO ${quoteIdent(table)} (${keys.map(quoteIdent).join(", ")}) VALUES (${keys.map(() => "?").join(", ")})`)
+              .run(...keys.map(key => cells[key]));
+          }
+        });
       }
       if (claimPermit) {
         db.prepare(`UPDATE ${CLAIM_PERMIT_TABLE} SET enabled=0 WHERE singleton=1`).run();
@@ -384,19 +386,21 @@ export function createBackupReplaySession(store, { audit = "strict" } = {}) {
         cleared.add(table);
       }
       const known = columnsOf(table);
-      for (const row of insertable) {
-        const keys = Object.keys(row);
-        if (keys.some(key => !known.has(key))) throw new Error("Export row does not match the store schema");
-        // An empty row object carries no cells and never lands (the
-        // buffered replay skips it the same way); count it so finish()'s
-        // landed-count reconciliation stays exact.
-        if (!keys.length) { unlandedEmpty.set(table, (unlandedEmpty.get(table) ?? 0) + 1); continue; }
-        const cells = Object.fromEntries(keys.map(key => [key, cellTracker().resolve(table, key, cellOf(row[key]))]));
-        checkStoredBytes(table, cells);
-        db.prepare(`INSERT INTO ${quoteIdent(table)} (${keys.map(quoteIdent).join(", ")}) VALUES (${keys.map(() => "?").join(", ")})`)
-          .run(...keys.map(key => cells[key]));
-        inserted += 1;
-      }
+      withRestoreTableRows(db, table, () => {
+        for (const row of insertable) {
+          const keys = Object.keys(row);
+          if (keys.some(key => !known.has(key))) throw new Error("Export row does not match the store schema");
+          // An empty row object carries no cells and never lands (the
+          // buffered replay skips it the same way); count it so finish()'s
+          // landed-count reconciliation stays exact.
+          if (!keys.length) { unlandedEmpty.set(table, (unlandedEmpty.get(table) ?? 0) + 1); continue; }
+          const cells = Object.fromEntries(keys.map(key => [key, cellTracker().resolve(table, key, cellOf(row[key]))]));
+          checkStoredBytes(table, cells);
+          db.prepare(`INSERT INTO ${quoteIdent(table)} (${keys.map(quoteIdent).join(", ")}) VALUES (${keys.map(() => "?").join(", ")})`)
+            .run(...keys.map(key => cells[key]));
+          inserted += 1;
+        }
+      });
     });
     buffers.set(table, held.length ? held : []);
     return inserted;

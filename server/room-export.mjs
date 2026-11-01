@@ -560,6 +560,20 @@ export function ensureNativeAgentRestoreSchema(db, names) {
   if (names.has("mcp_event_subscriptions") || names.has("mcp_event_outbox")) db.exec(mcpEventSubscriptionsSchema);
 }
 
+// Restored grants already carry their original journal/pending rows. Replaying
+// an INSERT must not invent a second, unjournaled grant transition. Suspend only
+// this derivative trigger inside the caller's synchronous restore transaction;
+// writer fences and deletion guards stay active. Real exported pending evidence
+// is loaded unchanged, and the target's original trigger is restored on failure.
+export function withRestoreTableRows(db, table, insert) {
+  if (table !== "membership_delegation_grants") return insert();
+  const trigger = db.prepare("SELECT sql FROM sqlite_master WHERE type='trigger' AND name='membership_delegation_pending_insert'").get();
+  if (!trigger?.sql) throw new Error("Restore requires the membership delegation insertion trigger");
+  db.exec("DROP TRIGGER membership_delegation_pending_insert");
+  try { return insert(); }
+  finally { db.exec(trigger.sql); }
+}
+
 export function replayNdjson(ndjson, filename, { audit = "strict", retainTables = null } = {}) {
   if (audit !== "strict" && audit !== "report") throw new Error("audit must be strict or report");
   if (retainTables != null && typeof retainTables !== "function") throw new Error("retainTables must be a function");
@@ -612,15 +626,17 @@ export function replayNdjson(ndjson, filename, { audit = "strict", retainTables 
         if (table === "credentials") rows.sort((a, b) => Number(a.parent_hash != null) - Number(b.parent_hash != null));
         const columns = tableColumns(store.db, table);
         const known = new Set(columns);
-        for (const row of rows) {
-          const keys = Object.keys(row);
-          if (keys.some(key => !known.has(key))) throw new Error("Export row does not match the store schema");
-          if (!keys.length) continue;
-          const cells = Object.fromEntries(keys.map(key => [key, tracker.resolve(table, key, cellOf(row[key]))]));
-          checkStoredBytes(table, cells);
-          store.db.prepare(`INSERT INTO ${quoteIdent(table)} (${keys.map(quoteIdent).join(", ")}) VALUES (${keys.map(() => "?").join(", ")})`)
-            .run(...keys.map(key => cells[key]));
-        }
+        withRestoreTableRows(store.db, table, () => {
+          for (const row of rows) {
+            const keys = Object.keys(row);
+            if (keys.some(key => !known.has(key))) throw new Error("Export row does not match the store schema");
+            if (!keys.length) continue;
+            const cells = Object.fromEntries(keys.map(key => [key, tracker.resolve(table, key, cellOf(row[key]))]));
+            checkStoredBytes(table, cells);
+            store.db.prepare(`INSERT INTO ${quoteIdent(table)} (${keys.map(quoteIdent).join(", ")}) VALUES (${keys.map(() => "?").join(", ")})`)
+              .run(...keys.map(key => cells[key]));
+          }
+        });
       }
       if (claimPermit) store.db.prepare(`UPDATE ${CLAIM_PERMIT_TABLE} SET enabled=0 WHERE singleton=1`).run();
     });

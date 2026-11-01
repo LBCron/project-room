@@ -44,3 +44,31 @@ Canonical work-entity hydration additionally requires no more than 2,000 rows
 and 4 MiB. The clock budget is checked between synchronous operations; the row
 and byte limits bound individual reads. Limit exhaustion is refusal, never
 partial repair. No automatic fleet migration is added.
+
+## Explicit historical session backfill mode
+
+The same plan/execute endpoints accept `repairKind: "pre749-session-backfill"`
+with exactly one selected room and `expectedHead` (1–64). This separate mode
+reconciles only a recorded `work.accepted` quarantine caused by the three
+session-to-work state effects introduced in PR749. Dates alone confer no
+eligibility. Ordinary command validation and the original message repair mode
+remain unchanged.
+
+The complete target input and proposed output must fit 256 KiB: source events,
+serving projection and entities, existing replay snapshot/anchor, variable
+controls, and audit envelope are admitted before payload hydration. Each row
+family has a 64-row cap. Archives and canonical message-authority rooms refuse.
+Malformed controls, missing proofs, or any historical replay difference from
+independently verified current serving state refuse. This mode performs no
+shape/default normalization and creates no serving proof baseline.
+
+A qualified execution preserves every serving row and proof byte, event and
+grant. It rewrites only the derived target replay snapshot/cursor, removes its
+obsolete quarantine/anchor and passes target parity in the same transaction as
+its phase-namespaced receipt. The result includes `derivedOnly`, the prior
+cursor hash, exact head and new snapshot hash. Audit or storage failure rolls
+back the entire operation. Persist the complete execute input before sending;
+a retry uses exactly that input and returns the original receipt even after
+later room writes. Planning records its standard operator audit only. A plan
+must establish actual current eligibility; historical backup comparisons are
+not current serving authority.

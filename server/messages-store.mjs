@@ -1277,6 +1277,18 @@ export function runTargetedMessagesBackfill(store, room, admitState) {
     caughtUp:outcome.replaySeq===room.sequence&&messagesBackfillCaughtUp(store.db,room.id)};
 }
 
+// Explicit operator reconciliation after a complete admitted historical replay
+// has independently matched every current serving field. Never publishes or
+// rewrites serving entities; its caller owns the exact-head receipt transaction.
+export function reconcileLegacySessionBackfill(store,{roomId,sequence,eventId,json}) {
+  if(!store.db.isTransaction)throw Error('Legacy session reconciliation requires its writer transaction');
+  saveCursor(store.db,roomId,sequence,eventId,null,json);
+  store.db.prepare('UPDATE messages_backfill_cursor SET applied_seq=?,applied_event_id=? WHERE room_id=?').run(sequence,eventId,roomId);
+  store.db.prepare('DELETE FROM messages_backfill_blocks WHERE room_id=?').run(roomId);
+  store.db.prepare('DELETE FROM messages_backfill_state WHERE room_id=?').run(anchorKey(roomId));
+  return store.checkMessagesParity({roomId});
+}
+
 // Errors that indict the store itself (schema/storage), not one room's
 // data: isolating them per room would re-report the same systemic failure
 // once per room and bury the signal, so they still abort the call.

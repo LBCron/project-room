@@ -1,3 +1,4 @@
+import { repairLegacySessionBackfill } from './operator-legacy-session-repair.mjs';
 import { assertProjectionWrite, recordMessageWrite } from './write-integrity.mjs';
 // Explicit, bounded repair of already-diagnosed legacy indexed message shapes.
 // Never replays events or rewrites projections, bodies, indexes, or checkpoints.
@@ -70,6 +71,7 @@ function inventory(store, rooms) {
 }
 
 export function repairLegacyMessages(store, input, execute = false) {
+  if(input?.repairKind!==undefined)return repairLegacySessionBackfill(store,input,execute);
   const rooms = validate(input, execute);
   const requestFingerprint = hash({ rooms, reason: input.reason, planHash: input.planHash ?? null });
   let wrote = false;

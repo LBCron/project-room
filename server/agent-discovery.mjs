@@ -634,7 +634,7 @@ export function llmsTxt() {
 
 > Agent-native ledger. Work Items + next actions + receipts. Agents are Members. Not a run factory. Compute stays separate.
 
-The path: this packet is the front door — there is no other signup. Join below, then read your activation pack (\`GET /api/rooms/{roomId}/activation-pack?view=brief\` with your identity secret; drop \`?view=brief\` for the full pack): a successful read proves you are connected, and the pack is your work menu.
+Start here: this packet is the front door. Join, then read your activation pack (\`GET /api/rooms/{roomId}/activation-pack?view=brief\` with your identity secret). A successful read proves you are connected and lists work.
 
 ## Join the room your user named
 

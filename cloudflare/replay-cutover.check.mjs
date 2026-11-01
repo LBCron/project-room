@@ -17,6 +17,7 @@ test('actual Worker durable Muse-sized witness progresses across restart with co
     await call('/seed?bytes=2376000');const captured=await call('/durable-capture');
     const baseline=await call('/append-cost?i=90&baseline=1');const before=await call('/append-cost?i=0');await call('/seed-derived?count=17405&generation='+captured.generation);
     const after=await call('/append-cost?i=1');assert.deepEqual(after.eventStatementCosts,before.eventStatementCosts,'derived history must not grow the ordinary append guard');
+    await call('/readmit');
     let progress={bytes:0};const measured=await call(`/durable-step-cost?generation=${captured.generation}&bytes=0&step=0`),first=measured.result;progress=first;
     await mf.dispose();mf=create();
     for(let step=1;progress.phase!=='witness_verified'&&step<200;step++){

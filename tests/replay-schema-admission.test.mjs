@@ -11,7 +11,7 @@ function fixture(t){
   let store=new RoomStore(filename);store.initialize(initialRoom());store.db.exec(cutover.replayCutoverSchema());
   const captured=cutover.captureReplayWitness(store,{roomId:'commons',requestId:'capture-schema',expectedHead:store.headSequence('commons'),reason:'Synthetic schema admission'});
   t.after(()=>{store.close();rmSync(directory,{recursive:true,force:true});});
-  const step=n=>cutover.advanceReplayWitness(store,{roomId:'commons',generation:captured.generation,expectedBytes:0,requestId:'schema-step-'+n});
+  let bytes=0;const step=n=>{const result=cutover.advanceReplayWitness(store,{roomId:'commons',generation:captured.generation,expectedBytes:bytes,requestId:'schema-step-'+n});bytes=result.bytes;return result;};
   return {get store(){return store;},step,reopen(){store.close();store=new RoomStore(filename);}};
 }
 function measure(db){

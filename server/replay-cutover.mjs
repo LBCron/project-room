@@ -73,14 +73,42 @@ export function replayCutoverSchema({durable = false} = {}) {
     END;`;
 }
 
-export function verifyReplayCutoverSchema(db) {
-  const ddl=replayCutoverSchema({durable:Boolean(db.storage?.sql)});
-  const definitions=[...ddl.matchAll(/(CREATE (?:TABLE|TRIGGER) ([a-z_]+)[\s\S]*?);(?=\s*CREATE |\s*$)/g)];
-  if(definitions.length!==8)throw Error('invalid replay schema contract');
-  for(const [,sql,name] of definitions){
+const schemaAdmissions=new WeakMap(),schemaContracts=new Map();
+function schemaContract(db){
+  const durable=Boolean(db.storage?.sql);
+  if(!schemaContracts.has(durable)){
+    const ddl=replayCutoverSchema({durable});
+    const definitions=[...ddl.matchAll(/(CREATE (?:TABLE|TRIGGER) ([a-z_]+)[\s\S]*?);(?=\s*CREATE |\s*$)/g)];
+    if(definitions.length!==8)throw Error('invalid replay schema contract');
+    schemaContracts.set(durable,{definitions,hash:hash(ddl)});
+  }
+  return schemaContracts.get(durable);
+}
+function schemaVersion(db){
+  const version=db.prepare('PRAGMA schema_version').get()?.schema_version;
+  if(!Number.isSafeInteger(version)||version<0)throw Error('invalid replay schema version');
+  return version;
+}
+// Exact verification is explicit admission/cold-start work, not a repeated
+// data-step scan. A committed schema change stays invalid until re-admission.
+export function admitReplayCutoverSchema(db){
+  schemaAdmissions.set(db,{invalid:true});
+  const contract=schemaContract(db),version=schemaVersion(db);
+  for(const [,sql,name] of contract.definitions){
     const row=db.prepare(`SELECT CASE WHEN typeof(sql)='text' AND octet_length(sql)<=8192
       THEN sql END AS sql FROM sqlite_master WHERE name=?`).get(name);
     if(row?.sql!==sql.trim())throw Error('replay schema requires reconciliation');
+  }
+  if(schemaVersion(db)!==version)throw Error('replay schema requires reconciliation before readmission');
+  schemaAdmissions.set(db,{version,contract:contract.hash,invalid:false});
+}
+export function verifyReplayCutoverSchema(db){
+  const admitted=schemaAdmissions.get(db);
+  if(!admitted)return admitReplayCutoverSchema(db);
+  const version=schemaVersion(db);
+  if(admitted.invalid||admitted.version!==version||admitted.contract!==schemaContract(db).hash){
+    admitted.invalid=true;
+    throw Error('replay schema requires reconciliation and exact readmission');
   }
 }
 
@@ -469,14 +497,14 @@ export function partitionReplayWitness(store,input) {
 export function ensureReplayCutoverRestoreSchema(db) {
   if (!db.prepare("SELECT 1 FROM sqlite_master WHERE type='table' AND name='message_replay_units'").get())
     db.exec(replayCutoverSchema({durable:Boolean(db.storage?.sql)}));
-  verifyReplayCutoverSchema(db);
+  admitReplayCutoverSchema(db);
 }
 
 // Whole-store backup/recovery already performs a complete offline audit. This
 // verifies preserved derivation inputs, not serving parity or completion. It is
 // deliberately not called by ordinary appends or bounded continuation steps.
 export function auditReplayCutoverRecovery(db) {
-  verifyReplayCutoverSchema(db);
+  admitReplayCutoverSchema(db);
   if(db.prepare(`SELECT 1 FROM message_replay_units u WHERE generation<>''
     AND NOT EXISTS(SELECT 1 FROM message_replay_units h WHERE h.room_id=u.room_id
       AND h.generation=u.generation AND h.domain='header' AND h.unit_key='state') LIMIT 1`).get())

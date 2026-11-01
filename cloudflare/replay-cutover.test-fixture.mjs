@@ -1,6 +1,7 @@
 // Local synthetic qualification only. DDL activation is confined to this fixture.
 import {ReplayWitnessRoom} from './replay-projection-witness.test-fixture.mjs';
-import {replayCutoverSchema,captureReplayWitness,advanceReplayWitness,partitionReplayWitness,readReplayWitnessLeaf} from '../server/replay-cutover.mjs';
+import * as cutover from '../server/replay-cutover.mjs';
+const {replayCutoverSchema,captureReplayWitness,advanceReplayWitness,partitionReplayWitness,readReplayWitnessLeaf}=cutover;
 import {applyEvent,event} from '../src/events.js';
 import {initialRoom} from '../server/bootstrap.mjs';
 import {createHash} from 'node:crypto';
@@ -33,6 +34,7 @@ export class ReplayCutoverRoom extends ReplayWitnessRoom {
         this.db.prepare("UPDATE message_replay_units SET payload=?,payload_bytes=?,payload_sha256=? WHERE domain='metadata-entry' AND unit_key=?").run(bytes,bytes.length,createHash('sha256').update(bytes).digest('hex'),key);
         return Response.json({tampered:true});
       }
+      if(url.pathname==='/readmit'){cutover.admitReplayCutoverSchema(this.db);return Response.json({admitted:true});}
       if(url.pathname==='/durable-capture')return Response.json(captureReplayWitness(this.s,{roomId:'commons',requestId:'durable-capture',expectedHead:2,reason:'Synthetic durable capture'}));
       if(url.pathname==='/durable-step')return Response.json(advanceReplayWitness(this.s,{roomId:'commons',generation:url.searchParams.get('generation'),requestId:'step-'+url.searchParams.get('step'),expectedBytes:Number(url.searchParams.get('bytes'))}));
       if(url.pathname==='/durable-step-cost'){

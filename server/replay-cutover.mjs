@@ -1,3 +1,10 @@
+import {stageCurrentCandidateRecords,currentCandidateCommandContext,applyCurrentCandidateEvent,publishCurrentCandidate,readCurrentRecord,admitCurrentCandidateBudget} from './current-room-repository.mjs';
+import {applyEvent,memberHistoryVisibility} from '../src/events.js';
+import {messageRowForWrite} from './messages-store.mjs';
+import {messageProofHash} from './write-integrity.mjs';
+import {messageRowParityFields} from './messages-store.mjs';
+import {decodeMessageEntity} from './message-entity-projection.mjs';
+import {projectionMessageFromRest} from './projection-at-rest.mjs';
 // Explicit, unwired replay cutover. Exported DDL is not registered on store
 // open. Capturing bytes never certifies replay or publishes serving rows.
 import {createHash} from 'node:crypto';
@@ -346,7 +353,7 @@ function auditBinding(db, receiptId) {
   const row=db.prepare(`SELECT CASE WHEN typeof(counts_json)='text' AND octet_length(counts_json)<=4096
     THEN counts_json END AS json FROM operator_actions WHERE id=?
     AND action IN ('replay_cutover_capture','replay_cutover_hash','replay_cutover_codec',
-      'replay_cutover_abandon','replay_cutover_cleanup','replay_cutover_dependency','replay_cutover_tail','replay_cutover_work')`).get(receiptId);
+      'replay_cutover_abandon','replay_cutover_cleanup','replay_cutover_dependency','replay_cutover_tail','replay_cutover_work','replay_cutover_messages','replay_cutover_current')`).get(receiptId);
   if(!row?.json)throw Error('missing independent replay audit binding');
   const value=JSON.parse(row.json);
   if(!value||typeof value!=='object'||Array.isArray(value))throw Error('invalid replay audit binding');
@@ -355,6 +362,13 @@ function auditBinding(db, receiptId) {
 }
 
 function validate(input, phase) {
+  if(phase==='messages'||phase==='current'){
+    if(!input||!id(input.roomId)||!id(input.requestId)||!digest(input.generation)
+      ||!Number.isSafeInteger(input.expectedSteps)||input.expectedSteps<0
+      ||Object.keys(input).some(k=>!['roomId','generation','requestId','expectedSteps'].includes(k)))
+      throw Error('invalid replay H message qualification intent');
+    return;
+  }
   if(phase==='work'){
     if(!input||!id(input.roomId)||!id(input.requestId)||!digest(input.generation)
       ||!Number.isSafeInteger(input.expectedWorkCount)||input.expectedWorkCount<0||input.expectedWorkCount>1000000
@@ -389,7 +403,7 @@ function validate(input, phase) {
 }
 function receipt(store, input, phase, operation) {
   validate(input, phase);
-  const intent=phase==='work'?{phase,roomId:input.roomId,requestId:input.requestId,generation:input.generation,expectedWorkCount:input.expectedWorkCount}:phase==='abandon'
+  const intent=(phase==='messages'||phase==='current')?{phase,roomId:input.roomId,requestId:input.requestId,generation:input.generation,expectedSteps:input.expectedSteps}:phase==='work'?{phase,roomId:input.roomId,requestId:input.requestId,generation:input.generation,expectedWorkCount:input.expectedWorkCount}:phase==='abandon'
     ? {phase,roomId:input.roomId,requestId:input.requestId,generation:input.generation,reason:input.reason}
     : phase==='cleanup'
       ? {phase,roomId:input.roomId,requestId:input.requestId,generation:input.generation,expectedDeleted:input.expectedDeleted}
@@ -425,10 +439,9 @@ export function captureReplayWitness(store, input) {
     const admitted=db.prepare(`SELECT
       CASE WHEN typeof(r.sequence)='integer' AND r.sequence BETWEEN 1 AND ${MAX} THEN r.sequence END AS head,
       CASE WHEN typeof(r.projection)='text' THEN octet_length(r.projection) END AS bytes,
-      CASE WHEN typeof(p.sequence)='integer' AND p.sequence=r.sequence
-        AND typeof(p.metadata_hash)='text' AND octet_length(p.metadata_hash)=64
-        AND typeof(p.projection_hash)='text' AND octet_length(p.projection_hash)=64
-        THEN p.metadata_hash END AS metadata_hash,
+      CASE WHEN typeof(p.metadata_hash)='text' AND octet_length(p.metadata_hash)=64 THEN p.metadata_hash END AS metadata_hash,
+      p.sequence AS historical_checkpoint_sequence,
+      CASE WHEN json_valid(r.projection) THEN json_type(r.projection,'$.messageAuthority') END AS message_authority_type,
       CASE WHEN typeof(p.projection_hash)='text' AND octet_length(p.projection_hash)=64 THEN p.projection_hash END AS content_hash,
       CASE WHEN typeof(e.id)='text' AND octet_length(e.id) BETWEEN 1 AND 200 THEN hex(CAST(e.id AS BLOB)) END AS event_id_hex
       FROM rooms r LEFT JOIN integrity_room_state p ON p.room_id=r.id
@@ -437,7 +450,9 @@ export function captureReplayWitness(store, input) {
     if (!Number.isSafeInteger(admitted.bytes) || admitted.bytes<1 || admitted.bytes>ceiling) throw Error('replay capture byte limit');
     const runtime=sqliteValueLimit(db);
     if(!Number.isSafeInteger(runtime?.valueLimitBytes) || admitted.bytes+512>runtime.valueLimitBytes)throw Error('replay capture runtime value limit');
-    if (!digest(admitted.metadata_hash) || !digest(admitted.content_hash) || !admitted.event_id_hex) throw Error('independent replay proof required');
+    if (!digest(admitted.metadata_hash) || !admitted.event_id_hex) throw Error('independent replay proof required');
+    if(admitted.message_authority_type!==null && (admitted.historical_checkpoint_sequence!==admitted.head || !digest(admitted.content_hash)))
+      throw Error('Canonical-authority current content qualification required');
     const generation=hash(input.roomId+'\0'+input.requestId);
     const active=activeCapture(db,roomId);
     if(active && db.prepare(`SELECT 1 FROM message_replay_units WHERE room_id=? AND generation=?
@@ -448,7 +463,8 @@ export function captureReplayWitness(store, input) {
       payload_bytes=excluded.payload_bytes,payload_sha256=excluded.payload_sha256,payload=excluded.payload`)
       .run(roomId,admitted.head,hash(generation),Buffer.from(generation));
     const header={version:1,roomId,generation,captureReceiptId:receiptId,head:admitted.head,eventId:rawId(admitted.event_id_hex),
-      bytes:admitted.bytes,metadataHash:admitted.metadata_hash,contentHash:admitted.content_hash,
+      bytes:admitted.bytes,metadataHash:admitted.metadata_hash,
+      historicalCheckpoint:{sequence:admitted.historical_checkpoint_sequence??null,contentHash:admitted.content_hash??null},
       epoch:epoch(db,roomId),ceiling};
     const headerHash=put(db,roomId,generation,'header',header,header.head);
     db.prepare(`INSERT INTO message_replay_units
@@ -458,7 +474,10 @@ export function captureReplayWitness(store, input) {
     put(db,roomId,generation,'hash',{version:1,headerHash,state,sourceRoot:SOURCE_EMPTY[8],receiptId});
     const codecState=JSON.stringify(initialProjectionScan());
     put(db,roomId,generation,'codec',{version:1,headerHash,state:codecState,receiptId});
-    return {generation,bindingHash:headerHash,hashStateHash:hash(state),sourceRoot:SOURCE_EMPTY[8],codecStateHash:hash(codecState),head:header.head,bytes:header.bytes,phase:'captured',publication:'pending',certified:false};
+    const targetHead=stageCurrentCandidateRecords(store,{changes:[{domain:'migrationFence',key:'active',value:{generation,headerHash}}],
+      counts:{roomId,sequence:header.head,eventId:header.eventId,messages:0,workItems:0,replyRequests:0,members:0,roundLimitPauses:0,
+        threadParticipants:0,historyFloors:0,historyExclusions:0,metadataRecords:0,metadataProofs:0}});
+    return {generation,targetHead,bindingHash:headerHash,hashStateHash:hash(state),sourceRoot:SOURCE_EMPTY[8],codecStateHash:hash(codecState),head:header.head,bytes:header.bytes,phase:'captured',publication:'pending',certified:false};
   });
 }
 
@@ -1119,6 +1138,263 @@ export function qualifyReplayHWork(store,input){
     return {generation:input.generation,bindingHash:header.hash,semanticStateHash:hash(JSON.stringify(state)),
       workCount:state.workCount,expectedWorkCount:frame.entries,workDefaultsQualified:state.workDefaultsQualified,
       phase:state.workDefaultsQualified?'work_qualified':'work_qualifying',inputBytes:budget.bytes,
+      basis:'protected-current-state',historyProvenance:'unknown',certified:false};
+  });
+}
+
+// Qualify the protected inline H message set against existing canonical rows.
+// Both directions are counted: qualifying projected IDs alone cannot reject an
+// extra canonical row. Candidate state is not admitted until all fields,
+// ancestry, pins, body references and the complete census have passed.
+export function qualifyReplayHMessages(store,input) {
+  return receipt(store,input,'messages',({receiptId})=>{
+    const db=store.db,header=captureBinding(db,input.roomId,input.generation),budget={bytes:hReadControlBytes(db,header)};
+    const codec=get(db,input.roomId,input.generation,'codec'),codecReceipt=auditBinding(db,codec.value.receiptId);
+    budget.bytes+=codec.inputBytes+receiptInputBytes.get(codecReceipt)+4096;
+    const scan=JSON.parse(codec.value.state);
+    if(codec.value.headerHash!==header.hash||codecReceipt.bindingHash!==header.hash
+      ||codecReceipt.codecStateHash!==hash(codec.value.state)||scan.phase!=='done'||scan.offset!==header.value.bytes)
+      throw Error('completed protected codec required for H message qualification');
+    if(scan.keys.includes('messageAuthority'))throw Error('Canonical-authority H content digest qualification is required before conversion');
+    const semantic=get(db,input.roomId,input.generation,'semantic'),prior=auditBinding(db,semantic.value.receiptId);
+    budget.bytes+=semantic.inputBytes+receiptInputBytes.get(prior)+4096;
+    let state=semantic.value.state;
+    if(prior.semanticStateHash!==hash(JSON.stringify(state))||prior.bindingHash!==header.hash
+      ||state.headerHash!==header.hash||state.codecStateHash!==hash(codec.value.state)||state.workDefaultsQualified!==true)
+      throw Error('complete independently qualified H work map required');
+    state={hMessageSteps:0,hMessageCursor:'',hMessageCount:0,hCanonicalCursor:'',hCanonicalCount:0,hMessagePhase:'projection',...state};
+    if(state.hMessageSteps!==input.expectedSteps)throw Error('H message qualification cursor changed');
+    if(state.hMessagesQualified!==true) {
+      if(state.hMessagePhase==='projection') {
+        const next=db.prepare("SELECT unit_key AS key FROM message_replay_units WHERE room_id=? AND generation=? AND domain='message' AND unit_key>? ORDER BY unit_key LIMIT 1")
+          .get(input.roomId,input.generation,state.hMessageCursor);
+        if(next) {
+          if(typeof next.key!=='string'||Buffer.byteLength(next.key)<1||Buffer.byteLength(next.key)>200)throw Error('H message key admission required');
+          const projected=readWitnessLeafSource(db,header,'message',next.key,budget).value;
+          const message=projectionMessageFromRest(projected,{bodyForSha:sha=>{
+            const source=readHReferenceSource(db,header,'body',sha,budget);if(source.absent)throw Error('Missing protected H body');return source.row.body;
+          }});
+          const source=readHMessageSource(db,header,next.key,budget);
+          if(source.absent)throw Error('Protected projected H member lacks canonical row');
+          const row=source.row,decoded=decodeMessageEntity(row);
+          if(!isDeepStrictEqual(decoded,message)||row.reactions_json!==null)throw Error('Protected H message payload differs');
+          const thread=new Map([[message.id,message]]);let ancestor=row.reply_to_id,childSeq=row.seq;
+          for(let depth=0;ancestor;depth++) {
+            if(depth>=32||thread.has(ancestor))throw Error('H reply ancestry exceeds bound or cycles');
+            const parent=readHMessageSource(db,header,ancestor,budget);
+            if(parent.absent||parent.row.seq>=childSeq)throw Error('H reply ancestry is missing or out of order');
+            const value=decodeMessageEntity(parent.row);thread.set(ancestor,value);childSeq=parent.row.seq;ancestor=parent.row.reply_to_id;
+          }
+          const pins=scan.keys.includes('pins')?readWitnessLeafSource(db,header,'metadata','pins',budget).value:[];
+          if(!Array.isArray(pins)||pins.length>100)throw Error('Protected H pins exceed bounded membership');
+          if(messageRowParityFields(row,message,{sequence:row.seq,pinned:pins.some(pin=>pin.messageId===message.id),threadMessages:thread}).length)
+            throw Error('Protected H message field or ancestry parity differs');
+          // The indexed original event point binds ordering without replaying
+          // or certifying any historical prefix. Pre-H provenance stays unknown.
+          const scalar=db.prepare('SELECT octet_length(body) AS bytes FROM events WHERE room_id=? AND sequence=?').get(input.roomId,row.seq);
+          if(!scalar||!Number.isSafeInteger(scalar.bytes)||scalar.bytes<1||scalar.bytes>131072||budget.bytes+scalar.bytes>262144)
+            throw Error('H message sequence source exceeds bounded input');
+          budget.bytes+=scalar.bytes;
+          const entry=JSON.parse(db.prepare('SELECT body FROM events WHERE room_id=? AND sequence=?').get(input.roomId,row.seq).body);
+          const originalId=entry.data?.messageId??entry.id;
+          if(entry.type!=='message.posted'||(originalId!==message.id&&originalId+':channel'!==message.id)||entry.actorId!==message.authorId)
+            throw Error('H message sequence source differs');
+          state={...state,hMessageCursor:next.key,hMessageCount:state.hMessageCount+1};
+        } else {
+          if(state.hMessageCount!==scan.messageIndex)throw Error('Protected H projected membership count differs');
+          state={...state,hMessagePhase:'canonical'};
+        }
+      } else if(state.hMessagePhase==='canonical') {
+        const candidates=[];
+        const current=db.prepare('SELECT message_id AS key FROM messages WHERE room_id=? AND message_id>? COLLATE BINARY ORDER BY message_id LIMIT 1').get(input.roomId,state.hCanonicalCursor);
+        if(current)candidates.push(current);
+        for(const domain of ['h-message','h-message-absent']) {
+          const row=db.prepare('SELECT unit_key AS key FROM message_replay_units WHERE room_id=? AND generation=? AND domain=? AND unit_key>? COLLATE BINARY ORDER BY unit_key LIMIT 1')
+            .get(input.roomId,input.generation,domain,state.hCanonicalCursor);if(row)candidates.push(row);
+        }
+        if(candidates.length) {
+          if(candidates.some(row=>typeof row.key!=='string'||Buffer.byteLength(row.key)<1||Buffer.byteLength(row.key)>200))throw Error('H canonical identity admission required');
+          const key=candidates.map(row=>row.key).sort((a,b)=>Buffer.compare(Buffer.from(a),Buffer.from(b)))[0];
+          const source=readHMessageSource(db,header,key,budget);
+          state={...state,hCanonicalCursor:key,hCanonicalCount:state.hCanonicalCount+(source.absent?0:1)};
+          if(state.hCanonicalCount>scan.messageIndex)throw Error('Unprojected H canonical member');
+        } else {
+          if(state.hCanonicalCount!==scan.messageIndex)throw Error('Protected H canonical membership count differs');
+          state={...state,hMessagesQualified:true};
+        }
+      } else throw Error('Invalid H message qualification phase');
+      state={...state,hMessageSteps:state.hMessageSteps+1};
+      if(budget.bytes>262144)throw Error('H message qualification aggregate byte limit');
+      put(db,input.roomId,input.generation,'semantic',{state,receiptId});
+    }
+    return {generation:input.generation,bindingHash:header.hash,semanticStateHash:hash(JSON.stringify(state)),
+      workCount:state.workCount,workDefaultsQualified:state.workDefaultsQualified,hMessageSteps:state.hMessageSteps,
+      hMessageCount:state.hMessageCount,hCanonicalCount:state.hCanonicalCount,hMessagesQualified:state.hMessagesQualified===true,
+      phase:state.hMessagesQualified?'h_messages_qualified':'h_messages_qualifying',inputBytes:budget.bytes,
+      basis:'protected-current-state',historyProvenance:'unknown',certified:false};
+  });
+}
+
+// Existing-room conversion uses the actual target metadata/proofs. Temporary
+// message versions exist only until H/tail comparison completes; publication
+// retains canonical messages/work_entities and never promotes these units.
+function currentCandidateValue(db,header,domain,key,budget) {
+  const {roomId,generation}=header.value;
+  const scalar=db.prepare('SELECT payload_bytes FROM message_replay_units WHERE room_id=? AND generation=? AND domain=? AND unit_key=?').get(roomId,generation,domain,key);
+  if(!scalar)return null;
+  if(!Number.isSafeInteger(scalar.payload_bytes)||scalar.payload_bytes<1||scalar.payload_bytes>131072||budget.bytes+scalar.payload_bytes+8192>262144)throw Error('Candidate payload admission required');
+  const stored=db.prepare('SELECT payload,payload_sha256 FROM message_replay_units WHERE room_id=? AND generation=? AND domain=? AND unit_key=?').get(roomId,generation,domain,key);
+  budget.bytes+=scalar.payload_bytes+8192;
+  if(!stored?.payload||stored.payload.byteLength!==scalar.payload_bytes||hash(stored.payload)!==stored.payload_sha256)throw Error('Candidate payload changed');
+  const value=JSON.parse(fatalText(stored.payload)),independent=auditBinding(db,value.receiptId);budget.bytes+=receiptInputBytes.get(independent);
+  if(independent.bindingHash!==header.hash||independent.generation!==generation||!independent.effects?.some(effect=>isDeepStrictEqual(effect,[domain,key,hash(JSON.stringify(value.row))])))
+    throw Error('Independent candidate effect differs');
+  return value.row;
+}
+function saveCurrentCandidateValue(db,header,domain,key,row,receiptId,effects) {
+  const payload=Buffer.from(JSON.stringify({row,receiptId}));if(payload.byteLength>131072)throw Error('Candidate payload exceeds bounded unit');
+  db.prepare(`INSERT INTO message_replay_units VALUES(?,?,?,?,1,?,?,?) ON CONFLICT(room_id,generation,domain,unit_key) DO UPDATE SET
+    payload_bytes=excluded.payload_bytes,payload_sha256=excluded.payload_sha256,payload=excluded.payload`)
+    .run(header.value.roomId,header.value.generation,domain,key,payload.byteLength,hash(payload),payload);
+  effects.push([domain,key,hash(JSON.stringify(row))]);
+}
+export function advanceCurrentRoomConversion(store,input) {
+  return receipt(store,input,'current',({receiptId})=>{
+    const db=store.db,header=captureBinding(db,input.roomId,input.generation),budget={bytes:hReadControlBytes(db,header),records:0,receipts:new Map()};
+    admitCurrentCandidateBudget(db,budget);
+    const semantic=get(db,input.roomId,input.generation,'semantic'),prior=auditBinding(db,semantic.value.receiptId);
+    budget.bytes+=semantic.inputBytes+receiptInputBytes.get(prior)+4096;
+    let state=semantic.value.state;
+    if(prior.bindingHash!==header.hash||prior.semanticStateHash!==hash(JSON.stringify(state))||state.hMessagesQualified!==true||state.workDefaultsQualified!==true)
+      throw Error('Completed independent H message and work qualification required');
+    const codec=get(db,input.roomId,input.generation,'codec'),codecReceipt=auditBinding(db,codec.value.receiptId);budget.bytes+=codec.inputBytes+receiptInputBytes.get(codecReceipt);
+    const scan=JSON.parse(codec.value.state);
+    if(codecReceipt.codecStateHash!==hash(codec.value.state)||state.codecStateHash!==hash(codec.value.state)||scan.phase!=='done')throw Error('Current conversion codec binding differs');
+    state={currentSteps:0,currentPhase:'metadata',metadataIndex:0,metadataEntry:'',participantCursor:'',candidateHead:auditBinding(db,header.value.captureReceiptId).targetHead,tailSequence:header.value.head,tailEventId:header.value.eventId,...state};
+    if(state.currentSteps!==input.expectedSteps)throw Error('Current conversion cursor changed');
+    const effects=[];
+    const counts=state.candidateHead?{...state.candidateHead.counts,...(state.currentSteps===0?{messages:state.hMessageCount}:{})}:{roomId:input.roomId,sequence:header.value.head,eventId:header.value.eventId,messages:state.hMessageCount,
+      workItems:0,replyRequests:0,members:0,roundLimitPauses:0,threadParticipants:0,historyFloors:0,historyExclusions:0,metadataRecords:0,metadataProofs:0};
+    const stage=(changes,nextCounts=counts)=>{state={...state,candidateHead:stageCurrentCandidateRecords(store,{head:state.candidateHead,changes,counts:nextCounts,inputBudget:budget})};};
+    const maps=new Set(['members','channels','workItems','replyRequests','agentHalts','helpOffers','bonds']);
+    const omitted=new Set(['messages','messageAuthority','eventLog','seenEvents','seenIdempotencyKeys']);
+    if(state.currentPhase==='metadata') {
+      const key=scan.keys[state.metadataIndex];
+      if(key===undefined)state={...state,currentPhase:'participants'};
+      else if(omitted.has(key))state={...state,metadataIndex:state.metadataIndex+1};
+      else {
+        if(key==='messagesArchive')throw Error('Existing archived room needs qualified nested retained-ID target conversion');
+        const source=readWitnessLeafSource(db,header,'metadata',key,budget).value;
+        const partitioned=source?.kind==='entry-map'&&source.parent===key;
+        const map=partitioned||maps.has(key)&&source!==null&&typeof source==='object'&&!Array.isArray(source);
+        if(map) {
+          if(!maps.has(key))throw Error('Unsupported target map domain');
+          if(state.metadataEntry==='') {
+            stage([{domain:'shape',key,value:'object'}]);state={...state,metadataEntry:'[start]'};
+          } else {
+            let next;
+            if(partitioned) {
+              const prefix=JSON.stringify([key]).slice(0,-1)+',';
+              next=db.prepare("SELECT unit_key AS key FROM message_replay_units WHERE room_id=? AND generation=? AND domain='metadata-entry' AND unit_key>? AND unit_key<? ORDER BY unit_key LIMIT 1")
+                .get(input.roomId,input.generation,state.metadataEntry==='[start]'?prefix:state.metadataEntry,prefix+'\uffff');
+            } else {
+              const keys=Object.keys(source).sort((a,b)=>Buffer.compare(Buffer.from(a),Buffer.from(b))),after=state.metadataEntry==='[start]'?'':state.metadataEntry;
+              const id=keys.find(id=>Buffer.compare(Buffer.from(id),Buffer.from(after))>0);if(id!==undefined)next={key:id};
+            }
+            if(next) {
+              const address=partitioned?JSON.parse(next.key):[key,next.key];if(address[0]!==key||typeof address[1]!=='string')throw Error('Candidate map membership differs');
+              const value=partitioned?readWitnessLeafSource(db,header,'metadata-entry',next.key,budget).value:source[address[1]];
+              const nextCounts={...counts};if(['workItems','replyRequests','members'].includes(key))nextCounts[key]++;
+              if(key==='members') {
+                const room=readCurrentRecord(db,input.roomId,'metadata','room',budget);
+                if(!room)throw Error('Room metadata must precede member qualification');
+                if(memberHistoryVisibility({room,members:{[address[1]]:value}},address[1])==='since_join')throw Error('Since-join member requires bounded historical floor qualification');
+              }
+              if(key==='workItems') {
+                const item=value?._workEntity===1?JSON.parse(readHReferenceSource(db,header,'work',address[1],budget).row.body):value;
+                if(item?.suspended_by==='round_limit')nextCounts.roundLimitPauses++;
+                if(value?._workEntity!==1)throw Error('Inline work requires code-owned target reference conversion');
+              }
+              stage([{domain:key,key:address[1],value}],nextCounts);state={...state,metadataEntry:next.key};
+            } else {
+              if(partitioned&&['workItems','replyRequests','members'].includes(key)&&counts[key]!==source.entries)throw Error('Complete target map count differs');
+              state={...state,metadataIndex:state.metadataIndex+1,metadataEntry:''};
+            }
+          }
+        } else {stage([{domain:'metadata',key,value:source}]);state={...state,metadataIndex:state.metadataIndex+1};}
+      }
+    } else if(state.currentPhase==='participants') {
+      const next=db.prepare("SELECT unit_key AS key FROM message_replay_units WHERE room_id=? AND generation=? AND domain='message' AND unit_key>? ORDER BY unit_key LIMIT 1").get(input.roomId,input.generation,state.participantCursor);
+      if(next) {
+        const row=readHMessageSource(db,header,next.key,budget).row,rootId=row.thread_root_id??row.message_id,key=rootId+'\0'+row.author_id;
+        const previous=readCurrentRecord(db,input.roomId,'threadParticipants',key,budget);
+        const changes=[{domain:'messageWitness',key:next.key,value:{sequence:row.seq,entityHash:row.entity_hash}}];
+        if(previous===undefined)changes.push({domain:'threadParticipants',key,value:{threadRootId:rootId,memberId:row.author_id}});
+        stage(changes,{...counts,threadParticipants:counts.threadParticipants+(previous===undefined?1:0)});
+        state={...state,participantCursor:next.key};
+      } else state={...state,currentPhase:'tail'};
+    } else if(state.currentPhase==='tail') {
+      const sourceHead=db.prepare('SELECT sequence FROM rooms WHERE id=?').get(input.roomId)?.sequence;
+      if(state.tailSequence===sourceHead)state={...state,currentPhase:'compare',compareCursor:state.compareCursor??''};
+      else {
+        const tail=readReplayTailEvent(store,{roomId:input.roomId,generation:input.generation,sequence:state.tailSequence+1});
+        budget.bytes+=tail.inputBytes;
+        const incoming=tail.event??JSON.parse(tail.body);
+        if(!['message.posted','work_claim.updated'].includes(incoming.type))throw Error('Unsupported bounded conversion tail dependency: '+incoming.type);
+        const readMessage=(id,b)=>{
+          const staged=currentCandidateValue(db,header,'replay-message',id,b);
+          const witness=readCurrentRecord(db,input.roomId,'messageWitness',id,b);
+          if(!staged&&witness===undefined)return undefined;
+          const source=staged?{absent:false,row:staged}:readHMessageSource(db,header,id,b);
+          if(!source.absent&&witness&&witness.entityHash!==source.row.entity_hash)throw Error('Candidate message witness differs');
+          return source.absent?undefined:{row:source.row,value:decodeMessageEntity(source.row)};
+        };
+        const context=currentCandidateCommandContext(store,input.roomId,{type:incoming.type,id:incoming.id,data:incoming.data},
+          {head:state.candidateHead,readMessage,inputBudget:budget,readWork:(id,b)=>{
+            const source=currentCandidateValue(db,header,'replay-metadata',id,b);return source??readHReferenceSource(db,header,'work',id,b).row;
+          }});
+        const applied=applyCurrentCandidateEvent(store,context,incoming,{sequence:state.tailSequence+1,apply:(previous,event)=>{
+          const next=applyEvent(previous,event);next.eventLog=[];next.seenEvents={};next.seenIdempotencyKeys={};return next;
+        },writeWork:()=>{throw Error('Unexpected work mutation in admitted post-only tail');},writeMessages:(previous,next,event,sequence)=>{
+          const before=new Map(previous.messages.map(message=>[message.id,message])),thread=new Map(next.messages.map(message=>[message.id,message]));
+          for(const message of next.messages)if(!isDeepStrictEqual(before.get(message.id),message)) {
+            const old=readMessage(message.id,budget);
+            const row=messageRowForWrite(message,{sequence:old?.row.seq??sequence,pinned:(next.pins??[]).some(pin=>pin.messageId===message.id),threadMessages:thread});row.entity_hash=messageProofHash(row);
+            saveCurrentCandidateValue(db,header,'replay-message',message.id,row,receiptId,effects);
+          }
+        }});
+        state={...state,candidateHead:applied.head,tailSequence:state.tailSequence+1,tailEventId:incoming.id};
+      }
+    } else if(state.currentPhase==='compare') {
+      const sourceHead=db.prepare('SELECT sequence FROM rooms WHERE id=?').get(input.roomId)?.sequence;
+      if(sourceHead!==state.tailSequence)state={...state,currentPhase:'tail'};
+      else {
+        const next=db.prepare("SELECT record_key AS key FROM current_room_record_proofs WHERE room_id=? AND domain='messageWitness' AND record_key>? AND present=1 ORDER BY record_key LIMIT 1").get(input.roomId,state.compareCursor);
+        if(next) {
+          const witness=readCurrentRecord(db,input.roomId,'messageWitness',next.key,budget);
+          const expected=currentCandidateValue(db,header,'replay-message',next.key,budget)??readHMessageSource(db,header,next.key,budget).row;
+          if(!witness||witness.entityHash!==expected.entity_hash||witness.sequence!==expected.seq)throw Error('Publication message membership differs');
+          const scalar=db.prepare('SELECT octet_length(record_json)+coalesce(octet_length(reducer_extras_json),0)+coalesce(octet_length(body),0) AS bytes FROM messages WHERE room_id=? AND message_id=?').get(input.roomId,next.key);
+          if(!scalar||scalar.bytes>131072||budget.bytes+scalar.bytes>262144)throw Error('Publication message comparison exceeds bounded input');budget.bytes+=scalar.bytes;
+          const actual=db.prepare(`SELECT ${[...MESSAGE_PROOF_FIELDS,'entity_hash'].join(',')} FROM messages WHERE room_id=? AND message_id=?`).get(input.roomId,next.key);
+          if(!isDeepStrictEqual({...actual},expected))throw Error('Current canonical tail differs from candidate');state={...state,compareCursor:next.key};
+        } else state={...state,currentPhase:'ready'};
+      }
+    } else if(state.currentPhase==='ready') {
+      // The engine's complete qualification and prospective tail are required;
+      // a caller-supplied head alone never reaches this publication branch.
+      if(db.prepare('SELECT sequence FROM rooms WHERE id=?').get(input.roomId)?.sequence!==state.tailSequence)state={...state,currentPhase:'tail'};
+      else {
+        const publication=publishCurrentCandidate(store,state.candidateHead,{generation:input.generation,qualificationReceiptId:semantic.value.receiptId});
+        abandonReplayCapture(store,{roomId:input.roomId,generation:input.generation,requestId:input.requestId+'-published',reason:'Qualified current serving activated; temporary source generation retired'});
+        return {...publication,generation:input.generation,bindingHash:header.hash,workCount:state.workCount,workDefaultsQualified:true,currentSteps:state.currentSteps+1,phase:'current_serving',publication:'current'};
+      }
+    } else throw Error('Invalid current conversion phase');
+    state={...state,currentSteps:state.currentSteps+1};
+    if(budget.bytes>262144)throw Error('Current conversion aggregate input bound');
+    put(db,input.roomId,input.generation,'semantic',{state,receiptId});
+    return {generation:input.generation,bindingHash:header.hash,semanticStateHash:hash(JSON.stringify(state)),workCount:state.workCount,workDefaultsQualified:true,
+      currentSteps:state.currentSteps,currentPhase:state.currentPhase,tailSequence:state.tailSequence,publicationReady:state.currentPhase==='ready',phase:'current_conversion',inputBytes:budget.bytes,effects,
       basis:'protected-current-state',historyProvenance:'unknown',certified:false};
   });
 }

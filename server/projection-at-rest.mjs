@@ -165,6 +165,16 @@ export function projectionMessageAtRest(original, {enabled=false, bodySha=shaOf}
   return slimmable(original)?renameKey(message,'body','bodyRef',bodySha(message.body,message.id)):message;
 }
 
+// The same per-record inverse used by bounded qualification; callers supply
+// an independently admitted body, not a repair or full-room hydration path.
+export function projectionMessageFromRest(original,{bodyForSha}={}) {
+  const message=hasMarker(original)?restoreEnvelope(original):original;
+  if(typeof message?.bodyRef!=='string')return message;
+  const body=bodyForSha?.(message.bodyRef);
+  if(typeof body!=='string'||shaOf(body)!==message.bodyRef)throw Error('Missing qualified projection body');
+  return renameKey(message,'bodyRef','body',body);
+}
+
 // Delete every body row the projection about to be stored no longer
 // references (win 4, replacing the json_each trigger). `referenced` is the
 // set of bodyRef shas in the new stored text. Callers run this in the same

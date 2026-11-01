@@ -1,6 +1,8 @@
 # Follow-up production releases, 2026-11-01
 
-This checkpoint supersedes c1c92 as the current production source. Exact own-head qualification, merge and deployment are distinct below. No skipped or cancelled job is called passed.
+Current observation, 10:08 UTC: production is `d3e73bf53972993905411d78df9e6560b5794aae` (canonical build `2026-11-01T09:58:00.832Z`, entry build `2026-11-01T09:58:09.665Z`). Deployment `41295314517` passed strict smoke 16/16, public smoke and runtime publication. Main also contains historical repair landing `21891d44372c7d24006ea37e312853517f5f9d73`, which is not deployed at this observation. Controlled live post/retry QA is still running; no final pass claimed yet.
+
+The sections below are dated checkpoint history. Later receipts supersede earlier limitations explicitly; failed attempts remain preserved. Exact head qualification, merge, deployment and live checks are distinct. No skipped or cancelled job is called passed.
 
 | PR | Qualified head | Merge |
 | --- | --- | --- |
@@ -22,13 +24,13 @@ Source e8c29d2f36fd8859d1c2c733abc1ed0052f9d68b. Canonical buildId 2026-11-01T07
 
 Main's intermediate push test runs were cancelled by newer-main concurrency; those are NOT-RUN. Own-head checks and preserved local qualification supported each landing under the authorized fast path. No health reset, schedule change, threshold change, rollback or production room conversion occurred.
 
-## Storage and product limits remain explicit
+## Earlier limits at e8c29 — later receipts supersede qualified cases
 
 The operator plan for controlled qa-release-c1c92-1101 admitted 11 events, 2 messages, 1 work item and 1 body. Execute request qa-e8c-authority-forward-v1 returned known HTTP 409 authority_not_ready because existing replay was not prepared. Conversion did not occur, and the saved result remained intact. The refusal is preserved; future preparation needs a fresh plan and new operation, not a claim of successful conversion.
 
 The large-room JSON replay blob problem remains open. The new activation door admits only small rooms and refuses archive/oversized history. The separate bounded replay prototype is not wired into runtime. Attachment reads improved materially: local SQL-result controls show list/delete/hidden download return zero blob bytes, while an authorized download reads exactly the requested blob. Inherited roomwide attachment quota scans can still traverse terminal rows; a qualified migration/index solution remains to be designed.
 
-The actual installed Codex runtime was not launched: enforced generic isolation rejects Darwin and bwrap is absent. Dedicated empty configuration validation passed; environment clearing alone is not an OS sandbox. The linked receipt records binary hash, source hashes, readiness refusal and every untested runtime/restart/wake boundary. This does not invalidate API qualification or establish actual host execution.
+At this earlier checkpoint, the actual installed Codex runtime had not been launched: enforced generic isolation rejects Darwin and bwrap is absent. Dedicated empty configuration validation passed; environment clearing alone is not an OS sandbox. The linked receipt records binary hash, source hashes, readiness refusal and every untested runtime/restart/wake boundary. This does not invalidate API qualification or establish actual host execution.
 
 Dot package preparation is deployed, but actual publisher identity, review video, platform approval, public installation and a fresh consenting Android journey remain unproven. No publisher details or install links are invented. Private connection state, operator token, provider raw logs, backup and SQLite files are excluded.
 
@@ -55,7 +57,7 @@ Runtime latest runtime-2026-11-01-108b5c1 targets exact source: 661 files / 3,50
 
 Dedicated existing QA-room live checks passed authorized pricing read, anonymous HTTP 401, cross-site origin_denied HTTP 403, and same-origin non-session room credential in cookie HTTP 401. Pricing state/revision remained identical; no grants minted or pricing changes. Initial source pin refused the old DO revision during propagation. A later test expectation incorrectly anticipated route HTTP 401 before the global Origin gate HTTP 403; this was corrected and both controls tested separately. Live rate exhaustion and a read-only API-key write were not tested. Local focused controls and hosted head qualification cover those behaviors.
 
-## Current storage qualification work
+## Storage qualification at 0f83478
 
 PR #5588 landed at 0f83478a9d7646f8297547723b06802cedc1167b from qualified head 8e8a7a047eb023635a07a1b9cecdb1ecaf596a75 (run 41290057997). Deployment and the controlled live conversion/reversal qualification are recorded below. Its first hosted run 41289516117 failed a pinned census test. Exact-main source census confirms the previously unrecorded operator admission dependency was already present on 06e811ff (expected 62 sites / actual 63), not a new runtime regression. The explicit test and design record now include it; original failure retained, no waiver. Six census and eight manifest tests passed locally.
 
@@ -86,3 +88,11 @@ Deployment `41293524688` uploaded source `9eec755f351ebdbcb3c5d8cf86f967aad6824f
 Automatic recovery verified both prior Worker allocations and both Worker/DO source doors back at `acedbeedc0de9cceb924fc763c5e85b45de8fa10` at `2026-11-01T09:43:34.918Z`. Root independently ran post-rollback strict smoke: 16/16 passed. This is recovery confirmation; the timeout cause is still under investigation. The original failed smoke and recovery artifacts are preserved.
 
 PRs #5589, #5591 and #5592 subsequently landed sequentially with their own heads green, ending at `3d22e0944ad8dbc82d1084b2cc54b5b62b07c6c7`; none is deployed at this checkpoint. No timeout was widened or failed deployment relabeled successful.
+
+### Successful composed deployments after the rollback
+
+Source `3d22e0944ad8dbc82d1084b2cc54b5b62b07c6c7` deployed successfully in `41294828583`: strict smoke 16/16, public smoke, all four source doors and runtime publication. Canonical build `2026-11-01T09:50:54.815Z`; entry build `2026-11-01T09:51:03.084Z`. Runtime: 661 files, 3,507,195 bytes, SHA256 `6ae53081ac1d6792af0c8ffaacf1b01ff307410a3e5ba2d647c0a35ba3e0c5ce`; latest release readback matched. This includes webhook authentication/atomic settlement, bounded ordinary posts, referral correctness and workflow comment corrections.
+
+Source `d3e73bf53972993905411d78df9e6560b5794aae` then deployed successfully in `41295314517`, adding qualified work-reference post admission. Strict smoke 16/16, public smoke, all source doors and runtime publication passed. Runtime: 661 files, 3,507,747 bytes, SHA256 `618e366b499024777804d6624923d4fce55910027f63340f447f7747f706ece2`. The isolated earlier 2.5-second readiness timeout did not recur in these checkpoints; its production cause remains unresolved.
+
+Historical repair PR #5594 passed its own head checks and landed at `21891d44372c7d24006ea37e312853517f5f9d73`. Its initial size gate failed because the body lacked the repository-required large-diff justification. The body now explains the atomic admission/repair/test slice; an edited-event gate passed with unchanged source. No live repair or quarantine clearance is claimed.

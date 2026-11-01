@@ -5,7 +5,7 @@ import {currentWorkCapacity} from './current-work-capacity.mjs';
 import {currentWorkSummary} from './current-work-summary.mjs';
 import {advanceCanonicalH} from './replay-canonical-h.mjs';
 import {purgeCurrentCandidateForPrivacy,assertCurrentCandidateEmpty,cleanupCurrentCandidateRecords,stageCurrentCandidateRecords,currentCandidateCommandContext,applyCurrentCandidateEvent,publishCurrentCandidate,readCurrentRecord,admitCurrentCandidateBudget} from './current-room-repository.mjs';
-import {applyEvent,memberHistoryVisibility} from '../src/events.js';
+import {applyEvent,memberHistoryVisibility,validId} from '../src/events.js';
 import {messageRowForWrite} from './messages-store.mjs';
 import {messageProofHash} from './write-integrity.mjs';
 import {messageRowParityFields} from './messages-store.mjs';
@@ -445,7 +445,6 @@ function receipt(store, input, phase, operation) {
 export function captureReplayWitness(store, input) {
   return receipt(store,input,'capture',({receiptId}) => {
     const db = store . db , roomId = input . roomId , ceiling = input . ceilingBytes ?? REPLAY_CAPTURE_BYTES ;
-    assertLegacyWorkReconciled(db,roomId);
     const admitted=db.prepare(`SELECT
       CASE WHEN typeof(r.sequence)='integer' AND r.sequence BETWEEN 1 AND ${MAX} THEN r.sequence END AS head,
       CASE WHEN typeof(r.projection)='text' THEN octet_length(r.projection) END AS bytes,
@@ -978,6 +977,22 @@ export function readReplayWitnessLeaf(store,input){
     const header=captureBinding(db,input.roomId,input.generation);
     return readWitnessLeafSource(db,header,input.domain,input.key,{bytes:hReadControlBytes(db,header)});
   });
+}
+// Operator preparation only. The complete independent H work qualification
+// supplies membership; the caller must still bind/recheck current task bytes.
+export function readQualifiedReplayWorkForRetirement(store,{roomId,generation,workItemId}) {
+  if(!id(roomId)||!digest(generation)||!validId(workItemId))throw Error('Invalid mirror H work selection');
+  const db=store.db;verifyReplayCutoverSchema(db);
+  const header=captureBinding(db,roomId,generation),budget={bytes:hReadControlBytes(db,header)};
+  const semantic=get(db,roomId,generation,'semantic'),saved=auditBinding(db,semantic.value.receiptId);
+  budget.bytes+=semantic.inputBytes+receiptInputBytes.get(saved)+4096;
+  if(saved.bindingHash!==header.hash||saved.semanticStateHash!==hash(JSON.stringify(semantic.value.state))||semantic.value.state.workDefaultsQualified!==true)
+    throw Error('Completed independent H work qualification required for mirror retirement');
+  const reference=readWitnessLeafSource(db,header,'metadata-entry',JSON.stringify(['workItems',workItemId]),budget).value;
+  if(reference?._workEntity!==1||reference.id!==workItemId)throw Error('Retirement requires a qualified H work reference');
+  const source=readHReferenceSource(db,header,'work',workItemId,budget);
+  if(source.absent||source.row.digest!==reference.digest||source.row.revision!==reference.revision)throw Error('Retirement H work reference differs');
+  return {reference,body:source.row.body,headerHash:header.hash,hHead:header.value.head,inputBytes:budget.bytes};
 }
 function readWitnessLeafSource(db,header,domain,key,budget){
     const {roomId,generation}=header.value;

@@ -1,7 +1,7 @@
 const PARTITIONED_MAPS=new Set(['members','channels','workItems','replyRequests','messagesArchive']);
 const RESTORE_MAPS=new Set([...PARTITIONED_MAPS,'seenEvents','seenIdempotencyKeys','helpOffers','agentHalts','bonds']);
 const sourceLimit=state=>state?.version===3?state.sourceBytes:4*1024*1024;
-const tokenLimit=state=>state?.version===3?state.sourceBytes:REPLAY_CODEC_TOKEN_BYTES;
+const tokenLimit = state => state?.version === 3?state.sourceBytes : REPLAY_CODEC_TOKEN_BYTES;
 // Bounded byte scanner for the immutable captured at-rest JSON. It partitions
 // existing bytes; record semantics remain in projection-at-rest and applyEvent.
 export const REPLAY_CODEC_TOKEN_BYTES = 128 * 1024;
@@ -84,7 +84,7 @@ function scanChunk(current,input,{maximumRecords=32}={}){
     }
     if(state.phase==='colon'){
       if(whitespace(byte)){take();continue;}if(byte!==58)fail();take();
-      state.phase=(state.key==='messages'||state.version===3&&state.key==='eventLog')?'messages-start':(state.version===3?RESTORE_MAPS:PARTITIONED_MAPS).has(state.key)?'map-start':'value';state.kind='metadata';state.tokenStart=state.offset;continue;
+      state.phase = (state.key === 'messages' || state.version === 3 && state.key === 'eventLog')?'messages-start' : (state.version === 3?RESTORE_MAPS : PARTITIONED_MAPS).has(state.key)?'map-start' : 'value';state.kind = 'metadata';state.tokenStart = state.offset;continue;
     }
     if(state.phase==='map-start'){
       if(whitespace(byte)){take();continue;}

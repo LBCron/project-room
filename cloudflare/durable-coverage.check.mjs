@@ -6,7 +6,9 @@ import {mkdtemp,rm} from 'node:fs/promises';
 import {join} from 'node:path';
 import {tmpdir} from 'node:os';
 import {fileURLToPath} from 'node:url';
-const token='synthetic-durable-restore-00000000000000',exporter='synthetic-durable-export-000000000000000';
+const token =
+  'synthetic-durable-restore-00000000000000', exporter =
+  'synthetic-durable-export-000000000000000';
 const bundle=async name=>(await build({entryPoints:[fileURLToPath(new URL(name,import.meta.url))],bundle:true,write:false,format:'esm',platform:'neutral',external:['node:*','cloudflare:*']})).outputFiles[0].text;
 test('actual Native cold constructor and operator continuations preserve sealed coverage and ordinary refusal',{timeout:120000},async()=>{
  const directory=await mkdtemp(join(tmpdir(),'native-durable-coverage-'));let script=await bundle('./durable-coverage-seed.test-fixture.mjs');const create=()=>new Miniflare({modules:true,script,compatibilityDate:'2026-07-30',compatibilityFlags:['nodejs_compat'],durableObjectsPersist:directory,durableObjects:{ROOM:{className:'DurableCoverageRoom',useSQLite:true}},bindings:{ROOM_ORIGIN:'https://room.example.test',ROOM_RESTORE_TOKEN:token,ROOM_EXPORT_TOKEN:exporter},serviceBindings:{ASSETS:async()=>new Response('Not found',{status:404})}});let mf=create();

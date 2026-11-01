@@ -25,6 +25,7 @@ import { ServiceError } from "./store.mjs";
 import { messageVisibleToViewer, summaryHistoryFloor } from "./history-visibility.mjs"; // QA4 Q4-SEC-1
 import { availableClaimsFromBoard, memoizeBoardList } from "./available-work.mjs";
 import { contextVersion } from "./room-context.mjs";
+import { workRoleHolder } from "./work-context.mjs";
 
 // Context embeds current Board orientation as well as formal work. Decide
 // conditional freshness only after composing both under the same read view.
@@ -55,6 +56,19 @@ export function readComposedRoomContext(store, token, roomId, { sinceVersion = n
     }
     return { ...context, context_version: version, orient: buildOrient(store, roomId, context.viewerId, options) };
   });
+}
+
+function withPrivateDefinitionsWithheld(store, roomSlug, state, viewerId) {
+  const privatePartiesByWork = typeof store.privateWorkParties === "function" ? store.privateWorkParties(roomSlug) : null;
+  if (!privatePartiesByWork?.size || !state.workItems) return state;
+  let changed = false;
+  const workItems = Object.fromEntries(Object.entries(state.workItems).map(([id, item]) => {
+    const parties = privatePartiesByWork.get(id);
+    if (!item || !parties || parties.has(viewerId) || workRoleHolder(item, viewerId)) return [id, item];
+    changed = true;
+    return [id, { ...item, title: null, definitionOfDone: null }];
+  }));
+  return changed ? { ...state, workItems } : state;
 }
 
 // Work states that count as open; completed and superseded work is history,
@@ -171,8 +185,12 @@ function fleetSelfOrNull(store, roomSlug, room, viewerId, boardList = null) {
 
 export function buildOrient(store, roomSlug, viewerId, options = {}) {
   // Unknown rooms fail here with the store's 404 (room_not_found).
-  const { sequence, state } = store.room(roomSlug);
-  if (!state.room) throw new Error("Room projection is missing its room record");
+  const { sequence, state: rawState } = store.room(roomSlug);
+  if (!rawState.room) throw new Error("Room projection is missing its room record");
+  // Private work definitions: the same predicate as default orientation
+  // (agent-orientation.mjs) — a non-party, non-role-holder sees the item
+  // with title and definitionOfDone withheld, on every orient consumer.
+  const state = withPrivateDefinitionsWithheld(store, roomSlug, rawState, viewerId);
   const member = state.members?.[viewerId];
   if (!member) throw new Error("Viewer is not a member of this room");
   const now = store.now();

@@ -159,3 +159,16 @@ test('new proof output bytes share the original admitted unit and cannot overrun
   assert.ok(spare>0);f.s.db.prepare("UPDATE message_replay_snapshots SET state_json=state_json||? WHERE room_id=?").run(' '.repeat(spare+1),roomId);
   const before=snapshot(f.s);assert.throws(()=>repairLegacyMessages(f.s,f.request),error=>error.code==='repair_bound_exceeded');assert.deepEqual(snapshot(f.s),before);
 });
+test('a strict plan cannot authorize the different explicit proof-adoption intent',t=>{
+  const s=new RoomStore(':memory:');t.after(()=>s.close());const f=seedLegacyFixture(s),plain=repairLegacyMessages(s,f.request);
+  const opted={...f.request,messageProofMode:MODE},different=repairLegacyMessages(s,opted);
+  assert.notEqual(different.planHash,plain.planHash);const before=snapshot(s);
+  assert.throws(()=>repairLegacyMessages(s,{...opted,planHash:plain.planHash,requestId:'different-mode'},true),error=>error.code==='repair_plan_changed');assert.deepEqual(snapshot(s),before);
+});
+test('the original 64-event boundary can atomically adopt every justified missing row proof',t=>{
+  const events=historicalSequence();
+  while(events.length<64)events.push(event({id:'bounded-extra-'+events.length,roomId,actorId:'owner',type:'message.posted',data:{messageId:'bounded-extra-'+events.length,body:'Bounded synthetic history'},at:'2026-09-01T03:00:00Z'}));
+  const f=fixture(t,{events}),plan=repairLegacyMessages(f.s,f.request),rows=f.s.db.prepare('SELECT * FROM messages WHERE room_id=?').all(roomId);
+  assert.equal(plan.rooms[0].events,64);assert.equal(plan.messageProofsToAdopt,rows.length);assert.equal(execute(f,plan).messageProofsAdopted,rows.length);
+  assert.equal(f.s.db.prepare('SELECT * FROM messages WHERE room_id=?').all(roomId).every(messageProofMatches),true);
+});

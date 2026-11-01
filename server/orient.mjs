@@ -213,7 +213,7 @@ export function buildOrient(store, roomSlug, viewerId, options = {}) {
   const boardList = withheldIds.size === 0 ? sharedBoardList : slug => {
     const rows = sharedBoardList(slug);
     if (slug !== roomSlug || !Array.isArray(rows)) return rows;
-    return rows.map(row => (row && withheldIds.has(row.id)
+    return rows.map(row => (row && withheldIds.has(row.workItemId)
       ? { ...row, title: null, ...(row.definitionOfDone !== undefined ? { definitionOfDone: null } : {}) }
       : row));
   };

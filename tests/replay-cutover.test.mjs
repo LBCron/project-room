@@ -5,8 +5,9 @@ import {mkdtempSync,rmSync} from 'node:fs';
 import {join} from 'node:path';
 import {tmpdir} from 'node:os';
 import {RoomStore} from '../server/store.mjs';
+import {applyEvent,event} from '../src/events.js';
 import {initialRoom} from '../server/bootstrap.mjs';
-import {replayCutoverSchema,captureReplayWitness,advanceReplayWitness,REPLAY_CAPTURE_BYTES} from '../server/replay-cutover.mjs';
+import {replayCutoverSchema,captureReplayWitness,advanceReplayWitness,partitionReplayWitness,REPLAY_CAPTURE_BYTES} from '../server/replay-cutover.mjs';
 function fixture(t,bytes=0){
   const s=new RoomStore(':memory:');t.after(()=>s.close());s.initialize(initialRoom());
   if(bytes){const state=structuredClone(s.room('commons').state);state.room.syntheticPadding='';state.room.syntheticPadding='x'.repeat(bytes-Buffer.byteLength(JSON.stringify(state)));s.transaction(()=>s.db.prepare("UPDATE rooms SET projection=? WHERE id='commons'").run(s.storedProjection('commons',state)));}
@@ -120,4 +121,37 @@ test('prior version-44 store opens and writes while leaving the explicit sidecar
     assert.deepEqual(s.db.prepare('SELECT * FROM message_replay_units ORDER BY generation,domain,unit_key').all(),before);
     assert.equal(advanceReplayWitness(s,{roomId:'commons',generation:captured.generation,expectedBytes:0,requestId:'old44-hash'}).phase,'witness_verified');
   }finally{s.close();}
+});
+
+function hashToEnd(f,start){let result={bytes:0};for(let n=0;result.phase!=='witness_verified'&&n<300;n++)result=f.step(start.generation,result.bytes,'hash-full-'+n);assert.equal(result.phase,'witness_verified');return result;}
+function codecStep(f,start,offset,n){return partitionReplayWitness(f.s,{roomId:'commons',generation:start.generation,expectedBytes:offset,requestId:'codec-'+n});}
+
+test('durable shared-codec partition requires the independent hash and keeps source cursor bytes untouched',t=>{
+  const f=fixture(t),start=f.capture(),before=authority(f.s.db);
+  assert.throws(()=>codecStep(f,start,0,0),/verified witness/);hashToEnd(f,start);
+  const result=codecStep(f,start,0,0);assert.equal(result.phase,'codec_partitioned');assert.equal(result.certified,false);assert.deepEqual(authority(f.s.db),before);
+  assert.equal(codecStep(f,start,0,0).duplicate,true);
+  assert.throws(()=>codecStep(f,start,1,'changed'),/cursor changed/);
+});
+
+test('Muse-sized message array partitions into point-addressable leaves with bounded steps',t=>{
+  const f=fixture(t),s=f.s,db=s.db;
+  const base=structuredClone(s.room('commons').state),sample=applyEvent(base,event({id:'template',roomId:'commons',actorId:'owner',type:'message.posted',at:'2026-01-01T00:00:00.000Z',data:{messageId:'template',body:'Synthetic Muse-sized body'}})).messages[0];
+  base.messages=Array.from({length:17405},(_,i)=>({...sample,id:'m'+i}));
+  s.transaction(()=>db.prepare("UPDATE rooms SET projection=? WHERE id='commons'").run(s.storedProjection('commons',base)));
+  const bytes=db.prepare("SELECT octet_length(projection) AS n FROM rooms WHERE id='commons'").get().n;assert.ok(bytes>2376000&&bytes<4194304);
+  const start=f.capture();hashToEnd(f,start);let state={bytes:0},steps=0,maxRecords=0;
+  while(state.phase!=='codec_partitioned'&&steps<1000){state=codecStep(f,start,state.bytes,'large-'+steps++);maxRecords=Math.max(maxRecords,state.records);}
+  assert.equal(state.phase,'codec_partitioned');assert.equal(state.messages,17405);assert.ok(steps>500);assert.ok(maxRecords<=32);
+  assert.equal(db.prepare("SELECT count(*) AS n FROM message_replay_units WHERE domain='message'").get().n,17405);
+  const leaf=db.prepare("SELECT payload FROM message_replay_units WHERE room_id='commons' AND generation=? AND domain='message' AND unit_key='m17404'").get(start.generation);
+  assert.equal(JSON.parse(Buffer.from(leaf.payload).toString()).id,'m17404');assert.equal(state.certified,false);
+});
+
+test('codec state tamper plus recomputed local checksum refuses against its old phase receipt',t=>{
+  const f=fixture(t),start=f.capture();hashToEnd(f,start);const db=f.s.db;
+  const row=db.prepare("SELECT payload FROM message_replay_units WHERE domain='codec'").get(),value=JSON.parse(Buffer.from(row.payload).toString());
+  const state=JSON.parse(value.state);state.phase='done';value.state=JSON.stringify(state);const payload=Buffer.from(JSON.stringify(value));
+  db.prepare("UPDATE message_replay_units SET payload=?,payload_bytes=?,payload_sha256=? WHERE domain='codec'").run(payload,payload.length,createHash('sha256').update(payload).digest('hex'));
+  assert.throws(()=>codecStep(f,start,0,0),/independent replay codec binding/);
 });

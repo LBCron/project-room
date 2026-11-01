@@ -30,3 +30,28 @@ test('actual Worker durable Muse-sized witness progresses across restart with co
     console.log('DURABLE_REPLAY_CAPTURE_WORKER '+JSON.stringify({runtime,head:progress.head,bytes:progress.bytes,phase:progress.phase,certified:false,derivedLeaves:17405,withoutGuard:baseline.eventStatementCosts,guardBefore:before.eventStatementCosts,guardAfter:after.eventStatementCosts,originalStepBytes:historical.bytes}));
   }finally{await mf.dispose();await rm(directory,{recursive:true,force:true});}
 });
+
+
+test('actual Worker partitions 17,405 captured messages through bounded codec steps and partial restart',async()=>{
+  const built=await build({entryPoints:[fileURLToPath(new URL('./replay-cutover.test-fixture.mjs',import.meta.url))],bundle:true,write:false,format:'esm',platform:'neutral',external:['node:*','cloudflare:*']});
+  const directory=await mkdtemp(join(tmpdir(),'codec-cutover-'));
+  const create=()=>new Miniflare({modules:true,script:built.outputFiles[0].text,compatibilityDate:'2026-07-30',compatibilityFlags:['nodejs_compat'],durableObjectsPersist:directory,durableObjects:{ROOM:{className:'ReplayCutoverRoom',useSQLite:true}}});
+  let mf=create();const call=async path=>{const response=await mf.dispatchFetch('http://localhost'+path),body=await response.json();assert.equal(response.status,200,JSON.stringify(body));return body;};
+  try{
+    assert.equal((await call('/runtime')).storage.valueLimitBytes,8388642);
+    const seed=await call('/seed-codec');assert.ok(seed.bytes>2376000&&seed.bytes<4194304);
+    const capture=await call('/durable-capture');let progress={bytes:0};
+    for(let i=0;progress.phase!=='witness_verified'&&i<300;i++)progress=await call(`/durable-step?generation=${capture.generation}&bytes=${progress.bytes}&step=${i}`);
+    assert.equal(progress.phase,'witness_verified');progress={bytes:0};let first,maxRecords=0,steps=0;
+    while(progress.phase!=='codec_partitioned'&&steps<1000){
+      progress=await call(`/durable-codec?generation=${capture.generation}&bytes=${progress.bytes}&step=${steps}`);
+      first??=progress;maxRecords=Math.max(maxRecords,progress.records);steps++;
+      if(steps===2){await mf.dispose();mf=create();}
+      if(steps===4)await call('/append-cost?i=33');
+    }
+    assert.equal(progress.phase,'codec_partitioned');assert.equal(progress.bytes,seed.bytes);assert.equal(progress.certified,false);assert.ok(maxRecords<=32);
+    const census=await call('/codec-census');assert.equal(census.messages,17405);assert.ok(census.maxLeafBytes<1000);
+    const original=await call(`/durable-codec?generation=${capture.generation}&bytes=0&step=0`);assert.deepEqual({...original,duplicate:false},first);
+    console.log('DURABLE_REPLAY_CODEC_WORKER '+JSON.stringify({bytes:seed.bytes,steps,maxRecords,census,head:progress.head,certified:false,publication:progress.publication}));
+  }finally{await mf.dispose();await rm(directory,{recursive:true,force:true});}
+});

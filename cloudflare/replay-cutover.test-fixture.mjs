@@ -1,6 +1,8 @@
 // Local synthetic qualification only. DDL activation is confined to this fixture.
 import {ReplayWitnessRoom} from './replay-projection-witness.test-fixture.mjs';
-import {replayCutoverSchema,captureReplayWitness,advanceReplayWitness} from '../server/replay-cutover.mjs';
+import {replayCutoverSchema,captureReplayWitness,advanceReplayWitness,partitionReplayWitness} from '../server/replay-cutover.mjs';
+import {applyEvent,event} from '../src/events.js';
+import {initialRoom} from '../server/bootstrap.mjs';
 import {createHash} from 'node:crypto';
 export class ReplayCutoverRoom extends ReplayWitnessRoom {
   constructor(ctx,env){
@@ -10,6 +12,15 @@ export class ReplayCutoverRoom extends ReplayWitnessRoom {
   async fetch(request){
     const url=new URL(request.url);
     try{
+      if(url.pathname==='/seed-codec'){
+        this.s.initialize(initialRoom());const state=structuredClone(this.s.room('commons').state);
+        const sample=applyEvent(state,event({id:'template',roomId:'commons',actorId:'owner',type:'message.posted',at:'2026-01-01T00:00:00.000Z',data:{messageId:'template',body:'Synthetic Muse-sized body'}})).messages[0];
+        state.messages=Array.from({length:17405},(_,i)=>({...sample,id:'m'+i}));
+        this.s.transaction(()=>this.db.prepare("UPDATE rooms SET projection=? WHERE id='commons'").run(this.s.storedProjection('commons',state)));
+        return Response.json(this.db.prepare("SELECT octet_length(projection) AS bytes FROM rooms WHERE id='commons'").get());
+      }
+      if(url.pathname==='/durable-codec')return Response.json(partitionReplayWitness(this.s,{roomId:'commons',generation:url.searchParams.get('generation'),requestId:'codec-'+url.searchParams.get('step'),expectedBytes:Number(url.searchParams.get('bytes'))}));
+      if(url.pathname==='/codec-census')return Response.json(this.db.prepare("SELECT count(*) AS messages,MAX(payload_bytes) AS maxLeafBytes FROM message_replay_units WHERE domain='message'").get());
       if(url.pathname==='/durable-capture')return Response.json(captureReplayWitness(this.s,{roomId:'commons',requestId:'durable-capture',expectedHead:2,reason:'Synthetic durable capture'}));
       if(url.pathname==='/durable-step')return Response.json(advanceReplayWitness(this.s,{roomId:'commons',generation:url.searchParams.get('generation'),requestId:'step-'+url.searchParams.get('step'),expectedBytes:Number(url.searchParams.get('bytes'))}));
       if(url.pathname==='/seed-derived'){

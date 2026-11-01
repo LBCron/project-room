@@ -136,5 +136,5 @@ Normal invocation executes one already-created public Room assistant run assigne
   }
 }
 if (process.argv[1] && import.meta.url === pathToFileURL(realpathSync(process.argv[1])).href) main().catch(error => {
-  console.error(error.message); process.exitCode = CODEX_RUNTIME_FAILURE_EXITS[codexRuntimeSetupFailure(error)] ?? 1;
+  console.error(error.message); const failureCode = codexRuntimeSetupFailure(error); process.exitCode = failureCode ? CODEX_RUNTIME_FAILURE_EXITS[failureCode] : 1;
 });

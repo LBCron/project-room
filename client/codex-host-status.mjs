@@ -25,7 +25,7 @@ function readRecord(path) {
     phase: value.phase, protocol: value.protocol, credentials: value.credentials, modelExecution: "not_tested" };
   for (const key of ["origin", "roomId", "memberId", "runId"])
     if (typeof value[key] === "string" && value[key].length <= 256) result[key] = value[key];
-  if (Object.hasOwn(CODEX_RUNTIME_FAILURE_EXITS, value.failureCode)) result.failureCode = value.failureCode;
+  if (typeof value.failureCode === "string" && Object.hasOwn(CODEX_RUNTIME_FAILURE_EXITS, value.failureCode)) result.failureCode = value.failureCode;
   return result;
 }
 
@@ -62,7 +62,7 @@ export function createCodexStatusWriter(directory, connection, { onError = () =>
       if (!["host_status", "host_readiness"].includes(event.type)) return;
       if (event.type === "host_status" && phases.has(event.status)) {
         record.phase = event.status;
-        if (Object.hasOwn(CODEX_RUNTIME_FAILURE_EXITS, event.failureCode)) record.failureCode = event.failureCode;
+        if (typeof event.failureCode === "string" && Object.hasOwn(CODEX_RUNTIME_FAILURE_EXITS, event.failureCode)) record.failureCode = event.failureCode;
         if (event.status === "protocol_qualified" && record.failureCode !== "login_required") delete record.failureCode;
         if (event.status === "protocol_qualified") record.protocol = "qualified";
         if (event.status === "recovery_pending") record.protocol = "unverified";

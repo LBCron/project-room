@@ -11,11 +11,11 @@ const inside = (root, path) => path === root || (!relative(root, path).startsWit
 export const CODEX_RUNTIME_FAILURE_EXITS = Object.freeze({ profile_lock_requires_reconciliation: 70, login_required: 71, invalid_runtime: 72 });
 export class CodexRuntimeSetupError extends Error {
   constructor(code, message) {
-    if (!Object.hasOwn(CODEX_RUNTIME_FAILURE_EXITS, code)) throw new TypeError('Unknown runtime setup failure');
+    if (typeof code !== "string" || !Object.hasOwn(CODEX_RUNTIME_FAILURE_EXITS, code)) throw new TypeError('Unknown runtime setup failure');
     super(message); this.name = 'CodexRuntimeSetupError'; this.code = code;
   }
 }
-export const codexRuntimeSetupFailure = error => error instanceof CodexRuntimeSetupError && Object.hasOwn(CODEX_RUNTIME_FAILURE_EXITS,error.code) ? error.code : undefined;
+export const codexRuntimeSetupFailure = error => error instanceof CodexRuntimeSetupError && typeof error.code === "string" && Object.hasOwn(CODEX_RUNTIME_FAILURE_EXITS,error.code) ? error.code : undefined;
 export function validateCodexRuntimeConfig(config) {
   try { return validateRuntimeConfig(config); }
   catch (error) { throw new CodexRuntimeSetupError('invalid_runtime', error.message); }

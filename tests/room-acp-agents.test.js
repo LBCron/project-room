@@ -5,7 +5,7 @@ import assert from "node:assert/strict";
 import { fileURLToPath } from "node:url";
 import { parseArgs } from "../room-acp/src/args.mjs";
 import { candidates, probe, splitCommand, spawnAgent, childEnvFor, KNOWN_AGENTS } from "../room-acp/src/agents.mjs";
-import { mkdtempSync, readFileSync, rmSync, mkdirSync, writeFileSync } from "node:fs";
+import { mkdtempSync, readFileSync, rmSync, mkdirSync, writeFileSync, chmodSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join as pathJoin } from "node:path";
 import { main } from "../room-acp/src/cli.mjs";
@@ -103,11 +103,8 @@ test("doctor lists the fake agent's capabilities", async () => {
 // KI-032: with no ACP agent installed, doctor names each adapter to install,
 // and says plainly when plain `claude` is present but cannot speak ACP.
 test("doctor with no ACP agent names the adapters and flags plain claude", async () => {
-  const { mkdtempSync, writeFileSync, chmodSync } = await import("node:fs");
-  const { tmpdir } = await import("node:os");
-  const { join: joinPath } = await import("node:path");
-  const dir = mkdtempSync(joinPath(tmpdir(), "room-acp-path-"));
-  writeFileSync(joinPath(dir, "claude"), "#!/bin/sh\n"); chmodSync(joinPath(dir, "claude"), 0o755);
+  const dir = mkdtempSync(pathJoin(tmpdir(), "room-acp-path-"));
+  writeFileSync(pathJoin(dir, "claude"), "#!/bin/sh\n"); chmodSync(pathJoin(dir, "claude"), 0o755);
   const lines = [];
   const code = await main(["doctor"], { print: line => lines.push(line), env: { PATH: dir } });
   const text = lines.join("\n");

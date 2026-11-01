@@ -4,7 +4,7 @@ import { createServer } from "node:http";
 import assert from "node:assert/strict";
 import { existsSync, realpathSync, rmSync, writeFileSync, readFileSync } from "node:fs";
 import { join } from "node:path";
-import { spawn } from "node:child_process";
+import { spawn, execFileSync } from "node:child_process";
 import { createAcceptanceFixture } from "../scripts/acceptance-fixture.mjs";
 import { createRoomServer } from "../server/http.mjs";
 import { RoomAgentClient } from "../client/room-agent.mjs";
@@ -246,6 +246,33 @@ test("configured host receives prepared request once and its answer returns thro
   assert.equal(retry.receipt.duplicate, true);
   assert.equal(retry.hostExecuted, false);
   assert.equal(calls, 1);
+});
+
+for (const fault of ['http-408', 'malformed-200', 'committed-malformed-200']) test(`a ${fault} delivered-report outcome stays unconfirmed and retryable`, async t => {
+  const f = await fixture(t), args = runner(t, f), requestMessageId = f.open('uncertain-report-' + fault).command.data.messageId;
+  let executions = 0;
+  const connection = { ...f.config, fetchImpl: async (url, options) => {
+    if (options.method === 'POST' && new URL(url).pathname.endsWith('/request-runs') && JSON.parse(options.body).action === 'delivered') {
+      if (fault === 'committed-malformed-200') await fetch(url, options);
+      return fault === 'http-408'
+        ? Response.json({ error: { code: 'request_timeout', message: 'Report timeout' } }, { status: 408 })
+        : new Response('{not-json', { status: 200, headers: { 'content-type': 'application/json' } });
+    }
+    return fetch(url, options);
+  } };
+  let refusal;
+  try { await runRequestOnce({ ...args, connection, requestMessageId, execute: async () => { executions++; return { body: 'Saved answer before uncertain report' }; } }); }
+  catch (error) { refusal = error; }
+  const row = args.db.prepare('SELECT delivered,reported FROM request_runs').get();
+  t.diagnostic(JSON.stringify({ fault, local: row, service: (await f.client.requestRuns()).runs[requestMessageId].state, errorStatus: refusal?.status, reportPending: refusal?.runReportPending }));
+  assert.equal(row.delivered, 1);
+  assert.equal(row.reported, 0, 'a timeout or malformed success does not prove a terminal report refusal');
+  assert.equal(refusal?.runReportPending, true);
+  const recovered = await runRequestOnce({ ...args, requestMessageId, execute: async () => { executions++; assert.fail('report recovery must not execute the host'); } });
+  assert.equal(recovered.runReported, true);
+  assert.equal(recovered.reportOnly, true);
+  assert.equal((await f.client.requestRuns()).runs[requestMessageId].state, 'delivered');
+  assert.equal(executions, 1);
 });
 test("lost delivery response reuses saved answer without executing host again", async t => {
   const f = await fixture(t), args = runner(t, f), q = f.open("host-lost");
@@ -1102,4 +1129,39 @@ test("implicit private replies confirm over HTTP without changing retry input or
   }
   const unavailable = { command: async () => receipt, messageThread: async () => { throw new Error("parent unavailable"); } };
   assert.equal((await submitReplyAction(unavailable, f.identity, "room_reply", args)).status, "unconfirmed");
+});
+
+test("upgrading an actual old journal recovers a previously lost delivered report", async t => {
+  const f = await fixture(t), requestMessageId = f.open("old-report-lost").command.data.messageId;
+  const oldPath = new URL(`../client/.member2-legacy-runner-${crypto.randomUUID()}.mjs`, import.meta.url);
+  const source = execFileSync("git", ["show", "ef583ba81eeeb284c8b743829aa4a0555752a0e8:client/request-runner.mjs"], { encoding: "utf8" });
+  writeFileSync(oldPath, source, { flag: "wx", mode: 0o600 });
+  t.after(() => rmSync(oldPath, { force: true }));
+  const old = await import(oldPath.href);
+  const path = join(f.directory, "actual-legacy-journal.sqlite");
+  let db = old.openRequestJournal(path), calls = 0;
+  t.after(() => db.close());
+  const lossy = { ...f.config, fetchImpl: async (url, options) => {
+    if (options.method === "POST" && new URL(url).pathname.endsWith("/request-runs")
+      && JSON.parse(options.body).action === "delivered") throw new TypeError("lost old run report");
+    return fetch(url, options);
+  } };
+  const execute = async () => { calls++; return { body: "Actual old result survives upgrade" }; };
+  assert.equal((await old.runRequestOnce({ connection: lossy, requestMessageId, db, execute })).status, "delivered");
+  assert.equal(db.prepare("SELECT delivered FROM request_runs").get().delivered, 1);
+  assert.equal(db.prepare("PRAGMA table_info(request_runs)").all().some(row => row.name === "reported"), false);
+  assert.equal((await f.client.requestRuns()).runs[requestMessageId].state, "result_ready");
+  db.close(); db = openRequestJournal(path);
+  const migrated = db.prepare("SELECT delivered,reported FROM request_runs").get();
+  t.diagnostic(JSON.stringify({ legacyDelivered: migrated.delivered, migratedReported: migrated.reported,
+    serviceState: (await f.client.requestRuns()).runs[requestMessageId].state, executions: calls }));
+  assert.equal(migrated.reported, 0, "legacy delivered does not prove its service report landed");
+  const controller = new AbortController(), timeout = setTimeout(() => controller.abort(), 3000);
+  t.after(() => { clearTimeout(timeout); controller.abort(); });
+  const seen = [];
+  await runRequestQueue({ connection: f.config, db, execute, signal: controller.signal, stream: false, intervalMs: 1000,
+    emit: result => { seen.push(result); if (result.status === "delivered") controller.abort(); } });
+  assert.equal(seen.at(-1)?.runReported, true);
+  assert.equal((await f.client.requestRuns()).runs[requestMessageId].state, "delivered");
+  assert.equal(calls, 1);
 });

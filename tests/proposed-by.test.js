@@ -70,7 +70,10 @@ test("reopening a pre-upgrade database repairs provenance from each item's own p
   store.command(owner, "commons", { id: crypto.randomUUID(), type: T.MEMBER_ADDED, data: { memberId: "human", displayName: "human", kind: "human", permissions: ["accept_work"] } });
   store.command(owner, "commons", { id: crypto.randomUUID(), type: T.WORK_PROPOSED, data: { workItemId: "w-legacy", title: "Legacy item", definitionOfDone: "done", accountableMemberId: "human" } });
   // Simulate the pre-upgrade persisted shape: projection row without the field, envelope intact.
-  store.db.prepare("UPDATE rooms SET projection=? WHERE id=?").run(JSON.stringify((() => { const s = structuredClone(store.room("commons").state); delete s.workItems["w-legacy"].proposedById; return s; })()), "commons");
+  const legacy = structuredClone(store.room("commons").state);
+  delete legacy.workItems["w-legacy"].proposedById;
+  store.transaction(() => store.db.prepare("UPDATE rooms SET projection=? WHERE id=?")
+    .run(store.storedProjection("commons", legacy), "commons"));
   store.close();
   store = new RoomStore(filename); // reopen: repair must run deterministically, without replaying the log
   try {

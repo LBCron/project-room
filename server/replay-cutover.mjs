@@ -1,6 +1,7 @@
 // Explicit, unwired replay cutover. Exported DDL is not registered on store
 // open. Capturing bytes never certifies replay or publishes serving rows.
 import {createHash} from 'node:crypto';
+import {MESSAGE_PROOF_FIELDS,messageProofMatches} from './write-integrity.mjs';
 import {initialProjectionScan,scanProjectionChunk,decodeProjectionSpan,projectionMapFrame} from './replay-projection-codec.mjs';
 import {sqliteValueLimit} from './storage-limits.mjs';
 import {STORE_SCHEMA_VERSION} from './writer-fence.mjs';
@@ -25,6 +26,105 @@ for(let level=1;level<=8;level++)SOURCE_EMPTY.push(sourceNode(level,SOURCE_EMPTY
 const sourceLeaf=(header,index,chunk)=>hash(JSON.stringify(['project-room.replay-source-leaf.v1',
   header.hash,header.value.generation,index,chunk.offset,chunk.length,header.value.bytes,chunk.sha256]));
 
+// H-row copies preserve an existing independent field proof, not a new
+// payload self-hash. The immutable dependency receipt fixes that old proof.
+// Unsealed source units use row_version=0/payload_sha256=''; readers must verify
+// the original row proof and receipt before using any field.
+function messageCaptureSchema() {
+  const textFields = MESSAGE_PROOF_FIELDS.filter(field => !['seq','pinned'].includes(field));
+  const payload = `json_object(${[...MESSAGE_PROOF_FIELDS,'entity_hash']
+    .map(field => `'${field}',OLD.${field}`).join(',')})`;
+  const textTypes = textFields.map(field => `typeof(OLD.${field}) IN ('text','null')`).join(' AND ');
+  const sourceBytes = [...textFields,'entity_hash']
+    .map(field => `coalesce(octet_length(OLD.${field}),0)`).join('+');
+  const rawAdmission = `${textTypes} AND typeof(OLD.message_id)='text'
+    AND octet_length(OLD.message_id) BETWEEN 1 AND 200
+    AND typeof(OLD.seq)='integer' AND OLD.seq BETWEEN 1 AND ${MAX}
+    AND typeof(OLD.pinned)='integer' AND OLD.pinned IN (0,1)
+    AND typeof(OLD.entity_hash)='text' AND octet_length(OLD.entity_hash)=64
+    AND OLD.entity_hash NOT GLOB '*[^a-f0-9]*' AND (${sourceBytes})<=131072`;
+  // CASE is intentional: never construct JSON from an unadmitted large value.
+  // JSON escaping can expand this fixed raw ceiling; the actual encoded copy
+  // must separately fit the existing 128 KiB unit ceiling before persistence.
+  const admitted = `(CASE WHEN ${rawAdmission}
+    THEN octet_length(${payload})<=131072 ELSE 0 END)`;
+  const generation = `CASE WHEN typeof(c.payload)='blob' AND c.payload_bytes=64
+    AND octet_length(c.payload)=64 THEN CAST(c.payload AS TEXT) END`;
+  const activeView = `CREATE VIEW replay_capture_active AS SELECT c.room_id,${generation} AS generation,
+    CASE WHEN typeof(h.payload_sha256)='text' AND octet_length(h.payload_sha256)=64
+      THEN h.payload_sha256 END AS header_hash
+    FROM message_replay_units c JOIN message_replay_units h ON h.room_id=c.room_id
+      AND h.generation=(${generation}) AND h.domain='header' AND h.unit_key='state'
+    WHERE c.generation='' AND c.domain='control' AND c.unit_key='capture-head'
+      AND typeof(c.payload)='blob' AND octet_length(c.payload)=64
+      AND (${generation}) NOT GLOB '*[^a-f0-9]*'
+      AND typeof(h.payload_sha256)='text' AND octet_length(h.payload_sha256)=64;`;
+  const active = room => `SELECT room_id,generation,header_hash FROM replay_capture_active WHERE room_id=${room}`;
+  const uncaptured = (a, key) => `(CASE WHEN typeof(${key})='text'
+    AND octet_length(${key}) BETWEEN 1 AND 200 THEN NOT EXISTS(SELECT 1 FROM message_replay_units x
+    WHERE x.room_id=${a}.room_id AND x.generation=${a}.generation
+      AND x.domain IN ('h-message','h-message-absent') AND x.unit_key=${key}) ELSE 1 END)`;
+  const dependencyId = (prefix, key) => `'oa_brc_${prefix}_'||a.generation||'_'||lower(hex(CAST(${key} AS BLOB)))`;
+  const time = `CAST(strftime('%s','now') AS INTEGER)*1000`;
+  const oldCopy = () => {
+    const receiptId = dependencyId('hm','OLD.message_id');
+    const source = `(${active('OLD.room_id')}) a WHERE ${uncaptured('a','OLD.message_id')}`;
+    const invalidId = `'oa_brc_inv_'||a.generation`;
+    return `
+      INSERT INTO operator_actions(id,at,action,target_kind,target_id,counts_json,result)
+        SELECT ${invalidId},${time},'replay_cutover_abandon','room',a.room_id,
+          json_object('roomId',a.room_id,'generation',a.generation,'lifecycle','abandoned',
+            'abandonmentReceiptId',${invalidId},'reason','dependency_admission'), 'abandoned'
+        FROM ${source} AND NOT ${admitted};
+      INSERT INTO message_replay_units
+        SELECT a.room_id,a.generation,'control','abandonment',1,
+          octet_length(json_object('receiptId',${invalidId})),'',
+          CAST(json_object('receiptId',${invalidId}) AS BLOB)
+        FROM ${source} AND NOT ${admitted};
+      DELETE FROM message_replay_units WHERE room_id=OLD.room_id AND generation=''
+        AND domain='control' AND unit_key='capture-head' AND EXISTS(
+          SELECT 1 FROM message_replay_units x WHERE x.room_id=OLD.room_id
+          AND x.generation=CASE WHEN typeof(message_replay_units.payload)='blob'
+            AND octet_length(message_replay_units.payload)=64 THEN CAST(message_replay_units.payload AS TEXT) END
+          AND x.domain='control' AND x.unit_key='abandonment');
+      INSERT INTO operator_actions(id,at,action,target_kind,target_id,counts_json,result)
+        SELECT ${receiptId},${time},'replay_cutover_dependency','room',a.room_id,
+          json_object('roomId',a.room_id,'generation',a.generation,'headerHash',a.header_hash,
+            'domain','h-message','key',OLD.message_id,'entityHash',OLD.entity_hash),'pending'
+        FROM ${source} AND ${admitted};
+      INSERT INTO message_replay_units
+        SELECT a.room_id,a.generation,'h-message',OLD.message_id,0,
+          octet_length(${payload}),'',CAST(${payload} AS BLOB)
+        FROM ${source} AND ${admitted};`;
+  };
+  const absence = () => {
+    const receiptId = dependencyId('ha','NEW.message_id');
+    const source = `(${active('NEW.room_id')}) a
+      WHERE typeof(NEW.message_id)='text' AND octet_length(NEW.message_id) BETWEEN 1 AND 200
+        AND ${uncaptured('a','NEW.message_id')}
+        AND NOT EXISTS(SELECT 1 FROM messages m WHERE m.room_id=NEW.room_id AND m.message_id=NEW.message_id)`;
+    return `
+      INSERT INTO operator_actions(id,at,action,target_kind,target_id,counts_json,result)
+        SELECT ${receiptId},${time},'replay_cutover_dependency','room',a.room_id,
+          json_object('roomId',a.room_id,'generation',a.generation,'headerHash',a.header_hash,
+            'domain','h-message-absent','key',NEW.message_id,'entityHash',NULL),'pending'
+        FROM ${source};
+      INSERT INTO message_replay_units
+        SELECT a.room_id,a.generation,'h-message-absent',NEW.message_id,0,4,'',CAST('null' AS BLOB)
+        FROM ${source};`;
+  };
+  return `${activeView}
+  CREATE TRIGGER replay_message_before_update BEFORE UPDATE ON messages
+    WHEN EXISTS(${active('OLD.room_id')}) OR EXISTS(${active('NEW.room_id')}) BEGIN
+    ${oldCopy()} ${absence()} END;
+  CREATE TRIGGER replay_message_before_delete BEFORE DELETE ON messages
+    WHEN EXISTS(${active('OLD.room_id')}) BEGIN
+    ${oldCopy()} END;
+  CREATE TRIGGER replay_message_before_insert BEFORE INSERT ON messages
+    WHEN EXISTS(${active('NEW.room_id')}) BEGIN
+    ${absence()} END;`;
+}
+
 // Separate typed identities are necessary: the existing (room_id,part) table
 // already owns its part-zero legacy checkpoint. No internal room/key aliases.
 export function replayCutoverSchema({durable = false} = {}) {
@@ -36,7 +136,7 @@ export function replayCutoverSchema({durable = false} = {}) {
     row_version INTEGER NOT NULL, payload_bytes INTEGER NOT NULL,
     payload_sha256 TEXT NOT NULL, payload BLOB NOT NULL,
     PRIMARY KEY(room_id,generation,domain,unit_key),
-    CHECK(domain IN ('control','header','witness','hash','codec','message','metadata','replay-message','replay-metadata','semantic','source-chunk','source-merkle','leaf-proof','metadata-entry'))
+    CHECK(domain IN ('control','header','witness','hash','codec','message','metadata','replay-message','replay-metadata','semantic','source-chunk','source-merkle','leaf-proof','metadata-entry','h-message','h-message-absent'))
   );
   ${['INSERT','UPDATE','DELETE'].map(operation => `CREATE TRIGGER replay_units_writer_${operation.toLowerCase()}
     BEFORE ${operation} ON message_replay_units BEGIN
@@ -70,17 +170,19 @@ export function replayCutoverSchema({durable = false} = {}) {
       THEN row_version+1 ELSE RAISE(ABORT,'invalid replay source epoch') END
       WHERE room_id=OLD.id AND generation='' AND domain='control' AND unit_key='epoch';
     DELETE FROM message_replay_units WHERE room_id=OLD.id AND generation<>'';
-    END;`;
+    END;
+  ${messageCaptureSchema()}`;
 }
 
-const schemaAdmissions=new WeakMap(),schemaContracts=new Map();
+const schemaAdmissions=new WeakMap(),schemaContracts=new Map(),receiptInputBytes=new WeakMap();
 function schemaContract(db){
   const durable=Boolean(db.storage?.sql);
   if(!schemaContracts.has(durable)){
     const ddl=replayCutoverSchema({durable});
-    const definitions=[...ddl.matchAll(/(CREATE (?:TABLE|TRIGGER) ([a-z_]+)[\s\S]*?);(?=\s*CREATE |\s*$)/g)];
-    if(definitions.length!==8)throw Error('invalid replay schema contract');
-    schemaContracts.set(durable,{definitions,hash:hash(ddl)});
+    const definitions=[...ddl.matchAll(/(CREATE (?:TABLE|TRIGGER|VIEW) ([a-z_]+)[\s\S]*?);(?=\s*CREATE |\s*$)/g)];
+    if(definitions.length!==12)throw Error('invalid replay schema contract');
+    schemaContracts.set(durable,{definitions,hash:hash(ddl),
+      bindingBytes:definitions.reduce((sum,[,sql])=>sum+Buffer.byteLength(sql.trim()),0)});
   }
   return schemaContracts.get(durable);
 }
@@ -88,20 +190,20 @@ function schemaContract(db){
 // not authorize schema_version. These tuples prove current definitions only;
 // they do not prove that no identical drop/recreate interval occurred.
 function catalogDefinition(db,definition,catalogId=null){
-  const [,sql,name]=definition,table=sql.startsWith('CREATE TABLE')?name:/\bON ([a-z_]+)/.exec(sql)?.[1];
-  const type=sql.startsWith('CREATE TABLE')?'table':'trigger',text=sql.trim();
+  const [,sql,name]=definition,type=/^CREATE (TABLE|TRIGGER|VIEW)/.exec(sql)?.[1].toLowerCase();
+  const table=type==='trigger'?/\bON ([a-z_]+)/.exec(sql)?.[1]:name,text=sql.trim();
   if(!table)throw Error('invalid replay schema object framing');
   const selector=catalogId===null?'name=?':'rowid=?';
   return db.prepare(`SELECT rowid AS catalog_id,CASE WHEN type=? AND name=? AND tbl_name=?
-    AND typeof(sql)='text' AND octet_length(sql)=? THEN sql END AS sql
-    FROM sqlite_master WHERE ${selector}`).get(type,name,table,Buffer.byteLength(text),catalogId??name);
+    AND typeof(sql)='text' AND octet_length(sql)=? THEN sql=? COLLATE BINARY ELSE 0 END AS matches
+    FROM sqlite_master WHERE ${selector}`).get(type,name,table,Buffer.byteLength(text),text,catalogId??name);
 }
 export function admitReplayCutoverSchema(db){
   schemaAdmissions.set(db,{invalid:true});
   const contract=schemaContract(db),objects=[];
   for(const definition of contract.definitions){
     const row=catalogDefinition(db,definition);
-    if(!Number.isSafeInteger(row?.catalog_id)||row.catalog_id<1||row.sql!==definition[1].trim())
+    if(!Number.isSafeInteger(row?.catalog_id)||row.catalog_id<1||row.matches!==1)
       throw Error('replay schema requires reconciliation');
     objects.push(row.catalog_id);
   }
@@ -114,7 +216,7 @@ export function verifyReplayCutoverSchema(db){
   if(admitted.invalid||admitted.contract!==contract.hash)throw Error('replay schema requires reconciliation and exact readmission');
   for(let i=0;i<contract.definitions.length;i++){
     const row=catalogDefinition(db,contract.definitions[i],admitted.objects[i]);
-    if(row?.catalog_id!==admitted.objects[i]||row.sql!==contract.definitions[i][1].trim()){
+    if(row?.catalog_id!==admitted.objects[i]||row.matches!==1){
       admitted.invalid=true;
       throw Error('replay schema requires reconciliation and exact readmission');
     }
@@ -169,16 +271,19 @@ function get(db, roomId, generation, domain) {
   if (hash(new Uint8Array(saved.payload)) !== saved.payload_sha256) throw Error('corrupt replay control');
   const value=JSON.parse(text);
   if (saved.row_version !== (domain==='header'?value.head:1)) throw Error('replay control version changed');
-  return {value, hash: saved.payload_sha256};
+  return {value, hash: saved.payload_sha256,inputBytes:saved.payload.byteLength};
 }
 function auditBinding(db, receiptId) {
-  if(typeof receiptId!=='string' || !/^oa_brc_[a-f0-9]{64}$/.test(receiptId))throw Error('invalid replay audit binding');
+  if(typeof receiptId!=='string' || !/^oa_brc_(?:[a-f0-9]{64}|inv_[a-f0-9]{64}|h[ma]_[a-f0-9]{64}_[a-f0-9]{2,400})$/.test(receiptId))throw Error('invalid replay audit binding');
   const row=db.prepare(`SELECT CASE WHEN typeof(counts_json)='text' AND octet_length(counts_json)<=4096
     THEN counts_json END AS json FROM operator_actions WHERE id=?
     AND action IN ('replay_cutover_capture','replay_cutover_hash','replay_cutover_codec',
-      'replay_cutover_abandon','replay_cutover_cleanup')`).get(receiptId);
+      'replay_cutover_abandon','replay_cutover_cleanup','replay_cutover_dependency')`).get(receiptId);
   if(!row?.json)throw Error('missing independent replay audit binding');
-  return JSON.parse(row.json);
+  const value=JSON.parse(row.json);
+  if(!value||typeof value!=='object'||Array.isArray(value))throw Error('invalid replay audit binding');
+  receiptInputBytes.set(value,Buffer.byteLength(row.json));
+  return value;
 }
 
 function validate(input, phase) {
@@ -229,7 +334,7 @@ function receipt(store, input, phase, operation) {
       return {...value,duplicate:true};
     }
     verifyReplayCutoverSchema(store.db);
-    const value = {...operation({receiptId}),fingerprint,duplicate:false};
+    const value = {...operation({receiptId}),schemaDefinitionBindingBytes:schemaContract(store.db).bindingBytes,fingerprint,duplicate:false};
     if(Buffer.byteLength(JSON.stringify(value))>4096)throw Error('replay receipt byte limit');
     store.db.prepare(`INSERT INTO operator_actions
       (id,at,action,target_kind,target_id,reason,plan_hash,counts_json,result,request_id)
@@ -368,6 +473,7 @@ function captureBinding(db,roomId,generation) {
   if(abandonedBinding(db,roomId,generation))throw Error('replay capture abandoned');
   const header=get(db,roomId,generation,'header');
   const captured=auditBinding(db,header.value.captureReceiptId);
+  header.captureReceiptInputBytes=receiptInputBytes.get(captured);
   if(captured.bindingHash!==header.hash || captured.generation!==generation)throw Error('independent replay capture binding changed');
   const active=activeCapture(db,roomId);
   if(active?.head!==header.value.head || active.generation!==generation)throw Error('replay capture control changed');
@@ -393,6 +499,43 @@ function pointer(db,roomId,generation,domain,key){
   if(!row?.payload)throw Error('missing or invalid replay proof pointer');
   return JSON.parse(fatalText(row.payload));
 }
+export function readReplayHMessage(store, input) {
+  if (!input || !id(input.roomId) || !digest(input.generation)
+    || typeof input.messageId !== 'string' || Buffer.byteLength(input.messageId) < 1
+    || Buffer.byteLength(input.messageId) > 200
+    || Object.keys(input).some(key => !['roomId','generation','messageId'].includes(key)))
+    throw Error('invalid replay H-row intent');
+  const db = store.db, {roomId,generation,messageId} = input;
+  verifyReplayCutoverSchema(db);
+  const header = captureBinding(db,roomId,generation);
+  const rows = db.prepare(`SELECT domain,CASE WHEN typeof(row_version)='integer' AND row_version=0 AND typeof(payload)='blob'
+    AND typeof(payload_bytes)='integer' AND payload_bytes BETWEEN 1 AND 131072
+    AND octet_length(payload)=payload_bytes AND typeof(payload_sha256)='text'
+    AND octet_length(payload_sha256)=0 THEN payload END AS payload
+    FROM message_replay_units WHERE room_id=? AND generation=?
+      AND domain IN ('h-message','h-message-absent') AND unit_key=?`)
+    .all(roomId,generation,messageId);
+  if (rows.length !== 1 || !rows[0].payload) throw Error('missing or invalid captured H row');
+  const source = rows[0], absent = source.domain === 'h-message-absent';
+  const receiptId = `oa_brc_${absent?'ha':'hm'}_${generation}_${Buffer.from(messageId).toString('hex')}`;
+  const independent = auditBinding(db,receiptId);
+  if (independent.roomId !== roomId || independent.generation !== generation
+    || independent.headerHash !== header.hash || independent.domain !== source.domain
+    || independent.key !== messageId) throw Error('independent replay H-row binding changed');
+  const value = JSON.parse(fatalText(source.payload));
+  if (absent) {
+    if (value !== null || independent.entityHash !== null)
+      throw Error('independent replay H-absence changed');
+    return {absent:true,receiptId,inputBytes:source.payload.byteLength,schemaDefinitionBindingBytes:schemaContract(db).bindingBytes};
+  }
+  const fields = [...MESSAGE_PROOF_FIELDS,'entity_hash'];
+  if (!value || Object.keys(value).length !== fields.length
+    || fields.some(field => !Object.hasOwn(value,field)) || value.message_id !== messageId
+    || independent.entityHash !== value.entity_hash || !messageProofMatches(value))
+    throw Error('independent replay H-row proof changed');
+  return {absent:false,row:value,receiptId,inputBytes:source.payload.byteLength,schemaDefinitionBindingBytes:schemaContract(db).bindingBytes};
+}
+
 const leafCommitment=(headerHash,sourceRoot,generation,domain,key,offset,sourceLength,bytes,sha256,keyFrame=null)=>hash(JSON.stringify(
   ['project-room.replay-leaf.v1',headerHash,sourceRoot,generation,domain,key,offset,sourceLength,bytes,sha256,keyFrame]));
 
@@ -546,17 +689,22 @@ export function advanceReplayWitness(store, input) {
 export function partitionReplayWitness(store,input) {
   return receipt(store,input,'codec',({receiptId})=>{
     const db=store.db,{roomId,generation}=input,header=captureBinding(db,roomId,generation);
-    const hashed=get(db,roomId,generation,'hash').value,hashReceipt=auditBinding(db,hashed.receiptId);
+    const hashControl=get(db,roomId,generation,'hash'),hashed=hashControl.value,hashReceipt=auditBinding(db,hashed.receiptId);
     if(hashed.headerHash!==header.hash || hashReceipt.bindingHash!==header.hash || hashReceipt.generation!==generation
       ||hashReceipt.hashStateHash!==hash(hashed.state)||!digest(hashed.sourceRoot)||hashReceipt.sourceRoot!==hashed.sourceRoot)throw Error('independent replay hash binding changed');
     const completeHash=decodeReplayHash(hashed.state);
     if(completeHash.bytes!==header.value.bytes || finishReplayHash(completeHash)!==header.value.metadataHash)throw Error('verified witness required before codec');
-    const saved=get(db,roomId,generation,'codec').value,prior=auditBinding(db,saved.receiptId);
+    const codecControl=get(db,roomId,generation,'codec'),saved=codecControl.value,prior=auditBinding(db,saved.receiptId);
     if(saved.headerHash!==header.hash || prior.bindingHash!==header.hash || prior.codecStateHash!==hash(saved.state))throw Error('independent replay codec binding changed');
     const state=JSON.parse(saved.state);
     if(state.offset!==input.expectedBytes)throw Error('replay codec cursor changed');
     if(state.phase==='done' && state.offset===header.value.bytes)return {generation,bindingHash:header.hash,codecStateHash:hash(saved.state),bytes:state.offset,head:header.value.head,records:0,phase:'codec_partitioned',publication:'pending',certified:false};
-    const budget={bytes:64*1024,chunks:new Map(),sourceRoot:hashed.sourceRoot};
+    // Include exact schema-definition bind traffic and actual admitted control
+    // payloads. Fixed head/epoch/request/output framing retains an 8 KiB reserve.
+    const controlInputBytes=Math.max(64*1024,schemaContract(db).bindingBytes+header.inputBytes
+      +header.captureReceiptInputBytes+hashControl.inputBytes+receiptInputBytes.get(hashReceipt)
+      +codecControl.inputBytes+receiptInputBytes.get(prior)+8192);
+    const budget={bytes:controlInputBytes,chunks:new Map(),sourceRoot:hashed.sourceRoot};
     const chunk=readSourceRange(db,header,state.offset,Math.min(REPLAY_CAPTURE_STEP_BYTES-state.offset%REPLAY_CAPTURE_STEP_BYTES,header.value.bytes-state.offset),budget);
     const potentialChunks=state.phase==='value'
       ?1+Math.floor(state.offset/REPLAY_CAPTURE_STEP_BYTES)-Math.floor(state.tokenStart/REPLAY_CAPTURE_STEP_BYTES):1;
@@ -598,7 +746,7 @@ export function partitionReplayWitness(store,input) {
     }
     put(db,roomId,generation,'codec',{version:1,headerHash:header.hash,state:encoded,receiptId});
     return {generation,bindingHash:header.hash,codecStateHash:hash(encoded),head:header.value.head,
-      bytes:scanned.state.offset,records:records.length,messages:scanned.state.messageIndex,leafCommitments,sourceRoot:hashed.sourceRoot,inputBytes:budget.bytes,logicalUnitRows,
+      bytes:scanned.state.offset,records:records.length,messages:scanned.state.messageIndex,leafCommitments,sourceRoot:hashed.sourceRoot,inputBytes:budget.bytes,controlInputBytes,logicalUnitRows,
       phase:scanned.complete&&scanned.state.offset===header.value.bytes?'codec_partitioned':'codec_partitioning',publication:'pending',certified:false};
   });
 }

@@ -13,7 +13,7 @@ try{
  s.db.exec(c.replayCutoverSchema());const head=s.headSequence('commons');const capture=c.captureReplayWitness(s,{roomId:'commons',requestId:'gap-capture',expectedHead:head,reason:'Synthetic catalog continuity control'});
  const target=s.db.prepare("SELECT rowid AS catalog_id FROM sqlite_master WHERE name='replay_source_update'").get();
  const tuples=s.db.prepare('SELECT rowid AS catalog_id,type,name,tbl_name,sql FROM sqlite_master WHERE rowid>=? ORDER BY rowid').all(target.catalog_id);
- for(const row of [...tuples].reverse())s.db.exec('DROP TRIGGER '+row.name);
+ for(const row of [...tuples].reverse())s.db.exec('DROP '+row.type.toUpperCase()+' '+row.name);
  s.db.prepare("UPDATE events SET body=json_set(body,'$.data.body','Corrupt!') WHERE room_id='commons' AND sequence=3").run();
  for(const row of tuples)s.db.exec(row.sql);
  const restored=s.db.prepare('SELECT rowid AS catalog_id,type,name,tbl_name,sql FROM sqlite_master WHERE rowid>=? ORDER BY rowid').all(target.catalog_id);

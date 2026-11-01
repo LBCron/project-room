@@ -113,3 +113,52 @@ test('actual Worker abandons and cleans a large derived generation across restar
       steps,maxPhysicalCost:maxCost,maxWarmPhysicalCost:maxWarmCost,coldAdmissionCost:coldCost,certified:false,servingMetadataUnchanged:true}));
   } finally { await mf.dispose(); await rm(directory,{recursive:true,force:true}); }
 });
+
+
+test('actual Worker first-H COW measures idle/active overhead and preserves proof across restart and erasure', async () => {
+  const built = await build({entryPoints:[fileURLToPath(new URL('./replay-cutover.test-fixture.mjs',import.meta.url))],
+    bundle:true,write:false,format:'esm',platform:'neutral',external:['node:*','cloudflare:*']});
+  const directory = await mkdtemp(join(tmpdir(),'cow-cutover-'));
+  const create = () => new Miniflare({modules:true,script:built.outputFiles[0].text,
+    compatibilityDate:'2026-07-30',compatibilityFlags:['nodejs_compat'],durableObjectsPersist:directory,
+    durableObjects:{ROOM:{className:'ReplayCutoverRoom',useSQLite:true}}});
+  let mf = create();
+  const call = async (surface,path) => {
+    const response = await mf.dispatchFetch('http://localhost'+path+(path.includes('?')?'&':'?')+'surface='+surface);
+    const body = await response.json();
+    assert.equal(response.status,200,JSON.stringify(body));return body;
+  };
+  try {
+    assert.equal((await call('cow-active','/runtime')).storage.valueLimitBytes,8388642);
+    const measurements = {};
+    let captured;
+    for (const mode of ['baseline','idle','active']) {
+      const surface = 'cow-'+mode;
+      await call(surface,'/cow-seed?mode='+mode);
+      if (mode==='active') {
+        captured = await call(surface,'/cow-capture');
+        await call(surface,'/seed-derived?count=17405&generation='+captured.generation);
+      }
+      measurements[mode] = [await call(surface,'/cow-write-cost?revision=0'),
+        await call(surface,'/cow-write-cost?revision=1')];
+    }
+    assert.equal(measurements.baseline[0].source.rows,0);
+    assert.equal(measurements.idle[0].source.rows,0);
+    assert.equal(measurements.active[0].source.rows,1);
+    assert.deepEqual(measurements.active[1].source,measurements.active[0].source);
+    await mf.dispose();mf=create();
+    const h = await call('cow-active','/cow-read?generation='+captured.generation);
+    assert.equal(h.row.body,'Independent original body');
+    assert.equal(h.row.edited_at,null);
+    assert.equal((await call('cow-active','/cow-delete?generation='+captured.generation)).remaining,0);
+    await call('cow-fault','/cow-seed');
+    await call('cow-fault','/cow-capture');
+    const before = await call('cow-fault','/cow-state');
+    const failed = await mf.dispatchFetch('http://localhost/cow-fault?surface=cow-fault');
+    assert.equal(failed.status,500);
+    assert.match((await failed.json()).message,/synthetic Worker COW storage failure/);
+    assert.deepEqual(await call('cow-fault','/cow-state'),before);
+    console.log('DURABLE_REPLAY_COW_WORKER '+JSON.stringify({derivedUnits:17405,measurements,
+      restartOldProofPreserved:true,erasureRemovedGeneration:true,storageFaultRolledBack:true,certified:false}));
+  } finally {await mf.dispose();await rm(directory,{recursive:true,force:true});}
+});

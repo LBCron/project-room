@@ -1,3 +1,4 @@
+import {verifyShareLinksForRecovery} from './recovery-share-links.mjs';
 import {recoveryReminderReceipt,recoveryReminderStep,recoveryReminderCurrent} from './recovery-reminder-rules.mjs';
 import {validateRecoveryHistoryEntry} from './recovery-history-entry.mjs';
 import { isCurrentRoom, readCurrentRoomForAudit, verifyCurrentRoomSchema } from './current-room-repository.mjs';
@@ -181,7 +182,7 @@ export function auditRecovery(store) {
     // fails, so one refusal carries the full reconciliation summary.
     if (drift.length) throw reconciliationError(drift);
     const invitations = store.verifyInvitationAudit();
-    store.shareLinks.verify(); store.reminders.verifySchema(); store.agentConnections.verify();
+    verifyShareLinksForRecovery(store); store.reminders.verifySchema(); store.agentConnections.verify();
     store.requestRuns.verifySchema({ allowAbsent: true });
     store.inbox.verify();
     store.email.verify();

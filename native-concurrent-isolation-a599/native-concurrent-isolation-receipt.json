@@ -1,0 +1,28 @@
+{
+  "source": "a599faa29ff65567e5c080609cb2d000acd33666",
+  "client": "@modelcontextprotocol/client@2.4.0",
+  "runtime": "Actual local July workerd/persistent SQLite",
+  "agents": 2,
+  "rooms": 2,
+  "simultaneousPostWaves": 4,
+  "successfulPosts": 9,
+  "allPostsAttributedToBoundAgent": true,
+  "ownPrivateCanaryReadable": true,
+  "foreignPrivateCanaryNeverReturned": true,
+  "crossedReadAndWriteRefused": [
+    "invalid_arguments",
+    "invalid_arguments",
+    "invalid_arguments",
+    "invalid_arguments"
+  ],
+  "crossedCallsAddNoEvents": true,
+  "oauthTokensRefusedAtRest": true,
+  "revokedAgentRefusedBesideValidAgent": true,
+  "mixedHttpStatuses": [
+    200,
+    401
+  ],
+  "requestCount": 20,
+  "protocolHeadersCorrect": true,
+  "scope": "Simultaneously submitted actual SDK requests via origin-restricted Miniflare dispatch; no forced execution interleaving, stress/throughput, hosted release or peer-device execution claim."
+}

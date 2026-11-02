@@ -28,3 +28,11 @@ for(const reactivate of [false,true])test(`since-join invitation ${reactivate?'r
  s.command(f.ownerKey,'commons',{id:'after-invite',type:'message.posted',data:{messageId:'after-invite',body:'visible after invitation'}});assert.equal(readConversation(s,f.peer.secret,'commons',{messageId:'after-invite'}).messages[0].body,'visible after invitation');
  assert.equal(s.invites.redeem(f.issued.code,options).duplicate,true);assert.deepEqual(floor(),first);assert.doesNotThrow(()=>auditRecovery(s));
 });
+import {withCurrentServingWriter} from '../server/current-room-repository.mjs';
+test('missing or corrupt protected activation/message facts refuse rather than exposing history',t=>{
+ const s=new RoomStore(':memory:');t.after(()=>s.close());const es=initialRoom();for(const e of es)e.at=joined;es.push(event({roomId:'commons',actorId:'owner',at:joined,type:'room.history_visibility_set',data:{historyVisibility:'since_join'}}),event({roomId:'commons',actorId:'owner',at:joined,type:'member.added',data:{memberId:'reader',displayName:'Reader',kind:'agent',permissions:[]}}),event({roomId:'commons',actorId:'owner',at:joined,type:'message.posted',data:{messageId:'visible',body:'Only protected facts authorize this'}}));s.initialize(es,{representation:'normalized-current-v1'});const key=s.issueAccessKey('commons','reader');
+ for(const[domain,id]of [['historyFloors','reader'],['messageWitness','visible']]){
+  const rollback=Error('synthetic fault rollback');assert.throws(()=>s.transaction(()=>{withCurrentServingWriter(s.db,'commons',()=>{s.db.prepare('DELETE FROM current_room_records WHERE room_id=? AND domain=? AND record_key=?').run('commons',domain,id);assert.throws(()=>readConversation(s,key,'commons',{messageId:'visible'}),/corrupt|changed|missing/);});throw rollback;}),e=>e===rollback);
+ }
+ assert.equal(readConversation(s,key,'commons',{messageId:'visible'}).messages[0].id,'visible');assert.doesNotThrow(()=>auditRecovery(s));
+});

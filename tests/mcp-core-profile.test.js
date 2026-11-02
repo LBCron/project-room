@@ -403,7 +403,7 @@ test("tools/list focus is explicit, stateless discovery with full-catalog escape
 });
 
 async function claimLinkFixture(t) {
-  const fixture = await serve(t), { origin, store, rooms } = fixture;
+  const fixture = await serve(t), { origin, store } = fixture;
   const owner = store.identities.create("Claim room owner"), writer = store.identities.create("Claim writer");
   const roomId = legacyAgentRoom(store,owner, { roomId: "claim-links", title: "Claim links", purpose: "Append PR from hosted MCP", kind: "personal" }).roomId;
   linkWithProof(store, owner.secret, roomId, writer, { displayName: "Claim writer", permissions: ["accept_work", "complete_work"] });

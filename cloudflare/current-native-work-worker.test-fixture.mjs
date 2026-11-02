@@ -1,5 +1,5 @@
 import {DurableObject} from 'cloudflare:workers';
-import {RoomStore} from '@qualified/store';
+import {RoomStore} from '../server/store.mjs';
 import {DurableDatabase,durableStorage} from './storage.mjs';
 import {initialRoom} from '../server/bootstrap.mjs';
 import {event} from '../src/events.js';

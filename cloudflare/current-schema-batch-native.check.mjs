@@ -18,7 +18,7 @@ test('production Native audit schema cold/warm exact validation physical compari
    const target=variant==='baseline'?join(archive,'server/current-room-repository.mjs'):resolve(root,'server/current-room-repository.mjs');
    const fixture=fileURLToPath(new URL('./current-schema-batch-native.test-fixture.mjs',import.meta.url));
    const built=await build({entryPoints:[fixture],bundle:true,write:false,format:'esm',platform:'neutral',external:['node:*','cloudflare:*'],plugins:[{name:'verifier',setup(b){
-    b.onResolve({filter:/^@audit-verifier$/},()=>({path:target}));
+    b.onResolve({filter:/^\.\.\/server\/current-room-repository\.mjs$/},args=>args.importer===fixture?{path:target}:undefined);
     // A historical verifier must inspect its own installed guard protocol.
     // Pairing it with the current constructor creates an invalid mixed runtime.
     if(variant==='baseline')b.onResolve({filter:/^\.\/(room|storage)\.mjs$/},args=>args.importer===fixture?{path:join(archive,'cloudflare',args.path.slice(2))}:undefined);

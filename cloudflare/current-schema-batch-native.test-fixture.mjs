@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import {ProjectRoom} from './room.mjs';
-import {verifyCurrentRoomSchema,invalidateCurrentRoomSchema} from '@audit-verifier';
+import {verifyCurrentRoomSchema,invalidateCurrentRoomSchema} from '../server/current-room-repository.mjs';
 import {durableStorage} from './storage.mjs';
 export class SchemaBatchRoom extends ProjectRoom {
  async fetch(request) {

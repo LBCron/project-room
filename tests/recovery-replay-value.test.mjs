@@ -4,7 +4,7 @@ import {mkdtempSync,rmSync} from 'node:fs';
 import {tmpdir} from 'node:os';
 import {join} from 'node:path';
 import {RoomStore} from '../server/store.mjs';
-import {beginRestore,checkpointRestore,restoreProgress,withRestoreTransaction,withRestoreAuditRows} from '../server/restore-admission.mjs';
+import {beginRestore,checkpointRestore,restoreProgress,withRestoreTransaction,withRestoreAuditRows,RESTORE_CONTROL_GUARDS} from '../server/restore-admission.mjs';
 import {planRecoveryReplayValue,writeRecoveryReplayValue,readRecoveryReplayValue,RECOVERY_VALUE_PART_BYTES} from '../server/recovery-replay-value.mjs';
 function store(){const rows=new Map();return{rows,remaining:128,get(lane,room,domain,key,part){return rows.get(JSON.stringify([lane,room,domain,key,part]));},set(lane,room,domain,key,value,part){const payload=JSON.stringify(value);assert.ok(Buffer.byteLength(payload)<=131072+2048);rows.set(JSON.stringify([lane,room,domain,key,part]),JSON.parse(payload));this.remaining--;}};}
 const get=(s,max)=>readRecoveryReplayValue(s,'r','seenEvents','e',max),put=(s,v,max)=>writeRecoveryReplayValue(s,'r','seenEvents','e',planRecoveryReplayValue(v,max));
@@ -40,9 +40,10 @@ test('existing guarded SQLite scratch atomically checkpoints large replay value 
   const before=restoreProgress(store.db);checkpointRestore(store.db,{restoreId:id,expectedRevision:before.revision,phase:'audit_pending',seal,progress:{replay:before.progress.replay+1},latest:{requestId:'value_'+before.revision}});
   if(fault)throw Error('after-head-and-cursor-before-commit');
  });
- write(value);const before=restoreProgress(store.db);assert.throws(()=>write({fingerprint:'replacement'},true),/before-commit/);assert.throws(()=>restoreProgress(store.db),/schema requires reconciliation/,'warm tuple admission is invalidated by rolled-back guard DDL; cold exact readmission is required');
+ write(value);const before=restoreProgress(store.db);assert.throws(()=>write({fingerprint:'replacement'},true),/before-commit/);assert.deepEqual(restoreProgress(store.db),before,'rolled-back guard DDL permits exact-definition warm readmission without changing checkpoint');
  assert.throws(()=>store.db.prepare("UPDATE current_restore_audit_scratch SET payload='null'").run(),/unsupported restore admission mutation/);
  store.close();store=new RoomStore(filename);assert.deepEqual(withRestoreTransaction(store,()=>withRestoreAuditRows(store.db,id,scratch=>get(scratch,maximum))),value);assert.deepEqual(restoreProgress(store.db),before);assert.throws(()=>store.headSequence('commons'),error=>error.status===503);
+ const [name,sql]=RESTORE_CONTROL_GUARDS.find(([name])=>name==='current_restore_audit_scratch_update');store.db.exec('DROP TRIGGER '+name);store.db.exec(sql.replace('unsupported restore admission mutation','changed restore admission mutation'));assert.throws(()=>restoreProgress(store.db),/schema requires reconciliation/,'exact warm readmission never accepts a changed guard definition');
 });
 
 test('actual process exit preserves reducer patch parts and exact independently folded cursor together',async t=>{

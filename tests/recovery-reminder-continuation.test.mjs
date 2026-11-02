@@ -11,6 +11,14 @@ import {operatorRestoreResponse} from '../server/restore-ndjson.mjs';
 import {restoreProgress} from '../server/restore-admission.mjs';
 import {auditRecovery} from '../server/recovery.mjs';
 import {seedRecoveryReminderSource} from './helpers/recovery-reminder-source.mjs';
+import {initialRecoveryReminders,validateRecoveryReminders} from '../server/recovery-reminder-continuation.mjs';
+import {recoveryReminderStep} from '../server/recovery-reminder-rules.mjs';
+test('persisted reminder cursors and receipt gaps refuse ambiguous recovery',()=>{
+ const cursor=initialRecoveryReminders();assert.doesNotThrow(()=>validateRecoveryReminders(cursor));
+ assert.throws(()=>validateRecoveryReminders({...cursor,unexpected:true}));
+ assert.throws(()=>validateRecoveryReminders({...cursor,after:-1}));
+ assert.throws(()=>recoveryReminderStep({revision:1,state:'active',dueAt:10},{revision:3,state:'cancelled',dueAt:10}));
+});
 const credential='synthetic-durable-restore-00000000000000',url='https://room.example/api/operator/restore';
 async function post(store,body){const json=typeof body!=='string';const response=await operatorRestoreResponse(new Request(url,{method:'POST',headers:{Authorization:'Bearer '+credential,...(json?{'Content-Type':'application/json'}:{})},body:json?JSON.stringify(body):body}),credential,store);return{status:response.status,body:await response.json()};}
 const next=(result,id)=>({restoreId:result.restoreId,sourceSeal:result.sourceSeal,expectedRevision:result.revision,requestId:id});

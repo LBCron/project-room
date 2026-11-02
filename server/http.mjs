@@ -1,3 +1,4 @@
+import { readAccountRoomRow } from './room-lifecycle.mjs';
 import {isCurrentRoom} from './current-room-repository.mjs';
 import {redactSelectedEventPage} from './current-room-events.mjs';
 import { oauthAuthorizationServerMetadata } from "./oauth-metadata.mjs";
@@ -2674,8 +2675,7 @@ export function createRoomServer({ store, origin, assetRoot = new URL("../", imp
           try { store.authenticateAccountSession(token, candidateId, binding); }
           catch (error) { if (error.status !== 403) throw error; continue; }
           if (activeRoom === null) activeRoom = candidateId;
-          const kind = store.db.prepare(
-            "SELECT json_extract(projection,'$.room.kind') AS kind FROM rooms WHERE id=?").get(candidateId)?.kind;
+          const kind = readAccountRoomRow(store, candidateId)?.kind;
           if (kind === "personal" && activePersonal === null) activePersonal = candidateId;
         }
         if (activeRoom) return json(res, 200, { room: { id: activePersonal ?? activeRoom }, created: false });

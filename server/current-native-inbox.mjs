@@ -76,5 +76,8 @@ export function readCurrentNativeInbox(store,secret,roomId,{limit=50,after,older
     omitted:['ambient fleet presentation','global unresolved-mention census'],
     legacyAssignments:{reconciledBeforeActivation:true,historyInspect:{method:'GET',path:`/api/rooms/${encodeURIComponent(roomId)}/collab/assignments`}}},
    sequence:head.sequence,next},memberId);
- }));
+ // One bounded operation includes selected events, protected parent context,
+ // overlapping mention/request obligations and indexed work discovery.
+ // Keep source windows and byte limits unchanged; ordinary reads stay at 200.
+ },{maxRecords:512}));
 }

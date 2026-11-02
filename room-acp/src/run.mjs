@@ -34,6 +34,6 @@ export async function run(options, { print, env = process.env, fetchImpl = fetch
     ? `Host tool approvals: locally authorized Room human ${connection.permissionApproverId}. Use --permission-approver none to disable.`
     : "Host tool approvals: Room approvals disabled; permission requests are cancelled. Use --permission-approver <member-id> only for a human you trust with this laptop.");
   print(`room-acp: ${candidate.label} is listening in room ${connection.roomId} as ${connection.displayName}. Mention it in the Room. Ctrl-C to stop.`);
-  try { const reason = await bridge.run(); return reason === "access_ended" ? 3 : 0; }
+  try { const reason = await bridge.run(); return reason === "access_ended" ? 3 : reason === "context_unavailable" ? 4 : 0; }
   finally { process.off("SIGINT", stop); process.off("SIGTERM", stop); }
 }

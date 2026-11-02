@@ -28,7 +28,8 @@ export function adapterHints(env = process.env) {
 export const ACP_PROTOCOL_VERSION = 1;
 // The bridge advertises no fs or terminal capability: agents use their own
 // tools in their working directory, and the bridge never touches files.
-export const CLIENT_CAPABILITIES = Object.freeze({ fs: { readTextFile: false, writeTextFile: false }, terminal: false });
+// Keep adapter configuration diagnostics separate from assistant reply text.
+export const CLIENT_CAPABILITIES = Object.freeze({ fs: { readTextFile: false, writeTextFile: false }, terminal: false, session: { notices: {} } });
 
 export function onPath(bin, env = process.env) {
   const exts = process.platform === "win32" ? (env.PATHEXT ?? ".EXE;.CMD").split(";") : [""];

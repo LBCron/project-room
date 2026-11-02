@@ -4,6 +4,7 @@ import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join as pathJoin } from "node:path";
 import { Bridge } from "../room-acp/src/bridge.mjs";
+import { TurnRecorder } from "../room-acp/src/render.mjs";
 import { RoomClient } from "../room-acp/src/room.mjs";
 import { join } from "../room-acp/src/join.mjs";
 import { startRoom } from "./room-acp-fixture.mjs";
@@ -88,4 +89,24 @@ test("real Room API deduplicates stable reply command IDs", async t => {
   assert.equal(fixture.messages().filter(message => message.id === "stable-reply").length, 1);
   const thread = await client.thread(rootId);
   assert.equal(thread.thread.replies.filter(message => message.id === "stable-reply").length, 1);
+});
+
+test("saved chat result excludes private structured notices across restart", async t => {
+  const { make, counts } = setup(t);
+  const first = make();
+  first.host.prompt = async () => {
+    counts.prompts.push("one model turn");
+    const recorder = new TurnRecorder();
+    recorder.update({ sessionUpdate: "notice", severity: "warning", title: "Private diagnostic", description: "/Users/private-owner/private-project/.codex/config.toml" });
+    recorder.update({ sessionUpdate: "agent_message_chunk", content: { type: "text", text: "Warning: model-authored reply remains." } });
+    return { recorder, stopReason: "end_turn" };
+  };
+  first.room.post = async args => { counts.posts.push(args); throw Error("response lost"); };
+  await first.turn("root", [wake("notice")]);
+  await make().turn("root", [wake("notice")]);
+  assert.equal(counts.prompts.length, 1);
+  assert.equal(counts.posts.length, 2);
+  assert.deepEqual(counts.posts[0], counts.posts[1]);
+  assert.equal(counts.posts[1].body, "Warning: model-authored reply remains.");
+  assert.doesNotMatch(JSON.stringify(counts.posts), /private-owner|private-project|Private diagnostic/);
 });

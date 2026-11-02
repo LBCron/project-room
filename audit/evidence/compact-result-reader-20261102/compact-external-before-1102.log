@@ -19,9 +19,9 @@
 test at tests/compact-result-reader.test.mjs:16:1
 ✖ actual thin external receipt never opens the text reader (1.180083ms)
   AssertionError [ERR_ASSERTION]: Expected values to be strictly equal:
-  
+
   1 !== 0
-  
+
       at TestContext.<anonymous> (file:///Users/johnpotter/src/pr-compact-result-reader-1102/tests/compact-result-reader.test.mjs:16:309)
       at Test.runInAsyncScope (node:async_hooks:227:14)
       at Test.run (node:internal/test_runner/test:1402:25)
@@ -40,9 +40,9 @@ test at tests/compact-result-reader.test.mjs:16:1
 test at tests/compact-return-brief.test.mjs:25:1
 ✖ actual thin external result preserves safe evidence anchor instead of text-reader control (0.369084ms)
   AssertionError [ERR_ASSERTION]: The input did not match the regular expression /href="https:\/\/example.test\/proof"/. Input:
-  
+
   '<article class="result-row" data-result-work-id="saved-task"><button type="button" data-read-result="saved-task" data-focus-key="result:saved-task">Useful result</button><p>Saved result</p><div class="result-meta"><span>Completed</span><button type="button" class="text-button" data-result-work="saved-task">Work details</button></div></article>'
-  
+
       at TestContext.<anonymous> (file:///Users/johnpotter/src/pr-compact-result-reader-1102/tests/compact-return-brief.test.mjs:25:265)
       at Test.runInAsyncScope (node:async_hooks:227:14)
       at Test.run (node:internal/test_runner/test:1402:25)

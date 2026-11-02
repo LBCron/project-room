@@ -245,6 +245,7 @@ These source-bound design and qualification notes describe the offline schema45 
 - [Durable text-result checks and warm schema recovery](research/2026-11-01-recovery-text-results.md)
 - [Existing active task migration: reviewed mirror retirement](research/2026-11-01-current-mirror-retirement.md)
 - [Compact normalized native inbox — first integration checkpoint](research/2026-11-01-current-native-inbox.md)
+- [Normalized needs-me and compact resume: bounded coverage and measured tradeoffs](research/2026-11-02-normalized-needs-me.md)
 - [Normalized reply cancellation writer](research/2026-11-01-current-reply-cancellation.md)
 - [Exact audit schema batching](research/2026-11-01-current-schema-batch.md)
 - [Normalized handoff and halt clear](research/2026-11-01-current-work-handoff.md)

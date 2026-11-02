@@ -1,3 +1,4 @@
+import {legacyAccountRoom} from './helpers/legacy-account-room.mjs';
 import {isCurrentRoom,readCurrentRoomForAudit} from '../server/current-room-repository.mjs';
 const forensicRoom=(store,roomId)=>isCurrentRoom(store.db,roomId)?store.readTransaction(()=>readCurrentRoomForAudit(store,roomId)):store.room(roomId);
 // QA2 finding P2-11: account deletion must not leave an ownerless room
@@ -56,8 +57,10 @@ async function deletionAccount(t, n) {
   };
 }
 
-function createRoom(ctx, roomId, kind, title) {
-  ctx.f.store.createAccountRoom(ctx.token, ctx.binding, {
+function createRoom(ctx, roomId, kind, title, {legacy=false}={}) {
+  const options={roomId, title, purpose: "Account deletion coverage", kind, displayName: "Owner"};
+  if(legacy)legacyAccountRoom(ctx.f.store,ctx.accountId,options);
+  else ctx.f.store.createAccountRoom(ctx.token, ctx.binding, {
     roomId, title, purpose: "Account deletion coverage", kind, displayName: "Owner"
   });
   const key = ctx.f.store.issueAccessKey(roomId, "owner");
@@ -70,7 +73,7 @@ const SECRET = "secret-phrase-p2-11";
 for (const entityProjection of [false, true]) test(`a solely owned personal room is archived and its messages and files are purged (entities=${entityProjection})`, async t => {
   const ctx = await deletionAccount(t, 1);
   const roomId = "solo-notes";
-  const { key } = createRoom(ctx, roomId, "personal", "Solo notes");
+  const { key } = createRoom(ctx, roomId, "personal", "Solo notes", {legacy:true});
   ctx.f.store.command(key, roomId, { id: randomUUID(), type: T.MESSAGE_POSTED, data: { messageId: "secret-note", body: SECRET } });
   ctx.f.store.roomAttachments.stage(key, roomId, {
     id: "secret-file", filename: "secret.txt", mediaType: "text/plain",
@@ -236,7 +239,7 @@ test("an account that joined a room through a share link can delete itself (join
 test("account deletion also purges archived message rows that are no longer in the projection", async t => {
   const ctx = await deletionAccount(t, 9);
   const roomId = "solo-archived";
-  const { key } = createRoom(ctx, roomId, "personal", "Solo archived");
+  const { key } = createRoom(ctx, roomId, "personal", "Solo archived", {legacy:true});
   ctx.f.store.command(key, roomId, { id: randomUUID(), type: T.MESSAGE_POSTED, data: { messageId: "old-secret", body: SECRET } });
   ctx.f.store.command(key, roomId, { id: randomUUID(), type: T.MESSAGE_POSTED, data: { messageId: "new-note", body: "recent" } });
   const db = ctx.f.store.db;

@@ -125,3 +125,10 @@ test("real agent browser session keeps owner-only 403 while the card reads its p
   assert.equal(client.session, session);
   assert.equal(client.session.member.kind, "agent");
 });
+
+test('existing-agent sponsorship card preserves the typed approve and deny contract',async t=>{
+ const f=model(t,member('owner'));
+ f.client.request=async()=>({roomId:'commons',requests:[{requestId:'adoption',kind:'agent-sponsor-transfer',displayName:'Existing Claude',note:'John requests sponsorship; identity and permissions stay unchanged',requestedPermissions:[]}]});
+ await f.card.refresh();const html=f.target.querySelector('#attention-list').innerHTML;
+ assert.match(html,/Connect Existing Claude to the requesting human/);assert.match(html,/Agent sponsorship/);assert.doesNotMatch(html,/asks to join|Choose permissions/);
+});

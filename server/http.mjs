@@ -1,5 +1,6 @@
 import { readAccountRoomRow } from './room-lifecycle.mjs';
 import {isCurrentRoom} from './current-room-repository.mjs';
+import { agentSponsorTransferCandidate } from './agent-sponsor-transfer.mjs';
 import {redactSelectedEventPage} from './current-room-events.mjs';
 import { oauthAuthorizationServerMetadata } from "./oauth-metadata.mjs";
 import { renderInviteOAuthPage } from "./routes/mcp-invite-oauth.mjs";
@@ -601,7 +602,8 @@ export function createRoomServer({ store, origin, assetRoot = new URL("../", imp
       .get(preference.preferredRoomId, accountId);
     if (!link) return null;
     const authority = store.roomAuthority(preference.preferredRoomId, {memberId: preference.preferredMemberId});
-    return authority.ownerId === link.member_id ? preference : null;
+    const agent=Object.hasOwn(authority.members,preference.preferredMemberId)?authority.members[preference.preferredMemberId]:null;
+    return authority.ownerId === link.member_id || agent?.sponsorAdoptionId && agent.accountableHumanId===link.member_id ? preference : null;
   };
 
   for (const c of [...connectorClients, ...mcpOAuthClients]) {
@@ -1825,13 +1827,16 @@ export function createRoomServer({ store, origin, assetRoot = new URL("../", imp
         const preference = mcpClientPreference(validated.client.clientId);
         const agentChoices = mcpConsent ? listMcpOAuthAgents(store, auth.account.id, oauthResource, preference ?? {}) : [];
         const requiredSeat = mcpConsent ? requiredMcpSeat(validated.client.clientId, auth.account.id) : null;
+        const adoption = mcpConsent && !agentChoices.some(choice=>choice.binding.roomId===preference?.preferredRoomId&&choice.binding.memberId===preference?.preferredMemberId)
+          ? agentSponsorTransferCandidate(store,auth.account.id,preference??{}) : null;
+        if(adoption)agentChoices.splice(0,agentChoices.length);
         if (requiredSeat) {
           const match = agentChoices.find(choice => choice.binding.memberId === requiredSeat.preferredMemberId
             && choice.binding.roomId === requiredSeat.preferredRoomId);
-          if (!match) return json(res, 409, {error: "existing_agent_connection_required", error_description: "The configured existing agent is not currently eligible; no replacement seat was created"});
-          agentChoices.splice(0, agentChoices.length, match);
+          if (!match && !adoption) return json(res, 409, {error: "existing_agent_connection_required", error_description: "The configured existing agent is not currently eligible; no replacement seat was created"});
+          if(match)agentChoices.splice(0, agentChoices.length, match);
         }
-        if (mcpConsent && !agentChoices.length)
+        if (mcpConsent && !agentChoices.length && !adoption)
           return json(res, 409, { error: "agent_connection_required", error_description: "Join the room as yourself, then create your own connected agent before authorizing it" });
         const scopeLabels = {
           "rooms:read": "See your rooms",
@@ -1855,9 +1860,10 @@ export function createRoomServer({ store, origin, assetRoot = new URL("../", imp
         const nativeAccountLabel = [nativeAccountName, nativeAccountEmail].filter(Boolean).join(" · ") || "Current signed-in account";
         const nativeConsentWarning = validated.client.clientId === "project-room-macos"
           ? `<p data-native-account>Account: ${esc(nativeAccountLabel)}</p><p>Only allow this if you just chose Sign in in the Project Room Mac app.</p>` : "";
-        const agentConsentFields = mcpConsent
-          ? `<input type="hidden" name="resource" value="${esc(oauthResource)}"><p>This connects your agent, with its existing room permissions. It does not sign in as you.</p><label>Agent and room <select name="agent_binding" required>${agentChoices.map(({ binding, label }) => `<option value="${esc(JSON.stringify(binding))}">${esc(label)}</option>`).join("")}</select></label>` : "";
-        const html = `<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Connect ${esc(validated.client.name)}</title><style>body{font-family:system-ui,sans-serif;max-width:28rem;margin:4rem auto;padding:0 1rem;color:#1a1a1a}h1{font-size:1.25rem}ul{padding-left:1.25rem}.actions{margin-top:1.5rem;display:flex;gap:.75rem}button{padding:.6rem 1.25rem;border-radius:.5rem;border:1px solid #ccc;font-size:1rem;cursor:pointer}.primary{background:#0066cc;color:#fff;border-color:#0066cc}</style></head><body><h1>Connect ${esc(validated.client.name)} to Project Room?</h1><p><strong>${esc(validated.client.name)}</strong> is requesting access to your Project Room account. It will be able to:</p><ul>${scopeItems}</ul><p>${esc(revocationHelp)}</p>${nativeConsentWarning}<form method="post" action="/oauth/authorize">${agentConsentFields}<input type="hidden" name="client_id" value="${esc(url.searchParams.get("client_id"))}"><input type="hidden" name="redirect_uri" value="${esc(url.searchParams.get("redirect_uri"))}"><input type="hidden" name="scope" value="${esc(url.searchParams.get("scope") || "")}"><input type="hidden" name="state" value="${esc(url.searchParams.get("state") || "")}"><input type="hidden" name="code_challenge" value="${esc(url.searchParams.get("code_challenge"))}"><input type="hidden" name="code_challenge_method" value="S256"><input type="hidden" name="csrf_token" value="${esc(auth.csrf)}"><div class="actions"><button type="submit" name="decision" value="allow" class="primary">Allow</button><button type="submit" name="decision" value="deny">Deny</button></div></form></body></html>`;
+        const agentConsentFields = adoption
+          ? `<input type="hidden" name="resource" value="${esc(oauthResource)}"><input type="hidden" name="adoption_request_id" value="${esc(adoption.pendingRequestId??`ar_${randomUUID().replaceAll('-', '').slice(0,24)}`)}"><p>Connect <strong>${esc(adoption.displayName)}</strong> in <strong>${esc(adoption.roomTitle)}</strong> as your existing agent. Its identity, work and Room permissions stay unchanged.</p><p>${adoption.pendingRequestId?'Your sponsorship request is waiting for a Room owner or administrator. After approval, return here to allow the connection.':'First, ask a Room owner or administrator to approve moving this agent’s sponsorship to your signed-in human membership. This does not make you the Room owner. Previous sponsor connections will stop working. No access is granted until approval and your final Allow.'}</p>`
+          : mcpConsent ? `<input type="hidden" name="resource" value="${esc(oauthResource)}"><p>This connects your agent, with its existing room permissions. It does not sign in as you.</p><label>Agent and room <select name="agent_binding" required>${agentChoices.map(({ binding, label }) => `<option value="${esc(JSON.stringify(binding))}">${esc(label)}</option>`).join("")}</select></label>` : "";
+        const html = `<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Connect ${esc(validated.client.name)}</title><style>body{font-family:system-ui,sans-serif;max-width:28rem;margin:4rem auto;padding:0 1rem;color:#1a1a1a}h1{font-size:1.25rem}ul{padding-left:1.25rem}.actions{margin-top:1.5rem;display:flex;gap:.75rem}button{padding:.6rem 1.25rem;border-radius:.5rem;border:1px solid #ccc;font-size:1rem;cursor:pointer}.primary{background:#0066cc;color:#fff;border-color:#0066cc}</style></head><body><h1>Connect ${esc(validated.client.name)} to Project Room?</h1><p><strong>${esc(validated.client.name)}</strong> is requesting access to your Project Room account. It will be able to:</p><ul>${scopeItems}</ul><p>${esc(revocationHelp)}</p>${nativeConsentWarning}<form method="post" action="/oauth/authorize">${agentConsentFields}<input type="hidden" name="client_id" value="${esc(url.searchParams.get("client_id"))}"><input type="hidden" name="redirect_uri" value="${esc(url.searchParams.get("redirect_uri"))}"><input type="hidden" name="scope" value="${esc(url.searchParams.get("scope") || "")}"><input type="hidden" name="state" value="${esc(url.searchParams.get("state") || "")}"><input type="hidden" name="code_challenge" value="${esc(url.searchParams.get("code_challenge"))}"><input type="hidden" name="code_challenge_method" value="S256"><input type="hidden" name="csrf_token" value="${esc(auth.csrf)}"><div class="actions">${adoption ? adoption.pendingRequestId ? `<a href="${esc(url.pathname+url.search)}">Check approval</a>` : '<button type="submit" name="decision" value="request-adoption" class="primary">Ask for approval</button>' : '<button type="submit" name="decision" value="allow" class="primary">Allow</button>'}<button type="submit" name="decision" value="deny">Deny</button></div></form></body></html>`;
         const bytes = Buffer.from(html, "utf8");
         res.setHeader("Referrer-Policy", "same-origin");
         // Browsers apply form-action to every redirect hop of the Allow POST,
@@ -1933,6 +1939,15 @@ export function createRoomServer({ store, origin, assetRoot = new URL("../", imp
           res.setHeader("Location", u.href);
           return res.end();
         };
+        if(decision==='request-adoption'){
+          if(!isMcpClient(validated.client.clientId)||data.resource!==oauthResource)return failRedirect('invalid_target','Wrong MCP resource');
+          const preference=mcpClientPreference(validated.client.clientId);
+          const candidate=agentSponsorTransferCandidate(store,accountId,preference??{});
+          if(!candidate)return failRedirect('access_denied','This account cannot request sponsorship of that existing agent');
+          accessRequests.sponsorTransfers.request(slotToken,candidate.roomId,{memberId:candidate.memberId,requestId:data.adoption_request_id},auth.sessionBinding);
+          const next=new URLSearchParams({client_id:validated.client.clientId,redirect_uri:validated.redirectUri,scope:validated.scopes.join(' '),code_challenge:data.code_challenge,code_challenge_method:'S256',resource:oauthResource,...(validated.state?{state:validated.state}:{})});
+          res.statusCode=303;res.setHeader('Location',`/oauth/authorize?${next}`);return res.end();
+        }
         if (decision !== "allow") return failRedirect("access_denied", "The user denied the request");
         let binding;
         if (isMcpClient(validated.client.clientId)) {
@@ -5232,7 +5247,7 @@ export function createRoomServer({ store, origin, assetRoot = new URL("../", imp
               action: "decide-request",
               method: "POST",
               path: `/api/rooms/${roomId}/access-requests/${requests[0].requestId}/decide`,
-              description: `Decide ${requests[0].displayName}'s request: send { decision: "approve", permissions: ${JSON.stringify(requests[0].requestedPermissions)}, note: null }. Use "deny" to refuse. Send your identity secret as the Bearer token.`,
+              description: requests[0].kind==="agent-sponsor-transfer" ? `Approve sponsorship of ${requests[0].displayName} by the requesting human: send { decision: "approve" }. Identity and permissions stay unchanged. Use "deny" to refuse.` : `Decide ${requests[0].displayName}'s request: send { decision: "approve", permissions: ${JSON.stringify(requests[0].requestedPermissions)}, note: null }. Use "deny" to refuse. Send your identity secret as the Bearer token.`,
             })]
           : [Object.freeze({
               action: "watch-requests",

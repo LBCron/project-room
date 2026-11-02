@@ -1,6 +1,7 @@
 import {inboxNext} from './inbox-next.mjs';
 import {readCurrentSearch} from './current-search.mjs';
 import {readCurrentWorkSnapshot} from './current-work-snapshot.mjs';
+import { assertSponsorTransferCommand } from "./agent-sponsor-transfer.mjs";
 import {readCurrentNativeInbox} from './current-native-inbox.mjs';
 import {ensureDefaultChannelState} from '../src/default-channel-state.js';
 import {readCurrentEventWindow,currentEventRedactionMessages} from './current-room-events.mjs';
@@ -751,6 +752,7 @@ const shapes = {
   [T.ROOM_ARCHIVED]: "reason",
   [T.OWNERSHIP_TRANSFERRED]: "toMemberId reason",
   [T.MEMBER_ADDED]: "memberId displayName kind permissions accountableHumanId identityId agentType referredBy joinedVia",
+  [T.MEMBER_SPONSOR_TRANSFERRED]: "requestId requestDigest memberId expectedMemberRevision toMemberId expectedHumanRevision previousSponsorId identityId",
   [T.MEMBER_ACCESS_CHANGED]: "memberId expectedMemberRevision permissions active",
   [T.MEMBER_STATUS_UPDATED]: "memberId message",
   [T.NOTIFICATION_PREFERENCES_SET]: "preferences",
@@ -841,7 +843,7 @@ export function validateCommand(command) {
   for (const [name, value] of Object.entries(command.data)) {
     if (!allowed.includes(name)) fail(422, "invalid_command", `Unexpected field: ${name}`);
     if (value === null) continue;
-    const type = ["expectedRevision", "expectedMemberRevision", "expectedMessageRevision", "basisRevision", "expectedRequestRevision", "contextSequence", "expectedHelpRevision", "expectedOfferRevision", "spendCents", "allowanceCents", "periodDays", "rounds", "toolCalls", "option", "attempt"].includes(name) ? "number" : ["active", "independentVerificationRequired", "ownerDecisionRequired", "allowOlderBasis", "externalActivityUnverified", "haltAll", "budgetEnforced", "muted", "resumeApproved", "alsoSendToChannel", "enabled", ...ROOM_POLICY_FIELDS].includes(name) ? "boolean" : ["permissions", "paths", "checksClaimed", "capabilities", "segments", "labels", "dependsOn", "scopes", "pullRequests", "blocks"].includes(name) ? "array" : name === "outputs" ? "outputs" : ["preferences", "budget", "signedEvidence", "poll"].includes(name) ? "object" : "string";
+    const type = ["expectedRevision", "expectedHumanRevision", "expectedMemberRevision", "expectedMessageRevision", "basisRevision", "expectedRequestRevision", "contextSequence", "expectedHelpRevision", "expectedOfferRevision", "spendCents", "allowanceCents", "periodDays", "rounds", "toolCalls", "option", "attempt"].includes(name) ? "number" : ["active", "independentVerificationRequired", "ownerDecisionRequired", "allowOlderBasis", "externalActivityUnverified", "haltAll", "budgetEnforced", "muted", "resumeApproved", "alsoSendToChannel", "enabled", ...ROOM_POLICY_FIELDS].includes(name) ? "boolean" : ["permissions", "paths", "checksClaimed", "capabilities", "segments", "labels", "dependsOn", "scopes", "pullRequests", "blocks"].includes(name) ? "array" : name === "outputs" ? "outputs" : ["preferences", "budget", "signedEvidence", "poll"].includes(name) ? "object" : "string";
     if (type === "array" ? !Array.isArray(value) : type === "object" ? !(value && typeof value === "object" && !Array.isArray(value)) : type === "outputs" ? !(typeof value === "string" || (Array.isArray(value) && value.every(v => typeof v === "string"))) : typeof value !== type) fail(422, "invalid_command", `Invalid field: ${name}`);
   }
   if (command.type === T.MESSAGE_POSTED && (typeof command.data.body !== "string" || !command.data.body.trim())) fail(422, "invalid_command", messageBody);
@@ -4030,6 +4032,12 @@ this.slaBreachAlerts = new SlaBreachAlertJournal(this); // Task 26: durable in-a
   // guards, same transaction as the caller's row write, so a throw rolls the
   // consent change back with the event. Also the MSG-2/integrity replay rail:
   // dm.consent_changed has a reducer no-op, so checkpoints replay clean.
+  agentSponsorAuthority(roomId,memberIds){
+    return this.readTransaction(()=>{
+      const context=currentInviteContext(this,roomId,{memberIds});
+      return context?{...context.room.state.room,members:context.room.state.members}: {...this.room(roomId).state.room,members:this.roomAuthority(roomId).members};
+    });
+  }
   currentDmConsentTransaction(roomId,operation){
     return this.transaction(()=>withCurrentServingWriter(this.db,roomId,operation));
   }
@@ -4042,7 +4050,7 @@ this.slaBreachAlerts = new SlaBreachAlertJournal(this); // Task 26: durable in-a
   }
   appendSideTableEvent(roomId, event) {
     if(isCurrentRoom(this.db,roomId)){
-      if(![T.DM_CONSENT_CHANGED,T.REFERRAL_COMPLETED,T.AGENT_INVITE_MINTED,T.LAND_UPDATED].includes(event.type))fail(409,'current_room_context_unavailable','This side-table event has no qualified current writer');
+      if(![T.DM_CONSENT_CHANGED,T.REFERRAL_COMPLETED,T.AGENT_INVITE_MINTED,T.LAND_UPDATED,T.ACCESS_REQUESTED].includes(event.type))fail(409,'current_room_context_unavailable','This side-table event has no qualified current writer');
       return this.transaction(()=>withCurrentReadContext(this.db,roomId,()=>withCurrentServingWriter(this.db,roomId,()=>{
         const context=event.type===T.DM_CONSENT_CHANGED ? currentDmConsentEventContext(this,roomId) : currentInviteContext(this,roomId,{memberIds:[event.actorId,event.data.referrerMemberId,event.data.refereeMemberId]}),room=context.room;
         refuseArchivedWrite(room.state);
@@ -7029,6 +7037,7 @@ this.slaBreachAlerts = new SlaBreachAlertJournal(this); // Task 26: durable in-a
   }
   command(token, roomId, command, expectedSessionBinding = null, { agentConnectionSponsor = false, listenerToken } = {}) {
     validateCommand(command);
+    if(command.type===T.MEMBER_SPONSOR_TRANSFERRED)assertSponsorTransferCommand(this,roomId,command);
     // #2951: a flood token spent below lives in an in-memory bucket that the
     // command transaction cannot roll back, so remember the spend and refund
     // it in the catch if anything after consume() fails — validation, the

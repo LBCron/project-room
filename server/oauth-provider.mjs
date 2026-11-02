@@ -49,7 +49,7 @@ const validateBinding = binding => {
   if (binding === undefined || binding === null) return null; // legacy desktop grant
   const fields = binding?.principalType === "invited-agent"
     ? ["resource", "roomId", "identityId", "memberId", "principalType", "invitationGrantId", "identityEpoch"]
-    : ["resource", "roomId", "identityId", "memberId", "humanMemberId", "identityEpoch", ...(binding?.principalType === "account-owned-agent" ? ["principalType", "accountEpoch"] : [])];
+    : ["resource", "roomId", "identityId", "memberId", "humanMemberId", "identityEpoch", ...(["account-owned-agent","account-adopted-agent"].includes(binding?.principalType) ? ["principalType", "accountEpoch", ...(binding?.principalType==="account-adopted-agent"?["adoptionId"]:[])] : [])];
   check(binding && typeof binding === "object" && !Array.isArray(binding)
     && Object.keys(binding).length === fields.length
     && fields.every(key => typeof binding[key] === "string" && binding[key].length > 0 && binding[key].length <= 512),

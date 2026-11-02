@@ -49,6 +49,7 @@ function requireOwner(store, auth, roomId) {
 
 function decideActions(roomId, request) {
   const path = `/api/rooms/${roomId}/access-requests/${request.requestId}/decide`;
+  if(request.kind==='agent-sponsor-transfer')return Object.freeze(['approve','deny'].map(decision=>Object.freeze({action:decision,method:'POST',path,body:Object.freeze({decision})})));
   return Object.freeze([
     Object.freeze({ action: "approve", method: "POST", path,
       body: Object.freeze({ decision: "approve", permissions: request.requestedPermissions, note: null }) }),
@@ -65,8 +66,8 @@ export function accessRequestAttentionItem(roomId, request) {
     kind: "access_request",
     id: request.requestId,
     severity: "action",
-    title: request.kind === "permissions" ? `${request.displayName} wants: ${request.requestedPermissions.join(", ")}` : `${request.displayName} asks to join`,
-    detail: `Requested ${request.requestedPermissions.join(", ")}`,
+    title: request.kind === "agent-sponsor-transfer" ? `Connect ${request.displayName} to the requesting human` : request.kind === "permissions" ? `${request.displayName} wants: ${request.requestedPermissions.join(", ")}` : `${request.displayName} asks to join`,
+    detail: request.kind === "agent-sponsor-transfer" ? request.note : `Requested ${request.requestedPermissions.join(", ")}`,
     actions: decideActions(roomId, request),
   });
 }

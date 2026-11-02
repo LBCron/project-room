@@ -5,6 +5,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import { randomUUID } from "node:crypto";
 import { TurnRecorder, renderTurn, TRAILER_LINES } from "../room-acp/src/render.mjs";
+import { AgentHost } from "../room-acp/src/agent-host.mjs";
 import { ThreadQueue } from "../room-acp/src/queue.mjs";
 import { mayTalk, Bridge } from "../room-acp/src/bridge.mjs";
 import { join } from "../room-acp/src/join.mjs";
@@ -30,6 +31,19 @@ test("render: text plus a bounded tool trailer, never thoughts", () => {
   assert.equal(trailer[0], "✗ step 0");
   assert.match(trailer.at(-1), /and 16 more tool calls/);
   assert.match(renderTurn(new TurnRecorder(), { error: "boom" }), /turn failed: boom/);
+});
+
+test("adapter structured notices stay private while warning-looking model text survives", async t => {
+  const host = new AgentHost({ candidate: { command: process.execPath, args: [FAKE_AGENT] }, env: { ...process.env, FAKE_ACP_MODE: "notices" } });
+  t.after(() => host.stop());
+  await host.start();
+  const text = "Warning: this is the requested model reply. Config warning: keep this quotation.";
+  const { recorder } = await host.prompt("notice-test", [{ type: "text", text }]);
+  assert.equal(renderTurn(recorder), `echo: ${text}`);
+  assert.doesNotMatch(renderTurn(recorder), /private-owner|private-project|Under-development/);
+  const onlyNotice = new TurnRecorder();
+  onlyNotice.update({ sessionUpdate: "notice", severity: "warning", title: "Private warning", description: "/private/config" });
+  assert.equal(renderTurn(onlyNotice), "(no reply text)");
 });
 
 test("queue: one turn in flight per thread, later items batch", async () => {

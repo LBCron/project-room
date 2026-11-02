@@ -35,7 +35,7 @@ test('real grants/revocations resume in bounded pages with exact retry and cold 
   f.store.delegationJournal.verify=()=>{throw Error('whole delegation journal was rescanned');};
   try {
     for(let n=0;f.response.body.auditProgress?.report?.stage!=='complete';n++){assert.ok(n<10000);assert.equal((await f.step()).status,202);}
-    const done=await f.step();assert.equal(done.status,200,JSON.stringify(done.body));assert.equal(done.body.subsystemContinuation.delegation.consumed,true);
+    const done=await f.step();assert.equal(done.status,200,JSON.stringify(done.body));assert.equal(done.body.subsystemContinuation.delegation.consumed,true);assert.equal(done.body.subsystemContinuation.projectionEquality.deferred,0);
     assert.deepEqual(done.body.recovery.tables,oracle.tables);assert.equal(done.body.recovery.dataSha256,oracle.dataSha256);
   }
   finally {f.store.delegationJournal.verify=original;}

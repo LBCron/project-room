@@ -24,7 +24,7 @@ test('actual Native journal continuation cold-resumes and consumes exact semanti
    if(before.body.auditProgress?.stage==='delegation'){assert.equal(r.status,202,JSON.stringify(r.body));assert.deepEqual(await post(input),r);}
    if(r.body.verified)finalInput=input;
   }
-  assert.equal(r.status,200,JSON.stringify(r.body));assert.equal(r.body.subsystemContinuation.delegation.consumed,true);assert.ok(compare);assert.ok(cold>=3);assert.deepEqual(await post(finalInput),r);
+  assert.equal(r.status,200,JSON.stringify(r.body));assert.equal(r.body.subsystemContinuation.delegation.consumed,true);assert.equal(r.body.subsystemContinuation.projectionEquality.deferred,0);assert.ok(compare);assert.ok(cold>=3);assert.deepEqual(await post(finalInput),r);
   let cleanup=r.body.nextCleanup;while(cleanup){const result=await post(cleanup.body);assert.ok([200,202].includes(result.status),JSON.stringify(result.body));cleanup=result.body.nextCleanup;}
   await mf.dispose();mf=create();assert.equal((await json('target','/api/ready')).status,200);
   t.diagnostic(JSON.stringify({actualNative:true,calls:n,coldJournalPages:cold,comparison:compare.body,wholeRecoveryBounded:false,fullOracleStillRequired:true}));

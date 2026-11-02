@@ -1,0 +1,16 @@
+{
+  "source": "a599faa29ff65567e5c080609cb2d000acd33666",
+  "client": "@modelcontextprotocol/client@2.4.0",
+  "runtime": "Actual local July workerd with persisted SQLite Durable Object",
+  "transport": "Official StreamableHTTP SDK via origin-restricted Miniflare fetch dispatch",
+  "catalogAuthorized": true,
+  "attributedSinglePost": true,
+  "coldReconnect": true,
+  "exactRetryAddsNoEvent": true,
+  "revokedGrantRefused": true,
+  "revokedHttpStatus": 401,
+  "revokedCallAddsNoEvent": true,
+  "requestCount": 6,
+  "allProtocolHeadersCorrect": true,
+  "scope": "Local qualification only. No external callback, hosted deployment, whole-suite or other laptop execution claim."
+}

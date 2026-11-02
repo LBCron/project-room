@@ -1,0 +1,11 @@
+[
+ {"id":"sdk-native","kind":"sdk","commit":"affbd0d9011606e61c7ad318bcc30573be21c6d9","prefix":"official-sdk-native-a599","folder":"official-sdk-native-evidence","receipt":"official-sdk-native-receipt.json"},
+ {"id":"native-isolation","kind":"isolation","commit":"685d7cc586514a6d9ff82d3f0f3f5fd0e78d2518","prefix":"native-concurrent-isolation-a599","files":["native_concurrent_isolation.mjs","native_concurrent_isolation_fixture.mjs","native-concurrent-isolation-receipt.json","native-concurrent-isolation-README.md"],"receipt":"native-concurrent-isolation-receipt.json"},
+ {"id":"canonical-capacity","kind":"capacity","commit":"b5dfc44972c23e6f2ec066099de31cc8cef55914","prefix":"canonical-capacity-a599","folder":"canonical-capacity-evidence","receipt":"canonical-work-capacity-http-receipt.json"},
+ {"id":"canonical-roles","kind":"roles","commit":"fa7abfe2642a73462852d31774f879f01566856b","prefix":"canonical-roles-a599","folder":"canonical-roles-evidence","receipt":"canonical-work-roles-http-receipt.json"},
+ {"id":"canonical-process-crash","kind":"crash","commit":"b041f89ea7ca6b8bb0854568893ed95594d3a2e0","prefix":"canonical-process-crash-a599","folder":"canonical-crash-evidence","receipt":"canonical-process-crash-retry-receipt.json"},
+ {"id":"charter-gap","kind":"charter","commit":"0ceabb94e30b6582957206d16705851d03a6284d","prefix":"charter-read-gap-a599","folder":"charter-read-gap-evidence","receipt":"normalized-charter-read-a599faa2.json"},
+ {"id":"pin-gap","kind":"pin","commit":"7e10b14ba082b118ccce6c74d5dd190bbb405f13","prefix":"pinned-context-gap-a599","folder":"pinned-context-gap-evidence","receipt":"normalized-pin-a599faa2.json"},
+ {"id":"fresh-room-sections","kind":"sections","commit":"d77d64a3a60d071ab165a12348795ffe293307f2","prefix":"fresh-room-sections-a599","folder":"fresh-room-sections-evidence","receipt":"fresh-room-sections-http-receipt.json"},
+ {"id":"fresh-room-browser","kind":"browser","commit":"7c8d6a056d8acd54ed9987d7c60d1a16281b4d4b","prefix":"fresh-room-browser-a599","folder":"fresh-room-browser-evidence","receipt":"receipt.json"}
+]

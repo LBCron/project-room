@@ -1,0 +1,23 @@
+{
+  "controls": [
+    {
+      "name": "real nine-packet42-artifact audit",
+      "passed": true
+    },
+    {
+      "name": "modified local receipt refused against Git bytes",
+      "passed": true
+    },
+    {
+      "name": "missing published screenshot refused",
+      "passed": true
+    },
+    {
+      "name": "changed capability observation requires explicit reclassification",
+      "passed": true
+    }
+  ],
+  "passed": 4,
+  "failed": 0,
+  "scope": "Indexer artifact/receipt truthfulness checks, not additional runtime/MVP qualification."
+}

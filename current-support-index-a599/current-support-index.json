@@ -1,0 +1,323 @@
+{
+  "schema": "member2-current-support-index-v1",
+  "testedSource": "a599faa29ff65567e5c080609cb2d000acd33666",
+  "sourceTree": "7be83d03ca225618552523451c262670f1accdda",
+  "base": "00888c52110d36250d3e07629036701b72926d09",
+  "observedFetchHead": "00888c52110d36250d3e07629036701b72926d09",
+  "candidateAncestorOfObservedFetchHead": false,
+  "packets": [
+    {
+      "id": "sdk-native",
+      "evidenceCommit": "affbd0d9011606e61c7ad318bcc30573be21c6d9",
+      "evidenceTree": "9c79b811c41a9a4e56927c39eff9fcb55f0a78a0",
+      "status": "scoped-pass",
+      "scope": "Official SDK on local Native: cold reconnect, no duplicate, revocation401.",
+      "url": "https://github.com/Uuriko/project-room/tree/affbd0d9011606e61c7ad318bcc30573be21c6d9/official-sdk-native-a599",
+      "artifacts": [
+        {
+          "name": "README.md",
+          "bytes": 1849,
+          "sha256": "59d9c1798bc9028e83ff0f4d618d0d3e7bf0828d79e59a8658e47780c73246c0"
+        },
+        {
+          "name": "official-sdk-native-receipt.json",
+          "bytes": 677,
+          "sha256": "ba141b419b95a147cbfe1c0e6ff91babc51200766d499cdd7edd1994f303fd31"
+        },
+        {
+          "name": "official_sdk_native.mjs",
+          "bytes": 5143,
+          "sha256": "9ff536ee1aed8c34b39476115f0428b4d1c5384f1b4c2553917a4947c808a04d"
+        },
+        {
+          "name": "official_sdk_native_fixture.mjs",
+          "bytes": 2512,
+          "sha256": "77df1d948d1792dadca46fc7a393719ddf51f3478999acb33c6789bb30dbc7f0"
+        }
+      ]
+    },
+    {
+      "id": "native-isolation",
+      "evidenceCommit": "685d7cc586514a6d9ff82d3f0f3f5fd0e78d2518",
+      "evidenceTree": "1a4ab164cef54cc8914835033545367cb7f5674a",
+      "status": "scoped-pass",
+      "scope": "Two actual SDK agents on local Native; simultaneous submission, no forced internal interleaving.",
+      "url": "https://github.com/Uuriko/project-room/tree/685d7cc586514a6d9ff82d3f0f3f5fd0e78d2518/native-concurrent-isolation-a599",
+      "artifacts": [
+        {
+          "name": "native-concurrent-isolation-README.md",
+          "bytes": 2262,
+          "sha256": "c4b5f050ae365bfd04949a041072a4538bbc4b97fdab3aed9be11560e9e8d3d3"
+        },
+        {
+          "name": "native-concurrent-isolation-receipt.json",
+          "bytes": 935,
+          "sha256": "ab460d95fc71046732abd132c70a00de3dcf17bbfa975b7ec90b312dbcc404e8"
+        },
+        {
+          "name": "native_concurrent_isolation.mjs",
+          "bytes": 6371,
+          "sha256": "77d841d4fc28edae67fca3161803260883989b40cb5fbac12a16cde12a7a41a3"
+        },
+        {
+          "name": "native_concurrent_isolation_fixture.mjs",
+          "bytes": 2835,
+          "sha256": "84902a6f5c77f973b941231bb5741fe49417791075e7129daee59666dddcb1d5"
+        }
+      ]
+    },
+    {
+      "id": "canonical-capacity",
+      "evidenceCommit": "b5dfc44972c23e6f2ec066099de31cc8cef55914",
+      "evidenceTree": "890cfd5bbfb476882853a960a5a8e4b265c0a5fa",
+      "status": "scoped-pass",
+      "scope": "Local HTTP small configured cap boundaries; no default1000/20 scale claim.",
+      "url": "https://github.com/Uuriko/project-room/tree/b5dfc44972c23e6f2ec066099de31cc8cef55914/canonical-capacity-a599",
+      "artifacts": [
+        {
+          "name": "README.md",
+          "bytes": 3376,
+          "sha256": "23f11002cd2ebcb4b989e732235ff99f959d5325ecbabe56497620bab12aa452"
+        },
+        {
+          "name": "canonical-work-capacity-http-receipt.json",
+          "bytes": 2465,
+          "sha256": "5a5a6afe9e8a28bd5b2b360e81420b6cee9a250db8bd73ac93400e11d27de1b0"
+        },
+        {
+          "name": "canonical_work_capacity_http.mjs",
+          "bytes": 6989,
+          "sha256": "f126ecd7d9b4e10625c3e830c9be2d718cbbaaa0d23545c84771303a8a532336"
+        }
+      ]
+    },
+    {
+      "id": "canonical-roles",
+      "evidenceCommit": "fa7abfe2642a73462852d31774f879f01566856b",
+      "evidenceTree": "c655cb6f73ec15cbd5bbcebb3ccc4117b867fc9c",
+      "status": "scoped-pass",
+      "scope": "Local HTTP54role/action cells; no delegation/autonomy/Native claim.",
+      "url": "https://github.com/Uuriko/project-room/tree/fa7abfe2642a73462852d31774f879f01566856b/canonical-roles-a599",
+      "artifacts": [
+        {
+          "name": "README.md",
+          "bytes": 3341,
+          "sha256": "c54141d6b3f6a810f105e6cca630f2a75046b5c525edeecac550acb3106873e9"
+        },
+        {
+          "name": "canonical-work-roles-http-receipt.json",
+          "bytes": 13379,
+          "sha256": "566e9c2c5cddf8112e1b6db0b59ac9d8192489263b16775b8b16985bade2c48f"
+        },
+        {
+          "name": "canonical_work_roles_http.mjs",
+          "bytes": 8965,
+          "sha256": "cff439047134e4d9ddb60f8b96758c3a837912aa65a5cc3bbe13d70862fc92cf"
+        }
+      ]
+    },
+    {
+      "id": "canonical-process-crash",
+      "evidenceCommit": "b041f89ea7ca6b8bb0854568893ed95594d3a2e0",
+      "evidenceTree": "3317474eaef08f259f210c2f2ee29a820d15e3e5",
+      "status": "scoped-pass",
+      "scope": "Local fileSQLite/Node actual SIGKILL after commit; no power-loss/Native claim.",
+      "url": "https://github.com/Uuriko/project-room/tree/b041f89ea7ca6b8bb0854568893ed95594d3a2e0/canonical-process-crash-a599",
+      "artifacts": [
+        {
+          "name": "README.md",
+          "bytes": 2975,
+          "sha256": "808ab25c9c2d9d97a3c514eddc24c2ee3d4a8ad129d075636f5a2edd1f1a842b"
+        },
+        {
+          "name": "canonical-process-crash-retry-receipt.json",
+          "bytes": 1510,
+          "sha256": "d04fbba7d0886933f95cb0445cad2929b7ec80c85ec5961b9dc02171965b97e5"
+        },
+        {
+          "name": "canonical_crash_worker.mjs",
+          "bytes": 2692,
+          "sha256": "90bf46c7ab854043a6ec7be059ece5ec2a8d1e34c79f014b811f11a773caddfc"
+        },
+        {
+          "name": "canonical_process_crash_retry.mjs",
+          "bytes": 5964,
+          "sha256": "dcf894d37b16ae148114d4767771085ef19043c702b4cdd947b8fac47f0b25b6"
+        }
+      ]
+    },
+    {
+      "id": "charter-gap",
+      "evidenceCommit": "0ceabb94e30b6582957206d16705851d03a6284d",
+      "evidenceTree": "63f031583dbd5e340e3bc325b09eff7a7e284fc3",
+      "status": "reproduced-gap",
+      "scope": "Normalized standalone charter read409; legacy200 and activation pack retains instructions.",
+      "url": "https://github.com/Uuriko/project-room/tree/0ceabb94e30b6582957206d16705851d03a6284d/charter-read-gap-a599",
+      "artifacts": [
+        {
+          "name": "README.md",
+          "bytes": 3023,
+          "sha256": "554697f73bc987c129e9f4e313e0d8b91e7e91539b4a6d6aa879d239313bf768"
+        },
+        {
+          "name": "normalized-charter-read-00888c52.json",
+          "bytes": 1149,
+          "sha256": "e8c4db4961248ab5de27af354a130340f1b4e4f945fff0755dba18e87fbff24f"
+        },
+        {
+          "name": "normalized-charter-read-a599faa2.json",
+          "bytes": 1149,
+          "sha256": "30b9ad9054c2f59ed670c510a70671f935311b6a491170523b65264ab7279535"
+        },
+        {
+          "name": "normalized_charter_read_repro.mjs",
+          "bytes": 3616,
+          "sha256": "17c1b9ec389838f7e00d89d24266db8e6634195b50927b3398c3f7ffdefa0768"
+        },
+        {
+          "name": "original-abuse-checker-receipt.json",
+          "bytes": 1325,
+          "sha256": "6bb08b84e008e6b1eee82797fb86ee5497f135d44045678c9b321f23017b6f08"
+        },
+        {
+          "name": "reordered-abuse-checker-receipt.json",
+          "bytes": 1435,
+          "sha256": "33979c51c4ba3d6836b092c68bda8900b5948e066817e757e41f574aef7be21b"
+        },
+        {
+          "name": "run_abuse_guard_qualification.mjs",
+          "bytes": 2093,
+          "sha256": "1b22baaf3c6a3f4bc533a8d69de9514c77ff8cae3da29d236161847bc6126a3e"
+        }
+      ]
+    },
+    {
+      "id": "pin-gap",
+      "evidenceCommit": "7e10b14ba082b118ccce6c74d5dd190bbb405f13",
+      "evidenceTree": "c69f2324ca93622a13df35d8c3cd02297dc3ce4e",
+      "status": "reproduced-gap",
+      "scope": "Normalized pin409 and preexisting pin omitted from activation context; no trust bypass/event-erasure claim.",
+      "url": "https://github.com/Uuriko/project-room/tree/7e10b14ba082b118ccce6c74d5dd190bbb405f13/pinned-context-gap-a599",
+      "artifacts": [
+        {
+          "name": "README.md",
+          "bytes": 3221,
+          "sha256": "1468d00d7302e04cef269e8472be946c8d235043b57c9e35e0240d46c309c4f1"
+        },
+        {
+          "name": "normalized-pin-00888c52.json",
+          "bytes": 2240,
+          "sha256": "17a0eb0cefbb6419653047ddcdd9a34c3500fc146c776bcc356971f496887c51"
+        },
+        {
+          "name": "normalized-pin-a599faa2.json",
+          "bytes": 2240,
+          "sha256": "ac17f77689edc27a1a03c1678df3cc1be7a0abb1afc44408615e5a1009ca7fc3"
+        },
+        {
+          "name": "normalized_pin_repro.mjs",
+          "bytes": 5128,
+          "sha256": "49a33b0ef9776150ee51ce9bde3213c0eb17885384aa3a5c50790b64f2f44bd2"
+        },
+        {
+          "name": "reordered-T1-receipt.json",
+          "bytes": 1745,
+          "sha256": "8cc05eb7cf854e3b11551860b87a29ab39b9351d3abe242c9d5620432d08d28a"
+        }
+      ]
+    },
+    {
+      "id": "fresh-room-sections",
+      "evidenceCommit": "d77d64a3a60d071ab165a12348795ffe293307f2",
+      "evidenceTree": "18ff1e4e28ed391f62095a897323d1786c8d80a0",
+      "status": "observed-gap",
+      "scope": "Fresh human/agent HTTP room windows declare five unavailable sections; source-only UI guard.",
+      "url": "https://github.com/Uuriko/project-room/tree/d77d64a3a60d071ab165a12348795ffe293307f2/fresh-room-sections-a599",
+      "artifacts": [
+        {
+          "name": "README.md",
+          "bytes": 2682,
+          "sha256": "c72968cb4d65cbd47bdd98989032236a8a87ef804455ea4d897bc7278f2ae5f1"
+        },
+        {
+          "name": "fresh-room-sections-http-receipt.json",
+          "bytes": 2901,
+          "sha256": "f30f2e203777548c4e156b12a67d4a57c837441839dcfd173fba3b6ca7677a81"
+        },
+        {
+          "name": "fresh_room_sections_http.mjs",
+          "bytes": 4801,
+          "sha256": "48774f5e515b780691e8b8d2950c5f4736bd35f8b8fdfc273e9d61d99e9e7615"
+        }
+      ]
+    },
+    {
+      "id": "fresh-room-browser",
+      "evidenceCommit": "7c8d6a056d8acd54ed9987d7c60d1a16281b4d4b",
+      "evidenceTree": "ebc1d2ed8e3062141c71c743e600f2d2d6781990",
+      "status": "observed-gap",
+      "scope": "Actual local desktop/phone fresh signup; hidden setup/unavailable Updates, not assistant-readiness pass.",
+      "url": "https://github.com/Uuriko/project-room/tree/7c8d6a056d8acd54ed9987d7c60d1a16281b4d4b/fresh-room-browser-a599",
+      "artifacts": [
+        {
+          "name": "FRESH-ROOM-ACCEPTANCE.md",
+          "bytes": 3232,
+          "sha256": "fdc9287ca0684bb1c88b0713888e7dc1990ccf0d2e3f76cd9c32fda3279b48ee"
+        },
+        {
+          "name": "README.md",
+          "bytes": 2940,
+          "sha256": "da9dc3a98ba6e6477550c40f60e3932b45f3ebe55626a5870f39f28481576ab7"
+        },
+        {
+          "name": "browser-dependency.json",
+          "bytes": 164,
+          "sha256": "faca7126dd7d09fb606e94cb1b35cc4a2dbf40c78215a0bc433acc2810850705"
+        },
+        {
+          "name": "desktop-settings.png",
+          "bytes": 88322,
+          "sha256": "d3fce97b923622d5efb9c51958a877301bc1e605894c5839b430849ed96a305c"
+        },
+        {
+          "name": "desktop-updates.png",
+          "bytes": 71259,
+          "sha256": "d6c4b17e1ad619f755fc10600db37d11a69e708fd6c5c603ad1cc717a2e8b469"
+        },
+        {
+          "name": "fresh_room_browser_observation.mjs",
+          "bytes": 5786,
+          "sha256": "b17e25195076a2008e4bddd0672dc2b62fb0edcc4bb5c5c8011b136a2a6ec369"
+        },
+        {
+          "name": "phone-settings.png",
+          "bytes": 51275,
+          "sha256": "88aac0a5bda457078329f1b5d7efc15a7c42bc05864dade398a70efa1ca6c07d"
+        },
+        {
+          "name": "phone-updates.png",
+          "bytes": 46758,
+          "sha256": "31a6db370ef78ac53b6e08ac4e4769f9defc19ee5c9a8c6c6580904f78e6329a"
+        },
+        {
+          "name": "receipt.json",
+          "bytes": 1552,
+          "sha256": "02ab4994e487bd84c319c7df5731f66132d9cd372222f8dc30af17f92710bebd"
+        }
+      ]
+    }
+  ],
+  "verifiedArtifacts": 42,
+  "counts": {
+    "scoped-pass": 5,
+    "reproduced-gap": 2,
+    "observed-gap": 2
+  },
+  "releaseReadyEstablished": false,
+  "peerExecutionEstablished": false,
+  "limits": [
+    "Byte/commit/receipt consistency only; no new runtime execution or independent authenticity proof.",
+    "Passing evidence scopes overlap; counts must not be added as unique tests.",
+    "Full suite, review, merge, deployment and physical device utilization remain separate and unproven."
+  ]
+}

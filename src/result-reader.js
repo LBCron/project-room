@@ -345,7 +345,7 @@ export function installResultReader({ client, getState, getSession, sameSession,
     const read = e.target.closest("[data-read-result]");
     if (read && getState() && !isBusy()) {
       const item = getState().workItems[read.dataset.readResult], receipt = item?.receipt;
-      const compact = receipt && typeof receipt.summary !== "string" && receipt.eventId && receipt.evidenceVersion;
+      const compact = receipt && typeof receipt.summary !== "string" && !receipt.evidenceUrl && receipt.eventId && receipt.evidenceVersion;
       if (!receipt?.nativeText && !compact) return true;
       const fromResults = Boolean(read.closest("#room-results-list"));
       if (fromResults && !currentResult(item)) return true;

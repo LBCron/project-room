@@ -604,8 +604,8 @@ export class ProjectRoom extends DurableObject {
   // ClueBot phase 1: tail new events and file invariant findings. The
   // patrol is read-only (patrol_* tables only); a paused room skips.
   async patrolTick() {
-    if(!this.paused && this.store)this.store.assertRestoreAdmitted();
     if (!scheduledPatrolEnabled(this.env)) return { skipped: 1, disabled: 1 };
+    if(!this.paused && this.store)this.store.assertRestoreAdmitted();
     if (this.paused) return { skipped: 1, paused: 1 };
     await yieldToQueuedRequests();
     return runPatrolTick(this.store, { deadline: cronDeadline() });

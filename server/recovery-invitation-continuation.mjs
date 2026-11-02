@@ -73,8 +73,11 @@ export function advanceRecoveryInvitations(store,_scratch,restoreId,previous,sou
   bundle??=load(p.current);if(!bundle)break;
   const rows=scalar(db,events,'room_id=? AND sequence<?',[bundle.record.room_id,p.before],'sequence DESC');
   if(!rows.length){finish(bundle,false);units++;continue;}if(!admit(inputBytes(rows,events)))break;
-  const row=db.prepare('SELECT sequence,body FROM events WHERE rowid=?').get(rows[0].rowid),e=JSON.parse(row.body);p.before=row.sequence;p.historyRows++;units++;
-  if(e?.type==='member.access_changed'&&e.data?.memberId===bundle.record.intended_member_id)finish(bundle,e.data?.active===false&&e.actorId===bundle.record.intended_member_id);
+  // Match the original SQL candidate predicate BEFORE JSON.parse. SQLite
+  // chooses first duplicate keys; JSON.parse chooses last values for the
+  // selected event's active/actor check. Neither grammar is interchangeable.
+  const row=db.prepare("SELECT sequence,body,(json_extract(body,'$.type')='member.access_changed' AND json_extract(body,'$.data.memberId')=?) eligible FROM events WHERE rowid=?").get(bundle.record.intended_member_id,rows[0].rowid);p.before=row.sequence;p.historyRows++;units++;
+  if(row.eligible===1){const e=JSON.parse(row.body);finish(bundle,e?.data?.active===false&&e.actorId===bundle.record.intended_member_id);}
  }
  return{cursor:p,units,bytes,done:p.stage==='complete'};
 }

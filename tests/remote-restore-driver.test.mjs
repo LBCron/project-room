@@ -52,13 +52,13 @@ test('remote mode refuses local restore options',async()=>{
 });
 
 test('process death blocks simultaneous restarts until explicit lock reconciliation',async t=>{
- let first=true,child;
+ let first=true;
  const f=await setup(t,({res,input})=>{
    if(first){first=false;child.kill('SIGKILL');res.destroy();return;}
    if(!input.cleanup)return send(res,input.expectedRevision===1?coverage:publication);
    send(res,cleaned(input.expectedRevision===1));
  });
- child=execFile(process.execPath,[script,...f.args],{env:{...process.env,ROOM_RESTORE_TOKEN:token}},()=>{});
+ const child=execFile(process.execPath,[script,...f.args],{env:{...process.env,ROOM_RESTORE_TOKEN:token}},()=>{});
  const signal=await new Promise(resolve=>child.once('exit',(_code,signal)=>resolve(signal)));
  assert.equal(signal,'SIGKILL');assert.equal(JSON.parse(readFileSync(f.checkpoint,'utf8')).pending.body,f.posts[0]);
  const lockBefore=readFileSync(f.checkpoint+'.lock','utf8');const blocked=await Promise.all([f.run(),f.run()]);

@@ -3,7 +3,7 @@ import {prepareClaimOverlap,matchClaimOverlap} from '../src/claim-overlap.js';
 import {initialReplayHash,advanceReplayHash,finishReplayHash} from './replay-sha256.mjs';
 import {initialRecoveryCheckpointSeed,validateRecoveryCheckpointSeed,advanceRecoveryCheckpointSeed} from './recovery-checkpoint-seed.mjs';
 import {validateRecoveryHistoryEntry} from './recovery-history-entry.mjs';
-import {savedHistoricalReplayCheckpoint} from './historical-replay-contract.mjs';
+import {savedHistoricalReplayCheckpoint,HISTORICAL_REPLAY_MAX_INPUT_BYTES} from './historical-replay-contract.mjs';
 import {applyRecoveryReplayStep} from './recovery-replay-step.mjs';
 import {planRecoveryReplayValue,readRecoveryReplayValue,writeRecoveryReplayValue} from './recovery-replay-value.mjs';
 // Transitional independent fold over the frozen original source. Unsupported
@@ -34,7 +34,7 @@ export function advanceRecoveryReplay(db,scratch,roomId,previous,seal){
   else if(held){if(!Number.isSafeInteger(held.sequence)||held.sequence<0||held.sequence>head.sequence||!Number.isSafeInteger(held.bytes)||held.bytes<2||held.bytes>(checkpoint?.maxRowBytes??0))throw Error('Recovery checkpoint source admission differs');cursor.checkpoint=initialRecoveryCheckpointSeed(held.sequence,held.bytes);cursor.stage='checkpoint';}
   else cursor.stage='events';
  }
- let historicalBytes=null;if(cursor.checkpoint?.sourceKind==='historical'){const saved=historical??savedHistoricalReplayCheckpoint(db,roomId,head.sequence);if(!saved||saved.sequence!==cursor.checkpoint.sequence||typeof saved.json!=='string')throw Error('Saved recovery basis requires reconciliation');historicalBytes=new TextEncoder().encode(saved.json);if(historicalDigest(historicalBytes)!==cursor.checkpoint.sourceDigest)throw Error('Saved recovery basis changed');bytes=256*1024;}
+ let historicalBytes=null;if(cursor.checkpoint?.sourceKind==='historical'){const saved=historical??savedHistoricalReplayCheckpoint(db,roomId,head.sequence);if(!saved||saved.sequence!==cursor.checkpoint.sequence||typeof saved.json!=='string')throw Error('Saved recovery basis requires reconciliation');historicalBytes=new TextEncoder().encode(saved.json);if(historicalDigest(historicalBytes)!==cursor.checkpoint.sourceDigest)throw Error('Saved recovery basis changed');bytes=HISTORICAL_REPLAY_MAX_INPUT_BYTES;}
  if(cursor.stage==='checkpoint'){const result=advanceRecoveryCheckpointSeed(db,scratch,roomId,cursor.checkpoint,maximumValueBytes,historicalBytes);cursor.checkpoint=result.cursor;units=result.units;bytes+=result.bytes;if(result.cursor.stage==='deferred')return defer(result.cursor.reason);if(result.cursor.stage==='complete'){cursor.sequence=result.cursor.sequence;cursor.counts=result.cursor.counts;cursor.stage='events';}return{cursor,units,bytes,done:false};}
  if(['complete','deferred'].includes(cursor.stage))return{cursor,units,bytes,done:true};
  while(units<128){

@@ -1,3 +1,4 @@
+import {HISTORICAL_REPLAY_MAX_INPUT_BYTES} from './historical-replay-contract.mjs';
 import {recoveryReplayOrderKey} from './recovery-replay-order.mjs';
 import {initialRecoveryProjectionScan,scanRecoveryProjectionChunk,decodeRecoveryProjectionSpan,recoveryProjectionFrame,REPLAY_CODEC_INPUT_BYTES} from './replay-projection-codec.mjs';
 import {planRecoveryReplayValue,writeRecoveryReplayValue,readRecoveryReplayValue} from './recovery-replay-value.mjs';
@@ -31,7 +32,7 @@ export function validateRecoveryCheckpointSeed(cursor){
 export function advanceRecoveryCheckpointSeed(db,scratch,roomId,previous,maximumValueBytes,historicalBytes=null){
  validateRecoveryCheckpointSeed(previous);const cursor=structuredClone(previous);if(cursor.version!==1||!['retained','historical'].includes(cursor.sourceKind)||(cursor.sourceKind==='historical'?!/^[a-f0-9]{64}$/.test(cursor.sourceDigest??''):cursor.sourceDigest!==null)||!['scan','defaults','owners','roots','root_fixup','complete','deferred'].includes(cursor.stage)||!Number.isSafeInteger(maximumValueBytes)||maximumValueBytes<1)fail();
  if(cursor.sourceKind==='retained'){const held=db.prepare('SELECT sequence,length(CAST(projection AS BLOB)) bytes FROM projection_checkpoints WHERE room_id=?').get(roomId);if(held?.sequence!==cursor.sequence||held.bytes!==cursor.sourceBytes)fail();}else if(!(historicalBytes instanceof Uint8Array)||historicalBytes.length!==cursor.sourceBytes)fail();
- const payloadQuantum=4*1024*1024-(cursor.sourceKind==='historical'?256*1024:0);let units=0,bytes=0;
+ const payloadQuantum=4*1024*1024-(cursor.sourceKind==='historical'?HISTORICAL_REPLAY_MAX_INPUT_BYTES:0);let units=0,bytes=0;
  const defer=reason=>{cursor.stage='deferred';cursor.reason=reason;return{cursor,units,bytes};};
  if(cursor.stage==='scan'){
   let start=cursor.scan.offset,input=source(db,roomId,cursor,start,Math.min(REPLAY_CODEC_INPUT_BYTES,cursor.sourceBytes-start),historicalBytes),position=0;bytes+=input.length;

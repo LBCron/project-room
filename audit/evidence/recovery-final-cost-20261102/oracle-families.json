@@ -30,7 +30,7 @@
     "materializedBytes": 2468290
   },
   {
-    "family": "full table fingerprint",
+    "family": "SELECT * bucket (includes final fingerprints and other subsystem queries)",
     "statements": 240,
     "rowsRead": 6320,
     "materializedBytes": 2627361

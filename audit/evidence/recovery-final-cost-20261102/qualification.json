@@ -114,5 +114,11 @@
   "secretScan": {
     "exitCode": 0,
     "sha256": "0d7466c5b5f634aaaf9b9ee50002004513a5ef493fbf332e8206314d311a6a27"
+  },
+  "exactFingerprintSubset": {
+    "statements": 222,
+    "rowsRead": 6302,
+    "materializedJSONBytes": 2626820,
+    "attribution": "Exact stack callsite script-0:111111:64 inside recovery.mjs applicationTables.map; broader SELECT* query bucket also includes18other subsystem calls."
   }
 }

@@ -15,7 +15,7 @@ Only the `audit_pending/full_audit_pending` operator request and its exact retry
 | Other finalization | 922 | 833,947 | 396,587 |
 | Oracle catalog checks | 44 | 67,863 | 139,148 |
 | Oracle current/message census | 14,099 | 20,140 | 2,468,290 |
-| Oracle whole-table fingerprints | 240 | 6,320 | 2,627,361 |
+| Oracle exact final table fingerprints | 222 | 6,302 | 2,626,820 |
 | Oracle table quick-checks | 227 | 6,309 | 4,540 |
 | Oracle global foreign-key check | 1 | 6,125 | 0 |
 | Oracle room history/replay | 4 | 4,036 | 968,118 |

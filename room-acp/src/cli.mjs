@@ -3,6 +3,7 @@
 import { parseArgs, USAGE } from "./args.mjs";
 import { adapterHints, candidates, probe } from "./agents.mjs";
 import { join } from "./join.mjs";
+import { importIdentity } from "./import-identity.mjs";
 import { loadConnection, forgetConnection, publicView } from "./credentials.mjs";
 import { redact } from "./redact.mjs";
 import { run, selectAgent } from "./run.mjs";
@@ -34,6 +35,12 @@ export async function main(argv = process.argv.slice(2), io = {}) {
   const env = io.env ?? process.env;
   let candidate = null;
   try {
+    if (options.command === "import-identity") {
+      if (options.origin || options.permissionApprover !== undefined) throw Error("Import uses the existing connection origin; configure host approval separately with run");
+      const connection = await importIdentity({ identityFrom: options.identityFrom, roomId: options.room, agent: options.agent, env, fetchImpl: io.fetchImpl });
+      print(`Connected existing identity to room ${connection.roomId}. Scoped credential saved privately; run room-acp run --room ${connection.roomId} to start your adapter.`);
+      return 0;
+    }
     if (options.command === "join") {
       if (!io.joinOnly) {
         let needsLogin = false;

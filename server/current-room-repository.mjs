@@ -235,6 +235,7 @@ function admitCurrentSchema(db,b) {
   const scope=formatScopes.get(db);
   if(permit.length!==1||permit[0].singleton!==1||permit[0].enabled!==(scope?1:0)||permit[0].room_id!==(scope??null)||(!scope&&permit[0].receipt_id!==null))corrupt('unregistered format writer permit');
   b.schemaVerified=true;
+  b.verifiedSchema=rows.map(({rowid,name,sql})=>[rowid,name,sql]);
 }
 export function readCurrentHead(db,roomId,b=contextBudgets.get(db)??budget()) {
   const scalar=db.prepare('SELECT length(CAST(counts_json AS BLOB)) AS bytes FROM current_room_head WHERE room_id=?').get(roomId);
@@ -252,6 +253,9 @@ export function readCurrentHead(db,roomId,b=contextBudgets.get(db)??budget()) {
 export function readCurrentRecord(db,roomId,domain,key,b=contextBudgets.get(db)??budget()) {
   if(!b.schemaVerified&&!readCurrentHead(db,roomId,b))corrupt('record namespace is not initialized');
   if(typeof key!=='string'||Buffer.byteLength(key)>200)refuse('Current record identity is too large');
+  const reuse=workSummaryReuseScopes.get(db),reuseKey=domain+'\0'+key;
+  const reusable=reuse?.roomId===roomId&&(domain==='metadata'&&key==='room'||domain==='members'&&(key===reuse.viewerId||key===reuse.ownerId));
+  if(reusable&&reuse.authority.has(reuseKey))return structuredClone(reuse.authority.get(reuseKey));
   charge(b,1024,2);
   const proof=db.prepare('SELECT revision,present,payload_sha256,receipt_id FROM current_room_record_proofs WHERE room_id=? AND domain=? AND record_key=?').get(roomId,domain,key);
   const scalar=db.prepare('SELECT revision,payload_bytes,length(CAST(payload AS BLOB)) AS bytes,payload_sha256 FROM current_room_records WHERE room_id=? AND domain=? AND record_key=?').get(roomId,domain,key);
@@ -265,7 +269,13 @@ export function readCurrentRecord(db,roomId,domain,key,b=contextBudgets.get(db)?
   charge(b,scalar.bytes);
   const {payload}=db.prepare('SELECT payload FROM current_room_records WHERE room_id=? AND domain=? AND record_key=?').get(roomId,domain,key);
   if(hash(payload)!==proof.payload_sha256)corrupt('record payload changed');
-  return JSON.parse(payload);
+  const value=JSON.parse(payload);
+  if(reusable){
+    if(domain==='metadata'&&key==='room')reuse.ownerId=value.ownerId;
+    if(reuse.authority.size>=3&&!reuse.authority.has(reuseKey))corrupt('work summary authority cache exceeded');
+    reuse.authority.set(reuseKey,structuredClone(value));
+  }
+  return value;
 }
 function fieldsOf(state) {
   const out=new Map();
@@ -1250,13 +1260,47 @@ export function readCurrentOverviewWindow(store,roomId,{workAfter='',limit=8,vie
     nextRead:hasMore?{tool:'get_room_context',arguments:{roomId,work_after:after}}:null}};
 }
 
+const workSummaryReuseScopes=new WeakMap();
+// The browser's composed read revisits at most eight already protected work
+// summaries for event-label privacy. Reuse only inside this synchronous TX.
+export function withCurrentWorkSummaryReuse(store,roomId,viewerId,operation) {
+  const db=store.db,b=contextBudgets.get(db);
+  if(!db.isTransaction||!(store.readTransactionDepth>0)||!b||workSummaryReuseScopes.has(db))throw Error('Work summary reuse requires its own current read scope');
+  const head=readCurrentHead(db,roomId,b),scope={roomId,viewerId,head:head.head_sha256,values:new Map(),authority:new Map(),ownerId:null};
+  const closedPermit=()=>{
+    const rows=db.prepare('SELECT singleton,enabled,room_id,receipt_id FROM current_room_writer_permit').all();charge(b,256,rows.length);
+    if(rows.length!==1||rows[0].singleton!==1||rows[0].enabled!==0||rows[0].room_id!==null||rows[0].receipt_id!==null)corrupt('work summary reuse permit is not closed');
+  };
+  closedPermit();
+  const schema=JSON.stringify(b.verifiedSchema),schemaCount=b.verifiedSchema.length;
+  const changes=db.prepare('SELECT total_changes() AS n').get().n;charge(b,256);
+  workSummaryReuseScopes.set(db,scope);
+  try {
+    const value=operation();
+    if(value&&typeof value.then==='function')throw Error('Work summary reuse must be synchronous');
+    if(readCurrentHead(db,roomId,b).head_sha256!==scope.head)corrupt('work summary reuse head changed');
+    // Exact original, independently admitted catalog tuples; one JSON bind
+    // keeps the native SQLite parameter ceiling. No schema cookie trust.
+    const matched=db.prepare("SELECT count(*) AS n FROM sqlite_master m JOIN json_each(?) e ON m.rowid=json_extract(e.value,'$[0]') WHERE m.name=json_extract(e.value,'$[1]') AND m.sql=json_extract(e.value,'$[2]')").get(schema);
+    charge(b,256);
+    if(matched.n!==schemaCount)corrupt('work summary reuse schema changed');
+    closedPermit();
+    const finalChanges=db.prepare('SELECT total_changes() AS n').get().n;charge(b,256);
+    if(finalChanges!==changes)corrupt('work summary reuse data changed');
+    return value;
+  }finally{workSummaryReuseScopes.delete(db);}
+}
 export function readCurrentWorkSummaryForViewer(db,roomId,id,viewerId,b=contextBudgets.get(db)??budget()){
+  const reuse=workSummaryReuseScopes.get(db);
+  if(reuse?.roomId===roomId&&reuse.viewerId===viewerId&&reuse.values.has(id))return structuredClone(reuse.values.get(id));
   if(!b.schemaVerified&&!readCurrentHead(db,roomId,b))corrupt('work namespace is not initialized');
   const summary=readCurrentRecord(db,roomId,'workSummary',id,b),ref=readCurrentRecord(db,roomId,'workItems',id,b);
   if(!summary||!isDeepStrictEqual(summary.ref,ref)||summary.work?.id!==id)corrupt('work summary membership differs');
   const current=db.prepare('SELECT revision,digest FROM work_entities WHERE room_id=? AND work_id=?').get(roomId,id);charge(b,256);
   if(!current||current.revision!==ref.revision||current.digest!==ref.digest)corrupt('work summary payload revision differs');
-  return privateWorkForViewer(db,roomId,id,summary.work,viewerId,b);
+  const result=privateWorkForViewer(db,roomId,id,summary.work,viewerId,b);
+  if(reuse?.roomId===roomId&&reuse.viewerId===viewerId&&reuse.values.size<8)reuse.values.set(id,structuredClone(result));
+  return result;
 }
 
 // Bound source examination before parsing event bodies. Long excluded tails

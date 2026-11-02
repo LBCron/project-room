@@ -2,7 +2,7 @@
 // The default GET /api/rooms/{id} and ?messages=recent are this window.
 // ?full=1 is the retired unbounded document, and only while
 // ROOM_SNAPSHOT_FULL_COMPAT=1. Older history pages through /messages.
-import { isCurrentRoom, withCurrentReadContext,readCurrentRecord,readCurrentHistoryFloor,chargeCurrentReadBudget } from './current-room-repository.mjs';
+import { isCurrentRoom, withCurrentReadContext,withCurrentWorkSummaryReuse,readCurrentRecord,readCurrentHistoryFloor,chargeCurrentReadBudget } from './current-room-repository.mjs';
 import {readCurrentEventWindow} from './current-room-events.mjs';
 import { readConversation } from './conversation-sync.mjs';
 import { messageSequences } from "./message-queries.mjs";
@@ -133,6 +133,7 @@ export function readRoomSnapshot(store, token, roomId, fence, { view = "full", h
       fail(409, "current_snapshot_selection_unavailable", "Use the bounded current room window and addressed detail reads");
     return store.readTransaction(() => withCurrentReadContext(store.db, roomId, b => {
       const auth = store.authenticate(token, roomId, fence);
+      return withCurrentWorkSummaryReuse(store,roomId,auth.member.id,()=>{
       const overview = store.currentOverview(roomId, auth.member.id);
       const conversation = readConversation(store, token, roomId, { limit: 8, expectedSessionBinding: fence });
       const channelKeys=store.db.prepare("SELECT record_key FROM current_room_record_proofs WHERE room_id=? AND domain='channels' AND present=1 ORDER BY record_key LIMIT 51").all(roomId);
@@ -163,6 +164,7 @@ export function readRoomSnapshot(store, token, roomId, fence, { view = "full", h
         workWindow: overview.workWindow,
         sections: { assistant:{available:false,code:'current_assistant_unavailable'},requestRuns:{available:false,code:'current_request_runs_unavailable'},notifications:{available:false,code:'current_notification_aggregate_unavailable'},updates:{available:false,code:'current_updates_aggregate_unavailable'},returnBrief:{available:false,code:'current_brief_aggregate_unavailable'},files:{available:true,coverage:'selected-messages',complete:false},fileUploads:{available:false,code:'current_upload_unavailable'}, helpOffers: { available: false, code: "current_help_offers_unavailable" }, replyRequests: { available: true,complete:false,coverage:"visible-conversation-records", nextRead: { tool: "room_list_requests", arguments: { direction: "incoming", status: "open" } } } }
       };
+      });
     }, { maxRecords: 1024 }));
   }
   // #4265: the non-windowed form is the explicit full-history contract (the

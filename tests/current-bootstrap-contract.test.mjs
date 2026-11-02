@@ -68,7 +68,7 @@ test('ordinary HTTP room read opens normalized storage without legacy room hydra
 });
 
 
-import {withCurrentReadContext} from '../server/current-room-repository.mjs';
+import {withCurrentReadContext,withCurrentWorkSummaryReuse,readCurrentWorkSummaryForViewer} from '../server/current-room-repository.mjs';
 test('composed browser metadata reservation supports100small members without widening nested inbox bounds',t=>{
  const store=new RoomStore(':memory:');t.after(()=>store.close());const events=initialRoom();
  for(let i=1;i<100;i++)events.push(event({roomId:'commons',actorId:'owner',type:'member.added',data:{memberId:'roster-'+i,displayName:'Member '+i,kind:'agent',permissions:[]}}));
@@ -79,4 +79,41 @@ test('composed browser metadata reservation supports100small members without wid
  assert.ok(snapshot.workWindow.nextAfter);const next=store.roomContext(key,'commons',{workAfter:snapshot.workWindow.nextAfter});
  assert.equal(next.workWindow.shown,1);assert.equal(next.workWindow.nextAfter,null);
  assert.throws(()=>store.readTransaction(()=>withCurrentReadContext(store.db,'commons',()=>readRoomSnapshot(store,key,'commons',null,{windowed:true}),{maxRecords:200})),e=>e.code==='current_room_context_unavailable','Nested reads cannot replace the enclosing smaller reservation');
+});
+
+
+test('same-transaction browser reuse keeps private event titles viewer-bound and observes changed parties in a new read',t=>{
+ const store=new RoomStore(':memory:');t.after(()=>store.close());const events=initialRoom();
+ for(const id of ['worker','outsider'])events.push(event({roomId:'commons',actorId:'owner',type:'member.added',data:{memberId:id,displayName:id,kind:'agent',permissions:[]}}));
+ events.push(event({roomId:'commons',actorId:'owner',type:'work.proposed',data:{workItemId:'secret-task',title:'PRIVATE_TASK_TITLE',definitionOfDone:'PRIVATE_DEFINITION',accountableMemberId:'worker'}}));
+ events.push(event({roomId:'commons',actorId:'owner',type:'message.posted',data:{messageId:'private-request',toMemberId:'worker',workItemId:'secret-task',requestKind:'reply',requestPolicyVersion:1,body:'Private request'}}));
+ store.initialize(events,{representation:'normalized-current-v1'});
+ const outsider=store.issueAccessKey('commons','outsider'),worker=store.issueAccessKey('commons','worker'),owner=store.issueAccessKey('commons','owner');
+ store.room=()=>{throw Error('browser must not hydrate room');};
+ const hidden=readRoomSnapshot(store,outsider,'commons',null,{windowed:true});
+ assert.equal(hidden.state.workItems['secret-task'].title,null);
+ assert.ok(!JSON.stringify(hidden).includes('PRIVATE_TASK_TITLE'));assert.ok(!JSON.stringify(hidden).includes('PRIVATE_DEFINITION'));
+ const visible=readRoomSnapshot(store,worker,'commons',null,{windowed:true});
+ assert.equal(visible.state.workItems['secret-task'].title,'PRIVATE_TASK_TITLE');
+ assert.equal(visible.state.eventLog.find(e=>e.type==='work.proposed').data.title,'PRIVATE_TASK_TITLE');
+ store.command(owner,'commons',{id:'include-outsider',type:'message.posted',data:{messageId:'private-request-two',toMemberId:'outsider',workItemId:'secret-task',requestKind:'reply',body:'Include another party'}});
+ const changed=readRoomSnapshot(store,outsider,'commons',null,{windowed:true});
+ assert.equal(changed.state.workItems['secret-task'].title,'PRIVATE_TASK_TITLE');
+ assert.equal(changed.state.eventLog.find(e=>e.type==='work.proposed').data.title,'PRIVATE_TASK_TITLE');
+});
+
+test('browser summary reuse expires, rejects async escape and refuses head/schema mutation with rollback',t=>{
+ const store=new RoomStore(':memory:');t.after(()=>store.close());const events=initialRoom();
+ events.push(event({roomId:'commons',actorId:'owner',type:'work.proposed',data:{workItemId:'task',title:'Original title',definitionOfDone:'Saved',accountableMemberId:'owner'}}));
+ store.initialize(events,{representation:'normalized-current-v1'});const key=store.issueAccessKey('commons','owner');
+ const reuse=operation=>store.readTransaction(()=>withCurrentReadContext(store.db,'commons',()=>withCurrentWorkSummaryReuse(store,'commons','owner',operation),{maxRecords:1024}));
+ assert.throws(()=>reuse(()=>Promise.resolve()),/must be synchronous/);
+ const escaped=reuse(()=>{const value=readCurrentWorkSummaryForViewer(store.db,'commons','task','owner');value.title='Changed clone';assert.equal(readCurrentWorkSummaryForViewer(store.db,'commons','task','owner').title,'Original title');return()=>readCurrentWorkSummaryForViewer(store.db,'commons','task','owner');});
+ assert.equal(escaped().title,'Original title');
+ const before=store.headSequence('commons'),writableReuse=operation=>store.transaction(()=>reuse(operation));
+ assert.throws(()=>writableReuse(()=>{readCurrentWorkSummaryForViewer(store.db,'commons','task','owner');store.command(key,'commons',{id:'must-rollback',type:'message.posted',data:{messageId:'must-rollback',body:'Never published'}});}),/reuse head changed/);
+ assert.equal(store.headSequence('commons'),before);assert.equal(store.db.prepare('SELECT 1 FROM events WHERE id=?').get('must-rollback'),undefined);
+ assert.throws(()=>writableReuse(()=>{readCurrentWorkSummaryForViewer(store.db,'commons','task','owner');store.db.exec('DROP INDEX current_work_summary_keys');}),/reuse schema changed/);
+ assert.ok(store.db.prepare("SELECT 1 FROM sqlite_master WHERE name='current_work_summary_keys'").get());
+ assert.equal(readRoomSnapshot(store,key,'commons',null,{windowed:true}).state.workItems.task.title,'Original title');
 });

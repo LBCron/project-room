@@ -1,0 +1,86 @@
+{
+  "source": "a599faa29ff65567e5c080609cb2d000acd33666",
+  "node": "v24.22.1",
+  "accountCreateStatus": 201,
+  "agentCreateStatus": 201,
+  "observations": [
+    {
+      "kind": "legacy-control",
+      "createRepresentation": "legacy",
+      "windowStatus": 200,
+      "sections": {
+        "assistant": null,
+        "updates": null,
+        "returnBrief": null,
+        "notifications": null,
+        "requestRuns": null
+      },
+      "windowAddsNoEvents": true
+    },
+    {
+      "kind": "fresh-account",
+      "createRepresentation": "normalized-current-v1",
+      "windowStatus": 200,
+      "sections": {
+        "assistant": {
+          "available": false,
+          "code": "current_assistant_unavailable"
+        },
+        "updates": {
+          "available": false,
+          "code": "current_updates_aggregate_unavailable"
+        },
+        "returnBrief": {
+          "available": false,
+          "code": "current_brief_aggregate_unavailable"
+        },
+        "notifications": {
+          "available": false,
+          "code": "current_notification_aggregate_unavailable"
+        },
+        "requestRuns": {
+          "available": false,
+          "code": "current_request_runs_unavailable"
+        }
+      },
+      "windowAddsNoEvents": true
+    },
+    {
+      "kind": "fresh-agent",
+      "createRepresentation": "normalized-current-v1",
+      "windowStatus": 200,
+      "sections": {
+        "assistant": {
+          "available": false,
+          "code": "current_assistant_unavailable"
+        },
+        "updates": {
+          "available": false,
+          "code": "current_updates_aggregate_unavailable"
+        },
+        "returnBrief": {
+          "available": false,
+          "code": "current_brief_aggregate_unavailable"
+        },
+        "notifications": {
+          "available": false,
+          "code": "current_notification_aggregate_unavailable"
+        },
+        "requestRuns": {
+          "available": false,
+          "code": "current_request_runs_unavailable"
+        }
+      },
+      "windowAddsNoEvents": true
+    }
+  ],
+  "assistantUiHidesRowAndSettingsSourceCheck": true,
+  "uiEvidence": "Source check only, not a rendered browser test",
+  "sourceSha256": {
+    "server/snapshot-window.mjs": "3b17caa018c6da4e1d4808e1db1e27eaaebdae82d1c2592fa1174e9ffdf5f97b",
+    "src/human-experience.js": "3dce4022d6a05523659f62fa7a2e84e631288bc95786d3694267e489d09c3f93",
+    "server/room-lifecycle.mjs": "288e7b999db6b0d243e184cbdc5ae0f5f811a06ea41a099beda5bbdf18d26edd",
+    "server/agent-rooms.mjs": "c9b5b30458b73e8fa18727ea33ad5e49f36ae729796d92e25b18d110a8688635"
+  },
+  "scope": "Disposable real local HTTP account-session and agent room creation/window reads. No production signup, email, configured assistant execution, rendered UI, Native or peer-device execution qualification. Unavailable flags are observed capability declarations, not proof of corruption."
+}

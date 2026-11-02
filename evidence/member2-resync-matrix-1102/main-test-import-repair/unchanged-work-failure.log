@@ -1,0 +1,21 @@
+{"event":"room.cold_start","clockSemantics":"io-bound","durationMs":42,"failed":true,"error":"no such table: main.current_restore_audit_scratch: SQLITE_ERROR","integrity":"deferred","phases":{"schema":{"ms":11,"rowsRead":8232},"plugin":{"ms":21,"rowsRead":40866}}}
+✖ actual Worker native work removes board mirror scans and retains exact cap/retry behavior (577.083791ms)
+ℹ tests 1
+ℹ suites 0
+ℹ pass 0
+ℹ fail 1
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 704.303916
+
+✖ failing tests:
+
+test at cloudflare/current-native-work-worker.check.mjs:2:1
+✖ actual Worker native work removes board mirror scans and retains exact cap/retry behavior (577.083791ms)
+  SyntaxError [Error]: Unexpected token 'E', "Error: no "... is not valid JSON
+      at JSON.parse (<anonymous>)
+      at parseJSONFromBytes (/Users/potter/Documents/Codex/2026-10-22/you-x20/work/release-evidence-binding/cloudflare/node_modules/.pnpm/undici@7.29.1/node_modules/undici/lib/web/infra/index.js:164:15)
+      at successSteps (/Users/potter/Documents/Codex/2026-10-22/you-x20/work/release-evidence-binding/cloudflare/node_modules/.pnpm/undici@7.29.1/node_modules/undici/lib/web/fetch/body.js:445:23)
+      at readAllBytes (/Users/potter/Documents/Codex/2026-10-22/you-x20/work/release-evidence-binding/cloudflare/node_modules/.pnpm/undici@7.29.1/node_modules/undici/lib/web/fetch/util.js:998:9)
+      at process.processTicksAndRejections (node:internal/process/task_queues:104:5)

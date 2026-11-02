@@ -1,0 +1,3 @@
+check-deps-exist: 2 problem(s):
+  import: cloudflare/current-native-work-worker.test-fixture.mjs imports "@qualified/store" — not a declared dependency
+  import: cloudflare/current-schema-batch-native.test-fixture.mjs imports "@audit-verifier" — not a declared dependency

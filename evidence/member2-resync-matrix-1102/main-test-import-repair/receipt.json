@@ -1,0 +1,94 @@
+{
+  "schema": "member2-main-test-import-repair-v1",
+  "code_commit": "f269976fa1d10d0bb2049fd56567c5a6c8a1ba7d",
+  "base": "328928e275e05b950b8f4e7bd6ec9bcf42cc03f5",
+  "code_tree": "4fb96bd8d3df5c4a6788f115fa658da0ecdcfbde",
+  "runtime_files_changed": false,
+  "node": "v24.22.1",
+  "miniflare": "4.20260730.0",
+  "esbuild": "0.28.2",
+  "workerd": "2026-07-30",
+  "historical_work_source": "a75c9e0bf8514cd9f8675317a75adfc9aa4a6046",
+  "historical_schema_source": "2dbf1f5470030ffed7fa4cb0e46bcd60db9afee8",
+  "checks": {
+    "deps_before": {
+      "exit_code": 1,
+      "undeclared_aliases": 2
+    },
+    "deps_after": {
+      "exit_code": 0,
+      "source_files_scanned": 3446
+    },
+    "unchanged_work_baseline": {
+      "exit_code": 1,
+      "error": "missing current_restore_audit_scratch in historical Store/current adapter mixture"
+    },
+    "native_work_coherent_baseline_and_current": {
+      "exit_code": 0,
+      "pass": 1,
+      "skip": 0
+    },
+    "native_schema_historical_and_current": {
+      "exit_code": 0,
+      "pass": 1,
+      "skip": 0
+    },
+    "boot_graph_census": {
+      "exit_code": 0,
+      "pass": 1,
+      "skip": 0
+    },
+    "eslint_five_files": {
+      "exit_code": 0
+    },
+    "diff_check": {
+      "exit_code": 0
+    },
+    "secrets_actual_patch": {
+      "exit_code": 0,
+      "input": "--diff main-alias-fix.patch"
+    }
+  },
+  "artifacts": {
+    "secrets.log": {
+      "bytes": 41,
+      "sha256": "e9dbced1b84dc9df4ffe6c8e23b9e065cc8b6d231ac13e41a5245b8419a6fa22"
+    },
+    "fix.patch": {
+      "bytes": 8700,
+      "sha256": "be7f2049e23351adda344e7be5b02ce9f0a7e269d15eed960ff9ec971f2154b4"
+    },
+    "native-work-green.log": {
+      "bytes": 14070,
+      "sha256": "fa104474ef638cabc6f0276c1f33ea2879493971fc8d652855f4578e51485a7d"
+    },
+    "lint.log": {
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    "boot-census-green.log": {
+      "bytes": 374,
+      "sha256": "290fcef81ba393195aedd5f2221dfe0357d7d4ced68a21f937423276d7baf6f9"
+    },
+    "code-verified.json": {
+      "bytes": 439,
+      "sha256": "40f3e37d6264f2b22958cd973305fa3ff2318a28a14762478d2d857cc2966558"
+    },
+    "deps-red.log": {
+      "bytes": 276,
+      "sha256": "3f230b584a357f289045b1ecaa18b0867c6910bd9e73d6ee4523776501af8edf"
+    },
+    "unchanged-work-failure.log": {
+      "bytes": 1471,
+      "sha256": "752979633d0c9a11f57b0aab67e387a937c28fb5f331a960136ed0ab8c10669a"
+    },
+    "native-schema-green.log": {
+      "bytes": 12356,
+      "sha256": "63256216b814f4e6ab63fb6b1c48a6d04d56927f8b94382f96fdfd50939132ea"
+    },
+    "deps-green.log": {
+      "bytes": 52,
+      "sha256": "9b3c3c90db0aad0827988f6fb58586081c22550a94411deb40cd81448463346d"
+    }
+  }
+}

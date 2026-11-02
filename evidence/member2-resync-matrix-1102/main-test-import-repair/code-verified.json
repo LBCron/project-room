@@ -1,0 +1,12 @@
+{
+  "commit": "f269976fa1d10d0bb2049fd56567c5a6c8a1ba7d",
+  "base": "328928e275e05b950b8f4e7bd6ec9bcf42cc03f5",
+  "files_verified": [
+    "cloudflare/current-native-work-worker.check.mjs",
+    "cloudflare/current-native-work-worker.test-fixture.mjs",
+    "cloudflare/current-schema-batch-native.check.mjs",
+    "cloudflare/current-schema-batch-native.test-fixture.mjs",
+    "scripts/boot-graph-census.mjs"
+  ],
+  "runtime_changed": false
+}

@@ -27,6 +27,13 @@ export const MESSAGE_ROW_TYPES = Object.freeze([
 
 const MESSAGE_ROW_TYPE_SET = new Set(MESSAGE_ROW_TYPES);
 
+// Exact leaf-owned access paths; only selected thread reads verify/charge them.
+export const THREAD_VISIBILITY_INDEXES = Object.freeze([
+  {name:'current_messages_thread_public_seq',sql:"CREATE INDEX current_messages_thread_public_seq ON messages(room_id,thread_root_id,seq,message_id) WHERE to_member_id IS NULL OR to_member_id=''"},
+  {name:'current_messages_thread_incoming_seq',sql:'CREATE INDEX current_messages_thread_incoming_seq ON messages(room_id,thread_root_id,to_member_id,seq,message_id)'},
+  {name:'current_messages_thread_outgoing_seq',sql:"CREATE INDEX current_messages_thread_outgoing_seq ON messages(room_id,thread_root_id,author_id,seq,message_id) WHERE to_member_id IS NOT NULL AND to_member_id<>''"}
+]);
+
 export const MESSAGES_SCHEMA = `
 CREATE TABLE IF NOT EXISTS messages (
   room_id TEXT NOT NULL REFERENCES rooms(id),
@@ -53,7 +60,7 @@ CREATE INDEX IF NOT EXISTS messages_room_seq ON messages(room_id, seq);
 CREATE INDEX IF NOT EXISTS messages_room_channel_seq ON messages(room_id, channel_id, seq);
 CREATE INDEX IF NOT EXISTS messages_room_thread_seq ON messages(room_id, thread_root_id, seq);
 CREATE INDEX IF NOT EXISTS messages_room_dm_seq ON messages(room_id, to_member_id, seq);
-`;
+` + THREAD_VISIBILITY_INDEXES.map(index=>index.sql.replace('CREATE INDEX','CREATE INDEX IF NOT EXISTS')+';').join('\n');
 
 // One row per room the replay has touched. applied_seq is the last event
 // whose message rows are certified. state_seq/replay_event_id anchor the

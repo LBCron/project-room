@@ -1,6 +1,8 @@
 // Argument parsing for `room-acp`. Pure; no I/O.
 export const USAGE = `Usage:
   room-acp <invite-link>        join a Room with the link and run your local agent
+  room-acp import-credential    save an already-issued scoped key without issuing another
+  room-acp import-identity      save a scoped connection for your existing identity
   room-acp run                  run with the credential saved by an earlier join
   room-acp doctor               list detected ACP agents and their capabilities
   room-acp status               show the saved connection (never the credential)
@@ -14,10 +16,14 @@ Options:
   --respond-to <owner|anyone>           whose mentions start a turn (default anyone; Room policy still applies)
   --permission-approver <member-id|none>  explicitly trust a Room human for host tool approvals (default disabled)
   --name <display name>                 display name when joining
-  --room <roomId>                       pick a saved room when several are saved
+  --room <roomId>                       pick a saved room or exact import destination
+  --credential-file <file>              private JSON for an already-issued scoped key
+  --expected-identity <identity ID>      exact identity to verify during scoped import
+  --origin <https://service>             explicit origin for scoped import
+  --identity-from <directory>           existing private CLI connection for import-identity
   -h, --help                            show this help`;
 
-const VALUE = new Set(["--agent", "--agent-cmd", "--cwd", "--mode", "--max-sessions", "--respond-to", "--name", "--origin", "--room", "--permission-approver"]);
+const VALUE = new Set(["--agent", "--agent-cmd", "--cwd", "--mode", "--max-sessions", "--respond-to", "--name", "--origin", "--room", "--permission-approver", "--identity-from", "--credential-file", "--expected-identity"]);
 
 export function parseArgs(argv) {
   const options = { command: null, link: null, agent: null, agentCmd: null, cwd: null, mode: null, maxSessions: 4, respondTo: "anyone", name: null, origin: null, room: null, help: false };
@@ -41,7 +47,7 @@ export function parseArgs(argv) {
   if (options.permissionApprover !== undefined && !/^[A-Za-z0-9][A-Za-z0-9_.:-]{0,127}$/.test(options.permissionApprover)) throw new Error("--permission-approver must be an exact member ID or none");
   const [first, ...rest] = positional;
   if (rest.length) throw new Error(`unexpected argument ${rest[0]}`);
-  if (["doctor", "status", "logout", "run"].includes(first)) options.command = first;
+  if (["doctor", "status", "logout", "run", "import-identity", "import-credential"].includes(first)) options.command = first;
   else if (first) { options.command = "join"; options.link = first; }
   else options.command = options.help ? "help" : "run";
   return options;

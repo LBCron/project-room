@@ -20,6 +20,7 @@ import { isWriteSql } from './sql-write-classification.mjs';
 import { WORK_REPOSITORY_SCHEMA, configureWorkRepository, hydrateWorkItems, readWorkItem } from "./work-repository.mjs";
 import { MESSAGE_REPLAY_SNAPSHOT_SCHEMA, migrateMessageReplaySnapshots, discardMessageReplaySnapshot } from './message-replay-snapshot.mjs';
 import { prepareMessageCommand, assertMessageCommandReferences, prepareMessageWrite, refusePausedAgentWrite } from "./message-command-service.mjs";
+import { readCurrentMessageThread } from './conversation-sync.mjs';
 import { selectedMessageRecord, messageRepository } from "./message-repository.mjs";
 import { invalidateEditedAssistantInput, invokeFromPlainPost } from './room-assistant.mjs';
 import { dmEventVisibility, dmConsentEventVisible } from "./dm-event-visibility.mjs";
@@ -6187,6 +6188,8 @@ this.slaBreachAlerts = new SlaBreachAlertJournal(this); // Task 26: durable in-a
   // Round-2 #112: threaded replies. Returns the root message plus its
   // reply tree (messages whose replyToId chains back to the root).
   messageThread(token, roomId, messageId, expectedSessionBinding = null) {
+    const current = readCurrentMessageThread(this, token, roomId, messageId, expectedSessionBinding);
+    if (current !== undefined) return current;
     return this.readTransaction(() => {
       const auth = this.authenticate(token, roomId, expectedSessionBinding);
       const { members } = this.roomAuthority(roomId);
@@ -7618,10 +7621,12 @@ this.slaBreachAlerts = new SlaBreachAlertJournal(this); // Task 26: durable in-a
     }, {
       // Alias resolution and membership admission require an exact full roster.
       // Channel creation similarly checks the fixed 50-channel catalog.
-      // These consumer reservations leave the byte ceiling unchanged.
+      // Posts also include repeated protected OAuth authority and selected work.
+      // Reserve a fixed record count for that complete command, without
+      // changing byte, payload, history, or default read limits.
       maxRecords: command.type === T.MEMBER_ADDED || command.type === T.MEMBER_ACCESS_CHANGED && command.data.active === true
         || command.type === T.MESSAGE_POSTED && typeof command.data.body === "string"
-        && command.data.body.includes("@") ? 1024 : command.type === T.CHANNEL_CREATED ? 512 : 200
+        && command.data.body.includes("@") ? 1024 : command.type === T.CHANNEL_CREATED || command.type === T.MESSAGE_POSTED ? 512 : 200
     }));
     } catch (error) {
       // The test doubles that replace roomFlood expose only consume(), so a

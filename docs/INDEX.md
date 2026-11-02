@@ -25,6 +25,8 @@ current work and release records. See [maintaining this handbook](ROOM-PROCEDURE
 
 Grok adapter: [maintained setup and operating guidance](GROK-BOT.md).
 
+Incident follow-through: [November 1 storage outage](incidents/outage-2026-11-01.md).
+
 Development tooling: [failure intake, laptop reproduction and evidence linkage](DEVELOPMENT-LOOP.md).
 
 Ecosystem cleanup: [reconciliation procedure](ROOM-PROCEDURES.md#reconcile-the-ecosystem-without-creating-another-handbook) connects repository guidance, GitHub work, local artifacts and preservation records. Private inventory paths stay in the maintainer catalog; incomplete coverage remains explicit.

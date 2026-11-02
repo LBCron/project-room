@@ -5,7 +5,7 @@ import { createHash, createCipheriv, createDecipheriv, randomBytes } from "node:
 import { hydrateRecordText } from "./projection-at-rest.mjs"; // Phase 1a
 import { ServiceError } from "./service-error.mjs";
 import { validId, DEFAULT_CHANNEL_ID } from "../src/events.js";
-import { markIfOther, withContentTrust } from "./content-trust.mjs";
+import { markIfOther, withContentTrust, stampThread } from "./content-trust.mjs";
 import { messageInHistory } from "./history-visibility.mjs";
 import { archiveMarker } from "./messages-store.mjs";
 import { identityNamesForRoom, resolveMentionTargetsInText } from "./mention-lifecycle.mjs";
@@ -293,4 +293,44 @@ function readCurrentDirectDirectory(store,token,roomId,{limit,cursor,expectedSes
   const hasMore=streams.some(s=>s.used<s.rows.length||s.rows.length===size),positions=streams.map(s=>s.at);
   return{...base,mode:'replace',peers:[...peers.values()],nextCursor:hasMore?codec.encode({scope,positions}):null,sourceWindow:{complete:!hasMore,examined,order:'message-sequence-desc',timestampBasis:'max-encountered-createdAt'}};
  }));
+}
+
+
+// Selected current subtree only. Refuse oversized families rather than read a
+// whole projection or silently give an executing agent incomplete context.
+export function readCurrentMessageThread(store, token, roomId, messageId, expectedSessionBinding = null) {
+  if (!isCurrentRoom(store.db, roomId)) return undefined;
+  return store.readTransaction(() => withCurrentReadContext(store.db, roomId, b => {
+    const auth = store.authenticate(token, roomId, expectedSessionBinding);
+    const floor = readCurrentHistoryFloor(store.db, roomId, auth.member.id);
+    const visible = message => message && messageInHistory(message, floor)
+      && (!message.toMemberId || message.authorId === auth.member.id || message.toMemberId === auth.member.id);
+    const selected = readCurrentMessage(store.db, roomId, messageId, b);
+    if (!visible(selected?.value)) fail(404, 'message_not_found', 'Message not found');
+    const family = selected.row.thread_root_id ?? messageId;
+    const rows = store.db.prepare(`SELECT message_id,seq FROM messages INDEXED BY messages_room_thread_seq
+      WHERE room_id=? AND thread_root_id=? AND seq>?
+        AND (to_member_id IS NULL OR to_member_id='' OR author_id=? OR to_member_id=?)
+      ORDER BY seq,message_id LIMIT 25`).all(roomId, family, selected.row.seq, auth.member.id, auth.member.id);
+    chargeCurrentReadBudget(b, rows.reduce((n, row) => n + Buffer.byteLength(row.message_id) + 32, 0), rows.length);
+    if (rows.length > 24) fail(413, 'current_thread_too_large', 'Selected thread exceeds bounded context; request a smaller selected message');
+    const messages = [selected.value];
+    for (const row of rows) {
+      const record = readCurrentMessage(store.db, roomId, row.message_id, b);
+      if (!record || record.row.seq !== row.seq || record.row.thread_root_id !== family) fail(409, 'current_thread_changed', 'Selected thread proof changed');
+      if (visible(record.value)) messages.push(record.value);
+    }
+    const byParent = new Map(), names = new Map();
+    for (const message of messages.slice(1)) {
+      if (!byParent.has(message.replyToId)) byParent.set(message.replyToId, []);
+      byParent.get(message.replyToId).push(message);
+    }
+    const attach = message => {
+      if (!names.has(message.authorId)) names.set(message.authorId, readCurrentRecord(store.db, roomId, 'members', message.authorId, b)?.displayName ?? message.authorId);
+      return { ...message, author: names.get(message.authorId), replies: (byParent.get(message.id) ?? []).map(attach) };
+    };
+    const thread = attach(selected.value);
+    if (Buffer.byteLength(JSON.stringify(thread)) > 65536) fail(413, 'current_thread_too_large', 'Selected thread exceeds bounded context; request a smaller selected message');
+    return withContentTrust({ roomId, thread: stampThread(thread, auth.member.id) });
+  }));
 }

@@ -765,7 +765,7 @@ export class RoomClient {
     if(result.contractVersion!==2||result.readKind!=='event-window'||result.selection?.eventId!==eventId||eventId===null&&result.selection.after!==after
       ||!Array.isArray(rows)||rows.length>16||!Number.isSafeInteger(result.next)||result.next<result.selection.after||typeof result.hasMore!=='boolean'
       ||rows.some((row,i)=>!Number.isSafeInteger(row.sequence)||row.sequence<=result.selection.after||row.sequence>result.next||i&&row.sequence<=rows[i-1].sequence||typeof row.event?.id!=='string')
-      ||eventId!==null&&(rows.length!==1||rows[0].event.id!==eventId))throw Error('Record window could not be confirmed');
+      ||eventId!==null&&(rows.length!==1||rows[0].event.id!==eventId))throw Error(uiText("currentRoom.recordUnconfirmed"));
     return result;
   }
   async bootstrap() {

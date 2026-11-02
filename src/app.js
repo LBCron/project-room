@@ -2175,7 +2175,7 @@ function render() {
     const ownedBy = serverPresence?.ownerIdentityId
       ? `<span class="member-owned-by">Agent identity: <code>${esc(serverPresence.ownerIdentityId)}</code></span>`
       : "";
-    const connectionScope=serverPresence?.coverage?.execution==='not-evaluated'?'<p class="member-observation">Connection observations; execution status is on the work item.</p>':'';
+    const connectionScope=serverPresence?.coverage?.execution==='not-evaluated'?`<p class="member-observation">${esc(uiText("currentRoom.connectionScope"))}</p>`:'';
     const hostReport = Number.isFinite(serverPresence?.presence?.lastSeenAt)
       ? `<p class="member-observation">Last host report: <time datetime="${esc(new Date(serverPresence.presence.lastSeenAt).toISOString())}">${esc(new Date(serverPresence.presence.lastSeenAt).toLocaleString())}</time></p>` : "";
     const lastReport = agent && presenceStale && serverState
@@ -2298,7 +2298,7 @@ function renderRecordPanel() {
     return;
   }
   recordLoadFailed = false;
-  const coverage=nativeEventsWindow?`<li class="rb-empty">${nativeEventsWindow.complete?'All retained record source windows examined.':'Partial record · older events are not loaded.'}${nativeEventsWindow.hasOlder?` <button type="button" data-record-older ${recordPageReading?'disabled':''}>${recordPageReading?'Loading…':'Load earlier records'}</button>`:''}</li>`:'';
+  const coverage=nativeEventsWindow?`<li class="rb-empty">${esc(uiText(nativeEventsWindow.complete?"currentRoom.recordComplete":"currentRoom.recordPartial"))}${nativeEventsWindow.hasOlder?` <button type="button" data-record-older ${recordPageReading?'disabled':''}>${recordPageReading?"Loading…":esc(uiText("currentRoom.recordOlder"))}</button>`:''}</li>`:'';
   renderContent("#event-list", coverage+[...state.eventLog].reverse().map(e => `<li id="${recordDomId("event", e.id)}" tabindex="-1" data-event-record-id="${esc(e.id)}" data-focus-key="event:${esc(e.id)}"><span>${esc(humanize(e.type))}</span><strong>${esc(memberLabel(e.actorId))}</strong><time datetime="${esc(e.at)}">${esc(time(e.at))}</time><code>${esc(e.id)}</code></li>`).join(""));
 
   // Decision register (backlog F2): the register is read from the event feed.
@@ -2306,7 +2306,7 @@ function renderRecordPanel() {
   setText("#decision-count", decisions.length || "");
   renderContent("#decision-list", [...decisions].reverse().map(e =>
     `<li><strong>${esc(e.type === T.DECISION_RECORDED ? e.data.statement : `${humanize(e.data.decision)}${e.data.reason ? `: ${e.data.reason}` : ""}`)}</strong>${e.data.sourceMessageId ? ` <a class="source-link" href="${esc(recordHref("message", e.data.sourceMessageId))}" data-open-message="${esc(e.data.sourceMessageId)}" data-focus-key="decision-source:${esc(e.id)}">source</a>` : ""}${e.data.note ? ` <span class="rb-detail">${esc(e.data.note)}</span>` : ""} <span class="rb-detail">${esc(memberLabel(e.actorId))} · ${esc(time(e.at))}</span></li>`).join("")
-    || (nativeEventsWindow&&!nativeEventsWindow.complete?'<li class="rb-empty">No decisions in the loaded record window.</li>':'<li class="rb-empty">No decisions recorded yet.</li>'));
+    || (nativeEventsWindow&&!nativeEventsWindow.complete?`<li class="rb-empty">${esc(uiText("currentRoom.noDecisionsWindow"))}</li>`:'<li class="rb-empty">No decisions recorded yet.</li>'));
 }
 $("#record-panel").addEventListener("toggle", () => {
   if (!$("#record-panel").open) { recordLoadFailed = false; void client.setAuditView("activity").catch(() => {}); }
@@ -2846,8 +2846,8 @@ function messageLinksHTML(m, { linked, moderation, count, muted }) {
 }
 function messageFileChips(messageId) {
   const files = roomFilesByMessage.get(messageId) ?? [];
-  const more=partialWorkSnapshot&&roomFilesNextCursor&&roomFilesSelection[0]===messageId?`<button type="button" data-more-message-files${roomFilesLoading?" disabled":""}>More files for loaded messages</button>`:"";
-  const inspect=partialWorkSnapshot&&!roomFilesSelection.includes(messageId)?`<button type="button" data-check-message-files="${esc(messageId)}">Check files</button>`:"";
+  const more=partialWorkSnapshot&&roomFilesNextCursor&&roomFilesSelection[0]===messageId?`<button type="button" data-more-message-files${roomFilesLoading?" disabled":""}>${esc(uiText("currentRoom.moreFiles"))}</button>`:"";
+  const inspect=partialWorkSnapshot&&!roomFilesSelection.includes(messageId)?`<button type="button" data-check-message-files="${esc(messageId)}">${esc(uiText("currentRoom.checkFiles"))}</button>`:"";
   if (!files.length&&!more&&!inspect) return "";
   return `<div class="message-files">${files.map(file => {
     const download = messageFileDownloads.get(file.id);
@@ -2945,7 +2945,7 @@ async function refreshRoomFiles(more=false, selectedIds=null) {
     roomFilesFlight=ticket;roomFilesLoading=true;renderMessages();
     const body = await client.request(client.path("/files")+(query.size?'?'+query:''));
     if (generation !== client.generation || state?.room?.id !== roomId || client.session!==authSession || session!==authSession || !client.ownsAccountSession() || conversationViewKey()!==viewKey) return;
-    if(partialWorkSnapshot&&(body.contractVersion!==2||body.coverage?.kind!=='selected-messages'||JSON.stringify(body.coverage.messageIds)!==JSON.stringify(selection)||body.coverage.complete!==!body.page?.hasMore||Boolean(body.page?.nextCursor)!==body.page?.hasMore))throw Error('Invalid file selection');
+    if(partialWorkSnapshot&&(body.contractVersion!==2||body.coverage?.kind!=='selected-messages'||JSON.stringify(body.coverage.messageIds)!==JSON.stringify(selection)||body.coverage.complete!==!body.page?.hasMore||Boolean(body.page?.nextCursor)!==body.page?.hasMore))throw Error(uiText("currentRoom.invalidFileSelection"));
     const next = partialWorkSnapshot?new Map(roomFilesByMessage):new Map();
     if(partialWorkSnapshot&&!more)for(const id of selection)next.delete(id);
     for (const file of body.files ?? []) {
@@ -2969,7 +2969,7 @@ function composerFileOwner(file) {
   return { authSession, owns };
 }
 async function attachComposerFiles(fileList) {
-  if(client.sectionAvailability('fileUploads')?.available===false){setComposerError('New file uploads are unavailable in this storage view. Existing files remain downloadable from their messages.');return;}
+  if(client.sectionAvailability('fileUploads')?.available===false){setComposerError(uiText("currentRoom.uploadUnavailable"));return;}
   if (!state || !client.session || isRoomArchived(state)) return;
   const batch = composerFileOwner();
   for (const file of [...(fileList ?? [])]) {
@@ -3135,7 +3135,7 @@ function restoreComposer(draft) {
   autosizeComposer();
 }
 function requestRunLabel(id) {
-  if(client.sectionAvailability('requestRuns')?.available===false)return 'Execution status unavailable';
+  if(client.sectionAvailability('requestRuns')?.available===false)return uiText("currentRoom.executionUnavailable");
   const run = requestRuns[id];
   if (!run || state?.replyRequests?.[id]?.status !== "open") return "";
   const status = run.state === "working" && Date.now() - run.updatedAt > 120000 ? "unknown" : run.state;
@@ -4947,7 +4947,7 @@ async function refreshMutedThreads() {
     const result = await client.threadMutes(selected);
     if (generation !== client.generation || !state) return;
     if(result&&Array.isArray(result.threadIds)){
-      if(partialWorkSnapshot){if(result.coverage?.kind!=='selected-threads'||result.coverage.complete!==true||JSON.stringify(result.coverage.selectedThreadIds)!==JSON.stringify(selected))throw Error('Mute selection could not be confirmed');for(const id of selected){threadMuteKnown.add(id);if(result.threadIds.includes(id))mutedThreads.add(id);else mutedThreads.delete(id);}}
+      if(partialWorkSnapshot){if(result.coverage?.kind!=='selected-threads'||result.coverage.complete!==true||JSON.stringify(result.coverage.selectedThreadIds)!==JSON.stringify(selected))throw Error(uiText("currentRoom.muteUnconfirmed"));for(const id of selected){threadMuteKnown.add(id);if(result.threadIds.includes(id))mutedThreads.add(id);else mutedThreads.delete(id);}}
       else mutedThreads=new Set(result.threadIds);
     }
   } catch {
@@ -4958,7 +4958,7 @@ async function refreshMutedThreads() {
 }
 function syncThreadMuteButton() {
   const button = $("#thread-mute");
-  if(partialWorkSnapshot&&currentThreadId&&(!threadMuteKnown.has(currentThreadId)||threadMuteGeneration!==client.generation)){button.removeAttribute('aria-pressed');button.textContent='Check mute state';return;}
+  if(partialWorkSnapshot&&currentThreadId&&(!threadMuteKnown.has(currentThreadId)||threadMuteGeneration!==client.generation)){button.removeAttribute('aria-pressed');button.textContent=uiText("currentRoom.checkMute");return;}
   const muted = Boolean(currentThreadId && mutedThreads.has(currentThreadId));
   button.setAttribute("aria-pressed", String(muted));
   button.textContent = muted ? "Unmute thread" : "Mute thread";
@@ -7216,7 +7216,7 @@ humanPushUi = installHumanPush({
   eligible: () => Boolean(state) && ownsNotifications(notificationOwner) && client.session?.member?.kind !== "agent"
 });
 async function loadNotifications() {
-  if(client.sectionAvailability('notifications')?.available===false){setText('#notification-status','Combined notifications are unavailable. Inspect conversations, work and History; this does not mean there are no unread requests.');return;}
+  if(client.sectionAvailability('notifications')?.available===false){setText('#notification-status',uiText("currentRoom.notificationsUnavailable"));return;}
   const pagingFocus = ["notification-older", "notification-newest"].includes(document.activeElement?.id) ? document.activeElement : null;
   const ticket = notificationOwner, request = ++notificationSerial;
   if (!ownsNotifications(ticket)) return;
@@ -7932,7 +7932,7 @@ function renderReturnBrief({ timelineRendered = false } = {}) {
     const items = Object.values(state.workItems);
     if (!timelineRendered) syncTimelineWork();
     const resultFocus = $("#room-results-list").contains(document.activeElement) ? document.activeElement : null;
-    preserveResultFocus($("#room-results-list"), () => renderContent("#room-results-list", completedResults(state).map(resultRow).join("") || (partialWorkSnapshot?'<li class="empty-note">No completed results in the loaded window. Open Results to inspect more.</li>':'<li class="empty-note">No completed results yet.</li>')));
+    preserveResultFocus($("#room-results-list"), () => renderContent("#room-results-list", completedResults(state).map(resultRow).join("") || (partialWorkSnapshot?`<li class="empty-note">${esc(uiText("currentRoom.resultsWindowEmpty"))}</li>`:'<li class="empty-note">No completed results yet.</li>')));
     if (resultFocus && !resultFocus.isConnected && document.activeElement === document.body) $("#room-results-list").focus({ preventScroll: true });
     resultStatus();
     syncResultComparisons();
@@ -7944,7 +7944,7 @@ function renderReturnBrief({ timelineRendered = false } = {}) {
   const newer = returnBrief && client.sequence > returnBrief.history.evaluatedThrough;
   // The reconciliation note comes first: it is the one thing here that says
   // what was already saved, which the generic brief message does not.
-  setText("#rb-status", owned && client.sectionAvailability('returnBrief')?.available===false ? 'Partial storage view: use conversations, personal work and History. Combined catch-up and assistant automation are unavailable; unseen work and saved history may remain.' : owned ? briefReconcileNote || briefView.message || (newer ? "New changes available. Refresh catch-up." : "") : "");
+  setText("#rb-status", owned && client.sectionAvailability('returnBrief')?.available===false ? uiText("currentRoom.catchupUnavailable") : owned ? briefReconcileNote || briefView.message || (newer ? "New changes available. Refresh catch-up." : "") : "");
   $("#rb-refresh-button").disabled = !owned || briefView.busy || client.sectionAvailability('returnBrief')?.available===false;
   $("#return-brief-panel").setAttribute("aria-busy", briefView.busy ? "true" : "false");
   $("#rb-more-button").disabled = briefView.busy;

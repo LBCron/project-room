@@ -141,9 +141,9 @@ export function createNeedsAttentionCard(options) {
   function render(report) {
     const items = report?.items ?? [];
     currentReport = report;
-    count.textContent = report?.coverage?`${items.length}${report.coverage.complete?' in scope':' loaded'}`:String(report?.itemCount??items.length);
+    count.textContent = report?.coverage?uiText(report.coverage.complete?"currentRoom.attentionCount":"currentRoom.attentionLoaded",{count:items.length}):String(report?.itemCount??items.length);
     pages.hidden = !report?.nextCursor && !report?.previousCursor;
-    range.textContent=report?.coverage?(report.coverage.complete?'Personal work/request sources examined. Other room oversight is outside this view.':'Partial personal work/request window. Continue to inspect more.'):(items.length?`Showing ${report.pageOffset+1}–${report.pageOffset+items.length} of ${report.itemCount}`:'');
+    range.textContent=report?.coverage?uiText(report.coverage.complete?"currentRoom.attentionComplete":"currentRoom.attentionPartial"):(items.length?uiText("currentRoom.attentionRange",{from:report.pageOffset+1,to:report.pageOffset+items.length,count:report.itemCount}):'');
     section.hidden = items.length === 0&&!report?.coverage;
     list.innerHTML = items.map((item, itemIndex) => `
       <li class="attention-item attention-${esc(item.kind)} attention-severity-${esc(item.severity)}" data-item-index="${itemIndex}" data-access-request-id="${item.kind === "access_request" ? esc(item.id) : ""}">

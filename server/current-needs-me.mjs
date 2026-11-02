@@ -8,7 +8,10 @@ import {ServiceError} from './service-error.mjs';
 const fail=()=>{throw new ServiceError(409,'stale_needs_me_cursor','Attention source or service changed. Restart needs-me without since.');};
 const clip=value=>String(value??'').replace(/\s+/g,' ').slice(0,140);
 const keys='kind roomId memberId credential head mode minimum after older workCursor conversationDone workDone'.split(' ');
-export function readCurrentNeedsMePage(store,secret,roomId,{cursor,after,freshWindow=500}={}){
+export function readCurrentNeedsMePage(store,secret,roomId,options={}){
+ return store.readTransaction(()=>readPage(store,secret,roomId,options));
+}
+function readPage(store,secret,roomId,{cursor,after,freshWindow=500}={}){
  const binding=store.readTransaction(()=>withCurrentReadContext(store.db,roomId,()=>{
   const auth=store.authenticate(secret,roomId),head=readCurrentHead(store.db,roomId);
   return{kind:'needs_me_native_v1',roomId,memberId:auth.member.id,credential:createHash('sha256').update(secret).digest('hex'),head:head.head_sha256,sequence:head.sequence};

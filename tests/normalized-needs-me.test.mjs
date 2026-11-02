@@ -1,5 +1,6 @@
 import test from 'node:test';import assert from 'node:assert/strict';
 import {mkdtempSync,rmSync} from 'node:fs';import{tmpdir}from'node:os';import{join}from'node:path';
+import {parseNeedsMeBody} from '../client/grok-host.mjs';
 import {RoomStore} from '../server/store.mjs';import {AgentRooms} from '../server/agent-rooms.mjs';import {collectNeedsMe} from '../server/needs-me.mjs';import {readCurrentNeedsMePage} from '../server/current-needs-me.mjs';
 function fixture(t){const dir=mkdtempSync(join(tmpdir(),'native-needs-')),path=join(dir,'room.sqlite');let s=new RoomStore(path);t.after(()=>{s.close();rmSync(dir,{recursive:true,force:true});});const owner=s.identities.create('Olive'),peer=s.identities.create('Parker'),other=s.identities.create('Vega'),room='native-attention';new AgentRooms(s).create(owner.secret,{roomId:room,title:'Native attention',purpose:'Useful coordination',starter:false});for(const identity of[peer,other])s.invites.redeem(s.invites.create(owner.secret,room,{profile:'member'}).code,{identitySecret:identity.secret,displayName:identity===peer?'Parker':'Vega'});const send=(who,id,type,data)=>s.command(who.secret,room,{id,type,data});return{get s(){return s;},owner,peer,other,room,send,reopen(){s.close();s=new RoomStore(path);}};}
 test('normalized needs-me discovers recent replies and late standing obligations without blob or board reads',t=>{
@@ -11,7 +12,10 @@ test('normalized needs-me discovers recent replies and late standing obligations
  let page=collectNeedsMe(s,owner.secret),n=1;const items=[...page.items];assert.ok(page.items.some(x=>x.id==='reply'));assert.ok(page.items.some(x=>x.kind==='work'));assert.ok(page.items.some(x=>x.kind==='direct_ask'&&x.id==='request'));assert.equal(page.nativeCoverage[0].available,true);assert.ok(page.hasMore);
  while(page.hasMore){assert.ok(n++<50);page=collectNeedsMe(s,owner.secret,{since:page.cursor});items.push(...page.items);}
  assert.deepEqual([...new Set(items.filter(x=>x.kind==='work').map(x=>x.id))].sort(),['work0','work1','work2']);assert.equal(page.nativeCoverage[0].standingWorkAndRequests.complete,true);assert.equal(page.nativeCoverage[0].conversation.complete,true);assert.equal(page.nativeCoverage[0].globalAttentionComplete,false);
- assert.equal(typeof readCurrentNeedsMePage,'function');
+ assert.ok(readCurrentNeedsMePage(s,owner.secret,room).items.some(x=>x.kind==='work'));
+ const parsed=parseNeedsMeBody(page);assert.deepEqual(parsed.nativeCoverage,page.nativeCoverage);
+ assert.throws(()=>parseNeedsMeBody({...page,nativeCoverage:[{...page.nativeCoverage[0],globalAttentionComplete:true}]}),e=>e.code==='invalid_needs_me');
+ assert.throws(()=>parseNeedsMeBody({...page,contractVersion:1}),e=>e.code==='invalid_needs_me');
 });
 test('normalized catch-up carries empty private windows without exposing excluded IDs or acknowledging them',t=>{
  const {s,owner,peer,other,room,send}=fixture(t);s.dmConsents.request(room,peer.identityId,other.identityId,'Private');s.dmConsents.decide(room,other.identityId,peer.identityId,'approve');

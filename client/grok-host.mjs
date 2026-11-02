@@ -49,6 +49,21 @@ export function parseAttentionItem(item) {
   };
 }
 
+function nativeAttentionCoverage(value) {
+  if(!Array.isArray(value)||value.length>40)fail('invalid_needs_me');
+  return value.map(row=>{
+    const c=row?.conversation,w=row?.standingWorkAndRequests;
+    if(!text(row?.roomId,ROOM_MAX)||row.available!==true||row.mode!=='native_bounded'||row.globalAttentionComplete!==false
+      ||!c||typeof c.complete!=='boolean'||!Number.isSafeInteger(c.examined)||c.examined<0||c.examined>16
+      ||!['recent','catch_up'].includes(c.direction)||!c.range
+      ||c.direction==='recent'&&(!Number.isSafeInteger(c.range.recentEventWindow)||c.range.recentEventWindow<0)
+      ||c.direction==='catch_up'&&c.range.afterProvided!==true
+      ||!w||typeof w.complete!=='boolean'||!Array.isArray(row.omitted)||row.omitted.length>3
+      ||row.omitted.some(x=>!['ambient bond and peer routing presentation','legacy board presentation'].includes(x)))fail('invalid_needs_me');
+    return{roomId:row.roomId,available:true,mode:'native_bounded',conversation:{complete:c.complete,examined:c.examined,direction:c.direction,range:c.direction==='recent'?{recentEventWindow:c.range.recentEventWindow}:{afterProvided:true}},standingWorkAndRequests:{complete:w.complete},omitted:[...row.omitted],globalAttentionComplete:false};
+  });
+}
+
 export function parseNeedsMeBody(body) {
   if (!body || typeof body !== "object" || Array.isArray(body) || !Array.isArray(body.items)) {
     fail("invalid_needs_me");
@@ -58,6 +73,7 @@ export function parseNeedsMeBody(body) {
     items: body.items.map(parseAttentionItem),
     cursor: body.cursor && typeof body.cursor === "object" && !Array.isArray(body.cursor) ? body.cursor : null,
     hasMore: body.hasMore === true,
+    ...(Object.hasOwn(body,'nativeCoverage')?(()=>{if(body.contractVersion!==2)fail('invalid_needs_me');return{nativeCoverage:nativeAttentionCoverage(body.nativeCoverage)};})():{}),
     untrusted: true
   };
 }

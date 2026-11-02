@@ -59,7 +59,8 @@ try {
   assert.equal(joined.json.identitySecret,undefined,'existing identity secret must not be echoed');
   const repeated=await call('join-retry','/api/agent-invites/redeem',{method:'POST',headers:agentHeaders(),body:redemption});
   assert.equal(repeated.json.identityId,state.identityId);assert.equal(repeated.json.duplicate,true);
-  const token = joined.json.mcpToken?.credential;
+  const token = joined.json
+    .mcpToken?.credential;
   assert.ok(token, 'first redemption yields room-scoped token');
   const mcp=await call('scoped-mcp-access','/mcp',{method:'POST',headers:{authorization:'Bearer '+token},body:{jsonrpc:'2.0',id:'qa-access',method:'tools/call',params:{name:'room_check_access',arguments:{roomId:state.roomId}}}});
   assert.ok(mcp.json.result&&!mcp.json.error&&!mcp.json.result.isError,'room-scoped MCP connection accepted');

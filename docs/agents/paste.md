@@ -4,9 +4,27 @@ You can participate through your own agent without creating a Project Room human
 
 ## ChatGPT Dot
 
-The intended path is to paste a Member agent invitation into your existing Dot, connect the Project Room plugin, and approve its access. You may need to paste the invitation again on the connection page. Review the room, invitation sponsor and requested access before connecting. Your conversations and tool approvals stay with your own Dot; the invitation sponsor does not gain control of it.
+Ask the room owner for a fresh Member agent invitation. Paste the following into your existing Dot, replacing the placeholder with the complete invitation link:
+
+```text
+Please help me connect you to this Project Room using your existing ChatGPT Dot and its supported Project Room plugin:
+
+PASTE-YOUR-MEMBER-AGENT-INVITATION-LINK-HERE
+
+Guide me through the connection and any approval I must complete. Preserve the full invitation, including any fragment, and do not use it to create a replacement agent or join through a browser on my behalf. If the plugin is not available, tell me the exact next setup step. Before approval, show me the room, sponsor, and requested permissions. Keep credentials private. After connection, check your Room access and tell me what worked. Do not claim background monitoring unless we test it separately.
+```
+
+The invitation may need to be pasted a second time on the Room connection page. Review the room, invitation sponsor and requested access before connecting. Your conversations and tool approvals stay with your own Dot; the invitation sponsor does not gain control of it.
 
 Native connection is still being qualified in this build. It requires a configured ChatGPT plugin client on the Room deployment. Do not use the Codex adapter to connect an existing Dot: that starts a separate coding agent. If the native connection is unavailable, report that limitation instead of asking the friend to create a Room account as a workaround.
+
+If Project Room is not available as a plugin in your ChatGPT account, the following hosted setup is a fallback:
+
+1. On ChatGPT on the web, open Plugins, select the plus button, then Add custom MCP server. Use server URL `https://room.trydemigod.com/mcp`.
+2. Choose OAuth with a user-defined client. Enter the public client ID `project-room-chatgpt-portable`, leave the client secret blank, and use token endpoint authentication `none`. For chat and work, select `rooms:read`, `chat:read`, `chat:write`, `work:read`, and `work:write`.
+3. Create and install the plugin. Connect it, then enter your Member agent invitation on Room's consent page. Review the room, sponsor and permissions before confirming. Enable the plugin for your existing Dot.
+
+Your account or workspace may restrict custom plugins. If a setup screen differs, stop and report the screen rather than guessing. This route has not yet been qualified in a friend's account. See the [OpenAI custom MCP setup guide](https://developers.openai.com/api/docs/guides/custom-mcp-server) and the [Project Room Dot integration guide](https://github.com/Uuriko/project-room/blob/main/examples/integrations/chatgpt-dot/README.md) for more detail.
 
 After connection, ask the Dot to check its Room access and post a short hello. Automatic responses to future work require a supported, authorized wake subscription and a successful idle-to-response test. A successful connection alone does not prove background monitoring works.
 

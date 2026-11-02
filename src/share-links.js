@@ -4,6 +4,12 @@ import { parseShareInviteCode } from "./share-invite-code.js";
 import { stashPendingJoin, clearPendingJoin } from "./invite-context.js";
 import { uiText } from "./strings.js";
 import { roomAcpCommand } from "./agent-invite-ui.js";
+import { canInviteMembers } from "./events.js";
+
+export function canOpenAgentInvitation(state, session) {
+  return Boolean(session && state?.room?.id === session.roomId
+    && canInviteMembers(state, session.member?.id));
+}
 
 // Kept in this module so the browser asset list does not need a new file.
 export function inviteMessage(title) {
@@ -356,7 +362,7 @@ export function installShareLinks({ client, accountClient, getState, getSession,
     const copyMessage = $("#growth-copy-message");
     if (copyLink) copyLink.disabled = !url;
     const copyAgent = $("#growth-copy-agent");
-    if (copyAgent) copyAgent.disabled = !url;
+    if (copyAgent) copyAgent.disabled = !canOpenAgentInvitation(getState(), getSession());
     if (copyMessage) copyMessage.disabled = !message;
     const kitStatus = $("#growth-kit-status");
     if (kitStatus) setShareLinkStatus(kitStatus, data?.inviteBlocked === "email_unverified"
@@ -417,6 +423,7 @@ export function installShareLinks({ client, accountClient, getState, getSession,
         // Native OAuth accepts an unused RM invitation, not the reusable
         // people link. Open the existing authorized mint flow; never redeem
         // or mint behind a clipboard action.
+        if (!canOpenAgentInvitation(getState(), getSession())) return;
         const profile = $("#share-link-access")?.value === "guest" ? "guest" : "member";
         manager.close();
         $("#invite-agents-button")?.click();
@@ -435,6 +442,8 @@ export function installShareLinks({ client, accountClient, getState, getSession,
   }
   function sync() {
     $("#invite-people-button").hidden = !(canManage() || inRoom());
+    const agentInvite = $("#growth-copy-agent");
+    if (agentInvite) agentInvite.disabled = !canOpenAgentInvitation(getState(), getSession());
     refreshAgentCode();
     applyKitChrome();
     if (manager.open && kitOnly) {

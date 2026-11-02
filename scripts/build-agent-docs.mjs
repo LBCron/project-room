@@ -39,7 +39,7 @@ export function codeBlock(text, label) {
   return `<pre tabindex="0" role="region" aria-label="${escape(plainLabel(label) || "Code example").replaceAll('"', "&quot;")}"><code>${escape(text)}</code></pre>`;
 }
 
-export function renderMarkdown(markdown, { labelPrefix = "" } = {}) {
+export function renderMarkdown(markdown, { labelPrefix = "", renderCode = codeBlock } = {}) {
   const blocks = [];
   let lastHeading = "";
   let codeCount = 0;
@@ -59,7 +59,7 @@ export function renderMarkdown(markdown, { labelPrefix = "" } = {}) {
       i += 1;
       while (i < lines.length && !lines[i].startsWith("```")) { body.push(lines[i]); i += 1; }
       codeCount += 1;
-      blocks.push(codeBlock(body.join("\n"), [labelPrefix, lastHeading || `code example ${codeCount}`].filter(Boolean).join(": ")));
+      blocks.push(renderCode(body.join("\n"), [labelPrefix, lastHeading || `code example ${codeCount}`].filter(Boolean).join(": "), codeCount));
       i += 1;
       continue;
     }
@@ -127,6 +127,8 @@ h1,h2{color:var(--text)}
 a{color:var(--blue)}
 pre{box-sizing:border-box;max-width:100%;white-space:pre-wrap;overflow-wrap:anywhere;overflow:auto;padding:12px 16px;background:#191a20;border:1px solid var(--line);border-radius:.45rem}
 pre:focus-visible{outline:2px solid var(--blue);outline-offset:2px}
+.agent-paste-prompt{box-sizing:border-box;width:100%;max-width:100%;padding:12px 16px;background:#191a20;color:var(--text);border:1px solid var(--line);border-radius:.45rem;font:inherit;resize:vertical}
+.agent-paste-prompt:focus-visible{outline:2px solid var(--blue);outline-offset:2px}
 code{font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;font-size:.9em}
 :not(pre)>code{overflow-wrap:anywhere}
 footer{margin-top:40px;border-top:1px solid var(--line);padding-top:16px;color:var(--muted)}
@@ -177,7 +179,8 @@ export function agentPages(dir = join(root, "docs", "agents")) {
     title: "Connect your agent by pasting",
     description: "Paste one block into ChatGPT, Claude, Cursor or another agent. It joins your room, says hello, and never needs your key.",
     path: PASTE_PAGE.docsPath,
-    body: renderMarkdown(pasteMd, { labelPrefix: "Paste block" }),
+    body: renderMarkdown(pasteMd, { labelPrefix: "Paste block",
+      renderCode: (text, label, index) => `<label for="agent-paste-prompt-${index}">Copy this prompt into your agent: ${escape(plainLabel(label))}</label><textarea id="agent-paste-prompt-${index}" class="agent-paste-prompt" readonly rows="16" spellcheck="false">${escape(text)}</textarea>` }),
     steps: sections(pasteMd),
   }));
   const indexBody = renderMarkdown(indexMd) + "<ul>" + connectSnippets.map(tool => `<li><a href="${tool.docsPath}">${escape(tool.label)}</a> — <code>${escape(tool.command)}</code></li>`).join("") + "</ul>";

@@ -1,5 +1,7 @@
 #!/usr/bin/env node
 // room-acp: connect a local ACP agent to a Project Room with one invite link.
+import { realpathSync } from "node:fs";
+import { fileURLToPath } from "node:url";
 import { parseArgs, USAGE } from "./args.mjs";
 import { adapterHints, candidates, probe } from "./agents.mjs";
 import { join } from "./join.mjs";
@@ -85,6 +87,15 @@ export async function main(argv = process.argv.slice(2), io = {}) {
   return 2;
 }
 
-if (import.meta.url === `file://${process.argv[1]}` || process.argv[1]?.endsWith("/room-acp")) {
+function isDirectEntry() {
+  if (!process.argv[1]) return false;
+  try {
+    // Node resolves entry symlinks and encodes spaces/special characters in URLs.
+    // Compare canonical native paths, including npm's bin link and Windows paths.
+    return realpathSync(fileURLToPath(import.meta.url)) === realpathSync(process.argv[1]);
+  } catch { return false; }
+}
+
+if (isDirectEntry()) {
   main().then(code => { process.exitCode = code; }, error => { console.error(`room-acp: ${error.message}`); process.exitCode = 1; });
 }

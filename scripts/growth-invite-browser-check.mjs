@@ -136,3 +136,25 @@ for (const width of [1280, 390]) test(`normalized invitation kit opens and creat
   await page.screenshot({ path: `test-results/normalized-invitation-kit-${width}.png` });
   assert.deepEqual(errors, []);
 });
+
+test('agent invitation remains available when the reusable invitation read fails', { timeout: 60000 }, async t => {
+  const store = new RoomStore(':memory:');
+  store.createAccount('invite-recovery-owner');
+  const slot = store.createAccountSessionSlot(), session = store.loginAccountSession(slot.token, store.issueAccountAccessKey('invite-recovery-owner'), 0);
+  const made = store.createAccountRoom(slot.token, session.sessionBinding, { roomId: 'invite-recovery', title: 'Recovery', purpose: 'Useful work', kind: 'personal', displayName: 'Owner' });
+  const owner = store.issueAccessKey('invite-recovery', made.room.memberId), server = createRoomServer({ store });
+  await new Promise(resolve => server.listen(0, '127.0.0.1', resolve));
+  const browser = await chromium.launch({ headless: true, ...(process.env.ROOM_TEST_CHROMIUM_PATH ? { executablePath: process.env.ROOM_TEST_CHROMIUM_PATH } : {}) });
+  t.after(async () => { await browser.close(); server.closeStreams(); server.closeAllConnections(); await new Promise(resolve => server.close(resolve)); store.close(); });
+  const page = await browser.newPage();
+  page.setDefaultTimeout(10000);
+  await page.route('**/referrals?view=invitation', route => route.fulfill({ status: 503, contentType: 'application/json', body: '{}' }));
+  await page.goto(`http://127.0.0.1:${server.address().port}/?room=invite-recovery`);
+  await signInFixture(page, owner); await clickChrome(page, '#invite-people-button');
+  await page.locator('#growth-kit-retry').waitFor({ state: 'visible' });
+  assert.equal(await page.locator('#growth-copy-link').isEnabled(), false);
+  assert.equal(await page.locator('#growth-copy-agent').isEnabled(), true);
+  await page.locator('#growth-copy-agent').click();
+  await page.locator('#agent-invite-dialog[open]').waitFor();
+  assert.equal(store.db.prepare('SELECT COUNT(*) AS n FROM agent_invite_codes').get().n, 0, 'opening the dialog must not create an invitation');
+});

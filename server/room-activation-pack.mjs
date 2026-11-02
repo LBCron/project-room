@@ -267,7 +267,7 @@ export function briefActivationPack(pack, presenceMembers, nowMs, viewerId = nul
   listed.sort((a, b) => (a.state === b.state ? (seen(b.lastSeenAt) || 0) - (seen(a.lastSeenAt) || 0) : a.state === "online" ? -1 : 1));
   const around = listed.slice(0, BRIEF_AROUND);
   const you = pack.members.find(member => member.id === viewerId) ?? null;
-  const claims = pack.openClaims.slice(0, BRIEF_ITEMS).map(claim => ({
+  const claims = (pack.openClaims ?? []).slice(0, BRIEF_ITEMS).map(claim => ({
     id: claim.id, title: clip(claim.title, 100), untrusted: true, claimAction: claim.claimAction }));
   const unclaimed = pack.openWork.filter(item => !item.claimant).slice(0, BRIEF_ITEMS - claims.length)
     .map(item => ({ id: item.id, title: clip(item.title, 100), state: item.state, untrusted: true }));
@@ -289,7 +289,8 @@ export function briefActivationPack(pack, presenceMembers, nowMs, viewerId = nul
     // payload itself (REGISTER row 59).
     recentWindowMs: BRIEF_ACTIVE_MS,
     pickUp: [...claims, ...unclaimed],
-    openWorkTotal: pack.openWork.length,
+    openWorkTotal: pack.workWindow ? null : pack.openWork.length,
+    ...(pack.workWindow ? {workWindow: pack.workWindow, workScope: pack.workScope, omitted: pack.omitted} : {}),
     recentDecisions: (pack.orientation?.recentDecisions ?? []).slice(0, BRIEF_ITEMS)
       .map(decision => ({ statement: clip(decision.statement, 140), at: decision.at ?? null })),
     rules: { ...pack.coordinationNorms, ...pack.participationRules },

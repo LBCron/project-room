@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import {RoomStore} from '../server/store.mjs';
 import {initialRoom} from '../server/bootstrap.mjs';
 import {buildOrient} from '../server/orient.mjs';
-import {buildActivationPack} from '../server/room-activation-pack.mjs';
+import {buildActivationPack,briefActivationPack} from '../server/room-activation-pack.mjs';
 import {buildRoomContext} from '../server/room-context.mjs';
 import {claimNote} from '../server/content-trust.mjs';
 import {thinWorkForContext} from '../server/current-work-summary.mjs';
@@ -17,7 +17,8 @@ test('actual default context and Begin enumerate bounded work summaries with hon
  do {const context=store.roomContext(token,'commons',{workAfter:after});assert.equal(context.workWindow.total,19);assert.ok(context.workWindow.shown<=8);assert.equal(context.workScope,'workWindow');ids.push(...context.focusWork.map(item=>item.id));after=context.workWindow.nextAfter;pages++;}while(after);
  assert.equal(ids.length,19);assert.equal(new Set(ids).size,19);assert.equal(pages,3);
  const orient=buildOrient(store,'commons','owner');assert.equal(orient.workTotal,null);assert.equal(orient.workWindow.complete,false);
- assert.equal(buildActivationPack(store,'commons','owner').openWork.length,8);
+ const pack=buildActivationPack(store,'commons','owner');assert.equal(pack.openWork.length,8);
+ const brief=briefActivationPack(pack,[],store.now(),'owner');assert.equal(brief.you.memberId,'owner');assert.ok(brief.pickUp.length>0);assert.equal(brief.openWorkTotal,null);assert.deepEqual(brief.workWindow,pack.workWindow);assert.deepEqual(brief.omitted,pack.omitted);
  assert.throws(()=>buildOrient(store,'commons','owner',{q:'Useful'}),/indexed query/);
  assert.ok(!sql.some(query=>/SELECT.*(?:payload|record_json|projection).*FROM work_entities/i.test(query)),'overview must never load work bodies');
  assert.ok(!sql.some(query=>/^SELECT projection FROM rooms/i.test(query)),'overview must not load room blob');

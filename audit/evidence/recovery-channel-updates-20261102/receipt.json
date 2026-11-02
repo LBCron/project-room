@@ -1,0 +1,151 @@
+{
+  "base": "328928e275e05b950b8f4e7bd6ec9bcf42cc03f5",
+  "runtimeCommit": "95a10f571f358c50d9197a595e6690c434610a37",
+  "protocol": 21,
+  "sourceOnly": true,
+  "deployment": false,
+  "wholeRecoveryBounded": false,
+  "fullOracleStillRequired": true,
+  "tests": {
+    "affectedNode": {
+      "pass": 23,
+      "fail": 0
+    },
+    "upgradeAdjacent": {
+      "pass": 8,
+      "fail": 0,
+      "overlapWithAffected": 3
+    },
+    "nativeOperator": {
+      "pass": 1,
+      "fail": 0,
+      "journalRows": 70,
+      "coldJournalPages": 3
+    },
+    "nativeScale": {
+      "pass": 1,
+      "fail": 0,
+      "retainedJournalRows": [
+        1000,
+        5000
+      ],
+      "maxPendingBacklog": 500
+    },
+    "finalFocusedNode": {
+      "pass": 15,
+      "fail": 0
+    },
+    "lint": {
+      "errors": 0,
+      "inheritedWarnings": 33
+    },
+    "focusedNewFilesLint": {
+      "errors": 0,
+      "warnings": 0
+    }
+  },
+  "nativeFinalSameInstantComparison": {
+    "70": {
+      "default": {
+        "rowsRead": 67809,
+        "bytes": 251669
+      },
+      "consumed": {
+        "rowsRead": 70081,
+        "bytes": 645464
+      }
+    },
+    "1000": {
+      "default": {
+        "rowsRead": 72459,
+        "bytes": 765865
+      },
+      "consumed": {
+        "rowsRead": 73801,
+        "bytes": 902607
+      }
+    },
+    "5000": {
+      "default": {
+        "rowsRead": 92459,
+        "bytes": 3005874
+      },
+      "consumed": {
+        "rowsRead": 89801,
+        "bytes": 2022634
+      }
+    }
+  },
+  "limitations": [
+    "Comparison includes the ordinary report fingerprint on both sides; target-local complete-proof admission adds fixed overhead.",
+    "Native70 final publication and zero cleanup proved; scale1k5k stops before report generation/publication and compares full oracle at the exact same sealed audit instant.",
+    "No whole-restore speedup or production CPU/memory claim.",
+    "SQLite checks, room replay/projection materialization and several global subsystem scans remain unbounded.",
+    "Native context adapter records include raw runtime permit writes; unknown counter0.",
+    "Node upgrade fixture uses exact preceding20guardDDL; separate genuine328runtime experiment corroborates cold/held/prepared operational refusals, not old constructor refusal."
+  ],
+  "logs": [
+    {
+      "name": "recovery-channel-consumption-before",
+      "sha256": "3b3a77dbd34d64c733b3f21a536d2c067de84e4872dded4d720b042b1db66716",
+      "bytes": 2000
+    },
+    {
+      "name": "recovery-channel-affected",
+      "sha256": "1d4e65914fe091962a13eade76bdc28c243ad5f6e23a6094b695b5fe81208fcd",
+      "bytes": 24394
+    },
+    {
+      "name": "recovery-channel-upgrade-adjacent",
+      "sha256": "702b000f2e60fe0ba0fb859c091f26ae95323ce2dec6d2dd7e7a2915175f4125",
+      "bytes": 6707
+    },
+    {
+      "name": "recovery-channel-genuine20",
+      "sha256": "f72c2421006353c7381a2be04936bc0304f92a648a0c81576519e15c3c60e16e",
+      "bytes": 1599
+    },
+    {
+      "name": "recovery-channel-native",
+      "sha256": "92a149f358c7a6e9fba94774a8f6ac0c330b51d616a917a6b6240caed0fa8e30",
+      "bytes": 23437
+    },
+    {
+      "name": "recovery-channel-scale",
+      "sha256": "d173aca789dec43932358702485905da9dd1a0549b4d63d98ffe00af3c3aabbe",
+      "bytes": 56340
+    },
+    {
+      "name": "recovery-channel-lint",
+      "sha256": "8faecf00ee69c3424cf35fda77746dd78984766e3be241aa84de21dd1de2e9f6",
+      "bytes": 7004
+    },
+    {
+      "name": "recovery-channel-final-focused",
+      "sha256": "52e582274d9d22e231aff2276d07fe16370f3bb5ad5640bdbe2954961f26c5ba",
+      "bytes": 15409
+    },
+    {
+      "name": "recovery-channel-final-lint",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "bytes": 0
+    },
+    {
+      "name": "recovery-channel-secret",
+      "sha256": "799e3201a5b88eae4477b159c57bac86af93f46933970440cbcf135ef2e3b94d",
+      "bytes": 24
+    }
+  ],
+  "qualificationCommit": "10e0a07e4",
+  "fileSha256": {
+    "server/recovery-channel-updates.mjs": "9c873cb8579f87ceabdf720d9b8b62cbf64ecd6177af54d92081431fe8e46c61",
+    "tests/recovery-channel-protocol.test.mjs": "0a404360cdf33b2180bdf7488dcdeeb707eaeb853199366d81801ca0b1c62be9",
+    "tests/recovery-channel-updates-consumption.test.mjs": "b8cc4743b38afa8aa3985cb496f547e608339ac96843ee4eca584a39903dca4b",
+    "tests/recovery-channel-updates.test.mjs": "0ac16bc917e2acdac08912c302b2e985653253661960c69d7911b5fcff6141aa",
+    "tests/helpers/recovery-channel-updates-target.mjs": "666647deb1e63d5e93a551dee59d3ccadf52d16014d43a1ef44020d1fc7fa326",
+    "tests/helpers/recovery-channel-updates-source.mjs": "088870909e8ad60bb49f47c1995b6ef7bfc58fcf1ec1571043f809f779e3d30b",
+    "cloudflare/recovery-channel-updates-scale.check.mjs": "7000241bd14bfb72acd22470a68bb185fcd6cacf92c22f5bc975f47547eeaa05",
+    "cloudflare/recovery-channel-updates-native.check.mjs": "c2b723da6b2f10ecaa1cb88a50a147515db4f1642001285a3f57b344190c4be4",
+    "cloudflare/recovery-channel-updates-native.test-fixture.mjs": "f074157c68ba556781ea024face9eaa51511637c3996df4ef12c771af4adc7ad"
+  }
+}

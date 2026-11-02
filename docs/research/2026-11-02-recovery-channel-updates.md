@@ -1,0 +1,68 @@
+# Sealed channel journal recovery and final-oracle consumption
+
+Source base `328928e275e05b950b8f4e7bd6ec9bcf42cc03f5`; runnable source `95a10f571f358c50d9197a595e6690c434610a37`. Protocol21 is an offline candidate, not deployed. Root owns adoption. Evidence: `audit/evidence/recovery-channel-updates-20261102/receipt.json`.
+
+`ChannelUpdateJournal.verify()` previously loaded every `pending_channel_updates` row during the final synchronous recovery oracle. The new continuation shares its exact row predicate: parsed payload/update ID, allowed status, attempts/exhaustion equivalence, error requirement and update/receive time ordering. JSON.parse duplicate-key behavior is unchanged. The original verifier remains the default for every ordinary audit.
+
+The independent sealed phase selects at most32 indexed unfiltered rowids, admits string bytes before fetching payload, validates each row, and compares the complete count to the sealed table census. The cursor supports all signed SQLite int64 rowids through decimal text, without unsafe JS number conversion. Its4MiB work quantum retains the existing sealed legal-atom exception: an admitted historical larger row runs alone. This is not a strict atomic CPU or memory bound.
+
+Final operator recovery consumes this one component only through a synchronous target-local WeakMap capability bound to persisted pending restore ID, source seal, current protocol, exact completed cursor/counts, control revision and verified freeze. The capability expires on callback exit and rechecks its persisted binding when consumed. No caller boolean, external certificate or ordinary-reader skip exists. Global engine checks and the original remaining oracle are still required.
+
+Protocol21 upgrades exact completed protocol20 control DDL only inside the normal constructor transaction. It requires clear restore state, no sealed progress/scratch, a closed serving permit and no unfinished cleanup. Original publication receipt and all business/auth rows remain unchanged. Unknown/wrong SQL and pending20 refuse. The previous explicit unused-native5 upgrade remains literal native5/audit20; this does not authorize populated old-format adoption. A genuine pinned328/runtime20 experiment corroborates populated cold upgrade and old runtime operational refusal. The old constructor itself may open; status/serving/control mutations refuse changed protocol before progress.
+
+## Causal tests and costs
+
+The exact328 before control fails final publication when the original journal verifier is replaced by a throwing observer. The candidate publishes, preserves the exact ordinary report, and ordinary post-publication audits still call that verifier.23 affected Node tests pass;8 upgrade-adjacent pass with3 overlapping;1 actual production Native operator test passes with three cold journal pages, exact retries, final consumption, cleanup zero and cold ready. Native scaling test passes for1k/5k retained journal rows delivered in legal100-update batches; pending backlog never exceeds500. The5k source contains4,500 imported,499 pending and1 failed update.
+
+| Rows retained | Default final audit rows read | Consumed rows read | Default returned UTF8 bytes | Consumed bytes |
+|---:|---:|---:|---:|---:|
+|70|67,809|70,081|251,669|645,464|
+|1,000|72,459|73,801|765,865|902,607|
+|5,000|92,459|89,801|3,005,874|2,022,634|
+
+The70/1k total regressions are real. Complete-proof admission adds control/freeze reads, outweighing small journals. At5k total returned bytes decrease32.7%, physical rows2.9%; journal payload alone halves. Both sides include the literal default report fingerprint and compare equal at the same audit instant. Scale restores take97/254 operator calls to reach the final stage; they do not publish or measure cumulative whole-restore cost. The70-row test separately publishes and cleans up. Native physical counters include raw runtime permit writes (2 in each comparison) and have unknown0. Wall times are local illustrative clock measurements, not production CPU. This evidence does not justify a standalone partial-protocol deployment or a blanket speed claim.
+
+Commands:
+
+```
+node --test tests/recovery-channel-updates.test.mjs tests/recovery-channel-updates-consumption.test.mjs tests/recovery-channel-protocol.test.mjs tests/channel-journal.test.js tests/channel-journal-parity.test.js
+node --test tests/current-empty-format-upgrade.test.mjs tests/recovery-channel-protocol.test.mjs
+node --test cloudflare/recovery-channel-updates-native.check.mjs
+node --test cloudflare/recovery-channel-updates-scale.check.mjs
+```
+
+## Exact remaining final-oracle map
+
+This map is tied to base328 plus the above source, not a claim about later composition. Entry is `continueRestoreCoverage` in `server/restore-ndjson.mjs`, final `audit_pending` arm. It enters completed-channel, completed-share-links, completed-reminder and completed-report scopes, calls `auditRecovery`, then calls `store.verifyInvitationAudit()` AGAIN for response/parity, revalidates the seal/freeze/current schema and atomically publishes. All other call sites of `auditRecovery` retain the original oracle.
+
+| Final call / scan | Existing continuation evidence | Can consume as-is? / precise gap |
+|---|---|---|
+|Version, writer fence, exact table/schema inventory|Sealed coverage/schema admission and per-call guard validation|Keep bounded exact checks. Catalog calls are numerous but code-owned table inventory is fixed; not a reason to waive them.|
+|Every table `PRAGMA quick_check`, global `foreign_key_check`|Complete `recovery-engine-continuation`, exact per-table checks|Not simply at the present location: report construction later mutates operational scratch/control. Recheck touched operational tables after report, or run the existing engine phase last, then consume the exact persisted engine completion. SQLite per-table atoms remain atomic, not strict CPU-bounded.|
+|Optional `auditReplayCutoverRecovery` over `message_replay_units`|Existing migration recovery checker only|No equivalent consumed bounded phase. It validates retained capture/header/chunk/proof/staging grammar, not just serving rows. Need restartable exact validation or a separately authorized completed-capture lifecycle; cannot ignore optional retained rows.|
+|Rooms enumeration; `readCurrentRoomForAudit` current metadata/message/work census|Complete current-record/proof/work/privacy/capacity/archive/participant/history-floor phases|Substantial independent evidence exists for normalized rooms. Need a durable per-room closure binding head/counts and proof completion; current final counters are not a complete replay-parity proof. Legacy rooms intentionally skip this census.|
+|`store.rebuildProjection`, full cloned stripChannels/stripWorkControls equality, driftFields, default backfill checks|`recovery-replay-continuation` folds qualified reducers and reaches exact head; checkpoint seed supports bounded grammar|**Missing final equality.** Replay completion checks sequence and stores patches; it never performs a complete keyset comparison of final `replay` state against independently captured `actual` state. Scratch is deleted before final oracle. Must add exact field/domain/cardinality closure, archive compaction and legacy channel/work-control accommodations before consuming. Deferred dependencies/large atoms/unsupported grammar remain full-oracle-only.|
+|Per-room checkpoint structural checks; full events `.all()` and `validateRecoveryHistoryEntry`|Current history phase validates exact sequence and entries; checkpoint seed validates admitted basis|Qualified current rooms have much of this evidence. Legacy paths and deferred checkpoint grammar lack equivalent completion. Need per-room head/checkpoint/count closure and exact existing structural semantics, not aggregate replayRooms alone.|
+|`auditTextResults`|Independent text continuation|Complete qualified current-room evidence, still unconsumed. Preserve global receipt coverage and checkpoint/source-erased rules; collect durable per-room completion binding and zero deferred before replacement.|
+|`auditCharters`|Independent charter continuation|Qualified normalized-room evidence, still unconsumed. Legacy rooms have no such completion. Preserve historical membership and checkpoint current-charter comparison.|
+|`auditReplyRequests`|Independent reply phase, `replyRooms/replyDeferred`|Consume only completed qualified rooms after persisting per-room closure. Deferred grammar and legacy/checkpoint-only cases must not disappear. Counts alone do not replace request/message/archive/context equality.|
+|`auditWorkHelp`|Independent help phase, `helpRooms/helpDeferred`|Same condition; preserve global identity/selected-work offer uniqueness, capacity/order and checkpoint authority. Deferred and legacy remain unresolved.|
+|`store.verifyInvitationAudit()` within oracle and again after oracle|Complete independent invitation phase and sealed summary|Equivalent qualified global phase already exists. Add target-local consumed capability for BOTH invocations, preserving summary exactly; do not rerun the scans merely to format the result.|
+|Share links|Complete/deferred global phase + consumed capability|Already consumed if complete; deferred grammar deliberately calls original verifier.|
+|Reminder schema and semantic receipts/current projection|Exact schema check + complete v2 reminder phase + consumed capability|Semantic scan already consumed; fixed schema check remains.|
+|`agentConnections.verify()` / `verifyHistory()`|No bounded independent connection-journal phase|Truly missing: complete connection operation generation chain/receipts/credentials/current authority; owner timeline; v2 full historical-prefix membership replay per operation; adoption authority and orphan coverage. Existing general replay does not prove at-time operation sponsorship.|
+|`requestRuns.verifySchema({allowAbsent:true})`|Fixed schema only|No data replay here; retain exact bounded schema check. Request run data semantics are not silently added or certified by this call.|
+|`inbox.verify()`|No independent private-inbox command fold|Truly missing: ordered private commands, source/draft/version/read projections, reply/update/send state machines, configured connection evidence, historical room/member proof and cross-table source/share linkage. Uses multiple whole maps and sorted closures.|
+|`email.verify()`|No independent private-email command fold|Truly missing: ordered connection/folder/import fold, mailbox uniqueness/account connection capacity, exact receipt and current projections, inbox source command bijection. Must coordinate shared inbox dependency rather than revalidate all history per receipt.|
+|`delegationJournal.verify()`|No independent delegation chain phase|Truly missing: contiguous global journal sequence, per-room hash chain, per-identity state transitions/baseline semantics, sqlite_sequence, no pending rows, exact grants correspondence.|
+|Channel update schema + journal|This new complete phase + consumed scope|Only this semantic scan replaced. Fixed schema check retained.|
+|Handoff schema + `handoffs.verify()`|No independent handoff-envelope phase|Truly missing: every row JSON envelope ID/status/proposed-origin history predicate. Can share original leaf and keyset closure; no new handoff authority.|
+|`applicationTables.map(SELECT *).map(canonical).sort` report fingerprint|Complete report1-compatible T0 continuation + consumed fingerprint scope|Already consumed in operator final audit. Its contract is the immutable captured audit instant, not a fingerprint of subsequently mutated scratch. Ordinary audits still compute literal current-state report.|
+
+## Smallest coherent complete cutover proposal (not implemented here)
+
+Reuse the existing sealed control, scratch codec, work budget, CAS/ACK and target-local synchronous capability. Do not create a second certificate system. Before deleting scratch, finish one exact keyset closure comparing every final replay field/domain/count with the independently censused actual state, including archive/backfill rules; retain per-room complete/deferred evidence bound to the same head/seal. Consume existing complete invitation/text/charter/reply/help checks only under that persisted closure. Preserve all deferred reasons and implement their missing grammar or require an explicit supported recovery capability; never label deferred complete.
+
+In the SAME continuation grammar, finish the genuinely missing global journals above. For fixed absent/zero-row subsystems, a sealed zero census plus exact schema/FK proof can establish the exact empty-case semantics; this is an optimization of the original checks, not permission to declare populated tables empty. Inbox/email and managed connection history are the largest missing pieces, not this channel scan. A replay prefix checkpoint at each authority operation can reuse the existing fold, avoiding repeated full-prefix replay while retaining original historical facts.
+
+Build report T0 only after all semantic closures; then perform remaining engine checks on tables mutated after the previous engine pass. The final transaction validates exact frozen source/schema/control revision, consumes every mandatory completed closure, constructs the existing report/summary and publishes atomically. Any missing/deferred closure retains the original oracle until implemented. This is the smallest route to removal of the unbounded final oracle; merely nesting more partial capabilities or trusting complete counters would be unsound. Even then, per-table SQLite PRAGMAs and admitted large-value atoms must be reported as atomic limitations rather than claiming a hard CPU bound.

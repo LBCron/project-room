@@ -277,3 +277,5 @@ These source-bound design and qualification notes describe the offline schema45 
 
 - [Normalized work snapshots and search qualification](research/2026-11-02-current-work-search.md): bounded source contracts, private event redaction, actual browser continuation and explicit unknown totals.
 - [Conversation attention and native digest continuation](research/2026-11-02-current-attention-digest.md): exact reply classification, bounded source admission, actual SDK traversal and explicit unknown totals.
+
+- [Sealed channel journal recovery and remaining final-oracle map](research/2026-11-02-recovery-channel-updates.md) — offline protocol21 component, negative small-journal cost and legal1k/5k measurements; full recovery still unbounded.

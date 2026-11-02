@@ -80,3 +80,14 @@ test('schema location fallback refuses reinstalled changed guard SQL and recover
  f.store.db.exec('DROP TRIGGER '+guard.name);f.store.db.exec(guard.sql);
  assert.doesNotThrow(()=>withRestoreTransaction(f.store,()=>verifyCurrentRoomSchema(f.store.db)));assert.ok(f.step(initialRecoveryTextResults()).units>0);
 });
+
+test('text audit refuses ordinary, wrong-restore and wrong-seal callers before event payload transfer',async t=>{
+ const f=await setup(t),p=initialRecoveryTextResults(),prepare=f.store.db.prepare.bind(f.store.db);let payloadReads=0;
+ f.store.db.prepare=sql=>{if(/^SELECT (?:id,sequence,body|payload FROM)/.test(sql))payloadReads++;return prepare(sql);};
+ try{
+  assert.throws(()=>advanceRecoveryTextResults(f.store,{},f.state.restore_id,'legacy-room',p,f.state.seal),/reconciliation/);
+  assert.throws(()=>withRestoreTransaction(f.store,()=>withRestoreAuditRows(f.store.db,f.state.restore_id,scratch=>advanceRecoveryTextResults(f.store,scratch,'wrong-restore','legacy-room',p,f.state.seal))),/reconciliation/);
+  assert.throws(()=>withRestoreTransaction(f.store,()=>withRestoreAuditRows(f.store.db,f.state.restore_id,scratch=>advanceRecoveryTextResults(f.store,scratch,f.state.restore_id,'legacy-room',p,{...f.state.seal,id:'wrong-seal'}))),/reconciliation/);
+ }finally{f.store.db.prepare=prepare;}
+ assert.equal(payloadReads,0);
+});

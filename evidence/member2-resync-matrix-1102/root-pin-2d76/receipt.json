@@ -1,0 +1,20 @@
+{
+  "runtime_sha": "2d76ffa9f507a1c49571d8685133cf327b3a9c51",
+  "exit_code": 0,
+  "summary": {
+    "event": "summary",
+    "cases": 16,
+    "controlPassed": 7,
+    "controlTotal": 7,
+    "pendingPassed": 7,
+    "pendingTotal": 7,
+    "expectedRefusals": 2,
+    "refusalTotal": 2
+  },
+  "runner_sha256": "6d9d98dc3683a7f90a4a9e4b295b2b49683fcee9b78dba98946c74eadd47701a",
+  "results_sha256": "3f5ea51057e1c85236e5feb11118df87e9cf91a7523f12400601fc498e6557df",
+  "node": "v24.22.1",
+  "results": "../results.jsonl",
+  "runner": "../member2-resync-write-matrix.mjs",
+  "scope": "Exact Root requested runtime pin; synthetic Node SQLite only, no Native or deployment claim"
+}

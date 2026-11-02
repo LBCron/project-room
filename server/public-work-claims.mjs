@@ -1,4 +1,3 @@
-import { decodeWorkClaimRow } from './work-claim-sqlite.mjs';
 import { validId } from '../src/events.js';
 import { createHash } from 'node:crypto';
 import { canonicalJson } from '../src/audit-receipts.mjs';

@@ -4802,6 +4802,7 @@ export function createRoomServer({ store, origin, assetRoot = new URL("../", imp
         // count recomputed) — otherwise the pin would leak the DM's body,
         // existence, and count. Fail closed when a pin cannot be resolved.
         const stripHiddenPinTargets = value => {
+          if (value.contractVersion === 2) return value; // already selected, proved and privacy-filtered
           const byId = messageRepository(store, roomId);
           const pins = (value.pins ?? []).filter(pin => {
             const message = byId.get(pin.messageId);
@@ -4809,7 +4810,11 @@ export function createRoomServer({ store, origin, assetRoot = new URL("../", imp
           });
           return { ...value, pins, count: pins.length };
         };
-        if (req.method === "GET") return json(res, 200, stripHiddenPinTargets(listPins(store, selected.token, roomId, fence)));
+        const pinSelection = () => {
+          if ([...url.searchParams.keys()].some(key => !['cursor','auth'].includes(key) || url.searchParams.getAll(key).length !== 1)) reject(422,'invalid_cursor','Choose one optional pin cursor');
+          return {cursor:url.searchParams.get('cursor')};
+        };
+        if (req.method === "GET") return json(res, 200, stripHiddenPinTargets(listPins(store, selected.token, roomId, fence, pinSelection())));
         if (req.method === "POST") {
           const result = setPin(store, selected.token, roomId, await body(req), fence);
           return json(res, result.changed ? 201 : 200, stripHiddenPinTargets(result)); // 201 when an event was appended, 200 when the room was already in that state or the requestId replayed

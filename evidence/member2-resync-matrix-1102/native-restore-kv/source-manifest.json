@@ -1,0 +1,22 @@
+[
+  {
+    "path": "cloudflare/package.json",
+    "sha256": "bb81e24db7ab2527a067ccff8f32d0303d879a3432bc734089b4712226ccfe9c"
+  },
+  {
+    "path": "cloudflare/recovery-native-kv.check.mjs",
+    "sha256": "6b83b65b980ab1ab06022fa960c4276f04332640c7a5d9320f9bee530f8e937b"
+  },
+  {
+    "path": "cloudflare/recovery-native-kv.test-fixture.mjs",
+    "sha256": "87248e690242cffb98c4a6d1f76157c34fa4fe420e2756e55d4d16b41180360e"
+  },
+  {
+    "path": "server/recovery-engine-continuation.mjs",
+    "sha256": "b3633c5c75c34a7367d89454ad9618429d399cab056c929052ff6bdae5967167"
+  },
+  {
+    "path": "tests/recovery-engine-continuation.test.mjs",
+    "sha256": "d0c8c9386f37a4b093f8d641e27f5b406aaf31d1bdbc941bbaf693342df8767a"
+  }
+]

@@ -1,0 +1,493 @@
+{"event":"room.cold_start","clockSemantics":"io-bound","durationMs":48,"integrity":"deferred","phases":{"schema":{"ms":11,"rowsRead":8389},"plugin":{"ms":19,"rowsRead":41018},"fence":{"ms":13,"rowsRead":47276},"verifies":{"ms":3,"rowsRead":21696},"checksum":{"ms":0,"rowsRead":0}},"rooms":0,"sequences":0,"projectionBytes":0,"events":0}
+{"event":"room.store_initialized","initializationMs":48,"legacyColdStartMs":48,"clockSemantics":"io-bound","cpuMeasured":false}
+{"event":"room.do_initialized","clockSemantics":"io-bound","cpuMeasured":false,"initializationMs":51,"storeInitializationMs":48}
+{"event":"room.cold_start","clockSemantics":"io-bound","durationMs":48,"integrity":"deferred","phases":{"schema":{"ms":11,"rowsRead":8389},"plugin":{"ms":19,"rowsRead":41018},"fence":{"ms":13,"rowsRead":47276},"verifies":{"ms":3,"rowsRead":21696},"checksum":{"ms":0,"rowsRead":0}},"rooms":0,"sequences":0,"projectionBytes":0,"events":0}
+{"event":"room.store_initialized","initializationMs":48,"legacyColdStartMs":48,"clockSemantics":"io-bound","cpuMeasured":false}
+{"event":"room.do_initialized","clockSemantics":"io-bound","cpuMeasured":false,"initializationMs":51,"storeInitializationMs":48}
+{"event":"room.cold_start","phase":"first_request","clockSemantics":"io-bound","cpuMeasured":false,"constructMs":48,"firstRequestMs":243,"storeInitializationMs":48,"durableObjectInitializationMs":51,"rooms":0,"sequences":0,"projectionBytes":0,"phases":{"schema":{"ms":11,"rowsRead":8389},"plugin":{"ms":19,"rowsRead":41018},"fence":{"ms":13,"rowsRead":47276},"verifies":{"ms":3,"rowsRead":21696},"checksum":{"ms":0,"rowsRead":0}}}
+{"event":"room.do_request","clockSemantics":"io-bound","cpuMeasured":false,"method":"POST","path":"/api/operator/restore","status":202,"appMs":243}
+RESTORE_STEP {"status":202,"phase":"coverage","rows":0,"tableIndex":0,"auditPhase":null}
+{"event":"room.do_request","clockSemantics":"io-bound","cpuMeasured":false,"method":"GET","path":"/api/rooms/access-scale/access-requests","status":503,"appMs":4}
+{"event":"room.do_initialized","clockSemantics":"io-bound","cpuMeasured":false,"initializationMs":6,"storeInitializationMs":2}
+{"event":"room.do_request","clockSemantics":"io-bound","cpuMeasured":false,"method":"POST","path":"/api/operator/restore","status":202,"appMs":14}
+RESTORE_STEP {"status":202,"phase":"coverage","rows":0,"tableIndex":0,"auditPhase":null}
+{"event":"room.do_request","clockSemantics":"io-bound","cpuMeasured":false,"method":"POST","path":"/api/operator/restore","status":202,"appMs":10}
+RESTORE_STEP {"status":202,"phase":"coverage","rows":128,"tableIndex":0,"auditPhase":null}
+{"event":"room.do_request","clockSemantics":"io-bound","cpuMeasured":false,"method":"POST","path":"/api/operator/restore","status":202,"appMs":10}
+RESTORE_STEP {"status":202,"phase":"coverage","rows":256,"tableIndex":0,"auditPhase":null}
+{"event":"room.do_request","clockSemantics":"io-bound","cpuMeasured":false,"method":"POST","path":"/api/operator/restore","status":202,"appMs":8}
+RESTORE_STEP {"status":202,"phase":"coverage","rows":384,"tableIndex":0,"auditPhase":null}
+{"event":"room.do_request","clockSemantics":"io-bound","cpuMeasured":false,"method":"POST","path":"/api/operator/restore","status":202,"appMs":9}
+RESTORE_STEP {"status":202,"phase":"coverage","rows":512,"tableIndex":0,"auditPhase":null}
+{"event":"room.do_request","clockSemantics":"io-bound","cpuMeasured":false,"method":"POST","path":"/api/operator/restore","status":202,"appMs":8}
+RESTORE_STEP {"status":202,"phase":"coverage","rows":640,"tableIndex":0,"auditPhase":null}
+{"event":"room.do_request","clockSemantics":"io-bound","cpuMeasured":false,"method":"POST","path":"/api/operator/restore","status":202,"appMs":9}
+RESTORE_STEP {"status":202,"phase":"coverage","rows":768,"tableIndex":0,"auditPhase":null}
+{"event":"room.do_request","clockSemantics":"io-bound","cpuMeasured":false,"method":"POST","path":"/api/operator/restore","status":202,"appMs":8}
+RESTORE_STEP {"status":202,"phase":"coverage","rows":896,"tableIndex":0,"auditPhase":null}
+{"event":"room.do_request","clockSemantics":"io-bound","cpuMeasured":false,"method":"POST","path":"/api/operator/restore","status":202,"appMs":10}
+RESTORE_STEP {"status":202,"phase":"coverage","rows":1024,"tableIndex":22,"auditPhase":null}
+{"event":"room.do_request","clockSemantics":"io-bound","cpuMeasured":false,"method":"POST","path":"/api/operator/restore","status":202,"appMs":8}
+RESTORE_STEP {"status":202,"phase":"coverage","rows":1152,"tableIndex":22,"auditPhase":null}
+{"event":"room.do_request","clockSemantics":"io-bound","cpuMeasured":false,"method":"POST","path":"/api/operator/restore","status":202,"appMs":9}
+RESTORE_STEP {"status":202,"phase":"coverage","rows":1280,"tableIndex":22,"auditPhase":null}
+{"event":"room.do_request","clockSemantics":"io-bound","cpuMeasured":false,"method":"POST","path":"/api/operator/restore","status":202,"appMs":8}
+RESTORE_STEP {"status":202,"phase":"coverage","rows":1408,"tableIndex":22,"auditPhase":null}
+{"event":"room.do_request","clockSemantics":"io-bound","cpuMeasured":false,"method":"POST","path":"/api/operator/restore","status":202,"appMs":8}
+RESTORE_STEP {"status":202,"phase":"coverage","rows":1536,"tableIndex":22,"auditPhase":null}
+{"event":"room.do_request","clockSemantics":"io-bound","cpuMeasured":false,"method":"POST","path":"/api/operator/restore","status":202,"appMs":9}
+RESTORE_STEP {"status":202,"phase":"coverage","rows":1664,"tableIndex":22,"auditPhase":null}
+{"event":"room.do_request","clockSemantics":"io-bound","cpuMeasured":false,"method":"POST","path":"/api/operator/restore","status":202,"appMs":8}
+RESTORE_STEP {"status":202,"phase":"coverage","rows":1792,"tableIndex":22,"auditPhase":null}
+{"event":"room.do_request","clockSemantics":"io-bound","cpuMeasured":false,"method":"POST","path":"/api/operator/restore","status":202,"appMs":9}
+RESTORE_STEP {"status":202,"phase":"coverage","rows":1920,"tableIndex":22,"auditPhase":null}
+{"event":"room.do_request","clockSemantics":"io-bound","cpuMeasured":false,"method":"POST","path":"/api/operator/restore","status":202,"appMs":7}
+RESTORE_STEP {"status":202,"phase":"coverage","rows":2048,"tableIndex":27,"auditPhase":null}
+{"event":"room.do_request","clockSemantics":"io-bound","cpuMeasured":false,"method":"POST","path":"/api/operator/restore","status":202,"appMs":7}
+RESTORE_STEP {"status":202,"phase":"coverage","rows":2176,"tableIndex":27,"auditPhase":null}
+{"event":"room.do_request","clockSemantics":"io-bound","cpuMeasured":false,"method":"POST","path":"/api/operator/restore","status":202,"appMs":7}
+RESTORE_STEP {"status":202,"phase":"coverage","rows":2304,"tableIndex":27,"auditPhase":null}
+{"event":"room.do_request","clockSemantics":"io-bound","cpuMeasured":false,"method":"POST","path":"/api/operator/restore","status":202,"appMs":6}
+RESTORE_STEP {"status":202,"phase":"coverage","rows":2432,"tableIndex":27,"auditPhase":null}
+{"event":"room.do_request","clockSemantics":"io-bound","cpuMeasured":false,"method":"POST","path":"/api/operator/restore","status":202,"appMs":6}
+RESTORE_STEP {"status":202,"phase":"coverage","rows":2560,"tableIndex":27,"auditPhase":null}
+{"event":"room.do_request","clockSemantics":"io-bound","cpuMeasured":false,"method":"POST","path":"/api/operator/restore","status":202,"appMs":6}
+RESTORE_STEP {"status":202,"phase":"coverage","rows":2688,"tableIndex":27,"auditPhase":null}
+{"event":"room.do_request","clockSemantics":"io-bound","cpuMeasured":false,"method":"POST","path":"/api/operator/restore","status":202,"appMs":7}
+RESTORE_STEP {"status":202,"phase":"coverage","rows":2816,"tableIndex":27,"auditPhase":null}
+{"event":"room.do_request","clockSemantics":"io-bound","cpuMeasured":false,"method":"POST","path":"/api/operator/restore","status":202,"appMs":6}
+RESTORE_STEP {"status":202,"phase":"coverage","rows":2944,"tableIndex":27,"auditPhase":null}
+{"event":"room.do_request","clockSemantics":"io-bound","cpuMeasured":false,"method":"POST","path":"/api/operator/restore","status":202,"appMs":7}
+RESTORE_STEP {"status":202,"phase":"coverage","rows":3072,"tableIndex":78,"auditPhase":null}
+{"event":"room.do_request","clockSemantics":"io-bound","cpuMeasured":false,"method":"POST","path":"/api/operator/restore","status":202,"appMs":6}
+RESTORE_STEP {"status":202,"phase":"coverage","rows":3200,"tableIndex":78,"auditPhase":null}
+{"event":"room.do_request","clockSemantics":"io-bound","cpuMeasured":false,"method":"POST","path":"/api/operator/restore","status":202,"appMs":6}
+RESTORE_STEP {"status":202,"phase":"coverage","rows":3328,"tableIndex":78,"auditPhase":null}
+{"event":"room.do_request","clockSemantics":"io-bound","cpuMeasured":false,"method":"POST","path":"/api/operator/restore","status":202,"appMs":6}
+RESTORE_STEP {"status":202,"phase":"coverage","rows":3456,"tableIndex":78,"auditPhase":null}
+{"event":"room.do_request","clockSemantics":"io-bound","cpuMeasured":false,"method":"POST","path":"/api/operator/restore","status":202,"appMs":6}
+RESTORE_STEP {"status":202,"phase":"coverage","rows":3584,"tableIndex":78,"auditPhase":null}
+{"event":"room.do_request","clockSemantics":"io-bound","cpuMeasured":false,"method":"POST","path":"/api/operator/restore","status":202,"appMs":6}
+RESTORE_STEP {"status":202,"phase":"coverage","rows":3712,"tableIndex":78,"auditPhase":null}
+{"event":"room.do_request","clockSemantics":"io-bound","cpuMeasured":false,"method":"POST","path":"/api/operator/restore","status":202,"appMs":7}
+RESTORE_STEP {"status":202,"phase":"coverage","rows":3840,"tableIndex":78,"auditPhase":null}
+{"event":"room.do_request","clockSemantics":"io-bound","cpuMeasured":false,"method":"POST","path":"/api/operator/restore","status":202,"appMs":5}
+RESTORE_STEP {"status":202,"phase":"coverage","rows":3968,"tableIndex":78,"auditPhase":null}
+{"event":"room.do_request","clockSemantics":"io-bound","cpuMeasured":false,"method":"POST","path":"/api/operator/restore","status":202,"appMs":8}
+RESTORE_STEP {"status":202,"phase":"coverage","rows":4096,"tableIndex":119,"auditPhase":null}
+{"event":"room.do_request","clockSemantics":"io-bound","cpuMeasured":false,"method":"POST","path":"/api/operator/restore","status":202,"appMs":7}
+RESTORE_STEP {"status":202,"phase":"coverage","rows":4224,"tableIndex":119,"auditPhase":null}
+{"event":"room.do_request","clockSemantics":"io-bound","cpuMeasured":false,"method":"POST","path":"/api/operator/restore","status":202,"appMs":7}
+RESTORE_STEP {"status":202,"phase":"coverage","rows":4352,"tableIndex":119,"auditPhase":null}
+{"event":"room.do_request","clockSemantics":"io-bound","cpuMeasured":false,"method":"POST","path":"/api/operator/restore","status":202,"appMs":7}
+RESTORE_STEP {"status":202,"phase":"coverage","rows":4480,"tableIndex":119,"auditPhase":null}
+{"event":"room.do_request","clockSemantics":"io-bound","cpuMeasured":false,"method":"POST","path":"/api/operator/restore","status":202,"appMs":8}
+RESTORE_STEP {"status":202,"phase":"coverage","rows":4608,"tableIndex":119,"auditPhase":null}
+{"event":"room.do_request","clockSemantics":"io-bound","cpuMeasured":false,"method":"POST","path":"/api/operator/restore","status":202,"appMs":7}
+RESTORE_STEP {"status":202,"phase":"coverage","rows":4736,"tableIndex":119,"auditPhase":null}
+{"event":"room.do_request","clockSemantics":"io-bound","cpuMeasured":false,"method":"POST","path":"/api/operator/restore","status":202,"appMs":7}
+RESTORE_STEP {"status":202,"phase":"coverage","rows":4864,"tableIndex":119,"auditPhase":null}
+{"event":"room.do_request","clockSemantics":"io-bound","cpuMeasured":false,"method":"POST","path":"/api/operator/restore","status":202,"appMs":7}
+RESTORE_STEP {"status":202,"phase":"coverage","rows":4992,"tableIndex":119,"auditPhase":null}
+{"event":"room.do_request","clockSemantics":"io-bound","cpuMeasured":false,"method":"POST","path":"/api/operator/restore","status":202,"appMs":8}
+RESTORE_STEP {"status":202,"phase":"coverage","rows":5120,"tableIndex":119,"auditPhase":null}
+{"event":"room.do_request","clockSemantics":"io-bound","cpuMeasured":false,"method":"POST","path":"/api/operator/restore","status":202,"appMs":8}
+RESTORE_STEP {"status":202,"phase":"coverage","rows":5248,"tableIndex":119,"auditPhase":null}
+{"event":"room.do_request","clockSemantics":"io-bound","cpuMeasured":false,"method":"POST","path":"/api/operator/restore","status":202,"appMs":8}
+RESTORE_STEP {"status":202,"phase":"coverage","rows":5376,"tableIndex":119,"auditPhase":null}
+{"event":"room.do_request","clockSemantics":"io-bound","cpuMeasured":false,"method":"POST","path":"/api/operator/restore","status":202,"appMs":7}
+RESTORE_STEP {"status":202,"phase":"coverage","rows":5504,"tableIndex":119,"auditPhase":null}
+{"event":"room.do_request","clockSemantics":"io-bound","cpuMeasured":false,"method":"POST","path":"/api/operator/restore","status":202,"appMs":8}
+RESTORE_STEP {"status":202,"phase":"coverage","rows":5632,"tableIndex":119,"auditPhase":null}
+{"event":"room.do_request","clockSemantics":"io-bound","cpuMeasured":false,"method":"POST","path":"/api/operator/restore","status":202,"appMs":8}
+RESTORE_STEP {"status":202,"phase":"coverage","rows":5760,"tableIndex":119,"auditPhase":null}
+{"event":"room.do_request","clockSemantics":"io-bound","cpuMeasured":false,"method":"POST","path":"/api/operator/restore","status":202,"appMs":7}
+RESTORE_STEP {"status":202,"phase":"coverage","rows":5888,"tableIndex":119,"auditPhase":null}
+{"event":"room.do_request","clockSemantics":"io-bound","cpuMeasured":false,"method":"POST","path":"/api/operator/restore","status":202,"appMs":8}
+RESTORE_STEP {"status":202,"phase":"coverage","rows":6016,"tableIndex":119,"auditPhase":null}
+{"event":"room.do_request","clockSemantics":"io-bound","cpuMeasured":false,"method":"POST","path":"/api/operator/restore","status":202,"appMs":8}
+RESTORE_STEP {"status":202,"phase":"coverage","rows":6144,"tableIndex":119,"auditPhase":null}
+{"event":"room.do_request","clockSemantics":"io-bound","cpuMeasured":false,"method":"POST","path":"/api/operator/restore","status":202,"appMs":7}
+RESTORE_STEP {"status":202,"phase":"coverage","rows":6272,"tableIndex":119,"auditPhase":null}
+{"event":"room.do_request","clockSemantics":"io-bound","cpuMeasured":false,"method":"POST","path":"/api/operator/restore","status":202,"appMs":7}
+RESTORE_STEP {"status":202,"phase":"coverage","rows":6400,"tableIndex":119,"auditPhase":null}
+{"event":"room.do_request","clockSemantics":"io-bound","cpuMeasured":false,"method":"POST","path":"/api/operator/restore","status":202,"appMs":7}
+RESTORE_STEP {"status":202,"phase":"coverage","rows":6528,"tableIndex":119,"auditPhase":null}
+{"event":"room.do_request","clockSemantics":"io-bound","cpuMeasured":false,"method":"POST","path":"/api/operator/restore","status":202,"appMs":7}
+RESTORE_STEP {"status":202,"phase":"coverage","rows":6656,"tableIndex":119,"auditPhase":null}
+{"event":"room.do_request","clockSemantics":"io-bound","cpuMeasured":false,"method":"POST","path":"/api/operator/restore","status":202,"appMs":7}
+RESTORE_STEP {"status":202,"phase":"coverage","rows":6784,"tableIndex":119,"auditPhase":null}
+{"event":"room.do_request","clockSemantics":"io-bound","cpuMeasured":false,"method":"POST","path":"/api/operator/restore","status":202,"appMs":7}
+RESTORE_STEP {"status":202,"phase":"coverage","rows":6912,"tableIndex":119,"auditPhase":null}
+{"event":"room.do_request","clockSemantics":"io-bound","cpuMeasured":false,"method":"POST","path":"/api/operator/restore","status":202,"appMs":9}
+RESTORE_STEP {"status":202,"phase":"audit_pending","rows":7038,"tableIndex":221,"auditPhase":null}
+{"event":"room.do_request","clockSemantics":"io-bound","cpuMeasured":false,"method":"POST","path":"/api/operator/restore","status":202,"appMs":13}
+RESTORE_STEP {"status":202,"phase":"audit_pending","rows":7038,"tableIndex":221,"auditPhase":null}
+{"event":"room.do_request","clockSemantics":"io-bound","cpuMeasured":false,"method":"POST","path":"/api/operator/restore","status":202,"appMs":8}
+RESTORE_STEP {"status":202,"phase":"audit_pending","rows":7038,"tableIndex":221,"auditPhase":null}
+{"event":"room.do_request","clockSemantics":"io-bound","cpuMeasured":false,"method":"POST","path":"/api/operator/restore","status":202,"appMs":9}
+RESTORE_STEP {"status":202,"phase":"audit_pending","rows":7038,"tableIndex":221,"auditPhase":null}
+{"event":"room.do_request","clockSemantics":"io-bound","cpuMeasured":false,"method":"POST","path":"/api/operator/restore","status":202,"appMs":8}
+RESTORE_STEP {"status":202,"phase":"audit_pending","rows":7038,"tableIndex":221,"auditPhase":null}
+{"event":"room.do_request","clockSemantics":"io-bound","cpuMeasured":false,"method":"POST","path":"/api/operator/restore","status":202,"appMs":8}
+RESTORE_STEP {"status":202,"phase":"audit_pending","rows":7038,"tableIndex":221,"auditPhase":null}
+{"event":"room.do_request","clockSemantics":"io-bound","cpuMeasured":false,"method":"POST","path":"/api/operator/restore","status":202,"appMs":8}
+RESTORE_STEP {"status":202,"phase":"audit_pending","rows":7038,"tableIndex":221,"auditPhase":null}
+{"event":"room.do_request","clockSemantics":"io-bound","cpuMeasured":false,"method":"POST","path":"/api/operator/restore","status":202,"appMs":7}
+RESTORE_STEP {"status":202,"phase":"audit_pending","rows":7038,"tableIndex":221,"auditPhase":null}
+{"event":"room.do_request","clockSemantics":"io-bound","cpuMeasured":false,"method":"POST","path":"/api/operator/restore","status":202,"appMs":8}
+RESTORE_STEP {"status":202,"phase":"audit_pending","rows":7038,"tableIndex":221,"auditPhase":null}
+{"event":"room.do_request","clockSemantics":"io-bound","cpuMeasured":false,"method":"POST","path":"/api/operator/restore","status":202,"appMs":5}
+RESTORE_STEP {"status":202,"phase":"audit_pending","rows":7038,"tableIndex":221,"auditPhase":null}
+{"event":"room.do_request","clockSemantics":"io-bound","cpuMeasured":false,"method":"POST","path":"/api/operator/restore","status":202,"appMs":6}
+RESTORE_STEP {"status":202,"phase":"audit_pending","rows":7038,"tableIndex":221,"auditPhase":null}
+{"event":"room.do_request","clockSemantics":"io-bound","cpuMeasured":false,"method":"POST","path":"/api/operator/restore","status":202,"appMs":7}
+RESTORE_STEP {"status":202,"phase":"audit_pending","rows":7038,"tableIndex":221,"auditPhase":null}
+{"event":"room.do_request","clockSemantics":"io-bound","cpuMeasured":false,"method":"POST","path":"/api/operator/restore","status":202,"appMs":5}
+RESTORE_STEP {"status":202,"phase":"audit_pending","rows":7038,"tableIndex":221,"auditPhase":null}
+{"event":"room.do_request","clockSemantics":"io-bound","cpuMeasured":false,"method":"POST","path":"/api/operator/restore","status":202,"appMs":4}
+RESTORE_STEP {"status":202,"phase":"audit_pending","rows":7038,"tableIndex":221,"auditPhase":null}
+{"event":"room.do_request","clockSemantics":"io-bound","cpuMeasured":false,"method":"POST","path":"/api/operator/restore","status":202,"appMs":4}
+RESTORE_STEP {"status":202,"phase":"audit_pending","rows":7038,"tableIndex":221,"auditPhase":null}
+{"event":"room.do_request","clockSemantics":"io-bound","cpuMeasured":false,"method":"POST","path":"/api/operator/restore","status":202,"appMs":5}
+RESTORE_STEP {"status":202,"phase":"audit_pending","rows":7038,"tableIndex":221,"auditPhase":null}
+{"event":"room.do_request","clockSemantics":"io-bound","cpuMeasured":false,"method":"POST","path":"/api/operator/restore","status":202,"appMs":5}
+RESTORE_STEP {"status":202,"phase":"audit_pending","rows":7038,"tableIndex":221,"auditPhase":null}
+{"event":"room.do_request","clockSemantics":"io-bound","cpuMeasured":false,"method":"POST","path":"/api/operator/restore","status":202,"appMs":5}
+RESTORE_STEP {"status":202,"phase":"audit_pending","rows":7038,"tableIndex":221,"auditPhase":null}
+{"event":"room.do_request","clockSemantics":"io-bound","cpuMeasured":false,"method":"POST","path":"/api/operator/restore","status":202,"appMs":4}
+RESTORE_STEP {"status":202,"phase":"audit_pending","rows":7038,"tableIndex":221,"auditPhase":null}
+{"event":"room.do_request","clockSemantics":"io-bound","cpuMeasured":false,"method":"POST","path":"/api/operator/restore","status":202,"appMs":5}
+RESTORE_STEP {"status":202,"phase":"audit_pending","rows":7038,"tableIndex":221,"auditPhase":null}
+{"event":"room.do_request","clockSemantics":"io-bound","cpuMeasured":false,"method":"POST","path":"/api/operator/restore","status":202,"appMs":5}
+RESTORE_STEP {"status":202,"phase":"audit_pending","rows":7038,"tableIndex":221,"auditPhase":null}
+{"event":"room.do_request","clockSemantics":"io-bound","cpuMeasured":false,"method":"POST","path":"/api/operator/restore","status":202,"appMs":5}
+RESTORE_STEP {"status":202,"phase":"audit_pending","rows":7038,"tableIndex":221,"auditPhase":null}
+{"event":"room.do_request","clockSemantics":"io-bound","cpuMeasured":false,"method":"POST","path":"/api/operator/restore","status":202,"appMs":4}
+RESTORE_STEP {"status":202,"phase":"audit_pending","rows":7038,"tableIndex":221,"auditPhase":null}
+{"event":"room.do_request","clockSemantics":"io-bound","cpuMeasured":false,"method":"POST","path":"/api/operator/restore","status":202,"appMs":5}
+RESTORE_STEP {"status":202,"phase":"audit_pending","rows":7038,"tableIndex":221,"auditPhase":null}
+{"event":"room.do_request","clockSemantics":"io-bound","cpuMeasured":false,"method":"POST","path":"/api/operator/restore","status":202,"appMs":4}
+RESTORE_STEP {"status":202,"phase":"audit_pending","rows":7038,"tableIndex":221,"auditPhase":null}
+{"event":"room.do_request","clockSemantics":"io-bound","cpuMeasured":false,"method":"POST","path":"/api/operator/restore","status":202,"appMs":5}
+RESTORE_STEP {"status":202,"phase":"audit_pending","rows":7038,"tableIndex":221,"auditPhase":null}
+{"event":"room.do_request","clockSemantics":"io-bound","cpuMeasured":false,"method":"POST","path":"/api/operator/restore","status":202,"appMs":4}
+RESTORE_STEP {"status":202,"phase":"audit_pending","rows":7038,"tableIndex":221,"auditPhase":null}
+{"event":"room.do_request","clockSemantics":"io-bound","cpuMeasured":false,"method":"POST","path":"/api/operator/restore","status":202,"appMs":5}
+RESTORE_STEP {"status":202,"phase":"audit_pending","rows":7038,"tableIndex":221,"auditPhase":null}
+{"event":"room.do_request","clockSemantics":"io-bound","cpuMeasured":false,"method":"POST","path":"/api/operator/restore","status":202,"appMs":4}
+RESTORE_STEP {"status":202,"phase":"audit_pending","rows":7038,"tableIndex":221,"auditPhase":null}
+{"event":"room.do_request","clockSemantics":"io-bound","cpuMeasured":false,"method":"POST","path":"/api/operator/restore","status":202,"appMs":5}
+RESTORE_STEP {"status":202,"phase":"audit_pending","rows":7038,"tableIndex":221,"auditPhase":null}
+{"event":"room.do_request","clockSemantics":"io-bound","cpuMeasured":false,"method":"POST","path":"/api/operator/restore","status":202,"appMs":4}
+RESTORE_STEP {"status":202,"phase":"audit_pending","rows":7038,"tableIndex":221,"auditPhase":null}
+{"event":"room.do_request","clockSemantics":"io-bound","cpuMeasured":false,"method":"POST","path":"/api/operator/restore","status":202,"appMs":5}
+RESTORE_STEP {"status":202,"phase":"audit_pending","rows":7038,"tableIndex":221,"auditPhase":null}
+{"event":"room.do_request","clockSemantics":"io-bound","cpuMeasured":false,"method":"POST","path":"/api/operator/restore","status":202,"appMs":5}
+RESTORE_STEP {"status":202,"phase":"audit_pending","rows":7038,"tableIndex":221,"auditPhase":null}
+{"event":"room.do_request","clockSemantics":"io-bound","cpuMeasured":false,"method":"POST","path":"/api/operator/restore","status":202,"appMs":4}
+RESTORE_STEP {"status":202,"phase":"audit_pending","rows":7038,"tableIndex":221,"auditPhase":null}
+{"event":"room.do_request","clockSemantics":"io-bound","cpuMeasured":false,"method":"POST","path":"/api/operator/restore","status":202,"appMs":5}
+RESTORE_STEP {"status":202,"phase":"audit_pending","rows":7038,"tableIndex":221,"auditPhase":null}
+{"event":"room.do_request","clockSemantics":"io-bound","cpuMeasured":false,"method":"POST","path":"/api/operator/restore","status":202,"appMs":4}
+RESTORE_STEP {"status":202,"phase":"audit_pending","rows":7038,"tableIndex":221,"auditPhase":null}
+{"event":"room.do_request","clockSemantics":"io-bound","cpuMeasured":false,"method":"POST","path":"/api/operator/restore","status":202,"appMs":5}
+RESTORE_STEP {"status":202,"phase":"audit_pending","rows":7038,"tableIndex":221,"auditPhase":null}
+{"event":"room.do_request","clockSemantics":"io-bound","cpuMeasured":false,"method":"POST","path":"/api/operator/restore","status":202,"appMs":5}
+RESTORE_STEP {"status":202,"phase":"audit_pending","rows":7038,"tableIndex":221,"auditPhase":null}
+{"event":"room.do_request","clockSemantics":"io-bound","cpuMeasured":false,"method":"POST","path":"/api/operator/restore","status":202,"appMs":5}
+RESTORE_STEP {"status":202,"phase":"audit_pending","rows":7038,"tableIndex":221,"auditPhase":null}
+{"event":"room.do_request","clockSemantics":"io-bound","cpuMeasured":false,"method":"POST","path":"/api/operator/restore","status":202,"appMs":5}
+RESTORE_STEP {"status":202,"phase":"audit_pending","rows":7038,"tableIndex":221,"auditPhase":null}
+{"event":"room.do_request","clockSemantics":"io-bound","cpuMeasured":false,"method":"POST","path":"/api/operator/restore","status":202,"appMs":4}
+RESTORE_STEP {"status":202,"phase":"audit_pending","rows":7038,"tableIndex":221,"auditPhase":null}
+{"event":"room.do_request","clockSemantics":"io-bound","cpuMeasured":false,"method":"POST","path":"/api/operator/restore","status":202,"appMs":5}
+RESTORE_STEP {"status":202,"phase":"audit_pending","rows":7038,"tableIndex":221,"auditPhase":null}
+{"event":"room.do_request","clockSemantics":"io-bound","cpuMeasured":false,"method":"POST","path":"/api/operator/restore","status":202,"appMs":4}
+RESTORE_STEP {"status":202,"phase":"audit_pending","rows":7038,"tableIndex":221,"auditPhase":null}
+{"event":"room.do_request","clockSemantics":"io-bound","cpuMeasured":false,"method":"POST","path":"/api/operator/restore","status":202,"appMs":5}
+RESTORE_STEP {"status":202,"phase":"audit_pending","rows":7038,"tableIndex":221,"auditPhase":null}
+{"event":"room.do_request","clockSemantics":"io-bound","cpuMeasured":false,"method":"POST","path":"/api/operator/restore","status":202,"appMs":4}
+RESTORE_STEP {"status":202,"phase":"audit_pending","rows":7038,"tableIndex":221,"auditPhase":null}
+{"event":"room.do_request","clockSemantics":"io-bound","cpuMeasured":false,"method":"POST","path":"/api/operator/restore","status":202,"appMs":4}
+RESTORE_STEP {"status":202,"phase":"audit_pending","rows":7038,"tableIndex":221,"auditPhase":null}
+{"event":"room.do_request","clockSemantics":"io-bound","cpuMeasured":false,"method":"POST","path":"/api/operator/restore","status":202,"appMs":4}
+RESTORE_STEP {"status":202,"phase":"audit_pending","rows":7038,"tableIndex":221,"auditPhase":null}
+{"event":"room.do_request","clockSemantics":"io-bound","cpuMeasured":false,"method":"POST","path":"/api/operator/restore","status":202,"appMs":4}
+RESTORE_STEP {"status":202,"phase":"audit_pending","rows":7038,"tableIndex":221,"auditPhase":null}
+{"event":"room.do_request","clockSemantics":"io-bound","cpuMeasured":false,"method":"POST","path":"/api/operator/restore","status":202,"appMs":4}
+RESTORE_STEP {"status":202,"phase":"audit_pending","rows":7038,"tableIndex":221,"auditPhase":null}
+{"event":"room.do_request","clockSemantics":"io-bound","cpuMeasured":false,"method":"POST","path":"/api/operator/restore","status":202,"appMs":4}
+RESTORE_STEP {"status":202,"phase":"audit_pending","rows":7038,"tableIndex":221,"auditPhase":null}
+{"event":"room.do_request","clockSemantics":"io-bound","cpuMeasured":false,"method":"POST","path":"/api/operator/restore","status":202,"appMs":4}
+RESTORE_STEP {"status":202,"phase":"audit_pending","rows":7038,"tableIndex":221,"auditPhase":null}
+{"event":"room.do_request","clockSemantics":"io-bound","cpuMeasured":false,"method":"POST","path":"/api/operator/restore","status":202,"appMs":4}
+RESTORE_STEP {"status":202,"phase":"audit_pending","rows":7038,"tableIndex":221,"auditPhase":null}
+{"event":"room.do_request","clockSemantics":"io-bound","cpuMeasured":false,"method":"POST","path":"/api/operator/restore","status":202,"appMs":4}
+RESTORE_STEP {"status":202,"phase":"audit_pending","rows":7038,"tableIndex":221,"auditPhase":null}
+{"event":"room.do_request","clockSemantics":"io-bound","cpuMeasured":false,"method":"POST","path":"/api/operator/restore","status":202,"appMs":4}
+RESTORE_STEP {"status":202,"phase":"audit_pending","rows":7038,"tableIndex":221,"auditPhase":null}
+{"event":"room.do_request","clockSemantics":"io-bound","cpuMeasured":false,"method":"POST","path":"/api/operator/restore","status":202,"appMs":4}
+RESTORE_STEP {"status":202,"phase":"audit_pending","rows":7038,"tableIndex":221,"auditPhase":null}
+{"event":"room.do_request","clockSemantics":"io-bound","cpuMeasured":false,"method":"POST","path":"/api/operator/restore","status":202,"appMs":4}
+RESTORE_STEP {"status":202,"phase":"audit_pending","rows":7038,"tableIndex":221,"auditPhase":null}
+{"event":"room.do_request","clockSemantics":"io-bound","cpuMeasured":false,"method":"POST","path":"/api/operator/restore","status":202,"appMs":4}
+RESTORE_STEP {"status":202,"phase":"audit_pending","rows":7038,"tableIndex":221,"auditPhase":null}
+{"event":"room.do_request","clockSemantics":"io-bound","cpuMeasured":false,"method":"POST","path":"/api/operator/restore","status":202,"appMs":4}
+RESTORE_STEP {"status":202,"phase":"audit_pending","rows":7038,"tableIndex":221,"auditPhase":null}
+{"event":"room.do_request","clockSemantics":"io-bound","cpuMeasured":false,"method":"POST","path":"/api/operator/restore","status":202,"appMs":4}
+RESTORE_STEP {"status":202,"phase":"audit_pending","rows":7038,"tableIndex":221,"auditPhase":null}
+{"event":"room.do_request","clockSemantics":"io-bound","cpuMeasured":false,"method":"POST","path":"/api/operator/restore","status":202,"appMs":4}
+RESTORE_STEP {"status":202,"phase":"audit_pending","rows":7038,"tableIndex":221,"auditPhase":null}
+{"event":"room.do_request","clockSemantics":"io-bound","cpuMeasured":false,"method":"POST","path":"/api/operator/restore","status":202,"appMs":4}
+RESTORE_STEP {"status":202,"phase":"audit_pending","rows":7038,"tableIndex":221,"auditPhase":null}
+{"event":"room.do_request","clockSemantics":"io-bound","cpuMeasured":false,"method":"POST","path":"/api/operator/restore","status":202,"appMs":4}
+RESTORE_STEP {"status":202,"phase":"audit_pending","rows":7038,"tableIndex":221,"auditPhase":null}
+{"event":"room.do_request","clockSemantics":"io-bound","cpuMeasured":false,"method":"POST","path":"/api/operator/restore","status":202,"appMs":4}
+RESTORE_STEP {"status":202,"phase":"audit_pending","rows":7038,"tableIndex":221,"auditPhase":null}
+{"event":"room.do_request","clockSemantics":"io-bound","cpuMeasured":false,"method":"POST","path":"/api/operator/restore","status":202,"appMs":4}
+RESTORE_STEP {"status":202,"phase":"audit_pending","rows":7038,"tableIndex":221,"auditPhase":null}
+{"event":"room.do_request","clockSemantics":"io-bound","cpuMeasured":false,"method":"POST","path":"/api/operator/restore","status":202,"appMs":4}
+RESTORE_STEP {"status":202,"phase":"audit_pending","rows":7038,"tableIndex":221,"auditPhase":null}
+{"event":"room.do_request","clockSemantics":"io-bound","cpuMeasured":false,"method":"POST","path":"/api/operator/restore","status":202,"appMs":4}
+RESTORE_STEP {"status":202,"phase":"audit_pending","rows":7038,"tableIndex":221,"auditPhase":null}
+{"event":"room.do_request","clockSemantics":"io-bound","cpuMeasured":false,"method":"POST","path":"/api/operator/restore","status":202,"appMs":4}
+RESTORE_STEP {"status":202,"phase":"audit_pending","rows":7038,"tableIndex":221,"auditPhase":null}
+{"event":"room.do_request","clockSemantics":"io-bound","cpuMeasured":false,"method":"POST","path":"/api/operator/restore","status":202,"appMs":4}
+RESTORE_STEP {"status":202,"phase":"audit_pending","rows":7038,"tableIndex":221,"auditPhase":null}
+{"event":"room.do_request","clockSemantics":"io-bound","cpuMeasured":false,"method":"POST","path":"/api/operator/restore","status":202,"appMs":4}
+RESTORE_STEP {"status":202,"phase":"audit_pending","rows":7038,"tableIndex":221,"auditPhase":null}
+{"event":"room.do_request","clockSemantics":"io-bound","cpuMeasured":false,"method":"POST","path":"/api/operator/restore","status":202,"appMs":4}
+RESTORE_STEP {"status":202,"phase":"audit_pending","rows":7038,"tableIndex":221,"auditPhase":null}
+{"event":"room.do_request","clockSemantics":"io-bound","cpuMeasured":false,"method":"POST","path":"/api/operator/restore","status":202,"appMs":4}
+RESTORE_STEP {"status":202,"phase":"audit_pending","rows":7038,"tableIndex":221,"auditPhase":null}
+{"event":"room.do_request","clockSemantics":"io-bound","cpuMeasured":false,"method":"POST","path":"/api/operator/restore","status":202,"appMs":4}
+RESTORE_STEP {"status":202,"phase":"audit_pending","rows":7038,"tableIndex":221,"auditPhase":null}
+{"event":"room.do_request","clockSemantics":"io-bound","cpuMeasured":false,"method":"POST","path":"/api/operator/restore","status":202,"appMs":4}
+RESTORE_STEP {"status":202,"phase":"audit_pending","rows":7038,"tableIndex":221,"auditPhase":null}
+{"event":"room.do_request","clockSemantics":"io-bound","cpuMeasured":false,"method":"POST","path":"/api/operator/restore","status":202,"appMs":4}
+RESTORE_STEP {"status":202,"phase":"audit_pending","rows":7038,"tableIndex":221,"auditPhase":null}
+{"event":"room.do_request","clockSemantics":"io-bound","cpuMeasured":false,"method":"POST","path":"/api/operator/restore","status":202,"appMs":4}
+RESTORE_STEP {"status":202,"phase":"audit_pending","rows":7038,"tableIndex":221,"auditPhase":null}
+{"event":"room.do_request","clockSemantics":"io-bound","cpuMeasured":false,"method":"POST","path":"/api/operator/restore","status":202,"appMs":4}
+RESTORE_STEP {"status":202,"phase":"audit_pending","rows":7038,"tableIndex":221,"auditPhase":null}
+{"event":"room.do_request","clockSemantics":"io-bound","cpuMeasured":false,"method":"POST","path":"/api/operator/restore","status":202,"appMs":6}
+RESTORE_STEP {"status":202,"phase":"audit_pending","rows":7038,"tableIndex":221,"auditPhase":null}
+{"event":"room.do_request","clockSemantics":"io-bound","cpuMeasured":false,"method":"POST","path":"/api/operator/restore","status":202,"appMs":5}
+RESTORE_STEP {"status":202,"phase":"audit_pending","rows":7038,"tableIndex":221,"auditPhase":null}
+{"event":"room.do_request","clockSemantics":"io-bound","cpuMeasured":false,"method":"POST","path":"/api/operator/restore","status":202,"appMs":5}
+RESTORE_STEP {"status":202,"phase":"audit_pending","rows":7038,"tableIndex":221,"auditPhase":null}
+{"event":"room.do_request","clockSemantics":"io-bound","cpuMeasured":false,"method":"POST","path":"/api/operator/restore","status":202,"appMs":5}
+RESTORE_STEP {"status":202,"phase":"audit_pending","rows":7038,"tableIndex":221,"auditPhase":null}
+{"event":"room.do_request","clockSemantics":"io-bound","cpuMeasured":false,"method":"POST","path":"/api/operator/restore","status":202,"appMs":5}
+RESTORE_STEP {"status":202,"phase":"audit_pending","rows":7038,"tableIndex":221,"auditPhase":null}
+{"event":"room.do_request","clockSemantics":"io-bound","cpuMeasured":false,"method":"POST","path":"/api/operator/restore","status":202,"appMs":5}
+RESTORE_STEP {"status":202,"phase":"audit_pending","rows":7038,"tableIndex":221,"auditPhase":null}
+{"event":"room.do_request","clockSemantics":"io-bound","cpuMeasured":false,"method":"POST","path":"/api/operator/restore","status":202,"appMs":5}
+RESTORE_STEP {"status":202,"phase":"audit_pending","rows":7038,"tableIndex":221,"auditPhase":null}
+{"event":"room.do_request","clockSemantics":"io-bound","cpuMeasured":false,"method":"POST","path":"/api/operator/restore","status":202,"appMs":6}
+RESTORE_STEP {"status":202,"phase":"audit_pending","rows":7038,"tableIndex":221,"auditPhase":null}
+{"event":"room.do_request","clockSemantics":"io-bound","cpuMeasured":false,"method":"POST","path":"/api/operator/restore","status":202,"appMs":5}
+RESTORE_STEP {"status":202,"phase":"audit_pending","rows":7038,"tableIndex":221,"auditPhase":null}
+{"event":"room.do_request","clockSemantics":"io-bound","cpuMeasured":false,"method":"POST","path":"/api/operator/restore","status":202,"appMs":5}
+RESTORE_STEP {"status":202,"phase":"audit_pending","rows":7038,"tableIndex":221,"auditPhase":null}
+{"event":"room.do_request","clockSemantics":"io-bound","cpuMeasured":false,"method":"POST","path":"/api/operator/restore","status":202,"appMs":5}
+RESTORE_STEP {"status":202,"phase":"audit_pending","rows":7038,"tableIndex":221,"auditPhase":null}
+{"event":"room.do_request","clockSemantics":"io-bound","cpuMeasured":false,"method":"POST","path":"/api/operator/restore","status":202,"appMs":5}
+RESTORE_STEP {"status":202,"phase":"audit_pending","rows":7038,"tableIndex":221,"auditPhase":null}
+{"event":"room.do_request","clockSemantics":"io-bound","cpuMeasured":false,"method":"POST","path":"/api/operator/restore","status":202,"appMs":5}
+RESTORE_STEP {"status":202,"phase":"audit_pending","rows":7038,"tableIndex":221,"auditPhase":null}
+{"event":"room.do_request","clockSemantics":"io-bound","cpuMeasured":false,"method":"POST","path":"/api/operator/restore","status":202,"appMs":5}
+RESTORE_STEP {"status":202,"phase":"audit_pending","rows":7038,"tableIndex":221,"auditPhase":null}
+{"event":"room.do_request","clockSemantics":"io-bound","cpuMeasured":false,"method":"POST","path":"/api/operator/restore","status":202,"appMs":5}
+RESTORE_STEP {"status":202,"phase":"audit_pending","rows":7038,"tableIndex":221,"auditPhase":null}
+{"event":"room.do_request","clockSemantics":"io-bound","cpuMeasured":false,"method":"POST","path":"/api/operator/restore","status":202,"appMs":6}
+RESTORE_STEP {"status":202,"phase":"audit_pending","rows":7038,"tableIndex":221,"auditPhase":null}
+{"event":"room.do_request","clockSemantics":"io-bound","cpuMeasured":false,"method":"POST","path":"/api/operator/restore","status":202,"appMs":6}
+RESTORE_STEP {"status":202,"phase":"audit_pending","rows":7038,"tableIndex":221,"auditPhase":null}
+{"event":"room.do_request","clockSemantics":"io-bound","cpuMeasured":false,"method":"POST","path":"/api/operator/restore","status":202,"appMs":6}
+RESTORE_STEP {"status":202,"phase":"audit_pending","rows":7038,"tableIndex":221,"auditPhase":null}
+{"event":"room.do_request","clockSemantics":"io-bound","cpuMeasured":false,"method":"POST","path":"/api/operator/restore","status":202,"appMs":5}
+RESTORE_STEP {"status":202,"phase":"audit_pending","rows":7038,"tableIndex":221,"auditPhase":null}
+{"event":"room.do_request","clockSemantics":"io-bound","cpuMeasured":false,"method":"POST","path":"/api/operator/restore","status":202,"appMs":5}
+RESTORE_STEP {"status":202,"phase":"audit_pending","rows":7038,"tableIndex":221,"auditPhase":null}
+{"event":"room.do_request","clockSemantics":"io-bound","cpuMeasured":false,"method":"POST","path":"/api/operator/restore","status":202,"appMs":6}
+RESTORE_STEP {"status":202,"phase":"audit_pending","rows":7038,"tableIndex":221,"auditPhase":null}
+{"event":"room.do_request","clockSemantics":"io-bound","cpuMeasured":false,"method":"POST","path":"/api/operator/restore","status":202,"appMs":5}
+RESTORE_STEP {"status":202,"phase":"audit_pending","rows":7038,"tableIndex":221,"auditPhase":null}
+{"event":"room.do_request","clockSemantics":"io-bound","cpuMeasured":false,"method":"POST","path":"/api/operator/restore","status":202,"appMs":6}
+RESTORE_STEP {"status":202,"phase":"audit_pending","rows":7038,"tableIndex":221,"auditPhase":null}
+{"event":"room.do_request","clockSemantics":"io-bound","cpuMeasured":false,"method":"POST","path":"/api/operator/restore","status":202,"appMs":6}
+RESTORE_STEP {"status":202,"phase":"audit_pending","rows":7038,"tableIndex":221,"auditPhase":null}
+{"event":"room.do_request","clockSemantics":"io-bound","cpuMeasured":false,"method":"POST","path":"/api/operator/restore","status":202,"appMs":5}
+RESTORE_STEP {"status":202,"phase":"audit_pending","rows":7038,"tableIndex":221,"auditPhase":null}
+{"event":"room.do_request","clockSemantics":"io-bound","cpuMeasured":false,"method":"POST","path":"/api/operator/restore","status":202,"appMs":5}
+RESTORE_STEP {"status":202,"phase":"audit_pending","rows":7038,"tableIndex":221,"auditPhase":null}
+{"event":"room.do_request","clockSemantics":"io-bound","cpuMeasured":false,"method":"POST","path":"/api/operator/restore","status":202,"appMs":5}
+RESTORE_STEP {"status":202,"phase":"audit_pending","rows":7038,"tableIndex":221,"auditPhase":null}
+{"event":"room.do_request","clockSemantics":"io-bound","cpuMeasured":false,"method":"POST","path":"/api/operator/restore","status":202,"appMs":5}
+RESTORE_STEP {"status":202,"phase":"audit_pending","rows":7038,"tableIndex":221,"auditPhase":null}
+{"event":"room.do_request","clockSemantics":"io-bound","cpuMeasured":false,"method":"POST","path":"/api/operator/restore","status":202,"appMs":5}
+RESTORE_STEP {"status":202,"phase":"audit_pending","rows":7038,"tableIndex":221,"auditPhase":null}
+{"event":"room.do_request","clockSemantics":"io-bound","cpuMeasured":false,"method":"POST","path":"/api/operator/restore","status":202,"appMs":5}
+RESTORE_STEP {"status":202,"phase":"audit_pending","rows":7038,"tableIndex":221,"auditPhase":null}
+{"event":"room.do_request","clockSemantics":"io-bound","cpuMeasured":false,"method":"POST","path":"/api/operator/restore","status":202,"appMs":5}
+RESTORE_STEP {"status":202,"phase":"audit_pending","rows":7038,"tableIndex":221,"auditPhase":null}
+{"event":"room.do_request","clockSemantics":"io-bound","cpuMeasured":false,"method":"POST","path":"/api/operator/restore","status":202,"appMs":5}
+RESTORE_STEP {"status":202,"phase":"audit_pending","rows":7038,"tableIndex":221,"auditPhase":null}
+{"event":"room.do_request","clockSemantics":"io-bound","cpuMeasured":false,"method":"POST","path":"/api/operator/restore","status":202,"appMs":5}
+RESTORE_STEP {"status":202,"phase":"audit_pending","rows":7038,"tableIndex":221,"auditPhase":null}
+{"event":"room.do_request","clockSemantics":"io-bound","cpuMeasured":false,"method":"POST","path":"/api/operator/restore","status":202,"appMs":4}
+RESTORE_STEP {"status":202,"phase":"audit_pending","rows":7038,"tableIndex":221,"auditPhase":null}
+{"event":"room.do_request","clockSemantics":"io-bound","cpuMeasured":false,"method":"POST","path":"/api/operator/restore","status":202,"appMs":5}
+RESTORE_STEP {"status":202,"phase":"audit_pending","rows":7038,"tableIndex":221,"auditPhase":null}
+{"event":"room.do_request","clockSemantics":"io-bound","cpuMeasured":false,"method":"POST","path":"/api/operator/restore","status":202,"appMs":5}
+RESTORE_STEP {"status":202,"phase":"audit_pending","rows":7038,"tableIndex":221,"auditPhase":null}
+{"event":"room.do_request","clockSemantics":"io-bound","cpuMeasured":false,"method":"POST","path":"/api/operator/restore","status":202,"appMs":4}
+RESTORE_STEP {"status":202,"phase":"audit_pending","rows":7038,"tableIndex":221,"auditPhase":null}
+{"event":"room.do_request","clockSemantics":"io-bound","cpuMeasured":false,"method":"POST","path":"/api/operator/restore","status":202,"appMs":4}
+RESTORE_STEP {"status":202,"phase":"audit_pending","rows":7038,"tableIndex":221,"auditPhase":null}
+{"event":"room.do_request","clockSemantics":"io-bound","cpuMeasured":false,"method":"POST","path":"/api/operator/restore","status":202,"appMs":5}
+RESTORE_STEP {"status":202,"phase":"audit_pending","rows":7038,"tableIndex":221,"auditPhase":null}
+{"event":"room.do_request","clockSemantics":"io-bound","cpuMeasured":false,"method":"POST","path":"/api/operator/restore","status":202,"appMs":5}
+RESTORE_STEP {"status":202,"phase":"audit_pending","rows":7038,"tableIndex":221,"auditPhase":null}
+{"event":"room.do_request","clockSemantics":"io-bound","cpuMeasured":false,"method":"POST","path":"/api/operator/restore","status":202,"appMs":5}
+RESTORE_STEP {"status":202,"phase":"audit_pending","rows":7038,"tableIndex":221,"auditPhase":null}
+{"event":"room.do_request","clockSemantics":"io-bound","cpuMeasured":false,"method":"POST","path":"/api/operator/restore","status":202,"appMs":5}
+RESTORE_STEP {"status":202,"phase":"audit_pending","rows":7038,"tableIndex":221,"auditPhase":null}
+{"event":"room.do_request","clockSemantics":"io-bound","cpuMeasured":false,"method":"POST","path":"/api/operator/restore","status":202,"appMs":5}
+RESTORE_STEP {"status":202,"phase":"audit_pending","rows":7038,"tableIndex":221,"auditPhase":null}
+{"event":"room.do_request","clockSemantics":"io-bound","cpuMeasured":false,"method":"POST","path":"/api/operator/restore","status":202,"appMs":5}
+RESTORE_STEP {"status":202,"phase":"audit_pending","rows":7038,"tableIndex":221,"auditPhase":null}
+{"event":"room.do_request","clockSemantics":"io-bound","cpuMeasured":false,"method":"POST","path":"/api/operator/restore","status":202,"appMs":5}
+RESTORE_STEP {"status":202,"phase":"audit_pending","rows":7038,"tableIndex":221,"auditPhase":null}
+{"event":"room.do_request","clockSemantics":"io-bound","cpuMeasured":false,"method":"POST","path":"/api/operator/restore","status":202,"appMs":4}
+RESTORE_STEP {"status":202,"phase":"audit_pending","rows":7038,"tableIndex":221,"auditPhase":null}
+{"event":"room.do_request","clockSemantics":"io-bound","cpuMeasured":false,"method":"POST","path":"/api/operator/restore","status":202,"appMs":4}
+RESTORE_STEP {"status":202,"phase":"audit_pending","rows":7038,"tableIndex":221,"auditPhase":null}
+{"event":"room.do_request","clockSemantics":"io-bound","cpuMeasured":false,"method":"POST","path":"/api/operator/restore","status":202,"appMs":4}
+RESTORE_STEP {"status":202,"phase":"audit_pending","rows":7038,"tableIndex":221,"auditPhase":null}
+{"event":"room.do_request","clockSemantics":"io-bound","cpuMeasured":false,"method":"POST","path":"/api/operator/restore","status":202,"appMs":4}
+RESTORE_STEP {"status":202,"phase":"audit_pending","rows":7038,"tableIndex":221,"auditPhase":null}
+{"event":"room.do_request","clockSemantics":"io-bound","cpuMeasured":false,"method":"POST","path":"/api/operator/restore","status":202,"appMs":4}
+RESTORE_STEP {"status":202,"phase":"audit_pending","rows":7038,"tableIndex":221,"auditPhase":null}
+{"event":"room.do_request","clockSemantics":"io-bound","cpuMeasured":false,"method":"POST","path":"/api/operator/restore","status":202,"appMs":4}
+RESTORE_STEP {"status":202,"phase":"audit_pending","rows":7038,"tableIndex":221,"auditPhase":null}
+{"event":"room.do_request","clockSemantics":"io-bound","cpuMeasured":false,"method":"POST","path":"/api/operator/restore","status":202,"appMs":4}
+RESTORE_STEP {"status":202,"phase":"audit_pending","rows":7038,"tableIndex":221,"auditPhase":null}
+{"event":"room.do_request","clockSemantics":"io-bound","cpuMeasured":false,"method":"POST","path":"/api/operator/restore","status":202,"appMs":4}
+RESTORE_STEP {"status":202,"phase":"audit_pending","rows":7038,"tableIndex":221,"auditPhase":null}
+{"event":"room.do_request","clockSemantics":"io-bound","cpuMeasured":false,"method":"POST","path":"/api/operator/restore","status":202,"appMs":4}
+RESTORE_STEP {"status":202,"phase":"audit_pending","rows":7038,"tableIndex":221,"auditPhase":null}
+{"event":"room.do_request","clockSemantics":"io-bound","cpuMeasured":false,"method":"POST","path":"/api/operator/restore","status":202,"appMs":4}
+RESTORE_STEP {"status":202,"phase":"audit_pending","rows":7038,"tableIndex":221,"auditPhase":null}
+{"event":"room.do_request","clockSemantics":"io-bound","cpuMeasured":false,"method":"POST","path":"/api/operator/restore","status":202,"appMs":4}
+RESTORE_STEP {"status":202,"phase":"audit_pending","rows":7038,"tableIndex":221,"auditPhase":null}
+{"event":"room.do_request","clockSemantics":"io-bound","cpuMeasured":false,"method":"POST","path":"/api/operator/restore","status":202,"appMs":4}
+RESTORE_STEP {"status":202,"phase":"audit_pending","rows":7038,"tableIndex":221,"auditPhase":null}
+{"event":"room.do_request","clockSemantics":"io-bound","cpuMeasured":false,"method":"POST","path":"/api/operator/restore","status":202,"appMs":4}
+RESTORE_STEP {"status":202,"phase":"audit_pending","rows":7038,"tableIndex":221,"auditPhase":null}
+{"event":"room.do_request","clockSemantics":"io-bound","cpuMeasured":false,"method":"POST","path":"/api/operator/restore","status":202,"appMs":4}
+RESTORE_STEP {"status":202,"phase":"audit_pending","rows":7038,"tableIndex":221,"auditPhase":null}
+{"event":"room.do_request","clockSemantics":"io-bound","cpuMeasured":false,"method":"POST","path":"/api/operator/restore","status":202,"appMs":5}
+RESTORE_STEP {"status":202,"phase":"audit_pending","rows":7038,"tableIndex":221,"auditPhase":null}
+{"event":"room.do_request","clockSemantics":"io-bound","cpuMeasured":false,"method":"POST","path":"/api/operator/restore","status":202,"appMs":4}
+RESTORE_STEP {"status":202,"phase":"audit_pending","rows":7038,"tableIndex":221,"auditPhase":null}
+{"event":"room.do_request","clockSemantics":"io-bound","cpuMeasured":false,"method":"POST","path":"/api/operator/restore","status":202,"appMs":4}
+RESTORE_STEP {"status":202,"phase":"audit_pending","rows":7038,"tableIndex":221,"auditPhase":null}
+{"event":"room.do_request","clockSemantics":"io-bound","cpuMeasured":false,"method":"POST","path":"/api/operator/restore","status":202,"appMs":4}
+RESTORE_STEP {"status":202,"phase":"audit_pending","rows":7038,"tableIndex":221,"auditPhase":null}
+{"event":"room.do_request","clockSemantics":"io-bound","cpuMeasured":false,"method":"POST","path":"/api/operator/restore","status":202,"appMs":4}
+RESTORE_STEP {"status":202,"phase":"audit_pending","rows":7038,"tableIndex":221,"auditPhase":null}
+{"event":"room.do_request","clockSemantics":"io-bound","cpuMeasured":false,"method":"POST","path":"/api/operator/restore","status":202,"appMs":4}
+RESTORE_STEP {"status":202,"phase":"audit_pending","rows":7038,"tableIndex":221,"auditPhase":null}
+{"event":"room.do_request","clockSemantics":"io-bound","cpuMeasured":false,"method":"POST","path":"/api/operator/restore","status":202,"appMs":4}
+RESTORE_STEP {"status":202,"phase":"audit_pending","rows":7038,"tableIndex":221,"auditPhase":null}
+{"event":"room.do_request","clockSemantics":"io-bound","cpuMeasured":false,"method":"POST","path":"/api/operator/restore","status":202,"appMs":4}
+RESTORE_STEP {"status":202,"phase":"audit_pending","rows":7038,"tableIndex":221,"auditPhase":null}
+{"event":"room.do_request","clockSemantics":"io-bound","cpuMeasured":false,"method":"POST","path":"/api/operator/restore","status":202,"appMs":5}
+RESTORE_STEP {"status":202,"phase":"audit_pending","rows":7038,"tableIndex":221,"auditPhase":null}
+{"event":"room.do_request","clockSemantics":"io-bound","cpuMeasured":false,"method":"POST","path":"/api/operator/restore","status":202,"appMs":4}
+RESTORE_STEP {"status":202,"phase":"audit_pending","rows":7038,"tableIndex":221,"auditPhase":null}
+{"event":"room.do_request","clockSemantics":"io-bound","cpuMeasured":false,"method":"POST","path":"/api/operator/restore","status":202,"appMs":6}
+RESTORE_STEP {"status":202,"phase":"audit_pending","rows":7038,"tableIndex":221,"auditPhase":null}
+{"event":"room.do_request","clockSemantics":"io-bound","cpuMeasured":false,"method":"POST","path":"/api/operator/restore","status":202,"appMs":7}
+RESTORE_STEP {"status":202,"phase":"audit_pending","rows":7038,"tableIndex":221,"auditPhase":null}
+{"event":"room.do_request","clockSemantics":"io-bound","cpuMeasured":false,"method":"POST","path":"/api/operator/restore","status":202,"appMs":6}
+RESTORE_STEP {"status":202,"phase":"audit_pending","rows":7038,"tableIndex":221,"auditPhase":null}
+{"event":"room.do_request","clockSemantics":"io-bound","cpuMeasured":false,"method":"POST","path":"/api/operator/restore","status":202,"appMs":6}
+RESTORE_STEP {"status":202,"phase":"audit_pending","rows":7038,"tableIndex":221,"auditPhase":null}
+{"event":"room.do_request","clockSemantics":"io-bound","cpuMeasured":false,"method":"POST","path":"/api/operator/restore","status":202,"appMs":6}
+RESTORE_STEP {"status":202,"phase":"audit_pending","rows":7038,"tableIndex":221,"auditPhase":null}
+{"event":"room.do_request","clockSemantics":"io-bound","cpuMeasured":false,"method":"POST","path":"/api/operator/restore","status":202,"appMs":6}
+RESTORE_STEP {"status":202,"phase":"audit_pending","rows":7038,"tableIndex":221,"auditPhase":null}
+{"event":"room.do_request","clockSemantics":"io-bound","cpuMeasured":false,"method":"POST","path":"/api/operator/restore","status":202,"appMs":6}
+RESTORE_STEP {"status":202,"phase":"audit_pending","rows":7038,"tableIndex":221,"auditPhase":null}
+{"event":"room.do_request","clockSemantics":"io-bound","cpuMeasured":false,"method":"POST","path":"/api/operator/restore","status":202,"appMs":6}
+RESTORE_STEP {"status":202,"phase":"audit_pending","rows":7038,"tableIndex":221,"auditPhase":null}
+{"event":"room.do_request","clockSemantics":"io-bound","cpuMeasured":false,"method":"POST","path":"/api/operator/restore","status":202,"appMs":5}
+RESTORE_STEP {"status":202,"phase":"audit_pending","rows":7038,"tableIndex":221,"auditPhase":null}
+{"event":"room.do_request","clockSemantics":"io-bound","cpuMeasured":false,"method":"POST","path":"/api/operator/restore","status":202,"appMs":4}
+RESTORE_STEP {"status":202,"phase":"audit_pending","rows":7038,"tableIndex":221,"auditPhase":null}
+{"event":"room.do_request","clockSemantics":"io-bound","cpuMeasured":false,"method":"POST","path":"/api/operator/restore","status":202,"appMs":5}
+RESTORE_STEP {"status":202,"phase":"audit_pending","rows":7038,"tableIndex":221,"auditPhase":null}
+{"event":"room.do_request","clockSemantics":"io-bound","cpuMeasured":false,"method":"POST","path":"/api/operator/restore","status":202,"appMs":4}
+RESTORE_STEP {"status":202,"phase":"audit_pending","rows":7038,"tableIndex":221,"auditPhase":null}
+{"event":"room.do_request","clockSemantics":"io-bound","cpuMeasured":false,"method":"POST","path":"/api/operator/restore","status":202,"appMs":5}
+RESTORE_STEP {"status":202,"phase":"audit_pending","rows":7038,"tableIndex":221,"auditPhase":null}
+{"event":"room.do_request","clockSemantics":"io-bound","cpuMeasured":false,"method":"POST","path":"/api/operator/restore","status":202,"appMs":5}
+RESTORE_STEP {"status":202,"phase":"audit_pending","rows":7038,"tableIndex":221,"auditPhase":null}
+{"event":"room.do_request","clockSemantics":"io-bound","cpuMeasured":false,"method":"POST","path":"/api/operator/restore","status":202,"appMs":4}
+RESTORE_STEP {"status":202,"phase":"audit_pending","rows":7038,"tableIndex":221,"auditPhase":null}
+{"event":"room.do_request","clockSemantics":"io-bound","cpuMeasured":false,"method":"POST","path":"/api/operator/restore","status":202,"appMs":5}
+RESTORE_STEP {"status":202,"phase":"audit_pending","rows":7038,"tableIndex":221,"auditPhase":null}
+{"event":"room.do_request","clockSemantics":"io-bound","cpuMeasured":false,"method":"POST","path":"/api/operator/restore","status":202,"appMs":5}
+RESTORE_STEP {"status":202,"phase":"audit_pending","rows":7038,"tableIndex":221,"auditPhase":null}
+{"event":"room.do_request","clockSemantics":"io-bound","cpuMeasured":false,"method":"POST","path":"/api/operator/restore","status":202,"appMs":4}
+RESTORE_STEP {"status":202,"phase":"audit_pending","rows":7038,"tableIndex":221,"auditPhase":null}
+{"event":"room.do_request","clockSemantics":"io-bound","cpuMeasured":false,"method":"POST","path":"/api/operator/restore","status":202,"appMs":4}
+RESTORE_STEP {"status":202,"phase":"audit_pending","rows":7038,"tableIndex":221,"auditPhase":null}
+{"event":"room.do_request","clockSemantics":"io-bound","cpuMeasured":false,"method":"POST","path":"/api/operator/restore","status":202,"appMs":4}
+RESTORE_STEP {"status":202,"phase":"audit_pending","rows":7038,"tableIndex":221,"auditPhase":null}
+{"event":"room.do_request","clockSemantics":"io-bound","cpuMeasured":false,"method":"POST","path":"/api/operator/restore","status":202,"appMs":4}
+RESTORE_STEP {"status":202,"phase":"audit_pending","rows":7038,"tableIndex":221,"auditPhase":null}
+{"event":"room.do_request","clockSemantics":"io-bound","cpuMeasured":false,"method":"POST","path":"/api/operator/restore","status":202,"appMs":4}
+RESTORE_STEP {"status":202,"phase":"audit_pending","rows":7038,"tableIndex":221,"auditPhase":null}
+{"event":"room.do_request","clockSemantics":"io-bound","cpuMeasured":false,"method":"POST","path":"/api/operator/restore","status":202,"appMs":4}
+RESTORE_STEP {"status":202,"phase":"audit_pending","rows":7038,"tableIndex":221,"auditPhase":null}
+{"event":"room.do_request","clockSemantics":"io-bound","cpuMeasured":false,"method":"POST","path":"/api/operator/restore","status":202,"appMs":4}
+RESTORE_STEP {"status":202,"phase":"audit_pending","rows":7038,"tableIndex":221,"auditPhase":null}
+{"event":"room.do_request","clockSemantics":"io-bound","cpuMeasured":false,"method":"POST","path":"/api/operator/restore","status":202,"appMs":5}
+RESTORE_STEP {"status":202,"phase":"audit_pending","rows":7038,"tableIndex":221,"auditPhase":null}
+{"event":"room.do_request","clockSemantics":"io-bound","cpuMeasured":false,"method":"POST","path":"/api/operator/restore","status":202,"appMs":5}
+RESTORE_STEP {"status":202,"phase":"audit_pending","rows":7038,"tableIndex":221,"auditPhase":null}
+{"event":"room.do_request","clockSemantics":"io-bound","cpuMeasured":false,"method":"POST","path":"/api/operator/restore","status":202,"appMs":4}
+RESTORE_STEP {"status":202,"phase":"audit_pending","rows":7038,"tableIndex":221,"auditPhase":null}
+{"event":"room.do_request","clockSemantics":"io-bound","cpuMeasured":false,"method":"POST","path":"/api/operator/restore","status":202,"appMs":4}
+RESTORE_STEP {"status":202,"phase":"audit_pending","rows":7038,"tableIndex":221,"auditPhase":null}
+{"event":"room.do_request","clockSemantics":"io-bound","cpuMeasured":false,"method":"POST","path":"/api/operator/restore","status":202,"appMs":5}
+RESTORE_STEP {"status":202,"phase":"audit_pending","rows":7038,"tableIndex":221,"auditPhase":null}
+{"event":"room.do_request","clockSemantics":"io-bound","cpuMeasured":false,"method":"POST","path":"/api/operator/restore","status":202,"appMs":5}
+RESTORE_STEP {"status":202,"phase":"audit_pending","rows":7038,"tableIndex":221,"auditPhase":null}
+{"event":"room.do_request","clockSemantics":"io-bound","cpuMeasured":false,"method":"POST","path":"/api/operator/restore","status":202,"appMs":4}
+RESTORE_STEP {"status":202,"phase":"audit_pending","rows":7038,"tableIndex":221,"auditPhase":null}
+{"event":"room.do_request","clockSemantics":"io-bound","cpuMeasured":false,"method":"POST","path":"/api/operator/restore","status":202,"appMs":4}
+RESTORE_STEP {"status":202,"phase":"audit_pending","rows":7038,"tableIndex":221,"auditPhase":null}
+{"event":"room.do_request","clockSemantics":"io-bound","cpuMeasured":false,"method":"POST","path":"/api/operator/restore","status":202,"appMs":5}
+RESTORE_STEP {"status":202,"phase":"audit_pending","rows":7038,"tableIndex":221,"auditPhase":null}
+{"event":"room.do_request","clockSemantics":"io-bound","cpuMeasured":false,"method":"POST","path":"/api/operator/restore","status":202,"appMs":4}
+RESTORE_STEP {"status":202,"phase":"audit_pending","rows":7038,"tableIndex":221,"auditPhase":null}
+{"event":"room.do_request","clockSemantics":"io-bound","cpuMeasured":false,"method":"POST","path":"/api/operator/restore","status":202,"appMs":4}
+RESTORE_STEP {"status":202,"phase":"audit_pending","rows":7038,"tableIndex":221,"auditPhase":null}
+{"event":"room.do_request","clockSemantics":"io-bound","cpuMeasured":false,"method":"POST","path":"/api/operator/restore","status":202,"appMs":4}
+RESTORE_STEP {"status":202,"phase":"audit_pending","rows":7038,"tableIndex":221,"auditPhase":null}
+{"event":"room.do_request","clockSemantics":"io-bound","cpuMeasured":false,"method":"POST","path":"/api/operator/restore","status":202,"appMs":4}
+RESTORE_STEP {"status":202,"phase":"audit_pending","rows":7038,"tableIndex":221,"auditPhase":null}
+{"event":"room.do_request","clockSemantics":"io-bound","cpuMeasured":false,"method":"POST","path":"/api/operator/restore","status":202,"appMs":5}
+RESTORE_STEP {"status":202,"phase":"audit_pending","rows":7038,"tableIndex":221,"auditPhase":null}
+{"event":"room.do_request","clockSemantics":"io-bound","cpuMeasured":false,"method":"POST","path":"/api/operator/restore","status":202,"appMs":5}
+RESTORE_STEP {"status":202,"phase":"audit_pending","rows":7038,"tableIndex":221,"auditPhase":null}
+{"event":"room.do_request","clockSemantics":"io-bound","cpuMeasured":false,"method":"POST","path":"/api/operator/restore","status":202,"appMs":5}
+RESTORE_STEP {"status":202,"phase":"audit_pending","rows":7038,"tableIndex":221,"auditPhase":null}
+{"event":"room.do_request","clockSemantics":"io-bound","cpuMeasured":false,"method":"POST","path":"/api/operator/restore","status":422,"appMs":3}
+RESTORE_STEP {"status":422,"phase":null,"rows":null,"tableIndex":null,"auditPhase":null}

@@ -1,0 +1,32 @@
+{"event":"room.cold_start","clockSemantics":"io-bound","durationMs":48,"integrity":"eager","phases":{"schema":{"ms":11,"rowsRead":8389},"plugin":{"ms":20,"rowsRead":41018},"fence":{"ms":13,"rowsRead":47276},"verifies":{"ms":2,"rowsRead":21696},"checksum":{"ms":0,"rowsRead":0}},"rooms":0,"sequences":0,"projectionBytes":0,"events":0}
+{"event":"room.store_initialized","initializationMs":48,"legacyColdStartMs":48,"clockSemantics":"io-bound","cpuMeasured":false}
+✖ Native recovery audits application foreign keys while preserving private KV (391.768917ms)
+ℹ tests 1
+ℹ suites 0
+ℹ pass 0
+ℹ fail 1
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 517.520875
+
+✖ failing tests:
+
+test at cloudflare/recovery-native-kv.check.mjs:6:1
+✖ Native recovery audits application foreign keys while preserving private KV (391.768917ms)
+  AssertionError [ERR_ASSERTION]: Error: not authorized: SQLITE_AUTH
+      at async Object.fetch (file:///Users/potter/Documents/Codex/2026-10-22/you-x20/work/release-evidence-binding/cloudflare/node_modules/.pnpm/miniflare@4.20260730.0/node_modules/miniflare/dist/src/workers/core/entry.worker.js:4765:22)
+  
+  500 !== 200
+  
+      at TestContext.<anonymous> (file:///Users/potter/Documents/Codex/2026-10-22/you-x20/work/member2-native-restore-kv-1102/cloudflare/recovery-native-kv.check.mjs:9:78)
+      at process.processTicksAndRejections (node:internal/process/task_queues:104:5)
+      at async Test.run (node:internal/test_runner/test:1409:7)
+      at async startSubtestAfterBootstrap (node:internal/test_runner/harness:387:3) {
+    generatedMessage: false,
+    code: 'ERR_ASSERTION',
+    actual: 500,
+    expected: 200,
+    operator: 'strictEqual',
+    diff: 'simple'
+  }

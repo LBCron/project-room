@@ -1,0 +1,27 @@
+[boot-config] ERROR: the agent card is UNSIGNED and no explicit opt-in was recorded at build time — members fetching /.well-known/agent-card.json will see an unsigned card (marked signed:false). To fix: set ROOM_AGENT_CARD_SIGNING_KEY and re-run scripts/sign-agent-card.mjs, or pass --allow-unsigned explicitly to record the choice.
+No magic-link mailer is configured: email-verification gates are relaxed (agent-invite escape hatch); /api/health reports emailVerification: relaxed-no-mailer
+[boot-config] ERROR: the agent card is UNSIGNED and no explicit opt-in was recorded at build time — members fetching /.well-known/agent-card.json will see an unsigned card (marked signed:false). To fix: set ROOM_AGENT_CARD_SIGNING_KEY and re-run scripts/sign-agent-card.mjs, or pass --allow-unsigned explicitly to record the choice.
+No magic-link mailer is configured: email-verification gates are relaxed (agent-invite escape hatch); /api/health reports emailVerification: relaxed-no-mailer
+room diagnostic op_jL4q6DGV 503 restore_incomplete unavailable /api/rooms/:roomId/access-requests
+error-trace eid_3GwitCmNbu-b fp=f43995943a8e62e2 status=503 code=restore_incomplete
+[boot-config] ERROR: the agent card is UNSIGNED and no explicit opt-in was recorded at build time — members fetching /.well-known/agent-card.json will see an unsigned card (marked signed:false). To fix: set ROOM_AGENT_CARD_SIGNING_KEY and re-run scripts/sign-agent-card.mjs, or pass --allow-unsigned explicitly to record the choice.
+No magic-link mailer is configured: email-verification gates are relaxed (agent-invite escape hatch); /api/health reports emailVerification: relaxed-no-mailer
+RESTORE_SQL_AUTH {"sql":"PRAGMA foreign_key_check(\"_cf_KV\")","method":"get","message":"not authorized: SQLITE_AUTH"}
+RESTORE_SQL_AUTH {"sql":"PRAGMA foreign_key_check(\"_cf_KV\")","method":"get","message":"not authorized: SQLITE_AUTH"}
+node:internal/modules/run_main:107
+    triggerUncaughtException(
+    ^
+
+AssertionError [ERR_ASSERTION]: {"error":{"code":"restore_continuation_refused","message":"not authorized: SQLITE_AUTH"}}
+    at post (file:///Users/potter/Documents/ChatGPT/project%20room/local-lab/access_request_native_restore.mjs:21:1425)
+    at process.processTicksAndRejections (node:internal/process/task_queues:104:5)
+    at async file:///Users/potter/Documents/ChatGPT/project%20room/local-lab/access_request_native_restore.mjs:27:430 {
+  generatedMessage: false,
+  code: 'ERR_ASSERTION',
+  actual: false,
+  expected: true,
+  operator: '==',
+  diff: 'simple'
+}
+
+Node.js v24.22.1

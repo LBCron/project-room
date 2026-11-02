@@ -1,0 +1,74 @@
+{
+  "schema": "member2-access-native-old-backup-restore-v1",
+  "sourceBefore": "00888c52110d36250d3e07629036701b72926d09",
+  "sourceAfter": "349f62dc4bc57f272b3a596303e371d15f86f942",
+  "treeAfter": "72a4430fbb5f297429493885c45be11391ec82d3",
+  "node": "v24.22.1",
+  "scope": "Actual local Native source and target with KV, strict authorized restore API and cleanup. No production, remote execution, whole-recovery-bound or speedup claim.",
+  "before": {
+    "count": 1000,
+    "fingerprint": "1d512f6a875a44c9974eee0685c497813f36ebbcf07524f904cff96920cd1c32",
+    "identities": 1000,
+    "index": null,
+    "credentials": "a9c7321004ae1bc52a15ca194d1d44eeb01f03987d2db4b1b330626dbed3db18"
+  },
+  "sourceBytes": 3180645,
+  "sourceSha256": "b8678c87009ea7f86b074b4ad2f4da350f0aada2ae91d939c6fb4168d1e73567",
+  "partialReadRefused": true,
+  "exactColdSourceResume": true,
+  "restore": {
+    "steps": 1164,
+    "cleanupSteps": 166,
+    "actualUniqueFrontiers": 997,
+    "independentDriverBudget": 20000,
+    "verified": true,
+    "auditOk": true,
+    "contentVerification": "full",
+    "cleanupComplete": true
+  },
+  "restoredRowsUnchanged": true,
+  "originalCredentialsPreserved": true,
+  "admissionClear": true,
+  "reads": [
+    {
+      "role": "owner",
+      "rowsRead": 1657,
+      "rowsWritten": 0,
+      "unknown": 0
+    },
+    {
+      "role": "admin",
+      "rowsRead": 946,
+      "rowsWritten": 0,
+      "unknown": 0
+    }
+  ],
+  "queue": {
+    "pages": 40,
+    "unique": 1000,
+    "maxRows": 938,
+    "zeroWrites": true
+  },
+  "restoreSourceKvClean": true,
+  "standaloneCommit": "dff5d160e39eeef737d4d73edc5c395ee54b66b8",
+  "standaloneTree": "efd3382c8ab77e59c9ab5d7ca1352f8065960917",
+  "standaloneParent": "00888c52110d36250d3e07629036701b72926d09",
+  "publishedComposition": "308a5a910ac6c9febe8ffb708932075b3cf2a1f1",
+  "publishedCompositionTree": "72a4430fbb5f297429493885c45be11391ec82d3",
+  "compositionFetchedTreeEqualsLocal": true,
+  "exitCode": 0,
+  "nativeEngineRegression": {
+    "beforeExit": 1,
+    "beforeError": "SQLITE_AUTH",
+    "afterExit": 0,
+    "quickTables": 229,
+    "foreignKeyTables": 230,
+    "privateKvPreserved": true,
+    "admissionNotPublished": true
+  },
+  "nodeEngineTestsPassed": 6,
+  "neighborTestsPassed": 15,
+  "composedCiContractExit": 0,
+  "knownUnchangedFailure": "Original restore-body-native test hits its500-step bound on unchanged00888 and fixed candidate. Test/cap/timeouts remain unchanged; no pass claimed.",
+  "driverLimit": "Independent1000request driver uses20000finite continuation budget and requires actual report frontier advancement/noncycling; completed1164 steps including166cleanup. No whole recovery boundedness/latency claim."
+}

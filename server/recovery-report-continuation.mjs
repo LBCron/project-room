@@ -18,13 +18,38 @@ function chunk(s, table, row, part) {
     || (!value.last && value.text.length !== REPORT_CHUNK_UNITS)) fail();
   return value;
 }
+const CONTROL_KEYS = 'carry,comparePart,end,hash,hashPart,hashRow,left,output,part,pass,right,rows,stage,start,table,version,width';
 function validate(p) {
   if (!p || p.version !== 1 || !['ingest','merge','hash','complete'].includes(p.stage)
+    || Object.keys(p).sort().join(',') !== (p.stage === 'complete' ? CONTROL_KEYS.replace(',stage',',sha256,stage') : CONTROL_KEYS)
     || typeof p.table !== 'string' || !/^[a-z_][a-z_0-9]*$/.test(p.table)
     || !['rows','part','width','pass','start','left','right','end','output','comparePart','hashRow','hashPart'].every(k => integer(p[k]))
-    || p.width < 1 || !Number.isInteger(Math.log2(p.width)) || ![0,1].includes(p.pass) || typeof p.carry !== 'string' || p.carry.length > 1
-    || JSON.stringify(p).length > 4096) fail();
-  decodeReplayHash(p.hash);
+    || p.width < 1 || !Number.isInteger(Math.log2(p.width)) || ![0,1].includes(p.pass)
+    || typeof p.carry !== 'string' || p.carry.length > 1
+    || (p.carry && !/^[\ud800-\udbff]$/.test(p.carry))
+    || p.hashRow > p.rows || JSON.stringify(p).length > 4096) fail();
+  const hash=decodeReplayHash(p.hash);
+  if(p.stage === 'ingest') {
+    if(p.width !== 1 || p.pass !== 0 || p.carry !== '' || hash.bytes !== 0
+      || ['start','left','right','end','output','comparePart','hashRow','hashPart'].some(k=>p[k] !== 0)) fail();
+    return;
+  }
+  if(p.part !== 0)fail();
+  if(p.stage === 'merge') {
+    const middle=Math.min(p.start+p.width,p.rows);
+    if(p.rows < 2 || p.width >= p.rows || p.start > p.rows
+      || (p.start !== p.rows && p.start % (2*p.width) !== 0)
+      || p.left < p.start || p.left > middle || p.right < middle || p.right > p.end
+      || p.end !== Math.min(p.start+2*p.width,p.rows)
+      || p.output !== p.left+p.right-middle
+      || (p.comparePart > 0 && (p.left === middle || p.right === p.end))
+      || p.hashRow !== 0 || p.hashPart !== 0 || p.carry !== '' || hash.bytes !== 1)fail();
+  } else {
+    if(p.width < Math.max(1,p.rows) || p.start !== 0 || p.left !== 0
+      || p.output !== 0 || p.right !== Math.min(p.width,p.rows) || p.end !== p.rows
+      || p.comparePart !== 0 || (p.hashRow === p.rows && (p.hashPart !== 0 || p.carry !== '')))fail();
+    if(p.stage === 'complete' && (p.hashRow !== p.rows || p.sha256 !== finishReplayHash(hash)))fail();
+  }
 }
 export function initialRecoveryReportTable(table) {
   const p = {version:1, table, stage:'ingest', rows:0, part:0, width:1, pass:0, start:0,

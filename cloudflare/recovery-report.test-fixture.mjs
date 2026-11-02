@@ -12,7 +12,7 @@ export class ReportFixture extends DurableObject {
    this.sql.exec('DELETE FROM scratch');const n=Number(url.searchParams.get('n'));let state=initialRecoveryReportTable('fixture');
    // Source fixture setup intentionally materializes one row; this does NOT
    // qualify the as-yet-unimplemented production source encoder.
-   for(let i=0;i<n;i++){const row={id:n-i,body:i<2?'x'.repeat(160000)+'🦉':'item'+String(i%17),value:i%3};const text=canonical(row);for(let offset=0;offset<text.length;offset+=REPORT_CHUNK_UNITS){writes=0;state=appendRecoveryReportChunk(scratch,state,text.slice(offset,offset+REPORT_CHUNK_UNITS),offset+REPORT_CHUNK_UNITS>=text.length);}}
+   for(let i=0;i<n;i++){const row={id:n-i,body:i<2?'x'.repeat(160000)+'🦉':'item'+String(i%17),value:i%3};const text=canonical(row);for(let offset = 0; offset < text.length; offset += REPORT_CHUNK_UNITS){writes=0;state=appendRecoveryReportChunk(scratch,state,text.slice(offset, offset + REPORT_CHUNK_UNITS),offset + REPORT_CHUNK_UNITS >= text.length);}}
    state=sealRecoveryReportTable(state);this.sql.exec('INSERT OR REPLACE INTO control VALUES(1,?)',JSON.stringify(state));return Response.json({ready:true});
   }
   let state=JSON.parse(this.sql.exec('SELECT payload FROM control WHERE id=1').one().payload);const step=advanceRecoveryReportTable(scratch,state);state=step.state;this.sql.exec('UPDATE control SET payload=? WHERE id=1',JSON.stringify(state));

@@ -16,3 +16,15 @@ Generic `POST /api/agent-keys` has no issuance replay contract. A lost issuance 
 Validation on the exact source: `node --test tests/room-acp-import-identity.test.js tests/room-acp-join.test.js tests/room-acp-saved-identity.test.js tests/room-acp-preflight.test.js tests/room-acp-agents.test.js tests/room-acp-pack-npm.test.js tests/runtime-pack-build.test.js`: **54/54 pass**, no skips. New cases use real in-process HTTP and prove identity continuity, heartbeat/poll, posting, other-room403, no global persistence/logging, private file permissions, save recovery, unknown-response refusal and concurrency. The actual ACP Bridge with scripted fake adapter responds to a mention as the original member. The public archive explicitly includes the new module; packaged CLI module help loads successfully.
 
 `node scripts/lint.mjs`: exit0, zero errors,365warnings. `git diff --check`: pass. Node26.8.2. Initial package-help harness used a direct temporary path whose `/var` versus `/private/var` spelling bypassed the existing entrypoint guard; invoking the exported packaged main function corrected that test harness. No production identity, credential, endpoint, model or adapter was used. Live real-adapter qualification remains separate.
+
+## Already-issued key import (actual other-laptop format)
+
+Source `8cafd1f587567c251a6f36c6817801d4b869f17f` adds the smaller no-issuance path:
+
+```sh
+node room-acp/src/cli.mjs import-credential --credential-file <private-key-JSON> --origin https://room.trydemigod.com --room room-fafdae79cf8c --expected-identity <exact-identity-id>
+```
+
+The other laptop confirmed only safe field names/types in Room sequence26388: `credential:string`, `keyId:string`, `identityId:string`, `roomId:string`, `expiresAt:number`, `scopes:array<string>`; no origin field. That existing0600 file is accepted without converting or copying a global identity. The caller supplies explicit origin, target and expected identity. Existing hosted MCP `room_check_access` verifies the authenticated identity/member rather than trusting local identity metadata; target `view=identity` then verifies active membership. Only that exact scoped key, supplied expiry/scopes, authoritative current permissions and explicit origin/room are saved atomically. Source file bytes stay unchanged. Same import retries preserve saved bytes; another saved key or unresolved setup is never replaced. No key issuance/rotation/revocation/admission call is made, and no global credential is needed.
+
+Exact source qualification: the seven-file command above passes **57/57**, no skips. New tests use the real retained shape and real HTTP to verify metadata mismatch/expiry refusal, unknown-read no-save, actual other authenticated identity refusal, final-save retry, no remote business writes and no duplicate key issuance. A causal control bypassing only the authenticated identity equality check makes the wrong-identity test fail with missing expected rejection. Restored source remains clean. Lint exit0, zero errors,365warnings; diff-check pass. Real other-laptop source/adapter/live-room qualification remains external to this local result.

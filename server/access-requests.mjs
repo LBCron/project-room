@@ -1,4 +1,4 @@
-import { currentInviteContext, prepareCurrentWrite, withCurrentServingWriter } from "./current-room-repository.mjs";
+import { currentInviteContext, prepareCurrentWrite, withCurrentServingWriter, isCurrentRoom, readCurrentHead, withCurrentReadContext } from "./current-room-repository.mjs";
 // Self-serve agent access requests.
 //
 // An agent that minted an identity (server/agent-identities.mjs) but has no
@@ -32,6 +32,7 @@ import { currentInviteContext, prepareCurrentWrite, withCurrentServingWriter } f
 // G11: read at call time; store.mjs imports this module, so no module-level copy.
 import { PILOT_LIMITS } from "./store.mjs";
 import { AgentSponsorTransfers, sponsorTransferContents } from "./agent-sponsor-transfer.mjs";
+import { conversationCursorCodec } from "./conversation-sync.mjs";
 import { randomUUID, createHash } from "node:crypto";
 import { MemberPermissionRequests, permissionRequestContents } from "./member-permission-requests.mjs";
 import { createRateLimiter } from "./identity-ratelimit.mjs";
@@ -79,6 +80,8 @@ export const accessRequestSchema = `
   );
   CREATE INDEX IF NOT EXISTS access_requests_room ON access_requests(room_id, status);
   CREATE INDEX IF NOT EXISTS access_requests_identity ON access_requests(identity_id);
+  CREATE INDEX IF NOT EXISTS access_requests_pending_page ON access_requests(room_id, created_at, request_id)
+    WHERE status IN ('pending', 'pending_upgrade', 'pending_account');
   -- PRODUCT-200 B10: covering index for the room-scoped idempotency replay
   -- lookup (WHERE request_id=? AND room_id=?).
   CREATE INDEX IF NOT EXISTS access_requests_room_request ON access_requests(room_id, request_id);
@@ -768,6 +771,44 @@ export class AccessRequests {
       "SELECT * FROM access_requests WHERE room_id=? AND status IN (?,?,?) ORDER BY created_at ASC")
       .all(roomId, status, status === "pending" ? UPGRADE_PENDING_STATUS : status, status === "pending" ? ACCOUNT_PENDING_STATUS : status);
     return Object.freeze(rows.map(rowToRequest));
+  }
+
+  // Current-per-page pending discovery. Unlike the legacy complete list, this
+  // read never materializes room-wide expiry or scans earlier keyset pages.
+  pendingPage(token, roomId, { limit = 25, cursor = null } = {}, expectedSessionBinding = null) {
+    if (!Number.isSafeInteger(limit) || limit < 1 || limit > 50)
+      fail(422, "invalid_request", "Choose a request page limit from 1 to 50");
+    return this.store.readTransaction(() => {
+      const { auth, authority } = this.#requireMembershipAdministration(token, roomId, expectedSessionBinding);
+      const generation = isCurrentRoom(this.db, roomId)
+        ? withCurrentReadContext(this.db, roomId, () => readCurrentHead(this.db, roomId).head_sha256)
+        : this.db.prepare("SELECT id FROM events WHERE room_id=? ORDER BY sequence LIMIT 1").get(roomId)?.id;
+      const scope = createHash("sha256").update(JSON.stringify(["access-requests-v1", roomId,
+        auth.member.id, auth.credentialHash ?? createHash("sha256").update(token).digest("hex"),
+        auth.member.revision, [...auth.member.permissions].sort(), expectedSessionBinding, generation, authority.sequence, limit])).digest("hex");
+      const codec = conversationCursorCodec(this.store), cutoff = this.store.now() - REQUEST_TTL_MS;
+      const stale = () => fail(409, "stale_access_request_cursor", "The request queue or access changed. Restart without cursor.");
+      let after = { createdAt: cutoff, requestId: "" };
+      if (cursor !== null) {
+        const saved = codec.decode(cursor);
+        if (!saved || Object.keys(saved).sort().join(" ") !== "createdAt requestId scope"
+            || saved.scope !== scope || !Number.isSafeInteger(saved.createdAt)
+            || typeof saved.requestId !== "string" || !REQUEST_ID_PATTERN.test(saved.requestId)) stale();
+        const anchor = this.db.prepare("SELECT status,created_at FROM access_requests WHERE room_id=? AND request_id=?").get(roomId, saved.requestId);
+        if (!anchor || !isPending(anchor.status) || anchor.created_at !== saved.createdAt || anchor.created_at < cutoff) stale();
+        after = saved;
+      }
+      const rows = this.db.prepare(`SELECT * FROM access_requests INDEXED BY access_requests_pending_page
+        WHERE room_id=? AND status IN ('pending','pending_upgrade','pending_account')
+          AND (created_at,request_id)>(?,?) ORDER BY created_at,request_id LIMIT ?`)
+        .all(roomId, after.createdAt, after.requestId, limit + 1);
+      const hasMore = rows.length > limit, selected = rows.slice(0, limit), last = selected.at(-1);
+      const nextCursor = hasMore ? codec.encode({ scope, createdAt: last.created_at, requestId: last.request_id }) : null;
+      const nextRead = nextCursor ? { method: "GET", path: `/api/rooms/${encodeURIComponent(roomId)}/access-requests?status=pending&limit=${limit}&cursor=${encodeURIComponent(nextCursor)}` } : null;
+      return { requests: selected.map(rowToRequest),
+        page: { limit, cursor, hasMore, nextCursor, nextRead },
+        sourceWindow: { complete: !hasMore, consistency: "current-per-page", order: "created-at-request-id", expiry: "filtered-at-read" } };
+    });
   }
 
   // Owner or membership-administration delegate (RC-2026-09-18-038):

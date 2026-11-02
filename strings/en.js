@@ -752,5 +752,14 @@ export default {
   "agentError.current_room_corrupt.recovery": "Stop the read and report the room ID, code and full message to the operator for integrity reconciliation. Do not retry unchanged or treat this as an empty result.",
   "agentSponsor.invalidConsent": "Invalid sponsorship consent",
   "agentSponsor.permissionsNotHeld": "Cannot grant permissions not held",
-  "agentSponsor.requestTitle": "Connect {name} to the requesting human"
+  "agentSponsor.requestTitle": "Connect {name} to the requesting human",
+  "accessQueue.label": "Access requests",
+  "accessQueue.previous": "Previous requests",
+  "accessQueue.next": "Next requests",
+  "accessQueue.reset": "The request list changed. Showing the first page.",
+  "accessQueue.unavailable": "Could not confirm the request page.",
+  "agentError.stale_access_request_cursor.hint": "The request queue or your access changed between pages.",
+  "agentError.stale_access_request_cursor.recovery": "Restart the same pending-request selection without cursor.",
+  "accessQueue.rangeMore": "Requests {from}–{to}. More requests are available.",
+  "accessQueue.rangeComplete": "Requests {from}–{to}. All pending requests checked."
 };

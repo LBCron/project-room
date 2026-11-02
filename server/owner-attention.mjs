@@ -66,6 +66,10 @@ export function accessRequestAttentionItem(roomId, request) {
     kind: "access_request",
     id: request.requestId,
     severity: "action",
+    // This already-authorized selected item must not depend on a second,
+    // formerly unbounded queue read to reconstruct its review controls.
+    request: Object.freeze({ requestId: request.requestId, kind: request.kind,
+      displayName: request.displayName, requestedPermissions: [...request.requestedPermissions], note: request.note }),
     title: request.kind === "agent-sponsor-transfer" ? `Connect ${request.displayName} to the requesting human` : request.kind === "permissions" ? `${request.displayName} wants: ${request.requestedPermissions.join(", ")}` : `${request.displayName} asks to join`,
     detail: request.kind === "agent-sponsor-transfer" ? request.note : `Requested ${request.requestedPermissions.join(", ")}`,
     actions: decideActions(roomId, request),

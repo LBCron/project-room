@@ -54,12 +54,22 @@ export async function requestMemberPermissions(ctx) {
 export async function listMemberAccessRequests(ctx) {
   const requests = service(ctx);
   const { roomId, selected, fence } = roomContext(ctx, false);
-  const records = requests.list(selected.token, roomId, { status: ctx.url.searchParams.get("status") ?? "pending" }, fence);
+  const params = ctx.url.searchParams;
+  if ([...params.keys()].some(key => !["status", "limit", "cursor", "auth"].includes(key) || params.getAll(key).length !== 1))
+    ctx.reject(422, "invalid_request", "Choose status and optional request page limit/cursor");
+  const status = params.get("status") ?? "pending", paged = params.has("limit") || params.has("cursor");
+  if (status !== "pending" && paged) ctx.reject(422, "invalid_request", "Pagination selects pending requests only");
+  const page = status === "pending" ? requests.pendingPage(selected.token, roomId,
+    { limit: params.has("limit") ? Number(params.get("limit")) : 25, cursor: params.get("cursor") }, fence) : null;
+  if (page?.page.hasMore && !paged)
+    ctx.reject(422, "invalid_request", "This queue requires pagination. Choose limit and follow page.nextRead until complete.");
+  const records = page ? page.requests : requests.list(selected.token, roomId, { status }, fence);
   const next = records.length ? [{ action: "decide-request", method: "POST",
     path: `/api/rooms/${encodeURIComponent(roomId)}/access-requests/${encodeURIComponent(records[0].requestId)}/decide`,
     description: records[0].kind==="agent-sponsor-transfer" ? `Approve sponsorship of ${records[0].displayName} by the requesting human: send { decision: "approve" }. Identity and permissions remain unchanged. Use "deny" to refuse.` : `Decide ${records[0].displayName}'s request: send { decision: "approve", permissions: ${JSON.stringify(records[0].requestedPermissions)}, note: null }. Use "deny" to refuse. Send your current room credential.` }]
     : [{ action: "watch-requests", description: "No pending access requests." }];
-  return ctx.json(ctx.res, 200, { roomId, requests: records, next });
+  return ctx.json(ctx.res, 200, { roomId, requests: records, next,
+    ...(page ? { page: page.page, sourceWindow: page.sourceWindow } : {}) });
 }
 
 function accountAdmissionContext(ctx) {
@@ -118,6 +128,6 @@ export const MEMBER_PERMISSION_ROUTES = Object.freeze([
     events: ["access.requested"] }),
   Object.freeze({ id: "list-member-access-requests", method: "GET", path: "/api/rooms/{roomId}/access-requests",
     auth: "room", capability: null, scope: "room", handler: listMemberAccessRequests,
-    schema: { params: parameters, query: { type: "object", properties: { status: { type: "string" } } }, response: { type: "object" } },
+    schema: { params: parameters, query: { type: "object", properties: { status: { type: "string" }, limit: { type: "integer", minimum: 1, maximum: 50 }, cursor: { type: "string" } } }, response: { type: "object" } },
     events: [] }),
 ]);

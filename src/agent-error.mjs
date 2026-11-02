@@ -551,6 +551,7 @@ export function errorRegistryAx(code, { httpStatus = 0, message = "", roomId, wo
 // covered by axFamilyRecovery() below; tests/errors-catalog-drift.test.js
 // fails if a catalogued code loses either kind of coverage.
 const AX_NAMED_RECOVERIES = {
+  stale_access_request_cursor: [uiText("agentError.stale_access_request_cursor.hint"), uiText("agentError.stale_access_request_cursor.recovery")],
   // Current-room refusals retain their qualified recovery and existing grants.
   current_room_context_required: [uiText("agentError.current_room_context_required.hint"), uiText("agentError.current_room_context_required.recovery")],
   current_directory_integrity: [uiText("agentError.current_directory_integrity.hint"), uiText("agentError.current_directory_integrity.recovery")],

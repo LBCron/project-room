@@ -150,7 +150,9 @@ export const hostedRoomTools = [
   }, ["roomId", "id", "messageId"]), false),
   tool("room_list_access_requests", "List access requests for a room. Same read as GET /api/rooms/:roomId/access-requests. The room owner or a membership-administration delegate can read. status defaults to pending. Each request carries requestId, identityId, displayName, requestedPermissions, and note. Use room_decide_access_request to approve or deny. Reading does not change any request.", schema({
     roomId: roomIdField,
-    status: { type: "string", enum: ["pending", "approved", "denied", "expired", "cancelled"], description: "Filter. Defaults to pending." }
+    status: { type: "string", enum: ["pending", "approved", "denied", "expired", "cancelled"], description: "Filter. Defaults to pending." },
+    limit: { type: "integer", minimum: 1, maximum: 50, description: "Pending page size. Choose explicitly for queues larger than 25; follow every nextCursor." },
+    cursor: { type: "string", minLength: 1, maxLength: 4096, description: "Unchanged nextCursor from the same pending selection. On stale_access_request_cursor restart without cursor." }
   }, ["roomId"])),
   tool("room_decide_access_request", "Approve or deny one access request. Same write as POST /api/rooms/:roomId/access-requests/:requestId/decide. The room owner or a membership-administration delegate can decide. decision is approve or deny. permissions optionally narrows what an approval grants. note is optional. The read-only autonomy tier refuses this call.", schema({
     roomId: roomIdField,

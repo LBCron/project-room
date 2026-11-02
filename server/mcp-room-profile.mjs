@@ -254,7 +254,10 @@ function validRoomArgs(name, args) {
   if (name === "room_list_files") return (args.messageIds === undefined || Array.isArray(args.messageIds)
     && args.messageIds.length >= 1 && args.messageIds.length <= 8 && new Set(args.messageIds).size === args.messageIds.length && args.messageIds.every(validId))
     && (args.cursor === undefined || args.messageIds !== undefined && typeof args.cursor === "string" && args.cursor.length > 0 && args.cursor.length <= 4096);
-  if (name === "room_list_access_requests") return args.status === undefined || typeof args.status === "string" && args.status.length <= 32;
+  if (name === "room_list_access_requests") return (args.status === undefined || typeof args.status === "string" && args.status.length <= 32)
+    && (args.limit === undefined || Number.isSafeInteger(args.limit) && args.limit >= 1 && args.limit <= 50)
+    && (args.cursor === undefined || typeof args.cursor === "string" && args.cursor.length > 0 && args.cursor.length <= 4096)
+    && (args.status === undefined || args.status === "pending" || args.limit === undefined && args.cursor === undefined);
   if (name === "room_decide_access_request") {
     const permsOk = args.permissions === undefined || validPermissionList(args.permissions);
     const noteOk = args.note === undefined || typeof args.note === "string" && args.note.length <= 500;
@@ -704,7 +707,11 @@ function dispatchRoomToolCall(store, secret, identity, name, args, agentRooms) {
     const auth = store.authenticate(secret, roomId);
     const identityId = auth.identityId ?? store.bonds?.identityForMember?.(roomId, auth.member.id) ?? null;
     const viewerIds = [auth.member.id, identityId].filter(id => id != null);
-    return stampAccessRequests({ roomId, requests: new AccessRequests(store).list(secret, roomId, { status: args.status ?? "pending" }) }, viewerIds);
+    const requests = new AccessRequests(store), status = args.status ?? "pending";
+    const page = status === "pending" ? requests.pendingPage(secret, roomId, { limit: args.limit ?? 25, cursor: args.cursor ?? null }) : null;
+    if (page?.page.hasMore && args.limit === undefined && args.cursor === undefined)
+      throw new ServiceError(422, "invalid_request", "This queue requires pagination. Choose limit and follow every nextCursor until complete.");
+    return stampAccessRequests({ roomId, ...(page ?? { requests: requests.list(secret, roomId, { status }) }) }, viewerIds);
   }
   if (name === "room_decide_access_request") {
     const decision = { decision: args.decision };

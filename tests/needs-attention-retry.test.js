@@ -208,11 +208,11 @@ function attentionClient({ read = async () => null, queue = async () => accessQu
     ownsAccountSession: () => true,
     needsAttention: cursor => { calls.rollup.push(cursor); return read(cursor); },
     path: path => {
-      assert.match(path, /^\/access-requests(?:\?status=pending|\/request-1\/decide)$/, "only access-request paths are supported");
+      assert.match(path, /^\/access-requests(?:\?status=pending&limit=25|\/request-1\/decide)$/, "only access-request paths are supported");
       return `/api/rooms/room-1${path}`;
     },
     request: (path, options) => {
-      assert.equal(path, "/api/rooms/room-1/access-requests?status=pending", "only the authorized pending queue may be fetched");
+      assert.equal(path, "/api/rooms/room-1/access-requests?status=pending&limit=25", "only the authorized pending queue may be fetched");
       assert.equal(options, undefined, "queue fetch must remain read-only");
       calls.queue.push(path);
       return queue();
@@ -279,8 +279,8 @@ test("current active admin renders the queue without calling the owner-only read
   assert.deepEqual(calls.rollup, []);
   assert.equal(calls.queue.length, 1);
   assert.equal(section.hidden, false);
-  assert.equal(section._elements["#attention-count"].textContent, "1");
-  assert.equal(section._elements["#attention-range"].textContent, "Showing 1–1 of 1");
+  assert.equal(section._elements["#attention-count"].textContent, "1 loaded");
+  assert.equal(section._elements["#attention-range"].textContent, "");
   const markup = section._elements["#attention-list"].innerHTML;
   assert.match(markup, /Pending member wants more permissions/);
   assert.match(markup, /You cannot grant: Complete work/, "admin grant controls use current permissions with a readable permission name");
@@ -417,8 +417,8 @@ function assertAdminQueueRendered(section) {
   assertOwnerRollupRemoved(section);
   assert.equal(section.hidden, false, "the remaining admin can still review pending requests");
   assert.match(section._elements["#attention-list"].innerHTML, /Pending member wants more permissions/);
-  assert.equal(section._elements["#attention-count"].textContent, "1");
-  assert.equal(section._elements["#attention-range"].textContent, "Showing 1–1 of 1");
+  assert.equal(section._elements["#attention-count"].textContent, "1 loaded");
+  assert.equal(section._elements["#attention-range"].textContent, "");
 }
 
 test("ownership transfer clears a selected owner page while preserving the active admin queue", async t => {

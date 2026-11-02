@@ -4331,6 +4331,16 @@ paths:
         delegate who may admit new members cannot approve additional
         permissions without manage_members. Scoped API keys require rooms:read
         and the selected room must satisfy their stored room restriction.
+        Pending requests use stable created-time/request-id keyset pages. Add
+        limit (1–50, default 25) and follow page.nextRead until complete. A
+        caller omitting pagination is refused if the pending queue exceeds one
+        page; the service never silently returns a partial complete list.
+        Continuations are bound to the current viewer, credential, session,
+        room source and selected limit. A stale continuation returns 409;
+        restart without cursor. Pages are current observations, not a frozen
+        queue or an acknowledgment. Expired pending rows are filtered at read
+        time without a room-wide expiry sweep. Other status selections retain
+        their complete-list contract and do not accept limit/cursor.
       security:
         - bearerAuth: []
         - roomSession: []
@@ -4338,6 +4348,8 @@ paths:
       parameters:
         - $ref: '#/components/parameters/RoomId'
         - { name: status, in: query, schema: { type: string, default: pending, enum: [pending, approved, denied, expired, cancelled] } }
+        - { name: limit, in: query, schema: { type: integer, minimum: 1, maximum: 50, default: 25 }, description: Explicit bounded pending-request selection }
+        - { name: cursor, in: query, schema: { type: string, maxLength: 4096 }, description: Copy the returned pending page continuation unchanged }
       responses:
         '401': { description: unauthenticated }
         '200':
@@ -4353,6 +4365,24 @@ paths:
                     type: array
                     items:
                       $ref: '#/components/schemas/RoomPermissionRequestRecord'
+                  page:
+                    type: object
+                    description: Pending selection only; no exact global count is inferred
+                    required: [limit, cursor, hasMore, nextCursor, nextRead]
+                    properties:
+                      limit: { type: integer }
+                      cursor: { type: [string, 'null'] }
+                      hasMore: { type: boolean }
+                      nextCursor: { type: [string, 'null'] }
+                      nextRead: { type: [object, 'null'], description: Same-origin GET method/path for the next page }
+                  sourceWindow:
+                    type: object
+                    description: Current-per-page pending coverage; complete is the end of this traversal, not a handled marker
+                    properties:
+                      complete: { type: boolean }
+                      consistency: { type: string, const: current-per-page }
+                      order: { type: string, const: created-at-request-id }
+                      expiry: { type: string, const: filtered-at-read }
                   next:
                     type: array
                     description: decide-request with the first request's decision path, or watch-requests when the queue is empty
@@ -4365,7 +4395,8 @@ paths:
                         path: { type: string }
                         description: { type: string }
         '403': { description: access_denied or insufficient_scope }
-        '422': { description: invalid_request (unsupported status) }
+        '409': { description: stale_access_request_cursor; restart the pending selection without cursor }
+        '422': { description: invalid_request (unsupported selection, malformed limit, or explicit pagination required for a larger queue) }
   /api/rooms/{roomId}/agents/overview:
     get:
       summary: Agent fleet overview (read-only)

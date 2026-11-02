@@ -44,8 +44,8 @@ for (const [kind, isOwner] of [["agent", false], ["agent", true], ["human", fals
     const viewer = member("viewer", kind), f = model(t, viewer, isOwner ? viewer.id : "owner");
     await f.card.refresh();
     assert.deepEqual(f.calls, kind === "human" && isOwner
-      ? ["rollup", "/api/rooms/commons/access-requests?status=pending"]
-      : ["/api/rooms/commons/access-requests?status=pending"]);
+      ? ["rollup", "/api/rooms/commons/access-requests?status=pending&limit=25"]
+      : ["/api/rooms/commons/access-requests?status=pending&limit=25"]);
     assert.equal(f.client.session.member, viewer);
   });
 }
@@ -62,7 +62,7 @@ test("losing human-owner eligibility clears cached rollup before the authorized 
   const pending = f.card.refresh();
   assert.equal(f.target.hidden, true);
   assert.equal(f.target.querySelector("#attention-list").innerHTML, "");
-  assert.deepEqual(f.calls, ["/api/rooms/commons/access-requests?status=pending"]);
+  assert.deepEqual(f.calls, ["/api/rooms/commons/access-requests?status=pending&limit=25"]);
   release(queue()); await pending;
   assert.doesNotMatch(f.target.querySelector("#attention-list").innerHTML, /OWNER_ONLY_CONTENT/);
 });
@@ -113,7 +113,7 @@ test("real agent browser session keeps owner-only 403 while the card reads its p
   const read = path => fetch(origin + path, { headers: { cookie, Origin: origin } });
   const refused = await read("/api/rooms/commons/needs-attention");
   assert.equal(refused.status, 403); assert.equal((await refused.json()).error.code, "owner_required");
-  assert.equal((await read("/api/rooms/commons/access-requests?status=pending")).status, 200);
+  assert.equal((await read("/api/rooms/commons/access-requests?status=pending&limit=25")).status, 200);
   assert.equal((await read("/api/session")).status, 200, "the rollup refusal does not end the agent session");
   const paths = [], client = new RoomClient({ fetcher: async (path, options) => {
     paths.push(path); return fetch(new URL(path, origin), { ...options, headers: { ...options?.headers, cookie, Origin: origin } });
@@ -121,7 +121,7 @@ test("real agent browser session keeps owner-only 403 while the card reads its p
   client.session = session;
   const target = section(), card = createNeedsAttentionCard({ client, section: target, getState: () => store.room("commons").state });
   await card.refresh();
-  assert.deepEqual(paths, ["/api/rooms/commons/access-requests?status=pending"]);
+  assert.deepEqual(paths, ["/api/rooms/commons/access-requests?status=pending&limit=25"]);
   assert.equal(client.session, session);
   assert.equal(client.session.member.kind, "agent");
 });

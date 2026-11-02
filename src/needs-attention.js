@@ -31,6 +31,21 @@ export function createNeedsAttentionCard(options) {
   const range = section.querySelector("#attention-range");
   const previous = section.querySelector("#attention-previous");
   const next = section.querySelector("#attention-next");
+  const accessLimit = 25;
+  let accessCursor = null, accessHistory = [], accessPage = null, workCursor = null;
+  const accessPages = typeof pages?.insertAdjacentElement === "function" ? document.createElement("div") : null;
+  let accessPrevious = null, accessNext = null, accessRange = null;
+  if (accessPages) {
+    accessPages.id = "attention-access-pages";
+    accessPages.setAttribute("role", "group"); accessPages.setAttribute("aria-label", uiText("accessQueue.label"));
+    accessRange = document.createElement("span"); accessRange.className = "form-hint";
+    accessPrevious = document.createElement("button"); accessNext = document.createElement("button");
+    for (const button of [accessPrevious, accessNext]) { button.type = "button"; button.className = "button ghost"; }
+    accessPrevious.id = "attention-access-previous"; accessPrevious.textContent = uiText("accessQueue.previous");
+    accessNext.id = "attention-access-next"; accessNext.textContent = uiText("accessQueue.next");
+    accessPages.append(accessRange, accessPrevious, accessNext); accessPages.hidden = true;
+    pages.insertAdjacentElement("afterend", accessPages);
+  }
   let currentReport = null, epoch = 0, busy = false, partial = null, observed = null, activeScope = null, authority = null, resync = false;
   function viewer() {
     const state = typeof getState === "function" ? getState() : null, session = client.session;
@@ -91,6 +106,8 @@ export function createNeedsAttentionCard(options) {
     refreshButton.disabled = value;
     previous.disabled = value || !currentReport?.previousCursor;
     next.disabled = value || !currentReport?.nextCursor;
+    if (accessPrevious) accessPrevious.disabled = value || !accessHistory.length;
+    if (accessNext) accessNext.disabled = value || !accessPage?.hasMore;
     list.querySelectorAll(".attention-decide, .attention-partial, .attention-cancel, .attention-selected").forEach(button => {
       button.disabled = value || button.dataset.unavailable === "true";
     });
@@ -100,6 +117,8 @@ export function createNeedsAttentionCard(options) {
     epoch++;
     clearRetry();
     currentReport = null; partial = null; observed = null; activeScope = null; authority = null; resync = false;
+    accessCursor = null; accessHistory = []; accessPage = null; workCursor = null;
+    if (accessPages) accessPages.hidden = true;
     section.hidden = true;
     list.innerHTML = "";
     count.textContent = "";
@@ -144,9 +163,16 @@ export function createNeedsAttentionCard(options) {
   function render(report) {
     const items = report?.items ?? [];
     currentReport = report;
-    count.textContent = report?.coverage?uiText(report.coverage.complete?"currentRoom.attentionCount":"currentRoom.attentionLoaded",{count:items.length}):String(report?.itemCount??items.length);
+    count.textContent = report?.accessQueueOnly || accessPage?.hasMore ? uiText("currentRoom.attentionLoaded", { count: items.length })
+      : report?.coverage?uiText(report.coverage.complete?"currentRoom.attentionCount":"currentRoom.attentionLoaded",{count:items.length}):String(report?.itemCount??items.length);
     pages.hidden = !report?.nextCursor && !report?.previousCursor;
-    range.textContent=report?.coverage?uiText(report.coverage.complete?"currentRoom.attentionComplete":"currentRoom.attentionPartial"):(items.length?uiText("currentRoom.attentionRange",{from:report.pageOffset+1,to:report.pageOffset+items.length,count:report.itemCount}):'');
+    if (accessPages) {
+      accessPages.hidden = !accessPage?.hasMore && !accessHistory.length;
+      const loaded = report?.items.filter(item => item.kind === "access_request").length ?? 0;
+      accessRange.textContent = uiText(accessPage?.hasMore ? "accessQueue.rangeMore" : "accessQueue.rangeComplete",
+        { from: loaded ? accessHistory.length * accessLimit + 1 : 0, to: accessHistory.length * accessLimit + loaded });
+    }
+    range.textContent=report?.accessQueueOnly ? "" : report?.coverage?uiText(report.coverage.complete?"currentRoom.attentionComplete":"currentRoom.attentionPartial"):(items.length?uiText("currentRoom.attentionRange",{from:report.pageOffset+1,to:report.pageOffset+items.length,count:report.itemCount}):'');
     section.hidden = items.length === 0&&!report?.coverage;
     list.innerHTML = items.map((item, itemIndex) => `
       <li class="attention-item attention-${esc(item.kind)} attention-severity-${esc(item.severity)}" data-item-index="${itemIndex}" data-access-request-id="${item.kind === "access_request" ? esc(item.id) : ""}">
@@ -199,7 +225,7 @@ export function createNeedsAttentionCard(options) {
     const item = report?.items?.[itemIndex], action = item?.actions?.[actionIndex];
     if (!action?.path || action.method !== "POST" || !action.body) return;
     const body = permissions ? { ...action.body, permissions } : action.body;
-    if (body.decision === "approve" && body.permissions.some(permission => !canGrant(permission))) return;
+    if (body.decision === "approve" && body.permissions?.some(permission => !canGrant(permission))) return;
     const ticket = ++epoch, session = client.session, generation = client.generation;
     setBusy(true);
     setStatus("Working…");
@@ -224,7 +250,7 @@ export function createNeedsAttentionCard(options) {
     if (event.target?.id === "human-advanced") queueMicrotask(() => refresh());
   });
 
-  async function refresh(cursor = null) {
+  async function refresh(cursor = null, queueCursor = accessCursor, queueHistory = accessHistory) {
     if (currentReport?.ownerOnly && !canReadOwnerRollup()) hide();
     if (!client.session || !canReview()) { hide(); return; }
     if (hasRoomState && !client.ownsAccountSession()) { hide(); client.endAccess(); return; }
@@ -241,21 +267,43 @@ export function createNeedsAttentionCard(options) {
     try {
       // Independent authorized reads overlap instead of waiting in sequence.
       // Promise.all also observes both failures if either read rejects first.
+      let queueReset = false;
+      const firstQueuePath = hasRoomState ? client.path(`/access-requests?status=pending&limit=${accessLimit}`) : null;
+      const readQueue = () => Promise.resolve(client.request(queueCursor ? [firstQueuePath, new URLSearchParams({ cursor: queueCursor }).toString()].join("&") : firstQueuePath))
+        .catch(error => {
+          if (!queueCursor || error.status !== 409 || error.code !== "stale_access_request_cursor") throw error;
+          queueReset = true; return client.request(firstQueuePath);
+        });
       let [report, queue] = await Promise.all([
         canReadOwnerRollup() ? client.needsAttention(cursor, { includeShadow: includeShadow() }) : null,
-        hasRoomState ? client.request(client.path("/access-requests?status=pending")) : null,
+        hasRoomState ? readQueue() : null,
       ]);
       if (!owns(ticket, session, generation)) return;
       if (hasRoomState) {
         if (queue?.roomId !== session.roomId || !Array.isArray(queue.requests)) throw new Error("The request queue could not be confirmed");
+        const page = queue.page;
+        if (queue.requests.length > accessLimit || page && (page.limit !== accessLimit || page.cursor !== (queueReset ? null : queueCursor) || typeof page.hasMore !== "boolean"
+            || page.hasMore !== Boolean(page.nextCursor) || queue.sourceWindow?.complete !== !page.hasMore
+            || page.nextCursor !== null && typeof page.nextCursor !== "string")) throw new Error(uiText("accessQueue.unavailable"));
+        const legacyOwnerReport = report && report.contractVersion !== 2;
+        accessPage = legacyOwnerReport ? null : page ?? { hasMore: false, nextCursor: null };
+        accessCursor = queueReset || legacyOwnerReport ? null : queueCursor;
+        accessHistory = queueReset || legacyOwnerReport ? [] : [...queueHistory];
         const requests = queue.requests.map(requestItem), byId = new Map(requests.map(item => [item.id, item]));
         // Owners retain their paged rollup; admins receive only the request queue
         // their existing manage_members authority permits, never the owner rollup.
         if (!canReadOwnerRollup()) report = null;
-        report = report ? { ...report, ownerOnly: true, items: (report.contractVersion === 2 ? [...requests, ...report.items] : report.items).map(item => item.kind === "access_request" ? byId.get(item.id) : item).filter(Boolean) }
-          : { items: requests, itemCount: requests.length, pageOffset: 0, ownerOnly: false };
+        report = report ? { ...report, ownerOnly: true, items: (report.contractVersion === 2 ? [...requests, ...report.items] : report.items).map(item => {
+          if (item.kind !== "access_request") return item;
+          if (item.request?.requestId === item.id) return requestItem(item.request);
+          const selected = byId.get(item.id);
+          if (!selected) throw new Error(uiText("accessQueue.unavailable"));
+          return selected;
+        }) }
+          : { items: requests, itemCount: null, pageOffset: 0, ownerOnly: false, accessQueueOnly: true };
       }
       if (partial && !report?.items.some(item => item.id === partial.id)) partial = null;
+      workCursor = cursor;
       const keepsFocus = focused && (document.activeElement === focused
         || focused.disabled && document.activeElement === document.body);
       render(report);
@@ -266,7 +314,10 @@ export function createNeedsAttentionCard(options) {
       } else if (keepsFocus && (focused === previous || focused === next)) {
         // Avoid leaving keyboard focus on a now-disabled paging control.
         (pages.hidden ? refreshButton : focused.disabled ? (focused === next ? previous : next) : focused).focus();
+      } else if (keepsFocus && (focused === accessPrevious || focused === accessNext)) {
+        (accessPages.hidden ? refreshButton : focused.disabled ? (focused === accessNext ? accessPrevious : accessNext) : focused).focus();
       }
+      if (queueReset) setStatus(uiText("accessQueue.reset"));
       // Events observed while this read was pending may be newer than its
       // snapshot. Coalesce them into one read after the current render.
       if (resync) { resync = false; observed = null; sync(); }
@@ -286,9 +337,15 @@ export function createNeedsAttentionCard(options) {
     }
   }
 
-  refreshButton.addEventListener("click", () => refresh());
+  refreshButton.addEventListener("click", () => refresh(null, null, []));
   previous.addEventListener("click", () => { if (!busy && currentReport?.previousCursor) refresh(currentReport.previousCursor); });
   next.addEventListener("click", () => { if (!busy && currentReport?.nextCursor) refresh(currentReport.nextCursor); });
+  accessNext?.addEventListener("click", () => {
+    if (!busy && accessPage?.hasMore) refresh(workCursor, accessPage.nextCursor, [...accessHistory, accessCursor]);
+  });
+  accessPrevious?.addEventListener("click", () => {
+    if (!busy && accessHistory.length) refresh(workCursor, accessHistory.at(-1), accessHistory.slice(0, -1));
+  });
   function sync() {
     if (!hasRoomState) return;
     if (!client.session || !canReview()) { hide(); return; }
@@ -311,7 +368,7 @@ export function createNeedsAttentionCard(options) {
     // Preserve the reader's selected page and unsent partial selection. Manual
     // Next/Previous still exercise the server's stale-continuation reset.
     if (busy) { resync = true; return; }
-    if (partial || currentReport?.pageOffset > 0) return;
+    if (partial || currentReport?.pageOffset > 0 || accessHistory.length) return;
     void refresh();
   }
   return { refresh, hide, sync };

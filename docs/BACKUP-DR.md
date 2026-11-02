@@ -113,12 +113,50 @@ recovered in place — a fresh DO starts empty, and
 as well as by file replay into a new Node sqlite store (above), which
 remains the route that needs no Cloudflare runtime.
 
+## Resume an already sealed remote restore
+
+The existing script has an explicit continuation-only mode:
+
+```sh
+node scripts/restore-room-backup.mjs \
+  --continue-receipt /private/restore/initial-receipt.json \
+  --origin https://room.example \
+  --checkpoint /private/restore/continuation.json
+```
+
+`ROOM_RESTORE_TOKEN` must already be in the environment. This mode never
+uploads a backup or starts a restore. Use the current coverage receipt or a
+verified publication/cleanup receipt from the existing operator API. It sends
+only POST `/api/operator/restore` under the explicit origin. HTTPS is required
+except loopback HTTP; userinfo, paths, query, fragments and redirects are refused.
+Response-provided destinations never select where authorization is sent.
+
+The checkpoint directory must be owned by the operator and not writable by
+others. The script atomically writes and fsyncs a mode0600 checkpoint containing
+the exact request before sending it. After an interrupted response or process
+restart, rerun the **same command with the same initial receipt and checkpoint**;
+the saved requestId and body are reused. A live lock refuses concurrent drivers;
+a dead local process lock can be reconciled, while unknown/other-host locks fail
+closed. Preserve checkpoint files until the operation is reconciled.
+
+Verified data publication is separate from guard cleanup. The driver follows
+only the exact `nextCleanup.body` template, including HTTP202 maintenance
+receipts where data is already verified. It reports complete only after an
+HTTP200 receipt proves both remaining guards and verified guard count are zero.
+It stops on malformed bindings, non-progress or rejected requests. Each invocation
+has a 15-minute budget (optionally shorten with `--run-ms`); budget exhaustion
+prints status `pending` and exits2, preserving the next exact request. Completed
+cleanup exits0; refusal/interruption exits1. Output contains status and counts,
+never raw receipts, request bodies or credentials. Existing local file/KV restore
+options are unchanged and cannot be mixed with continuation mode.
+
 ## Honest RPO / RTO
 
 - **RPO: ~24 hours.** Nightly backups bound the loss window to the last
-  successful daily export. Cloudflare also replicates Durable Object storage
-  internally, but there is no user-facing snapshot or point-in-time recovery
-  for DO SQLite — the nightly export is the recovery point.
+  successful daily export for this portable-backup path. Separately,
+  [Cloudflare SQLite-backed Durable Objects support point-in-time recovery of SQL and KV data over the preceding 30 days](https://developers.cloudflare.com/durable-objects/api/sqlite-storage-api/).
+  That platform recovery path is distinct from this export/restore protocol;
+  neither automatically reconciles authority changes after the chosen recovery point.
 - **RTO: hours, not minutes.** File replay is rehearsed, but re-issuing
   credentials and re-applying post-backup revocations (below) are manual.
   There is no runbook rehearsal against production — and there must never be

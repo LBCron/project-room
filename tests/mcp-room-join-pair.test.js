@@ -77,5 +77,5 @@ test("room_join pairs, a stranger is not_member, and the owner can merge", async
   }, owner.secret);
   assert.equal(merged.isError, false, JSON.stringify(merged.body));
   assert.equal(merged.value.retired, true);
-  assert.equal(store.room(room.roomId).state.members[redeemed.memberId].active, false);
+  assert.equal(store.roomAuthority(room.roomId, { memberId: redeemed.memberId }).members[redeemed.memberId].active, false);
 });

@@ -11,7 +11,7 @@ import {workRoleHolder} from './work-context.mjs';
 import {currentWorkSummary} from './current-work-summary.mjs';
 import {archiveRetains,recoverArchiveMarker} from './current-room-archive.mjs';
 import {messageRowForWrite} from './messages-store.mjs';
-import {messageProofHash} from './write-integrity.mjs';
+import {messageProofHash,assertMessageWrite,recordMessageWrite,MESSAGE_PROOF_FIELDS} from './write-integrity.mjs';
 import { RESTORE_CONTROL_DEFINITIONS, RESTORE_CONTROL_GUARDS, RESTORE_CONTROL_SCHEMA, inRestoreContext, withExactRestoreGuards } from './restore-admission.mjs';
 import { messageInHistory, historyFloor as deriveHistoryFloor, historyActivationTuple, historyActivationValue } from './history-visibility.mjs';
 import { bindCurrentRecordContext } from '../src/current-record-context.js';
@@ -697,6 +697,52 @@ export function currentInviteContext(store, roomId, { memberIds = [], census = f
     return { room: { sequence: head.sequence, state }, current: { head, before: fieldsOf(state), workRefs: new Map(), budget: b, messageRows: new Map() } };
   }, { maxRecords: census ? 1024 : 200 }));
 }
+// Exceptional owner merge: complete bounded work-summary census, indexed
+// affected canonical messages and their exact ancestors. Never a sparse merge.
+export function currentPairingMergeContext(store, roomId, {actorId,keptMemberId,retiredMemberId}) {
+  return store.readTransaction(() => withCurrentReadContext(store.db,roomId,b=>{
+    const context=currentInviteContext(store,roomId,{memberIds:[actorId,keptMemberId,retiredMemberId]});
+    if(!context)return null;
+    const db=store.db,{state}=context.room,{head}=context.current,refs=new Map(),messages=new Map();
+    const keys=db.prepare("SELECT record_key FROM current_room_record_proofs WHERE room_id=? AND domain='workSummary' AND present=1 ORDER BY record_key LIMIT 33").all(roomId);
+    if(keys.length>32)refuse('Member merge exceeds bounded complete work census');
+    if(keys.length!==head.counts.workItems)corrupt('merge work census differs');
+    charge(b,keys.length*256,keys.length);
+    for(const {record_key:id} of keys) {
+      const summary=readCurrentRecord(db,roomId,'workSummary',id,b);
+      if(!summary||summary.work?.id!==id)corrupt('merge summary identity differs');
+      if(![summary.work.accountableMemberId,summary.work.verifierMemberId,summary.work.claim?.holderId].includes(retiredMemberId))continue;
+      const item=readCurrentWorkFromVerifiedHead(db,roomId,id,b);
+      const ref=readCurrentRecord(db,roomId,'workItems',id,b);
+      if(!item||!isDeepStrictEqual(summary,currentWorkSummary(item,ref)))corrupt('merge summary differs from work');
+      state.workItems[id]=item;refs.set(id,ref);
+    }
+    const touched=new Set();
+    for(const column of ['author_id','to_member_id']) {
+      const rows=db.prepare(`SELECT message_id FROM messages WHERE room_id=? AND ${column}=? LIMIT 33`).all(roomId,retiredMemberId);
+      if(rows.length>32)refuse('Member merge exceeds bounded affected messages');
+      charge(b,rows.length*256,rows.length);
+      for(const row of rows)touched.add(row.message_id);
+    }
+    if(touched.size>32)refuse('Member merge exceeds bounded affected messages');
+    const load=id=>{if(!messages.has(id)){const source=readCurrentMessage(db,roomId,id,b);if(!source)corrupt('merge message missing');messages.set(id,source);}return messages.get(id);};
+    for(const id of touched) {
+      let source=load(id),depth=0;
+      while(source.value.replyToId) {
+        if(++depth>32)refuse('Merge reply ancestry exceeds bounded context');
+        const parent=load(source.value.replyToId);
+        if(parent.row.seq>=source.row.seq)corrupt('merge reply ancestry differs');source=parent;
+      }
+    }
+    state.messages=[...messages.values()].map(source=>source.value);
+    const legacy=db.prepare('SELECT claim_id,length(CAST(item_json AS BLOB)) AS bytes FROM work_claims WHERE room_id=? LIMIT 33').all(roomId);
+    if(legacy.length>32)refuse('Member merge exceeds bounded historical claim rows');
+    const legacyClaims=[];
+    for(const row of legacy){if(row.bytes>MAX_RECORD)refuse('Historical claim exceeds merge input');charge(b,row.bytes+256);legacyClaims.push(db.prepare('SELECT claim_id,item_json FROM work_claims WHERE room_id=? AND claim_id=?').get(roomId,row.claim_id));}
+    return {room:context.room,current:{...context.current,budget:b,before:fieldsOf({...state,workItems:Object.fromEntries(refs)}),workRefs:refs,messageRows:messages,
+      merge:{keptMemberId,retiredMemberId,touched,legacyClaims}}};
+  }));
+}
 export function prepareCurrentWrite(store,{roomId,previous,state,event,sequence,current}) {
   const db=store.db,refs={},workWrites=[];
   for(const [id,item] of Object.entries(state.workItems)) {
@@ -748,11 +794,21 @@ export function prepareCurrentWrite(store,{roomId,previous,state,event,sequence,
       }
     }
   }
-  if(['message.redacted','message.edited'].includes(event.type))for(const message of state.messages) {
+  if(['message.redacted','message.edited','member.merged'].includes(event.type))for(const message of state.messages) {
     const source=current.messageRows.get(message.id);
     if(!source||isDeepStrictEqual(message,source.value))continue;
-    const row=messageRowForWrite(message,{sequence:source.row.seq,pinned:(state.pins??[]).some(pin=>pin.messageId===message.id),threadMessages:new Map(state.messages.map(m=>[m.id,m]))});
+    const row=messageRowForWrite(message,{sequence:source.row.seq,pinned:event.type==='member.merged'?source.row.pinned===1:(state.pins??[]).some(pin=>pin.messageId===message.id),threadMessages:new Map(state.messages.map(m=>[m.id,m]))});
     changes.push({domain:'messageWitness',key:message.id,value:{sequence:source.row.seq,entityHash:messageProofHash(row)}});
+  }
+  if(current.merge) {
+    const roots=new Set([...current.merge.touched].map(id=>current.messageRows.get(id).row.thread_root_id??id));
+    for(const root of roots) {
+      const oldKey=root+'\0'+current.merge.retiredMemberId,newKey=root+'\0'+current.merge.keptMemberId;
+      const old=readCurrentRecord(db,roomId,'threadParticipants',oldKey,current.budget);
+      const kept=readCurrentRecord(db,roomId,'threadParticipants',newKey,current.budget);
+      // Only authored messages contribute; recipient-only changes have no participant effect.
+      if(old!==undefined){changes.push({domain:'threadParticipants',key:oldKey,value:undefined});counts.threadParticipants--;if(kept===undefined){changes.push({domain:'threadParticipants',key:newKey,value:{threadRootId:root,memberId:current.merge.keptMemberId}});counts.threadParticipants++;}}
+    }
   }
   counts.messages+=state.messages.length-previous.state.messages.length;
   for(const domain of ['workItems','replyRequests','members'])for(const change of changes.filter(c=>c.domain===domain)) {
@@ -780,6 +836,14 @@ export function prepareCurrentWrite(store,{roomId,previous,state,event,sequence,
     }
     for(const {id,item,body,digest} of workWrites)db.prepare(`INSERT INTO work_entities VALUES(?,?,?,?,?) ON CONFLICT(room_id,work_id)
       DO UPDATE SET revision=excluded.revision,digest=excluded.digest,body=excluded.body`).run(roomId,id,item.revision,digest,body);
+    if(current.merge)for(const id of current.merge.touched) {
+      const source=current.messageRows.get(id),message=state.messages.find(value=>value.id===id);
+      const row=messageRowForWrite(message,{sequence:source.row.seq,pinned:source.row.pinned===1,threadMessages:new Map(state.messages.map(value=>[value.id,value]))});
+      assertMessageWrite(db,roomId,id);
+      db.prepare('UPDATE messages SET '+MESSAGE_PROOF_FIELDS.filter(key=>key!=='message_id').map(key=>key+'=?').join(',')+' WHERE room_id=? AND message_id=?')
+        .run(...MESSAGE_PROOF_FIELDS.filter(key=>key!=='message_id').map(key=>row[key]),roomId,id);
+      recordMessageWrite(db,roomId,id);
+    }
     syncMessageRows(db,{roomId,sequence,event,state});
     const saved=saveTransition(db,roomId,sequence,event.id,current.head,changes,counts);
     if(saved!==projection)corrupt('prepared carrier differs from committed head');

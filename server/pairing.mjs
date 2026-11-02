@@ -1,4 +1,4 @@
-import { currentInviteContext, prepareCurrentWrite, withCurrentServingWriter, isCurrentRoom } from './current-room-repository.mjs';
+import { currentInviteContext, currentPairingMergeContext, prepareCurrentWrite, withCurrentServingWriter } from './current-room-repository.mjs';
 import { assertMessageWrite, recordMessageWrite } from './write-integrity.mjs';
 // Device-code pairing for agents that can fetch a URL, plus reconnect-by-key
 // and owner merge of two agent members. The user code and device secret are
@@ -253,8 +253,8 @@ export class Pairing {
       .run(roomId, memberId, publicKey, this.store.now());
   }
 
-  #append(roomId, incoming) {
-    const context = currentInviteContext(this.store, roomId, {
+  #append(roomId, incoming, mergeContext = null) {
+    const context = mergeContext ?? currentInviteContext(this.store, roomId, {
       memberIds: [incoming.actorId, incoming.data.memberId], census: incoming.type === T.MEMBER_ADDED
     });
     const room = context?.room ?? this.store.room(roomId);
@@ -579,9 +579,9 @@ export class Pairing {
   merge(token, roomId, { keepMemberId, retireMemberId } = {}, binding = null) {
     if (!validId(keepMemberId) || !validId(retireMemberId)) fail(422, "invalid_merge", "keepMemberId and retireMemberId are required");
     const auth = this.#ownerLevel(token, roomId, binding);
-    if (isCurrentRoom(this.db, roomId)) fail(409, "current_room_context_unavailable", "Native member merge requires its affected-row context");
     return this.store.transaction(() => {
-      const state = this.store.room(roomId).state;
+      const context = currentPairingMergeContext(this.store, roomId, {actorId:auth.member.id,keptMemberId:keepMemberId,retiredMemberId:retireMemberId});
+      const state = (context?.room ?? this.store.room(roomId)).state;
       const kept = ownMember(state.members, keepMemberId);
       const retired = ownMember(state.members, retireMemberId);
       if (!kept || !retired) fail(404, "not_found", "Unknown member");
@@ -595,8 +595,8 @@ export class Pairing {
           keptMemberId: keepMemberId, retiredMemberId: retireMemberId,
           expectedKeptRevision: kept.revision, expectedRetiredRevision: retired.revision
         }
-      }));
-      this.#moveSideRows(roomId, keepMemberId, retireMemberId);
+      }), context);
+      withCurrentServingWriter(this.db, roomId, () => this.#moveSideRows(roomId, keepMemberId, retireMemberId, context?.current.merge));
       const keptMember = ownMember(next.members, keepMemberId);
       return {
         roomId, keepMemberId, retireMemberId,
@@ -606,12 +606,12 @@ export class Pairing {
     });
   }
 
-  #moveSideRows(roomId, kept, retired) {
+  #moveSideRows(roomId, kept, retired, currentMerge = null) {
     this.db.prepare("UPDATE identity_links SET member_id=? WHERE room_id=? AND member_id=?").run(kept, roomId, retired);
     this.db.prepare(`DELETE FROM agent_member_keys WHERE room_id=? AND member_id=? AND public_key IN (
       SELECT public_key FROM agent_member_keys WHERE room_id=? AND member_id=?)`).run(roomId, retired, roomId, kept);
     this.db.prepare("UPDATE agent_member_keys SET member_id=? WHERE room_id=? AND member_id=?").run(kept, roomId, retired);
-    if (this.db.prepare("SELECT 1 FROM sqlite_master WHERE type='table' AND name='messages'").get()) {
+    if (!currentMerge && this.db.prepare("SELECT 1 FROM sqlite_master WHERE type='table' AND name='messages'").get()) {
       const touched = this.db.prepare('SELECT message_id FROM messages WHERE room_id=? AND (author_id=? OR to_member_id=?)').all(roomId,retired,retired);
       for (const row of touched) assertMessageWrite(this.db,roomId,row.message_id);
       this.db.prepare("UPDATE messages SET author_id=? WHERE room_id=? AND author_id=?").run(kept, roomId, retired);
@@ -629,7 +629,7 @@ export class Pairing {
       for (const row of touched) recordMessageWrite(this.db,roomId,row.message_id);
     }
     if (this.db.prepare("SELECT 1 FROM sqlite_master WHERE type='table' AND name='work_claims'").get()) {
-      const claims = this.db.prepare("SELECT claim_id, item_json FROM work_claims WHERE room_id=?").all(roomId);
+      const claims = currentMerge?.legacyClaims ?? this.db.prepare("SELECT claim_id, item_json FROM work_claims WHERE room_id=?").all(roomId);
       for (const row of claims) {
         try {
           const item = JSON.parse(row.item_json);

@@ -1,3 +1,4 @@
+import {readCurrentRecord, readCurrentMessage, readCurrentRoomForAudit} from '../server/current-room-repository.mjs';
 // Core MCP profile, legal tool names, hidden aliases, and cross-room room_needs_me.
 import test from "node:test";
 import assert from "node:assert/strict";
@@ -323,7 +324,7 @@ test("a fresh default-profile client can discover, answer and verify a formal re
   const stale = initial.value.responseActions.find(action => action.arguments.responseOutcome === "answered");
   assert.ok(advertised.has(stale.tool), "the discovered response must also be advertised");
   await invoke("room_reply", { roomId: room.roomId, requestId: "core-clarification", replyToId: "core-question", body: "One clarification first." });
-  assert.equal(store.room(room.roomId).state.replyRequests["core-question"].status, "open", "ordinary chat does not answer the formal request");
+  assert.equal(store.readTransaction(() => readCurrentRecord(store.db, room.roomId, "replyRequests", "core-question")).status, "open", "ordinary chat does not answer the formal request");
   const refused = await invoke(stale.tool, { ...stale.arguments, requestId: "core-stale-answer", body: "Stale answer" });
   assert.equal(refused.body.result.isError, true);
   let selected = await invoke(pointer.tool, { ...pointer.arguments, limit: 1 });
@@ -346,7 +347,7 @@ test("tools/list focus is explicit, stateless discovery with full-catalog escape
   }).roomId;
   linkWithProof(store, owner.secret, roomId, reader, { displayName: "Reader", permissions: [] });
   setTier(store.db, roomId, reader.identityId, "t1_readonly", { updatedBy: "owner", nowMs: Date.now() });
-  const before = JSON.stringify(store.room(roomId).state);
+  const before = JSON.stringify(store.readTransaction(() => readCurrentRoomForAudit(store, roomId).state));
   const review = await (await rpc(origin, "tools/list", { focus: "review" }, owner.secret)).json();
   assert.equal(review.result.focus, "review");
   assert.equal(review.result._meta.focus.permissionsChanged, false);
@@ -388,7 +389,7 @@ test("tools/list focus is explicit, stateless discovery with full-catalog escape
   assert.equal(full.result.focus, undefined);
   assert.ok(namesOf(full).includes("room_propose_work"));
   // Discovery must not issue commands, set tiers, or persist a selected mode.
-  assert.equal(JSON.stringify(store.room(roomId).state), before);
+  assert.equal(JSON.stringify(store.readTransaction(() => readCurrentRoomForAudit(store, roomId).state)), before);
   const readonly = await (await rpc(origin, "tools/list", { focus: "review" }, reader.secret)).json();
   assert.ok(namesOf(readonly).includes("room_read_result"));
   assert.ok(!namesOf(readonly).includes("room_record_verification"));
@@ -532,7 +533,7 @@ test("a room-pinned API key defaults roomId and scopes room_needs_me", async t =
   assert.equal(messages.value.roomId, roomA);
   const posted = await call(origin, "room_post_message", { body: "Pinned default write" }, key);
   assert.equal(posted.body.result.isError, undefined);
-  assert.equal(store.room(roomA).state.messages.some(message => message.body === "Pinned default write"), true);
+  assert.equal(store.readTransaction(() => readCurrentMessage(store.db, roomA, posted.value.event.data.messageId).value.body) === "Pinned default write", true);
 });
 
 test("hosted work writes derive requestId and use the current revision when omitted", async t => {
@@ -556,7 +557,7 @@ test("hosted work writes derive requestId and use the current revision when omit
   assert.equal(started.body.result.isError, undefined);
   assert.match(started.value.requestId, /^mcp-[a-f0-9]{64}$/);
   assert.equal(started.value.appliedRevision, 2);
-  assert.equal(store.room(roomId).state.workItems["auto-start"].state, "working");
+  assert.equal(store.workContext(owner.secret, roomId, "auto-start").work.state, "working");
 
   const stale = await call(origin, "room_start_work", { workItemId: "stale-start", expectedRevision: 0 }, key);
   assert.equal(stale.body.result.isError, true);
@@ -598,7 +599,7 @@ test("every lean tool is callable with required business fields after a fresh jo
   const answer = request.responseActions.find(action => action.arguments.responseOutcome === "answered");
   const responded = await called("room_respond_to_request", { ...answer.arguments, body: "Lean answer" });
   assert.match(responded.requestId, /^mcp-[a-f0-9]{64}$/);
-  assert.equal(store.room(roomId).state.replyRequests["lean-request"].status, "answered");
+  assert.equal(store.readTransaction(() => readCurrentRecord(store.db, roomId, "replyRequests", "lean-request")).status, "answered");
   const found = await called("room_search_actions", { query: "close board claim" });
   assert.equal(found.matches.some(match => match.name === "room_close_work_claim"), true);
   await called("room_run_action", { name: "room_check_access", arguments: {} });

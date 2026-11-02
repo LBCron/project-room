@@ -15,9 +15,9 @@
 test at tests/compact-result-reader.test.mjs:12:1
 ✖ actual compact native receipt click opens exact selected result loader and preserves binding (1.680417ms)
   AssertionError [ERR_ASSERTION]: Expected values to be strictly equal:
-  
+
   0 !== 1
-  
+
       at TestContext.<anonymous> (file:///Users/johnpotter/src/pr-compact-result-reader-1102/tests/compact-result-reader.test.mjs:12:248)
       at Test.runInAsyncScope (node:async_hooks:227:14)
       at Test.run (node:internal/test_runner/test:1402:25)

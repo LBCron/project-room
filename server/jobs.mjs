@@ -45,6 +45,43 @@ export const SLOW_JOB_DUE_SLACK_MS = 60 * 1000;
 
 const oneLine = value => String(value ?? "").replace(/[\r\n]+/g, " ").trim().slice(0, 200);
 
+// The Node scheduler's lastError is free error text served on the same
+// unauthenticated GET /api/health/jobs surface as the Worker heartbeat's.
+// It is redacted with the same pattern set as redactError in
+// cloudflare/job-heartbeat.mjs (the two modules cannot import each other:
+// the heartbeat reads this registry). tests/job-health-redaction.test.js
+// pins both copies to the same battery so they cannot drift apart. The
+// Node channel keeps its historic 200-char cap (the Worker caps at 240).
+const MAX_JOB_ERROR = 200;
+export function redactJobError(value) {
+  const text = String(value ?? "unknown error")
+    .replace(/([A-Za-z0-9+/_=-]{8,})(?:\r\n|\n|\\n)([A-Za-z0-9+/_=-]{8,})/g, "$1$2")
+    .replace(/[\r\n\t]+/g, " ")
+    .replace(/-----BEGIN [A-Z0-9 ]*-----[\s\S]*?-----END [A-Z0-9 ]*-----/g, "[redacted]")
+    .replace(/-----BEGIN [A-Z0-9 ]*-----[\s\S]*/g, "[redacted]")
+    .replace(/(\b[a-zA-Z][a-zA-Z0-9+.-]*:\/\/[^\s/:@]*:)[^\s/@]+(@)/g, "$1[redacted]$2")
+    .replace(/([A-Za-z0-9_-]*(?:password|passwd|secret|token|api[-_]?key|private[-_]?key|account[-_]?key|credential)[A-Za-z0-9_-]*)(\s*"?\s*[:=]\s*"?)([^\s"',;}]{8,})/gi, "$1$2[redacted]")
+    .replace(/\b(bearer|token|secret|password|authorization)(\s*[:=]?\s*)\S+/gi, "$1$2[redacted]")
+    .replace(/\b(?:pri|ghp|gho|ghs|ghu|github_pat|sk|xox[abpr]|whsec|re)_[A-Za-z0-9_-]{6,}/g, "[redacted]")
+    .replace(/(https?:\/\/[^\s?#]+)[?#]\S*/g, "$1")
+    .replace(/[A-Za-z0-9+/_-]{32,}={0,2}/g, "[redacted]")
+    .trim();
+  return text.length > MAX_JOB_ERROR ? text.slice(0, MAX_JOB_ERROR - 1) + "…" : text;
+}
+
+// Mirrors the Worker heartbeat's errorText: a job whose registry entry
+// sets redactErrors (gmail-sync) has a thrown error collapsed to its
+// stable code or a fixed line — never free text. The Node scheduler
+// previously never read the flag, so the author's opt-in was silently
+// dropped on this runtime.
+export function nodeJobErrorText(job, error) {
+  if (job?.redactErrors) {
+    const code = typeof error?.code === "string" && /^[a-z][a-z0-9_]{0,63}$/i.test(error.code) ? error.code : null;
+    return code ?? `${job.name} tick failed`;
+  }
+  return redactJobError(error?.message ?? error);
+}
+
 function read(store, sql, params = []) {
   if (!store?.db?.prepare) return null;
   try { return store.db.prepare(sql).get(...params) ?? null; }
@@ -1046,6 +1083,36 @@ export function budgetExhaustedWithoutProgress(result) {
   return true;
 }
 
+// #3334 parity with the Worker heartbeat's sanitizeFailureDetail: a
+// failing tick keeps a sanitized failure detail (token-shaped fields
+// only) so the Node health surface can name the failing sub-check too.
+// This is an allowlist rebuild, not a free-text redactor: any value that
+// is not itself one anchored token is dropped whole. Field limits match
+// the Worker copy exactly — code and recordId up to 64 chars, the class
+// and token fields up to 41 (this copy previously admitted 42–64 chars
+// for subcheck/errorClass/recordClass; aligned so the two health
+// surfaces cannot diverge). Module scope, not a scheduler closure, so
+// tests/job-health-redaction.test.js can pin it field-for-field
+// against the Worker copy.
+const DETAIL_TOKEN_41 = /^[a-z][a-z0-9_]{0,40}$/i;
+export function failureDetailOf(source) {
+  const detail = source?.failureDetail;
+  if (!detail || typeof detail !== "object") return null;
+  const out = {};
+  if (typeof detail.code === "string" && SAFE_CARRIED_CODE.test(detail.code)) out.code = detail.code;
+  for (const key of ["subcheck", "errorClass", "recordClass"]) {
+    if (typeof detail[key] === "string" && DETAIL_TOKEN_41.test(detail[key])) out[key] = detail[key];
+  }
+  for (const key of ["reason", "component"]) {
+    if (typeof detail[key] === "string" && PUBLIC_BLOCK_TOKEN.test(detail[key])) out[key] = detail[key];
+  }
+  // A room id named by the integrity job (room-record steps only; the
+  // job attaches it, this layer only shape-checks it). Ids contain
+  // hyphens, which the token pattern above does not allow.
+  if (typeof detail.recordId === "string" && SAFE_RECORD_ID.test(detail.recordId)) out.recordId = detail.recordId;
+  return Object.keys(out).length ? out : null;
+}
+
 // Node has no Durable Object alarm. One unref'd timer asks each node job
 // whether it is due. The immediate webhook kick still flushes a delivery
 // that was just committed; this timer is the retry backstop.
@@ -1101,26 +1168,6 @@ export function startNodeScheduler({
   const lastRan = new Map();
   // REL-24: per-job run record for GET /api/health/jobs on Node.
   const records = new Map();
-  // #3334 parity with the Worker heartbeat: a failing tick keeps a sanitized
-  // failure detail (token-shaped fields only) so the Node health surface can
-  // name the failing sub-check too.
-  const detailToken = /^[a-z][a-z0-9_]{0,63}$/i;
-  const failureDetailOf = source => {
-    const detail = source?.failureDetail;
-    if (!detail || typeof detail !== "object") return null;
-    const out = {};
-    for (const key of ["code", "subcheck", "errorClass", "recordClass"]) {
-      if (typeof detail[key] === "string" && detailToken.test(detail[key])) out[key] = detail[key];
-    }
-    for (const key of ["reason", "component"]) {
-      if (typeof detail[key] === "string" && PUBLIC_BLOCK_TOKEN.test(detail[key])) out[key] = detail[key];
-    }
-    // A room id named by the integrity job (room-record steps only; the
-    // job attaches it, this layer only shape-checks it). Ids contain
-    // hyphens, which the token pattern above does not allow.
-    if (typeof detail.recordId === "string" && SAFE_RECORD_ID.test(detail.recordId)) out.recordId = detail.recordId;
-    return Object.keys(out).length ? out : null;
-  };
   const record = (name, at, ok, { error = null, failure = null, grade = null, durationMs = null } = {}) => {
     const prior = records.get(name) ?? { consecutiveFailures: 0 };
     // #3767: the grade names a success that did no work (budget exhausted
@@ -1131,7 +1178,11 @@ export function startNodeScheduler({
     records.set(name, ok
       ? { ...prior, lastRunAt: at, lastSuccessAt: at, consecutiveFailures: 0, lastDurationMs: durationMs, lastSummaryAt: at, lastFailure: null,
         lastGrade: grade, consecutiveNoProgressExhaustions: exhausted ? (prior.consecutiveNoProgressExhaustions ?? 0) + 1 : 0 }
-      : { ...prior, lastRunAt: at, lastErrorAt: at, lastError: error ?? prior.lastError ?? null, consecutiveFailures: prior.consecutiveFailures + 1, lastDurationMs: durationMs, lastFailure: failure,
+      // Redacted at record time, whatever the caller passed: lastError is
+      // served unauthenticated, so no call site can store raw error text
+      // on this channel. Redaction is idempotent over its own output, so
+      // the already-redacted texts runOnce builds pass through unchanged.
+      : { ...prior, lastRunAt: at, lastErrorAt: at, lastError: error != null ? redactJobError(error) : (prior.lastError ?? null), consecutiveFailures: prior.consecutiveFailures + 1, lastDurationMs: durationMs, lastFailure: failure,
         lastGrade: null, consecutiveNoProgressExhaustions: 0 });
   };
   // ctxBase is scheduler-lifetime state, not a per-tick template: jobs may
@@ -1174,7 +1225,7 @@ export function startNodeScheduler({
           // cooperative, and the next tick continues the remainder.
           const grade = !failed && budgetExhaustedWithoutProgress(result) ? BUDGET_EXHAUSTED_NO_PROGRESS : null;
           record(job.name, at, !failed, {
-            error: failed ? (result.scanError ? `scanError: ${oneLine(result.scanError)}` : `${Number(result.errors) || 0} error(s) in tick`) : null,
+            error: failed ? (result.scanError ? `scanError: ${redactJobError(result.scanError)}` : `${Number(result.errors) || 0} error(s) in tick`) : null,
             failure: failed ? failureDetailOf(result) : null,
             grade,
             durationMs: now() - startedAt
@@ -1182,7 +1233,7 @@ export function startNodeScheduler({
           outcomes.push(grade ? { job: job.name, ok: true, grade, result } : { job: job.name, ok: true, result });
         } catch (error) {
           lastRan.set(job.name, at);
-          record(job.name, at, false, { error: oneLine(error?.message ?? error), failure: failureDetailOf(error), durationMs: now() - startedAt });
+          record(job.name, at, false, { error: nodeJobErrorText(job, error), failure: failureDetailOf(error), durationMs: now() - startedAt });
           console.warn(`[${job.name}] tick failed: ${oneLine(error?.message ?? error)}`);
           outcomes.push({ job: job.name, ok: false });
         }

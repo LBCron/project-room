@@ -89,7 +89,14 @@ guardDefinitions.push(['current_room_permit_update',`CREATE TRIGGER IF NOT EXIST
       THEN RAISE(ABORT,'unsupported current room permit') END; END`],
   ['current_room_permit_delete',`CREATE TRIGGER IF NOT EXISTS current_room_permit_delete BEFORE DELETE ON current_room_writer_permit BEGIN
     SELECT RAISE(ABORT,'unsupported current room permit'); END`]);
-export const CURRENT_ROOM_GUARDS = [...guardDefinitions,...RESTORE_CONTROL_GUARDS].map(([,sql])=>sql+';').join('\n') + CURRENT_LEGACY_WORK_INDEXES + CURRENT_WORK_CAPACITY_INDEXES + CURRENT_INBOX_DISCOVERY_INDEXES + `
+// Independent selectors: current request metadata and immutable opening events.
+export const CURRENT_REQUEST_OPENING_PREDICATE = "json_extract(body,'$.type')='message.posted' AND json_extract(body,'$.data.requestKind')='reply' AND json_extract(body,'$.data.requestPolicyVersion')=1";
+export const CURRENT_REQUEST_PARTY_INDEXES = ['requester','recipient'].map(role =>
+  `CREATE INDEX IF NOT EXISTS current_request_party_${role} ON current_room_records(room_id,json_extract(payload,'$.${role}Id'),record_key) WHERE domain='replyRequests';`
+).join('\n') + ['requester','recipient'].map(role =>
+  `CREATE INDEX IF NOT EXISTS current_request_opening_${role} ON events(room_id,json_extract(body,'${role==='requester'?'$.actorId':'$.data.toMemberId'}'),sequence) WHERE ${CURRENT_REQUEST_OPENING_PREDICATE};`
+).join('\n');
+export const CURRENT_ROOM_GUARDS = [...guardDefinitions,...RESTORE_CONTROL_GUARDS].map(([,sql])=>sql+';').join('\n') + CURRENT_LEGACY_WORK_INDEXES + CURRENT_WORK_CAPACITY_INDEXES + CURRENT_INBOX_DISCOVERY_INDEXES + CURRENT_REQUEST_PARTY_INDEXES + `
 CREATE INDEX IF NOT EXISTS current_redaction_message_events ON events(room_id,CASE WHEN json_type(body,'$.data.messageId')='text' AND json_extract(body,'$.data.messageId')<>'' THEN json_extract(body,'$.data.messageId') ELSE id END,sequence);
 CREATE INDEX IF NOT EXISTS current_redaction_code_drops ON room_code_drops(room_id,message_id,id);
 CREATE INDEX IF NOT EXISTS current_room_attachments_message ON room_attachments(room_id,message_id,id);

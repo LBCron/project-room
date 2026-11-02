@@ -1,24 +1,30 @@
 import { validId } from "../src/events.js";
 import { messageInHistory } from "./history-visibility.mjs";
-import {isCurrentRoom,withCurrentReadContext,readCurrentHead,readCurrentRecord,readCurrentMessage} from './current-room-repository.mjs';
+import {isCurrentRoom,withCurrentReadContext,readCurrentHead,readCurrentRecord,readCurrentMessage,CURRENT_REQUEST_OPENING_PREDICATE} from './current-room-repository.mjs';
 
 // Addressed protected dependencies only. The legacy full-state contract stays
 // unchanged; normalized reads never reconstruct the room or its request map.
-function currentRunContext(store, roomId, ids, viewerId) {
+function currentRunContext(store, roomId, ids, viewerId, recipientOnly = false) {
   return withCurrentReadContext(store.db, roomId, b => {
     const head = readCurrentHead(store.db, roomId, b);
     const room = readCurrentRecord(store.db, roomId, 'metadata', 'room', b);
     const replyRequests = Object.create(null), members = Object.create(null);
     for (const id of ids) {
       const request = readCurrentRecord(store.db, roomId, 'replyRequests', id, b);
-      if (!request) continue;
+      if (!request) {
+        if (!recipientOnly) fail('request_run_changed', 'Request selector lacks its protected request');
+        continue;
+      }
+      // Deny unrelated selections before loading private opening context.
+      if (recipientOnly && request.recipientId !== viewerId) continue;
+      if (!recipientOnly && ![request.requesterId, request.recipientId].includes(viewerId)) fail('request_run_changed', 'Request party selectors require reconciliation');
       if (request.id !== id || !validId(request.openingEventId) || !validId(request.requesterId)
         || !validId(request.recipientId) || !['open','answered','declined','cancelled'].includes(request.status))
         fail('request_run_changed', 'Request proof requires reconciliation');
       // Bind request metadata to the independently protected opening message.
       const opening = readCurrentMessage(store.db, roomId, id, b);
-      const event = opening && store.db.prepare('SELECT id FROM events WHERE room_id=? AND sequence=?').get(roomId, opening.row.seq);
-      if (!opening || event?.id !== request.openingEventId || opening.value.authorId !== request.requesterId
+      const event = opening && store.db.prepare(`SELECT id,json_extract(body,'$.actorId') AS requester,json_extract(body,'$.data.toMemberId') AS recipient,json_extract(body,'$.data.messageId') AS messageId,json_extract(body,'$.at') AS at FROM events WHERE room_id=? AND sequence=? AND ${CURRENT_REQUEST_OPENING_PREDICATE}`).get(roomId, opening.row.seq);
+      if (!opening || event?.id !== request.openingEventId || event.requester !== request.requesterId || event.recipient !== request.recipientId || event.messageId !== id || event.at !== request.createdAt || opening.value.authorId !== request.requesterId
         || opening.value.toMemberId !== request.recipientId || opening.value.createdAt !== request.createdAt)
         fail('request_run_changed', 'Request opening requires reconciliation');
       replyRequests[id] = request;
@@ -63,11 +69,28 @@ export class RequestRuns {
       const exists = this.store.db.prepare("SELECT 1 FROM sqlite_master WHERE name='request_runs' AND type='table'").get();
       // v1 promises a complete map, not a first page. Refuse a larger source
       // before hydrating any records rather than returning a misleading subset.
-      const rows = !exists ? [] : current
-        ? this.store.db.prepare("SELECT * FROM request_runs WHERE room_id=? ORDER BY opening_id LIMIT 33").all(roomId)
-        : this.store.db.prepare("SELECT * FROM request_runs WHERE room_id=?").all(roomId);
-      if (current && rows.length > 32) fail('request_runs_context_unavailable', 'Request run list exceeds bounded v1 coverage; inspect selected requests and original attempts', 422);
-      const context = current ? currentRunContext(this.store, roomId, rows.map(row => row.request_id), auth.member.id) : this.store.room(roomId);
+      let context, rows;
+      if (current) {
+        const ids = new Set();
+        // Cap each viewer-only indexed prefix before proof hydration. The
+        // independent union detects a single source's omitted party selector.
+        for (const role of ['requester','recipient']) {
+          for (const row of this.store.db.prepare(`SELECT record_key AS id FROM current_room_records INDEXED BY current_request_party_${role}
+            WHERE room_id=? AND domain='replyRequests' AND json_extract(payload,'$.${role}Id')=? ORDER BY record_key LIMIT 33`).all(roomId,auth.member.id)) ids.add(row.id);
+          const path = role === 'requester' ? '$.actorId' : '$.data.toMemberId';
+          for (const row of this.store.db.prepare(`SELECT json_extract(body,'$.data.messageId') AS id FROM events INDEXED BY current_request_opening_${role}
+            WHERE room_id=? AND json_extract(body,'${path}')=? AND ${CURRENT_REQUEST_OPENING_PREDICATE} ORDER BY sequence LIMIT 33`).all(roomId,auth.member.id)) ids.add(row.id);
+        }
+        if (ids.size > 32) fail('request_runs_context_unavailable', 'Request run list exceeds bounded viewer-party v1 coverage; inspect selected requests and original attempts', 422);
+        context = currentRunContext(this.store, roomId, [...ids], auth.member.id);
+        rows = exists ? Object.values(context.state.replyRequests).flatMap(request => {
+          const row = this.store.db.prepare('SELECT * FROM request_runs WHERE room_id=? AND opening_id=?').get(roomId,request.openingEventId);
+          return row ? [row] : [];
+        }) : [];
+      } else {
+        rows = !exists ? [] : this.store.db.prepare("SELECT * FROM request_runs WHERE room_id=?").all(roomId);
+        context = this.store.room(roomId);
+      }
       const state = context.state, floor = current ? context.floor : this.store.historyFloor(roomId, auth.member.id, context.sequence);
       const runs = {};
       for (const row of rows) {
@@ -89,7 +112,7 @@ export class RequestRuns {
     return this.store.transaction(() => {
       const auth = this.store.authenticate(token, roomId, binding);
       const current = isCurrentRoom(this.store.db, roomId);
-      const context = current ? currentRunContext(this.store, roomId, [input.requestMessageId], auth.member.id) : this.store.room(roomId);
+      const context = current ? currentRunContext(this.store, roomId, [input.requestMessageId], auth.member.id, true) : this.store.room(roomId);
       const state = context.state;
       const request = state.replyRequests?.[input.requestMessageId];
       if (auth.member.kind !== "agent" || !request || request.recipientId !== auth.member.id)

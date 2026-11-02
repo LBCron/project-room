@@ -1,0 +1,13 @@
+import assert from 'node:assert/strict';
+import {execFileSync,spawnSync} from 'node:child_process';
+import {mkdtempSync,writeFileSync,mkdirSync} from 'node:fs';
+import {fileURLToPath} from 'node:url';
+const root=fileURLToPath(new URL('.',import.meta.url)),repo='/Users/potter/Documents/Codex/2026-10-22/you-x20/work/member2-public-boundary-adapter-1102';
+const runtime='/Users/potter/.cache/codex-runtimes/codex-primary-runtime/dependencies',git=runtime+'/bin/fallback/git',pin='1084460ddcf6d22d36aeb6e8deed24e91e6ba927';
+assert.equal(execFileSync(git,['-C',repo,'rev-parse','HEAD'],{encoding:'utf8'}).trim(),pin);execFileSync(git,['-C',repo,'diff','--exit-code','HEAD','--']);
+const out=root+'opt-in-mcp-robustness';mkdirSync(out,{recursive:true});
+const env={PATH:[runtime+'/node/bin',runtime+'/python/bin',runtime+'/bin/fallback',root+'qualification-tools/bin','/usr/bin','/bin'].join(':'),TMPDIR:mkdtempSync('/tmp/member2-mcp-qa2-'),LANG:'en_US.UTF-8',QA2_E2E:'1',HOST:'127.0.0.1'};
+writeFileSync(out+'/plan.json',JSON.stringify({source:pin,file:'tests/qa2/mcp-robustness.test.js',optIn:'QA2_E2E=1',environmentKeys:Object.keys(env),scope:'Existing real local HTTP opt-in wrapper; no ambient service credentials, no external endpoint or runtime edits.'},null,2)+'\n');
+const start=Date.now();const r=spawnSync(process.execPath,['--test','--test-reporter=junit','--test-reporter-destination='+out+'/junit.xml','tests/qa2/mcp-robustness.test.js'],{cwd:repo,env,stdio:'inherit',timeout:360000});
+const trackedDiff=execFileSync(git,['-C',repo,'diff','--name-only','HEAD','--'],{encoding:'utf8'}).trim().split('\n').filter(Boolean);
+writeFileSync(out+'/receipt.json',JSON.stringify({source:pin,status:r.status,signal:r.signal,errorCode:r.error?.code??null,elapsedMs:Date.now()-start,trackedDiff,scratch:env.TMPDIR},null,2)+'\n');console.log('OPT_IN_MCP_TERMINAL '+JSON.stringify({status:r.status,signal:r.signal,elapsedMs:Date.now()-start,trackedDiff}));process.exitCode=r.status??1;

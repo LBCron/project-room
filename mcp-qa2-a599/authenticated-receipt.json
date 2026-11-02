@@ -1,0 +1,14 @@
+{
+  "source": "a599faa29ff65567e5c080609cb2d000acd33666",
+  "status": 0,
+  "checks": 46,
+  "pass": 46,
+  "fail": 0,
+  "foreignPrivateCanaryAbsent": true,
+  "credentialCanariesAbsent": true,
+  "actualIdempotentStoredMessages": 1,
+  "unicodePayloadPreserved": true,
+  "rejectedControlMessagesStored": 0,
+  "elapsedMs": 84,
+  "trackedDiff": []
+}

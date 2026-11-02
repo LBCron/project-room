@@ -1,0 +1,27 @@
+{
+  "codeCommit": "a599faa29ff65567e5c080609cb2d000acd33666",
+  "tree": "7be83d03ca225618552523451c262670f1accdda",
+  "parent": "1084460ddcf6d22d36aeb6e8deed24e91e6ba927",
+  "changedFiles": [
+    "scripts/qa2/mcp-robustness.mjs"
+  ],
+  "fileSha256": "2d68050d719fe446b7bc6b6fe5fec8200ae0df122ef9887bdf3943f57d763abf",
+  "fetchedBytesEqual": true,
+  "trackedClean": true,
+  "sourceRuntimeChanges": false,
+  "focusedTests": {
+    "tests": 11,
+    "pass": 11,
+    "fail": 0,
+    "includes": [
+      "candidate manifest drift",
+      "checker signal/nonzero exit truthfulness"
+    ]
+  },
+  "mechanical": {
+    "syntax": "pass",
+    "eslint": "pass",
+    "diffCheck": "pass"
+  },
+  "scope": "Local Node HTTP only; no full suite, Native, production or peer execution claim"
+}

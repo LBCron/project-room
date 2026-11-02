@@ -1,0 +1,171 @@
+{
+  "source": "4986df689a1773e4162f7c686667a02f15f18c4c",
+  "total": 33,
+  "cases": [
+    {
+      "name": "Linux qualification requires the real sandbox to launch",
+      "file": "host-execution-readiness.test.js",
+      "reason": "Linux backend qualification"
+    },
+    {
+      "name": "automatic host cannot read parent secrets or reach the network",
+      "file": "host-policy-boundary.test.js",
+      "reason": "Requires Linux bubblewrap isolation"
+    },
+    {
+      "name": "sandbox refuses executables outside the checkout and system paths",
+      "file": "host-policy-boundary.test.js",
+      "reason": "Requires Linux bubblewrap isolation"
+    },
+    {
+      "name": "hosted runner Node is exposed as a single read-only binary, not a tool-cache directory",
+      "file": "host-policy-boundary.test.js",
+      "reason": "requires setup-node runner"
+    },
+    {
+      "name": "default host has isolated HOME so a room path cannot expand to operator HOME",
+      "file": "host-process.test.js",
+      "reason": "Requires Linux bubblewrap isolation"
+    },
+    {
+      "name": "host process receives JSON and literal arguments without ambient environment",
+      "file": "host-process.test.js",
+      "reason": "Requires Linux bubblewrap isolation"
+    },
+    {
+      "name": "host malformed output fails without exposing diagnostics",
+      "file": "host-process.test.js",
+      "reason": "Requires Linux bubblewrap isolation"
+    },
+    {
+      "name": "host nonzero output fails without exposing diagnostics",
+      "file": "host-process.test.js",
+      "reason": "Requires Linux bubblewrap isolation"
+    },
+    {
+      "name": "host oversized output fails without exposing diagnostics",
+      "file": "host-process.test.js",
+      "reason": "Requires Linux bubblewrap isolation"
+    },
+    {
+      "name": "host empty output fails without exposing diagnostics",
+      "file": "host-process.test.js",
+      "reason": "Requires Linux bubblewrap isolation"
+    },
+    {
+      "name": "timeout and cancellation stop host processes",
+      "file": "host-process.test.js",
+      "reason": "Requires Linux bubblewrap isolation"
+    },
+    {
+      "name": "different host processes cannot write the same checkout concurrently",
+      "file": "host-process.test.js",
+      "reason": "Requires Linux bubblewrap isolation"
+    },
+    {
+      "name": "process adapter accepts optional coding evidence without replacing its bytes",
+      "file": "host-process.test.js",
+      "reason": "Requires Linux bubblewrap isolation"
+    },
+    {
+      "name": "adapter gets a typed data envelope rather than top-level room instructions",
+      "file": "host-process.test.js",
+      "reason": "Requires Linux bubblewrap isolation"
+    },
+    {
+      "name": "adapter runs configured checks and binds observations to exact local patch",
+      "file": "host-verification.test.js",
+      "reason": "Requires Linux bubblewrap isolation"
+    },
+    {
+      "name": "failed configured check remains a failed observed exit, despite model success claim",
+      "file": "host-verification.test.js",
+      "reason": "Requires Linux bubblewrap isolation"
+    },
+    {
+      "name": "mismatched patch, untracked files, and wrong repository never start checks",
+      "file": "host-verification.test.js",
+      "reason": "Requires Linux bubblewrap isolation"
+    },
+    {
+      "name": "check that edits tracked files cannot produce a current verification receipt",
+      "file": "host-verification.test.js",
+      "reason": "Requires Linux bubblewrap isolation"
+    },
+    {
+      "name": "committed artifact verification requires exact clean head and valid ancestor",
+      "file": "host-verification.test.js",
+      "reason": "Requires Linux bubblewrap isolation"
+    },
+    {
+      "name": "checkout stays reserved through verification and cancellation releases it",
+      "file": "host-verification.test.js",
+      "reason": "Requires Linux bubblewrap isolation"
+    },
+    {
+      "name": "model stdout cannot inject an adapter observation",
+      "file": "host-verification.test.js",
+      "reason": "Requires Linux bubblewrap isolation"
+    },
+    {
+      "name": "observed result is journaled and redelivered after restart without repeating execution or checks",
+      "file": "host-verification.test.js",
+      "reason": "Requires Linux bubblewrap isolation"
+    },
+    {
+      "name": "bounded verification times out without an observation and releases checkout ownership",
+      "file": "host-verification.test.js",
+      "reason": "Requires Linux bubblewrap isolation"
+    },
+    {
+      "name": "official pinned modern client uses invitation OAuth for attributed Room tools",
+      "file": "mcp-events-http.test.js",
+      "reason": "true"
+    },
+    {
+      "name": "official SDK 2.4.0 pinned modern client discovers, lists and calls real HTTP",
+      "file": "mcp-modern.test.js",
+      "reason": "true"
+    },
+    {
+      "name": "real pinned Graphify extracts and queries an exact committed fixture",
+      "file": "project-map-local.test.js",
+      "reason": "true"
+    },
+    {
+      "name": "abuse guards: refusals leave the room state unchanged",
+      "file": "abuse-guards.test.js",
+      "reason": "true"
+    },
+    {
+      "name": "agent journeys: pass^3 with no unexpected failures",
+      "file": "agent-journeys.test.js",
+      "reason": "true"
+    },
+    {
+      "name": "authz matrix: every role x action cell matches policy",
+      "file": "authz-matrix.test.js",
+      "reason": "true"
+    },
+    {
+      "name": "MCP robustness: malformed and edge inputs never 5xx, leak, or break JSON-RPC",
+      "file": "mcp-robustness.test.js",
+      "reason": "true"
+    },
+    {
+      "name": "one command drives a separate host process and repeat invocation reuses its result",
+      "file": "reply-agent.test.js",
+      "reason": "Requires Linux bubblewrap isolation"
+    },
+    {
+      "name": "MUT-04-A: heartbeat renew without progressMessageId keeps the original lease duration",
+      "file": "work-claim-renew-probes.test.js",
+      "reason": "true"
+    },
+    {
+      "name": "MUT-04-B: renew extends from the old expiry, not from now",
+      "file": "work-claim-renew-probes.test.js",
+      "reason": "true"
+    }
+  ]
+}

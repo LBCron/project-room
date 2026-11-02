@@ -1,0 +1,327 @@
+{
+  "source": "1084460ddcf6d22d36aeb6e8deed24e91e6ba927",
+  "code": 1,
+  "signal": null,
+  "elapsedMs": 79,
+  "checks": 44,
+  "pass": 43,
+  "fail": 1,
+  "cases": [
+    {
+      "name": "parse error",
+      "ok": true,
+      "status": 400,
+      "ms": 14,
+      "why": ""
+    },
+    {
+      "name": "empty body",
+      "ok": true,
+      "status": 400,
+      "ms": 1,
+      "why": ""
+    },
+    {
+      "name": "missing jsonrpc",
+      "ok": true,
+      "status": 200,
+      "ms": 2,
+      "why": ""
+    },
+    {
+      "name": "wrong jsonrpc version",
+      "ok": true,
+      "status": 200,
+      "ms": 1,
+      "why": ""
+    },
+    {
+      "name": "unknown method",
+      "ok": true,
+      "status": 200,
+      "ms": 1,
+      "why": ""
+    },
+    {
+      "name": "method not string",
+      "ok": true,
+      "status": 200,
+      "ms": 1,
+      "why": ""
+    },
+    {
+      "name": "params array",
+      "ok": true,
+      "status": 200,
+      "ms": 2,
+      "why": ""
+    },
+    {
+      "name": "batch array",
+      "ok": true,
+      "status": 200,
+      "ms": 1,
+      "why": ""
+    },
+    {
+      "name": "empty batch",
+      "ok": true,
+      "status": 200,
+      "ms": 1,
+      "why": ""
+    },
+    {
+      "name": "notification (no id)",
+      "ok": true,
+      "status": 202,
+      "ms": 1,
+      "why": ""
+    },
+    {
+      "name": "id object",
+      "ok": true,
+      "status": 200,
+      "ms": 0,
+      "why": ""
+    },
+    {
+      "name": "text/plain content type",
+      "ok": true,
+      "status": 200,
+      "ms": 1,
+      "why": ""
+    },
+    {
+      "name": "initialize unsupported version",
+      "ok": true,
+      "status": 200,
+      "ms": 1,
+      "why": ""
+    },
+    {
+      "name": "initialize 2026-07-28",
+      "ok": true,
+      "status": 200,
+      "ms": 0,
+      "why": ""
+    },
+    {
+      "name": "ping",
+      "ok": true,
+      "status": 200,
+      "ms": 0,
+      "why": ""
+    },
+    {
+      "name": "tools/call no name",
+      "ok": true,
+      "status": 200,
+      "ms": 0,
+      "why": ""
+    },
+    {
+      "name": "tools/call unknown tool",
+      "ok": true,
+      "status": 200,
+      "ms": 1,
+      "why": ""
+    },
+    {
+      "name": "tools/call args array",
+      "ok": true,
+      "status": 200,
+      "ms": 1,
+      "why": ""
+    },
+    {
+      "name": "tools/call args string",
+      "ok": true,
+      "status": 200,
+      "ms": 0,
+      "why": ""
+    },
+    {
+      "name": "missing required roomId",
+      "ok": true,
+      "status": 200,
+      "ms": 0,
+      "why": ""
+    },
+    {
+      "name": "roomId wrong type",
+      "ok": true,
+      "status": 200,
+      "ms": 0,
+      "why": ""
+    },
+    {
+      "name": "roomId traversal",
+      "ok": true,
+      "status": 200,
+      "ms": 0,
+      "why": ""
+    },
+    {
+      "name": "roomId 10k chars",
+      "ok": true,
+      "status": 200,
+      "ms": 0,
+      "why": ""
+    },
+    {
+      "name": "roomId __proto__",
+      "ok": true,
+      "status": 200,
+      "ms": 0,
+      "why": ""
+    },
+    {
+      "name": "extra property",
+      "ok": true,
+      "status": 200,
+      "ms": 1,
+      "why": ""
+    },
+    {
+      "name": "limit 0",
+      "ok": true,
+      "status": 200,
+      "ms": 0,
+      "why": ""
+    },
+    {
+      "name": "limit 101",
+      "ok": true,
+      "status": 200,
+      "ms": 0,
+      "why": ""
+    },
+    {
+      "name": "limit negative",
+      "ok": true,
+      "status": 200,
+      "ms": 0,
+      "why": ""
+    },
+    {
+      "name": "limit float",
+      "ok": true,
+      "status": 200,
+      "ms": 0,
+      "why": ""
+    },
+    {
+      "name": "limit string",
+      "ok": true,
+      "status": 200,
+      "ms": 0,
+      "why": ""
+    },
+    {
+      "name": "after huge",
+      "ok": true,
+      "status": 200,
+      "ms": 0,
+      "why": ""
+    },
+    {
+      "name": "foreign room read (not a member)",
+      "ok": true,
+      "status": 200,
+      "ms": 1,
+      "why": ""
+    },
+    {
+      "name": "foreign room post (not a member)",
+      "ok": true,
+      "status": 200,
+      "ms": 2,
+      "why": ""
+    },
+    {
+      "name": "post empty body",
+      "ok": true,
+      "status": 200,
+      "ms": 0,
+      "why": ""
+    },
+    {
+      "name": "post body 65537",
+      "ok": true,
+      "status": 200,
+      "ms": 1,
+      "why": ""
+    },
+    {
+      "name": "post body null",
+      "ok": true,
+      "status": 200,
+      "ms": 0,
+      "why": ""
+    },
+    {
+      "name": "reply body whitespace",
+      "ok": true,
+      "status": 200,
+      "ms": 1,
+      "why": ""
+    },
+    {
+      "name": "reply to missing message",
+      "ok": true,
+      "status": 200,
+      "ms": 4,
+      "why": ""
+    },
+    {
+      "name": "unauth room tool",
+      "ok": true,
+      "status": 401,
+      "ms": 0,
+      "why": ""
+    },
+    {
+      "name": "GET with SSE accept",
+      "ok": true,
+      "status": 200,
+      "ms": 0,
+      "why": ""
+    },
+    {
+      "name": "post unicode/RTL/zero-width",
+      "ok": false,
+      "status": 200,
+      "ms": 1,
+      "why": "I4 expected success, got 200 {\"jsonrpc\":\"2.0\",\"id\":40,\"result\":{\"content\":[{\"type\":\"text\",\"text\":\"{\\\"status\\\":422,\\\"code\\\":\\\"invalid_command\\\",\\\"message\\\":\\\"body must not contain bidirectio"
+    },
+    {
+      "name": "post NUL byte",
+      "ok": true,
+      "status": 200,
+      "ms": 1,
+      "why": ""
+    },
+    {
+      "name": "idempotent post #1",
+      "ok": true,
+      "status": 200,
+      "ms": 3,
+      "why": ""
+    },
+    {
+      "name": "idempotent post #2 same id",
+      "ok": true,
+      "status": 200,
+      "ms": 2,
+      "why": ""
+    }
+  ],
+  "foreignPrivateCanaryAbsent": true,
+  "credentialCanariesAbsent": true,
+  "actualIdempotentStoredMessages": 1,
+  "rawReportSha256": "b40df08c0c7aa67a8e418a9fd46d0f2aab7eb12418285cebc9395598582d5ec6",
+  "limits": [
+    "Local Node HTTP only, not Native or release qualification",
+    "Raw response samples stay private; published cases omit samples"
+  ]
+}

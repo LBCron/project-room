@@ -1,0 +1,13 @@
+{
+  "run_authenticated_mcp_robustness.mjs": "033db9543114199d638af0c8f0df1f650d27317befc7c48f330145385d156145",
+  "authenticated-baseline.json": "f87645cd224f1faf2f5c5506656c9838089ce60fcff081d123dd27095f196e29",
+  "authenticated-fixed.json": "b5634b9074fc86588b47ad80b404412132daf0ea70e356ab833828a6c26c1d89",
+  "code-receipt.json": "2336523fe31e7bbafac9a2b44d9d1451795f39864a7e1396f7cce187685ad6d5",
+  "anonymous-receipt.json": "7b46fb04642c8f2e397f04aad3a6c00c12d64b815edf76d3eadba0f8e0f33cb7",
+  "anonymous-cases.json": "dcd378a2a87e9f26dbb2fdd1879b5ccd3f216eb4775f73e96055ffaf53e0ec05",
+  "run_opt_in_mcp_robustness.mjs": "571a77dfed61e9711660b8ba06e30f95125d1b248908088885c589c54ea49fa4",
+  "README.md": "4ac8b4473d48316dffb04c90c6dcca9ada1982f1a8a4849e43a4d0068addbabe",
+  "unit-skip-inventory.json": "704b51d28c8d8cfc6a78b3102da251d7eebb7e88b2c4af04432d30b8d3f1db38",
+  "authenticated-receipt.json": "6f7f3d9bddd4db946f03afe8fa1b09bbbe52fed82b660291e8e9a5a9f2424174",
+  "run_authenticated_mcp_candidate.mjs": "917985565eef3b6c495f6723bd2099961fe76f60deb99851cfdfdbab60a52522"
+}

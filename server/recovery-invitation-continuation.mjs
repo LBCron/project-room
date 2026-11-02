@@ -30,7 +30,9 @@ function membershipContext(store,record){
  if(isCurrentRoom(db,record.room_id))return withCurrentAuditUnits(store,record.room_id,reader=>({sequence:reader.head?.sequence,member:reader.record('members',record.intended_member_id)}));
  // Same original selected member. SQLite still tokenizes the admitted legacy
  // projection atom; this does not claim strict CPU bounds for that operation.
- const path='$.members.'+JSON.stringify(record.intended_member_id),row=db.prepare('SELECT sequence,json_extract(projection,?) member FROM rooms WHERE id=?').get(path,record.room_id);
+ // JSON.parse of the original extracted members object keeps the LAST
+ // duplicate key. A direct json_extract(member path) would pick the first.
+ const row=db.prepare("SELECT sequence,(SELECT json_quote(value) FROM json_each(rooms.projection,'$.members') WHERE CAST(key AS TEXT)=? ORDER BY id DESC LIMIT 1) member FROM rooms WHERE id=?").get(record.intended_member_id,record.room_id);
  return{sequence:row?.sequence,member:row?.member?JSON.parse(row.member):undefined};
 }
 export function advanceRecoveryInvitations(store,_scratch,restoreId,previous,sourceSeal,{maxUnits=32}={}){
@@ -72,7 +74,9 @@ export function advanceRecoveryInvitations(store,_scratch,restoreId,previous,sou
   const rows=scalar(db,events,'room_id=? AND sequence<?',[bundle.record.room_id,p.before],'sequence DESC');
   if(!rows.length){finish(bundle,false);units++;continue;}if(!admit(inputBytes(rows,events)))break;
   const row=db.prepare('SELECT sequence,body FROM events WHERE rowid=?').get(rows[0].rowid),e=JSON.parse(row.body);p.before=row.sequence;p.historyRows++;units++;
-  if(e.type==='member.access_changed'&&e.data?.memberId===bundle.record.intended_member_id)finish(bundle,e.data?.active===false&&e.actorId===bundle.record.intended_member_id);
+  if(e?.type==='member.access_changed'&&e.data?.memberId===bundle.record.intended_member_id)finish(bundle,e.data?.active===false&&e.actorId===bundle.record.intended_member_id);
  }
  return{cursor:p,units,bytes,done:p.stage==='complete'};
 }
+
+export function recoveryInvitationSummary(cursor){validateRecoveryInvitations(cursor);if(cursor.stage!=='complete')fail();return{consistent:true,invitations:cursor.invitations,legacyBaselines:cursor.legacyBaselines,journalEntries:cursor.journalEntries};}

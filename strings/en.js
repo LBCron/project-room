@@ -1,5 +1,6 @@
 // Generated from strings/en.json by scripts/build-ui-strings.mjs.
 export default {
+  "agent.existing.separate": "Create a separate agent",
   "request.timedOut": "The request timed out before confirmation. Please try again.",
   "_meta": {
     "locale": "en",

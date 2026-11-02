@@ -1,3 +1,4 @@
+import {recoveryReplayOrderKey} from './recovery-replay-order.mjs';
 import {initialRecoveryProjectionScan,scanRecoveryProjectionChunk,decodeRecoveryProjectionSpan,recoveryProjectionFrame,REPLAY_CODEC_INPUT_BYTES} from './replay-projection-codec.mjs';
 import {planRecoveryReplayValue,writeRecoveryReplayValue,readRecoveryReplayValue} from './recovery-replay-value.mjs';
 import {ensureWorkControlDefaults} from '../src/work-item-session.js';
@@ -35,7 +36,7 @@ export function advanceRecoveryCheckpointSeed(db,scratch,roomId,previous,maximum
  if(cursor.stage==='scan'){
   let start=cursor.scan.offset,input=source(db,roomId,cursor,start,Math.min(REPLAY_CODEC_INPUT_BYTES,cursor.sourceBytes-start),historicalBytes),position=0;bytes+=input.length;
   while(units<128){
-   if(position===input.length){if(cursor.scan.offset===cursor.sourceBytes||bytes+REPLAY_CODEC_INPUT_BYTES>payloadQuantum)break;start=cursor.scan.offset;input=source(db,roomId,cursor,start,Math.min(REPLAY_CODEC_INPUT_BYTES,cursor.sourceBytes-start),historicalBytes);position=0;bytes+=input.length;}
+   if(position===input.length){if(cursor.scan.offset === cursor.sourceBytes || bytes + REPLAY_CODEC_INPUT_BYTES > payloadQuantum)break;start=cursor.scan.offset;input=source(db,roomId,cursor,start,Math.min(REPLAY_CODEC_INPUT_BYTES,cursor.sourceBytes-start),historicalBytes);position=0;bytes+=input.length;}
    let step;try{step=scanRecoveryProjectionChunk(cursor.scan,input.subarray(position),{maximumRecords:1});}catch(error){if(error.message==='unsupported or corrupt replay projection codec')return defer('checkpoint_shape_requires_original_oracle');throw error;}
    const record=step.records[0];
    if(!record){cursor.scan=step.state;position+=step.consumed;continue;}
@@ -50,7 +51,7 @@ export function advanceRecoveryCheckpointSeed(db,scratch,roomId,previous,maximum
    }else if(record.kind==='metadata-entry'&&maps.has(record.key)){
     domain=record.key;key=record.entryKey;
     if(domain==='workItems'){const state={workItems:{[key]:value}};ensureWorkControlDefaults(state);value=state.workItems[key];}
-    if(counted.has(domain)&&scratch.get('replay',roomId,domain,key,0)===undefined){values.push({domain:'replayOrder',key:JSON.stringify([domain,cursor.counts[domain]]),value:key});newCount=domain;}
+    if(counted.has(domain)&&scratch.get('replay',roomId,domain,key,0)===undefined){values.push({domain:'replayOrder',key:JSON.stringify([domain,cursor.counts[domain]]),value:key});if(domain==='workItems')values.push({domain:'workOrder',key:recoveryReplayOrderKey(key,cursor.counts[domain]),value:key});newCount=domain;}
    }else if(record.kind==='metadata-entry'&&record.key==='messagesArchive'){domain='checkpointArchive';key=record.entryKey;}
    else if(record.kind==='metadata-index'){domain='checkpointArchiveRetained';key=String(record.index);}
    else if(record.kind==='metadata'){domain='metadata';key=record.key;}

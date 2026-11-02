@@ -19,6 +19,8 @@ test("every currently served asset is registered in the exact-source runtime", (
   assert.deepEqual(publicAssets, assetPaths);
   for (const path of assetPaths) assert.ok(allowed.has(path), `Missing runtime asset: ${path}`);
   assert.ok(allowed.has("server/recovery-checkpoint-seed.mjs"), "Cold recovery includes retained and historical checkpoint seeding");
+  assert.ok(allowed.has("server/recovery-replay-order.mjs"));
+  assert.ok(publicAssets.includes("src/claim-overlap.js"), "Browser event replay can load its shared overlap predicate");
 });
 
 test("exact-commit runtime package verifies cold, excludes private state and preserves populated committed-schema data", async t => {

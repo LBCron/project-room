@@ -4,12 +4,12 @@
 // may additionally bind scoped point readers over its own prior reducer fold;
 // no callback or context is serialized, supplied by a client or a grant.
 const contexts = new WeakMap();
-export function bindCurrentRecordContext(state, { replyRequestCount, replyOwner, replyRootChannel }) {
+export function bindCurrentRecordContext(state, { replyRequestCount, replyOwner, replyRootChannel, claimOverlaps }) {
   if (!Number.isSafeInteger(replyRequestCount) || replyRequestCount < 0)
     throw Error('invalid_current_reply_request_count');
-  if ([replyOwner, replyRootChannel].some(value => value !== undefined && typeof value !== 'function'))
+  if ([replyOwner, replyRootChannel, claimOverlaps].some(value => value !== undefined && typeof value !== 'function'))
     throw Error('invalid_current_replay_reader');
-  contexts.set(state, Object.freeze({ replyRequestCount, replyOwner, replyRootChannel }));
+  contexts.set(state, Object.freeze({ replyRequestCount, replyOwner, replyRootChannel, claimOverlaps }));
 }
 export function inheritCurrentRecordContext(previous, next) {
   const context=contexts.get(previous);if(context)contexts.set(next,context);
@@ -24,5 +24,11 @@ export function currentRecordReplyOwner(state,messageId) {
 export function currentRecordReplyRootChannel(state,messageId) {
  const value=contexts.get(state)?.replyRootChannel?.(messageId);
  if(value!==undefined&&(typeof value!=='string'||!value))throw Error('Invalid scoped reply root channel');
+ return value;
+}
+
+export function currentRecordClaimOverlaps(state, workItemId, repository, paths, at) {
+ const value=contexts.get(state)?.claimOverlaps?.(workItemId,repository,paths,at);
+ if(value!==undefined&&(!Array.isArray(value)||value.length>10||value.some(item=>!item||typeof item.workItemId!=='string'||typeof item.holderId!=='string'||!Array.isArray(item.paths)||item.paths.length<1||item.paths.length>16||item.paths.some(path=>typeof path!=='string'))))throw Error('Invalid scoped claim overlaps');
  return value;
 }

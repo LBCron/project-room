@@ -13,5 +13,21 @@
     "passed": 11,
     "failed": 0
   },
-  "notQualified": "Protocol20 actual Native source with skipped lazy tables fails metadata validation. Correction pending; focused green is not full native acceptance. No production deployment."
+  "notQualified": "Full candidate not qualified: three finalization contract failures remain; broader restore tests and combined native qualification remain. Initial20 skipped-table metadata failure cured separately. No production deployment.",
+  "protocol20Cured": {
+    "head": "388465023",
+    "passed": 6,
+    "failed": 0
+  },
+  "guard20Composed": {
+    "head": "4d09eed10",
+    "passed": 15,
+    "failed": 0
+  },
+  "remainingFinalizationContract": {
+    "head": "f813130af",
+    "passed": 0,
+    "failed": 3,
+    "status": "must reconcile current operator entrypoint and preserve independent bounds/freeze assertions"
+  }
 }

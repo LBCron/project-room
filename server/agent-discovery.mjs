@@ -1622,6 +1622,30 @@ const MCP_SERVER_CARD_DOC = Object.freeze({
   get body() { return wellKnownMcpJson(); }
 });
 
+// Shared Node/edge discovery route approach from Grok's PR #4534. Keep the
+// served summary aligned with the declarative contract, not public receipt data.
+const WORK_RECEIPT_EXTENSION_DOC = Object.freeze({
+  type: "text/markdown; charset=utf-8",
+  body: `# A2A work-receipt extension v1
+
+URI: ${A2A_WORK_RECEIPT_EXTENSION.uri}
+
+This extension is declarative only. It defines an optional metadata convention
+using schema \`project-room-receipt/1\`; it adds no RPC methods or wire authentication.
+An AgentCard declaration is not proof that its publisher issues signed receipts.
+
+Message.metadata["${A2A_WORK_RECEIPT_EXTENSION.uri}"] contains
+\`{ "receipts": [...] }\`. Multiple receipts or an empty receipts array are allowed.
+No A2A-Extensions header is required because there are no methods to activate.
+
+Public /receipts/<id>.json records are unsigned \`project-room-public-receipt/1\`
+records, a different shape. Receipt claims are not proof that the reported work
+is true; receivers must apply the standard's verification and identity rules.
+
+Full specification: ${A2A_WORK_RECEIPT_EXTENSION.params.spec_url}
+`
+});
+
 const CANONICAL = Object.freeze({
   "/llms.txt": Object.freeze({ type: "text/plain; charset=utf-8", body: llmsTxt() }),
   // Agent skill (Omnara-style SKILL.md): self-onboarding — find work, claim
@@ -1750,6 +1774,25 @@ export function isEdgeDoorUrl(url) {
 }
 
 export function discoveryDoc(pathname) {
+  // Modern route-table registration owns Node routing for this new document;
+  // edge discovery shares its bytes without expanding the legacy path catalog.
+  if(pathname==="/extensions/work-receipt/v1")return WORK_RECEIPT_EXTENSION_DOC;
   const canonical = ALIASES[pathname] ?? pathname;
   return CANONICAL[canonical] ?? null;
 }
+
+// The shared discovery handler serves these bytes on Node and at the edge.
+// Register the public specification in the existing modern route inventory too.
+function workReceiptExtensionRoute(ctx) {
+  const bytes=new TextEncoder().encode(WORK_RECEIPT_EXTENSION_DOC.body);
+  ctx.res.setHeader("X-Robots-Tag","all");
+  ctx.res.writeHead(200,{"Content-Type":WORK_RECEIPT_EXTENSION_DOC.type,"Content-Length":bytes.byteLength});
+  return ctx.res.end(ctx.req.method==="HEAD"?undefined:bytes);
+}
+export const WORK_RECEIPT_EXTENSION_ROUTES = Object.freeze(["GET","HEAD"].map(method=>Object.freeze({
+  id: `work-receipt-extension-${method.toLowerCase()}`,method,path:"/extensions/work-receipt/v1",
+  auth:"none",capability:null,scope:"public",handler:workReceiptExtensionRoute,
+  parity:"exempt:static public A2A extension specification; no MCP operation",
+  publication:"open:static declarative specification; no room or member data",
+  schema:{response:{type:"string"}},events:[]
+})));

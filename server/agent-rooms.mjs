@@ -14,12 +14,11 @@
 // The auxiliary table records creation provenance (who created which room)
 // for the pilot bound. It is non-authoritative: the projection's ownerId
 // and the event log are the source of truth for who owns a room.
-import {isCurrentRoom,readCurrentHead,readCurrentRecord,withCurrentReadContext} from './current-room-repository.mjs';
+import {isCurrentRoom,readCurrentHead,readCurrentRecord,readCurrentWorkItem,withCurrentReadContext} from './current-room-repository.mjs';
 import { randomBytes, randomUUID } from "node:crypto";
 import { EVENT_TYPES as T, PERMISSIONS, event, validId, ownMember, ROOM_KINDS, HISTORY_DEFAULTS_VERSION } from "../src/events.js";
 import { ServiceError } from "./service-error.mjs";
 import { createRateLimiter } from "./identity-ratelimit.mjs";
-import { nextActionsForRoomCreate } from "./discoverability.mjs";
 import { growthFundedRooms, GROWTH_FUNDING, identityRoomCredits } from "./growth-loop.mjs";
 import { claimWork, createWork } from "./work-claims.mjs";
 import { isFirstContribution, retentionAck } from "./retention-response.mjs";
@@ -90,8 +89,22 @@ export function onboardingRotateNext(roomId, withinReplayWindow = true) {
   };
 }
 
-export function roomCreateNext(roomId) {
+export function roomCreateNext(roomId, { native = false, starter = true } = {}) {
   const room = `/api/rooms/${encodeURIComponent(roomId)}`;
+  if (native) return [
+    ...(starter ? [
+      { action: "read-work", tool: "room_read_work", arguments: { workItemId: AGENT_STARTER_ID },
+        description: "Inspect your accepted starter task and its current revision." },
+      { action: "start-work", method: "POST", path: `${room}/commands`,
+        body: { id: "<stable-command-id>", type: "work.started", data: { workItemId: AGENT_STARTER_ID, expectedRevision: 1 } },
+        description: "Start the accepted starter task. Read it first if its revision has changed." },
+    ] : []),
+    { action: "post-message", method: "POST", path: `${room}/commands`,
+      body: { id: "<stable-command-id>", type: "message.posted", data: { messageId: "<stable-message-id>", body: "<your plan>" } },
+      description: "Share your plan using the room-scoped bearer credential." },
+    { action: "invite-members", method: "POST", path: `${room}/agent-invites`,
+      description: "Invite an existing peer agent with an explicit permission profile." },
+  ];
   const starterUpdate = `${room}/work-claims/${encodeURIComponent(AGENT_STARTER_ID)}/update`;
   return [
     { action: "start-work", method: "POST", path: starterUpdate, body: { state: "in_progress" },
@@ -118,13 +131,22 @@ export function roomCreateNext(roomId) {
 }
 
 function starterView(store, roomId) {
+  if(isCurrentRoom(store.db,roomId)){
+    const item=readCurrentWorkItem(store.db,roomId,AGENT_STARTER_ID);
+    return item?{workItemId:AGENT_STARTER_ID,state:item.state,nextRead:{tool:'room_read_work',arguments:{workItemId:AGENT_STARTER_ID}}}:null;
+  }
   const item = store.workClaims.get(roomId, AGENT_STARTER_ID);
   return item ? { claimId: AGENT_STARTER_ID, state: item.state } : null;
 }
 
-function ensureAgentStarter(store, roomId, memberId) {
+function ensureAgentStarter(store, roomId, memberId, secret) {
   const existing = starterView(store, roomId);
   if (existing) return existing;
+  if(isCurrentRoom(store.db,roomId)){
+    store.command(secret,roomId,{id:'native-starter-propose',type:T.WORK_PROPOSED,data:{workItemId:AGENT_STARTER_ID,title:AGENT_STARTER_TITLE,definitionOfDone:'Save a useful result, inspect its receipt, and share the next action.',accountableMemberId:memberId,mode:'read'}});
+    store.command(secret,roomId,{id:'native-starter-accept',type:T.WORK_ACCEPTED,data:{workItemId:AGENT_STARTER_ID,expectedRevision:0}});
+    return starterView(store,roomId);
+  }
   const now = store.now();
   let item = createWork({ id: AGENT_STARTER_ID, title: AGENT_STARTER_TITLE, tags: ["starter"] }, { now, agentId: memberId });
   store.workClaims.set(roomId, item);
@@ -142,6 +164,10 @@ function ensureAgentStarter(store, roomId, memberId) {
   store.workClaims.set(roomId, item);
   emitWorkClaimEvent(store, roomId, { actorId: memberId, item, action: "claimed", atMs: now });
   return { claimId: AGENT_STARTER_ID, state: item.state };
+}
+function creationState(store,roomId,memberId){
+ if(!isCurrentRoom(store.db,roomId))return store.room(roomId).state;
+ return withCurrentReadContext(store.db,roomId,()=>({room:readCurrentRecord(store.db,roomId,'metadata','room'),members:store.roomAuthority(roomId,{memberId}).members}));
 }
 function slugFromTitle(title) {
   const suffix = randomBytes(2).toString("hex");
@@ -223,7 +249,7 @@ export class AgentRooms {
           nextCursor = rooms[pageSize - 1].roomId;
           break;
         }
-        rooms.push({ roomId: seat.roomId, archivedAt: roomRow.archivedAt, title: roomRow.title, memberId });
+        rooms.push({ roomId: seat.roomId, archivedAt: roomRow.archivedAt, title: isCurrentRoom(this.store.db,seat.roomId)?this.store.readTransaction(()=>withCurrentReadContext(this.store.db,seat.roomId,()=>readCurrentRecord(this.store.db,seat.roomId,'metadata','room').title)):roomRow.title, memberId });
       }
       if (nextCursor) break;
       // A short batch means the seat list is exhausted.
@@ -307,7 +333,7 @@ export class AgentRooms {
         const prior = this.store.db.prepare(
           "SELECT room_id FROM agent_room_ownership WHERE identity_id=? AND request_id=?").get(identity.identityId, requestId);
         if (prior) {
-          const state = this.store.room(prior.room_id).state;
+          const state = creationState(this.store,prior.room_id,memberId);
           const same = state && state.room.ownerId === memberId && state.room.title === title && state.room.purpose === purpose
             && state.room.kind === kind && ownMember(state.members, memberId)?.displayName === displayName
             && hadStarter(prior.room_id) === wantStarter;
@@ -317,7 +343,7 @@ export class AgentRooms {
       }
       if (this.store.db.prepare("SELECT 1 FROM rooms WHERE id=?").get(roomId)) {
         const created = this.store.db.prepare("SELECT 1 FROM agent_room_ownership WHERE identity_id=? AND room_id=?").get(identity.identityId, roomId);
-        const state = created ? this.store.room(roomId).state : null;
+        const state = created ? creationState(this.store,roomId,memberId) : null;
         const same = state && state.room.ownerId === memberId && state.room.title === title && state.room.purpose === purpose
           && state.room.kind === kind && ownMember(state.members, memberId)?.displayName === displayName
           && hadStarter(roomId) === wantStarter;
@@ -349,7 +375,7 @@ export class AgentRooms {
       this.store.initialize([
         event({ type: T.ROOM_CREATED, actorId: memberId, roomId, at, data: { roomId, ownerId: memberId, title, purpose, kind, historyDefaultsVersion: HISTORY_DEFAULTS_VERSION } }), // PRIV-2
         event({ type: T.MEMBER_ADDED, actorId: memberId, roomId, at, data: { memberId, displayName, kind: "agent", permissions: [...PERMISSIONS], identityId: identity.identityId } })
-      ]);
+      ], {representation:'normalized-current-v1'});
       // Link the identity so its pri_ secret authenticates to the new room.
       this.store.db.prepare("INSERT INTO identity_links(room_id,identity_id,member_id,linked_at) VALUES(?,?,?,?)")
         .run(roomId, identity.identityId, memberId, this.store.now());
@@ -359,10 +385,11 @@ export class AgentRooms {
         this.store.db.prepare("UPDATE agent_room_ownership SET funded_by=? WHERE identity_id=? AND room_id=?")
           .run(GROWTH_FUNDING, identity.identityId, roomId);
       }
-      const starter = wantStarter ? ensureAgentStarter(this.store, roomId, memberId) : null;
+      const starter = wantStarter ? ensureAgentStarter(this.store, roomId, memberId, secret) : null;
       return { roomId, ownerMemberId: memberId, identityId: identity.identityId, duplicate: false, starter,
         mcpToken: this.store.agentPlugin.issueOnboardingMcpToken({ identityId: identity.identityId, roomId, label: displayName }),
-        next: roomCreateNext(roomId), nextActions: nextActionsForRoomCreate(roomId) };
+        next: roomCreateNext(roomId, {native:true,starter:wantStarter}),
+        nextActions: roomCreateNext(roomId, {native:true,starter:wantStarter}).map(action=>({...action,transport:action.tool?'mcp':'http'})) };
     });
   }
 

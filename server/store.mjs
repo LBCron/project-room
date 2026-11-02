@@ -71,7 +71,7 @@ import { runLegacyMessageShapeUpgrade } from "./legacy-message-shape.mjs";
 import { commitMessageRedaction, prepareCurrentMessageRedaction } from "./message-redaction.mjs";
 import { runPatrolTick, patrolFindings as listPatrolFindings, patrolBlocks as listPatrolBlocks } from "./patrol.mjs";
 import { historyFloor as readHistoryFloor, messageInHistory, rowInHistory, messageVisibleToViewer, visibleSequenceHorizon } from "./history-visibility.mjs"; // PRIV-2
-import { migrateRoomLifecycleV28, verifyRoomLifecycle, refuseArchivedWrite, createAccountRoom, accountRoomEntry, ACCOUNT_ROOM_SELECT, archivedAtOf } from "./room-lifecycle.mjs";
+import { migrateRoomLifecycleV28, verifyRoomLifecycle, refuseArchivedWrite, createAccountRoom, accountRoomEntry, readAccountRoomRow, archivedAtOf } from "./room-lifecycle.mjs";
 import { ShareLinks, shareLinkSchema, shareLinkCodeSchema, shareLinkAccessSchema } from "./share-links.mjs";
 import { DmConsents, dmConsentSchema } from "./dm-consents.mjs";
 import { Bonds, bondSchema, isPeerPrivateEvent, peerEventVisible } from "./bonds.mjs";
@@ -4814,7 +4814,7 @@ this.slaBreachAlerts = new SlaBreachAlertJournal(this); // Task 26: durable in-a
       for (const row of rows.slice(0, 50)) {
         try {
           const access = this.authenticateAccountSession(token, row.room_id, binding);
-          rooms.push(accountRoomEntry(this.db.prepare(ACCOUNT_ROOM_SELECT).get(row.room_id), access.member.id));
+          rooms.push(accountRoomEntry(readAccountRoomRow(this,row.room_id), access.member.id));
         } catch (error) { if (error.status !== 403) throw error; }
       }
       return { contractVersion: 1, viewer: { accountId: auth.account.id, authEpoch: auth.account.authEpoch,

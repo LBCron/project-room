@@ -1,3 +1,4 @@
+import {isCurrentRoom,readCurrentRecord,withCurrentReadContext} from './current-room-repository.mjs';
 // Issue #6 A2: room lifecycle on the server side — create a room for an
 // account, archive it, and read its lifecycle for discovery.
 //
@@ -63,6 +64,14 @@ export function refuseArchivedWrite(state) {
 export const archivedAtOf = state => (typeof state?.room?.archivedAt === "string" ? state.room.archivedAt : null);
 
 export const ACCOUNT_ROOM_SELECT = "SELECT id, archived_at, json_extract(projection,'$.room.title') AS title, json_extract(projection,'$.room.kind') AS kind FROM rooms WHERE id=?";
+export function readAccountRoomRow(store,roomId){
+  if(!isCurrentRoom(store.db,roomId))return store.db.prepare(ACCOUNT_ROOM_SELECT).get(roomId);
+  return withCurrentReadContext(store.db,roomId,()=>{const room=readCurrentRecord(store.db,roomId,'metadata','room'),row=store.db.prepare('SELECT id,archived_at FROM rooms WHERE id=?').get(roomId);return row?{...row,title:room.title,kind:room.kind}:row;});
+}
+function creationState(store,roomId,memberId){
+  if(!isCurrentRoom(store.db,roomId))return store.room(roomId).state;
+  return withCurrentReadContext(store.db,roomId,()=>({room:readCurrentRecord(store.db,roomId,'metadata','room'),members:store.roomAuthority(roomId,{memberId}).members}));
+}
 export const accountRoomEntry = (row, memberId) => ({
   id: row.id, title: row.title, memberId, kind: roomKind({ kind: row.kind }),
   archived: row.archived_at !== null && row.archived_at !== undefined, archivedAt: row.archived_at ?? null
@@ -124,14 +133,15 @@ export function createAccountRoom(store, token, binding, request) {
     const auth = store.authenticateAccountSession(token, null, binding);
     const accountId = auth.account.id;
     const view = (memberId, duplicate) => ({ contractVersion: 1, viewer: accountViewer(auth),
-      room: accountRoomEntry(store.db.prepare(ACCOUNT_ROOM_SELECT).get(roomId), memberId), duplicate });
+      room: accountRoomEntry(readAccountRoomRow(store,roomId), memberId), duplicate,
+      ...(wantsStarter && isCurrentRoom(store.db,roomId) ? {starter:{workItemId:'native-starter',nextRead:{tool:'room_read_work',arguments:{workItemId:'native-starter'}}}} : {}) });
     if (store.db.prepare("SELECT 1 FROM rooms WHERE id=?").get(roomId)) {
       const bound = store.db.prepare("SELECT member_id FROM member_accounts WHERE room_id=? AND account_id=?").get(roomId, accountId);
-      const state = bound ? store.room(roomId).state : null;
+      const state = bound ? creationState(store,roomId,bound.member_id) : null;
       const same = state && state.room.ownerId === bound.member_id && state.room.title === title && state.room.purpose === purpose
         && roomKind(state.room) === kind && ownMember(state.members, bound.member_id)?.displayName === displayName;
       if (!same) fail(409, "room_exists", "That room id is already in use");
-      if (wantsStarter) seedStarterForNewAccount(store, accountId, { intent, templateSlug, roomId, ownerMemberId: bound.member_id, start });
+      if (wantsStarter) seedStarterForNewAccount(store, accountId, { intent, templateSlug, roomId, ownerMemberId: bound.member_id, start, token, binding });
       return view(bound.member_id, true);
     }
     // A provisional account exists for exactly one room key membership and can never bind elsewhere.
@@ -168,9 +178,9 @@ export function createAccountRoom(store, token, binding, request) {
     store.initialize([
       event({ type: T.ROOM_CREATED, actorId: ownerId, roomId, at, data: { roomId, ownerId, title, purpose, kind, historyDefaultsVersion: HISTORY_DEFAULTS_VERSION } }), // PRIV-2
       event({ type: T.MEMBER_ADDED, actorId: ownerId, roomId, at, data: { memberId: ownerId, displayName, kind: "human", permissions: [...PERMISSIONS] } })
-    ]);
+    ], {representation:'normalized-current-v1'});
     store.ensureHumanAccountBinding(roomId, ownerId, accountId, foundedWithGrowth ? GROWTH_ROOM_ORIGIN : "account-room-create");
-    if (wantsStarter) seedStarterForNewAccount(store, accountId, { intent, templateSlug, roomId, ownerMemberId: ownerId, start });
+    if (wantsStarter) seedStarterForNewAccount(store, accountId, { intent, templateSlug, roomId, ownerMemberId: ownerId, start, token, binding });
     return view(ownerId, false);
   });
 }

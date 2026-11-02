@@ -1,0 +1,59 @@
+{
+  "base": "26ae962688fd38e6c26e1fee7836bca60f871aea",
+  "sourceCommits": [
+    "0a0fee2bf",
+    "d8e0fa517"
+  ],
+  "nodeVersion": "26.8.2",
+  "results": {
+    "firstThreeReproductions": {
+      "before": {
+        "pass": 0,
+        "fail": 3
+      },
+      "after": {
+        "pass": 3,
+        "fail": 0
+      }
+    },
+    "upgradeSearchSettlementFiles": {
+      "pass": 45,
+      "fail": 0
+    },
+    "schemaRelocation": {
+      "pass": 4,
+      "fail": 0
+    },
+    "dmConsents": {
+      "pass": 7,
+      "fail": 0
+    },
+    "helpDiscovery": {
+      "pass": 8,
+      "fail": 0
+    },
+    "invitationMigration": {
+      "pass": 1,
+      "fail": 0,
+      "log": "help-invitation-after.log.gz; combined8pass1fail is retained, remaininghelpfailure fixedseparately"
+    },
+    "inboxClaimDiscovery": {
+      "pass": 4,
+      "fail": 0
+    },
+    "connectionDiagnostics": {
+      "pass": 9,
+      "fail": 0
+    },
+    "lint": {
+      "errors": 0,
+      "existingWarnings": 1
+    }
+  },
+  "limitations": [
+    "Full baseline suite remains running and has additional failures; not a full-suite pass.",
+    "Not integrated, deployed or live-verified.",
+    "Old45 DM test explicitly installs current guard SQL on empty fixture; not a supported data migration.",
+    "Corruption fixtures temporarily bypass JSON guards to inject impossible rows; exact guards restored before tested operation."
+  ]
+}

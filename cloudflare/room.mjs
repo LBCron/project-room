@@ -335,7 +335,7 @@ export class ProjectRoom extends DurableObject {
     // Object's storage. Restore token only; fail-closed on a non-empty store
     // (see server/restore-ndjson.mjs and docs/BACKUP-DR.md).
     if (url.pathname === '/api/operator/restore') {
-      return respond(await operatorRestoreResponse(request, backupTokens.restoreToken, this.store));
+      return respond(await operatorRestoreResponse(request, backupTokens.restoreToken, this.store, this.env.ROOM_BACKUPS_KV));
     }
     // Same recovery, sourced from the daily backup already sitting in the
     // ROOM_BACKUPS_KV namespace: the request-body path caps at 64 MiB and

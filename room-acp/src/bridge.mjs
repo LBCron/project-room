@@ -188,7 +188,7 @@ export class Bridge {
     // Old receipts lack source IDs: do not disclose their result without
     // evidence that every original requester still has access.
     if (!Array.isArray(messageIds) || !messageIds.length) return false;
-    for (const id of messageIds) if (!allowed((await this.room.thread(id)).thread?.authorId)) return false;
+    for (const id of messageIds) if (!allowed((await this.readThread(id)).thread?.authorId)) return false;
     return true;
   }
 
@@ -211,9 +211,24 @@ export class Bridge {
     this.stats.acked += signalIds.length;
   }
 
+  stopForContextLimit(error) {
+    if (!(error instanceof RoomError) || error.status !== 413 || error.code !== "current_thread_too_large") return false;
+    if (this.stopReason !== "context_unavailable") {
+      this.stopReason = "context_unavailable";
+      this.log("Room thread exceeds this bridge's bounded context. Stopping; the wake remains unacknowledged. Inspect the request in Room before restarting.");
+    }
+    this.stop();
+    return true;
+  }
+
+  async readThread(messageId) {
+    try { return await this.room.thread(messageId); }
+    catch (error) { this.stopForContextLimit(error); throw error; }
+  }
+
   async threadRoot(messageId) {
-    let current = (await this.room.thread(messageId)).thread;
-    for (let hops = 0; current.replyToId && hops < 5; hops++) current = (await this.room.thread(current.replyToId)).thread;
+    let current = (await this.readThread(messageId)).thread;
+    for (let hops = 0; current.replyToId && hops < 5; hops++) current = (await this.readThread(current.replyToId)).thread;
     return current;
   }
 
@@ -224,7 +239,7 @@ export class Bridge {
     try {
       if (signal.workClaim) { await this.acceptClaim(signal); return; }
       if (!signal.messageId || !["mention", "dm", "reply", "direct"].includes(signal.kind)) { await this.ack([signal.signalId]); this.stats.skipped++; return; }
-      const message = (await this.room.thread(signal.messageId)).thread;
+      const message = (await this.readThread(signal.messageId)).thread;
       if (!mayTalk({ authorId: message.authorId, members: this.members, me: this.me, ownerId: this.ownerId, respondTo: this.respondTo })) {
       this.log(`ignored a ${signal.kind} from ${message.author ?? message.authorId} (respond-to ${this.respondTo})`);
       await this.ack([signal.signalId]); this.stats.skipped++; return;
@@ -331,7 +346,7 @@ export class Bridge {
       try {
         await this.agentReady();
         if (this.controller.signal.aborted) return;
-        const thread = (await this.room.thread(threadKey)).thread;
+        const thread = (await this.readThread(threadKey)).thread;
         const { sessionId, created } = await this.host.session(threadKey);
         if (!(await this.authorized({ messageIds: started.messageIds }))) { await this.ack(signalIds); return; }
         const prompt = buildPrompt({ roomTitle: this.title, thread, wakes: fresh.map(entry => entry.item), firstTurn: created });
@@ -374,6 +389,7 @@ export class Bridge {
       }
       await this.ack(receipt.signalIds);
     } catch (error) {
+      this.stopForContextLimit(error);
       for (const id of receipt.signalIds) this.seen.delete(id);
       throw error;
     }
@@ -418,6 +434,7 @@ export class Bridge {
       try { await this.pollOnce(); failures = 0; }
       catch (error) {
         if (this.controller.signal.aborted) break;
+        if (this.stopForContextLimit(error)) break;
         if (error instanceof RoomError && [401, 403, 410].includes(error.status)) { this.log(`room access ended (${error.code}); stopping`); this.stopReason = "access_ended"; break; }
         failures++;
         const delay = error.retryAfterMs ?? Math.min(60000, 1000 * 2 ** Math.min(failures, 6));

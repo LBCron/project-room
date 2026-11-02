@@ -150,7 +150,7 @@ export function mountUpdates({ client, host, getContext, onOpenWork, onOpenMessa
     }
   }
   function paint() {
-    decisions.hidden = nativeAttention() || filter === "mentions";
+    decisions.hidden = filter === "mentions";
     for (const button of tabs.querySelectorAll("[role=tab]")) {
       const on = button.dataset.updateFilter === filter;
       button.setAttribute("aria-selected", on ? "true" : "false");

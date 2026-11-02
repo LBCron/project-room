@@ -110,7 +110,7 @@
     "scripts/native-invite-oauth-browser-check.mjs": 1600,
     "scripts/native-result-browser-check.mjs": 20548,
     "scripts/native-wake-bridge-browser-check.mjs": 40306,
-    "scripts/normalized-attention-browser-check.mjs": 3051,
+    "scripts/normalized-attention-browser-check.mjs": 3016,
     "scripts/notification-feed-browser-check.mjs": 12037,
     "scripts/oauth-reconnect-browser-check.mjs": 1510,
     "scripts/oauth-return-invite-browser-check.mjs": 2733,

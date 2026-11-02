@@ -36,7 +36,7 @@ test('writer and choices are disabled by default while strict proof reader remai
 
 test('no holder-proof exemption is granted to callers who copy an enrollment reference',t=>{
  const f=fixture(t);f.apply();const raw=JSON.parse(f.s.db.prepare("SELECT request_json FROM agent_connection_operations WHERE room_id='target'").get().request_json);
- assert.throws(()=>f.s.agentConnections.apply(f.slot.token,'source',{...raw,requestId:'forged',memberId:'forged'},f.binding),{code:'connection_integrity_error'});
+ assert.throws(()=>f.s.agentConnections.apply(f.slot.token,'source',{...raw,requestId:'forged',memberId:'forged'},f.binding),{code:'identity_link_proof_required'});
 });
 
 for(const [name,change] of [

@@ -31,9 +31,9 @@ export function assertAccountEnrollment(store,roomId,request,{history=false,acco
   ||proof.keyHash!==request.keyHash||proof.expiresAt!==request.expiresAt||proof.displayName!==request.displayName
   ||proof.sourceBinding.identityId!==request.identityId||proof.sourceBinding.memberId!==request.memberId
   ||accountId!==null&&proof.accountId!==accountId)
-  fail(409,'connection_integrity_error','Existing agent enrollment evidence requires reconciliation');
+  fail(history?503:422,history?'connection_integrity_error':'identity_link_proof_required','Existing agent enrollment evidence requires reconciliation');
  if(!history&&scopes.get(store)!==request.accountEnrollment)
-  fail(403,'identity_link_proof_required','Explicit account enrollment consent required');
+  fail(403,'access_denied','Explicit account enrollment consent required');
  return proof;
 }
 export function createAccountAgentEnrollment({store,resource,preferences=[],enabled=false}){

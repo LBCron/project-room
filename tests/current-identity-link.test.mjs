@@ -36,7 +36,8 @@ test('normalized relink reactivates the same member and uses current narrow perm
  assert.equal(linkWithProof(s,key,'commons',identity,{permissions:['accept_work']}).relinked,true);
  const member=s.authenticate(identity.secret,'commons').member;assert.equal(member.active,true);assert.equal(member.revision,2);assert.deepEqual(member.permissions,['accept_work']);
 });
-test('normalized link retains the 100-member capacity refusal',t=>{
+test('normalized link admits the 100th member and retains capacity refusal for the 101st',t=>{
+ const admitted=fixture(t,{members:99});linkWithProof(admitted.store,admitted.key,'commons',admitted.identity,{permissions:[]});assert.equal(admitted.store.authenticate(admitted.identity.secret,'commons').member.id,admitted.identity.identityId);assert.equal(admitted.store.db.prepare("SELECT count(*) n FROM current_room_records WHERE domain='members' AND room_id='commons'").get().n,100);
  const {store:s,key,identity}=fixture(t,{members:100});assert.throws(()=>linkWithProof(s,key,'commons',identity,{permissions:[]}),e=>/capacity|limit/i.test(e.message));assert.equal(s.db.prepare('SELECT count(*) n FROM identity_links WHERE identity_id=?').get(identity.identityId).n,0);
 });
 

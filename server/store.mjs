@@ -5500,14 +5500,19 @@ this.slaBreachAlerts = new SlaBreachAlertJournal(this); // Task 26: durable in-a
   }
 
   charter(token, roomId, { revision, expectedSessionBinding = null } = {}) {
-    return this.readTransaction(() => {
-      const auth = this.authenticate(token, roomId, expectedSessionBinding), room = this.room(roomId);
+    return this.readTransaction(() => withCurrentReadContext(this.db, roomId, () => {
+      const auth = this.authenticate(token, roomId, expectedSessionBinding), currentRoom = isCurrentRoom(this.db, roomId);
+      const head = currentRoom ? readCurrentHead(this.db, roomId) : null;
+      const room = currentRoom ? {sequence: head.sequence, state: {room: readCurrentRecord(this.db, roomId, 'metadata', 'room')}} : this.room(roomId);
       if (revision !== undefined && (!Number.isSafeInteger(revision) || revision < 0)) fail(422, "invalid_charter_revision", "Choose an instructions version");
       const current = charterContext(room.state.room);
       const selected = revision ?? current.revision;
       if (selected > current.revision) fail(404, "charter_not_found", "That instructions version is unavailable");
       let charter = selected === current.revision ? current.charter : null;
       if (selected > 0 && selected !== current.revision) {
+        if (currentRoom) throw new ServiceError(409, 'current_room_context_unavailable',
+          `Historical instructions are retained but this bounded reader serves only current instructions or revision 0. Read /api/rooms/${encodeURIComponent(roomId)}/charter for the current version.`,
+          {Link: `</api/rooms/${encodeURIComponent(roomId)}/charter>; rel="latest"`});
         // Return one bounded event, not all discussion bodies or every version.
         // Full retained-history/checkpoint validation belongs to the recovery audit.
         const rows = this.db.prepare("SELECT body FROM events WHERE room_id=? AND json_extract(body,'$.type')=? AND json_extract(body,'$.data.expectedRevision')=? LIMIT 2").all(roomId, T.ROOM_CHARTER_UPDATED, selected - 1);
@@ -5516,10 +5521,10 @@ this.slaBreachAlerts = new SlaBreachAlertJournal(this); // Task 26: durable in-a
         if (parsedEvent.roomId !== roomId || parsedEvent.actorId !== room.state.room.ownerId) fail(409, "charter_integrity_error", "Instructions history requires reconciliation");
         charter = charterFromEvent(parsedEvent, { revision: selected - 1 });
       }
-      return { contractVersion: 1, roomId, evaluatedThrough: room.sequence, currentRevision: current.revision, currentEventId: current.eventId,
+      return { contractVersion: 1, roomId, evaluatedThrough: currentRoom ? currentVisibleHorizon(this, roomId, auth.member.id, room.sequence) : room.sequence, currentRevision: current.revision, currentEventId: current.eventId,
         ...charterContext({ charter }), viewerId: auth.member.id, viewerAccountId: auth.account?.id ?? null,
         viewerAuthEpoch: auth.account?.authEpoch ?? null, viewerSessionBinding: auth.sessionBinding, viewerSessionRevision: auth.sessionRevision ?? null };
-    });
+    }));
   }
   workSessions(token, roomId, { status = null, expectedSessionBinding = null } = {}) {
     return this.readTransaction(() => {

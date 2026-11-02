@@ -67,6 +67,30 @@
     {
       "file": "root-protocol12-error-guidance-composed-1101.log.gz",
       "uncompressedSha256": "84fc65b84febab781afbc63032b9f6122bef718c6a88d13a37746789da4742f1"
+    },
+    {
+      "file": "root-protocol12-history-v2-six-fixed-1101.log.gz",
+      "uncompressedSha256": "2b7e2956bf4c0512341dfe0a05ef2d8568dec1d2c0cac2c327faf6116f16a449"
+    },
+    {
+      "file": "root-protocol12-composed-publication-final-1101.log.gz",
+      "uncompressedSha256": "e396cc2f3daede69c1294c10a8f18045c8aebd7eda5134f637ec0a3a7ba5d8cf"
+    },
+    {
+      "file": "root-protocol12-doc-links-fixed-1101.log.gz",
+      "uncompressedSha256": "723ff3e5a497836e264fa0a0fbf12abd890fd70d057c381a69347c9a5c126647"
+    },
+    {
+      "file": "root-protocol12-composed-publication-fixed-1101.log.gz",
+      "uncompressedSha256": "0b35cc619cdcf0d6b071f3ccbafa7cde10dadf79d097bbdd14e931d71567da99"
     }
-  ]
+  ],
+  "followUp": {
+    "source": "391ad8ef502096a742d3868469777a7a82440ef1",
+    "historyFixtures": "six of six pass after reviewed v2 activation fixture correction; corruption tests preserved",
+    "publicationCheck": "CI-mode check exit0,15 mandatory drift tests pass, full Node suite explicitly skipped",
+    "docLinks": "846 pass; incident evidence links fixed after causal failure",
+    "production": "No new merge or deployment; readiness last checked503 at01:08UTC",
+    "pending": "Protocol13/14 text/charter and warm schema-cache cure remain separate work"
+  }
 }

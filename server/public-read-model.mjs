@@ -1,3 +1,4 @@
+import {ServiceError} from './service-error.mjs';
 import { hydrateWorkItems } from "./work-repository.mjs";
 // Public pages read these tables and nothing from rooms.projection.
 // Rows are written when an owner opts in, updated in the same transaction
@@ -530,7 +531,9 @@ export function syncCurrentRoomPublication(store,{roomId,previous,state,event,ch
     charge(scalar.bytes+256);
     const row=store.db.prepare('SELECT members_json FROM public_rooms WHERE slug=?').get(roomId);
     members=JSON.parse(row.members_json);
-    if(!Array.isArray(members)||members.length>100||new Set(members.map(m=>m.id)).size!==members.length)throw Error('current_room_corrupt: public member projection differs');
+    if(!Array.isArray(members)||members.length>100||members.some(m=>!m||!['human','agent'].includes(m.kind))
+      ||new Set(members.map(m=>m.id)).size!==members.length)
+      throw new ServiceError(409,'current_room_context_unavailable','Public member projection needs an explicit public-page off/on rebuild before membership changes');
     for(const change of memberChanges){
       const before=current.before.get(JSON.stringify(['members',change.key]));
       const at=members.findIndex(m=>m.id===change.key);

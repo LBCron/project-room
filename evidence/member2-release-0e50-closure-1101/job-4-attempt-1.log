@@ -1,0 +1,21 @@
+TAP version 13
+# {"event":"room.cold_start","clockSemantics":"runtime-dependent","durationMs":111,"integrity":"eager","phases":{"schema":{"ms":25,"rowsRead":0},"plugin":{"ms":47,"rowsRead":0},"fence":{"ms":22,"rowsRead":0},"verifies":{"ms":5,"rowsRead":0},"checksum":{"ms":0,"rowsRead":0}},"cpuMs":114,"heapBytes":80169472,"rooms":0,"sequences":0,"projectionBytes":0,"events":0}
+# {"event":"room.store_initialized","initializationMs":113,"legacyColdStartMs":111,"clockSemantics":"runtime-dependent","cpuMeasured":false}
+# [boot-config] ERROR: the agent card is UNSIGNED and no explicit opt-in was recorded at build time — members fetching /.well-known/agent-card.json will see an unsigned card (marked signed:false). To fix: set ROOM_AGENT_CARD_SIGNING_KEY and re-run scripts/sign-agent-card.mjs, or pass --allow-unsigned explicitly to record the choice.
+# ROOM_SECURITY_CONTACT is unset; /.well-known/security.txt returns 404
+# No magic-link mailer is configured: email-verification gates are relaxed (agent-invite escape hatch); /api/health reports emailVerification: relaxed-no-mailer
+# Subtest: message composer is axe-clean (serious/critical)
+ok 1 - message composer is axe-clean (serious/critical)
+  ---
+  duration_ms: 3448.592292
+  type: 'test'
+  ...
+1..1
+# tests 1
+# suites 0
+# pass 1
+# fail 0
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 4204.503916

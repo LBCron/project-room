@@ -1,0 +1,335 @@
+{
+  "schemaVersion": 1,
+  "kind": "local-worker-qualification",
+  "sourceBefore": {
+    "revision": "0e50e157f95f9fda4f16c1d3be3e0468f8413b65",
+    "tree": "7c36cc173c2d7536cd3fae8b441d1a36da117375",
+    "clean": true
+  },
+  "sourceAfter": {
+    "revision": "0e50e157f95f9fda4f16c1d3be3e0468f8413b65",
+    "tree": "7c36cc173c2d7536cd3fae8b441d1a36da117375",
+    "clean": true
+  },
+  "startedAt": "2026-10-31T06:00:56.127Z",
+  "completedAt": "2026-10-31T06:01:32.407Z",
+  "lane": 0,
+  "lanes": 2,
+  "identity": {
+    "source": "0e50e157f95f9fda4f16c1d3be3e0468f8413b65",
+    "node": "v24.19.0",
+    "platform": "darwin",
+    "arch": "arm64",
+    "tools": {
+      "spare-capacity-worker.mjs": "a8341b3b43f9cb37a6d74beaaec8b8975687ede466d57cae6a747fa191c1661c",
+      "local-test-campaign.mjs": "52b49c3ec282f4fd104a48e81e5c95ea0bb5138c0cf9ea62a2bed9653313d056",
+      "../client/local-workloads.mjs": "3cb16dc6e0768157f75df8a6be2b410dce99f8c9fb15758ef91b349d86e941eb",
+      "../client/local-test-executor.mjs": "6cad48cb247f5c325e5922091d57b9a6656f725652b142aba551e119f8f6584a"
+    },
+    "lockfile": "301419dd2256c996a6c774b7a5a8f18713f68a2d4478da1e29c97548d1098cb8"
+  },
+  "expected": [
+    {
+      "suite": "tests/development-loop.test.js",
+      "seed": null
+    },
+    {
+      "suite": "tests/mcp-events-wire.test.js",
+      "seed": null
+    },
+    {
+      "suite": "tests/backup-verify.test.js",
+      "seed": null
+    },
+    {
+      "suite": "scripts/a11y-composer-browser-check.mjs",
+      "seed": null
+    },
+    {
+      "suite": "tests/events-kernel.property.test.js",
+      "seed": 11500000
+    },
+    {
+      "suite": "tests/spend-grants-property.test.js",
+      "seed": 11500200
+    },
+    {
+      "suite": "tests/writer-fence-property.test.js",
+      "seed": 11500400
+    }
+  ],
+  "jobs": [
+    {
+      "jobId": 1,
+      "suite": "tests/development-loop.test.js",
+      "seed": null,
+      "status": "passed",
+      "code": 0,
+      "signal": null,
+      "reason": null,
+      "bytes": 3763,
+      "observation": {
+        "outcome": "passed",
+        "counts": {
+          "tests": 4,
+          "pass": 4,
+          "fail": 0,
+          "cancelled": 0,
+          "skipped": 0,
+          "todo": 0
+        }
+      },
+      "workload": "request-protocol",
+      "identity": {
+        "source": "0e50e157f95f9fda4f16c1d3be3e0468f8413b65",
+        "node": "v24.19.0",
+        "platform": "darwin",
+        "arch": "arm64",
+        "tools": {
+          "spare-capacity-worker.mjs": "a8341b3b43f9cb37a6d74beaaec8b8975687ede466d57cae6a747fa191c1661c",
+          "local-test-campaign.mjs": "52b49c3ec282f4fd104a48e81e5c95ea0bb5138c0cf9ea62a2bed9653313d056",
+          "../client/local-workloads.mjs": "3cb16dc6e0768157f75df8a6be2b410dce99f8c9fb15758ef91b349d86e941eb",
+          "../client/local-test-executor.mjs": "6cad48cb247f5c325e5922091d57b9a6656f725652b142aba551e119f8f6584a"
+        },
+        "lockfile": "301419dd2256c996a6c774b7a5a8f18713f68a2d4478da1e29c97548d1098cb8"
+      },
+      "logName": "job-1-attempt-1.log",
+      "logHash": "642ec37c403159848599ccd44910792bf0519f04a2892e5f8f8d174e1f60c63a",
+      "elapsedMs": 3657
+    },
+    {
+      "jobId": 2,
+      "suite": "tests/mcp-events-wire.test.js",
+      "seed": null,
+      "status": "passed",
+      "code": 0,
+      "signal": null,
+      "reason": null,
+      "bytes": 2190,
+      "observation": {
+        "outcome": "passed",
+        "counts": {
+          "tests": 10,
+          "pass": 10,
+          "fail": 0,
+          "cancelled": 0,
+          "skipped": 0,
+          "todo": 0
+        }
+      },
+      "workload": "request-protocol",
+      "identity": {
+        "source": "0e50e157f95f9fda4f16c1d3be3e0468f8413b65",
+        "node": "v24.19.0",
+        "platform": "darwin",
+        "arch": "arm64",
+        "tools": {
+          "spare-capacity-worker.mjs": "a8341b3b43f9cb37a6d74beaaec8b8975687ede466d57cae6a747fa191c1661c",
+          "local-test-campaign.mjs": "52b49c3ec282f4fd104a48e81e5c95ea0bb5138c0cf9ea62a2bed9653313d056",
+          "../client/local-workloads.mjs": "3cb16dc6e0768157f75df8a6be2b410dce99f8c9fb15758ef91b349d86e941eb",
+          "../client/local-test-executor.mjs": "6cad48cb247f5c325e5922091d57b9a6656f725652b142aba551e119f8f6584a"
+        },
+        "lockfile": "301419dd2256c996a6c774b7a5a8f18713f68a2d4478da1e29c97548d1098cb8"
+      },
+      "logName": "job-2-attempt-1.log",
+      "logHash": "24ffcc0d9c8ceff203cc5633563082f1797ab45f5af51ed143b9c5cfc1bc3bff",
+      "elapsedMs": 251
+    },
+    {
+      "jobId": 3,
+      "suite": "tests/backup-verify.test.js",
+      "seed": null,
+      "status": "passed",
+      "code": 0,
+      "signal": null,
+      "reason": null,
+      "bytes": 6942,
+      "observation": {
+        "outcome": "passed",
+        "counts": {
+          "tests": 15,
+          "pass": 15,
+          "fail": 0,
+          "cancelled": 0,
+          "skipped": 0,
+          "todo": 0
+        }
+      },
+      "workload": "backup-verification",
+      "identity": {
+        "source": "0e50e157f95f9fda4f16c1d3be3e0468f8413b65",
+        "node": "v24.19.0",
+        "platform": "darwin",
+        "arch": "arm64",
+        "tools": {
+          "spare-capacity-worker.mjs": "a8341b3b43f9cb37a6d74beaaec8b8975687ede466d57cae6a747fa191c1661c",
+          "local-test-campaign.mjs": "52b49c3ec282f4fd104a48e81e5c95ea0bb5138c0cf9ea62a2bed9653313d056",
+          "../client/local-workloads.mjs": "3cb16dc6e0768157f75df8a6be2b410dce99f8c9fb15758ef91b349d86e941eb",
+          "../client/local-test-executor.mjs": "6cad48cb247f5c325e5922091d57b9a6656f725652b142aba551e119f8f6584a"
+        },
+        "lockfile": "301419dd2256c996a6c774b7a5a8f18713f68a2d4478da1e29c97548d1098cb8"
+      },
+      "logName": "job-3-attempt-1.log",
+      "logHash": "c905bce1b476455aaa8eb97fe273157a7462a024c969d04533b52d93326cd371",
+      "elapsedMs": 2021
+    },
+    {
+      "jobId": 4,
+      "suite": "scripts/a11y-composer-browser-check.mjs",
+      "seed": null,
+      "status": "passed",
+      "code": 0,
+      "signal": null,
+      "reason": null,
+      "bytes": 1365,
+      "observation": {
+        "outcome": "passed",
+        "counts": {
+          "tests": 1,
+          "pass": 1,
+          "fail": 0,
+          "cancelled": 0,
+          "skipped": 0,
+          "todo": 0
+        }
+      },
+      "workload": "composer-accessibility",
+      "identity": {
+        "source": "0e50e157f95f9fda4f16c1d3be3e0468f8413b65",
+        "node": "v24.19.0",
+        "platform": "darwin",
+        "arch": "arm64",
+        "tools": {
+          "spare-capacity-worker.mjs": "a8341b3b43f9cb37a6d74beaaec8b8975687ede466d57cae6a747fa191c1661c",
+          "local-test-campaign.mjs": "52b49c3ec282f4fd104a48e81e5c95ea0bb5138c0cf9ea62a2bed9653313d056",
+          "../client/local-workloads.mjs": "3cb16dc6e0768157f75df8a6be2b410dce99f8c9fb15758ef91b349d86e941eb",
+          "../client/local-test-executor.mjs": "6cad48cb247f5c325e5922091d57b9a6656f725652b142aba551e119f8f6584a"
+        },
+        "lockfile": "301419dd2256c996a6c774b7a5a8f18713f68a2d4478da1e29c97548d1098cb8"
+      },
+      "logName": "job-4-attempt-1.log",
+      "logHash": "98c65f8def52b1fc291197045c8853408a9f78bad515f655599fa7d82f69fe8b",
+      "elapsedMs": 4264
+    },
+    {
+      "jobId": 5,
+      "suite": "tests/events-kernel.property.test.js",
+      "seed": 11500000,
+      "status": "passed",
+      "code": 0,
+      "signal": null,
+      "reason": null,
+      "bytes": 1548,
+      "observation": {
+        "outcome": "passed",
+        "counts": {
+          "tests": 6,
+          "pass": 6,
+          "fail": 0,
+          "cancelled": 0,
+          "skipped": 0,
+          "todo": 0
+        }
+      },
+      "workload": "generated-invariants",
+      "identity": {
+        "source": "0e50e157f95f9fda4f16c1d3be3e0468f8413b65",
+        "node": "v24.19.0",
+        "platform": "darwin",
+        "arch": "arm64",
+        "tools": {
+          "spare-capacity-worker.mjs": "a8341b3b43f9cb37a6d74beaaec8b8975687ede466d57cae6a747fa191c1661c",
+          "local-test-campaign.mjs": "52b49c3ec282f4fd104a48e81e5c95ea0bb5138c0cf9ea62a2bed9653313d056",
+          "../client/local-workloads.mjs": "3cb16dc6e0768157f75df8a6be2b410dce99f8c9fb15758ef91b349d86e941eb",
+          "../client/local-test-executor.mjs": "6cad48cb247f5c325e5922091d57b9a6656f725652b142aba551e119f8f6584a"
+        },
+        "lockfile": "301419dd2256c996a6c774b7a5a8f18713f68a2d4478da1e29c97548d1098cb8"
+      },
+      "logName": "job-5-attempt-1.log",
+      "logHash": "e664dec6065da95474b941c7e6f0b1029a0a3d57312333ffc33b902922d0cb76",
+      "elapsedMs": 1304
+    },
+    {
+      "jobId": 6,
+      "suite": "tests/spend-grants-property.test.js",
+      "seed": 11500200,
+      "status": "passed",
+      "code": 0,
+      "signal": null,
+      "reason": null,
+      "bytes": 1460,
+      "observation": {
+        "outcome": "passed",
+        "counts": {
+          "tests": 5,
+          "pass": 5,
+          "fail": 0,
+          "cancelled": 0,
+          "skipped": 0,
+          "todo": 0
+        }
+      },
+      "workload": "generated-invariants",
+      "identity": {
+        "source": "0e50e157f95f9fda4f16c1d3be3e0468f8413b65",
+        "node": "v24.19.0",
+        "platform": "darwin",
+        "arch": "arm64",
+        "tools": {
+          "spare-capacity-worker.mjs": "a8341b3b43f9cb37a6d74beaaec8b8975687ede466d57cae6a747fa191c1661c",
+          "local-test-campaign.mjs": "52b49c3ec282f4fd104a48e81e5c95ea0bb5138c0cf9ea62a2bed9653313d056",
+          "../client/local-workloads.mjs": "3cb16dc6e0768157f75df8a6be2b410dce99f8c9fb15758ef91b349d86e941eb",
+          "../client/local-test-executor.mjs": "6cad48cb247f5c325e5922091d57b9a6656f725652b142aba551e119f8f6584a"
+        },
+        "lockfile": "301419dd2256c996a6c774b7a5a8f18713f68a2d4478da1e29c97548d1098cb8"
+      },
+      "logName": "job-6-attempt-1.log",
+      "logHash": "ca5133e1033e65120ee906e8964b2185790a9fe1d0427c0ff54574423a99a982",
+      "elapsedMs": 1502
+    },
+    {
+      "jobId": 7,
+      "suite": "tests/writer-fence-property.test.js",
+      "seed": 11500400,
+      "status": "passed",
+      "code": 0,
+      "signal": null,
+      "reason": null,
+      "bytes": 1550,
+      "observation": {
+        "outcome": "passed",
+        "counts": {
+          "tests": 5,
+          "pass": 5,
+          "fail": 0,
+          "cancelled": 0,
+          "skipped": 0,
+          "todo": 0
+        }
+      },
+      "workload": "generated-invariants",
+      "identity": {
+        "source": "0e50e157f95f9fda4f16c1d3be3e0468f8413b65",
+        "node": "v24.19.0",
+        "platform": "darwin",
+        "arch": "arm64",
+        "tools": {
+          "spare-capacity-worker.mjs": "a8341b3b43f9cb37a6d74beaaec8b8975687ede466d57cae6a747fa191c1661c",
+          "local-test-campaign.mjs": "52b49c3ec282f4fd104a48e81e5c95ea0bb5138c0cf9ea62a2bed9653313d056",
+          "../client/local-workloads.mjs": "3cb16dc6e0768157f75df8a6be2b410dce99f8c9fb15758ef91b349d86e941eb",
+          "../client/local-test-executor.mjs": "6cad48cb247f5c325e5922091d57b9a6656f725652b142aba551e119f8f6584a"
+        },
+        "lockfile": "301419dd2256c996a6c774b7a5a8f18713f68a2d4478da1e29c97548d1098cb8"
+      },
+      "logName": "job-7-attempt-1.log",
+      "logHash": "c66d95e6bc1530d65156289a893f371e5424912d69f3a190cb741e78b9684cf9",
+      "elapsedMs": 22313
+    }
+  ],
+  "limitations": [
+    "unsigned-local-observation",
+    "installed-dependencies-not-attested",
+    "tracked-source-only",
+    "not-release-authorization"
+  ]
+}

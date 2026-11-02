@@ -1,0 +1,120 @@
+TAP version 13
+# {"event":"room.cold_start","clockSemantics":"runtime-dependent","durationMs":113,"integrity":"eager","phases":{"schema":{"ms":22,"rowsRead":0},"plugin":{"ms":49,"rowsRead":0},"fence":{"ms":25,"rowsRead":0},"verifies":{"ms":5,"rowsRead":0},"checksum":{"ms":0,"rowsRead":0}},"cpuMs":118,"heapBytes":26196448,"rooms":0,"sequences":0,"projectionBytes":0,"events":0}
+# {"event":"room.store_initialized","initializationMs":115,"legacyColdStartMs":113,"clockSemantics":"runtime-dependent","cpuMeasured":false}
+# Subtest: parseSchedule: named intervals
+ok 1 - parseSchedule: named intervals
+  ---
+  duration_ms: 1.134041
+  type: 'test'
+  ...
+# Subtest: parseSchedule: duration forms
+ok 2 - parseSchedule: duration forms
+  ---
+  duration_ms: 0.269916
+  type: 'test'
+  ...
+# Subtest: parseSchedule: cron form
+ok 3 - parseSchedule: cron form
+  ---
+  duration_ms: 0.554917
+  type: 'test'
+  ...
+# Subtest: parseSchedule: rejects junk
+ok 4 - parseSchedule: rejects junk
+  ---
+  duration_ms: 0.306542
+  type: 'test'
+  ...
+# Subtest: nextRunAfter: interval adds the interval
+ok 5 - nextRunAfter: interval adds the interval
+  ---
+  duration_ms: 0.156875
+  type: 'test'
+  ...
+# Subtest: nextRunAfter: cron finds the next matching minute (UTC)
+ok 6 - nextRunAfter: cron finds the next matching minute (UTC)
+  ---
+  duration_ms: 0.42925
+  type: 'test'
+  ...
+# Subtest: nextRunAfter: cron every-5-minutes steps
+ok 7 - nextRunAfter: cron every-5-minutes steps
+  ---
+  duration_ms: 0.132209
+  type: 'test'
+  ...
+# Subtest: scheduleIsDue: never-run is due, fresh run is not, failed run retries
+ok 8 - scheduleIsDue: never-run is due, fresh run is not, failed run retries
+  ---
+  duration_ms: 0.150792
+  type: 'test'
+  ...
+# {"event":"room.cold_start","clockSemantics":"runtime-dependent","durationMs":15,"cpuMs":15,"heapBytes":25937920,"rooms":1,"sequences":5,"projectionBytes":1333,"events":5}
+# {"event":"room.cold_start","clockSemantics":"runtime-dependent","durationMs":14,"cpuMs":15,"heapBytes":35332560,"rooms":1,"sequences":5,"projectionBytes":1333,"events":5}
+# {"event":"room.cold_start","clockSemantics":"runtime-dependent","durationMs":13,"cpuMs":13,"heapBytes":39229760,"rooms":1,"sequences":5,"projectionBytes":1333,"events":5}
+# {"event":"room.cold_start","clockSemantics":"runtime-dependent","durationMs":12,"cpuMs":13,"heapBytes":27021416,"rooms":1,"sequences":5,"projectionBytes":1333,"events":5}
+# {"event":"room.cold_start","clockSemantics":"runtime-dependent","durationMs":13,"cpuMs":14,"heapBytes":36175776,"rooms":1,"sequences":5,"projectionBytes":1333,"events":5}
+# {"event":"room.cold_start","clockSemantics":"runtime-dependent","durationMs":13,"cpuMs":13,"heapBytes":40075592,"rooms":1,"sequences":5,"projectionBytes":1333,"events":5}
+# {"event":"room.cold_start","clockSemantics":"runtime-dependent","durationMs":110,"integrity":"eager","phases":{"schema":{"ms":20,"rowsRead":0},"plugin":{"ms":54,"rowsRead":0},"fence":{"ms":25,"rowsRead":0},"verifies":{"ms":3,"rowsRead":0},"checksum":{"ms":0,"rowsRead":0}},"cpuMs":110,"heapBytes":28777352,"rooms":0,"sequences":0,"projectionBytes":0,"events":0}
+# {"event":"room.store_initialized","initializationMs":111,"legacyColdStartMs":110,"clockSemantics":"runtime-dependent","cpuMeasured":false}
+# Subtest: runBackupCycle: full cycle verifies, writes state, then skips when not due
+ok 9 - runBackupCycle: full cycle verifies, writes state, then skips when not due
+  ---
+  duration_ms: 326.387083
+  type: 'test'
+  ...
+# {"event":"room.cold_start","clockSemantics":"runtime-dependent","durationMs":17,"cpuMs":19,"heapBytes":33298072,"rooms":1,"sequences":5,"projectionBytes":1333,"events":5}
+# {"event":"room.cold_start","clockSemantics":"runtime-dependent","durationMs":16,"cpuMs":15,"heapBytes":28805272,"rooms":1,"sequences":5,"projectionBytes":1333,"events":5}
+# {"event":"room.cold_start","clockSemantics":"runtime-dependent","durationMs":16,"cpuMs":16,"heapBytes":32832616,"rooms":1,"sequences":5,"projectionBytes":1333,"events":5}
+# {"event":"room.cold_start","clockSemantics":"runtime-dependent","durationMs":16,"cpuMs":16,"heapBytes":37295304,"rooms":1,"sequences":5,"projectionBytes":1333,"events":5}
+# {"event":"room.cold_start","clockSemantics":"runtime-dependent","durationMs":118,"integrity":"eager","phases":{"schema":{"ms":25,"rowsRead":0},"plugin":{"ms":56,"rowsRead":0},"fence":{"ms":25,"rowsRead":0},"verifies":{"ms":3,"rowsRead":0},"checksum":{"ms":0,"rowsRead":0}},"cpuMs":120,"heapBytes":25550416,"rooms":0,"sequences":0,"projectionBytes":0,"events":0}
+# {"event":"room.store_initialized","initializationMs":119,"legacyColdStartMs":118,"clockSemantics":"runtime-dependent","cpuMeasured":false}
+# {"event":"room.cold_start","clockSemantics":"runtime-dependent","durationMs":113,"integrity":"eager","phases":{"schema":{"ms":24,"rowsRead":0},"plugin":{"ms":55,"rowsRead":0},"fence":{"ms":24,"rowsRead":0},"verifies":{"ms":3,"rowsRead":0},"checksum":{"ms":0,"rowsRead":0}},"cpuMs":112,"heapBytes":30155584,"rooms":0,"sequences":0,"projectionBytes":0,"events":0}
+# {"event":"room.store_initialized","initializationMs":114,"legacyColdStartMs":113,"clockSemantics":"runtime-dependent","cpuMeasured":false}
+# Subtest: verifyRestoredBackup: flags a backup whose events drifted from the watermark
+ok 10 - verifyRestoredBackup: flags a backup whose events drifted from the watermark
+  ---
+  duration_ms: 261.195875
+  type: 'test'
+  ...
+# Subtest: verifyRestoredBackup: missing watermark fails fast
+ok 11 - verifyRestoredBackup: missing watermark fails fast
+  ---
+  duration_ms: 0.336417
+  type: 'test'
+  ...
+# Subtest: reconcileRestoredAuthority: a restored room deleted from the current store is reported, not a crash
+ok 12 - reconcileRestoredAuthority: a restored room deleted from the current store is reported, not a crash
+  ---
+  duration_ms: 244.398959
+  type: 'test'
+  ...
+# Subtest: cli: --print-cron emits a usable crontab line
+ok 13 - cli: --print-cron emits a usable crontab line
+  ---
+  duration_ms: 240.609416
+  type: 'test'
+  ...
+# {"event":"room.cold_start","clockSemantics":"runtime-dependent","durationMs":91,"integrity":"eager","phases":{"schema":{"ms":20,"rowsRead":0},"plugin":{"ms":44,"rowsRead":0},"fence":{"ms":19,"rowsRead":0},"verifies":{"ms":2,"rowsRead":0},"checksum":{"ms":0,"rowsRead":0}},"cpuMs":91,"heapBytes":35423744,"rooms":0,"sequences":0,"projectionBytes":0,"events":0}
+# {"event":"room.store_initialized","initializationMs":92,"legacyColdStartMs":91,"clockSemantics":"runtime-dependent","cpuMeasured":false}
+# Subtest: cli: missing --db/--to is a usage error
+ok 14 - cli: missing --db/--to is a usage error
+  ---
+  duration_ms: 219.345541
+  type: 'test'
+  ...
+# Subtest: cli: --force runs a full cycle and prints JSON
+ok 15 - cli: --force runs a full cycle and prints JSON
+  ---
+  duration_ms: 431.909458
+  type: 'test'
+  ...
+1..15
+# tests 15
+# suites 0
+# pass 15
+# fail 0
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 1967.337292

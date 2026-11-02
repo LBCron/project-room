@@ -1,0 +1,40 @@
+TAP version 13
+# Subtest: fence definitions form one exact trigger per table and operation, and table sets only ever grow across versions
+ok 1 - fence definitions form one exact trigger per table and operation, and table sets only ever grow across versions
+  ---
+  duration_ms: 29.841041
+  type: 'test'
+  ...
+# Subtest: for any fence version, a write passes exactly when the registered writer answers that integer version
+ok 2 - for any fence version, a write passes exactly when the registered writer answers that integer version
+  ---
+  duration_ms: 1312.21675
+  type: 'test'
+  ...
+# Subtest: a connection without any writer function is refused by every fenced write; registerWriter answers every retained version
+ok 3 - a connection without any writer function is refused by every fenced write; registerWriter answers every retained version
+  ---
+  duration_ms: 11534.1485
+  type: 'test'
+  ...
+# Subtest: verifyWriterFence accepts exact installs at any version and rejects any single trigger drift
+ok 4 - verifyWriterFence accepts exact installs at any version and rejects any single trigger drift
+  ---
+  duration_ms: 5456.354
+  type: 'test'
+  ...
+# Subtest: installWriterFence is idempotent inside a transaction, refuses drifted triggers and stamps the schema version
+ok 5 - installWriterFence is idempotent inside a transaction, refuses drifted triggers and stamps the schema version
+  ---
+  duration_ms: 3803.721708
+  type: 'test'
+  ...
+1..5
+# tests 5
+# suites 0
+# pass 5
+# fail 0
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 22241.119958

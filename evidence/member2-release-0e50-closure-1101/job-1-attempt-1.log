@@ -1,0 +1,45 @@
+TAP version 13
+# {"event":"room.cold_start","clockSemantics":"runtime-dependent","durationMs":147,"integrity":"eager","phases":{"schema":{"ms":31,"rowsRead":0},"plugin":{"ms":68,"rowsRead":0},"fence":{"ms":27,"rowsRead":0},"verifies":{"ms":6,"rowsRead":0},"checksum":{"ms":0,"rowsRead":0}},"cpuMs":193,"heapBytes":35818512,"rooms":0,"sequences":0,"projectionBytes":0,"events":0}
+# {"event":"room.store_initialized","initializationMs":150,"legacyColdStartMs":147,"clockSemantics":"runtime-dependent","cpuMeasured":false}
+# [boot-config] ERROR: the agent card is UNSIGNED and no explicit opt-in was recorded at build time — members fetching /.well-known/agent-card.json will see an unsigned card (marked signed:false). To fix: set ROOM_AGENT_CARD_SIGNING_KEY and re-run scripts/sign-agent-card.mjs, or pass --allow-unsigned explicitly to record the choice.
+# ROOM_SECURITY_CONTACT is unset; /.well-known/security.txt returns 404
+# No magic-link mailer is configured: email-verification gates are relaxed (agent-invite escape hatch); /api/health reports emailVerification: relaxed-no-mailer
+# {"event":"room.cold_start","clockSemantics":"runtime-dependent","durationMs":126,"integrity":"eager","phases":{"schema":{"ms":27,"rowsRead":0},"plugin":{"ms":60,"rowsRead":0},"fence":{"ms":27,"rowsRead":0},"verifies":{"ms":3,"rowsRead":0},"checksum":{"ms":0,"rowsRead":0}},"cpuMs":126,"heapBytes":45476096,"rooms":0,"sequences":0,"projectionBytes":0,"events":0}
+# {"event":"room.store_initialized","initializationMs":127,"legacyColdStartMs":126,"clockSemantics":"runtime-dependent","cpuMeasured":false}
+# Subtest: actual HTTP bridge retries unknown proposal and request receipts without duplicate work; journal replays saved answer
+ok 1 - actual HTTP bridge retries unknown proposal and request receipts without duplicate work; journal replays saved answer
+  ---
+  duration_ms: 856.374833
+  type: 'test'
+  ...
+# {"event":"room.cold_start","clockSemantics":"runtime-dependent","durationMs":93,"integrity":"eager","phases":{"schema":{"ms":19,"rowsRead":0},"plugin":{"ms":45,"rowsRead":0},"fence":{"ms":19,"rowsRead":0},"verifies":{"ms":2,"rowsRead":0},"checksum":{"ms":0,"rowsRead":0}},"cpuMs":93,"heapBytes":55148608,"rooms":0,"sequences":0,"projectionBytes":0,"events":0}
+# {"event":"room.store_initialized","initializationMs":93,"legacyColdStartMs":93,"clockSemantics":"runtime-dependent","cpuMeasured":false}
+# Subtest: preview refuses changed packet evidence and existing work with another accountable member
+ok 2 - preview refuses changed packet evidence and existing work with another accountable member
+  ---
+  duration_ms: 672.132458
+  type: 'test'
+  ...
+# {"event":"room.cold_start","clockSemantics":"runtime-dependent","durationMs":81,"integrity":"eager","phases":{"schema":{"ms":17,"rowsRead":0},"plugin":{"ms":38,"rowsRead":0},"fence":{"ms":17,"rowsRead":0},"verifies":{"ms":3,"rowsRead":0},"checksum":{"ms":0,"rowsRead":0}},"cpuMs":82,"heapBytes":51624600,"rooms":0,"sequences":0,"projectionBytes":0,"events":0}
+# {"event":"room.store_initialized","initializationMs":82,"legacyColdStartMs":81,"clockSemantics":"runtime-dependent","cpuMeasured":false}
+# Subtest: evidence links exact test/source/stdout and leaves a different release revision unproven
+ok 3 - evidence links exact test/source/stdout and leaves a different release revision unproven
+  ---
+  duration_ms: 338.160666
+  type: 'test'
+  ...
+# Subtest: real failing Node child flows through HTTP work, laptop adapter, journal and linked output
+ok 4 - real failing Node child flows through HTTP work, laptop adapter, journal and linked output
+  ---
+  duration_ms: 1143.077875
+  type: 'test'
+  ...
+1..4
+# tests 4
+# suites 0
+# pass 4
+# fail 0
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 3578.875125

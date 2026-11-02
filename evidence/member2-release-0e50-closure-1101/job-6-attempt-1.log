@@ -1,0 +1,40 @@
+TAP version 13
+# Subtest: P1 conservation: a charge never exceeds the grant balance; remaining tracks the ledger; refused charges change nothing
+ok 1 - P1 conservation: a charge never exceeds the grant balance; remaining tracks the ledger; refused charges change nothing
+  ---
+  duration_ms: 198.751541
+  type: 'test'
+  ...
+# Subtest: P2 idempotency: the same nonce never double-charges across authorize/settle/void/replay interleavings
+ok 2 - P2 idempotency: the same nonce never double-charges across authorize/settle/void/replay interleavings
+  ---
+  duration_ms: 306.143166
+  type: 'test'
+  ...
+# Subtest: P3 single-use: at most one in-flight authorization; the first settle revokes the grant
+ok 3 - P3 single-use: at most one in-flight authorization; the first settle revokes the grant
+  ---
+  duration_ms: 192.552
+  type: 'test'
+  ...
+# Subtest: P4 per-agent isolation: interleaved charges for two agents never leak across grants
+ok 4 - P4 per-agent isolation: interleaved charges for two agents never leak across grants
+  ---
+  duration_ms: 201.720458
+  type: 'test'
+  ...
+# Subtest: P5 room-allowance nesting: reservations never exceed the allowance headroom; outcomes match the model
+ok 5 - P5 room-allowance nesting: reservations never exceed the allowance headroom; outcomes match the model
+  ---
+  duration_ms: 209.111083
+  type: 'test'
+  ...
+1..5
+# tests 5
+# suites 0
+# pass 5
+# fail 0
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 1429.739041

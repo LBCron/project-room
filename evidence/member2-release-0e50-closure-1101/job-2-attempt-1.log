@@ -1,0 +1,70 @@
+TAP version 13
+# Subtest: Standard Webhooks signature covers exact body, stable event ID and fresh attempt timestamp
+ok 1 - Standard Webhooks signature covers exact body, stable event ID and fresh attempt timestamp
+  ---
+  duration_ms: 1.503791
+  type: 'test'
+  ...
+# Subtest: invalid or oversized signing keys/payloads are rejected without echoing secrets
+ok 2 - invalid or oversized signing keys/payloads are rejected without echoing secrets
+  ---
+  duration_ms: 0.500417
+  type: 'test'
+  ...
+# Subtest: callback challenge is signed, random per attempt, validated before acceptance
+ok 3 - callback challenge is signed, random per attempt, validated before acceptance
+  ---
+  duration_ms: 2.462167
+  type: 'test'
+  ...
+# Subtest: callback private DNS fails before network I/O
+ok 4 - callback private DNS fails before network I/O
+  ---
+  duration_ms: 0.266958
+  type: 'test'
+  ...
+# Subtest: redirect, gone and oversized response statuses are terminal; rate limit retries
+ok 5 - redirect, gone and oversized response statuses are terminal; rate limit retries
+  ---
+  duration_ms: 1.206459
+  type: 'test'
+  ...
+# Subtest: revoked and expired subscriptions never contact callback
+ok 6 - revoked and expired subscriptions never contact callback
+  ---
+  duration_ms: 0.159667
+  type: 'test'
+  ...
+# Subtest: signing-secret rotation sends both keys only within its bounded window
+ok 7 - signing-secret rotation sends both keys only within its bounded window
+  ---
+  duration_ms: 0.362167
+  type: 'test'
+  ...
+# Subtest: expiry during authorization or DNS prevents delivery
+ok 8 - expiry during authorization or DNS prevents delivery
+  ---
+  duration_ms: 62.173
+  type: 'test'
+  ...
+# Subtest: deadline includes DNS and does not send after a slow resolution
+ok 9 - deadline includes DNS and does not send after a slow resolution
+  ---
+  duration_ms: 47.552792
+  type: 'test'
+  ...
+# Subtest: event occurrence timestamp requires a full timezone-qualified instant
+ok 10 - event occurrence timestamp requires a full timezone-qualified instant
+  ---
+  duration_ms: 0.4255
+  type: 'test'
+  ...
+1..10
+# tests 10
+# suites 0
+# pass 10
+# fail 0
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 199.218792

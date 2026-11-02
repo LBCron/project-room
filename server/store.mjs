@@ -4862,7 +4862,7 @@ this.slaBreachAlerts = new SlaBreachAlertJournal(this); // Task 26: durable in-a
   // stats / revocation record the owner identity honestly (schema v36).
   authenticateInvitationAdmin(token, roomId, expectedSessionBinding = null) {
     const auth = this.authenticate(token, roomId, expectedSessionBinding);
-    const ownerId = this.room(roomId).state.room.ownerId;
+    const ownerId = this.roomAuthority(roomId, {memberId:auth.member?.id}).ownerId;
     if (auth.member?.id === ownerId) return auth;
     if (!auth.account || auth.kind !== "session") fail(403, "account_session_required", "Invitation administration requires an account browser session");
     return auth;
@@ -4923,7 +4923,7 @@ this.slaBreachAlerts = new SlaBreachAlertJournal(this); // Task 26: durable in-a
       const now = this.now();
       if (expiresAt <= now || expiresAt > now + 30 * 86400000) fail(422, "invalid_expiry", "Invitations expire within 30 days");
       if (issuer.member.revision !== expectedIssuerMemberRevision) fail(409, "stale_member_revision", "Issuer membership changed; review the invitation again");
-      const room = this.room(roomId);
+      const room = currentInviteContext(this,roomId,{memberIds:[issuer.member.id,intendedMemberId],census:true})?.room ?? this.room(roomId);
       if (issuer.member.id !== room.state.room.ownerId && permissions.some(permission => !issuer.member.permissions.includes(permission))) {
         fail(403, "access_denied", "A membership administrator cannot offer authority they do not hold");
       }
@@ -4962,7 +4962,7 @@ this.slaBreachAlerts = new SlaBreachAlertJournal(this); // Task 26: durable in-a
       const row = this.db.prepare("SELECT i.*,r.projection FROM membership_invitations i JOIN rooms r ON r.id=i.room_id WHERE i.token_hash=?").get(hash(token));
       if (!row) fail(404, "invitation_unavailable", "Invitation is unavailable");
       this.verifyInvitationRecord(row.id);
-      const room = JSON.parse(row.projection);
+      const room = currentInviteContext(this,row.room_id,{memberIds:[row.issuer_member_id,row.intended_member_id],census:true})?.room.state ?? JSON.parse(row.projection);
       let status = invitationStatus(row, this.now());
       if (status === "pending") {
         const issuerAccount = row.issuer_account_id === null ? null
@@ -5105,7 +5105,8 @@ this.slaBreachAlerts = new SlaBreachAlertJournal(this); // Task 26: durable in-a
       if (row.revision !== expectedRevision) fail(409, "stale_invitation_revision", "Invitation changed; preview it again");
       const now = this.now();
       if (now >= row.expires_at) fail(410, "invitation_expired", "Invitation expired");
-      const room = this.room(row.room_id);
+      const context = currentInviteContext(this,row.room_id,{memberIds:[row.issuer_member_id,row.intended_member_id],census:true});
+      const room = context?.room ?? this.room(row.room_id);
       const issuerAccount = row.issuer_account_id === null ? null
         : this.db.prepare("SELECT active,auth_epoch FROM accounts WHERE id=?").get(row.issuer_account_id);
       const issuerBinding = this.db.prepare("SELECT account_id FROM member_accounts WHERE room_id=? AND member_id=?").get(row.room_id, row.issuer_member_id);
@@ -5145,11 +5146,15 @@ this.slaBreachAlerts = new SlaBreachAlertJournal(this); // Task 26: durable in-a
       let state;
       try { state = compact(applyEventWithGrowth(room.state, incoming, growthCollector).state); }
       catch (error) { fail(409, "invitation_rejected", error.message); }
-      const projection = this.storedProjection(row.room_id, state);
-      if (Buffer.byteLength(projection) > PILOT_LIMITS.projectionBytes) fail(409, "pilot_limit", "Room projection limit reached; no data was changed. Ask the room owner to have older messages archived to free space.");
       const sequence = room.sequence + 1;
-      this.db.prepare("INSERT INTO events VALUES(?,?,?,?)").run(row.room_id, sequence, incoming.id, JSON.stringify(incoming));
-      this.db.prepare("UPDATE rooms SET sequence=?,projection=? WHERE id=?").run(sequence, projection, row.room_id);
+      const write = context ? prepareCurrentWrite(this,{roomId:row.room_id,previous:room,state,event:incoming,sequence,current:context.current}) : null;
+      const projection = write?.projection ?? this.storedProjection(row.room_id, state);
+      if (Buffer.byteLength(projection) > PILOT_LIMITS.projectionBytes) fail(409, "pilot_limit", "Room projection limit reached; no data was changed. Ask the room owner to have older messages archived to free space.");
+      withCurrentServingWriter(this.db,row.room_id,()=>{
+        this.db.prepare("INSERT INTO events VALUES(?,?,?,?)").run(row.room_id, sequence, incoming.id, JSON.stringify(incoming));
+        this.db.prepare("UPDATE rooms SET sequence=?,projection=? WHERE id=?").run(sequence, projection, row.room_id);
+        write?.persistEntities();
+      });
       this.db.prepare("INSERT INTO member_accounts(room_id,member_id,account_id,origin) VALUES(?,?,?,?)")
         .run(row.room_id, row.intended_member_id, row.intended_account_id, `invitation:${row.id}`);
       this.markAccountHadRoom(row.intended_account_id);

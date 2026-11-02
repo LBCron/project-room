@@ -58,7 +58,7 @@ export function heartbeatWithListener(store, auth, data, { roomKey = false, door
       // Links survive access suspension (see scopedKeyRoomBinding):
       // recheck the live room member, not just the identity mapping,
       // before an identity-level credential may hold the room's lease.
-      const member = link ? ownMember(store.room(requestedRoom).state.members, link.memberId) : null;
+      const member = link ? ownMember(store.roomAuthority(requestedRoom, { memberId: link.memberId }).members, link.memberId) : null;
       if (!member || member.active === false || member.kind !== "agent" || member.identityId !== auth.identityId)
         reject(403, "room_mismatch", "The identity is not a member of the requested listener room");
       leaseRoomId = requestedRoom;

@@ -1,11 +1,11 @@
 import {ProjectRoom} from './room.mjs';
-import {seedRecoveryInvitationSource} from '../tests/helpers/recovery-invitation-source.mjs';
+import {seedRecoveryInvitationSource,rebindRecoveryInvitee} from '../tests/helpers/recovery-invitation-source.mjs';
 import {exportNdjsonText} from '../server/room-export.mjs';
 import {createBackupReplaySession} from '../server/restore-ndjson.mjs';
 import {restoreProgress,withRestoreTransaction} from '../server/restore-admission.mjs';
 export class InvitationRecoveryRoom extends ProjectRoom{
  async fetch(request){const u=new URL(request.url),store=this.store,db=store.db;
-  if(u.pathname==='/__seed')return Response.json(seedRecoveryInvitationSource(store,{pending:17}).expected);
+  if(u.pathname==='/__seed')return Response.json(seedRecoveryInvitationSource(store,{pending:17,beforeCapture(s,context){rebindRecoveryInvitee(s,context);const clock=s.now;let offset=0;s.now=()=>clock()+offset;for(let i=0;i<40;i++){offset+=3000;s.command(context.key,'legacy-room',{id:'native-later-'+i,type:'message.posted',data:{messageId:'native-later-'+i,body:'Unrelated later history '+i}});}}}).expected);
   if(u.pathname==='/__export')return new Response(exportNdjsonText(db));
   if(u.pathname==='/__progress')return Response.json(restoreProgress(db));
   if(u.pathname==='/__partial'){const text=await request.text(),session=createBackupReplaySession(store,{staged:true});session.writeText(text.slice(0,text.lastIndexOf('{"kind":"trailer"')));return Response.json({pending:restoreProgress(db).state==='pending'});}

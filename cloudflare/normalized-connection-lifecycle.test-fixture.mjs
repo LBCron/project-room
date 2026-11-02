@@ -16,7 +16,10 @@ export class ConnectionLifecycleRoom extends NormalizationAuthRoom {
   }
   const f=await this.ctx.storage.get('auth-fixture'),v=await this.ctx.storage.get('connection-fixture');s.now=()=>f.baseNow+2000;if(!path.startsWith('/api/operator/normalization/'))s.room=()=>{throw Error('forbidden whole-room connection hydration');};
   if(path==='/__connection-facts'){
-   auditRecovery(s);const attempt=token=>{try{return s.authenticate(token,'commons').member.id;}catch{return null;}};
+   auditRecovery(s);const attempt = credential => {
+    try { return s.authenticate(credential,'commons').member.id; }
+    catch { return null; }
+   };
    return Response.json({digest:snapshot(s),first:attempt(v.first),next:attempt(v.next),identity:attempt(v.identity.secret),connections:s.agentConnections.list(v.session.token,'commons',v.session.binding),preserved:normalizationAuthFacts(s,f)});
   }
   if(request.headers.get('x-connection-fault')==='1'){

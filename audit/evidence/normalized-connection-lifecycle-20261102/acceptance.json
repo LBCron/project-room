@@ -9,5 +9,8 @@
   "actualNativeFail": 0,
   "lintErrors": 0,
   "lintPreexistingWarnings": 3,
-  "live": false
+  "live": false,
+  "secretScanFiles": 1887,
+  "secretScanFindings": 0,
+  "fixtureFormattingCure": true
 }

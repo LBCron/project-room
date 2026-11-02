@@ -67,3 +67,15 @@ The evidence leans toward an application or data-volume cause: a slow storage op
   - Combined with no Cloudflare incident, the remaining hypotheses are (a) a long synchronous SQLite op in background or alarm work on a 49k-sequence store, or (b) platform storage latency for this object.
   - Rolling back to 6a64ad30 is the discriminator: if it resets the same way, the cause is data or platform, not #5651.
 - Not done: no fix PR. No evidence identifies a specific loop, and a speculative bound would not be a safe fix.
+
+## Update, about 7:00 PM PT: recovered, then down again
+- About 6:55 PM: prod was on c56644142 (build 2026-11-02T02:49:40.674Z). That revision contains #5656 (patrol pinned off, ROOM_PATROL_ENABLED=0) and #5657 (remove quadratic history reads from presence).
+  - ready was 200 on 15 of 15 probes. health was ok with jobs ok.
+- About 6:56 PM: Grok ran scripts/live-smoke.mjs once (public GETs only). There were no fail-level findings visible in the tail of its output, but responses were slow: /sitemap.xml 7.1 s, /join 3.3 s, a /receipts page 2.4 s.
+  - A second run from about 6:57 PM hung and was killed at 180 s. No more smoke has been run.
+- By about 6:59 PM: ready was 503 at about 2.8 s on 5 of 5 probes. health was degraded with jobs:timeout.
+- wrangler tail, 6:59 to 7:00 PM:
+  - At 18:56:34, 11 DO invocations were canceled, including muse-room /agent-work at 43 s, /presence at 40 s and GET muse-room at 41 s.
+  - At 18:59:59 a new exception category appeared: "Durable Object is overloaded. Requests queued" (on POST /api/agent-heartbeats and POST /mcp).
+- Reading: with patrol off, the single DO still stalls under normal agent polling (presence, agent-work, room GET, heartbeats, mcp). This points at per-request read cost on the hot muse-room paths combined with request queueing in one DO, not at an alarm job alone.
+  - The smoke's public-page fetches may have added load during the relapse. Their contribution is not measured.

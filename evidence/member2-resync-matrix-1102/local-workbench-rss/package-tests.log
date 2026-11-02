@@ -1,0 +1,15 @@
+test_changed_object_refused (__main__.WorkbenchTests.test_changed_object_refused) ... ok
+test_failed_launch_reserves_attempt_and_can_resume (__main__.WorkbenchTests.test_failed_launch_reserves_attempt_and_can_resume) ... ok
+test_missing_rss_for_live_owned_worker_still_refuses (__main__.WorkbenchTests.test_missing_rss_for_live_owned_worker_still_refuses) ... ok
+test_orphan_attempt_directory_is_preserved_on_retry (__main__.WorkbenchTests.test_orphan_attempt_directory_is_preserved_on_retry) ... ok
+test_sigterm_stops_owned_workers_and_resumes (__main__.WorkbenchTests.test_sigterm_stops_owned_workers_and_resumes) ... ok
+test_snapshot_search_cache_and_corruption_refusal (__main__.WorkbenchTests.test_snapshot_search_cache_and_corruption_refusal) ... ok
+test_supervisor_death_retains_worker_lock_and_recovers (__main__.WorkbenchTests.test_supervisor_death_retains_worker_lock_and_recovers) ... ok
+test_timeout_then_resume (__main__.WorkbenchTests.test_timeout_then_resume) ... ok
+test_verification_never_creates_an_empty_passing_journal (__main__.WorkbenchTests.test_verification_never_creates_an_empty_passing_journal) ... ok
+test_worker_exit_during_rss_observation_keeps_verified_success (__main__.WorkbenchTests.test_worker_exit_during_rss_observation_keeps_verified_success) ... ok
+
+----------------------------------------------------------------------
+Ran 10 tests in 0.825s
+
+OK

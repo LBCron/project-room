@@ -1,0 +1,83 @@
+{
+  "schema": "member2-local-workbench-rss-race-v1",
+  "runtimeQualification": false,
+  "purpose": "Local finite workload supervisor reliability; not a Project Room release gate",
+  "bug": "successful child can exit between poll and missing RSS observation; old supervisor marks rss_observation_failed",
+  "red": {
+    "exit_code": 1,
+    "observed_states": {
+      "failed": 3,
+      "succeeded": 3
+    },
+    "test": "real child completion during RSS lookup"
+  },
+  "green": {
+    "exit_code": 0,
+    "tests": 10
+  },
+  "extractedPackage": {
+    "byte_readback_verified": true,
+    "exit_code": 0,
+    "tests": 10
+  },
+  "realWork": {
+    "version": 1,
+    "plan_sha256": "4d7b31a4f6860b266dcb22bd7f426af922b2828cdf8583bc497449b07b383279",
+    "host": "mac",
+    "python": "3.12.14",
+    "sqlite": "3.53.1",
+    "workers": 4,
+    "wall_ms": 810.729083023034,
+    "parent_cpu_ms": 191.145,
+    "child_cpu_ms_including_startup_and_monitor": 2925.423,
+    "executed_this_run": 75,
+    "cached": 0,
+    "states": {
+      "succeeded": 75
+    },
+    "worker_cpu_ms_saved_results": 961.638,
+    "max_worker_peak_rss_bytes": 42549248,
+    "logical_sha256": "694cf03cf870a74911f8e9e10e7764c1ab9f29b881d93e04a47229da4b2d7eb9",
+    "cancelled": false,
+    "limits": {
+      "wall_seconds_per_job": 30.0,
+      "sampled_rss_mib": 512,
+      "cpu_seconds_per_worker": 30,
+      "file_size_mib": 128
+    }
+  },
+  "selected_source_sha": "ff3350cb8d2be1d1c7278677211eeea3282b7c75",
+  "selected_source_files": 800,
+  "selected_source_bytes": 7933666,
+  "selection_scope": "deterministic bounded server source prefix, not whole repository; two unreadable/nontext/large files excluded; stopped at selection limit",
+  "artifacts": {
+    "package-tests.log": {
+      "bytes": 1387,
+      "sha256": "a5c1fe6eecc37c2fbf9c7218fb342a1a1b036601935a9868fd355ebf2d5bbd3b"
+    },
+    "test_workbench.py": {
+      "bytes": 10180,
+      "sha256": "509ec87d15c503696eeb5f929089c2bd99a2d0b95f83ec06e81dd73329ebb70f"
+    },
+    "red.log": {
+      "bytes": 944,
+      "sha256": "75216e7bfe79f854c7dd095ce8cdc79e8ae379a3ee632615dc906f1baad0f77b"
+    },
+    "green.log": {
+      "bytes": 1387,
+      "sha256": "c935e6cbf59824c6406305bdb46cb2f267e9010799ca000bd6f29158f2f10bde"
+    },
+    "workbench.py": {
+      "bytes": 27797,
+      "sha256": "58f87b3f65f6f4bd222f45762fe54ad29e13c3fdbad3d4016ef1e8024bda542a"
+    },
+    "real-run.json": {
+      "bytes": 649,
+      "sha256": "23dface9e89d647fe817a093ebdae2646531902d37c4df30019915db60443882"
+    },
+    "local-workbench-rss-fix.zip": {
+      "bytes": 16034,
+      "sha256": "6a807ee79464dd7614cb873ff721aaa8f34a37cc81e57fb2ffed7dd09f18a588"
+    }
+  }
+}

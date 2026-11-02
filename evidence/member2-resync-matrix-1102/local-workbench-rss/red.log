@@ -1,0 +1,16 @@
+test_worker_exit_during_rss_observation_keeps_verified_success (__main__.WorkbenchTests.test_worker_exit_during_rss_observation_keeps_verified_success) ... FAIL
+
+======================================================================
+FAIL: test_worker_exit_during_rss_observation_keeps_verified_success (__main__.WorkbenchTests.test_worker_exit_during_rss_observation_keeps_verified_success)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/Users/potter/Documents/ChatGPT/project room/local-lab/test_workbench.py", line 137, in test_worker_exit_during_rss_observation_keeps_verified_success
+    self.assertEqual(report['states'], {'succeeded': 6})
+AssertionError: {'failed': 3, 'succeeded': 3} != {'succeeded': 6}
+- {'failed': 3, 'succeeded': 3}
++ {'succeeded': 6}
+
+----------------------------------------------------------------------
+Ran 1 test in 0.128s
+
+FAILED (failures=1)

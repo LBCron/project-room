@@ -155,6 +155,18 @@ export class RequestRuns {
 // Internal observation only: callers supply canonical requests already filtered
 // for this viewer/history floor within the same read transaction. Never accept
 // request records from HTTP input or use this observation as execution authority.
+// Pickup may omit bodies, but its selected run ownership still depends on
+// the exact protected canonical request opening. Reuse execution's proof rules.
+export function validateSelectedRunOpenings(store,roomId,requests,viewerId){
+  if(!isCurrentRoom(store.db,roomId))return;
+  if(!validId(viewerId)||!Array.isArray(requests)||requests.length>4)fail('request_runs_context_unavailable','Selected pickup proof exceeds bounded v1 coverage; use the paged request reads',422);
+  if(!requests.length)return;
+  const context=currentRunContext(store,roomId,requests.map(request=>request.id),viewerId,true);
+  for(const selected of requests){const current=context.state.replyRequests[selected.id];
+    if(!current||['id','openingEventId','requesterId','recipientId','revision','status'].some(key=>selected[key]!==current[key]))fail('request_run_changed','Selected request opening requires reconciliation');
+  }
+}
+
 export function observeSelectedRuns(store, roomId, requests) {
   if (!requests.length || !store.db.prepare("SELECT 1 FROM sqlite_master WHERE name='request_runs' AND type='table'").get()) return {};
   // CROSS JOIN pins selected openings as the outer loop. An ordinary JOIN

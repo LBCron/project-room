@@ -6949,7 +6949,7 @@ this.slaBreachAlerts = new SlaBreachAlertJournal(this); // Task 26: durable in-a
           ...(request&&[request.requesterId,request.recipientId].includes(memberId)?{requestKind:'reply',nextRead:{tool:'room_read_request',arguments:{requestMessageId:message.id}}}:{})}));
         if(rows.length===limit)return rows;
       }
-      if(!source.complete&&source.rows.at(-1)?.position>after)fail(409,'current_room_context_unavailable','Mention array exceeds its bounded source; continue the current room inbox instead');
+      if(!source.complete&&(source.continuation?.position??through)>after)fail(409,'current_room_context_unavailable','Mention array exceeds its bounded source; continue the current room inbox instead');
       return rows;
     }));
 

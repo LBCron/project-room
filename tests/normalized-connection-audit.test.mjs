@@ -14,7 +14,7 @@ const hash=x=>createHash('sha256').update(x).digest('hex');
 test('retained owner and friend connection journals verify after normalized activation and cold reopen',t=>{
  const dir=mkdtempSync(join(tmpdir(),'normalized-connections-')),file=join(dir,'room.sqlite');let store=new RoomStore(file),now=Date.now();store.now=()=>now;
  t.after(()=>{store.close();rmSync(dir,{recursive:true,force:true});});
- let identities={},accountId,grant,binding,invited;
+ const identities={};let accountId,grant,binding,invited;
  store.initialize(initialRoom('legacy-room'));const key=store.issueAccessKey('legacy-room','owner');
  ((s)=>{
   const owner=s.createSession(key);

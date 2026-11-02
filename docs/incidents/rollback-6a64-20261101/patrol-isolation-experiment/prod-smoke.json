@@ -1,0 +1,138 @@
+{
+  "ok": false,
+  "sha": "7ee5ad65a6628cd2b959c4561889e5741b3561e7",
+  "origin": "https://room.trydemigod.com",
+  "entry": "https://www.getdasha.com/room",
+  "checks": [
+    {
+      "name": "version https://room.trydemigod.com/api/version",
+      "pass": true,
+      "got": "7ee5ad65a6628cd2b959c4561889e5741b3561e7",
+      "status": 200
+    },
+    {
+      "name": "version https://room.trydemigod.com/api/version/worker",
+      "pass": true,
+      "got": "7ee5ad65a6628cd2b959c4561889e5741b3561e7",
+      "status": 200
+    },
+    {
+      "name": "version https://www.getdasha.com/room/api/version",
+      "pass": true,
+      "got": "7ee5ad65a6628cd2b959c4561889e5741b3561e7",
+      "status": 200
+    },
+    {
+      "name": "version https://www.getdasha.com/room/api/version/worker",
+      "pass": true,
+      "got": "7ee5ad65a6628cd2b959c4561889e5741b3561e7",
+      "status": 200
+    },
+    {
+      "name": "health https://room.trydemigod.com/api/health",
+      "pass": false,
+      "status": 200,
+      "body": "degraded",
+      "healthJobsStatus": "stale",
+      "jobsStatus": "stale",
+      "reason": "job_stale",
+      "degradedJobs": [],
+      "attempts": 1
+    },
+    {
+      "name": "ready https://room.trydemigod.com/api/ready",
+      "pass": false,
+      "status": 503,
+      "body": "degraded",
+      "emailVerification": "unknown",
+      "emailVerificationScope": "unknown",
+      "do": {
+        "status": "timeout",
+        "ms": 2500,
+        "timeoutMs": 2500
+      },
+      "elapsedMs": 2552
+    },
+    {
+      "name": "page https://room.trydemigod.com/terms",
+      "pass": false,
+      "status": 0
+    },
+    {
+      "name": "page https://room.trydemigod.com/privacy",
+      "pass": false,
+      "status": 0
+    },
+    {
+      "name": "page https://room.trydemigod.com/",
+      "pass": true,
+      "status": 200
+    },
+    {
+      "name": "health https://www.getdasha.com/room/api/health",
+      "pass": false,
+      "status": 200,
+      "body": "degraded",
+      "healthJobsStatus": "timeout",
+      "jobsStatus": "unknown",
+      "reason": "invalid_jobs",
+      "degradedJobs": [],
+      "attempts": 1
+    },
+    {
+      "name": "ready https://www.getdasha.com/room/api/ready",
+      "pass": false,
+      "status": 503,
+      "body": "degraded",
+      "emailVerification": "unknown",
+      "emailVerificationScope": "unknown",
+      "do": {
+        "status": "timeout",
+        "ms": 2500,
+        "timeoutMs": 2500
+      },
+      "elapsedMs": 3107
+    },
+    {
+      "name": "page https://www.getdasha.com/room/terms",
+      "pass": false,
+      "status": 0
+    },
+    {
+      "name": "page https://www.getdasha.com/room/privacy",
+      "pass": false,
+      "status": 0
+    },
+    {
+      "name": "page https://www.getdasha.com/room/",
+      "pass": false,
+      "status": 0
+    },
+    {
+      "name": "agent-card https://room.trydemigod.com/.well-known/agent-card.json",
+      "pass": true,
+      "fetches": 10,
+      "waitMs": 90000,
+      "attempts": 10,
+      "staleFetches": 0,
+      "converged": true,
+      "elapsedMs": 13974,
+      "retryKind": null,
+      "failures": [],
+      "failureCount": 0
+    },
+    {
+      "name": "agent-card https://www.getdasha.com/room/.well-known/agent-card.json",
+      "pass": true,
+      "fetches": 10,
+      "waitMs": 90000,
+      "attempts": 10,
+      "staleFetches": 0,
+      "converged": true,
+      "elapsedMs": 13990,
+      "retryKind": null,
+      "failures": [],
+      "failureCount": 0
+    }
+  ]
+}

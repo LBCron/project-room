@@ -1,0 +1,97 @@
+{
+  "status": "ROLLBACK VERIFIED",
+  "targetSha": "7ee5ad65a6628cd2b959c4561889e5741b3561e7",
+  "candidateCodeSchemaVersion": 44,
+  "compatibilityLimit": "Code-schema floor and exact writer-fence definition only; this does not prove prior code understands new rows, semantics or retained runtime.",
+  "recordedAt": "2026-11-02T02:29:22.629Z",
+  "workers": {
+    "prod": {
+      "previousVersionId": "65e553f4-f96f-4f7f-a4d4-ac8e18c209a5",
+      "previousSourceRevision": "6a64ad3039600de2b382a16faead57f33dd304e3",
+      "previousCodeSchemaVersion": 44,
+      "candidateCodeSchemaVersion": 44,
+      "disposition": "rollback_verified",
+      "rollbackAttempted": true,
+      "observedBefore": {
+        "known": true,
+        "versions": [
+          {
+            "versionId": "9f4007b9-df23-48cc-8c01-5c0c4d9e404c",
+            "percentage": 100
+          }
+        ],
+        "versionId": "9f4007b9-df23-48cc-8c01-5c0c4d9e404c"
+      },
+      "reason": "schema floor and exact writer-fence definition match; row/runtime compatibility is not established by this check",
+      "observedAfter": {
+        "known": true,
+        "versions": [
+          {
+            "versionId": "65e553f4-f96f-4f7f-a4d4-ac8e18c209a5",
+            "percentage": 100
+          }
+        ],
+        "versionId": "65e553f4-f96f-4f7f-a4d4-ac8e18c209a5"
+      },
+      "allocationRollbackVerified": true,
+      "sourceConvergence": {
+        "verified": true,
+        "attempts": 1,
+        "elapsedMs": 3164,
+        "doors": {
+          "prod": {
+            "edgeRevision": "6a64ad3039600de2b382a16faead57f33dd304e3",
+            "durableRevision": "6a64ad3039600de2b382a16faead57f33dd304e3",
+            "expectedEdgeRevision": "6a64ad3039600de2b382a16faead57f33dd304e3",
+            "expectedDurableRevision": "6a64ad3039600de2b382a16faead57f33dd304e3",
+            "matched": true
+          }
+        }
+      }
+    },
+    "entry": {
+      "previousVersionId": "ebd621f5-fc73-43af-bc41-374df1b22e20",
+      "previousSourceRevision": "6a64ad3039600de2b382a16faead57f33dd304e3",
+      "previousCodeSchemaVersion": 44,
+      "candidateCodeSchemaVersion": 44,
+      "disposition": "rollback_verified",
+      "rollbackAttempted": true,
+      "observedBefore": {
+        "known": true,
+        "versions": [
+          {
+            "versionId": "51d74a77-d52a-43bb-a69b-8233f9f14b9c",
+            "percentage": 100
+          }
+        ],
+        "versionId": "51d74a77-d52a-43bb-a69b-8233f9f14b9c"
+      },
+      "reason": "schema floor and exact writer-fence definition match; row/runtime compatibility is not established by this check",
+      "observedAfter": {
+        "known": true,
+        "versions": [
+          {
+            "versionId": "ebd621f5-fc73-43af-bc41-374df1b22e20",
+            "percentage": 100
+          }
+        ],
+        "versionId": "ebd621f5-fc73-43af-bc41-374df1b22e20"
+      },
+      "allocationRollbackVerified": true,
+      "sourceConvergence": {
+        "verified": true,
+        "attempts": 1,
+        "elapsedMs": 3164,
+        "doors": {
+          "entry": {
+            "edgeRevision": "6a64ad3039600de2b382a16faead57f33dd304e3",
+            "durableRevision": "6a64ad3039600de2b382a16faead57f33dd304e3",
+            "expectedEdgeRevision": "6a64ad3039600de2b382a16faead57f33dd304e3",
+            "expectedDurableRevision": "6a64ad3039600de2b382a16faead57f33dd304e3",
+            "matched": true
+          }
+        }
+      }
+    }
+  }
+}

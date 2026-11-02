@@ -1,0 +1,137 @@
+{
+  "source": "a599faa29ff65567e5c080609cb2d000acd33666",
+  "node": "v24.22.1",
+  "interventions": [
+    {
+      "requested": "normalized-current-v1",
+      "used": "legacy"
+    },
+    {
+      "requested": "normalized-current-v1",
+      "used": "legacy"
+    }
+  ],
+  "observations": [
+    {
+      "viewport": "desktop",
+      "width": 1280,
+      "stages": [
+        {
+          "accountStatus": {
+            "visible": false,
+            "text": ""
+          },
+          "account": "account-a",
+          "representation": "legacy",
+          "sessionRevision": 1,
+          "assistantConnectVisible": true,
+          "settledUpdatesText": "Updates\nClose\nNeeds me\nMentions\nAll activity\nNothing needs you.\nPage 1 loaded.\n\n0 loaded\n\nCatch up\nNo new updates",
+          "ownMessageVisible": true,
+          "otherAccountMessageAbsent": true,
+          "screenshot": "desktop-0-account-a.png"
+        },
+        {
+          "accountStatus": {
+            "visible": true,
+            "text": "You're not in that room yet. Ask a member for an invite, or request to join"
+          },
+          "account": "account-b",
+          "representation": "normalized-current-v1",
+          "sessionRevision": 3,
+          "assistantConnectVisible": false,
+          "settledUpdatesText": "Updates\nClose\nNeeds me\nMentions\nAll activity\nDecisions\n0 in scope\nRefresh\n\n0 loaded\n\nUpdates are unavailable. Check Conversations, Work and History for activity.\n\nCatch up\n3 updates",
+          "ownMessageVisible": true,
+          "otherAccountMessageAbsent": true,
+          "screenshot": "desktop-1-account-b.png"
+        },
+        {
+          "accountStatus": {
+            "visible": true,
+            "text": "You're not in that room yet. Ask a member for an invite, or request to join"
+          },
+          "account": "account-a",
+          "representation": "legacy",
+          "sessionRevision": 5,
+          "assistantConnectVisible": true,
+          "settledUpdatesText": "Updates\nClose\nNeeds me\nMentions\nAll activity\nNothing needs you.\nPage 1 loaded.\n\n0 loaded\n\nCatch up\nNo new updates",
+          "ownMessageVisible": true,
+          "otherAccountMessageAbsent": true,
+          "screenshot": "desktop-2-account-a.png"
+        }
+      ],
+      "foreignAccountRoom": {
+        "status": 403,
+        "code": "access_denied",
+        "privateMarkerAbsent": true
+      },
+      "staleSessionBinding": {
+        "status": 409,
+        "code": "session_binding_changed",
+        "privateMarkerAbsent": true
+      },
+      "pageErrors": [],
+      "blockedExternalRequests": 0
+    },
+    {
+      "viewport": "phone",
+      "width": 390,
+      "stages": [
+        {
+          "accountStatus": {
+            "visible": false,
+            "text": ""
+          },
+          "account": "account-a",
+          "representation": "legacy",
+          "sessionRevision": 1,
+          "assistantConnectVisible": true,
+          "settledUpdatesText": "Updates\nClose\nNeeds me\nMentions\nAll activity\nNothing needs you.\nPage 1 loaded.\n\n0 loaded\n\nCatch up\nNo new updates",
+          "ownMessageVisible": true,
+          "otherAccountMessageAbsent": true,
+          "screenshot": "phone-0-account-a.png"
+        },
+        {
+          "accountStatus": {
+            "visible": true,
+            "text": "You're not in that room yet. Ask a member for an invite, or request to join"
+          },
+          "account": "account-b",
+          "representation": "normalized-current-v1",
+          "sessionRevision": 3,
+          "assistantConnectVisible": false,
+          "settledUpdatesText": "Updates\nClose\nNeeds me\nMentions\nAll activity\nDecisions\n0 in scope\nRefresh\n\n0 loaded\n\nUpdates are unavailable. Check Conversations, Work and History for activity.\n\nCatch up\n3 updates",
+          "ownMessageVisible": true,
+          "otherAccountMessageAbsent": true,
+          "screenshot": "phone-1-account-b.png"
+        },
+        {
+          "accountStatus": {
+            "visible": true,
+            "text": "You're not in that room yet. Ask a member for an invite, or request to join"
+          },
+          "account": "account-a",
+          "representation": "legacy",
+          "sessionRevision": 5,
+          "assistantConnectVisible": true,
+          "settledUpdatesText": "Updates\nClose\nNeeds me\nMentions\nAll activity\nNothing needs you.\nPage 1 loaded.\n\n0 loaded\n\nCatch up\nNo new updates",
+          "ownMessageVisible": true,
+          "otherAccountMessageAbsent": true,
+          "screenshot": "phone-2-account-a.png"
+        }
+      ],
+      "foreignAccountRoom": {
+        "status": 403,
+        "code": "access_denied",
+        "privateMarkerAbsent": true
+      },
+      "staleSessionBinding": {
+        "status": 409,
+        "code": "session_binding_changed",
+        "privateMarkerAbsent": true
+      },
+      "pageErrors": [],
+      "blockedExternalRequests": 0
+    }
+  ],
+  "scope": "Actual local browser account signout/new signup/relogin in one context, fixture-only initial legacy creation for accountA. No product patch, concurrent delayed-response race, configured provider, Native, hosted, fullsuite or physical peer-device proof."
+}

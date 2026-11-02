@@ -1,0 +1,88 @@
+{
+  "source": "a599faa29ff65567e5c080609cb2d000acd33666",
+  "node": "v24.22.1",
+  "cases": [
+    {
+      "label": "board non-owner config",
+      "status": 403,
+      "code": "work_claims_not_permitted",
+      "authoritativeTablesUnchanged": true
+    },
+    {
+      "label": "third acceptance at room cap2",
+      "status": 409,
+      "code": "work_board_full",
+      "authoritativeTablesUnchanged": true
+    },
+    {
+      "label": "owner raises cap; same refused ID succeeds then exact retry adds no write",
+      "passed": true
+    },
+    {
+      "label": "member non-owner config",
+      "status": 403,
+      "code": "work_claims_not_permitted",
+      "authoritativeTablesUnchanged": true
+    },
+    {
+      "label": "third acquisition at member cap2",
+      "status": 409,
+      "code": "too_many_open_claims",
+      "authoritativeTablesUnchanged": true
+    },
+    {
+      "label": "other member releases holder claim",
+      "status": 422,
+      "code": "command_rejected",
+      "authoritativeTablesUnchanged": true
+    },
+    {
+      "label": "chat profile releases holder claim",
+      "status": 403,
+      "code": "work_claims_not_permitted",
+      "authoritativeTablesUnchanged": true
+    },
+    {
+      "label": "holder renewal past expiry",
+      "status": 422,
+      "code": "command_rejected",
+      "authoritativeTablesUnchanged": true
+    },
+    {
+      "label": "holder renewal null expiry",
+      "status": 422,
+      "code": "command_rejected",
+      "authoritativeTablesUnchanged": true
+    },
+    {
+      "label": "holder renewal malformed expiry",
+      "status": 422,
+      "code": "command_rejected",
+      "authoritativeTablesUnchanged": true
+    },
+    {
+      "label": "holder release frees one member slot; refused work can acquire",
+      "passed": true
+    }
+  ],
+  "defaults": {
+    "maxOpenClaims": 1000,
+    "maxMemberOpenClaims": 20
+  },
+  "boundaryCapsAreExplicitSyntheticOwnerConfiguration": true,
+  "noLegacyMirrorRows": true,
+  "finalRecoveryAudit": true,
+  "refusalSnapshotTables": [
+    "rooms",
+    "events",
+    "commands",
+    "work_entities",
+    "work_claims",
+    "current_room_records",
+    "current_room_record_proofs",
+    "current_room_head",
+    "operator_actions",
+    "work_claim_config"
+  ],
+  "scope": "Disposable local Node HTTP canonical work acceptance/acquisition boundaries with small explicit caps; not full QA2 legacy guard suite, default-limit scale, Native, hosted or peer-device execution proof."
+}

@@ -1,0 +1,8 @@
+{
+  "node": "v24.22.1",
+  "source": "a01c0b301597927ec18f521980f3b51350021fd8",
+  "discoveredFiles": 1859,
+  "newFileDiscoveredOnce": true,
+  "fileListSha256": "93fc2925de27ddb0049c12428ee77bc93fc41982bf8884fa7a95cec80a304f9f",
+  "scope": "Discovery, not full-suite execution"
+}

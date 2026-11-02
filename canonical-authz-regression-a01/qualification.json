@@ -1,0 +1,24 @@
+{
+  "source": "a01c0b301597927ec18f521980f3b51350021fd8",
+  "tree": "c7adf00dba49b770666a47dedb13fce1cfdbbaa6",
+  "base": "a599faa29ff65567e5c080609cb2d000acd33666",
+  "changedFiles": [
+    "tests/canonical-work-authz-http.test.mjs"
+  ],
+  "lineCount": 158,
+  "fileSha256": "7b837082f32e926b0a5fc63c6e02b6a4f998730ab070f41a23787278f5b839c2",
+  "counts": {
+    "tests": 63,
+    "pass": 63,
+    "fail": 0,
+    "skipped": 0
+  },
+  "namedRoleActionCells": 54,
+  "includesEnclosingTestAndEightManifestCases": true,
+  "fixtureFormatExplicitAndIndependentOfCreationDefaults": true,
+  "eslintZeroWarningsErrors": true,
+  "diffCheckPassed": true,
+  "fetchedTreeAndFileByteEqual": true,
+  "cleanIsolatedCheckout": true,
+  "scope": "Final exact-head test-only qualification; no runtime/UI/dependency change, full suite, Native, merge/deploy or peer-device proof."
+}

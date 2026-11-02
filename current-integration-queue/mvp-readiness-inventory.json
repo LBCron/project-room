@@ -1,0 +1,24 @@
+{
+  "observedMain": "00888c52110d36250d3e07629036701b72926d09",
+  "checks": [
+    {
+      "checkout": "/Users/potter/Documents/Codex/2026-10-22/you-x20/work/member2-mcp-qa2-adapter-1102",
+      "head": "a599faa29ff65567e5c080609cb2d000acd33666",
+      "clean": true,
+      "qualificationSourceMatches": true
+    },
+    {
+      "checkout": "/Users/potter/Documents/Codex/2026-10-22/you-x20/work/member2-authz-main-only-1102",
+      "head": "2fd8145d497e092d8a84751371311733b6668d70",
+      "clean": true,
+      "qualificationSourceMatches": true
+    },
+    {
+      "checkout": "/Users/potter/Documents/Codex/2026-10-22/you-x20/work/member2-canonical-crash-ci-1102",
+      "head": "a956b0f82506e0b315a2974c431694f9cdb9fd51",
+      "clean": true,
+      "qualificationSourceMatches": true
+    }
+  ],
+  "testExecution": "No application tests rerun. Existing evidence reused for unchanged clean source."
+}

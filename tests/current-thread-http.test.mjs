@@ -70,3 +70,25 @@ test('current selected thread preserves the since-join floor', async t => {
   assert.equal((await f.read('late', 'public-root')).status, 404);
   assert.equal((await f.read('owner', 'public-root')).status, 200);
 });
+
+// Derived-index upgrade: no normalized record, carrier or format rewrite.
+test('thread visibility indexes install on cold existing stores and rebuild exactly through restore', async t => {
+  const { mkdtempSync, rmSync } = await import('node:fs');
+  const { tmpdir } = await import('node:os'); const { join } = await import('node:path');
+  const { exportNdjsonText } = await import('../server/room-export.mjs');
+  const { replayNdjsonInto } = await import('../server/restore-ndjson.mjs');
+  const dir = mkdtempSync(join(tmpdir(), 'thread-index-upgrade-')), path = join(dir, 'room.sqlite');
+  let store = new RoomStore(path); t.after(() => { store.close(); rmSync(dir, { recursive: true, force: true }); });
+  const events = initialRoom(); events.push(event({ roomId: 'commons', actorId: 'owner', type: 'message.posted', data: { messageId: 'root', body: 'Upgrade preserved' } }));
+  store.initialize(events, { representation: 'normalized-current-v1' }); const key = store.issueAccessKey('commons', 'owner');
+  const before = { head: store.db.prepare('SELECT * FROM current_room_head').all(), projection: store.db.prepare('SELECT projection FROM rooms').all() };
+  const indexes = () => store.db.prepare("SELECT name,sql FROM sqlite_master WHERE name GLOB 'current_messages_thread_*' ORDER BY name").all();
+  for (const row of indexes()) store.db.exec('DROP INDEX ' + row.name);
+  store.close(); store = new RoomStore(path);
+  assert.equal(indexes().length, 3); assert.deepEqual(store.db.prepare('SELECT * FROM current_room_head').all(), before.head); assert.deepEqual(store.db.prepare('SELECT projection FROM rooms').all(), before.projection);
+  const restored = new RoomStore(':memory:'); t.after(() => restored.close());
+  replayNdjsonInto(exportNdjsonText(store.db), restored);
+  assert.deepEqual(restored.db.prepare("SELECT name,sql FROM sqlite_master WHERE name GLOB 'current_messages_thread_*' ORDER BY name").all(), indexes());
+  store.room = restored.room = () => { throw Error('Whole-room hydration forbidden'); };
+  assert.equal(store.messageThread(key, 'commons', 'root').thread.body, 'Upgrade preserved'); assert.equal(restored.messageThread(key, 'commons', 'root').thread.body, 'Upgrade preserved');
+});

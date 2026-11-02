@@ -308,11 +308,23 @@ export function readCurrentMessageThread(store, token, roomId, messageId, expect
     const selected = readCurrentMessage(store.db, roomId, messageId, b);
     if (!visible(selected?.value)) fail(404, 'message_not_found', 'Message not found');
     const family = selected.row.thread_root_id ?? messageId;
-    const rows = store.db.prepare(`SELECT message_id,seq FROM messages INDEXED BY messages_room_thread_seq
-      WHERE room_id=? AND thread_root_id=? AND seq>?
-        AND (to_member_id IS NULL OR to_member_id='' OR author_id=? OR to_member_id=?)
-      ORDER BY seq,message_id LIMIT 25`).all(roomId, family, selected.row.seq, auth.member.id, auth.member.id);
-    chargeCurrentReadBudget(b, rows.reduce((n, row) => n + Buffer.byteLength(row.message_id) + 32, 0), rows.length);
+    // Visibility is an indexed equality/predicate, never a residual over the
+    // family stream. Invisible private children cannot consume source work or
+    // change whether an otherwise small public thread fits its context limit.
+    const sources = [
+      ['current_messages_thread_public_seq', "(to_member_id IS NULL OR to_member_id='')", []],
+      ['current_messages_thread_incoming_seq', 'to_member_id=?', [auth.member.id]],
+      ['current_messages_thread_outgoing_seq', "author_id=? AND to_member_id IS NOT NULL AND to_member_id<>''", [auth.member.id]]
+    ];
+    const unique = new Map();
+    for (const [index, where, args] of sources) {
+      const admitted = store.db.prepare(`SELECT message_id,seq FROM messages INDEXED BY ${index}
+        WHERE room_id=? AND thread_root_id=? AND seq>? AND ${where}
+        ORDER BY seq,message_id LIMIT 25`).all(roomId, family, selected.row.seq, ...args);
+      chargeCurrentReadBudget(b, admitted.reduce((n, row) => n + Buffer.byteLength(row.message_id) + 32, 0), admitted.length);
+      for (const row of admitted) unique.set(row.message_id, row);
+    }
+    const rows = [...unique.values()].sort((a, c) => a.seq - c.seq || Buffer.compare(Buffer.from(a.message_id), Buffer.from(c.message_id)));
     if (rows.length > 24) fail(413, 'current_thread_too_large', 'Selected thread exceeds bounded context; request a smaller selected message');
     const messages = [selected.value];
     for (const row of rows) {

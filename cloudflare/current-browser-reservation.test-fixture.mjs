@@ -5,7 +5,7 @@ import {readRoomSnapshot} from '../server/snapshot-window.mjs';
 import {withCurrentReadContext} from '../server/current-room-repository.mjs';
 export class CurrentBrowserReservationRoom extends ProjectRoom {
  async fetch(request){
-  if(new URL(request.url).pathname!='/__run')return super.fetch(request);
+  if(new URL(request.url).pathname!=='/__run')return super.fetch(request);
   const store=this.store,events=initialRoom();
   for(let i=1;i<100;i++)events.push(event({roomId:'commons',actorId:'owner',type:'member.added',data:{memberId:'roster-'+i,displayName:'Member '+i,kind:'agent',permissions:[]}}));
   for(let i=0;i<9;i++)events.push(event({roomId:'commons',actorId:'owner',type:'work.proposed',data:{workItemId:'roster-task-'+i,title:'Useful task',definitionOfDone:'Saved result',accountableMemberId:'owner'}}));

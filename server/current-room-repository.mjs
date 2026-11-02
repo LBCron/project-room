@@ -1275,6 +1275,7 @@ export function withCurrentWorkSummaryReuse(store,roomId,viewerId,operation) {
   closedPermit();
   const schema=JSON.stringify(b.verifiedSchema),schemaCount=b.verifiedSchema.length;
   const changes=db.prepare('SELECT total_changes() AS n').get().n;charge(b,256);
+  if(!Number.isSafeInteger(changes)||changes<0)corrupt('work summary reuse mutation counter unavailable');
   workSummaryReuseScopes.set(db,scope);
   try {
     const value=operation();
@@ -1287,7 +1288,7 @@ export function withCurrentWorkSummaryReuse(store,roomId,viewerId,operation) {
     if(matched.n!==schemaCount)corrupt('work summary reuse schema changed');
     closedPermit();
     const finalChanges=db.prepare('SELECT total_changes() AS n').get().n;charge(b,256);
-    if(finalChanges!==changes)corrupt('work summary reuse data changed');
+    if(!Number.isSafeInteger(finalChanges)||finalChanges!==changes)corrupt('work summary reuse data changed');
     return value;
   }finally{workSummaryReuseScopes.delete(db);}
 }

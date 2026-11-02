@@ -458,3 +458,38 @@ test('failed or old-server agent-work reads withhold requests and runs as unavai
   assert.ok(request.blockedBy.every(reason => reason.length <= 80));
   assert.equal(request.blockedBy[0], `0-${'x'.repeat(78)}`);
 });
+
+test('resume preserves native opaque continuation and maps actual work revision pointers to selected work', async () => {
+  const cursor = { rooms: { commons: 10 }, native: { commons: 'opaque.native.position' } };
+  const f = transport(url => url.includes('/needs-me') ? page({ cursor, hasMore: true,
+    items: [{ kind: 'work', roomId: 'commons', id: 'standing-task', seq: 7 }] }) : undefined);
+  const result = await resumeAgent({ connection, fetchImpl: f.fetchImpl, maxPages: 2 });
+  assert.deepEqual(result.observedThroughBySource.attention.cursor, cursor);
+  assert.equal(result.observedThroughBySource.attention.hasMore, true);
+  assert.deepEqual(result.attention[0], { kind: 'work', roomId: 'commons', id: 'standing-task', seq: 7,
+    nextRead: { tool: 'room_read_work', arguments: { roomId: 'commons', workItemId: 'standing-task' } } });
+  const second = f.calls.filter(call => call.url.includes('/needs-me'))[1];
+  assert.deepEqual(JSON.parse(new URL(second.url).searchParams.get('since')), cursor);
+});
+
+test('native continuation keeps exact room/type/token/aggregate limits without admitting unknown cursor keys', async () => {
+  const cases = [null, [], { commons: '' }, { commons: 3 }, { commons: 'x'.repeat(12289) }, { commons: '🙂'.repeat(3073) },
+    Object.fromEntries(Array.from({ length: 41 }, (_, i) => ['room-' + i, 'opaque'])),
+    { commons: 'x'.repeat(12288), other: 'y'.repeat(5000) }, { 'invalid room': 'opaque' }];
+  for (const native of cases) {
+    const f = transport(url => url.includes('/needs-me') ? page({ cursor: { rooms: { commons: 10 }, native } }) : undefined);
+    const result = await resumeAgent({ connection, fetchImpl: f.fetchImpl });
+    assert.equal(result.observedThroughBySource.attention, undefined);
+    assert.ok(result.incompleteSources.some(source => source.source === 'attention' && source.code === 'invalid_response'));
+  }
+});
+
+test('native continuation accepts exact byte and room-count boundaries as opaque values', async () => {
+  for (const native of [{}, { commons: 'x'.repeat(12288) }, { commons: '🙂'.repeat(3072) },
+    Object.fromEntries(Array.from({ length: 40 }, (_, i) => ['room-' + i, 'opaque']))]) {
+    const cursor = { rooms: { commons: 10 }, native };
+    const f = transport(url => url.includes('/needs-me') ? page({ cursor }) : undefined);
+    const result = await resumeAgent({ connection, fetchImpl: f.fetchImpl });
+    assert.deepEqual(result.observedThroughBySource.attention.cursor, cursor);
+  }
+});

@@ -12,17 +12,20 @@ const pick = (value, fields) => Object.fromEntries(fields.filter(key => Object.h
 
 function checkedCursor(value) {
   if (!isObject(value) || Buffer.byteLength(JSON.stringify(value)) > 16384
-    || Object.keys(value).some(key => !['rooms', 'land', 'landIds', 'floor', 'roomAfter'].includes(key)) || !isObject(value.rooms)) throw invalid();
+    || Object.keys(value).some(key => !['rooms', 'land', 'landIds', 'floor', 'roomAfter', 'native'].includes(key)) || !isObject(value.rooms)) throw invalid();
   for (const key of ['rooms', 'land', 'landIds']) if (value[key] !== undefined) {
     if (!isObject(value[key]) || Object.keys(value[key]).length > 500
       || Object.entries(value[key]).some(([id, entry]) => !validId(id) || (key === 'landIds' ? typeof entry !== 'string' || entry.length > 256 : !count(entry)))) throw invalid();
   }
+  if (value.native !== undefined && (!isObject(value.native) || Object.keys(value.native).length > 40
+    || Object.entries(value.native).some(([roomId, token]) => !validId(roomId) || typeof token !== 'string'
+      || token.length === 0 || Buffer.byteLength(token) > 12288))) throw invalid();
   if (value.floor !== undefined && !count(value.floor) || value.roomAfter !== undefined && value.roomAfter !== '' && !validId(value.roomAfter)) throw invalid();
   return value;
 }
 function attentionRead(item) {
   const roomId = item.roomId;
-  if (item.kind === 'handoff') return { tool: 'room_read_work', arguments: { roomId, workItemId: item.id } };
+  if (item.kind === 'handoff' || item.kind === 'work') return { tool: 'room_read_work', arguments: { roomId, workItemId: item.id } };
   if (item.kind === 'direct_ask') return { tool: 'room_read_request', arguments: { roomId, requestMessageId: item.id } };
   if (item.kind === 'bond_request') return { tool: 'bond_list', arguments: { roomId } };
   if (item.kind === 'land_queue') return { tool: 'list_land_queue', arguments: { roomId } };

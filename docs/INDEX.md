@@ -272,3 +272,5 @@ These source-bound design and qualification notes describe the offline schema45 
 [Pending-constructor write proof qualification](research/2026-11-02-pending-constructor-write-protocol.md) records the reproduced post-recovery integrity defect and fix.
 
 [Bounded post-publication restore cleanup](research/2026-11-02-restore-cleanup.md) records protocol17, immutable retries, fault recovery, and the measured peak-versus-total storage cost.
+
+- [Normalized work snapshots and search qualification](research/2026-11-02-current-work-search.md): bounded source contracts, private event redaction, actual browser continuation and explicit unknown totals.

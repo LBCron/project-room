@@ -45,7 +45,7 @@ export function readCurrentNativeInbox(store,secret,roomId,{limit=50,after,older
     if(parent?.authorId===memberId)replies.push({...row,inReplyTo:e.data.replyToId});
    }
   }
-  const ownerId=store.roomAuthority(roomId).ownerId,discovery=readCurrentInboxDiscovery(store,roomId,auth.member,ownerId,floor,b),replyRequests=discovery.requests;
+  const ownerId=store.roomAuthority(roomId,{memberId}).ownerId,discovery=readCurrentInboxDiscovery(store,roomId,auth.member,ownerId,floor,b),replyRequests=discovery.requests;
   const workNext={tool:'room_list_work',arguments:{roomId,focus:'needs_me',limit:1}},conversationNext=page.hasMore?{tool:'room_read_inbox',arguments:{limit,after:page.next}}:null;
   const next=[{action:'list-my-work',nextRead:workNext},{action:'list-open-requests',nextRead:workNext},...(conversationNext?[{action:'continue-conversation',nextRead:conversationNext}]:[])];
   return stampInbox({agentId:memberId,roomId,directMessages,directMentions,replies:stampInbox({directMessages:replies},memberId).directMessages,nativeWork:discovery.work,replyRequests,

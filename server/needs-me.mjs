@@ -1,3 +1,5 @@
+import {readCurrentNeedsMePage} from './current-needs-me.mjs';
+import {isCurrentRoom} from './current-room-repository.mjs';
 import { messageRepository } from "./message-repository.mjs";
 import { sessionWatermark } from "./read-cursor.mjs";
 import { stampNeedsMe } from "./content-trust.mjs";
@@ -31,6 +33,7 @@ import { stampNeedsMe } from "./content-trust.mjs";
 import { ServiceError } from "./store.mjs";
 import { visibleSequenceHorizon } from "./history-visibility.mjs";
 import { nextWorkStep } from "../src/workflow.js";
+import {ownMember} from "../src/events.js";
 import { retiredNeedsMeKeys } from "./updates.mjs";
 import { mayWriteWorkClaims } from "./work-claim-routes.mjs";
 import { availableBoardRowsInRoom } from "./available-work.mjs";
@@ -191,10 +194,10 @@ function integerMap(value) {
 }
 
 export function parseNeedsMeSince(since) {
-  if (since == null || since === "") return { provided: false, number: null, rooms: {}, land: {} };
+  if (since == null || since === "") return { provided: false, number: null, rooms: {}, land: {}, native:{} };
   if (typeof since === "number") {
     if (!Number.isSafeInteger(since) || since < 0) fail(422, "invalid_cursor", "since must be a sequence number or a cursor object");
-    return { provided: true, number: since, rooms: {}, land: {} };
+    return { provided: true, number: since, rooms: {}, land: {}, native:{} };
   }
   if (typeof since === "string") {
     const trimmed = since.trim();
@@ -210,13 +213,15 @@ export function parseNeedsMeSince(since) {
     const landIds = wrapped ? since.landIds ?? {} : {};
     const roomAfter = wrapped ? since.roomAfter ?? "" : "";
     const floor = wrapped ? since.floor ?? null : null;
+    const native=wrapped?since.native??{}:{};
+    if(!native||typeof native!=='object'||Array.isArray(native)||Object.keys(native).length>40||Object.entries(native).some(([id,value])=>!id||id.length>128||typeof value!=='string'||!value||Buffer.byteLength(value)>12288))fail(422,'invalid_cursor','Invalid native attention continuation');
     if (!landIds || typeof landIds !== "object" || Array.isArray(landIds)
       || Object.entries(landIds).some(([key, value]) => key.length > 128 || typeof value !== "string" || value.length > 256)
       || typeof roomAfter !== "string" || roomAfter.length > 128
       || (floor !== null && (!Number.isSafeInteger(floor) || floor < 0))) {
       fail(422, "invalid_cursor", "Invalid continuation cursor");
     }
-    return { provided: true, number: floor, rooms, land, landIds, roomAfter };
+    return { provided: true, number: floor, rooms, land, landIds, roomAfter, native };
   }
   fail(422, "invalid_cursor", "since must be a sequence number or a cursor object");
 }
@@ -1090,7 +1095,8 @@ export function collectNeedsMe(store, secret, { since, roomId: scopedRoom = null
   const rooms = { ...parsed.rooms };
   const land = { ...parsed.land };
   const landIds = { ...parsed.landIds };
-  const pendingBonds = store.bonds.pendingProposalsFor(identity.identityId);
+  const native={...parsed.native},nativeCoverage=[];
+  let pendingBonds = null;
   const openWork = [];
   const reviewAsks = [];
   const myWork = [];
@@ -1113,6 +1119,21 @@ export function collectNeedsMe(store, secret, { since, roomId: scopedRoom = null
   for (const link of links.slice(0, MAX_ROOMS)) {
     if (allowedRooms && !allowedRooms.includes(link.roomId)) { roomAfter = link.roomId; continue; }
     if (link.archivedAt) { roomAfter = link.roomId; continue; }
+    if(isCurrentRoom(store.db,link.roomId)){
+      const authority=store.roomAuthority(link.roomId,{memberId:link.memberId});
+      if(!ownMember(authority.members,link.memberId)||ownMember(authority.members,link.memberId).active===false){roomAfter=link.roomId;delete native[link.roomId];continue;}
+      // Each native page can return at most four messages in three attention
+      // classes plus one addressed work item and one request. Never slice a
+      // returned source page and acknowledge its undisclosed remainder.
+      if(MAX_ITEMS-items.length<14){hasMore=true;break;}
+      const page=readCurrentNeedsMePage(store,secret,link.roomId,{cursor:native[link.roomId],...(parsed.provided?{after:roomWatermark(parsed,link.roomId,store.headSequence(link.roomId),freshWindow)}:{}),freshWindow});
+      items.push(...page.items);nativeCoverage.push({roomId:link.roomId,...page.coverage});
+      if(page.cursor)native[link.roomId]=page.cursor;else delete native[link.roomId];
+      if(page.visibleThrough)rooms[link.roomId]=page.visibleThrough;
+      if(!page.complete){hasMore=true;break;}
+      roomAfter=link.roomId;continue;
+    }
+    pendingBonds??=store.bonds.pendingProposalsFor(identity.identityId);
     // Do not silently acknowledge a room whose authority/projection failed.
     const authority = store.roomAuthority(link.roomId);
     const member = authority.members?.[link.memberId];
@@ -1215,7 +1236,7 @@ export function collectNeedsMe(store, secret, { since, roomId: scopedRoom = null
   // floor would follow the agent into a room it joins later and hide that
   // room's first mentions forever; without it, cursor.rooms/landIds keep the
   // delivered state exact and nothing replays.
-  const cursor = { rooms, land, landIds, ...(parsed.number !== null && hasMore ? { floor: parsed.number } : {}), ...(hasMore ? { roomAfter } : {}) };
+  const cursor = { rooms, land, landIds, ...(nativeCoverage.length||Object.keys(native).length?{native}:{}), ...(parsed.number !== null && hasMore ? { floor: parsed.number } : {}), ...(hasMore ? { roomAfter } : {}) };
   items.sort((a, b) => a.roomId.localeCompare(b.roomId) || b.seq - a.seq);
   // R327-1 (r6): tell a paused agent it is paused. Items stay readable (this
   // is a read surface) but carry paused:true; `paused` names each paused room
@@ -1226,6 +1247,6 @@ export function collectNeedsMe(store, secret, { since, roomId: scopedRoom = null
     const held = new Set(pausedRooms.map(p => p.roomId));
     for (let i = 0; i < items.length; i++) if (held.has(items[i]?.roomId)) items[i] = { ...items[i], paused: true };
   }
-  return stampNeedsMe({ identityId: identity.identityId, items, ...(pausedRooms.length ? { paused: pausedRooms } : {}), ...(openWork.length ? { openWork } : {}), ...(reviewAsks.length ? { reviewAsks } : {}), ...(myWork.length ? { myWork } : {}), ...(myClaims.length ? { myClaims } : {}), ...(actionsNeeded.length ? { actionsNeeded } : {}), cursor, hasMore,
+  return stampNeedsMe({ identityId: identity.identityId, items, ...(pausedRooms.length ? { paused: pausedRooms } : {}), ...(openWork.length ? { openWork } : {}), ...(reviewAsks.length ? { reviewAsks } : {}), ...(myWork.length ? { myWork } : {}), ...(myClaims.length ? { myClaims } : {}), ...(actionsNeeded.length ? { actionsNeeded } : {}), cursor, hasMore, ...(nativeCoverage.length?{contractVersion:2,nativeCoverage}:{}),
     scan: { scannedRows: scan.scannedRows, scannedBytes: scan.scannedBytes, exhausted: scan.exhausted, replies: scan.replies, mentions: scan.mentions, rowBudgets: { replies: REPLY_SCAN_ROW_BUDGET, mentions: MENTION_SCAN_ROW_BUDGET }, byteBudgets: { replies: REPLY_SCAN_BYTE_BUDGET, mentions: MENTION_SCAN_BYTE_BUDGET }, ...(scan.exhausted ? { continuation: "pass the returned cursor back unchanged; the scan resumes at the first unscanned sequence" } : {}) } });
 }

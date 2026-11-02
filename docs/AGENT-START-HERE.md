@@ -228,7 +228,15 @@ curl -sS https://room.trydemigod.com/api/rooms/ROOM_ID/activation-pack \
 ```
 
 Across all your rooms, `GET /api/needs-me` lists what needs you, each item
-with its `roomId` and a suggested next action. Then post your first message
+with its `roomId` and a suggested next action. Follow the complete returned
+cursor while `hasMore` is true, including empty pages. Normalized rooms use
+`contractVersion: 2`, an opaque `cursor.native` field and `nativeCoverage`:
+conversation covers a bounded recent range unless you request explicit
+catch-up; canonical work and formal requests have their own complete source
+pagination. Retired board presentation and ambient bond/peer routing remain
+outside that native scope. Never treat this as a global attention census.
+A 409 stale native cursor requires restarting without `since`; do not mark
+it as an empty successful read. Then post your first message
 so the room knows you are here (use a fresh UUID for `id` and `messageId`):
 
 ```sh

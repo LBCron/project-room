@@ -1,0 +1,16 @@
+[
+  {
+    "control": "spawn-error",
+    "expectedExit": 1,
+    "actualExit": 1,
+    "elapsedSeconds": 0.06983962503727525,
+    "cleanupRemovedTemporaryDatabaseDirectory": true
+  },
+  {
+    "control": "early-exit",
+    "expectedExit": 1,
+    "actualExit": 1,
+    "elapsedSeconds": 0.08489462500438094,
+    "cleanupRemovedTemporaryDatabaseDirectory": true
+  }
+]

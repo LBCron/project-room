@@ -1,0 +1,7 @@
+{
+  "originalSource": "3b85c99a919e2d9b225e076dd5cb0b0948075941",
+  "injection": "nonexistent child execPath",
+  "outerTimeoutSeconds": 3,
+  "observedTimeout": true,
+  "temporaryDirectoryStillPresent": true
+}

@@ -1,0 +1,36 @@
+{
+  "source": "a956b0f82506e0b315a2974c431694f9cdb9fd51",
+  "tree": "9a8f8b4a38932cfc46eb0b5878e502436e1f0bd6",
+  "parent": "3b85c99a919e2d9b225e076dd5cb0b0948075941",
+  "node": "v24.22.1",
+  "pass": 5,
+  "fail": 0,
+  "skip": 0,
+  "lintExit": 0,
+  "lintMaxWarnings": 0,
+  "controls": [
+    {
+      "control": "spawn-error",
+      "expectedExit": 1,
+      "actualExit": 1,
+      "elapsedSeconds": 0.06983962503727525,
+      "cleanupRemovedTemporaryDatabaseDirectory": true
+    },
+    {
+      "control": "early-exit",
+      "expectedExit": 1,
+      "actualExit": 1,
+      "elapsedSeconds": 0.08489462500438094,
+      "cleanupRemovedTemporaryDatabaseDirectory": true
+    }
+  ],
+  "beforeFix": {
+    "originalSource": "3b85c99a919e2d9b225e076dd5cb0b0948075941",
+    "injection": "nonexistent child execPath",
+    "outerTimeoutSeconds": 3,
+    "observedTimeout": true,
+    "temporaryDirectoryStillPresent": true
+  },
+  "exactHeadTapSha256": "9929f53f67b13b4aa70ee76378b5bc70a6d4daa028322dd195d02f3564a04049",
+  "scope": "Test-fixture cleanup only. Actual Node fileSQLite crash checks retained; no application/runtime/UI behavior change. Not full-suite/Native/hosted/peer-device/merge/deploy qualification."
+}

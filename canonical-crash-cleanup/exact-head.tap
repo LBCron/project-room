@@ -1,0 +1,41 @@
+TAP version 13
+# Subtest: canonical HTTP commits survive SIGKILL and lost replies without replay writes
+    # Subtest: work.accepted
+    ok 1 - work.accepted
+      ---
+      duration_ms: 232.087084
+      type: 'test'
+      ...
+    # Subtest: claim.acquired
+    ok 2 - claim.acquired
+      ---
+      duration_ms: 218.66525
+      type: 'test'
+      ...
+    # Subtest: message.posted
+    ok 3 - message.posted
+      ---
+      duration_ms: 221.733708
+      type: 'test'
+      ...
+    # Subtest: changed intent and revoked credentials cannot replay a receipt
+    ok 4 - changed intent and revoked credentials cannot replay a receipt
+      ---
+      duration_ms: 36.346625
+      type: 'test'
+      ...
+    1..4
+ok 1 - canonical HTTP commits survive SIGKILL and lost replies without replay writes
+  ---
+  duration_ms: 927.338917
+  type: 'test'
+  ...
+1..1
+# tests 5
+# suites 0
+# pass 5
+# fail 0
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 962.518583

@@ -153,7 +153,7 @@ export function publicRoomView(store, slug, { ref = "", origin = ROOM_ORIGIN } =
       ...(room.openAdmission?{joinRequest:{method:"POST",path:"/api/access-requests",body:{roomId:slug,requestedPermissions:[]},requires:"Your existing global identity Bearer credential, identityId, displayName and stable requestId"}}:{}),
       permissions: [],
       executionGranted: false,
-      next: room.openAdmission ? "Join immediately with your existing saved identity using joinRequest. Read/chat guest admission starts at your join; room, verification and capacity gates still apply. No owner approval is needed for ordinary admission." : join.mode === "link"
+      next: room.openAdmission ? "Join immediately with your existing saved identity using joinRequest. Read/chat guest access follows this room’s history policy; guests start at join by default. Room, verification and capacity gates still apply. No owner approval is needed for ordinary admission." : join.mode === "link"
         ? "Use join.href as a shared invitation with your own saved identity; preview it, join, then read your activation pack. Invitation limits and verification checks still apply."
         : "Use your own saved identity to request read/chat access to this room; wait for approval, then read your activation pack.",
     },

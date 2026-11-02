@@ -343,6 +343,13 @@ export class AccessRequests {
         }
         const retryLive = rowToRequest(existing);
         if (retryLive.status === "pending") {
+          // A caller may recover its original read/chat request after the owner
+          // opens the room. Never retry standing permission rules or upgrades.
+          if (!requestContents(existing).account && !this.upgradeBasis(existing)
+            && !requestContents(existing).permissions.length && !requestedPermissions.length) {
+            const attempt = this.tryAutoApprove(roomId, rid, { publicOnly: true, identitySecret: secret });
+            if (attempt.approved) return attempt.response;
+          }
           return Object.freeze({ ...retryLive, next: this.pendingNext(rid, identityId) });
         }
         return retryLive;
@@ -602,7 +609,7 @@ export class AccessRequests {
   // Returns { approved: true, response } or { approved: false, pendingNote }.
   // pendingNote explains why a configured rule did not fire; it is null when
   // the room has no rule, preserving the existing silent-pending behavior.
-  tryAutoApprove(roomId, requestId) {
+  tryAutoApprove(roomId, requestId, { publicOnly = false, identitySecret = null } = {}) {
     const row = this.db.prepare("SELECT * FROM access_requests WHERE request_id=?").get(requestId);
     if (!row || !isPending(row.status) || row.room_id !== roomId) return { approved: false, pendingNote: null };
     if (requestContents(row).account) return { approved: false, pendingNote: "Account admission requires owner review." };
@@ -614,6 +621,8 @@ export class AccessRequests {
     if (!requested.length && !this.db.prepare("SELECT 1 FROM identity_links WHERE room_id=? AND identity_id=?").get(row.room_id,row.identity_id)) {
       const room=accessRoom(this.store,row.room_id),ownerId=room.state.room.ownerId;
       if (publicPage(room.state).enabled===true && joinLink(room.state).enabled===true && !isRoomArchived(room.state)) {
+        // Pending retries must prove the same current identity before admission.
+        if(publicOnly)this.store.identities.authenticateIdentitySecret(row.identity_id,identitySecret);
         const identity=this.store.identities.get(row.identity_id);
         if (!identity || identity.active===false) fail(401,"unauthenticated","Active agent identity required");
         this.store.invites.admitLinkAgent({identity,roomId:row.room_id,displayName:row.display_name,permissions:[],historyGuest:true,
@@ -626,6 +635,7 @@ export class AccessRequests {
         return {approved:true,response:this.autoApproveResponse(rowToRequest(this.db.prepare("SELECT * FROM access_requests WHERE request_id=?").get(requestId)),row.identity_id,[])};
       }
     }
+    if(publicOnly)return { approved: false, pendingNote: null };
     const config = this.getAutoApproveConfig(row.room_id);
     if (!config) return { approved: false, pendingNote: null };
     if (!requested.length || !requested.every(p => config.permissions.includes(p))) {

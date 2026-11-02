@@ -1,0 +1,62 @@
+[
+  {
+    "path": "README.md",
+    "bytes": 3509,
+    "sha256": "eff42aad6cb538d4757a0bfb9f18ce4ba2d5d8445d67ef9f5c1db5b2889cfc68"
+  },
+  {
+    "path": "before-500-cap.log",
+    "bytes": 81559,
+    "sha256": "1ca98cf3c3121d24789aec51ef09dffad989290d4d3a8d8fb60a1deb4c27ed1a"
+  },
+  {
+    "path": "composed-guards.log",
+    "bytes": 1302,
+    "sha256": "41a5448996ef78114c18d282c6cea68507313893b646e4fd2d76fcd5a356ce61"
+  },
+  {
+    "path": "composed-native.log",
+    "bytes": 117826,
+    "sha256": "b6b83d7625fa521b8f1175a009795f649fdd37894f991c80732e5e4a686bba57"
+  },
+  {
+    "path": "deps.log",
+    "bytes": 50,
+    "sha256": "cbb9498680a61c33e4c98d9e08c1d78d946df9252eb369de23e942dce84ed188"
+  },
+  {
+    "path": "eslint.log",
+    "bytes": 466,
+    "sha256": "8604d7619bf41c01c9101982ba59b8ee0e2c02e54509eec677b53d3678afd074"
+  },
+  {
+    "path": "guard-finalization.log",
+    "bytes": 7880,
+    "sha256": "31e9099821c5ae0fdbc61efc9ba7e7059b34f3d576fbd3a9e01091e48c09838d"
+  },
+  {
+    "path": "receipt.json",
+    "bytes": 4929,
+    "sha256": "7a62683a606ebf065cb9db8e48c4577a533f4f0e938e86563bfa731bbd7d94eb"
+  },
+  {
+    "path": "repair.diff",
+    "bytes": 21770,
+    "sha256": "0cd70771dfa6165e355e6924aa0cb2f6aa681841fb0c8ab3b40deaa2341e5606"
+  },
+  {
+    "path": "secrets.log",
+    "bytes": 24,
+    "sha256": "799e3201a5b88eae4477b159c57bac86af93f46933970440cbcf135ef2e3b94d"
+  },
+  {
+    "path": "source-manifest.json",
+    "bytes": 819,
+    "sha256": "2e1b6a50e6705b46036d4e173ea0fff17e5a4300ed9f40983232feb2facebfc0"
+  },
+  {
+    "path": "standalone-native.log",
+    "bytes": 117822,
+    "sha256": "190ff903b23d351a9a55d2f906a2549e50a0ebfdc755a4592c98cf1a0501a68a"
+  }
+]

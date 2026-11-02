@@ -1,0 +1,190 @@
+{
+  "standaloneCommit": "bdee803d4fa2ee3db225f5b6b07b04ab411737a9",
+  "standaloneTree": "0439c7755de32f1cc140619011a7bd83777e7b80",
+  "parent": "00888c52110d36250d3e07629036701b72926d09",
+  "composedCommit": "4986df689a1773e4162f7c686667a02f15f18c4c",
+  "composedTree": "e0b52214ad91d867e7b543465b72ee75a3d6b7eb",
+  "composedParent": "308a5a910ac6c9febe8ffb708932075b3cf2a1f1",
+  "localComposedTestCommitSameTree": "63b66e07bfe94521b5426eb1b82bd924bff9b181",
+  "standaloneFetchedTreeEqualsLocal": true,
+  "composedFetchedTreeEqualsLocal": true,
+  "scope": "Test-only driver, fixture, helper export, guard controls and registration. No production source changes.",
+  "node": "24.22.1",
+  "workerd": "2026-07-30",
+  "before": {
+    "exit": 1,
+    "reason": "obsolete aggregate500-step assumption"
+  },
+  "standaloneNative": {
+    "actualNative": true,
+    "configuredKv": true,
+    "sourceBytes": 3151048,
+    "sourceSha256": "3d7a159221d1fd6f6bf3feb3c70797d7ca520425befc247c18400017f29a3fea",
+    "stage": {
+      "put": 5,
+      "get": 4,
+      "delete": 5,
+      "writeBytes": 3152010,
+      "readBytes": 3151048,
+      "maxPutBytes": 1048576,
+      "manifests": 1,
+      "canonicalRoomsAtPut": [
+        0,
+        0,
+        0,
+        0,
+        0
+      ]
+    },
+    "invalidSource": {
+      "put": 3,
+      "get": 0,
+      "delete": 3,
+      "writeBytes": 3145728,
+      "readBytes": 0,
+      "maxPutBytes": 1048576,
+      "manifests": 0,
+      "canonicalRoomsAtPut": [
+        0,
+        0,
+        0
+      ]
+    },
+    "interruptedUpload": {
+      "put": 2,
+      "get": 0,
+      "delete": 2,
+      "writeBytes": 2097152,
+      "readBytes": 0,
+      "maxPutBytes": 1048576,
+      "manifests": 0,
+      "canonicalRoomsAtPut": [
+        0,
+        0
+      ]
+    },
+    "largeBlobBytes": 1048576,
+    "coldSourceIo": {
+      "put": 0,
+      "get": 0,
+      "delete": 0,
+      "writeBytes": 0,
+      "readBytes": 0,
+      "maxPutBytes": 0,
+      "manifests": 0,
+      "canonicalRoomsAtPut": []
+    },
+    "steps": 732,
+    "reportProgress": {
+      "preReportCalls": 330,
+      "reportCalls": 401,
+      "publicationCalls": 1,
+      "reportCallBudget": 1239141,
+      "sourceUnits": 1149231,
+      "sortUnits": 89846
+    },
+    "verified": true,
+    "coldReady": true,
+    "exactRetry": true,
+    "completeSourceBeforeCanonicalImport": true,
+    "wholeRecoveryBounded": false,
+    "eventTuplesAndLargestLineStillUnbounded": true
+  },
+  "composedNative": {
+    "actualNative": true,
+    "configuredKv": true,
+    "sourceBytes": 3151048,
+    "sourceSha256": "a9474c63cb6eada217e33f23faeb4fd3e868370a62036d84d3c4698fecf8fd6f",
+    "stage": {
+      "put": 5,
+      "get": 4,
+      "delete": 5,
+      "writeBytes": 3152010,
+      "readBytes": 3151048,
+      "maxPutBytes": 1048576,
+      "manifests": 1,
+      "canonicalRoomsAtPut": [
+        0,
+        0,
+        0,
+        0,
+        0
+      ]
+    },
+    "invalidSource": {
+      "put": 3,
+      "get": 0,
+      "delete": 3,
+      "writeBytes": 3145728,
+      "readBytes": 0,
+      "maxPutBytes": 1048576,
+      "manifests": 0,
+      "canonicalRoomsAtPut": [
+        0,
+        0,
+        0
+      ]
+    },
+    "interruptedUpload": {
+      "put": 2,
+      "get": 0,
+      "delete": 2,
+      "writeBytes": 2097152,
+      "readBytes": 0,
+      "maxPutBytes": 1048576,
+      "manifests": 0,
+      "canonicalRoomsAtPut": [
+        0,
+        0
+      ]
+    },
+    "largeBlobBytes": 1048576,
+    "coldSourceIo": {
+      "put": 0,
+      "get": 0,
+      "delete": 0,
+      "writeBytes": 0,
+      "readBytes": 0,
+      "maxPutBytes": 0,
+      "manifests": 0,
+      "canonicalRoomsAtPut": []
+    },
+    "steps": 732,
+    "reportProgress": {
+      "preReportCalls": 330,
+      "reportCalls": 401,
+      "publicationCalls": 1,
+      "reportCallBudget": 1239141,
+      "sourceUnits": 1149231,
+      "sortUnits": 89846
+    },
+    "verified": true,
+    "coldReady": true,
+    "exactRetry": true,
+    "completeSourceBeforeCanonicalImport": true,
+    "wholeRecoveryBounded": false,
+    "eventTuplesAndLargestLineStillUnbounded": true
+  },
+  "nodeGuardAndFinalizationTests": 5,
+  "composedGuardTests": 2,
+  "originalMessageCount": 650,
+  "originalTimeoutMs": 120000,
+  "nonReportCallLimit": 500,
+  "registeredNativeTestsBefore": 88,
+  "registeredNativeTestsAfter": 89,
+  "priorTestEntriesPreserved": true,
+  "duplicateRegistrations": 0,
+  "eslint": {
+    "exit": 0,
+    "errors": 0,
+    "warnings": 2
+  },
+  "depsExit": 0,
+  "secretDiffExit": 0,
+  "limits": [
+    "Report budget is a conservative independent source oracle, not a production CPU/latency bound.",
+    "No claim that complete restore cleanup is covered by this existing broad case; full cleanup is qualified separately in prior1000-request evidence.",
+    "No new full-repository CI run; unchanged runtime CI qualification remains pinned to308a5a9.",
+    "No hosted CI, peer execution, merge, deployment or utilization claim."
+  ]
+}

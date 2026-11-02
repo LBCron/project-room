@@ -64,3 +64,19 @@ test('complete addressed work lifecycle preserves session usage, historical veri
  const {recoveryWorkLifecycle}=await import('./helpers/recovery-work-lifecycle.mjs'),{history,state:expected}=recoveryWorkLifecycle(),actual=fold();for(const incoming of history)actual.apply(incoming);
  assert.deepEqual(withoutJournal(actual.materialize()),withoutJournal(expected));assert.equal(actual.materialize().workItems.main.state,'superseded');assert.equal(actual.materialize().workItems.main.attempts[0].usageCents,4);assert.ok(actual.materialize().workItems.main.verificationHistory.some(entry=>entry.historical===true));assert.ok(actual.maxReads<32);
 });
+
+test('addressed lifecycle preserves authority, CAS, session and exact-version refusal without partial writes',async()=>{
+ const {recoveryWorkLifecycle}=await import('./helpers/recovery-work-lifecycle.mjs'),{history}=recoveryWorkLifecycle(),actual=fold();let full=emptyRoomState(),refusals=0;
+ for(const incoming of history){
+  let invalid=null;
+  if(incoming.type==='work.accepted')invalid={...incoming,data:{...incoming.data,expectedRevision:999}};
+  if(incoming.type==='session.started')invalid={...incoming,actorId:'reviewer'};
+  if(incoming.type==='session.status_changed')invalid={...incoming,data:{...incoming.data,status:'invalid'}};
+  if(incoming.type==='verification.recorded')invalid={...incoming,actorId:'owner'};
+  if(incoming.type==='owner.decision_recorded')invalid={...incoming,data:{...incoming.data,completionEventId:'missing-completion'}};
+  if(incoming.type==='work.superseded')invalid={...incoming,data:{...incoming.data,supersededByWorkItemId:'missing-replacement'}};
+  if(invalid){const before=structuredClone([...actual.cells]);let expected;try{applyEvent(structuredClone(full),structuredClone(invalid));}catch(error){expected=error.message;}assert.ok(expected,'original reducer must refuse');assert.throws(()=>actual.apply(invalid),error=>error.message===expected);assert.deepEqual([...actual.cells],before);refusals++;}
+  actual.apply(incoming);full=applyEvent(full,structuredClone(incoming));
+ }
+ assert.ok(refusals>=8);assert.deepEqual(withoutJournal(actual.materialize()),withoutJournal(full));
+});

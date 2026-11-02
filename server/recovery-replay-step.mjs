@@ -10,7 +10,7 @@ const supported=new Set(['room.created','member.added','member.access_changed','
 // These handlers read only addressed member/work/channel records and room scalars.
 for(const name of ['ROOM_CHARTER_UPDATED','ROOM_POLICY_SET','ROOM_SPEND_ALLOWANCE_SET','ROOM_SPEND_PRICING_SET','ROOM_DEVELOPMENT_ACCESS_SET','ROOM_TRUST_SET','ROOM_PUBLIC_RECEIPTS_SET','ROOM_PUBLIC_PAGE_SET','ROOM_JOIN_LINK_SET','MEMBER_PUBLIC_NAME_SET','WORK_PUBLIC_SET','ROOM_ARCHIVED','OWNERSHIP_TRANSFERRED','MEMBER_STATUS_UPDATED','NOTIFICATION_PREFERENCES_SET','MEMBER_MUTE_SET','CAPABILITIES_ADVERTISED','ACCESS_REQUESTED','LAND_UPDATED','ROOM_STARTER_SEEDED','AGENT_INVITE_MINTED','ROOM_EXPORTED','DM_CONSENT_CHANGED','DM_POSTED','REFERRAL_COMPLETED','DECISION_RECORDED'])supported.add(EVENT_TYPES[name]);
 supported.add(RETIRED_REPLAY_EVENT_TYPES.MESSAGE_REACTION_SET);
-for(const type of ['claim.acquired','claim.released','claim.renewed'])supported.add(type);
+for(const type of ['claim.acquired','claim.released','claim.renewed','work.blocked','work.blocker_resolved','work.superseded','verification.recorded','owner.decision_recorded','session.started','session.status_changed','session.stop_requested','session.stopped'])supported.add(type);
 const memberFields=['memberId','toMemberId','accountableMemberId','verifierMemberId','humanDecisionMakerId','accountableHumanId','referredBy','producerId','referrerMemberId','refereeMemberId'];
 const workMemberFields=['accountableMemberId','verifierMemberId','humanDecisionMakerId','proposedById'];
 const messageFields=['replyToId','sourceMessageId','progressMessageId','evidenceMessageId'];

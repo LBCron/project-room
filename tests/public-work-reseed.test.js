@@ -251,3 +251,11 @@ test('receipt state and archived publication preserve scheduler parity', t => {
   f.store.transaction(() => f.store.db.prepare("UPDATE rooms SET archived_at=NULL WHERE id='commons'").run());
   assert.equal(assertPendingParity(f), false, 'unarchiving is visible immediately');
 });
+
+test('alarm re-arm requests a conservative indexed check without hydrating any public candidate', t => {
+ const f=fixture(t);for(const id of PUBLIC_WORK_STARTER_SEED_IDS)f.submit(id);f.enableSeed('still-useful-public-work');
+ let candidates=0;const record=f.store.projectOffers.record.bind(f.store.projectOffers);f.store.projectOffers.record=row=>{candidates++;return record(row);};
+ const service=f.service();service.packet=()=>assert.fail('scheduler must not render packets');service._starterFamily=()=>assert.fail('scheduler must not enumerate family rounds');
+ assert.equal(service.starterPoolPending(),true,'an anchored submission schedules a check even when useful public work remains');assert.equal(candidates,0);
+ assert.equal(f.service().reseedStarterPool().seeded,0,'conservative scheduling never changes exact global-zero replenishment');
+});

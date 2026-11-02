@@ -1,0 +1,25 @@
+{
+  "observedAt": "2026-11-02T02:00Z",
+  "source": "Existing signed-in Cloudflare dashboard, read-only inspection",
+  "namespace": "2f74da0ff4dc42eb83c9cc33a8007870",
+  "namespaceStorageDisplayed": "235.79 MB",
+  "namespaceStorageNotExactFreshNativeBytes": true,
+  "activeInstancesLast24h": 1,
+  "instance": "invite-only-pilot",
+  "requestsLast24h": 269091,
+  "errorRateLast24h": "10.1%",
+  "p99WallTimeDisplayed": "14.8s",
+  "p99IsolateMemoryDisplayed": "142.73 MB",
+  "memoryIsNotPerObjectOrOOMProof": true,
+  "storedErrorRecordsLast3h": 2378,
+  "resetAfterRollbackDisplayedAt": "2026-11-01 17:48:20.824 Pacific (dashboard label PST)",
+  "errorRecordsAreNotIndependentStorageOperationCount": true,
+  "dataStudioProbe": {
+    "sql": "SELECT 1 AS storage_probe;",
+    "result": "Unknown error; UI suggests workers-sdk issue or account team",
+    "schemaList": "No schemas found",
+    "mutation": false,
+    "inferenceLimit": "Additional platform-tool failure; does not prove whether app constructor, storage or inspection service is responsible."
+  },
+  "conclusion": "10GB capacity exhaustion unlikely based on displayed namespace aggregate. Source rollback insufficient. Exact current native size still unmeasured; blocking storage operation and memory pressure remain to isolate."
+}

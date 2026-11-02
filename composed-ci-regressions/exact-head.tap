@@ -1,0 +1,421 @@
+TAP version 13
+# {"event":"room.cold_start","clockSemantics":"runtime-dependent","durationMs":41,"integrity":"eager","phases":{"schema":{"ms":10,"rowsRead":0},"plugin":{"ms":17,"rowsRead":0},"fence":{"ms":10,"rowsRead":0},"verifies":{"ms":2,"rowsRead":0},"checksum":{"ms":0,"rowsRead":0}},"cpuMs":44,"heapBytes":39959800,"rooms":0,"sequences":0,"projectionBytes":0,"events":0}
+# {"event":"room.store_initialized","initializationMs":42,"legacyColdStartMs":41,"clockSemantics":"runtime-dependent","cpuMeasured":false}
+# [boot-config] ERROR: the agent card is UNSIGNED and no explicit opt-in was recorded at build time — members fetching /.well-known/agent-card.json will see an unsigned card (marked signed:false). To fix: set ROOM_AGENT_CARD_SIGNING_KEY and re-run scripts/sign-agent-card.mjs, or pass --allow-unsigned explicitly to record the choice.
+# ROOM_SECURITY_CONTACT is unset; /.well-known/security.txt returns 404
+# No magic-link mailer is configured: email-verification gates are relaxed (agent-invite escape hatch); /api/health reports emailVerification: relaxed-no-mailer
+# Subtest: canonical work HTTP preserves role authority, attribution and refusal atomicity
+    # Subtest: propose: owner
+    ok 1 - propose: owner
+      ---
+      duration_ms: 4.615584
+      type: 'test'
+      ...
+    # Subtest: propose: collaborator
+    ok 2 - propose: collaborator
+      ---
+      duration_ms: 4.223583
+      type: 'test'
+      ...
+# room diagnostic op_J7mUOmjy 422 command_rejected conflict /api/rooms/:roomId/commands
+    # Subtest: propose: contributor
+    ok 3 - propose: contributor
+      ---
+      duration_ms: 4.885291
+      type: 'test'
+      ...
+# room diagnostic op_oUKTQIEZ 422 command_rejected conflict /api/rooms/:roomId/commands
+    # Subtest: propose: reviewer
+    ok 4 - propose: reviewer
+      ---
+      duration_ms: 4.879458
+      type: 'test'
+      ...
+# room diagnostic op_9ItFyCQ6 422 command_rejected conflict /api/rooms/:roomId/commands
+    # Subtest: propose: chat
+    ok 5 - propose: chat
+      ---
+      duration_ms: 4.447042
+      type: 'test'
+      ...
+# room diagnostic op_siWNOzLa 422 command_rejected conflict /api/rooms/:roomId/commands
+    # Subtest: propose: guest
+    ok 6 - propose: guest
+      ---
+      duration_ms: 4.528917
+      type: 'test'
+      ...
+# room diagnostic op_CaKm7PJk 403 no_access access /api/rooms/:roomId/commands
+    # Subtest: propose: outsider
+    ok 7 - propose: outsider
+      ---
+      duration_ms: 1.605833
+      type: 'test'
+      ...
+# room diagnostic op_vn9tm1ij 401 unauthenticated access /api/rooms/:roomId/commands
+    # Subtest: propose: anonymous
+    ok 8 - propose: anonymous
+      ---
+      duration_ms: 1.555
+      type: 'test'
+      ...
+# room diagnostic op_zl74TcFT 401 unauthenticated access /api/rooms/:roomId/commands
+    # Subtest: propose: revoked
+    ok 9 - propose: revoked
+      ---
+      duration_ms: 1.609458
+      type: 'test'
+      ...
+    # Subtest: accept-own: owner
+    ok 10 - accept-own: owner
+      ---
+      duration_ms: 5.522125
+      type: 'test'
+      ...
+    # Subtest: accept-own: collaborator
+    ok 11 - accept-own: collaborator
+      ---
+      duration_ms: 5.528333
+      type: 'test'
+      ...
+    # Subtest: accept-own: contributor
+    ok 12 - accept-own: contributor
+      ---
+      duration_ms: 6.710541
+      type: 'test'
+      ...
+# room diagnostic op_88B3OdIB 422 command_rejected conflict /api/rooms/:roomId/commands
+    # Subtest: accept-own: reviewer
+    ok 13 - accept-own: reviewer
+      ---
+      duration_ms: 6.341625
+      type: 'test'
+      ...
+# room diagnostic op_zONjI9At 422 command_rejected conflict /api/rooms/:roomId/commands
+    # Subtest: accept-own: chat
+    ok 14 - accept-own: chat
+      ---
+      duration_ms: 5.992084
+      type: 'test'
+      ...
+# room diagnostic op_xJEUE-rr 422 command_rejected conflict /api/rooms/:roomId/commands
+    # Subtest: accept-own: guest
+    ok 15 - accept-own: guest
+      ---
+      duration_ms: 5.912875
+      type: 'test'
+      ...
+# room diagnostic op_JvjcgdaP 403 no_access access /api/rooms/:roomId/commands
+    # Subtest: accept-own: outsider
+    ok 16 - accept-own: outsider
+      ---
+      duration_ms: 3.275959
+      type: 'test'
+      ...
+# room diagnostic op_UJJGrsLU 401 unauthenticated access /api/rooms/:roomId/commands
+    # Subtest: accept-own: anonymous
+    ok 17 - accept-own: anonymous
+      ---
+      duration_ms: 3.490334
+      type: 'test'
+      ...
+# room diagnostic op_yiRrfWsC 401 unauthenticated access /api/rooms/:roomId/commands
+    # Subtest: accept-own: revoked
+    ok 18 - accept-own: revoked
+      ---
+      duration_ms: 3.543291
+      type: 'test'
+      ...
+# room diagnostic op_3raNnZdX 422 command_rejected conflict /api/rooms/:roomId/commands
+    # Subtest: acquire-contributor: owner
+    ok 19 - acquire-contributor: owner
+      ---
+      duration_ms: 8.83075
+      type: 'test'
+      ...
+# room diagnostic op_qxPt0kRo 422 command_rejected conflict /api/rooms/:roomId/commands
+    # Subtest: acquire-contributor: collaborator
+    ok 20 - acquire-contributor: collaborator
+      ---
+      duration_ms: 7.426083
+      type: 'test'
+      ...
+    # Subtest: acquire-contributor: contributor
+    ok 21 - acquire-contributor: contributor
+      ---
+      duration_ms: 7.845916
+      type: 'test'
+      ...
+# room diagnostic op_a3_OBAnV 422 command_rejected conflict /api/rooms/:roomId/commands
+    # Subtest: acquire-contributor: reviewer
+    ok 22 - acquire-contributor: reviewer
+      ---
+      duration_ms: 8.60625
+      type: 'test'
+      ...
+# room diagnostic op_g4maHhzG 403 work_claims_not_permitted access /api/rooms/:roomId/commands
+    # Subtest: acquire-contributor: chat
+    ok 23 - acquire-contributor: chat
+      ---
+      duration_ms: 7.684334
+      type: 'test'
+      ...
+# room diagnostic op_Ry9DcQVd 403 work_claims_not_permitted access /api/rooms/:roomId/commands
+    # Subtest: acquire-contributor: guest
+    ok 24 - acquire-contributor: guest
+      ---
+      duration_ms: 8.348417
+      type: 'test'
+      ...
+# room diagnostic op_7cktF2p- 403 no_access access /api/rooms/:roomId/commands
+    # Subtest: acquire-contributor: outsider
+    ok 25 - acquire-contributor: outsider
+      ---
+      duration_ms: 5.049208
+      type: 'test'
+      ...
+# room diagnostic op_GWVo7AYu 401 unauthenticated access /api/rooms/:roomId/commands
+    # Subtest: acquire-contributor: anonymous
+    ok 26 - acquire-contributor: anonymous
+      ---
+      duration_ms: 4.774917
+      type: 'test'
+      ...
+# room diagnostic op_0KIoUZ56 401 unauthenticated access /api/rooms/:roomId/commands
+    # Subtest: acquire-contributor: revoked
+    ok 27 - acquire-contributor: revoked
+      ---
+      duration_ms: 4.855625
+      type: 'test'
+      ...
+# room diagnostic op_8AuTGkyd 422 command_rejected conflict /api/rooms/:roomId/commands
+    # Subtest: renew-contributor: owner
+    ok 28 - renew-contributor: owner
+      ---
+      duration_ms: 12.156167
+      type: 'test'
+      ...
+# room diagnostic op_pr7Mcb2u 422 command_rejected conflict /api/rooms/:roomId/commands
+    # Subtest: renew-contributor: collaborator
+    ok 29 - renew-contributor: collaborator
+      ---
+      duration_ms: 11.138208
+      type: 'test'
+      ...
+    # Subtest: renew-contributor: contributor
+    ok 30 - renew-contributor: contributor
+      ---
+      duration_ms: 10.484208
+      type: 'test'
+      ...
+# room diagnostic op_tfadrf-D 422 command_rejected conflict /api/rooms/:roomId/commands
+    # Subtest: renew-contributor: reviewer
+    ok 31 - renew-contributor: reviewer
+      ---
+      duration_ms: 10.977791
+      type: 'test'
+      ...
+# room diagnostic op_6wP8xtmp 403 work_claims_not_permitted access /api/rooms/:roomId/commands
+    # Subtest: renew-contributor: chat
+    ok 32 - renew-contributor: chat
+      ---
+      duration_ms: 11.320667
+      type: 'test'
+      ...
+# room diagnostic op_OHxK96FE 403 work_claims_not_permitted access /api/rooms/:roomId/commands
+    # Subtest: renew-contributor: guest
+    ok 33 - renew-contributor: guest
+      ---
+      duration_ms: 12.562625
+      type: 'test'
+      ...
+# room diagnostic op_XwwQii2L 403 no_access access /api/rooms/:roomId/commands
+    # Subtest: renew-contributor: outsider
+    ok 34 - renew-contributor: outsider
+      ---
+      duration_ms: 8.189542
+      type: 'test'
+      ...
+# room diagnostic op_WN0gGgeS 401 unauthenticated access /api/rooms/:roomId/commands
+    # Subtest: renew-contributor: anonymous
+    ok 35 - renew-contributor: anonymous
+      ---
+      duration_ms: 8.362084
+      type: 'test'
+      ...
+# room diagnostic op_-7N6IBtg 401 unauthenticated access /api/rooms/:roomId/commands
+    # Subtest: renew-contributor: revoked
+    ok 36 - renew-contributor: revoked
+      ---
+      duration_ms: 8.6255
+      type: 'test'
+      ...
+    # Subtest: release-contributor: owner
+    ok 37 - release-contributor: owner
+      ---
+      duration_ms: 12.058458
+      type: 'test'
+      ...
+# room diagnostic op_61JFg9LN 422 command_rejected conflict /api/rooms/:roomId/commands
+    # Subtest: release-contributor: collaborator
+    ok 38 - release-contributor: collaborator
+      ---
+      duration_ms: 11.46375
+      type: 'test'
+      ...
+    # Subtest: release-contributor: contributor
+    ok 39 - release-contributor: contributor
+      ---
+      duration_ms: 11.137792
+      type: 'test'
+      ...
+# room diagnostic op_2MSyqV3E 422 command_rejected conflict /api/rooms/:roomId/commands
+    # Subtest: release-contributor: reviewer
+    ok 40 - release-contributor: reviewer
+      ---
+      duration_ms: 11.586958
+      type: 'test'
+      ...
+# room diagnostic op_6sRMvXJ2 403 work_claims_not_permitted access /api/rooms/:roomId/commands
+    # Subtest: release-contributor: chat
+    ok 41 - release-contributor: chat
+      ---
+      duration_ms: 11.950041
+      type: 'test'
+      ...
+# room diagnostic op_0Fb-Kxw2 403 work_claims_not_permitted access /api/rooms/:roomId/commands
+    # Subtest: release-contributor: guest
+    ok 42 - release-contributor: guest
+      ---
+      duration_ms: 13.180958
+      type: 'test'
+      ...
+# room diagnostic op_MnJDhSl3 403 no_access access /api/rooms/:roomId/commands
+    # Subtest: release-contributor: outsider
+    ok 43 - release-contributor: outsider
+      ---
+      duration_ms: 8.724167
+      type: 'test'
+      ...
+# room diagnostic op_PKsiU6As 401 unauthenticated access /api/rooms/:roomId/commands
+    # Subtest: release-contributor: anonymous
+    ok 44 - release-contributor: anonymous
+      ---
+      duration_ms: 8.830958
+      type: 'test'
+      ...
+# room diagnostic op_Yb4U2BMd 401 unauthenticated access /api/rooms/:roomId/commands
+    # Subtest: release-contributor: revoked
+    ok 45 - release-contributor: revoked
+      ---
+      duration_ms: 10.470834
+      type: 'test'
+      ...
+    # Subtest: configure: owner
+    ok 46 - configure: owner
+      ---
+      duration_ms: 5.706209
+      type: 'test'
+      ...
+# room diagnostic op_ObCCDRwR 403 work_claims_not_permitted access /api/rooms/:roomId/work-claims/config
+    # Subtest: configure: collaborator
+    ok 47 - configure: collaborator
+      ---
+      duration_ms: 6.245708
+      type: 'test'
+      ...
+# room diagnostic op_YLM8EKoH 403 work_claims_not_permitted access /api/rooms/:roomId/work-claims/config
+    # Subtest: configure: contributor
+    ok 48 - configure: contributor
+      ---
+      duration_ms: 6.057666
+      type: 'test'
+      ...
+# room diagnostic op_PhHuG0ij 403 work_claims_not_permitted access /api/rooms/:roomId/work-claims/config
+    # Subtest: configure: reviewer
+    ok 49 - configure: reviewer
+      ---
+      duration_ms: 6.9025
+      type: 'test'
+      ...
+# room diagnostic op_CPv3FutH 403 work_claims_not_permitted access /api/rooms/:roomId/work-claims/config
+    # Subtest: configure: chat
+    ok 50 - configure: chat
+      ---
+      duration_ms: 6.128583
+      type: 'test'
+      ...
+# room diagnostic op_XZFKT7gG 403 work_claims_not_permitted access /api/rooms/:roomId/work-claims/config
+    # Subtest: configure: guest
+    ok 51 - configure: guest
+      ---
+      duration_ms: 5.926583
+      type: 'test'
+      ...
+# room diagnostic op_xRtUt42C 403 no_access access /api/rooms/:roomId/work-claims/config
+    # Subtest: configure: outsider
+    ok 52 - configure: outsider
+      ---
+      duration_ms: 2.865792
+      type: 'test'
+      ...
+# room diagnostic op_GpL_-whY 401 unauthenticated access /api/rooms/:roomId/work-claims/config
+    # Subtest: configure: anonymous
+    ok 53 - configure: anonymous
+      ---
+      duration_ms: 2.732458
+      type: 'test'
+      ...
+# room diagnostic op_ciYR5Gly 401 unauthenticated access /api/rooms/:roomId/work-claims/config
+    # Subtest: configure: revoked
+    ok 54 - configure: revoked
+      ---
+      duration_ms: 2.760042
+      type: 'test'
+      ...
+    1..54
+ok 1 - canonical work HTTP preserves role authority, attribution and refusal atomicity
+  ---
+  duration_ms: 762.548875
+  type: 'test'
+  ...
+# Subtest: canonical HTTP commits survive SIGKILL and lost replies without replay writes
+    # Subtest: work.accepted
+    ok 1 - work.accepted
+      ---
+      duration_ms: 241.1015
+      type: 'test'
+      ...
+    # Subtest: claim.acquired
+    ok 2 - claim.acquired
+      ---
+      duration_ms: 230.326291
+      type: 'test'
+      ...
+    # Subtest: message.posted
+    ok 3 - message.posted
+      ---
+      duration_ms: 229.73125
+      type: 'test'
+      ...
+    # Subtest: changed intent and revoked credentials cannot replay a receipt
+    ok 4 - changed intent and revoked credentials cannot replay a receipt
+      ---
+      duration_ms: 37.296375
+      type: 'test'
+      ...
+    1..4
+ok 2 - canonical HTTP commits survive SIGKILL and lost replies without replay writes
+  ---
+  duration_ms: 962.381458
+  type: 'test'
+  ...
+1..2
+# tests 60
+# suites 0
+# pass 60
+# fail 0
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 999.007042

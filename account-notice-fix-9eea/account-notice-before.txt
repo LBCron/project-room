@@ -1,0 +1,53 @@
+- link "Skip to content":
+  - /url: "#conversation-title"
+- status: Connected
+- status: You're not in that room yet. Ask a member for an invite, or request to join
+- main:
+  - complementary "Channels and people":
+    - navigation "Workspace":
+      - button "Rooms"
+    - heading "My first room, Room overview" [level=2]:
+      - button "My first room, Room overview":
+        - generic: My first room
+        - generic: ", Room overview"
+        - generic: ⌄
+    - navigation "Channels":
+      - list:
+        - button "general":
+          - generic: "#"
+          - generic: general
+    - navigation "Direct messages":
+      - paragraph:
+        - generic: Messages
+        - button "New message": +
+      - list
+    - generic "Add people":
+      - text: Add people
+      - generic: +
+    - button "Invite"
+    - button "Add agent"
+    - generic "Participants 1 member":
+      - generic: Participants
+      - generic: 1 member
+  - region "# general":
+    - heading "# general" [active] [level=2]
+    - button "Needs me"
+    - button "Search":
+    - generic "More ⌄"
+    - button "Session and account actions":
+    - status
+    - status
+    - list "Messages and work":
+      - text: No messages yet.
+      - button "Write the first one"
+      - text: ·
+      - button "Invite someone"
+    - generic: Message the room
+    - textbox "Message the room":
+      - /placeholder: "Message #general"
+    - button "Send":
+    - button "Attach a file":
+    - generic "Options"
+    - paragraph: Enter to send · Shift + Enter for a new line
+- status
+- text: ▸

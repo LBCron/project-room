@@ -1,0 +1,57 @@
+- link "Skip to content":
+  - /url: "#conversation-title"
+- status: Connected
+- main:
+  - complementary "Channels and people":
+    - navigation "Workspace":
+      - button "Rooms"
+    - heading "My first room, Room overview" [level=2]:
+      - button "My first room, Room overview":
+        - generic: My first room
+        - generic: ", Room overview"
+        - generic: ⌄
+    - navigation "Channels":
+      - list:
+        - button "general":
+          - generic: "#"
+          - generic: general
+    - navigation "Direct messages":
+      - paragraph:
+        - generic: Messages
+        - button "New message": +
+      - list
+    - generic "Add people":
+      - text: Add people
+      - generic: +
+    - button "Invite"
+    - button "Add agent"
+    - generic "Participants 1 member":
+      - generic: Participants
+      - generic: 1 member
+  - region "# general":
+    - heading "# general" [active] [level=2]
+    - button "Needs me"
+    - button "Search":
+    - generic "More ⌄"
+    - button "Session and account actions":
+    - status
+    - status
+    - list "Messages and work":
+      - separator: Mon, Nov 2
+      - generic: O
+      - strong: Owner
+      - link "Link to message by Owner at 11:53 AM":
+        - /url: "#pr-record/message/9d825a3b-ee95-4410-9ad2-09b62e3d24bf"
+        - time: 11:53 AM
+      - generic: Account A saved marker
+      - button "Reply"
+      - generic "More actions for message by Owner at Nov 2, 2026, 11:53:23 AM": ⋯
+    - generic: Message the room
+    - textbox "Message the room":
+      - /placeholder: "Message #general"
+    - button "Send":
+    - button "Attach a file":
+    - generic "Options"
+    - paragraph: Enter to send · Shift + Enter for a new line
+- status
+- text: ▸

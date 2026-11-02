@@ -1,0 +1,174 @@
+{
+  "source": "bb429d29c2839c5df788d15473eb19a5241ed6a8",
+  "actualNative": true,
+  "seedAndAdoptionExcluded": true,
+  "adapterObserved": true,
+  "rawNativeUnobserved": true,
+  "wholeRecoveryBounded": false,
+  "receipts": [
+    {
+      "input": {
+        "events": 128,
+        "rotations": 1
+      },
+      "facts": {
+        "events": 139,
+        "connections": 5,
+        "operations": 7
+      },
+      "warm": {
+        "verified": true,
+        "actualNative": true,
+        "cost": {
+          "statements": 288,
+          "rowsRead": 9944,
+          "rowsWritten": 0,
+          "unknown": 0,
+          "prefixQueries": 6,
+          "prefixRows": 169,
+          "prefixBytes": 60350
+        },
+        "elapsedMs": 12,
+        "clockOnly": true
+      },
+      "cold": {
+        "verified": true,
+        "actualNative": true,
+        "cost": {
+          "statements": 288,
+          "rowsRead": 9944,
+          "rowsWritten": 0,
+          "unknown": 0,
+          "prefixQueries": 6,
+          "prefixRows": 169,
+          "prefixBytes": 60350
+        },
+        "elapsedMs": 14,
+        "clockOnly": true
+      }
+    },
+    {
+      "input": {
+        "events": 128,
+        "rotations": 16
+      },
+      "facts": {
+        "events": 139,
+        "connections": 5,
+        "operations": 22
+      },
+      "warm": {
+        "verified": true,
+        "actualNative": true,
+        "cost": {
+          "statements": 663,
+          "rowsRead": 15074,
+          "rowsWritten": 0,
+          "unknown": 0,
+          "prefixQueries": 21,
+          "prefixRows": 2254,
+          "prefixBytes": 754715
+        },
+        "elapsedMs": 58,
+        "clockOnly": true
+      },
+      "cold": {
+        "verified": true,
+        "actualNative": true,
+        "cost": {
+          "statements": 663,
+          "rowsRead": 15074,
+          "rowsWritten": 0,
+          "unknown": 0,
+          "prefixQueries": 21,
+          "prefixRows": 2254,
+          "prefixBytes": 754715
+        },
+        "elapsedMs": 61,
+        "clockOnly": true
+      }
+    },
+    {
+      "input": {
+        "events": 512,
+        "rotations": 1
+      },
+      "facts": {
+        "events": 523,
+        "connections": 5,
+        "operations": 7
+      },
+      "warm": {
+        "verified": true,
+        "actualNative": true,
+        "cost": {
+          "statements": 288,
+          "rowsRead": 10712,
+          "rowsWritten": 0,
+          "unknown": 0,
+          "prefixQueries": 6,
+          "prefixRows": 553,
+          "prefixBytes": 184382
+        },
+        "elapsedMs": 20,
+        "clockOnly": true
+      },
+      "cold": {
+        "verified": true,
+        "actualNative": true,
+        "cost": {
+          "statements": 288,
+          "rowsRead": 10712,
+          "rowsWritten": 0,
+          "unknown": 0,
+          "prefixQueries": 6,
+          "prefixRows": 553,
+          "prefixBytes": 184382
+        },
+        "elapsedMs": 23,
+        "clockOnly": true
+      }
+    },
+    {
+      "input": {
+        "events": 512,
+        "rotations": 16
+      },
+      "facts": {
+        "events": 523,
+        "connections": 5,
+        "operations": 22
+      },
+      "warm": {
+        "verified": true,
+        "actualNative": true,
+        "cost": {
+          "statements": 663,
+          "rowsRead": 21602,
+          "rowsWritten": 0,
+          "unknown": 0,
+          "prefixQueries": 21,
+          "prefixRows": 8398,
+          "prefixBytes": 2739227
+        },
+        "elapsedMs": 186,
+        "clockOnly": true
+      },
+      "cold": {
+        "verified": true,
+        "actualNative": true,
+        "cost": {
+          "statements": 663,
+          "rowsRead": 21602,
+          "rowsWritten": 0,
+          "unknown": 0,
+          "prefixQueries": 21,
+          "prefixRows": 8398,
+          "prefixBytes": 2739227
+        },
+        "elapsedMs": 188,
+        "clockOnly": true
+      }
+    }
+  ]
+}

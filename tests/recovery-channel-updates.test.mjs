@@ -1,6 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {validateChannelUpdateJournalRow} from '../server/channel-journal.mjs';
+import {ChannelUpdateJournal as LiveChannelUpdateJournal} from '../server/journal.mjs';
 import {initialRecoveryChannelUpdates,validateRecoveryChannelUpdates,advanceRecoveryChannelUpdates,withCompletedRecoveryChannelUpdates,verifyChannelUpdatesForRecovery} from '../server/recovery-channel-updates.mjs';
 import {restoreProgress,withRestoreTransaction,checkpointRestore} from '../server/restore-admission.mjs';
 import {fixture,post,input} from './helpers/recovery-channel-updates-target.mjs';
@@ -61,4 +62,14 @@ test('existing sealed historical payload larger than work quantum is validated a
  const before=restoreProgress(f.store.db),r=await f.step();assert.equal(r.status,202,JSON.stringify(r.body));const after=restoreProgress(f.store.db);
  assert.equal(after.progress.audit.channelUpdates.rows,1);assert.ok(after.progress.audit.bytes-before.progress.audit.bytes>4*1024*1024);assert.equal(after.progress.audit.units-before.progress.audit.units,1);
  assert.equal((await f.step()).status,202);assert.equal(restoreProgress(f.store.db).progress.audit.channelUpdates.rows,2);
+});
+
+test('live Store channel journal uses the same row predicate as the bounded phase',()=>{
+ const row={payload:'{"update_id":4,"update_id":5}',update_id:5,status:'pending',attempts:0,last_error:null,updated_at:5,received_at:5};
+ const verify=value=>new LiveChannelUpdateJournal({db:{prepare(sql){assert.equal(sql,'SELECT * FROM pending_channel_updates');return{all:()=>[value]};}},readTransaction:operation=>operation()}).verify();
+ assert.deepEqual(verify(row),{pending:1,imported:0,failed:0});
+ for(const change of [{update_id:4},{payload:'[]'},{status:'unknown'},{attempts:6},{status:'failed',attempts:4},{attempts:1},{updated_at:4}]){
+  const changed={...row,...change};assert.throws(()=>validateChannelUpdateJournalRow(changed),/reconciliation/);assert.throws(()=>verify(changed),/reconciliation/);
+ }
+ assert.deepEqual(verify({...row,status:'imported',attempts:2}),{pending:0,imported:1,failed:0});
 });

@@ -8,6 +8,7 @@ import { schemaSqlByName } from "./schema-sql-by-name.mjs";
 // a row through a fixed status list. Graph reply is the same idea in memory:
 // the stored record is the JSON of the transition result.
 import { createHash } from "node:crypto";
+import { validateChannelUpdateJournalRow } from "./channel-journal.mjs";
 import { INVITATION_ROLE_POLICIES, validId } from "../src/events.js";
 import { emailInput, emailOpaqueId, exactEmailFields } from "./email-envelope.mjs";
 import { compareReplyEnvelope, compareReplyUpdateEnvelope, replyObservationReviewable } from "./graph-reply-draft.mjs";
@@ -79,12 +80,7 @@ export class ChannelUpdateJournal extends JournalBase {
     return this.store.readTransaction(() => {
       const counts = { pending: 0, imported: 0, failed: 0 };
       for (const row of this.db.prepare("SELECT * FROM pending_channel_updates").all()) {
-        const payload = JSON.parse(row.payload);
-        if (!payload || typeof payload !== "object" || Array.isArray(payload) || payload.update_id !== row.update_id
-          || !channelJournalStatuses.includes(row.status) || row.attempts > channelJournalLimits.maxAttempts
-          || (row.status === "failed") !== (row.attempts >= channelJournalLimits.maxAttempts)
-          || (row.attempts > 0 && row.status !== "imported" && typeof row.last_error !== "string")
-          || row.updated_at < row.received_at) throw new Error("Channel update journal requires operator reconciliation");
+        validateChannelUpdateJournalRow(row);
         counts[row.status]++;
       }
       return counts;

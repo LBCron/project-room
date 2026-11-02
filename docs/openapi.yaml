@@ -2311,15 +2311,38 @@ paths:
           description: No such drop
   /api/rooms/{roomId}/files:
     get:
-      summary: List staged and committed room files
+      summary: List committed files for selected visible messages
       description: |
-        Members list room files staged or committed through the same
-        room_attachments store the MCP file tools use. Bytes are not included.
+        Normalized rooms require 1–8 messageId query values. Returns committed
+        metadata for those messages only, never a complete room inventory or
+        staged-file list. Keep the uploader-only staging receipt/id for get or
+        commit. Follow page.nextCursor with the same messageId selection until
+        page.hasMore is false, even when files is empty. A changed selection,
+        credential, room revision or server restart requires a fresh read.
+        Unknown, private and pre-join message selections are not found. Legacy
+        rooms retain their historical unselected staged/committed list.
+        No bytes are returned. Hosted room_list_files uses messageIds (array)
+        and cursor for the same service and scope.
       parameters:
         - $ref: '#/components/parameters/RoomId'
+        - name: messageId
+          in: query
+          description: Required for normalized rooms; repeat for 1–8 visible messages.
+          style: form
+          explode: true
+          schema:
+            type: array
+            minItems: 1
+            maxItems: 8
+            uniqueItems: true
+            items: {type: string, minLength: 1, maxLength: 128}
+        - name: cursor
+          in: query
+          description: Opaque page.nextCursor from the exact same selection.
+          schema: {type: string, minLength: 1, maxLength: 4096}
       responses:
         '200':
-          description: Room file list
+          description: Selected file page (normalized v2) or historical legacy list
           content:
             application/json:
               schema:
@@ -2327,8 +2350,17 @@ paths:
                 properties:
                   roomId: { type: string }
                   files: { type: array, items: { type: object } }
+                  contractVersion: {type: integer, enum: [2]}
+                  coverage: {type: object, description: Selected messages only; complete refers to this source window.}
+                  page: {type: object, description: Follow nextCursor while hasMore is true.}
         '401':
           description: No room credential
+        '404':
+          description: Message selection is unavailable or not visible to this viewer.
+        '409':
+          description: Continuation or metadata requires reconciliation; restart the selection.
+        '422':
+          description: Select one to eight distinct visible message ids.
     post:
       summary: Stage one room file
       description: |
@@ -16579,6 +16611,10 @@ paths:
         room_put_file, room_list_files, room_get_file, room_discard_file, and
         room_commit_file stage, fetch, and commit room file bytes in
         room_attachments (canonical base64, 1 MiB, 24 hours while staged).
+        room_list_files requires messageIds (1–8 visible message ids) in
+        normalized rooms and follows page.nextCursor as cursor with the same
+        selection; metadata coverage is selected messages only. Retain the
+        staging receipt/id to read or commit unbound staged bytes.
         room_commit_file sets message_id and state committed on a message
         this identity posted. Wake and push settings on this bearer:
         wake_register, wake_clear (HTTPS wakeUrl, same checks as

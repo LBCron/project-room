@@ -130,7 +130,11 @@ export const hostedRoomTools = [
     mediaType: { type: "string", minLength: 1, maxLength: 255 },
     data: { type: "string", maxLength: base64LengthForBytes(attachmentLimits.fileBytes), description: "Canonical base64 file bytes. No whitespace." }
   }, ["roomId", "id", "filename", "mediaType", "data"]), false),
-  tool("room_list_files", "List room files visible to this member: their staged files, committed DM files addressed to or authored by them, and other committed room files. Metadata only: no bytes. Discarded and expired files are omitted.", schema({ roomId: roomIdField }, ["roomId"])),
+  tool("room_list_files", "List committed file metadata for 1–8 selected visible messageIds in a normalized room. Required there: messageIds. Follow page.nextCursor with the SAME messageIds until page.hasMore is false; an empty page may have more. Coverage describes only the selection, never the room. Staged files are not inventoried: keep room_put_file's id/receipt and use room_get_file or room_commit_file. Unknown, private or pre-join selections are not found. Legacy rooms retain their unselected staged/committed list. No file bytes are returned.", schema({
+    roomId: roomIdField,
+    messageIds: { type: "array", items: idField, minItems: 1, maxItems: 8, uniqueItems: true, description: "Required for normalized rooms: visible message ids whose committed files to inspect. Keep the same selection across pages." },
+    cursor: { type: "string", minLength: 1, maxLength: 4096, description: "Opaque page.nextCursor from this same selection. On expiry, restart without cursor." }
+  }, ["roomId"])),
   tool("room_get_file", "Download one room file from room_attachments. Returns canonical base64 in attachment.data plus sha256. Staged files are uploader-only. Committed DM files are author-and-recipient-only; other committed files are readable by current room members. Discarded, expired, and deleted files are unavailable.", schema({
     roomId: roomIdField,
     id: { ...idField, description: "Attachment id returned by room_put_file or room_list_files." }

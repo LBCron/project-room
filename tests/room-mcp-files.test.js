@@ -12,6 +12,7 @@ import { setTier } from "../server/autonomy-tiers.mjs";
 import { issueSpendGrant } from "../server/spend-grants.mjs";
 import { mcpAttachmentBodyBytes } from "../server/room-attachment-bytes.mjs";
 import { linkWithProof } from "./helpers/link-with-proof.mjs";
+import {seedHistoricalNeedsMeRoom} from "./helpers/historical-needs-me-room.mjs";
 
 const JOIN_TOOLS = ["room_join_packet", "room_join_kits", "room_join_prompt", "room_mcp_snippet"];
 const FILE_TOOLS = ["room_put_file", "room_list_files", "room_get_file", "room_discard_file", "room_commit_file"];
@@ -120,12 +121,14 @@ test("enrolled members upload and download room_attachments through hosted MCP",
   assert.equal(conflict.body.result.isError, true);
 
   // #983: staged files are visible only to the uploader, not to every member.
-  const peerListed = await call(origin, "room_list_files", { roomId: created.roomId }, peer.secret);
-  assert.equal(peerListed.value.files.length, 0);
-  const ownerListed = await call(origin, "room_list_files", { roomId: created.roomId }, owner.secret);
-  assert.equal(ownerListed.value.files.length, 1);
-  assert.equal(ownerListed.value.files[0].id, "note");
-  assert.equal("data" in ownerListed.value.files[0], false);
+  const unselected = await call(origin, "room_list_files", { roomId: created.roomId }, owner.secret);
+  assert.equal(unselected.value.code, "attachment_selection_required", "normalized inventory requires a real selected conversation");
+  store.command(owner.secret,created.roomId,{id:"file-list-message",type:"message.posted",data:{messageId:"file-list-message",body:"Files can be committed here"}});
+  const peerListed = await call(origin, "room_list_files", { roomId: created.roomId, messageIds:["file-list-message"] }, peer.secret);
+  assert.deepEqual(peerListed.value.files, []);
+  const ownerListed = await call(origin, "room_list_files", { roomId: created.roomId, messageIds:["file-list-message"] }, owner.secret);
+  assert.deepEqual(ownerListed.value.files, [], "a selected committed-file list does not claim to inventory unbound staging");
+  assert.equal(ownerListed.value.coverage.kind,"selected-messages");assert.equal(ownerListed.value.coverage.complete,true);
 
   const peerHidden = await call(origin, "room_get_file", { roomId: created.roomId, id: "note" }, peer.secret);
   assert.equal(peerHidden.value.status, 404);
@@ -201,7 +204,7 @@ test("an enrolled uploader commits a staged file onto a message they posted", as
   }, owner.secret);
   assert.equal(staged.value.status, "staged");
   assert.equal(staged.value.attachment.messageId, null);
-  const before = store.room(created.roomId).state.messages.length;
+  const before = store.db.prepare("SELECT count(*) AS n FROM messages WHERE room_id=?").get(created.roomId).n;
 
   const shaped = await call(origin, "room_commit_file", { roomId: created.roomId, id: "note" }, owner.secret);
   assert.equal(shaped.body.error.code, -32602);
@@ -254,7 +257,7 @@ test("an enrolled uploader commits a staged file onto a message they posted", as
   assert.equal(committed.value.attachment.messageId, "msg-1");
   assert.equal(committed.value.attachment.sha256, createHash("sha256").update(bytes).digest("hex"));
   assert.equal(JSON.stringify(committed.body).includes(owner.secret), false);
-  assert.equal(store.room(created.roomId).state.messages.length, before);
+  assert.equal(store.db.prepare("SELECT count(*) AS n FROM messages WHERE room_id=?").get(created.roomId).n, before);
   const row = store.db.prepare("SELECT state, message_id, length(bytes) AS n FROM room_attachments WHERE room_id=? AND id=?").get(created.roomId, "note");
   assert.equal(row.state, "committed");
   assert.equal(row.message_id, "msg-1");
@@ -275,7 +278,7 @@ test("an enrolled uploader commits a staged file onto a message they posted", as
   assert.equal(moved.value.code, "attachment_conflict");
   assert.equal(store.db.prepare("SELECT message_id FROM room_attachments WHERE room_id=? AND id=?").get(created.roomId, "note").message_id, "msg-1");
 
-  const listed = await call(origin, "room_list_files", { roomId: created.roomId }, peer.secret);
+  const listed = await call(origin, "room_list_files", { roomId: created.roomId, messageIds:["msg-1"] }, peer.secret);
   const listedNote = listed.value.files.find(file => file.id === "note");
   assert.equal(listedNote.state, "committed");
   assert.equal(listedNote.messageId, "msg-1");
@@ -317,8 +320,12 @@ test("an enrolled uploader commits a staged file onto a message they posted", as
   }, owner.secret);
   assert.equal(expired.value.status, 410);
   assert.equal(expired.value.code, "attachment_unavailable");
-  const listedExpired = await call(origin, "room_list_files", { roomId: created.roomId }, owner.secret);
+  const listedExpired = await call(origin, "room_list_files", { roomId: created.roomId, messageIds:["msg-1"] }, owner.secret);
   assert.equal(listedExpired.value.files.some(file => file.id === "aging"), false);
+  // Read-only selected listing does not perform a roomwide expiry sweep.
+  // The next successful staging transaction performs the existing cleanup.
+  const cleanup=await call(origin,"room_put_file",{roomId:created.roomId,id:"expiry-cleanup",filename:"cleanup.txt",mediaType:"text/plain",data},owner.secret);
+  assert.equal(cleanup.value.status,"staged");
   const expiredRow = store.db.prepare("SELECT state, message_id, bytes FROM room_attachments WHERE room_id=? AND id=?").get(created.roomId, "aging");
   assert.equal(expiredRow.state, "expired");
   assert.equal(expiredRow.message_id, null);
@@ -404,8 +411,11 @@ test("staged files expire and a member cannot exceed the staged-file cap", t => 
   now += attachmentLimits.lifetimeMs + 1;
   assert.throws(() => store.roomAttachments.get(owner.secret, created.roomId, "f0"),
     error => error.status === 410 && error.code === "attachment_unavailable");
-  const after = store.roomAttachments.list(owner.secret, created.roomId);
-  assert.deepEqual(after.files, []);
+  store.command(owner.secret,created.roomId,{id:"expiry-list-message",type:"message.posted",data:{messageId:"expiry-list-message",body:"Expired staging is not a committed file"}});
+  const after = store.roomAttachments.list(owner.secret, created.roomId,{messageIds:["expiry-list-message"]});
+  assert.deepEqual(after.files, []);assert.equal(after.coverage.complete,true);
+  const renewed=store.roomAttachments.stage(owner.secret,created.roomId,{id:"after-expiry",filename:"n.txt",mediaType:"text/plain",data});
+  assert.equal(renewed.status,"staged","a successful staging transaction reclaims expired quota and bytes");
   const expired = store.db.prepare("SELECT state, bytes FROM room_attachments WHERE room_id=? AND id=?").get(created.roomId, "f0");
   assert.equal(expired.state, "expired");
   assert.equal(expired.bytes, null);
@@ -446,12 +456,13 @@ test("staged files stay with the uploader; DM-committed files stay with the DM p
   }
 
   const ids = files => files.map(f => f.id).sort();
-  const ownerList = await call(origin, "room_list_files", { roomId: created.roomId }, owner.secret);
-  assert.deepEqual(ids(ownerList.value.files), ["dm-note", "pub-note", "staged-note"]);
-  const peerList = await call(origin, "room_list_files", { roomId: created.roomId }, peer.secret);
+  const ownerList = await call(origin, "room_list_files", { roomId: created.roomId,messageIds:["msg-pub","msg-dm"] }, owner.secret);
+  assert.deepEqual(ids(ownerList.value.files), ["dm-note", "pub-note"], "staging remains accessible only through the saved upload id/receipt");
+  const peerList = await call(origin, "room_list_files", { roomId: created.roomId,messageIds:["msg-pub","msg-dm"] }, peer.secret);
   assert.deepEqual(ids(peerList.value.files), ["dm-note", "pub-note"],
     "the DM recipient sees the DM file and the public file, but not the staged upload");
-  const thirdList = await call(origin, "room_list_files", { roomId: created.roomId }, third.secret);
+  const deniedSelection=await call(origin,"room_list_files",{roomId:created.roomId,messageIds:["msg-pub","msg-dm"]},third.secret);assert.equal(deniedSelection.value.status,404);assert.equal(deniedSelection.value.files,undefined);
+  const thirdList = await call(origin, "room_list_files", { roomId: created.roomId,messageIds:["msg-pub"] }, third.secret);
   assert.deepEqual(ids(thirdList.value.files), ["pub-note"],
     "a member outside the DM sees only the public file");
 
@@ -471,14 +482,13 @@ test("staged files stay with the uploader; DM-committed files stay with the DM p
   assert.equal(thirdPub.value.attachment.data, data("public"), "public file stays downloadable room-wide");
 });
 
-test("a committed DM file whose message is missing from the projection is not room-visible (#2950)", async t => {
+test("[legacy compatibility] a committed DM file whose message is missing from the projection is not room-visible (#2950)", async t => {
   const { origin, store, rooms } = await serve(t);
   const owner = store.identities.create("Orphan owner");
   const peer = store.identities.create("Orphan peer");
   const third = store.identities.create("Orphan third");
-  const created = rooms.create(owner.secret, {
-    roomId: "orphan-den", title: "Orphan den", purpose: "Missing-message file visibility", kind: "personal", displayName: "Orphan owner"
-  });
+  seedHistoricalNeedsMeRoom(store,owner,{roomId:"orphan-den",title:"Historical orphan fixture",purpose:"Legacy history replacement and attachment privacy"});
+  const created={roomId:"orphan-den"};
   for (const ident of [peer, third]) {
     linkWithProof(store, owner.secret, created.roomId, ident, { displayName: ident.displayName, permissions: [] });
     setTier(store.db, created.roomId, ident.identityId, "t2_standard", { updatedBy: "owner", nowMs: Date.now() });
@@ -533,4 +543,20 @@ test("a committed DM file whose message is missing from the projection is not ro
     "the uploader retains access to their own committed file");
   const ownerGot = await call(origin, "room_get_file", { roomId: created.roomId, id: "orphan-note" }, owner.secret);
   assert.equal(ownerGot.value.attachment.data, data, "the uploader can still download their own committed file");
+});
+
+test('hosted normalized file listing exposes and forwards exact selected-message continuation',async t=>{
+ const {origin,store,rooms}=await serve(t),owner=store.identities.create('Selected file owner');
+ const created=rooms.create(owner.secret,{roomId:'selected-files',title:'Selected files',purpose:'Bounded file discovery',starter:false});
+ const listing=await(await rpc(origin,'tools/list',{profile:'full'},owner.secret)).json(),tool=listing.result.tools.find(x=>x.name==='room_list_files');
+ assert.equal(tool.inputSchema.properties.messageIds.type,'array');assert.equal(tool.inputSchema.properties.messageIds.maxItems,8);assert.equal(tool.inputSchema.properties.cursor.maxLength,4096);
+ const posted=await call(origin,'room_post_message',{roomId:created.roomId,id:'selected-post',messageId:'selected-message',body:'Saved files belong here'},owner.secret);assert.equal(posted.value.status,'posted');
+ for(let i=0;i<9;i++){
+  const staged=await call(origin,'room_put_file',{roomId:created.roomId,id:'selected-'+i,filename:'note.txt',mediaType:'text/plain',data:Buffer.from('Useful '+i).toString('base64')},owner.secret);assert.equal(staged.value.status,'staged');
+  const committed=await call(origin,'room_commit_file',{roomId:created.roomId,id:'selected-'+i,messageId:'selected-message'},owner.secret);assert.equal(committed.value.status,'committed');
+ }
+ const first=await call(origin,'room_list_files',{roomId:created.roomId,messageIds:['selected-message']},owner.secret);assert.equal(first.body.result.isError,undefined);assert.equal(first.value.contractVersion,2);assert.equal(first.value.files.length,8);assert.equal(first.value.coverage.complete,false);assert.equal(first.value.page.hasMore,true);
+ const next=await call(origin,'room_list_files',{roomId:created.roomId,messageIds:['selected-message'],cursor:first.value.page.nextCursor},owner.secret);assert.equal(next.value.page.hasMore,false);assert.equal(next.value.files.length,1);assert.equal(new Set([...first.value.files,...next.value.files].map(x=>x.id)).size,9);
+ const read=await call(origin,'room_get_file',{roomId:created.roomId,id:next.value.files[0].id},owner.secret);assert.equal(Buffer.from(read.value.attachment.data,'base64').toString(),'Useful 8');
+ for(const selection of [[],['selected-message','selected-message'],Array.from({length:9},(_,i)=>'m'+i),[42]]){const bad=await call(origin,'room_list_files',{roomId:created.roomId,messageIds:selection},owner.secret);assert.equal(bad.body.error?.code,-32602);}
 });

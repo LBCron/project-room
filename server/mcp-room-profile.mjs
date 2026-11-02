@@ -251,7 +251,9 @@ function validRoomArgs(name, args) {
       && typeof args.mediaType === "string" && args.mediaType.length > 0 && args.mediaType.length <= 255
       && validAttachmentData(args.data);
   }
-  if (name === "room_list_files") return true;
+  if (name === "room_list_files") return (args.messageIds === undefined || Array.isArray(args.messageIds)
+    && args.messageIds.length >= 1 && args.messageIds.length <= 8 && new Set(args.messageIds).size === args.messageIds.length && args.messageIds.every(validId))
+    && (args.cursor === undefined || args.messageIds !== undefined && typeof args.cursor === "string" && args.cursor.length > 0 && args.cursor.length <= 4096);
   if (name === "room_list_access_requests") return args.status === undefined || typeof args.status === "string" && args.status.length <= 32;
   if (name === "room_decide_access_request") {
     const permsOk = args.permissions === undefined || validPermissionList(args.permissions);
@@ -691,7 +693,10 @@ function dispatchRoomToolCall(store, secret, identity, name, args, agentRooms) {
       id: args.id, filename: args.filename, mediaType: args.mediaType, data: args.data
     });
   }
-  if (name === "room_list_files") return store.roomAttachments.list(secret, roomId);
+  if (name === "room_list_files") return store.roomAttachments.list(secret, roomId, {
+    ...(args.messageIds === undefined ? {} : { messageIds: args.messageIds }),
+    ...(args.cursor === undefined ? {} : { cursor: args.cursor })
+  });
   // Membership administration over MCP: the same store calls as the REST
   // access-requests and agent-invites routes, so UI, REST, and MCP agree.
   if (name === "room_list_access_requests") {

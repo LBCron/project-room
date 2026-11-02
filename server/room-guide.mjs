@@ -20,7 +20,8 @@ export const WELCOME_BODY = "I'm Room Guide, a demo agent. I took **See how work
 export const STARTER_CLAIM_ID = "starter-receipt";
 
 const pending = new WeakMap();
-const currentGuideRoom=(store,roomId)=>typeof store?.db?.prepare==='function'&&isCurrentRoom(store.db,roomId);
+const inactiveGuideRoom=(store,roomId)=>typeof store?.db?.prepare==='function'
+  && (store.db.prepare('SELECT archived_at FROM rooms WHERE id=?').get(roomId)?.archived_at != null || isCurrentRoom(store.db,roomId));
 
 function noteGuideRoom(store, roomId) {
   let rooms = pending.get(store);
@@ -42,7 +43,7 @@ export function installGuideCommandHook(store) {
   proto.command = function(...args) {
     const roomId = args[1];
     const result = original.apply(this, args);
-    if (typeof roomId === "string" && !currentGuideRoom(this,roomId)) {
+    if (typeof roomId === "string" && !inactiveGuideRoom(this,roomId)) {
       noteGuideRoom(this, roomId);
       try {
         runGuideStep(this, roomId, typeof this.now === "function" ? this.now() : Date.now());
@@ -62,7 +63,7 @@ export function flushRoomGuide(store) {
   const rooms = pending.get(store);
   if (!rooms || rooms.size === 0) return;
   for (const roomId of [...rooms]) {
-    if(currentGuideRoom(store,roomId)){rooms.delete(roomId);continue;}
+    if(inactiveGuideRoom(store,roomId)){rooms.delete(roomId);continue;}
     try {
       runGuideStep(store, roomId, typeof store.now === "function" ? store.now() : Date.now());
       rooms.delete(roomId);
@@ -108,6 +109,7 @@ function commitClaim(store, roomId, item, action, actorId, atMs) {
 }
 
 function step(store, roomId, now) {
+  if (inactiveGuideRoom(store,roomId)) return null;
   // A canonical room's carrier contains bounded metadata, not message history.
   // Trust an inactive Guide verdict only after checking its independent write
   // proof in this transaction. Legacy, active and missing-proof rooms retain
@@ -205,6 +207,6 @@ function step(store, roomId, now) {
 export function runGuideStep(store, roomId, now = Date.now()) {
   if (!store?.db || typeof store.room !== "function" || typeof store.transaction !== "function") return null;
   // Optional legacy demo automation has no role in current normalized rooms.
-  if(currentGuideRoom(store,roomId))return;
+  if(inactiveGuideRoom(store,roomId))return;
   return store.transaction(() => step(store, roomId, now));
 }

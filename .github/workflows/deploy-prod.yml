@@ -25,7 +25,7 @@ name: deploy-prod
 # canonical Worker (`wrangler deploy --env production --keep-vars`), then the
 # public entry (`wrangler deploy --keep-vars`), smoke, and recover only to
 # prior code meeting a known schema floor. Lower/unknown schemas require roll-forward. A receipt goes
-# to muse-room when the ROOM_RECEIPT_TOKEN secret exists.
+# to the current Project Room when the ROOM_RECEIPT_TOKEN secret exists.
 #
 # Actions secrets (names only, never values in git):
 #   CLOUDFLARE_API_TOKEN         required. Workers scripts/routes edit on the account.
@@ -71,7 +71,7 @@ concurrency:
 env:
   PROD_ORIGIN: https://room.trydemigod.com
   ENTRY_ORIGIN: https://www.getdasha.com/room
-  RECEIPT_ROOM: muse-room
+  RECEIPT_ROOM: room-fafdae79cf8c
   WRANGLER_SEND_METRICS: "false"
 
 jobs:
@@ -330,7 +330,7 @@ jobs:
             ${{ runner.temp }}/prod-smoke-attempt*.log
             ${{ runner.temp }}/prod-smoke.json
           retention-days: 90
-      - name: Receipt to muse-room
+      - name: Receipt to Project Room
         if: always() && steps.pre.outcome == 'success'
         continue-on-error: true
         env:

@@ -149,7 +149,7 @@
     "src/reminder-time.js": "sha256:b9b64c18baa9e66a49fc6a028e58763dddb9154d2277901914ff5f123dced652",
     "src/reminders.js": "sha256:b1a57316743260616b3925384d5e37cbc04ee9dd311fad9198d18e2dc46b6800",
     "src/reply-requests.js": "sha256:4ceabbfcca0d39c0d08997602fbb8f06c5278ebf90646170b97987b32fd9fd71",
-    "src/request-access.js": "sha256:07e82c35a3760b66025783dfb0624daede5ee31bd7f571821c7637f61c1c34e1",
+    "src/request-access.js": "sha256:a4259e3704a299f9d2def9fd3f1d7840dd8996d8c9624ce63501b9317cdb95b1",
     "src/result-availability.js": "sha256:62c352ecf523344df2539262a26c66a312d00089cda3f241dcf276993d069638",
     "src/result-comparison.js": "sha256:ab99b4e6fb738b13abd7abc05475197cfe2c97e9f7d7485199b5a783f0f655ad",
     "src/result-feedback.js": "sha256:c97402e2f9bb3ac3683d0da34598835f13d3afaf0d9b5fcbe3e84ec417b72237",
@@ -187,10 +187,10 @@
     "strings/en.json": "sha256:975dff60aa02090f7cdd21aa66c8f681088e87e628024047f44d572094ce2343"
   },
   "deployment": {
-    ".github/workflows/deploy-prod.yml": "sha256:7e030610eac171906f82a35049eb536b2767e90d32320681e9ea346a08e250f4",
+    ".github/workflows/deploy-prod.yml": "sha256:dde1a1a309b23870b9e9d11aee0499c8a9cf1089997f6f5cf61b5087110eb0a8",
     "cloudflare/bootstrap.mjs": "sha256:ff6095ac5ab0332de1cacc5d5250ff71831ed8c360ec108b37ecc8effe211d6d",
     "cloudflare/build-assets.mjs": "sha256:7a204a775ed8aac33ff23d1d1c210de1a29efe84a47455db7e303e6fd4aff4d4",
-    "cloudflare/package.json": "sha256:6934db50f3a321f7892580eff6e9da2463ef0d67d2e1017260dd3588a6bf0afe",
+    "cloudflare/package.json": "sha256:8a2a993246eaa320c34969379741d291dc33062562372951a2553c4a6ba6889f",
     "cloudflare/pnpm-lock.yaml": "sha256:ccd56c35c71f2a0e696120d5db191035aea0b091c2f0b95935dd85a59bbf9248",
     "cloudflare/room.mjs": "sha256:dc7b34fb7e6f67594528dd1d113a54a17f8feda3994e9d22b1cabbe65d330f7a",
     "cloudflare/storage.mjs": "sha256:8ab552b91c75ef7fb87e9a5c001a242b54739f6f6bf0a21702633b718f657432",

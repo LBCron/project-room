@@ -5272,6 +5272,12 @@ export function createRoomServer({ store, origin, assetRoot = new URL("../", imp
         return json(res, 200, { roomId, requests, next: Object.freeze(next) });
       }
       if (route === "referrals" && req.method === "GET") {
+        const view = url.searchParams.get("view");
+        if (url.searchParams.getAll("view").length > 1 || view !== null && view !== "invitation")
+          reject(422, "invalid_referral_view", "Choose one invitation view or omit view for the referral board");
+        if (view === "invitation") return json(res, 200, store.referrals.invitation(selected.token, roomId, fence, {
+          address: String(remoteAddress ?? ""), session: cookie(req, accountCookieName) || null,
+        }));
         // Member-visible referral board: newest-first join graph, plain
         // leaderboard by successful referrals, and the caller's own rows.
         // Authorization is store-level (Referrals.board); ids and display

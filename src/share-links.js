@@ -380,7 +380,7 @@ export function installShareLinks({ client, accountClient, getState, getSession,
     const retry = $("#growth-kit-retry");
     if (retry) retry.hidden = true;
     try {
-      const data = await client.request(client.path("/referrals"), { method: "GET" });
+      const data = await client.request(client.path("/referrals?view=invitation"), { method: "GET" });
       if (current()) renderKit(data);
     } catch {
       if (!current()) return;

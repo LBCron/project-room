@@ -520,6 +520,12 @@ const client = new RoomClient({
     inspectedWorkRecord = null;
     state = pendingSends.length ? { ...snapshot.state, messages: [...snapshot.state.messages, ...pendingSends] } : snapshot.state;
     session = identity;
+    // A successful room snapshot supersedes a denied deep link from an
+    // earlier room/account. Keep unrelated account failures visible.
+    const accountStatus = $("#account-status");
+    if (accountStatus.textContent === ROOM_ACCESS_NOTICE) {
+      accountStatus.textContent = ""; accountStatus.hidden = true;
+    }
     displayNames = createMemberDisplayNames(state.members);
     announceWorkArrivals(snapshot.state.eventLog ?? [], presenceBoundary);
     void refreshRequestRuns();

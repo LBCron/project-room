@@ -54,6 +54,30 @@ export const REFERRAL_VIA = Object.freeze(["invite", "request"]);
 export class Referrals {
   constructor(store) { this.store = store; this.db = store.db; }
 
+  // The invitation dialog needs one caller-owned link, not the referral graph
+  // or activation settlement (which examines message history). Keep the same
+  // invitation/verification/autonomy gates and recorded reward-derived cap.
+  invitation(token, roomId, expectedSessionBinding = null, trace = null) {
+    return this.store.transaction(() => {
+      const auth = this.store.authenticate(token, roomId, expectedSessionBinding);
+      if (!auth?.member) fail(401, "unauthenticated", "Room membership required");
+      const reward = memberReward(this.store, roomId, auth.member.id);
+      const personal = this.store.shareLinks?.personalInvite(auth, roomId, reward.inviteCap);
+      let invite = null;
+      if (personal?.token) {
+        const room = currentInviteContext(this.store, roomId, { memberIds: [auth.member.id] })?.room ?? this.store.room(roomId);
+        stampIssuer(this.store, roomId, auth.member.id, trace ?? {});
+        invite = { token: personal.token, hash: `#join/${personal.token}`,
+          expiresAt: personal.link.expiresAt, remainingJoins: personal.link.remainingJoins,
+          maxJoins: personal.link.maxJoins, status: personal.link.status,
+          message: inviteMessage(room.state.room?.title) };
+      }
+      const inviteBlocked = !invite && auth.account && this.store.accountLogins.emailGateBlocks(auth.account.id)
+        ? "email_unverified" : null;
+      return { contractVersion: 1, roomId, invite, ...(inviteBlocked ? { inviteBlocked } : {}) };
+    });
+  }
+
   // Record a completed referral. Reuse the caller's transaction or open one,
   // after the referee's member record exists. Idempotent per referee: a
   // second recording for the same referee is a no-op returning the original.

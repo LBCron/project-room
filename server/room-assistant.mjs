@@ -65,15 +65,26 @@ const visibleRun = (run, state, actor, floor, records) => {
   if (messageVisibleToViewer(opening, actor.id, floor)) return run;
   return controlsDeletedSource(run, opening, actor, state, floor) ? deletedControl(run) : null;
 };
+// Query the actual optional table. SQLite resolves its current schema on every
+// call; only its exact missing-table error means the feature is not installed.
+// No schema epoch or cached table-presence decision survives DDL or restore.
+function optionalAssistantRead(table, read) {
+  try { return read(); } catch (error) {
+    if (error?.message === `no such table: ${table}`
+      || error?.message === `no such table: ${table}: SQLITE_ERROR`) return undefined;
+    throw error;
+  }
+}
+
 // Called only after a validated message edit, inside the command transaction.
 // The run revision fences both publication and acknowledgements: an ID still
 // refers to the same message after editing, but no longer to the same input.
 export function invalidateEditedAssistantInput(db, roomId, messageId, at) {
-  if (!db.prepare("SELECT 1 FROM sqlite_master WHERE name='room_assistant_runs'").get()) return;
-  const rows = db.prepare(`SELECT runs.run_id,runs.value FROM room_assistant_runs AS runs
+  const rows = optionalAssistantRead('room_assistant_runs', () => db.prepare(`SELECT runs.run_id,runs.value FROM room_assistant_runs AS runs
     WHERE runs.room_id=? AND json_extract(runs.value,'$.status') NOT IN ('done','cancelled','failed')
     AND EXISTS (SELECT 1 FROM json_each(json_extract(runs.value,'$.inputs')) AS entry
-      WHERE json_extract(entry.value,'$.sourceMessageId')=?)`).all(roomId, messageId);
+      WHERE json_extract(entry.value,'$.sourceMessageId')=?)`).all(roomId, messageId));
+  if (!rows) return;
   for (const row of rows) {
     const run = JSON.parse(row.value);
     for (const input of run.inputs) if (input.sourceMessageId === messageId) input.status = 'pending';
@@ -439,8 +450,7 @@ export function assistantRunId(sourceMessageId) {
 // commit in the same command transaction. Storage failures must propagate so
 // an acknowledged ask cannot lose its dispatch; the same command can retry.
 export function invokeFromPlainPost(store, roomId, state, actor, data, messageId) {
-  if (!store.db.prepare("SELECT 1 FROM sqlite_master WHERE name='room_assistant_config'").get()) return;
-  const configRow = store.db.prepare('SELECT value FROM room_assistant_config WHERE room_id=?').get(roomId);
+  const configRow = optionalAssistantRead('room_assistant_config', () => store.db.prepare('SELECT value FROM room_assistant_config WHERE room_id=?').get(roomId));
   if (!configRow) return;
   const config = JSON.parse(configRow.value);
   if (!config.coordinatorMemberId) return;

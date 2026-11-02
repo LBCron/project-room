@@ -4,6 +4,7 @@ import {RoomStore} from '../server/store.mjs';
 import {DurableDatabase,durableStorage} from './storage.mjs';
 import {initializeCurrentInviteJourney} from '../tests/helpers/current-agent-invite-journey.mjs';
 import {textVersion} from '../server/text-results.mjs';
+import {createHash} from 'node:crypto';
 import {readConversation} from '../server/conversation-sync.mjs';
 import {auditRecovery} from '../server/recovery.mjs';
 import {replayCutoverSchema,captureReplayWitness,advanceReplayWitness,partitionReplayWitness,qualifyReplayHWork,qualifyReplayHMessages,advanceCurrentRoomConversion} from '../server/replay-cutover.mjs';
@@ -21,6 +22,15 @@ export class InviteJourneyRoom extends DurableObject {
    if(path==='/seed'){const state=initializeCurrentInviteJourney(this.store,await request.json());await this.ctx.storage.put('fixture',state);return Response.json({ready:true,cost:cost()});}
    const f=await this.ctx.storage.get('fixture'),s=this.store;
    if(f.testJoinAt)s.now=()=>f.testJoinAt;
+   if(path==='/invitation-view'){
+    const room=s.room,prepare=this.db.prepare.bind(this.db),queries=[];
+    s.room=()=>{throw Error('Selected invitation must not read whole room');};
+    this.db.prepare=sql=>{queries.push(sql);return prepare(sql);};
+    let first,second;try{first=s.referrals.invitation(f.ownerKey,'commons');second=s.referrals.invitation(f.ownerKey,'commons');}finally{s.room=room;this.db.prepare=prepare;}
+    const digest=createHash('sha256').update(first.invite?.token??'').digest('hex'),previous=await this.ctx.storage.get('selected-invitation-digest');
+    await this.ctx.storage.put('selected-invitation-digest',digest);
+    return Response.json({available:Boolean(first.invite?.token),sameRetry:first.invite?.token===second.invite?.token,sameAfterCold:previous===undefined||previous===digest,noBoard:Object.hasOwn(first,'referrals')===false,noMessageScan:!queries.some(sql=>/\bFROM\s+messages\b/i.test(sql)),cost:cost()});
+   }
    const options={displayName:'Friend existing agent',identitySecret:f.peer.secret,requestId:'native-existing-join'};
    const inventory=()=>Object.fromEntries(['agent_identities','identity_links','events','commands','operator_actions','agent_invite_redeem_receipts','agent_connections'].map(t=>[t,this.db.prepare('SELECT count(*) n FROM '+t).get().n]));
    if(path==='/join'){const made=s.invites.create(f.inviter.secret,'commons',{profile:'contribute',displayName:'Friend existing agent'});await this.ctx.storage.put('invite',made);const result=s.invites.redeem(made.code,options);return Response.json({sameIdentity:result.identityId===f.peer.identityId,permissions:s.authenticate(f.peer.secret,'commons').member.permissions,homeWorks:s.authenticate(f.peer.secret,'friend-home').member.id===f.peer.identityId,starterAbsent:result.starter===undefined,next:result.nextWork,inventory:inventory(),cost:cost()});}

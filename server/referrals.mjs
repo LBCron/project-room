@@ -112,7 +112,7 @@ export class Referrals {
   matchReferrer(roomId, text) {
     const needle = typeof text === "string" ? text.trim().toLowerCase() : "";
     if (!needle) return null;
-    const members = this.store.room(roomId).state.members ?? {};
+    const members = this.store.roomAuthority(roomId).members ?? {};
     const hits = Object.values(members).filter(m => m.active !== false
       && typeof m.displayName === "string" && m.displayName.trim().toLowerCase() === needle);
     return hits.length === 1 ? hits[0].id : null;

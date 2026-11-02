@@ -1,3 +1,4 @@
+import { currentInviteContext, prepareCurrentWrite, withCurrentServingWriter } from "./current-room-repository.mjs";
 // Self-serve agent access requests.
 //
 // An agent that minted an identity (server/agent-identities.mjs) but has no
@@ -163,6 +164,26 @@ const countActiveMembers = members =>
 const AUTO_APPROVE_FORBIDDEN_PERMISSIONS = Object.freeze(
   ["manage_members", "decide", "manage_claims", "write_external", "invite_member"]);
 
+// Admission needs the bounded member census for capacity and name uniqueness,
+// never conversation or task history. Legacy rooms retain their existing path.
+const accessRoom = (store, roomId) => {
+  const context = currentInviteContext(store, roomId, { census: true });
+  return context ? { ...context.room, current: context.current } : store.room(roomId);
+};
+const accessProjection = (store, roomId, room, state, incoming) => {
+  const write = room.current ? prepareCurrentWrite(store, { roomId, previous: room, state, event: incoming,
+    sequence: room.sequence + 1, current: room.current }) : null;
+  return { write, projection: write?.projection ?? store.storedProjection(roomId, state) };
+};
+const saveAccessEvent = (store, roomId, room, incoming, projection, write) => {
+  const sequence = room.sequence + 1;
+  withCurrentServingWriter(store.db, roomId, () => {
+    store.db.prepare("INSERT INTO events VALUES(?,?,?,?)").run(roomId, sequence, incoming.id, JSON.stringify(incoming));
+    store.db.prepare("UPDATE rooms SET sequence=?,projection=? WHERE id=?").run(sequence, projection, roomId);
+    write?.persistEntities();
+  });
+};
+
 export class AccessRequests {
   constructor(store, { rateLimiter } = {}) {
     this.store = store;
@@ -204,7 +225,7 @@ export class AccessRequests {
           || prior.note !== (note?.trim() || null) || prior.referred_by !== (referredBy?.trim() || null)) fail(409, "request_conflict", "requestId is already in use");
         return this.statusAccount(token, requestId, binding);
       }
-      const room = this.store.room(roomId);
+      const room = accessRoom(this.store, roomId);
       if (isRoomArchived(room.state)) fail(409, "room_archived", "Archived rooms cannot admit members");
       assertAdmissibleMemberName(name, room.state.members);
       const limit = this.rateLimiter.check(`account-access-request:${auth.account.id}`);
@@ -244,7 +265,7 @@ export class AccessRequests {
     const account = requestContents(row).account;
     const current = this.db.prepare("SELECT active,auth_epoch FROM accounts WHERE id=?").get(account.id);
     if (!current || current.active !== 1 || current.auth_epoch !== account.authEpoch) fail(409, "account_access_changed", "Applicant account access changed; a fresh request is required");
-    const room = this.store.room(roomId);
+    const room = accessRoom(this.store, roomId);
     if (isRoomArchived(room.state)) fail(409, "room_archived", "Archived rooms cannot admit members");
     const bound = this.db.prepare("SELECT member_id FROM member_accounts WHERE room_id=? AND account_id=?").get(roomId, account.id);
     let memberId = bound?.member_id;
@@ -367,7 +388,7 @@ export class AccessRequests {
       // Invalid upgrade proofs must not spend the real holder's request quota.
       const limit = this.rateLimiter.check(`access-request:${identityId}`);
       if (!limit.allowed) fail(429, "rate_limited", limit.message);
-      const room = this.store.room(roomId);
+      const room = accessRoom(this.store, roomId);
       const member = linked ? ownMember(room.state.members, linked.memberId) ?? null : null;
       if (linked) {
         if (!member || member.active === false || member.identityId !== identityId || this.store.identities.secretRevoked(identityId)) {
@@ -438,7 +459,7 @@ export class AccessRequests {
   // behavior (request recorded, no timeline event — there is no live
   // timeline audience to notify).
   emitAccessRequested(roomId, { requestId, identityId, displayName, requestedPermissions, note, at, upgradeMember = null, identityScope = "global" }) {
-    const room = this.store.room(roomId);
+    const room = accessRoom(this.store, roomId);
     if (isRoomArchived(room.state)) return;
     if (room.sequence >= PILOT_LIMITS.eventsPerRoom) fail(409, "pilot_limit", "Bounded pilot capacity reached; no data was changed");
     const requestKey = createHash("sha256").update(`access-request:${requestId}`).digest("hex");
@@ -475,11 +496,9 @@ export class AccessRequests {
     let state;
     try { state = compactState(applyEventWithGrowth(room.state, incoming, growthCollector).state); }
     catch (error) { fail(409, "access_rejected", error.message); }
-    const projection = this.store.storedProjection(roomId, state);
+    const { projection, write } = accessProjection(this.store, roomId, room, state, incoming);
     if (Buffer.byteLength(projection) > PILOT_LIMITS.projectionBytes) fail(409, "pilot_limit", "Room projection limit reached; no data was changed. Ask the room owner to have older messages archived to free space.");
-    const sequence = room.sequence + 1;
-    this.db.prepare("INSERT INTO events VALUES(?,?,?,?)").run(roomId, sequence, incoming.id, JSON.stringify(incoming));
-    this.db.prepare("UPDATE rooms SET sequence=?,projection=? WHERE id=?").run(sequence, projection, roomId);
+    saveAccessEvent(this.store, roomId, room, incoming, projection, write);
   }
 
   // The durable row distinguishes upgrades from legacy admission requests,
@@ -530,7 +549,7 @@ export class AccessRequests {
     const { auth } = this.#requireManageMembers(token, roomId, expectedSessionBinding);
     // A standing admission rule is a membership write: the read-only autonomy
     // tier cannot set one, even holding manage_members (issue #996).
-    enforceAutonomyTierForAction({ db: this.db, roomId, state: this.store.room(roomId).state, actor: auth.member, action: "access_auto_approve", fail });
+    enforceAutonomyTierForAction({ db: this.db, roomId, state: accessRoom(this.store, roomId).state, actor: auth.member, action: "access_auto_approve", fail });
     if (!Array.isArray(permissions)) fail(422, "invalid_request", "permissions must be an array of permission strings; empty disables auto-approve");
     return this.store.transaction(() => {
       if (permissions.length === 0) {
@@ -603,13 +622,13 @@ export class AccessRequests {
     // rule whose author lost membership administration stops admitting.
     // Fail-closed to pending — the owner queue is the safe default.
     let authorizerActive = false;
-    try { authorizerActive = memberCan(this.store.room(row.room_id).state, config.updatedBy, "manage_members"); }
+    try { authorizerActive = memberCan(accessRoom(this.store, row.room_id).state, config.updatedBy, "manage_members"); }
     catch { authorizerActive = false; }
     if (!authorizerActive) {
       return { approved: false, pendingNote:
         "This room's auto-approve rule is suspended: its author no longer holds membership administration. The request waits for an owner decision." };
     }
-    const room = this.store.room(row.room_id);
+    const room = accessRoom(this.store, row.room_id);
     if (isRoomArchived(room.state)) {
       return { approved: false, pendingNote: "This room is archived; new admissions wait for an owner decision." };
     }
@@ -664,13 +683,11 @@ export class AccessRequests {
     catch (error) {
       return { approved: false, pendingNote: `Auto-approve was rejected (${error.message}); the request waits for an owner decision.` };
     }
-    const projection = this.store.storedProjection(row.room_id, state);
+    const { projection, write } = accessProjection(this.store, row.room_id, room, state, incoming);
     if (Buffer.byteLength(projection) > PILOT_LIMITS.projectionBytes) {
       return { approved: false, pendingNote: "Room projection limit reached; the request waits for an owner decision." };
     }
-    const sequence = room.sequence + 1;
-    this.db.prepare("INSERT INTO events VALUES(?,?,?,?)").run(row.room_id, sequence, incoming.id, JSON.stringify(incoming));
-    this.db.prepare("UPDATE rooms SET sequence=?,projection=? WHERE id=?").run(sequence, projection, row.room_id);
+    saveAccessEvent(this.store, row.room_id, room, incoming, projection, write);
     this.db.prepare("INSERT INTO identity_links(room_id,identity_id,member_id,linked_at) VALUES(?,?,?,?)")
       .run(row.room_id, row.identity_id, row.identity_id, now);
     if (referrerMemberId && referrerMemberId !== row.identity_id) {
@@ -756,7 +773,7 @@ export class AccessRequests {
     const { auth, authority } = this.#requireMembershipAdministration(token, roomId, expectedSessionBinding);
     // Deciding access requests is a membership write: the read-only autonomy
     // tier applies even when the agent holds manage_members (issue #996).
-    enforceAutonomyTierForAction({ db: this.db, roomId, state: this.store.room(roomId).state, actor: auth.member, action: "access_decide", fail });
+    enforceAutonomyTierForAction({ db: this.db, roomId, state: accessRoom(this.store, roomId).state, actor: auth.member, action: "access_decide", fail });
     return this.store.transaction(() => {
       const row = this.db.prepare("SELECT * FROM access_requests WHERE request_id=? AND room_id=?").get(requestId, roomId);
       if (!row) fail(404, "not_found", "No such join request");
@@ -818,7 +835,7 @@ export class AccessRequests {
       if (unheld.length) fail(403, "access_denied", `Cannot grant permissions not held: ${unheld.join(", ")}. Approve with permissions you hold, or ask the room owner`);
       if (requestContents(row).account) return this.approveAccount(token, roomId, row, grants, auth, expectedSessionBinding);
       const identities = this.store.identities;
-      assertMemberDisplayNameAvailable(row.display_name, this.store.room(roomId).state.members);
+      assertMemberDisplayNameAvailable(row.display_name, accessRoom(this.store, roomId).state.members);
       // Referral attribution: match the "who referred you?" text against
       // member display names. A unique match attributes the join; anything
       // else joins with no referrer and the approval proceeds unchanged.

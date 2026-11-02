@@ -6932,9 +6932,14 @@ this.slaBreachAlerts = new SlaBreachAlertJournal(this); // Task 26: durable in-a
       for(const point of source.rows){
         if(point.position<=after)break;
         const message=JSON.parse(point.body);if(message.deletedAt||message.body==null)continue;
-        const event=this.db.prepare('SELECT id FROM events WHERE room_id=? AND sequence=?').get(roomId,point.position);
-        if(!event)fail(409,'current_room_context_unavailable','Mention opening is unavailable; inspect the current inbox');
-        chargeCurrentReadBudget(b,256);
+        const scalar=this.db.prepare('SELECT id,length(CAST(body AS BLOB)) AS bytes FROM events WHERE room_id=? AND sequence=?').get(roomId,point.position);
+        if(!scalar||scalar.bytes>131072)fail(409,'current_room_context_unavailable','Mention opening is unavailable or exceeds bounded context; inspect the current inbox');
+        chargeCurrentReadBudget(b,scalar.bytes+256);
+        const event=this.db.prepare(`SELECT id,json_extract(body,'$.id') AS eventId,json_extract(body,'$.type') AS type,
+          json_extract(body,'$.roomId') AS roomId,json_extract(body,'$.actorId') AS actorId,json_extract(body,'$.data.messageId') AS messageId,
+          json_extract(body,'$.at') AS at FROM events WHERE room_id=? AND sequence=?`).get(roomId,point.position);
+        if(event.id!==event.eventId||event.type!=='message.posted'||event.roomId!==roomId||event.actorId!==message.authorId
+          ||(event.messageId??event.id)!==message.id||event.at!==message.createdAt)fail(409,'current_room_context_unavailable','Mention opening differs from its protected current message');
         const chip=this.db.prepare(`SELECT m.state,m.timeout_at AS timeoutAt,o.acknowledged_at AS acknowledgedAt,
           o.late_acknowledged_at AS lateAcknowledgedAt,o.responded_at AS respondedAt
           FROM mention_states m LEFT JOIN mention_observations o ON o.room_id=m.room_id AND o.message_event_id=m.message_event_id AND o.mentioned_member_id=m.mentioned_member_id

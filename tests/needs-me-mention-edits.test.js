@@ -84,7 +84,7 @@ test('openDirectMentions keeps the oldest mention when top deletions force multi
 });
 
 import {canonicalNeedsMeRoom,drainCanonicalNeedsMe} from './helpers/canonical-needs-me-room.mjs';
-import {readCurrentMessage} from '../server/current-room-repository.mjs';
+import {readCurrentMessage,withCurrentRoomWriter} from '../server/current-room-repository.mjs';
 import {auditRecovery} from '../server/recovery.mjs';
 import {initialRoom} from '../server/bootstrap.mjs';
 import {event} from '../src/events.js';
@@ -147,4 +147,14 @@ test('normalized mention array never treats a filtered empty source window as co
  for(let i=0;i<64;i++)add('message.posted',{messageId:'later-backdated-'+i,body:'Hidden by the activation time'},'2026-01-02T00:00:00Z');
  store.initialize(events,{representation:'normalized-current-v1'});
  assert.throws(()=>store.openDirectMentions('commons','worker'),e=>e.code==='current_room_context_unavailable','empty filtered source must retain honest continuation/refusal');
+});
+
+test('normalized mention arrays refuse malformed or oversized opening rows before returning delivery',t=>{
+ for(const mode of ['actor','id','oversized']){
+  const f=canonicalNeedsMeRoom(t),{store,owner,worker,roomId}=f;const posted=f.send(owner,'message.posted',{messageId:'bad-opening',body:'@Canonical worker Original'});
+  const raw=store.db.prepare('SELECT body FROM events WHERE room_id=? AND id=?').get(roomId,posted.event.id),bad=JSON.parse(raw.body);
+  if(mode==='actor')bad.actorId='unrelated';else if(mode==='id')bad.id='substituted';else bad.data.body='X'.repeat(140000);
+  store.transaction(()=>withCurrentRoomWriter(store.db,roomId,()=>store.db.prepare('UPDATE events SET body=? WHERE room_id=? AND id=?').run(JSON.stringify(bad),roomId,posted.event.id)));
+  assert.throws(()=>store.openDirectMentions(roomId,worker.identityId),e=>e.code==='current_room_context_unavailable',mode);
+ }
 });

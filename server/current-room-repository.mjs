@@ -105,12 +105,18 @@ export function verifyCurrentRoomSchema(db) {
   // existing independent verifiers; this is not a schema trust epoch.
   const expected=new Map([...definitions,...RESTORE_CONTROL_DEFINITIONS,...guardDefinitions,...RESTORE_CONTROL_GUARDS]
     .map(([name,sql])=>[name,normalized(sql)]));
-  const saved=auditSchemaLocations.get(db);
+  let saved=auditSchemaLocations.get(db);
   let rows;
   try {
     rows=saved
       ?db.prepare('SELECT rowid,name,sql FROM sqlite_master WHERE rowid IN ('+saved.map(()=>'?').join(',')+')').all(...saved.map(row=>row.rowid))
       :db.prepare('SELECT rowid,name,sql FROM sqlite_master WHERE name IN ('+[...expected].map(()=>'?').join(',')+')').all(...expected.keys());
+    // Restore may legally reinstall its exact guards at new catalog rowids.
+    // A location miss never changes authority: retry the ORIGINAL full set.
+    if(saved&&(rows.length!==expected.size||rows.some(row=>saved.find(location=>location.rowid===row.rowid)?.name!==row.name||expected.get(row.name)!==normalized(row.sql)))) {
+      auditSchemaLocations.delete(db);saved=null;
+      rows=db.prepare('SELECT rowid,name,sql FROM sqlite_master WHERE name IN ('+[...expected].map(()=>'?').join(',')+')').all(...expected.keys());
+    }
     const locations=saved?new Map(saved.map(row=>[row.rowid,row.name])):null;
     const changed=rows.find(row=>!Number.isSafeInteger(row.rowid)||row.rowid<1
       ||!expected.has(row.name)||expected.get(row.name)!==normalized(row.sql)
@@ -191,10 +197,15 @@ function admitCurrentSchema(db,b) {
   // Include the exact owned visibility indexes as well as mutation guards.
   for(const sql of CURRENT_ROOM_GUARDS.split(';').map(sql=>sql.trim()).filter(sql=>sql.startsWith('CREATE INDEX')))
     expected.set(/CREATE INDEX IF NOT EXISTS ([a-z_]+)/.exec(sql)[1],normalized(sql));
-  const saved=schemaCache.get(db);let rows;
+  let saved=schemaCache.get(db),rows;
   if(saved)rows=db.prepare(`SELECT rowid,name,sql FROM sqlite_master WHERE rowid IN (${saved.map(()=>'?').join(',')})`).all(...saved);
   else rows=db.prepare(`SELECT rowid,name,sql FROM sqlite_master WHERE name IN (${[...expected].map(()=>'?').join(',')})`).all(...expected.keys());
   charge(b,rows.reduce((bytes,row)=>bytes+Buffer.byteLength(row.sql??'')+128,0),rows.length);
+  if(saved&&(rows.length!==expected.size||rows.some(row=>expected.get(row.name)!==normalized(row.sql)))) {
+    schemaCache.delete(db);saved=null;
+    rows=db.prepare(`SELECT rowid,name,sql FROM sqlite_master WHERE name IN (${[...expected].map(()=>'?').join(',')})`).all(...expected.keys());
+    charge(b,rows.reduce((bytes,row)=>bytes+Buffer.byteLength(row.sql??'')+128,0),rows.length);
+  }
   if(rows.length!==expected.size||rows.some(row=>expected.get(row.name)!==normalized(row.sql)))corrupt('owned serving schema changed');
   if(!saved)schemaCache.set(db,rows.map(row=>row.rowid));
   const permit=db.prepare('SELECT singleton,enabled,room_id,receipt_id FROM current_room_writer_permit').all();charge(b,256,permit.length);
@@ -376,7 +387,7 @@ export function readCurrentMessage(db,roomId,messageId,b=contextBudgets.get(db)?
   return {row,value:decodeMessageEntity(row)};
 }
 
-const supported = new Set(['message.deleted','work.superseded','ownership.transferred','reply_request.cancelled','work_claim.updated','message.posted','work.proposed','work.accepted','work.started','work.completed','work.handoff_recorded','work.halt_cleared','verification.recorded','owner.decision_recorded']);
+const supported = new Set(['room.charter_updated','message.deleted','work.superseded','ownership.transferred','reply_request.cancelled','work_claim.updated','message.posted','work.proposed','work.accepted','work.started','work.completed','work.handoff_recorded','work.halt_cleared','verification.recorded','owner.decision_recorded']);
 const contextBudgets = new WeakMap();
 export function withCurrentServingWriter(db,roomId,operation) {
   if(!isCurrentRoom(db,roomId) && !db.prepare("SELECT 1 FROM current_room_record_proofs WHERE room_id=? AND domain='migrationFence' AND record_key='active' AND present=1").get(roomId))return operation();

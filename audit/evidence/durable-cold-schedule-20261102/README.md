@@ -8,7 +8,7 @@ The old schedule restarted every tenth recovery continuation (plus the first), a
 
 Cold coverage is explicit and asserted:
 
-- The first recovery continuation, every observed recovery phase / audit-stage transition (18 transitions across 19 observed stages), and geometric progress calls 1 through 1024.
+- The first recovery continuation, every observed recovery phase / audit-stage transition (19 transitions across 19 distinct observed stages (including return to the rooms stage)), and geometric progress calls 1 through 1024.
 - The first observation of each of 27 distinct nested subsystem stages. This is deliberately not a restart at every report table's repeated source/sort transition.
 - First cleanup, cleanup state transitions and geometric cleanup calls through 128. This fixture removes guards and report workspace concurrently; its observed labels are workspace then complete, not a separately observed guards-only stage.
 - Partial import → fresh production constructor, sealed target → fresh constructor, and final fresh reopen remain mandatory.

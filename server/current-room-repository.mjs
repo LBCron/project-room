@@ -1262,7 +1262,8 @@ export function readCurrentOverviewWindow(store,roomId,{workAfter='',limit=8,vie
 
 const workSummaryReuseScopes=new WeakMap();
 // The browser's composed read revisits at most eight already protected work
-// summaries for event-label privacy. Reuse only inside this synchronous TX.
+// summaries for event-label privacy, plus room/owner/viewer authority (max3).
+// Reuse only inside this synchronous read TX; no writes may be committed.
 export function withCurrentWorkSummaryReuse(store,roomId,viewerId,operation) {
   const db=store.db,b=contextBudgets.get(db);
   if(!db.isTransaction||!(store.readTransactionDepth>0)||!b||workSummaryReuseScopes.has(db))throw Error('Work summary reuse requires its own current read scope');

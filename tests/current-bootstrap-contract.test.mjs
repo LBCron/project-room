@@ -68,7 +68,7 @@ test('ordinary HTTP room read opens normalized storage without legacy room hydra
 });
 
 
-import {withCurrentReadContext,withCurrentWorkSummaryReuse,readCurrentWorkSummaryForViewer} from '../server/current-room-repository.mjs';
+import {withCurrentReadContext,withCurrentWorkSummaryReuse,readCurrentWorkSummaryForViewer,withCurrentServingWriter} from '../server/current-room-repository.mjs';
 test('composed browser metadata reservation supports100small members without widening nested inbox bounds',t=>{
  const store=new RoomStore(':memory:');t.after(()=>store.close());const events=initialRoom();
  for(let i=1;i<100;i++)events.push(event({roomId:'commons',actorId:'owner',type:'member.added',data:{memberId:'roster-'+i,displayName:'Member '+i,kind:'agent',permissions:[]}}));
@@ -115,5 +115,9 @@ test('browser summary reuse expires, rejects async escape and refuses head/schem
  assert.equal(store.headSequence('commons'),before);assert.equal(store.db.prepare('SELECT 1 FROM events WHERE id=?').get('must-rollback'),undefined);
  assert.throws(()=>writableReuse(()=>{readCurrentWorkSummaryForViewer(store.db,'commons','task','owner');store.db.exec('DROP INDEX current_work_summary_keys');}),/reuse schema changed/);
  assert.ok(store.db.prepare("SELECT 1 FROM sqlite_master WHERE name='current_work_summary_keys'").get());
+ const original=store.db.prepare('SELECT body FROM work_entities WHERE room_id=? AND work_id=?').get('commons','task').body;
+ assert.throws(()=>writableReuse(()=>{readCurrentWorkSummaryForViewer(store.db,'commons','task','owner');withCurrentServingWriter(store.db,'commons',()=>store.db.prepare('UPDATE work_entities SET body=body||? WHERE room_id=? AND work_id=?').run(' ','commons','task'));assert.equal(readCurrentWorkSummaryForViewer(store.db,'commons','task','owner').title,'Original title');}),/reuse data changed/);
+ assert.equal(store.db.prepare('SELECT body FROM work_entities WHERE room_id=? AND work_id=?').get('commons','task').body,original);
+
  assert.equal(readRoomSnapshot(store,key,'commons',null,{windowed:true}).state.workItems.task.title,'Original title');
 });

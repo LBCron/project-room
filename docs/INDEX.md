@@ -237,6 +237,7 @@ These source-bound design and qualification notes describe the offline schema45 
 - [Normalized consent authority and atomic receipt writer](research/2026-11-01-current-dm-consents.md)
 - [Bounded activation floor: original proposal and implementation status](research/2026-11-01-current-history-floor-v2-proposal.md)
 - [Normalized message erasure](research/2026-11-01-current-message-redaction.md)
+- [Historical-prefix erasure and immutable recovery proofs](research/2026-11-01-historical-prefix-redaction.md)
 - [Existing active task migration: reviewed mirror retirement](research/2026-11-01-current-mirror-retirement.md)
 - [Compact normalized native inbox — first integration checkpoint](research/2026-11-01-current-native-inbox.md)
 - [Normalized reply cancellation writer](research/2026-11-01-current-reply-cancellation.md)

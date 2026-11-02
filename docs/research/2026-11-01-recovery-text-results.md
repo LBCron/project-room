@@ -43,4 +43,4 @@ MINIFLARE_WORKERD_PATH=/Users/johnpotter/.npm/_npx/c943b712072b77c4/node_modules
 
 Causal logs: `/tmp/recovery-text-cache-causal-red.log`, `/tmp/recovery-text-cap-causal-red.log`. Machine-readable receipt: `audit/evidence/recovery-text-results-20261101.json`.
 
-This removes one precisely enumerated full-oracle dependency from uninterrupted execution. It does not remove the final oracle, certify all remaining recovery subsystems, qualify legacy rooms as bounded, or claim bounded whole recovery/CPU/purge. No new tables, grants, product system or live format activation was introduced.
+This adds restartable independent coverage for one precisely enumerated subsystem. The still-required original full oracle repeats these checks, so this checkpoint does not claim a net end-to-end speedup or removal of that final blocking work. It does not remove the final oracle, certify all remaining recovery subsystems, qualify legacy rooms as bounded, or claim bounded whole recovery/CPU/purge. No new tables, grants, product system or live format activation was introduced.

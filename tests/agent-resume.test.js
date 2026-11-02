@@ -202,10 +202,13 @@ test('real HTTP compact resume measures bytes against existing full snapshot and
   const baseline = await baselineClient.snapshot();
   assert.ok(baseline.state.messages.some(message => message.body.includes('private-body-sentinel')));
   const first = await resumeAgent({ connection: config });
-  assert.equal(first.connection.status, 'credential_accepted'); assert.deepEqual(first.incompleteSources, []);
+  assert.equal(first.connection.status, 'credential_accepted'); assert.deepEqual(first.incompleteSources, [{source:'attention',code:'page_limit'}]);
   assert.ok(first.obligations.some(x => x.id === 'task'));
   assert.equal(JSON.stringify(first).includes('private-body-sentinel'), false);
-  assert.equal(first.metrics.requests, 4);
+  assert.equal(first.metrics.attentionPages,2);assert.equal(first.metrics.requests,5);
+  const enumeration={requests:first.metrics.requests,responseBytes:first.metrics.responseBytes,resumeCalls:1};
+  const finishAttention=async initial=>{let current=initial,n=0;while(current.observedThroughBySource.attention?.hasMore){assert.ok(n++<20,'finite fixture attention continuation completes');current=await resumeAgent({connection:config,sinceVersion:initial.contextVersion,attentionCursor:current.observedThroughBySource.attention.cursor});enumeration.requests+=current.metrics.requests;enumeration.responseBytes+=current.metrics.responseBytes;enumeration.resumeCalls++;assert.ok(current.incompleteSources.every(source=>source.source==='attention'&&source.code==='page_limit'));}assert.deepEqual(current.incompleteSources,[]);return current;};
+  const completed=await finishAttention(first);assert.equal(completed.observedThroughBySource.attention.hasMore,false);
   const rpc = async (method, params) => {
     const response = await fetch(origin + '/room/mcp?profile=full', { method: 'POST',
       headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${worker.secret}` },
@@ -220,7 +223,7 @@ test('real HTTP compact resume measures bytes against existing full snapshot and
   const transported = await rpc('tools/call', { name: hint.tool, arguments: hint.arguments });
   assert.equal(transported.error, undefined); assert.notEqual(transported.result.isError, true);
   assert.equal(transported.result.structuredContent.work.id, 'task');
-  const repeat = await resumeAgent({ connection: config, sinceVersion: first.contextVersion, attentionCursor: first.observedThroughBySource.attention.cursor });
+  const repeat = await resumeAgent({ connection: config, sinceVersion: first.contextVersion, attentionCursor: completed.observedThroughBySource.attention.cursor });
   assert.ok(Buffer.byteLength(JSON.stringify(repeat)) < Buffer.byteLength(JSON.stringify(first)));
   assert.ok(first.metrics.responseBytes < baselineBytes);
   const mismatch = await resumeAgent({ connection: { ...config, memberId: owner.identityId } });
@@ -228,7 +231,7 @@ test('real HTTP compact resume measures bytes against existing full snapshot and
   const aliasIdentity = store.identities.create('Alias');
   linkWithProof(store, owner.secret, 'commons', aliasIdentity, { memberId: 'custom-linked-member', displayName: 'Alias', permissions: [] });
   const alias = await resumeAgent({ connection: { ...config, token: aliasIdentity.secret, memberId: 'custom-linked-member' } });
-  assert.equal(alias.connection.status, 'credential_accepted'); assert.deepEqual(alias.incompleteSources, []);
+  assert.equal(alias.connection.status, 'credential_accepted'); assert.ok(alias.incompleteSources.every(source=>source.source==='attention'&&source.code==='page_limit'));
   assert.equal(alias.authoritySummary.id, 'custom-linked-member');
   let revoked = false;
   const ended = await resumeAgent({ connection: config, fetchImpl: async (url, options) => {
@@ -240,7 +243,7 @@ test('real HTTP compact resume measures bytes against existing full snapshot and
   } });
   assert.equal(ended.connection.status, 'unconfirmed');
   assert.deepEqual(ended.attention, []); assert.deepEqual(ended.obligations, []); assert.deepEqual(ended.observedThroughBySource, {});
-  console.log(JSON.stringify({ benchmark: 'synthetic30messages1000chars', baselineRequests, baselineBytes, roomContextBytes, first: first.metrics, repeat: repeat.metrics }));
+  console.log(JSON.stringify({ benchmark: 'synthetic30messages1000chars', baselineRequests, baselineBytes, roomContextBytes, firstUsefulDiscovery:first.metrics, completeAttentionEnumeration:enumeration, repeat:repeat.metrics }));
 });
 
 // Contract: current open addressed requests survive an advanced observation cursor.

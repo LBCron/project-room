@@ -1129,7 +1129,7 @@ export function collectNeedsMe(store, secret, { since, roomId: scopedRoom = null
       const page=readCurrentNeedsMePage(store,secret,link.roomId,{cursor:native[link.roomId],...(parsed.provided?{after:roomWatermark(parsed,link.roomId,store.headSequence(link.roomId),freshWindow)}:{}),freshWindow});
       items.push(...page.items);nativeCoverage.push({roomId:link.roomId,...page.coverage});
       if(page.cursor)native[link.roomId]=page.cursor;else delete native[link.roomId];
-      if(page.visibleThrough)rooms[link.roomId]=page.visibleThrough;
+      if(page.complete)rooms[link.roomId]=page.visibleThrough;
       if(!page.complete){hasMore=true;break;}
       roomAfter=link.roomId;continue;
     }

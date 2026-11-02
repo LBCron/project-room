@@ -3,7 +3,7 @@
 import {createHash} from 'node:crypto';
 import {readCurrentNativeInbox} from './current-native-inbox.mjs';
 import {conversationCursorCodec} from './conversation-sync.mjs';
-import {withCurrentReadContext,readCurrentHead,readCurrentRecord,chargeCurrentReadBudget} from './current-room-repository.mjs';
+import {withCurrentReadContext,readCurrentHead,readCurrentRecord,currentVisibleHorizon,chargeCurrentReadBudget} from './current-room-repository.mjs';
 import {ServiceError} from './service-error.mjs';
 const fail=()=>{throw new ServiceError(409,'stale_needs_me_cursor','Attention source or service changed. Restart needs-me without since.');};
 const clip=value=>String(value??'').replace(/\s+/g,' ').slice(0,140);
@@ -60,6 +60,7 @@ function readPage(store,secret,roomId,{cursor,after,freshWindow=500}={}){
   state.workCursor=page.page.nextCursor;state.workDone=!page.page.hasMore;workComplete=state.workDone;visibleThrough=page.evaluatedThrough;
  }
  const complete=state.conversationDone&&state.workDone;
+ if(complete&&!visibleThrough)visibleThrough=withCurrentReadContext(store.db,roomId,()=>currentVisibleHorizon(store,roomId,binding.memberId,binding.sequence));
  const nextCursor=complete?null:conversationCursorCodec(store).encode(state);
  if(nextCursor&&nextCursor.length>4096)throw new ServiceError(409,'current_room_context_unavailable','Attention continuation exceeds the existing cursor codec bound; inspect inbox and work separately.');
  return{items,complete,cursor:nextCursor,visibleThrough,coverage:{available:true,mode:'native_bounded',conversation:{complete:conversationComplete,examined,direction:state.mode,range:state.mode==='recent'?{recentEventWindow:freshWindow}:{afterProvided:true}},standingWorkAndRequests:{complete:workComplete},omitted:['ambient bond and peer routing presentation','legacy board presentation'],globalAttentionComplete:false}};

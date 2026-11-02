@@ -1,8 +1,9 @@
 import { JOBS as REGISTRY, JOB_BUDGET_MS, jobDisabledReason, jobEnabled, jobNextDue } from "../server/jobs.mjs";
 
 // Per-job cron heartbeat. Every scheduled job records lastRunAt, lastSuccessAt
-// and a redacted lastError in the Durable Object, and GET /api/health/jobs reads
-// it back without auth. A job whose lastSuccessAt is older than 3x its period is
+// and a redacted lastError in the Durable Object. GET /api/health/jobs exposes
+// a fixed error marker and structured run facts without auth, never error prose.
+// A job whose lastSuccessAt is older than 3x its period is
 // stale. A disabled job is not stale. This is the signal that was missing when
 // every cron tick failed with a DO RPC error for weeks while page health checks
 // stayed green.
@@ -322,6 +323,8 @@ export function jobHealthView(stored, now = Date.now(), env = null, store = null
   const gatesKnown = env != null || store != null;
   const jobs = CRON_JOBS.map(job => {
     const record = stored?.[job.name] ?? {};
+    // Rebuild structured public evidence even for predating stored records.
+    const failure = sanitizeFailureDetail(record.lastFailure);
     const staleAfterSeconds = job.periodSeconds * STALE_PERIODS;
     const source = REGISTRY.find(item => item.name === job.name);
     const enabled = !gatesKnown || (source ? jobEnabled(source, env ?? {}, store) : true);
@@ -371,7 +374,9 @@ export function jobHealthView(stored, now = Date.now(), env = null, store = null
       attemptOutcome: typeof record.attemptOutcome === 'string' ? record.attemptOutcome : null,
       uncommittedAttemptSinceAt: iso(record.uncommittedAttemptSinceAt ?? null),
       secondsSinceSuccess: enabled ? ageSeconds : null,
-      lastError: record.lastError ?? null,
+      // Free-form diagnostics can contain unknown credentials or personal data.
+      // Keep the public marker fixed, including for errors stored before this rule.
+      lastError: record.lastError == null ? null : 'Job failed',
       lastErrorAt: iso(record.lastErrorAt),
       // A success keeps lastError/lastErrorAt as history (applyOutcomes), so
       // the text alone cannot say whether it is today's failure. On
@@ -379,15 +384,15 @@ export function jobHealthView(stored, now = Date.now(), env = null, store = null
       // lastError from 2026-10-15 and was triaged as a live validation
       // failure. lastErrorCurrent is true only while the job is failing now.
       lastErrorCurrent: record.lastError != null && (record.consecutiveFailures ?? 0) > 0,
-      lastErrorCode: record.lastFailure?.code ?? null,
-      lastErrorSubcheck: record.lastFailure?.subcheck ?? null,
-      lastErrorClass: record.lastFailure?.errorClass ?? null,
-      lastErrorRecordClass: record.lastFailure?.recordClass ?? null,
-      lastErrorReason: record.lastFailure?.reason ?? null,
-      lastErrorComponent: record.lastFailure?.component ?? null,
+      lastErrorCode: failure?.code ?? null,
+      lastErrorSubcheck: failure?.subcheck ?? null,
+      lastErrorClass: failure?.errorClass ?? null,
+      lastErrorRecordClass: failure?.recordClass ?? null,
+      lastErrorReason: failure?.reason ?? null,
+      lastErrorComponent: failure?.component ?? null,
       lastDurationMs: record.lastDurationMs ?? null,
       consecutiveFailures: record.consecutiveFailures ?? 0,
-      lastSummary: record.lastSummary ?? null,
+      lastSummary: compactSummary(record.lastSummary),
       lastSummaryAt: iso(record.lastSummaryAt),
       overdueStreak: Number.isFinite(record.overdueStreak) ? record.overdueStreak : null,
       overdueSinceAt: iso(record.overdueSinceAt ?? null),

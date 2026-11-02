@@ -1267,7 +1267,8 @@ export function startNodeScheduler({
           name: job.name, runtime: inRuntime ? "node" : "worker-only", enabled, reason,
           periodSeconds: Math.round((overrides.get(job.name) ?? job.cadenceMs) / 1000),
           lastRunAt: iso(rec.lastRunAt), lastSuccessAt: iso(rec.lastSuccessAt), lastErrorAt: iso(rec.lastErrorAt),
-          lastError: rec.lastError ?? null,
+          // Public health reports failure facts, never free-form diagnostics.
+          lastError: rec.lastError == null ? null : "Job failed",
           lastErrorCode: rec.lastFailure?.code ?? null,
           lastErrorSubcheck: rec.lastFailure?.subcheck ?? null,
           lastErrorClass: rec.lastFailure?.errorClass ?? null,

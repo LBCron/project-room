@@ -47,3 +47,23 @@ Cold starts still succeed quickly: schema rowsRead 885 and plugin rowsRead 1263.
 
 ## Read
 The evidence leans toward an application or data-volume cause: a slow storage operation inside the muse-room DO. A platform incident is less likely, because there is no Cloudflare incident and other requests work. This does not prove #5651 is the cause. If 6a64ad30 resets the same way against current data, the cause is the data volume or the jobs path, not #5651.
+
+## Update, about 6:15 PM PT
+- Probe at 6:12 PM: ready 503 on 5 of 5. version gives no response. health is degraded with jobs:error.
+- wrangler tail, 6:13 to 6:15 PM (120 s, 68 events): zero durableObject invocations were recorded. 42 Worker requests were canceled at 10 to 15 s waiting on the DO. The paths were muse-room GET /, /assistant, /presence, /agent-work, /saved, /reply-context, /stream, plus POST /mcp, POST /api/agent-heartbeats and /api/account-session. The DO is no longer completing any invocation.
+- Reset anatomy from the 5:37 PM sample:
+  - 4 requests arrived at 17:37:14 and cold-started the DO (775 rooms, 49,075 sequences, projectionBytes 7,140,804; schema rowsRead 885, plugin rowsRead 1263).
+  - Each logged room.do_request status 200 with appMs 0. All 4 then ended exceededWallTime at about 41 s with "storage operation exceeded timeout... object reset" at 17:37:53.6. That is about 39 s after the response was produced.
+  - The next cold start, at 17:37:55, served normally for a few seconds.
+- No alarm or scheduled events appeared in either sample (3.5 min total), although patrol and project-map have 1-minute cadences.
+- Static trace at bbb8b348 (cloudflare/room.mjs):
+  - After the response, fetch's finally runs three waitUntil tasks: humanPush.flush, flushRoomGuide and #armJobAlarm (via ctx.storage.getAlarm/setAlarm).
+  - #armJobAlarm is already single-flight (job-alarm-reconciler.mjs).
+  - The fast-job alarm path runs patrol and project-map every minute. patrol's history scan is the cost #5631 bounds.
+  - #5651 does not touch any of these.
+- Culprit: NOT pinned.
+  - The storage op that times out runs after the app code returns. Candidates are the post-response waitUntil tasks and an alarm-held storage lock. Neither can be distinguished without DO-level logs.
+  - No recorded event shows a CPU or memory limit hit. CPU is not measured.
+  - Combined with no Cloudflare incident, the remaining hypotheses are (a) a long synchronous SQLite op in background or alarm work on a 49k-sequence store, or (b) platform storage latency for this object.
+  - Rolling back to 6a64ad30 is the discriminator: if it resets the same way, the cause is data or platform, not #5651.
+- Not done: no fix PR. No evidence identifies a specific loop, and a speculative bound would not be a safe fix.

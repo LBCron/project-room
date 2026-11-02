@@ -33,8 +33,8 @@ function readPage(store,secret,roomId,{cursor,after,freshWindow=500}={}){
  if(!state.conversationDone){
   const inbox=readCurrentNativeInbox(store,secret,roomId,state.mode==='recent'?{limit:4,...(state.older?{olderCursor:state.older}:{})}:{limit:4,after:state.after});
   for(const [kind,rows]of [['mention',inbox.directMentions],['dm',inbox.directMessages],['reply',inbox.replies]])for(const row of rows){
-   if(row.sequence<=state.minimum)continue;
-   items.push({kind,roomId,seq:row.sequence,id:row.messageId,summary:clip(row.body),next:{tool:'room_reply',arguments:{roomId,requestId:`needs-me-${roomId}-${row.messageId}`,replyToId:row.messageId,...(row.replyToMemberId?{toMemberId:row.replyToMemberId}:{})}}});
+   if(row.sequence<=state.minimum||kind==='reply'&&[...inbox.directMentions,...inbox.directMessages].some(other=>other.messageId===row.messageId))continue;
+   items.push({kind,roomId,seq:row.sequence,id:row.messageId,...(kind==='dm'?{channel:'room'}:{}),...(kind==='reply'?{replyToId:row.inReplyTo}:{}),summary:clip(row.body),next:{tool:'room_reply',arguments:{roomId,requestId:`needs-me-${roomId}-${row.messageId}`,replyToId:row.messageId,...(row.replyToMemberId?{toMemberId:row.replyToMemberId}:{})}}});
   }
   examined=inbox.coverage.conversation.examined;
   if(state.mode==='recent'){

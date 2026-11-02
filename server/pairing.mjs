@@ -1,3 +1,4 @@
+import { currentInviteContext, prepareCurrentWrite, withCurrentServingWriter, isCurrentRoom } from './current-room-repository.mjs';
 import { assertMessageWrite, recordMessageWrite } from './write-integrity.mjs';
 // Device-code pairing for agents that can fetch a URL, plus reconnect-by-key
 // and owner merge of two agent members. The user code and device secret are
@@ -164,15 +165,19 @@ export class Pairing {
     return { roomId, mode, updatedAt: now, updatedBy: auth.member.id };
   }
 
+  #room(roomId, memberIds = [], census = false) {
+    return currentInviteContext(this.store, roomId, { memberIds, census })?.room ?? this.store.room(roomId);
+  }
+
   #approver(token, roomId, binding) {
     const auth = this.store.authenticate(token, roomId, binding);
-    if (!canInviteMembers(this.store.room(roomId).state, auth.member.id)) fail(403, "access_denied", "invite_member required");
+    if (!canInviteMembers(this.#room(roomId, [auth.member.id]).state, auth.member.id)) fail(403, "access_denied", "invite_member required");
     return auth;
   }
 
   #ownerLevel(token, roomId, binding) {
     const auth = this.store.authenticate(token, roomId, binding);
-    const state = this.store.room(roomId).state;
+    const state = this.#room(roomId, [auth.member.id]).state;
     const owner = auth.member.id === state.room.ownerId;
     const both = auth.member.permissions.includes("manage_members") && auth.member.permissions.includes("decide");
     if (!owner && !both) fail(403, "access_denied", "Owner-level membership required");
@@ -183,7 +188,7 @@ export class Pairing {
     if (!validId(roomId)) fail(404, "not_found", "Room not found");
     const exists = this.db.prepare("SELECT 1 FROM rooms WHERE id=?").get(roomId);
     if (!exists) fail(404, "not_found", "Room not found");
-    const room = this.store.room(roomId);
+    const room = this.#room(roomId);
     if (isRoomArchived(room.state)) fail(409, "room_archived", "This room is archived");
     return room;
   }
@@ -199,7 +204,7 @@ export class Pairing {
   // A key already bound to a member of this room, or to an identity that is.
   resolveKey(roomId, publicKey) {
     if (!publicKey) return null;
-    const members = this.store.room(roomId).state.members ?? {};
+    const members = this.#room(roomId, [], true).state.members ?? {};
     const follow = memberId => {
       let current = memberId;
       const seen = new Set();
@@ -228,7 +233,7 @@ export class Pairing {
 
   #nameMatch(roomId, displayName, exceptId) {
     const name = canonicalName(displayName);
-    for (const member of Object.values(this.store.room(roomId).state.members ?? {})) {
+    for (const member of Object.values(this.#room(roomId, [], true).state.members ?? {})) {
       if (!member || member.active === false || member.kind !== "agent" || member.id === exceptId) continue;
       if (canonicalName(member.displayName) === name) return member.id;
     }
@@ -249,16 +254,24 @@ export class Pairing {
   }
 
   #append(roomId, incoming) {
-    const room = this.store.room(roomId);
+    const context = currentInviteContext(this.store, roomId, {
+      memberIds: [incoming.actorId, incoming.data.memberId], census: incoming.type === T.MEMBER_ADDED
+    });
+    const room = context?.room ?? this.store.room(roomId);
+    if (isRoomArchived(room.state)) fail(409, "room_archived", "This room is archived");
     if (room.sequence >= PILOT_LIMITS.eventsPerRoom) fail(409, "pilot_limit", "Bounded pilot capacity reached; no data was changed");
     let state;
     try { state = compactState(applyEventWithGrowth(room.state, incoming, growthCollector).state); }
     catch (error) { fail(422, "invalid_event", error.message); }
-    const projection = this.store.storedProjection(roomId, state);
-    if (Buffer.byteLength(projection) > PILOT_LIMITS.projectionBytes) fail(409, "pilot_limit", "Room projection limit reached; no data was changed. Ask the room owner to have older messages archived to free space.");
     const sequence = room.sequence + 1;
-    this.db.prepare("INSERT INTO events VALUES(?,?,?,?)").run(roomId, sequence, incoming.id, JSON.stringify(incoming));
-    this.db.prepare("UPDATE rooms SET sequence=?,projection=? WHERE id=?").run(sequence, projection, roomId);
+    const write = context ? prepareCurrentWrite(this.store, { roomId, previous: room, state, event: incoming, sequence, current: context.current }) : null;
+    const projection = write?.projection ?? this.store.storedProjection(roomId, state);
+    if (Buffer.byteLength(projection) > PILOT_LIMITS.projectionBytes) fail(409, "pilot_limit", "Room projection limit reached; no data was changed. Ask the room owner to have older messages archived to free space.");
+    withCurrentServingWriter(this.db, roomId, () => {
+      this.db.prepare("INSERT INTO events VALUES(?,?,?,?)").run(roomId, sequence, incoming.id, JSON.stringify(incoming));
+      this.db.prepare("UPDATE rooms SET sequence=?,projection=? WHERE id=?").run(sequence, projection, roomId);
+      write?.persistEntities();
+    });
     return state;
   }
 
@@ -296,7 +309,7 @@ export class Pairing {
         authorityPolicyVersion: MEMBERSHIP_AUTHORITY_POLICY_VERSION
       }
     }, binding);
-    return ownMember(this.store.room(roomId).state.members, member.id);
+    return ownMember(this.#room(roomId, [member.id]).state.members, member.id);
   }
 
   start({ roomId, displayName, publicKey = null, keyProof = null, credential = null, address = null, origin = null, holdFor = null } = {}) {
@@ -346,7 +359,7 @@ export class Pairing {
       const profile = mode.startsWith("auto:") ? mode.slice(5) : null;
       const blocked = keyHit?.memberId && !keyHit.active;
       if (profile && !blocked) {
-        const ownerId = this.store.room(roomId).state.room.ownerId;
+        const ownerId = this.#room(roomId).state.room.ownerId;
         const admitted = this.#admit(pairId, { actorId: ownerId, profile, reconnect: Boolean(keyHit?.memberId || duplicateMemberId) });
         return { reconnected: Boolean(admitted.connection.reconnected), connection: { ...admitted.connection, ...(origin ? { origin } : {}) } };
       }
@@ -402,7 +415,7 @@ export class Pairing {
   }
 
   #view(row) {
-    const duplicate = row.duplicate_member_id ? ownMember(this.store.room(row.room_id).state.members, row.duplicate_member_id) : null;
+    const duplicate = row.duplicate_member_id ? ownMember(this.#room(row.room_id, [row.duplicate_member_id]).state.members, row.duplicate_member_id) : null;
     return {
       pairId: row.pair_id, roomId: row.room_id, displayName: row.display_name, userCode: row.user_code,
       status: row.status, expiresAt: row.expires_at,
@@ -494,14 +507,14 @@ export class Pairing {
     let identitySecret = null;
     let reconnected = false;
     if (reconnectId) {
-      const member = ownMember(this.store.room(roomId).state.members, reconnectId);
+      const member = ownMember(this.#room(roomId, [reconnectId]).state.members, reconnectId);
       if (!member || member.kind !== "agent") fail(409, "pair_closed", "That agent is no longer in the room");
       if (member.active === false) {
         if (!token) fail(403, "access_denied", "An inactive agent needs an owner to approve the reconnect");
         this.#reactivate(token, roomId, member, binding);
       }
       memberId = reconnectId;
-      identityId = identityId ?? ownMember(this.store.room(roomId).state.members, memberId)?.identityId ?? null;
+      identityId = identityId ?? ownMember(this.#room(roomId, [memberId]).state.members, memberId)?.identityId ?? null;
       reconnected = true;
     } else if (identityId || row.starter_identity_id) {
       identityId = identityId ?? row.starter_identity_id;
@@ -536,7 +549,7 @@ export class Pairing {
   #linkIdentity(roomId, actorId, identityId, displayName, permissions) {
     const existing = this.db.prepare("SELECT member_id AS memberId FROM identity_links WHERE room_id=? AND identity_id=?").get(roomId, identityId);
     if (existing) return existing.memberId;
-    const members = this.store.room(roomId).state.members ?? {};
+    const members = this.#room(roomId, [], true).state.members ?? {};
     assertNotReservedRoleName(displayName);
     const activeNames = Object.values(members)
       .filter(member => member.active !== false)
@@ -566,6 +579,7 @@ export class Pairing {
   merge(token, roomId, { keepMemberId, retireMemberId } = {}, binding = null) {
     if (!validId(keepMemberId) || !validId(retireMemberId)) fail(422, "invalid_merge", "keepMemberId and retireMemberId are required");
     const auth = this.#ownerLevel(token, roomId, binding);
+    if (isCurrentRoom(this.db, roomId)) fail(409, "current_room_context_unavailable", "Native member merge requires its affected-row context");
     return this.store.transaction(() => {
       const state = this.store.room(roomId).state;
       const kept = ownMember(state.members, keepMemberId);

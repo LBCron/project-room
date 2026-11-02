@@ -33,55 +33,63 @@ function textPiece(hex,carry,last){
 }
 const nextBlob=(n,length)=>{if(n!==0&&n*10<length)return n*10;while(n%10===9||n+1>=length){n=Math.floor(n/10);if(n===0)return length;}return n+1;};
 export function advanceRecoveryReportRow(db,current,options={}){
- return advanceRow(db,current,options,new Map());
+ return advanceRow(db,current,options,new Map(),new Map());
 }
 // Owner creates this reader only after this request's exact snapshot admission.
 // The owner retains it for one report step: at most two verified 64 KiB raw parts
 // (128 KiB total) survive source chunks within that one synchronous invocation.
 // It caches no authority, cursor, mutable control or business row.
-export function recoveryReportRowReader(db,{snapshot,scratch}){
- const cache=new Map();
- return (current,{maxUnits=32}={})=>advanceRow(db,current,{maxUnits,snapshot,scratch},cache);
+export function recoveryReportRowReader(db,{snapshot,scratch,budget=null}){
+ const cache=new Map(),blobs=new Map();
+ return (current,{maxUnits=32}={})=>advanceRow(db,current,{maxUnits,snapshot,scratch,budget},cache,blobs);
 }
-function advanceRow(db,current,{maxUnits=32,snapshot=null,scratch=null}={},snapshotCache){
- validate(current);if(!Number.isInteger(maxUnits)||maxUnits<1||maxUnits>32)fail();const p=structuredClone(current);let units=0;
+function advanceRow(db,current,{maxUnits=32,snapshot=null,scratch=null,budget=null}={},snapshotCache,blobCache){
+ validate(current);if(!Number.isInteger(maxUnits)||maxUnits<1||maxUnits>(budget?16384:32))fail();const p=structuredClone(current);let units=0;
+ const append=text=>{budget?.charge(Buffer.byteLength(text));p.output+=text;};
+ const observed=value=>{if(budget)budget.charge(Buffer.byteLength(JSON.stringify(value)??'null'));return value;};
  const finishCell=()=>{p.column++;p.phase='key';p.offset=p.length=0;p.carry='';p.blobIndex=0;};
  while(units<maxUnits){
    if ( p . output . length >= REPORT_CHUNK_UNITS || p . phase === 'done' ) break ;
-  if(p.phase==='open'){p.output+='{';p.phase='key';continue;}
-  if(p.phase==='key'){if(p.column===p.columns.length){p.output+='}';p.phase='done';continue;}p.output+=(p.column?',':'')+JSON.stringify(p.columns[p.column])+':';p.phase='cell';continue;}
+  if(budget&&!budget.canSourceUnit())break;
+  if(p.phase==='open'){append('{');p.phase='key';continue;}
+  if(p.phase==='key'){if(p.column===p.columns.length){append('}');p.phase='done';continue;}append((p.column?',':'')+JSON.stringify(p.columns[p.column])+':');p.phase='cell';continue;}
   const name=p.columns[p.column],column=ident(name),table=ident(p.table),virtual=p.table==='current_restore_admission'&&snapshot!==null;
   if(virtual&&(!scratch||p.rowid!=='1'))fail();
   if(p.phase==='cell'){
-   const info=virtual?reportSnapshotCellInfo(snapshot,name):db.prepare(`SELECT typeof(${column}) kind,length(CAST(${column} AS BLOB)) bytes FROM ${table} WHERE rowid=?`).get(p.rowid);units++;
+   const info=virtual?reportSnapshotCellInfo(snapshot,name):db.prepare(`SELECT typeof(${column}) kind,length(CAST(${column} AS BLOB)) bytes FROM ${table} WHERE rowid=?`).get(p.rowid);units++;budget?.unit();
+   if(!virtual)observed(info);
    if(!info||!['null','text','blob','integer','real'].includes(info.kind)||info.bytes!==null&&(!Number.isSafeInteger(info.bytes)||info.bytes<0))fail();
    p.length=info.bytes??0;p.sourceBytes+=p.length;if(p.sourceBytes>p.maximumBytes+p.columns.length*32)fail();
-   if(info.kind==='null'){p.output+='null';finishCell();continue;}
+   if(info.kind==='null'){append('null');finishCell();continue;}
    if(info.kind==='integer'||info.kind==='real'){
     const value=virtual?reportSnapshotCellValue(snapshot,name):db.prepare(`SELECT ${column} value FROM ${table} WHERE rowid=?`).get(p.rowid)?.value;
-    if(typeof value!=='number')fail();p.output+=JSON.stringify(value);finishCell();continue;
+    observed(value);if(typeof value!=='number')fail();append(JSON.stringify(value));finishCell();continue;
    }
    if(info.kind==='blob'){
-    if(p.length===0){p.output+='{}';finishCell();continue;}
+    if(p.length===0){append('{}');finishCell();continue;}
     // Match each platform's ORIGINAL SELECT * value representation. Native
     // returns ArrayBuffer (no enumerable keys); Node SQLite Uint8Array exposes
     // bytes as numeric object keys. Never copy the whole BLOB to determine it.
     const empty=db.prepare(`SELECT substr(${column},1,0) value FROM ${table} WHERE rowid=?`).get(p.rowid)?.value;
-    if(empty instanceof ArrayBuffer){p.output+='{}';finishCell();continue;}
-    if(!(empty instanceof Uint8Array))fail();p.output+='{';p.phase='blob';continue;
+    if(empty instanceof ArrayBuffer){append('{}');finishCell();continue;}
+    if(!(empty instanceof Uint8Array))fail();append('{');p.phase='blob';continue;
    }
-   p.output+='"';p.phase='text';continue;
+   append('"');p.phase='text';continue;
   }
   if(p.phase==='text'){
-   if(p.offset===p.length){if(p.carry)fail();p.output+='"';finishCell();continue;}
-   const count=Math.min(2048,p.length-p.offset),row=virtual?{value:reportSnapshotCellBytes(scratch,snapshot,name,p.offset,count,snapshotCache)}:db.prepare(`SELECT hex(substr(CAST(${column} AS BLOB),?,?)) value FROM ${table} WHERE rowid=?`).get(p.offset+1,count,p.rowid);units++;
+   if(p.offset===p.length){if(p.carry)fail();append('"');finishCell();continue;}
+   const count=Math.min(2048,p.length-p.offset),row=virtual?{value:reportSnapshotCellBytes(scratch,snapshot,name,p.offset,count,snapshotCache)}:db.prepare(`SELECT hex(substr(CAST(${column} AS BLOB),?,?)) value FROM ${table} WHERE rowid=?`).get(p.offset+1,count,p.rowid);units++;budget?.unit();
+   if(!virtual)observed(row);
    if(typeof row?.value!=='string'||row.value.length!==2*count)fail();p.offset+=count;
-   const decoded=textPiece(row.value,p.carry,p.offset===p.length);p.carry=decoded.carry;p.output+=JSON.stringify(decoded.text).slice(1,-1);continue;
+   const decoded=textPiece(row.value,p.carry,p.offset===p.length);p.carry=decoded.carry;append(JSON.stringify(decoded.text).slice(1,-1));continue;
   }
   if(p.phase==='blob'){
-   if(p.blobIndex===p.length){p.output+='}';finishCell();continue;}
-   const row=db.prepare(`SELECT hex(substr(${column},?,1)) value FROM ${table} WHERE rowid=?`).get(p.blobIndex+1,p.rowid);units++;
-   if(!/^[A-F0-9]{2}$/.test(row?.value??''))fail();p.output+=(p.blobIndex?',':'')+JSON.stringify(String(p.blobIndex))+':'+parseInt(row.value,16);p.blobIndex=nextBlob(p.blobIndex,p.length);
+   if(p.blobIndex===p.length){append('}');finishCell();continue;}
+   const block=Math.floor(p.blobIndex/2048),cacheKey=JSON.stringify([p.table,p.rowid,name,block]);let data=blobCache.get(cacheKey);
+   if(!data){const count=Math.min(2048,p.length-block*2048),row=observed(db.prepare(`SELECT hex(substr(${column},?,?)) value FROM ${table} WHERE rowid=?`).get(block*2048+1,count,p.rowid));
+    if(typeof row?.value!=='string'||row.value.length!==count*2||!/^[A-F0-9]+$/.test(row.value))fail();data=Buffer.from(row.value,'hex');if(blobCache.size===2)blobCache.delete(blobCache.keys().next().value);blobCache.set(cacheKey,data);
+   }
+   units++;budget?.unit();append((p.blobIndex?',':'')+JSON.stringify(String(p.blobIndex))+':'+data[p.blobIndex-block*2048]);p.blobIndex=nextBlob(p.blobIndex,p.length);
   }
  }
  let chunk=null,last=false;

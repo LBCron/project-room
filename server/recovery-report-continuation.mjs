@@ -79,13 +79,14 @@ function ref(s,p,index) {
   const n=get(s,p.table,`fingerprint-index${p.pass}`,index);
   if(!integer(n)||n>=p.rows)fail();return n;
 }
-function feed(p,text) { p.hash=encodeReplayHash(advanceReplayHash(decodeReplayHash(p.hash),new TextEncoder().encode(text))); }
+function feed(p,text,budget=null) { budget?.charge(new TextEncoder().encode(text).length);p.hash=encodeReplayHash(advanceReplayHash(decodeReplayHash(p.hash),new TextEncoder().encode(text))); }
 // Fixed fan-in two. Equal-prefix comparisons resume one bounded chunk at a
 // time. Both index generations contain ONLY ordinals, never sortable payloads.
-export function advanceRecoveryReportTable(scratch,current,{maxUnits=16}={}) {
-  validate(current);if(!Number.isInteger(maxUnits)||maxUnits<1||maxUnits>16||current.stage==='ingest')fail();
+export function advanceRecoveryReportTable(scratch,current,{maxUnits=16,budget=null}={}) {
+  validate(current);if(!Number.isInteger(maxUnits)||maxUnits<1||maxUnits>(budget?1024:16)||current.stage==='ingest')fail();
   const p=structuredClone(current);let units=0;
   while(units<maxUnits&&p.stage!=='complete') {
+    if(budget&&!budget.canSortUnit())break;
     if(p.stage==='merge') {
       if(p.start>=p.rows) {
         p.pass=1-p.pass;p.width*=2;p.start=0;p.left=0;p.right=Math.min(p.width,p.rows);p.end=Math.min(2*p.width,p.rows);p.output=0;
@@ -100,21 +101,21 @@ export function advanceRecoveryReportTable(scratch,current,{maxUnits=16}={}) {
       else {
         const a=chunk(scratch,p.table,ref(scratch,p,p.left),p.comparePart);
         const b=chunk(scratch,p.table,ref(scratch,p,p.right),p.comparePart);
-        if(a.text===b.text&&!a.last&&!b.last){p.comparePart++;units++;continue;}
+        if(a.text===b.text&&!a.last&&!b.last){p.comparePart++;units++;budget?.unit();continue;}
         chosen=a.text<b.text||(a.text===b.text&&(a.last||!b.last))?'left':'right';
       }
       const selected=ref(scratch,p,p[chosen]);
       set(scratch,p.table,`fingerprint-index${1-p.pass}`,p.output++,selected);
-      p[chosen]++;p.comparePart=0;units++;
+      p[chosen]++;p.comparePart=0;units++;budget?.unit();
     } else {
-      if(p.hashRow===p.rows){feed(p,']');p.stage='complete';p.sha256=finishReplayHash(decodeReplayHash(p.hash));break;}
-      const value=chunk(scratch,p.table,ref(scratch,p,p.hashRow),p.hashPart);units++;
+      if(p.hashRow===p.rows){feed(p,']',budget);p.stage='complete';p.sha256=finishReplayHash(decodeReplayHash(p.hash));break;}
+      const value=chunk(scratch,p.table,ref(scratch,p,p.hashRow),p.hashPart);units++;budget?.unit();
       let text=p.carry+value.text;p.carry='';
       const finalCode=text.charCodeAt(text.length-1);
       if(!value.last&&finalCode>=0xd800&&finalCode<=0xdbff){p.carry=text.slice(-1);text=text.slice(0,-1);}
-      if(p.hashPart===0)feed(p,(p.hashRow?',':'')+'"');
-      feed(p,JSON.stringify(text).slice(1,-1));
-      if(value.last){feed(p,'"');p.hashRow++;p.hashPart=0;}else p.hashPart++;
+      if(p.hashPart===0)feed(p,(p.hashRow?',':'')+'"',budget);
+      feed(p,JSON.stringify(text).slice(1,-1),budget);
+      if(value.last){feed(p,'"',budget);p.hashRow++;p.hashPart=0;}else p.hashPart++;
     }
   }
   validate(p);return {state:p,units};

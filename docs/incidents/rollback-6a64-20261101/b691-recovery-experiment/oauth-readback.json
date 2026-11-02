@@ -1,0 +1,62 @@
+[
+  {
+    "path": "/.well-known/oauth-authorization-server",
+    "http": 200,
+    "body": {
+      "issuer": "https://room.trydemigod.com",
+      "authorization_endpoint": "https://room.trydemigod.com/oauth/authorize",
+      "authorization_response_iss_parameter_supported": true,
+      "token_endpoint": "https://room.trydemigod.com/oauth/token",
+      "revocation_endpoint": "https://room.trydemigod.com/oauth/revoke",
+      "registration_endpoint": "https://room.trydemigod.com/oauth/register",
+      "response_types_supported": [
+        "code"
+      ],
+      "grant_types_supported": [
+        "authorization_code",
+        "refresh_token"
+      ],
+      "code_challenge_methods_supported": [
+        "S256"
+      ],
+      "scopes_supported": [
+        "rooms:read",
+        "chat:read",
+        "chat:write",
+        "work:read",
+        "work:write",
+        "members:invite"
+      ],
+      "token_endpoint_auth_methods_supported": [
+        "none"
+      ]
+    }
+  },
+  {
+    "path": "/.well-known/oauth-protected-resource/mcp",
+    "http": 200,
+    "body": {
+      "resource": "https://room.trydemigod.com/mcp",
+      "authorization_servers": [
+        "https://room.trydemigod.com"
+      ],
+      "bearer_methods_supported": [
+        "header"
+      ],
+      "scopes_supported": [
+        "rooms:read",
+        "chat:read",
+        "chat:write",
+        "work:read",
+        "work:write",
+        "members:invite"
+      ]
+    }
+  },
+  {
+    "path": "/mcp",
+    "http": 401,
+    "challenge": "Bearer resource_metadata=\"https://room.trydemigod.com/.well-known/oauth-protected-resource/mcp\"",
+    "body": "{\"jsonrpc\":\"2.0\",\"id\":\"b691-auth-challenge-check\",\"error\":{\"code\":-32001,\"message\":\"Room tools need Authorization: Bearer with your saved identity secret\",\"data\":{\"tool\":\"room_check_access\",\"reason\":\"auth_required\",\"hint\":\"Use your saved connection and identity secret. If none exists, read /llms.txt for initial setup.\",\"next\":[{\"command\":\"tools/list\"}],\"status\":\"action_required\",\"operationId\":\"op_KjZqBrYE\",\"category\":\"access\"}}}"
+  }
+]

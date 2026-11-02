@@ -1,0 +1,142 @@
+{
+  "ok": true,
+  "sha": "b6917a237004f994f60731d3d0ab9f4130e4e27a",
+  "origin": "https://room.trydemigod.com",
+  "entry": "https://www.getdasha.com/room",
+  "checks": [
+    {
+      "name": "version https://room.trydemigod.com/api/version",
+      "pass": true,
+      "got": "b6917a237004f994f60731d3d0ab9f4130e4e27a",
+      "status": 200
+    },
+    {
+      "name": "version https://room.trydemigod.com/api/version/worker",
+      "pass": true,
+      "got": "b6917a237004f994f60731d3d0ab9f4130e4e27a",
+      "status": 200
+    },
+    {
+      "name": "version https://www.getdasha.com/room/api/version",
+      "pass": true,
+      "got": "b6917a237004f994f60731d3d0ab9f4130e4e27a",
+      "status": 200
+    },
+    {
+      "name": "version https://www.getdasha.com/room/api/version/worker",
+      "pass": true,
+      "got": "b6917a237004f994f60731d3d0ab9f4130e4e27a",
+      "status": 200
+    },
+    {
+      "name": "health https://room.trydemigod.com/api/health",
+      "pass": true,
+      "status": 200,
+      "body": "ok",
+      "healthJobsStatus": "ok",
+      "jobsStatus": "ok",
+      "reason": "verified",
+      "degradedJobs": [],
+      "legacy": false,
+      "attempts": 1,
+      "convergenceRounds": 5
+    },
+    {
+      "name": "ready https://room.trydemigod.com/api/ready",
+      "pass": true,
+      "status": 200,
+      "body": "ready",
+      "emailVerification": "enforced",
+      "emailVerificationScope": "durable-object",
+      "do": {
+        "status": "ok",
+        "ms": 73,
+        "statusCode": 200
+      },
+      "elapsedMs": 110
+    },
+    {
+      "name": "page https://room.trydemigod.com/terms",
+      "pass": true,
+      "status": 200
+    },
+    {
+      "name": "page https://room.trydemigod.com/privacy",
+      "pass": true,
+      "status": 200
+    },
+    {
+      "name": "page https://room.trydemigod.com/",
+      "pass": true,
+      "status": 200
+    },
+    {
+      "name": "health https://www.getdasha.com/room/api/health",
+      "pass": true,
+      "status": 200,
+      "body": "ok",
+      "healthJobsStatus": "ok",
+      "jobsStatus": "ok",
+      "reason": "verified",
+      "degradedJobs": [],
+      "legacy": false,
+      "attempts": 1,
+      "convergenceRounds": 5
+    },
+    {
+      "name": "ready https://www.getdasha.com/room/api/ready",
+      "pass": true,
+      "status": 200,
+      "body": "ready",
+      "emailVerification": "enforced",
+      "emailVerificationScope": "durable-object",
+      "do": {
+        "status": "ok",
+        "ms": 59,
+        "statusCode": 200
+      },
+      "elapsedMs": 105
+    },
+    {
+      "name": "page https://www.getdasha.com/room/terms",
+      "pass": true,
+      "status": 200
+    },
+    {
+      "name": "page https://www.getdasha.com/room/privacy",
+      "pass": true,
+      "status": 200
+    },
+    {
+      "name": "page https://www.getdasha.com/room/",
+      "pass": true,
+      "status": 200
+    },
+    {
+      "name": "agent-card https://room.trydemigod.com/.well-known/agent-card.json",
+      "pass": true,
+      "fetches": 10,
+      "waitMs": 90000,
+      "attempts": 10,
+      "staleFetches": 0,
+      "converged": true,
+      "elapsedMs": 13758,
+      "retryKind": null,
+      "failures": [],
+      "failureCount": 0
+    },
+    {
+      "name": "agent-card https://www.getdasha.com/room/.well-known/agent-card.json",
+      "pass": true,
+      "fetches": 10,
+      "waitMs": 90000,
+      "attempts": 10,
+      "staleFetches": 0,
+      "converged": true,
+      "elapsedMs": 13838,
+      "retryKind": null,
+      "failures": [],
+      "failureCount": 0
+    }
+  ]
+}

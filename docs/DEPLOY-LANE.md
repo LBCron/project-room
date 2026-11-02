@@ -75,6 +75,24 @@ removing the variable: deployment preserves existing bindings with `--keep-vars`
 Verify the production Worker variable and absence of new `room.sql_cost` records
 after disablement. Do not increase deadlines or generate a load test for this sample.
 
+### Temporary scheduled patrol isolation
+
+The incident release explicitly pins `ROOM_PATROL_ENABLED=0` on both production
+Workers, including the upload command so `--keep-vars` cannot retain a different
+value. This pauses only the optional scheduled patrol and reports its disabled
+reason. Findings and cursors remain stored; manual authorized rechecks and the
+separate integrity, retention, backup and store-growth jobs remain available.
+It is a reversible diagnostic mitigation, not evidence that patrol caused the
+storage outage or that the product is healthy.
+
+Restore scheduled patrol explicitly after its existing work-bound changes and
+bounded history catch-up/head agreement qualify against large rooms. Update both
+configuration and command pins to `ROOM_PATROL_ENABLED=1`, qualify the exact source, and use the ordinary
+serialized deploy/readback/smoke path. Readiness and required job checks remain
+release gates throughout; do not change the smoke to accept a failed service.
+Rolling back to older code also removes this isolation: that code ignores the
+variable. Verify the actual running source, not only a retained variable value.
+
 ### Optional auto-deploy
 
 When the repository variable `ROOM_AUTO_DEPLOY` is `1`, `deploy-prod` also runs after `test` or `schema-gate` completes on `main`. It deploys only the current main tip, only when both gates are green, and only if production does not already report that commit. The variable is unset by default.

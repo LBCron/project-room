@@ -265,6 +265,10 @@ async function runNodeRetention(store, ctx) {
   return { ...receipt, webhookDeliveries, oauthProvider, abuseRateBuckets };
 }
 
+export function scheduledPatrolEnabled(env = {}) {
+  return env.ROOM_PATROL_ENABLED !== "0";
+}
+
 function defineJob(job) {
   return Object.freeze({
     budgetMs: JOB_BUDGET_MS,
@@ -282,8 +286,8 @@ function defineJob(job) {
 // no production-runtime job watched its aggregate size approach the
 // store's limits (growth-watch tracks product-growth events off a
 // process-local collector and is node-only for that reason). The gauges
-// are one aggregate read over the rooms table plus the SQLite page
-// count — cheap at any room count. The limits are the lines where an
+// use one aggregate over rooms plus native database bytes (Node uses
+// SQLite page counts). The limits are the lines where an
 // operator must act, not the hard caps: the largest room projection is
 // escalated at 3.5 MB against the 4 MiB application cap, and the
 // database at 8 GB against the 10 GB Durable Object SQLite limit.
@@ -300,11 +304,18 @@ export function measureStoreGrowth(store) {
     COALESCE(MAX(LENGTH(CAST(projection AS BLOB))), 0) AS maxProjectionBytes FROM rooms`).get();
   let dbBytes = 0;
   try {
-    const pages = store.db.prepare("PRAGMA page_count").get();
-    const size = store.db.prepare("PRAGMA page_size").get();
-    const count = Number(pages?.page_count);
-    const bytes = Number(size?.page_size);
-    if (Number.isFinite(count) && Number.isFinite(bytes)) dbBytes = count * bytes;
+    // Workers exposes the complete SQLite size directly. Page PRAGMAs are
+    // unsupported there and previously made a nonempty store report zero.
+    // https://developers.cloudflare.com/durable-objects/api/sqlite-storage-api/#databasesize
+    const nativeBytes = store.db.storage?.sql?.databaseSize;
+    if (Number.isSafeInteger(nativeBytes) && nativeBytes >= 0) dbBytes = nativeBytes;
+    else {
+      const pages = store.db.prepare("PRAGMA page_count").get();
+      const size = store.db.prepare("PRAGMA page_size").get();
+      const count = Number(pages?.page_count);
+      const bytes = Number(size?.page_size);
+      if (Number.isFinite(count) && Number.isFinite(bytes)) dbBytes = count * bytes;
+    }
   } catch { /* a runtime without page pragmas reports 0; the room gauges still watch */ }
   return {
     rooms: Number(row?.rooms) || 0,
@@ -858,8 +869,8 @@ export const JOBS = Object.freeze([
     // ClueBot phase 1: enabled only while some room has events the patrol
     // has not tailed, so an idle room never wakes for it (the registry's
     // standing rule). Read-only: the patrol files findings, it never acts.
-    enabled: (_env, store) => (store ? patrolPending(store) : true),
-    disabledReason: () => "No unpatrolled events are waiting",
+    enabled: (env, store) => scheduledPatrolEnabled(env) && (store ? patrolPending(store) : true),
+    disabledReason: env => scheduledPatrolEnabled(env) ? "No unpatrolled events are waiting" : "Scheduled patrol disabled by ROOM_PATROL_ENABLED=0",
     healthPendingSince: (store, now) => patrolPendingSince(store, now),
     // Due at the caller's `now`, never a live Date.now(): a fresh clock
     // read lands a hair past the arming computation, slips past the
@@ -867,6 +878,7 @@ export const JOBS = Object.freeze([
     // immediately — an idle room would wake at once (jobs-alarm proof).
     nextDueAt: (store, now) => (patrolPending(store) ? now : null),
     async run(store, ctx) {
+      if (!scheduledPatrolEnabled(ctx.env)) return { skipped: 1, disabled: 1 };
       if (ctx.room?.patrolTick) return ctx.room.patrolTick();
       return runPatrolTick(store, { deadline: ctx.deadline });
     }

@@ -107,6 +107,11 @@ CREATE INDEX IF NOT EXISTS current_messages_channel_public_seq ON messages(room_
 CREATE INDEX IF NOT EXISTS current_messages_incoming_seq ON messages(room_id,to_member_id,seq DESC,message_id DESC);
 CREATE INDEX IF NOT EXISTS current_messages_outgoing_seq ON messages(room_id,author_id,seq DESC,message_id DESC) WHERE to_member_id IS NOT NULL AND to_member_id<>'';
 CREATE INDEX IF NOT EXISTS current_messages_pair_seq ON messages(room_id,author_id,to_member_id,seq DESC,message_id DESC);
+CREATE INDEX IF NOT EXISTS current_messages_public_seq_live ON messages(room_id,seq DESC,message_id DESC) WHERE (to_member_id IS NULL OR to_member_id='') AND deleted_at IS NULL;
+CREATE INDEX IF NOT EXISTS current_messages_channel_public_seq_live ON messages(room_id,channel_id,seq DESC,message_id DESC) WHERE (to_member_id IS NULL OR to_member_id='') AND deleted_at IS NULL;
+CREATE INDEX IF NOT EXISTS current_messages_incoming_seq_live ON messages(room_id,to_member_id,seq DESC,message_id DESC) WHERE deleted_at IS NULL;
+CREATE INDEX IF NOT EXISTS current_messages_outgoing_seq_live ON messages(room_id,author_id,seq DESC,message_id DESC) WHERE (to_member_id IS NOT NULL AND to_member_id<>'') AND deleted_at IS NULL;
+CREATE INDEX IF NOT EXISTS current_messages_pair_seq_live ON messages(room_id,author_id,to_member_id,seq DESC,message_id DESC) WHERE deleted_at IS NULL;
 `;
 export function verifyCurrentRoomSchema(db) {
   // Cache lookup locations only. Every invocation checks the complete ORIGINAL
@@ -718,14 +723,14 @@ export function withCurrentWorkReadUnits(store,roomId,operation) {
 
 // Three separately indexed visibility streams avoid scanning private history
 // while constructing a public window. Only admitted scalars cross before rows.
-export function currentConversationRows(store,roomId,{viewerId,limit,before,beforeId,messageId,channelId,peerMemberId,floor}) {
+export function currentConversationRows(store,roomId,{viewerId,limit,before,beforeId,messageId,channelId,peerMemberId,floor,liveOnly=false}) {
   if(limit>64)refuse('Current conversation pages support at most64 messages');
   const db=store.db,b=contextBudgets.get(db)??budget();
   if(messageId!==null) {
     // Addressed selection always uses the existing primary key, including a
     // missing/old/private identity. Never scan a seq stream to find it.
     const source=readCurrentMessage(db,roomId,messageId,b),m=source?.value;
-    const visible=m&&(!m.toMemberId||m.authorId===viewerId||m.toMemberId===viewerId)
+    const visible=m&&(!liveOnly||!m.deletedAt)&&(!m.toMemberId||m.authorId===viewerId||m.toMemberId===viewerId)
       &&(channelId===null||!m.toMemberId&&(m.channelId||'general')===channelId)
       &&(peerMemberId===null||(m.authorId===viewerId&&m.toMemberId===peerMemberId)||(m.authorId===peerMemberId&&m.toMemberId===viewerId))
       &&messageInHistory(m,floor);
@@ -744,7 +749,7 @@ export function currentConversationRows(store,roomId,{viewerId,limit,before,befo
       ?{index:'current_messages_outgoing_seq',where:"author_id=? AND to_member_id IS NOT NULL AND to_member_id<>''",args:[viewerId]}
       :{index:'current_messages_pair_seq',where:'author_id=? AND to_member_id=?',args:[viewerId,peerMemberId]});
   }
-  for(const stream of streams){stream.before=before;stream.beforeId=beforeId;stream.rows=[];stream.done=false;}
+  for(const stream of streams){if(liveOnly){stream.index+='_live';stream.where='('+stream.where+') AND deleted_at IS NULL';}stream.before=before;stream.beforeId=beforeId;stream.rows=[];stream.done=false;}
   const refill=stream=>{
     if(stream.rows.length||stream.done)return;
     // History/time predicates are residuals AFTER this bounded source window.

@@ -18,7 +18,7 @@ export function readCurrentNativeInbox(store,secret,roomId,{limit=50,after,older
   if(recent){
     const saved=olderCursor===undefined?null:conversationCursorCodec(store).decode(olderCursor);
     if(olderCursor!==undefined&&(!saved||Object.entries(binding).some(([k,v])=>saved[k]!==v)))throw new ServiceError(409,'stale_inbox_cursor','Inbox source changed or the service restarted; restart without olderCursor');
-    const selected=currentConversationRows(store,roomId,{viewerId:memberId,limit:binding.limit,before:saved?.before??head.sequence+1,beforeId:saved?.beforeId??'',messageId:null,channelId:null,peerMemberId:null,floor});
+    const selected=currentConversationRows(store,roomId,{viewerId:memberId,limit:binding.limit,before:saved?.before??head.sequence+1,beforeId:saved?.beforeId??'',messageId:null,channelId:null,peerMemberId:null,floor,liveOnly:true});
     const events=selected.rows.map(row=>{
       const m=JSON.parse(row.body),scalar=store.db.prepare('SELECT id,length(CAST(body AS BLOB)) AS bytes FROM events WHERE room_id=? AND sequence=?').get(roomId,row.position);
       if(!scalar||scalar.bytes>131072)throw new ServiceError(409,'current_room_context_unavailable','Recent message needs a bounded opening event');

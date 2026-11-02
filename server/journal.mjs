@@ -599,6 +599,24 @@ const membershipHash = row => createHash("sha256").update(JSON.stringify([
 ])).digest("hex");
 const membershipInvalid = () => { throw new Error("Membership delegation journal requires operator reconciliation"); };
 
+export function validateDelegationJournalStep(row, { prior = false, seen = false, priorHash = MEMBERSHIP_ZERO, previousSequence = 0 } = {}) {
+      const baseline = row.action === "baseline_active" || row.action === "baseline_revoked";
+      const rollback = baseline && row.actor_id === "rollback_unattributed";
+      const next = row.next_active === 1;
+      if (!Number.isSafeInteger(row.sequence) || row.sequence !== previousSequence + 1 || !Number.isSafeInteger(row.recorded_at)
+        || row.recorded_at < 0 || !/^[A-Za-z0-9_-]{1,64}$/.test(row.identity_id)
+        || typeof row.room_id !== "string" || !row.room_id || typeof row.actor_id !== "string" || !row.actor_id
+        || ![0, 1].includes(row.prior_active) || ![0, 1].includes(row.next_active)
+        || !["baseline_active", "baseline_revoked", "grant", "revoke", "revoke_effective"].includes(row.action)
+        || row.prior_hash !== (priorHash) || row.hash !== membershipHash(row)
+        || row.prior_active !== Number(prior) || seen && baseline && !rollback
+        || baseline && (!rollback && row.actor_id !== "legacy_unattributed"
+          || next !== (row.action === "baseline_active") || rollback && prior === next)
+        || !baseline && (row.actor_id === "legacy_unattributed" || row.actor_id === "rollback_unattributed"
+          || prior === next || next !== (row.action === "grant"))) membershipInvalid();
+      return next;
+}
+
 export class MembershipDelegationJournal extends JournalBase {
   append(roomId, identityId, action, actorId, at, priorActive, nextActive) {
     const previous = this.db.prepare("SELECT hash FROM membership_delegation_journal WHERE room_id=? ORDER BY sequence DESC LIMIT 1").get(roomId);
@@ -640,9 +658,9 @@ export class MembershipDelegationJournal extends JournalBase {
     this.verify();
     return rows.length;
   }
-  verify({ allowAbsent = false, allowPending = false } = {}) {
+  verifySchema({ allowAbsent = false } = {}) {
     const table = this.db.prepare("SELECT sql FROM sqlite_master WHERE type='table' AND name='membership_delegation_journal'").get();
-    if (!table) { if (allowAbsent) return { entries: 0, absent: true }; membershipInvalid(); }
+    if (!table) { if (allowAbsent) return false; membershipInvalid(); }
     const columns = this.db.prepare("PRAGMA table_info(membership_delegation_journal)").all().map(row => row.name);
     if (columns.join(",") !== "sequence,room_id,identity_id,action,actor_id,recorded_at,prior_active,next_active,prior_hash,hash"
       || !this.db.prepare("SELECT 1 FROM sqlite_master WHERE type='index' AND name='membership_delegation_journal_room'").get()) membershipInvalid();
@@ -651,26 +669,17 @@ export class MembershipDelegationJournal extends JournalBase {
     for (const name of ["membership_delegation_pending_insert", "membership_delegation_pending_update", "membership_delegation_pending_delete"]) {
       if (!this.db.prepare("SELECT 1 FROM sqlite_master WHERE type='trigger' AND name=?").get(name)) membershipInvalid();
     }
+    return true;
+  }
+  verify({ allowAbsent = false, allowPending = false } = {}) {
+    if (!this.verifySchema({ allowAbsent })) return { entries: 0, absent: true };
     const state = new Map(), chain = new Map();
     const rows = this.db.prepare("SELECT * FROM membership_delegation_journal ORDER BY sequence").all();
     let lastSequence = 0;
     for (const row of rows) {
       const key = JSON.stringify([row.room_id, row.identity_id]);
       const prior = state.get(key) ?? false;
-      const baseline = row.action === "baseline_active" || row.action === "baseline_revoked";
-      const rollback = baseline && row.actor_id === "rollback_unattributed";
-      const next = row.next_active === 1;
-      if (!Number.isSafeInteger(row.sequence) || row.sequence !== lastSequence + 1 || !Number.isSafeInteger(row.recorded_at)
-        || row.recorded_at < 0 || !/^[A-Za-z0-9_-]{1,64}$/.test(row.identity_id)
-        || typeof row.room_id !== "string" || !row.room_id || typeof row.actor_id !== "string" || !row.actor_id
-        || ![0, 1].includes(row.prior_active) || ![0, 1].includes(row.next_active)
-        || !["baseline_active", "baseline_revoked", "grant", "revoke", "revoke_effective"].includes(row.action)
-        || row.prior_hash !== (chain.get(row.room_id) ?? MEMBERSHIP_ZERO) || row.hash !== membershipHash(row)
-        || row.prior_active !== Number(prior) || state.has(key) && baseline && !rollback
-        || baseline && (!rollback && row.actor_id !== "legacy_unattributed"
-          || next !== (row.action === "baseline_active") || rollback && prior === next)
-        || !baseline && (row.actor_id === "legacy_unattributed" || row.actor_id === "rollback_unattributed"
-          || prior === next || next !== (row.action === "grant"))) membershipInvalid();
+      const next = validateDelegationJournalStep(row, { prior, seen: state.has(key), priorHash: chain.get(row.room_id) ?? MEMBERSHIP_ZERO, previousSequence: lastSequence });
       lastSequence = row.sequence; chain.set(row.room_id, row.hash); state.set(key, next);
     }
     const grants = this.db.prepare("SELECT room_id,identity_id,revoked_at FROM membership_delegation_grants").all();

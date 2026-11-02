@@ -1,3 +1,4 @@
+import {verifyDelegationForRecovery} from './recovery-delegation.mjs';
 import {completedRecoveryProjectionParity} from './recovery-projection-consumption.mjs';
 import {stripRecoveryProjection,verifyRecoveryWorkDefaults,verifyRecoveryGeneralChannel} from './recovery-projection-rules.mjs';
 import {verifyChannelUpdatesForRecovery} from './recovery-channel-updates.mjs';
@@ -140,7 +141,7 @@ export function auditRecovery(store) {
     store.requestRuns.verifySchema({ allowAbsent: true });
     store.inbox.verify();
     store.email.verify();
-    store.delegationJournal.verify();
+    store.delegationJournal.verifySchema(); verifyDelegationForRecovery(store);
     store.channelUpdates.verifySchema(); verifyChannelUpdatesForRecovery(store);
     store.handoffs.verifySchema(); store.handoffs.verify(); // Task 23: handoff journal integrity.
     const reminderAudit=verifyRemindersForRecovery(store,rooms);

@@ -1,0 +1,96 @@
+{
+  "source": "72b3b248d217041162a204ce6bb7232227f3806c",
+  "node": "v24.22.1",
+  "steps": [
+    {
+      "operation": "account-owned room create",
+      "status": 201
+    },
+    {
+      "operation": "existing identity join",
+      "status": 201,
+      "noNewIdentity": true
+    },
+    {
+      "operation": "post/propose/accept/save/complete",
+      "statuses": [
+        201,
+        201,
+        201,
+        201,
+        201
+      ],
+      "attributed": true
+    },
+    {
+      "operation": "new-process cold restart/exact completion retry",
+      "status": 200,
+      "duplicate": true,
+      "sameEvent": true,
+      "noBusinessWrites": true
+    },
+    {
+      "operation": "changed-intent refusal after restart",
+      "status": 409,
+      "noBusinessWrites": true
+    }
+  ],
+  "processStarts": 2,
+  "representation": "normalized-current-v1",
+  "recoveryAudit": true,
+  "accountSessionAndIdentitySurviveNewProcess": true,
+  "finalFacts": {
+    "fingerprints": {
+      "rooms": {
+        "rows": 1,
+        "sha256": "05e28739e2c85b0b20fac807b91b1270a0f6daf59f345af4bf0093c51f68f69b"
+      },
+      "events": {
+        "rows": 9,
+        "sha256": "6f5d4e97a07ce1b8e7945cec04b6d2538ea521cac1b9f869823860fec8c684c5"
+      },
+      "commands": {
+        "rows": 5,
+        "sha256": "ef63abb21ea311e0b775ae6645feab23e079302b6248a00934544b27351307e7"
+      },
+      "work_entities": {
+        "rows": 1,
+        "sha256": "470c3e4e8a0fb7ab9681b85d081554fdbec3474bea5b00266805c2867e7edaa9"
+      },
+      "work_claims": {
+        "rows": 0,
+        "sha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+      },
+      "current_room_records": {
+        "rows": 17,
+        "sha256": "074a1610d7b06356136e2e2107d299470606db992e375e6fe9066637a557899d"
+      },
+      "current_room_record_proofs": {
+        "rows": 17,
+        "sha256": "bca46e144f6ac784b430cb1cdd8452c95d85d8aef56391742fa10295caead543"
+      },
+      "current_room_head": {
+        "rows": 1,
+        "sha256": "bc49214203d0d10e4ad05574ea5eaae048a2dba4c129d8fb04dbf5e2b8ba1205"
+      },
+      "operator_actions": {
+        "rows": 25,
+        "sha256": "99a3fd2b4c7da633c012fec102d78d9bf68176fb0edb166fb21662edcd1c06cf"
+      },
+      "work_claim_config": {
+        "rows": 0,
+        "sha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+      }
+    },
+    "identities": 1,
+    "accounts": 1,
+    "recoveryAudit": true,
+    "cost": {
+      "cpuUserMicros": 257287,
+      "cpuSystemMicros": 29849,
+      "rssBytes": 195231744
+    }
+  },
+  "wallMs": 582.0615,
+  "scope": "Actual local HTTP/fileSQLite with fresh fixture-provisioned account/session and preexisting global identity; room/create/invite/join/work are actual HTTP. New server process on same disk database, not backup restore, SIGKILL/power failure, signup/provider or hosted/peer-device qualification."
+}

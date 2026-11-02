@@ -2,19 +2,20 @@ import {Buffer} from 'node:buffer';
 import {applicationTables} from './writer-fence.mjs';
 import {restoreProgress,inRestoreContext,withRestoreAuditRows} from './restore-admission.mjs';
 import {captureRecoveryReportSnapshot,readRecoveryReportSnapshot} from './recovery-report-snapshot.mjs';
-import {initialRecoveryReportRow,advanceRecoveryReportRow} from './recovery-report-source.mjs';
+import {initialRecoveryReportRow,advanceRecoveryReportRow,recoveryReportRowid} from './recovery-report-source.mjs';
 import {initialRecoveryReportTable,appendRecoveryReportChunk,sealRecoveryReportTable,advanceRecoveryReportTable,recoveryReportTableResult,initialRecoveryReportDigest,appendRecoveryReportDigest,finishRecoveryReportDigest} from './recovery-report-continuation.mjs';
 const fail=()=>{throw Error('Recovery report stage requires reconciliation');};
 export function validateRecoveryReportStage(p){
  if(!p||Object.keys(p).sort().join(',')!=='dataHash,dataSha256,results,rowAfter,scratchRows,snapshotHash,source,stage,table,tableIndex,version'||p.version!==1
   ||!['source','sort','complete'].includes(p.stage)||!/^[a-f0-9]{64}$/.test(p.snapshotHash??'')
-  ||!Number.isSafeInteger(p.scratchRows)||p.scratchRows<1||!Number.isInteger(p.tableIndex)||p.tableIndex<0||p.tableIndex>applicationTables.length||p.rowAfter!==null&&!Number.isSafeInteger(p.rowAfter)
+   || ! Number . isSafeInteger ( p . scratchRows ) || p . scratchRows < 1 || ! Number . isInteger ( p . tableIndex ) || p . tableIndex < 0 || p . tableIndex > applicationTables . length || p . rowAfter !== null && typeof p . rowAfter !== 'string'
   ||!Array.isArray(p.results)||p.results.length!==p.tableIndex||p.results.some((v,i)=>v.table!==applicationTables[i]||!Number.isSafeInteger(v.rows)||v.rows<0||!/^[a-f0-9]{64}$/.test(v.sha256??''))
   ||Buffer.byteLength(JSON.stringify(p))>512*1024)fail();
- if(p.stage==='complete'){if(p.tableIndex!==applicationTables.length||p.table!==null||p.source!==null||p.dataSha256!==finishRecoveryReportDigest(p.dataHash))fail();}
+ if(p.rowAfter!==null)recoveryReportRowid(p.rowAfter);
+  if ( p . stage === 'complete' ) { if ( p . tableIndex !== applicationTables . length || p . table !== null || p . source !== null || p . dataSha256 !== finishRecoveryReportDigest ( p . dataHash ) ) fail ( ) ; }
  else if(p.tableIndex>=applicationTables.length||p.table?.table!==applicationTables[p.tableIndex]||p.dataSha256!==null
   ||(p.stage==='source'&&p.table.stage!=='ingest')||(p.stage==='sort'&&p.table.stage==='ingest')
-  ||p.source!==null&&(p.stage!=='source'||p.source.table!==applicationTables[p.tableIndex]||(p.rowAfter!==null&&p.source.rowid<=p.rowAfter)))fail();
+  ||p.source!==null&&(p.stage!=='source'||p.source.table!==applicationTables[p.tableIndex]||(p.rowAfter!==null&&BigInt(p.source.rowid)<=BigInt(p.rowAfter))))fail();
 }
 // The existing restore entrypoint supplies its existing exact sealed-schema
 // admission callback; it must not create a second, weaker source/freeze check.
@@ -44,9 +45,9 @@ export function advanceRecoveryReport(store,restoreId,previous,{assertSealedSour
    }
   }else{
    if(p.source===null){
-    const next=name==='current_restore_audit_scratch'?undefined:name==='current_restore_admission'?(p.rowAfter===null?{__report_rid:1}:undefined):db.prepare(`SELECT rowid AS __report_rid FROM "${name}"${p.rowAfter===null?'':' WHERE rowid>?'} ORDER BY rowid LIMIT 1`).get(...(p.rowAfter===null?[]:[p.rowAfter]));
+    const next=name==='current_restore_audit_scratch'?undefined:name==='current_restore_admission'?(p.rowAfter===null?{__report_rid:'1'}:undefined):db.prepare(`SELECT CAST(rowid AS TEXT) AS __report_rid FROM "${name}"${p.rowAfter===null?'':' WHERE rowid>?'} ORDER BY rowid LIMIT 1`).get(...(p.rowAfter===null?[]:[p.rowAfter]));
     if(!next){p.table=sealRecoveryReportTable(p.table);p.stage='sort';continue;}
-    if(!Number.isSafeInteger(next.__report_rid))fail();
+    recoveryReportRowid(next.__report_rid);
     // maxRowBytes is sealed from the actual original source. Only target-owned
     // control/permit rows may exist outside that list; others must be empty.
     const entry=state.seal.tables.find(t=>t.name===name),target=name==='current_restore_admission'||name==='current_room_writer_permit'||name==='public_work_claim_writer_permit';

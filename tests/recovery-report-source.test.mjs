@@ -14,3 +14,7 @@ test('Node BLOB numeric keys preserve JS lexicographic order without a full-byte
 test('source size, malformed continuation and missing addressed rows fail closed',()=>{
  const db=new DatabaseSync(':memory:');db.exec("CREATE TABLE input(z);INSERT INTO input VALUES('xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx')");assert.throws(()=>encode(db,1,0));let p=initialRecoveryReportRow(db,'input',1,100);assert.throws(()=>advanceRecoveryReportRow(db,{...p,extra:true}));db.exec('DELETE FROM input');assert.throws(()=>advanceRecoveryReportRow(db,p));
 });
+test('all signed SQLite rowids remain addressable without lossy JS integer conversion',()=>{
+ const db=new DatabaseSync(':memory:');db.exec('CREATE TABLE input(z)');
+ for(const id of ['-9223372036854775808','-9007199254740991','-1','0','9223372036854775807']){db.prepare('INSERT INTO input(rowid,z) VALUES(CAST(? AS INTEGER),?)').run(id,'value '+id);assert.equal(encode(db,id).text,canonical(db.prepare('SELECT * FROM input WHERE rowid=CAST(? AS INTEGER)').get(id)));}
+});

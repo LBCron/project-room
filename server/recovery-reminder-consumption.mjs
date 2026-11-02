@@ -35,7 +35,7 @@ function authority(store,id,sealId){
  const db=store.db;requireState(db.isTransaction&&inRestoreContext(db));
  const state=restoreProgress(db),audit=state.progress?.audit;
  requireState(state.state==='pending'&&state.phase==='audit_pending'&&state.restore_id===id&&state.seal?.id===sealId
-  &&state.seal.auditVersion===RESTORE_AUDIT_VERSION&&audit?.version===RESTORE_AUDIT_VERSION&&audit.stage==='full_audit_pending');
+   && state . seal . auditVersion === RESTORE_AUDIT_VERSION && audit ?. version === RESTORE_AUDIT_VERSION && audit . stage === 'full_audit_pending' ) ;
  const cursor=audit.reminders;validateRecoveryReminders(cursor);
  const entry=table=>state.seal.tables.find(e=>e.name===table);
  requireState(cursor.stage==='complete'&&cursor.version===2&&cursor.receipts===entry('private_reminder_commands')?.expected.rows

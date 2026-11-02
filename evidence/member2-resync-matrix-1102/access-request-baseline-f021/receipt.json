@@ -1,0 +1,348 @@
+{
+  "schema": "member2-access-request-baseline-v1",
+  "pin": "f02132a1c921af7953368a7340f6d03b87a78d28",
+  "pass": true,
+  "node": "v24.22.1",
+  "native_environment": {
+    "miniflare": "4.20260730.0",
+    "esbuild": "0.28.2",
+    "workerd": "2026-07-30"
+  },
+  "browser_environment": {
+    "playwright": "1.62.1",
+    "browser": "existing cached Chromium1234",
+    "server_backend": "Node SQLite; separate from Native SQL-cost experiment"
+  },
+  "native_samples": [
+    {
+      "count": 25,
+      "role": "owner",
+      "repeat": 0,
+      "endpoint": "access-requests",
+      "httpStatus": 200,
+      "cost": {
+        "statements": 82,
+        "rowsRead": 820,
+        "rowsWritten": 0,
+        "unknown": 0
+      },
+      "ms": 6,
+      "payloadBytes": 9362,
+      "returnedRequests": 25,
+      "returnedItems": null,
+      "contractVersion": null,
+      "hasQueueContinuation": false,
+      "error": null
+    },
+    {
+      "count": 25,
+      "role": "owner",
+      "repeat": 1,
+      "endpoint": "access-requests",
+      "httpStatus": 200,
+      "cost": {
+        "statements": 80,
+        "rowsRead": 803,
+        "rowsWritten": 0,
+        "unknown": 0
+      },
+      "ms": 3,
+      "payloadBytes": 9362,
+      "returnedRequests": 25,
+      "returnedItems": null,
+      "contractVersion": null,
+      "hasQueueContinuation": false,
+      "error": null
+    },
+    {
+      "count": 25,
+      "role": "admin",
+      "repeat": 0,
+      "endpoint": "access-requests",
+      "httpStatus": 200,
+      "cost": {
+        "statements": 90,
+        "rowsRead": 813,
+        "rowsWritten": 0,
+        "unknown": 0
+      },
+      "ms": 1,
+      "payloadBytes": 9362,
+      "returnedRequests": 25,
+      "returnedItems": null,
+      "contractVersion": null,
+      "hasQueueContinuation": false,
+      "error": null
+    },
+    {
+      "count": 25,
+      "role": "admin",
+      "repeat": 1,
+      "endpoint": "access-requests",
+      "httpStatus": 200,
+      "cost": {
+        "statements": 90,
+        "rowsRead": 813,
+        "rowsWritten": 0,
+        "unknown": 0
+      },
+      "ms": 1,
+      "payloadBytes": 9362,
+      "returnedRequests": 25,
+      "returnedItems": null,
+      "contractVersion": null,
+      "hasQueueContinuation": false,
+      "error": null
+    },
+    {
+      "count": 25,
+      "role": "owner",
+      "endpoint": "needs-attention",
+      "httpStatus": 200,
+      "cost": {
+        "statements": 173,
+        "rowsRead": 1543,
+        "rowsWritten": 0,
+        "unknown": 0
+      },
+      "ms": 6,
+      "payloadBytes": 1717,
+      "returnedRequests": null,
+      "returnedItems": 0,
+      "contractVersion": 2,
+      "hasQueueContinuation": false,
+      "error": null
+    },
+    {
+      "count": 1000,
+      "role": "owner",
+      "repeat": 0,
+      "endpoint": "access-requests",
+      "httpStatus": 200,
+      "cost": {
+        "statements": 82,
+        "rowsRead": 3745,
+        "rowsWritten": 0,
+        "unknown": 0
+      },
+      "ms": 11,
+      "payloadBytes": 360362,
+      "returnedRequests": 1000,
+      "returnedItems": null,
+      "contractVersion": null,
+      "hasQueueContinuation": false,
+      "error": null
+    },
+    {
+      "count": 1000,
+      "role": "owner",
+      "repeat": 1,
+      "endpoint": "access-requests",
+      "httpStatus": 200,
+      "cost": {
+        "statements": 80,
+        "rowsRead": 3728,
+        "rowsWritten": 0,
+        "unknown": 0
+      },
+      "ms": 6,
+      "payloadBytes": 360362,
+      "returnedRequests": 1000,
+      "returnedItems": null,
+      "contractVersion": null,
+      "hasQueueContinuation": false,
+      "error": null
+    },
+    {
+      "count": 1000,
+      "role": "admin",
+      "repeat": 0,
+      "endpoint": "access-requests",
+      "httpStatus": 200,
+      "cost": {
+        "statements": 90,
+        "rowsRead": 3738,
+        "rowsWritten": 0,
+        "unknown": 0
+      },
+      "ms": 5,
+      "payloadBytes": 360362,
+      "returnedRequests": 1000,
+      "returnedItems": null,
+      "contractVersion": null,
+      "hasQueueContinuation": false,
+      "error": null
+    },
+    {
+      "count": 1000,
+      "role": "admin",
+      "repeat": 1,
+      "endpoint": "access-requests",
+      "httpStatus": 200,
+      "cost": {
+        "statements": 90,
+        "rowsRead": 3738,
+        "rowsWritten": 0,
+        "unknown": 0
+      },
+      "ms": 6,
+      "payloadBytes": 360362,
+      "returnedRequests": 1000,
+      "returnedItems": null,
+      "contractVersion": null,
+      "hasQueueContinuation": false,
+      "error": null
+    },
+    {
+      "count": 1000,
+      "role": "owner",
+      "endpoint": "needs-attention",
+      "httpStatus": 200,
+      "cost": {
+        "statements": 173,
+        "rowsRead": 1543,
+        "rowsWritten": 0,
+        "unknown": 0
+      },
+      "ms": 13,
+      "payloadBytes": 1721,
+      "returnedRequests": null,
+      "returnedItems": 0,
+      "contractVersion": 2,
+      "hasQueueContinuation": false,
+      "error": null
+    }
+  ],
+  "browser_samples": [
+    {
+      "count": 25,
+      "role": "owner",
+      "dom": {
+        "rows": 25,
+        "nodes": 225,
+        "buttons": 75,
+        "height": 3235
+      },
+      "queueResponses": [
+        {
+          "status": 200,
+          "bytes": 9362,
+          "returnedRequests": 25,
+          "hasQueueContinuation": false
+        }
+      ],
+      "pagesVisible": false,
+      "keyboardPartialAndEscapeFocus": true,
+      "exactAdminGrantControls": null,
+      "noDecisionsSubmitted": true,
+      "browserErrors": []
+    },
+    {
+      "count": 25,
+      "role": "admin",
+      "dom": {
+        "rows": 25,
+        "nodes": 250,
+        "buttons": 75,
+        "height": 4734
+      },
+      "queueResponses": [
+        {
+          "status": 200,
+          "bytes": 9362,
+          "returnedRequests": 25,
+          "hasQueueContinuation": false
+        }
+      ],
+      "pagesVisible": false,
+      "keyboardPartialAndEscapeFocus": true,
+      "exactAdminGrantControls": true,
+      "noDecisionsSubmitted": true,
+      "browserErrors": []
+    },
+    {
+      "count": 1000,
+      "role": "owner",
+      "dom": {
+        "rows": 1000,
+        "nodes": 9000,
+        "buttons": 3000,
+        "height": 129695
+      },
+      "queueResponses": [
+        {
+          "status": 200,
+          "bytes": 360362,
+          "returnedRequests": 1000,
+          "hasQueueContinuation": false
+        }
+      ],
+      "pagesVisible": false,
+      "keyboardPartialAndEscapeFocus": true,
+      "exactAdminGrantControls": null,
+      "noDecisionsSubmitted": true,
+      "browserErrors": []
+    },
+    {
+      "count": 1000,
+      "role": "admin",
+      "dom": {
+        "rows": 1000,
+        "nodes": 10000,
+        "buttons": 3000,
+        "height": 189664
+      },
+      "queueResponses": [
+        {
+          "status": 200,
+          "bytes": 360362,
+          "returnedRequests": 1000,
+          "hasQueueContinuation": false
+        }
+      ],
+      "pagesVisible": false,
+      "keyboardPartialAndEscapeFocus": true,
+      "exactAdminGrantControls": true,
+      "noDecisionsSubmitted": true,
+      "browserErrors": []
+    }
+  ],
+  "source_clean_after": true,
+  "limits": [
+    "Local synthetic normal-producer data only",
+    "Constructor/seeding excluded from Native warm costs",
+    "No CPU or production claim",
+    "No shared/API/UI edits or decisions submitted",
+    "Baseline reproduces unbounded queue size; focus/permission preservation is a positive control"
+  ],
+  "artifacts": {
+    "browser.log": {
+      "bytes": 2510,
+      "sha256": "6a1536f986f18f8c783cabf8490ea0806ebb5f3eb26fa1fcaa9fba39ddbd7fe5"
+    },
+    "access_request_seed.mjs": {
+      "bytes": 1138,
+      "sha256": "4d26b6c292e8026d6a27e7b012a4b8c1ea75ea5d111e439c90cf7b6e5373a4f9"
+    },
+    "access_request_native_baseline.mjs": {
+      "bytes": 5044,
+      "sha256": "bdad884c043cf7945b511251e59acdd019bc483eb8967d9794b648f4d9d97e6d"
+    },
+    "browser.stderr": {
+      "bytes": 1557,
+      "sha256": "64e422e39eeac0586f052dcbd526f91b545589588aa277b544149f1a6a9b2774"
+    },
+    "native.log": {
+      "bytes": 8514,
+      "sha256": "08df74ba2e2e3ccb69bfa6f21065869c62b9572e55616547ba4b32d08431567c"
+    },
+    "native.stderr": {
+      "bytes": 988,
+      "sha256": "b8bdf0d9eac189005c4a24a0f29987a6e8cdf88c78ba8dc6f01f5a0d6a286057"
+    },
+    "access_request_browser_baseline.mjs": {
+      "bytes": 5001,
+      "sha256": "f2993eb56a3cbe0d6450b5b7f6bbba11f5a3e8a81321618308d8affe19f1a126"
+    }
+  }
+}

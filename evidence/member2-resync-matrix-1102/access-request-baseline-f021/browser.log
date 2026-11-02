@@ -1,0 +1,100 @@
+{
+  "schema": "member2-access-request-browser-baseline-v1",
+  "pin": "f02132a1c921af7953368a7340f6d03b87a78d28",
+  "node": "v24.22.1",
+  "samples": [
+    {
+      "count": 25,
+      "role": "owner",
+      "dom": {
+        "rows": 25,
+        "nodes": 225,
+        "buttons": 75,
+        "height": 3235
+      },
+      "queueResponses": [
+        {
+          "status": 200,
+          "bytes": 9362,
+          "returnedRequests": 25,
+          "hasQueueContinuation": false
+        }
+      ],
+      "pagesVisible": false,
+      "keyboardPartialAndEscapeFocus": true,
+      "exactAdminGrantControls": null,
+      "noDecisionsSubmitted": true,
+      "browserErrors": []
+    },
+    {
+      "count": 25,
+      "role": "admin",
+      "dom": {
+        "rows": 25,
+        "nodes": 250,
+        "buttons": 75,
+        "height": 4734
+      },
+      "queueResponses": [
+        {
+          "status": 200,
+          "bytes": 9362,
+          "returnedRequests": 25,
+          "hasQueueContinuation": false
+        }
+      ],
+      "pagesVisible": false,
+      "keyboardPartialAndEscapeFocus": true,
+      "exactAdminGrantControls": true,
+      "noDecisionsSubmitted": true,
+      "browserErrors": []
+    },
+    {
+      "count": 1000,
+      "role": "owner",
+      "dom": {
+        "rows": 1000,
+        "nodes": 9000,
+        "buttons": 3000,
+        "height": 129695
+      },
+      "queueResponses": [
+        {
+          "status": 200,
+          "bytes": 360362,
+          "returnedRequests": 1000,
+          "hasQueueContinuation": false
+        }
+      ],
+      "pagesVisible": false,
+      "keyboardPartialAndEscapeFocus": true,
+      "exactAdminGrantControls": null,
+      "noDecisionsSubmitted": true,
+      "browserErrors": []
+    },
+    {
+      "count": 1000,
+      "role": "admin",
+      "dom": {
+        "rows": 1000,
+        "nodes": 10000,
+        "buttons": 3000,
+        "height": 189664
+      },
+      "queueResponses": [
+        {
+          "status": 200,
+          "bytes": 360362,
+          "returnedRequests": 1000,
+          "hasQueueContinuation": false
+        }
+      ],
+      "pagesVisible": false,
+      "keyboardPartialAndEscapeFocus": true,
+      "exactAdminGrantControls": true,
+      "noDecisionsSubmitted": true,
+      "browserErrors": []
+    }
+  ],
+  "scope": "Actual local Chromium full app, real account-session signin and HTTP/SQLite producer APIs. Node SQLite backend; Native physical cost is separately measured. No fake API replies, production load, decisions or runtime source edits."
+}

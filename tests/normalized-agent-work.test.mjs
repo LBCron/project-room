@@ -1,0 +1,11 @@
+import test from 'node:test';import assert from 'node:assert/strict';import {RoomStore} from '../server/store.mjs';import {AgentRooms} from '../server/agent-rooms.mjs';import {createRoomServer} from '../server/http.mjs';import {RoomAgentClient} from '../client/room-agent.mjs';import {linkWithProof} from './helpers/link-with-proof.mjs';
+async function setup(t,count=1){
+ const s=new RoomStore(':memory:'),owner=s.identities.create('Owen'),worker=s.identities.create('Vega'),other=s.identities.create('Lyra');new AgentRooms(s).create(owner.secret,{roomId:'commons',title:'Agent work',purpose:'Coordinate',starter:false});
+ for(const person of [worker,other]){linkWithProof(s,owner.secret,'commons',person,{displayName:person.identityId===worker.identityId?'Vega':'Lyra',permissions:[]});s.dmConsents.request('commons',owner.identityId,person.identityId,'Fixture');s.dmConsents.decide('commons',person.identityId,owner.identityId,'approve');}
+ for(let i=0;i<count;i++)s.command(owner.secret,'commons',{id:'ask-'+i,type:'message.posted',data:{messageId:'ask-'+i,toMemberId:worker.identityId,requestKind:'reply',body:'PRIVATE-BODY-SENTINEL'}});
+ s.command(owner.secret,'commons',{id:'other-private',type:'message.posted',data:{messageId:'other-private',toMemberId:other.identityId,requestKind:'reply',body:'OTHER-PRIVATE-SENTINEL'}});
+ s.room=()=>{throw Error('forbidden full-room hydration');};const server=createRoomServer({store:s});await new Promise(r=>server.listen(0,'127.0.0.1',r));t.after(async()=>{server.closeStreams();server.closeAllConnections();await new Promise(r=>server.close(r));s.close();});const origin='http://127.0.0.1:'+server.address().port,client=new RoomAgentClient({origin,roomId:'commons',memberId:worker.identityId,token:worker.secret});return{s,owner,worker,other,origin,client};
+}
+test('normalized selected agent work is private and never hydrates a room',async t=>{
+ const f=await setup(t),before=f.s.headSequence('commons'),result=await f.client.agentWork();assert.deepEqual(result.requests.map(r=>r.id),['ask-0']);assert.deepEqual(result.runs,{});assert.equal(result.executionGranted,false);assert.equal(result.ownerId,f.owner.identityId);assert.doesNotMatch(JSON.stringify(result),/PRIVATE-BODY-SENTINEL|OTHER-PRIVATE-SENTINEL|other-private/);assert.equal(f.s.headSequence('commons'),before);
+});

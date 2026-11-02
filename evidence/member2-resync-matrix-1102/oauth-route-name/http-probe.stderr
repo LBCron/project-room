@@ -1,0 +1,17 @@
+{"event":"room.cold_start","clockSemantics":"runtime-dependent","durationMs":40,"integrity":"eager","phases":{"schema":{"ms":10,"rowsRead":0},"plugin":{"ms":17,"rowsRead":0},"fence":{"ms":9,"rowsRead":0},"verifies":{"ms":2,"rowsRead":0},"checksum":{"ms":0,"rowsRead":0}},"cpuMs":41,"heapBytes":39847384,"rooms":0,"sequences":0,"projectionBytes":0,"events":0}
+{"event":"room.store_initialized","initializationMs":40,"legacyColdStartMs":40,"clockSemantics":"runtime-dependent","cpuMeasured":false}
+[boot-config] ERROR: the agent card is UNSIGNED and no explicit opt-in was recorded at build time — members fetching /.well-known/agent-card.json will see an unsigned card (marked signed:false). To fix: set ROOM_AGENT_CARD_SIGNING_KEY and re-run scripts/sign-agent-card.mjs, or pass --allow-unsigned explicitly to record the choice.
+ROOM_SECURITY_CONTACT is unset; /.well-known/security.txt returns 404
+No magic-link mailer is configured: email-verification gates are relaxed (agent-invite escape hatch); /api/health reports emailVerification: relaxed-no-mailer
+room diagnostic op_IsJamyHp 405 method_not_allowed input /api/rooms/:roomId/activity-read
+room diagnostic op_XTfMNVfw 405 method_not_allowed input /api/rooms/:roomId/activity-read-all
+room diagnostic op_jzZkRBqy 405 method_not_allowed input /api/rooms/:roomId/commands
+room diagnostic op_p2VvjGjw 405 method_not_allowed input /api/rooms/:roomId/cursor
+room diagnostic op_d9YCO9Qh 405 method_not_allowed input /api/rooms/:roomId/guest-invites
+room diagnostic op_5eg3cQI7 405 method_not_allowed input /api/rooms/:roomId/guest-invites-disconnect
+room diagnostic op_XEL6vxg_ 405 method_not_allowed input /api/rooms/:roomId/guest-invites-list
+room diagnostic op_DWXcY5QY 405 method_not_allowed input /api/rooms/:roomId/guest-invites-revoke
+room diagnostic op_wLJBpmpk 405 method_not_allowed input /api/rooms/:roomId/guest-invites-revoke-all
+room diagnostic op_0KAwfGhy 405 method_not_allowed input /api/rooms/:roomId/guest-invites-upgrade
+room diagnostic op_UqVBnYZx 405 method_not_allowed input /api/rooms/:roomId/import
+room diagnostic op_HyP1svkF 405 method_not_allowed input /api/rooms/:roomId/share-links-cancel

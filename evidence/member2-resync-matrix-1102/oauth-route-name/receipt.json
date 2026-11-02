@@ -1,0 +1,45 @@
+{
+  "standaloneCommit": "936f86fd5a0c65287d4f41a1c1bc20aa1b77f46a",
+  "standaloneTree": "c99b38bf20eb75cc5c72d4bfe296a5fd94114d14",
+  "standaloneParent": "00888c52110d36250d3e07629036701b72926d09",
+  "featurePackagingFollowup": "255816cbd7de046e4352b95e05a5a9a606f9f62c",
+  "featurePackagingTree": "149189cf378f25b454714787aea802f5bc638baa",
+  "composedCommit": "1785f8e970c8b0be0e5afc233e4a98ac91e5a424",
+  "composedTree": "2e3cdd110f82c2547adae96f20f3661c6ae87c88",
+  "localTestCommitSameComposedTree": "00bcb5266181fbd0e44e131898e98e7d4ff807fc",
+  "node": "24.22.1",
+  "standaloneFetchedTreeEqualsLocal": true,
+  "featurePackagingFetchedTreeEqualsLocal": true,
+  "composedFetchedTreeEqualsLocal": true,
+  "beforeLegacyGate": {
+    "exit": 1,
+    "testPass": 0,
+    "testFail": 1
+  },
+  "standaloneAfter": {
+    "openapiExit": 0,
+    "legacyInventoryExit": 0,
+    "routes": 893,
+    "removedInventedLegacyGET": 13,
+    "addedRoutes": 0,
+    "routeTestsPassed": 25,
+    "sponsorConsentTestsPassed": 28,
+    "eslintExit": 0,
+    "syntaxExit": 0,
+    "secretDiffExit": 0
+  },
+  "composedAfter": {
+    "focusedTestsPassed": 80,
+    "ciContractCommand": "CI=1 node scripts/check.mjs",
+    "ciContractExit": 0,
+    "ciContractEmbeddedTests": 15
+  },
+  "limits": [
+    "Local CI-mode contract check; no hosted GitHub workflow or full root unit-suite success claim.",
+    "No merge, deploy, live OAuth consent or peer execution claim.",
+    "Original Acorn/template-boundary hypothesis was experimentally disproved and discarded.",
+    "Only repair is3localbindingrename lines; no scanner/allowlist/dependency change.",
+    "Required generated skill mirror follows featureaec29 with1addedrow; runtime unchanged.",
+    "Prior Native/browser evidence remains pinned toaec29; composition uses focused80tests and fullCIcheck."
+  ]
+}

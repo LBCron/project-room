@@ -1,0 +1,7 @@
+journey-coverage: 23 claimed capabilities, every one linked to executable evidence
+no shadowed imports
+OpenAPI route gate: document parses, and every documented operation is served.
+Schema version 45 is stated consistently.
+server.json OK io.github.Uuriko/project-room 1.1.0
+skills-sync-check: content differs: project-room/references/errors-catalog.md
+skills-sync-check: FAILED (1). Run: node scripts/skills-sync.mjs

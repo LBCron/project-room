@@ -1,0 +1,58 @@
+✖ the legacy allowlist matches the chain and only shrinks (661.324541ms)
+ℹ tests 1
+ℹ suites 0
+ℹ pass 0
+ℹ fail 1
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 833.777417
+
+✖ failing tests:
+
+test at tests/route-table-parity.test.js:345:1
+✖ the legacy allowlist matches the chain and only shrinks (661.324541ms)
+  AssertionError [ERR_ASSERTION]: Expected values to be strictly deep-equal:
+  + actual - expected
+  
+  + [
+  +   'legacy route is not in the RT-0 baseline (the allowlist only shrinks): GET /api/rooms/{}/activity-read',
+  +   'legacy route is not listed in routes: GET /api/rooms/{}/activity-read',
+  +   'legacy route is not in the RT-0 baseline (the allowlist only shrinks): GET /api/rooms/{}/activity-read-all',
+  +   'legacy route is not listed in routes: GET /api/rooms/{}/activity-read-all',
+  +   'legacy route is not in the RT-0 baseline (the allowlist only shrinks): GET /api/rooms/{}/commands',
+  +   'legacy route is not listed in routes: GET /api/rooms/{}/commands',
+  +   'legacy route is not in the RT-0 baseline (the allowlist only shrinks): GET /api/rooms/{}/cursor',
+  +   'legacy route is not listed in routes: GET /api/rooms/{}/cursor',
+  +   'legacy route is not in the RT-0 baseline (the allowlist only shrinks): GET /api/rooms/{}/guest-invites',
+  +   'legacy route is not listed in routes: GET /api/rooms/{}/guest-invites',
+  +   'legacy route is not in the RT-0 baseline (the allowlist only shrinks): GET /api/rooms/{}/guest-invites-disconnect',
+  +   'legacy route is not listed in routes: GET /api/rooms/{}/guest-invites-disconnect',
+  +   'legacy route is not in the RT-0 baseline (the allowlist only shrinks): GET /api/rooms/{}/guest-invites-list',
+  +   'legacy route is not listed in routes: GET /api/rooms/{}/guest-invites-list',
+  +   'legacy route is not in the RT-0 baseline (the allowlist only shrinks): GET /api/rooms/{}/guest-invites-revoke',
+  +   'legacy route is not listed in routes: GET /api/rooms/{}/guest-invites-revoke',
+  +   'legacy route is not in the RT-0 baseline (the allowlist only shrinks): GET /api/rooms/{}/guest-invites-revoke-all',
+  +   'legacy route is not listed in routes: GET /api/rooms/{}/guest-invites-revoke-all',
+  +   'legacy route is not in the RT-0 baseline (the allowlist only shrinks): GET /api/rooms/{}/guest-invites-upgrade',
+  +   'legacy route is not listed in routes: GET /api/rooms/{}/guest-invites-upgrade',
+  +   'legacy route is not listed in routes: GET /api/rooms/{}/human-push',
+  +   'legacy route is not in the RT-0 baseline (the allowlist only shrinks): GET /api/rooms/{}/import',
+  +   'legacy route is not listed in routes: GET /api/rooms/{}/import',
+  +   'legacy route is not in the RT-0 baseline (the allowlist only shrinks): GET /api/rooms/{}/share-links-cancel',
+  +   'legacy route is not listed in routes: GET /api/rooms/{}/share-links-cancel'
+  + ]
+  - []
+  
+      at TestContext.<anonymous> (file:///Users/potter/Documents/Codex/2026-10-22/you-x20/work/member2-oauth-route-name-1102/tests/route-table-parity.test.js:352:10)
+      at Test.runInAsyncScope (node:async_hooks:227:14)
+      at Test.run (node:internal/test_runner/test:1402:25)
+      at Test.start (node:internal/test_runner/test:1262:17)
+      at startSubtestAfterBootstrap (node:internal/test_runner/harness:387:17) {
+    generatedMessage: true,
+    code: 'ERR_ASSERTION',
+    actual: [ 'legacy route is not in the RT-0 baseline (the allowlist only shrinks): GET /api/rooms/{}/activity-read', 'legacy route is not listed in routes: GET /api/rooms/{}/activity-read', 'legacy route is not in the RT-0 baseline (the allowlist only shrinks): GET /api/rooms/{}/activity-read-all', 'legacy route is not listed in routes: GET /api/rooms/{}/activity-read-all', 'legacy route is not in the RT-0 baseline (the allowlist only shrinks): GET /api/rooms/{}/commands', 'legacy route is not listed in routes: GET /api/rooms/{}/commands', 'legacy route is not in the RT-0 baseline (the allowlist only shrinks): GET /api/rooms/{}/cursor', 'legacy route is not listed in routes: GET /api/rooms/{}/cursor', 'legacy route is not in the RT-0 baseline (the allowlist only shrinks): GET /api/rooms/{}/guest-invites', 'legacy route is not listed in routes: GET /api/rooms/{}/guest-invites', 'legacy route is not in the RT-0 baseline (the allowlist only shrinks): GET /api/rooms/{}/guest-invites-disconnect', 'legacy route is not listed in routes: GET /api/rooms/{}/guest-invites-disconnect', 'legacy route is not in the RT-0 baseline (the allowlist only shrinks): GET /api/rooms/{}/guest-invites-list', 'legacy route is not listed in routes: GET /api/rooms/{}/guest-invites-list', 'legacy route is not in the RT-0 baseline (the allowlist only shrinks): GET /api/rooms/{}/guest-invites-revoke', 'legacy route is not listed in routes: GET /api/rooms/{}/guest-invites-revoke', 'legacy route is not in the RT-0 baseline (the allowlist only shrinks): GET /api/rooms/{}/guest-invites-revoke-all', 'legacy route is not listed in routes: GET /api/rooms/{}/guest-invites-revoke-all', 'legacy route is not in the RT-0 baseline (the allowlist only shrinks): GET /api/rooms/{}/guest-invites-upgrade', 'legacy route is not listed in routes: GET /api/rooms/{}/guest-invites-upgrade', 'legacy route is not listed in routes: GET /api/rooms/{}/human-push', 'legacy route is not in the RT-0 baseline (the allowlist only shrinks): GET /api/rooms/{}/import', 'legacy route is not listed in routes: GET /api/rooms/{}/import', 'legacy route is not in the RT-0 baseline (the allowlist only shrinks): GET /api/rooms/{}/share-links-cancel', 'legacy route is not listed in routes: GET /api/rooms/{}/share-links-cancel' ],
+    expected: [],
+    operator: 'deepStrictEqual',
+    diff: 'simple'
+  }

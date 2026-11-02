@@ -1,0 +1,92 @@
+[
+  {
+    "path": "README.md",
+    "bytes": 2726,
+    "sha256": "09097e690a51630e046151705faa808d350a80ee68807e086b6d8417deb4a44f"
+  },
+  {
+    "path": "before.log",
+    "bytes": 5738,
+    "sha256": "0048e75b665341a38985f99a3a505651eea873d0bb8c4e5eecacc17fa289867c"
+  },
+  {
+    "path": "causal-trace.log",
+    "bytes": 1247,
+    "sha256": "0aa8bd8b76495b1df923f54cadabf7abd04c017743776f80131e7849a9ca4f25"
+  },
+  {
+    "path": "composed-check.log",
+    "bytes": 80337,
+    "sha256": "f4e04a806758da486cf80baae2f4b2043f2a438edee638b7bb8ac7b155323cc8"
+  },
+  {
+    "path": "composed-first-check-packaging-failure.log",
+    "bytes": 418,
+    "sha256": "eab65009c146985438c9610b5e74b5d3be1fc9642860d70ca83a379998fbbaa5"
+  },
+  {
+    "path": "composed-tests.log",
+    "bytes": 30775,
+    "sha256": "a3308765460f395da780cfe629b62a4ee3dc0492e7c3ec533ff44fa67fdef181"
+  },
+  {
+    "path": "consent-tests.log",
+    "bytes": 19632,
+    "sha256": "383d4907f99f2d7692d878e685c40f5386eae5eb9a451c96a2e3dd70ac20f0bf"
+  },
+  {
+    "path": "eslint.log",
+    "bytes": 536,
+    "sha256": "9240fddbd741873c7bc8e4897eb17f3e40a2338bb8d2f804b01a85d19210c1dd"
+  },
+  {
+    "path": "http-probe.log",
+    "bytes": 1216,
+    "sha256": "c241985fd6bcb7df8b86faea0ffce08ff79a1c795b55f9a35aff672e9a7b2e5e"
+  },
+  {
+    "path": "http-probe.mjs",
+    "bytes": 1820,
+    "sha256": "60a9a48290a0b0d46a5ec8dd62cf3a948fa17e1ede1f4bfba4dacc4e9b1490df"
+  },
+  {
+    "path": "http-probe.stderr",
+    "bytes": 2172,
+    "sha256": "d6a96239b15926bdfc31c7c0d9aa0e4daec5cc56f9957d7a584b0a89312a2b54"
+  },
+  {
+    "path": "inventory-after.log",
+    "bytes": 60,
+    "sha256": "86c97488b0c102ad5ab2c893839de4b744ade630e0476def14e3b9c7f91aad99"
+  },
+  {
+    "path": "inventory-delta.json",
+    "bytes": 858,
+    "sha256": "e358eeaa47b6baa7ba68fde192955d4fe846bc36f5630c7ebe5429765c0cd899"
+  },
+  {
+    "path": "openapi-after.log",
+    "bytes": 79,
+    "sha256": "e20870bf1d4288b14e1cc4673bd00f14c7b8c505e72b1946dd11b9344baa40f1"
+  },
+  {
+    "path": "receipt.json",
+    "bytes": 1823,
+    "sha256": "42128244f1efdafb8e3849d19e15dead78a9b069a050d54c0081849907d73329"
+  },
+  {
+    "path": "repair.diff",
+    "bytes": 1575,
+    "sha256": "9862c9c06bba48c657fa3cf3626ef4335141db17e908cef394a5077d4ce5eecd"
+  },
+  {
+    "path": "route-tests.log",
+    "bytes": 32255,
+    "sha256": "92cc25269f3162f9cdffeb5c6e7508bfdfcf27b13d6ed601d3c3f6df04a22647"
+  },
+  {
+    "path": "secret-diff.log",
+    "bytes": 24,
+    "sha256": "799e3201a5b88eae4477b159c57bac86af93f46933970440cbcf135ef2e3b94d"
+  }
+]

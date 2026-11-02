@@ -1,0 +1,186 @@
+{"event":"room.cold_start","clockSemantics":"runtime-dependent","durationMs":78,"integrity":"eager","phases":{"schema":{"ms":16,"rowsRead":0},"plugin":{"ms":29,"rowsRead":0},"fence":{"ms":25,"rowsRead":0},"verifies":{"ms":6,"rowsRead":0},"checksum":{"ms":0,"rowsRead":0}},"cpuMs":63,"heapBytes":43355592,"rooms":0,"sequences":0,"projectionBytes":0,"events":0}
+{"event":"room.store_initialized","initializationMs":80,"legacyColdStartMs":78,"clockSemantics":"runtime-dependent","cpuMeasured":false}
+{"event":"room.cold_start","clockSemantics":"runtime-dependent","durationMs":54,"integrity":"eager","phases":{"schema":{"ms":12,"rowsRead":0},"plugin":{"ms":26,"rowsRead":0},"fence":{"ms":14,"rowsRead":0},"verifies":{"ms":1,"rowsRead":0},"checksum":{"ms":0,"rowsRead":0}},"cpuMs":54,"heapBytes":53341296,"rooms":0,"sequences":0,"projectionBytes":0,"events":0}
+{"event":"room.store_initialized","initializationMs":54,"legacyColdStartMs":54,"clockSemantics":"runtime-dependent","cpuMeasured":false}
+{"event":"room.cold_start","clockSemantics":"runtime-dependent","durationMs":38,"integrity":"eager","phases":{"schema":{"ms":10,"rowsRead":0},"plugin":{"ms":18,"rowsRead":0},"fence":{"ms":9,"rowsRead":0},"verifies":{"ms":1,"rowsRead":0},"checksum":{"ms":0,"rowsRead":0}},"cpuMs":39,"heapBytes":118252952,"rooms":0,"sequences":0,"projectionBytes":0,"events":0}
+{"event":"room.store_initialized","initializationMs":38,"legacyColdStartMs":38,"clockSemantics":"runtime-dependent","cpuMeasured":false}
+{"event":"room.cold_start","clockSemantics":"runtime-dependent","durationMs":37,"integrity":"eager","phases":{"schema":{"ms":10,"rowsRead":0},"plugin":{"ms":17,"rowsRead":0},"fence":{"ms":9,"rowsRead":0},"verifies":{"ms":1,"rowsRead":0},"checksum":{"ms":0,"rowsRead":0}},"cpuMs":37,"heapBytes":141103000,"rooms":0,"sequences":0,"projectionBytes":0,"events":0}
+{"event":"room.store_initialized","initializationMs":37,"legacyColdStartMs":37,"clockSemantics":"runtime-dependent","cpuMeasured":false}
+{"event":"room.cold_start","clockSemantics":"runtime-dependent","durationMs":40,"integrity":"eager","phases":{"schema":{"ms":9,"rowsRead":0},"plugin":{"ms":19,"rowsRead":0},"fence":{"ms":11,"rowsRead":0},"verifies":{"ms":1,"rowsRead":0},"checksum":{"ms":0,"rowsRead":0}},"cpuMs":41,"heapBytes":118480736,"rooms":0,"sequences":0,"projectionBytes":0,"events":0}
+{"event":"room.store_initialized","initializationMs":41,"legacyColdStartMs":40,"clockSemantics":"runtime-dependent","cpuMeasured":false}
+{"event":"room.cold_start","clockSemantics":"runtime-dependent","durationMs":42,"integrity":"eager","phases":{"schema":{"ms":9,"rowsRead":0},"plugin":{"ms":19,"rowsRead":0},"fence":{"ms":9,"rowsRead":0},"verifies":{"ms":1,"rowsRead":0},"checksum":{"ms":0,"rowsRead":0}},"cpuMs":42,"heapBytes":130800944,"rooms":0,"sequences":0,"projectionBytes":0,"events":0}
+{"event":"room.store_initialized","initializationMs":42,"legacyColdStartMs":42,"clockSemantics":"runtime-dependent","cpuMeasured":false}
+{"event":"room.cold_start","clockSemantics":"runtime-dependent","durationMs":11,"integrity":"eager","phases":{"schema":{"ms":4,"rowsRead":0},"plugin":{"ms":2,"rowsRead":0},"fence":{"ms":3,"rowsRead":0},"verifies":{"ms":1,"rowsRead":0},"checksum":{"ms":0,"rowsRead":0}},"cpuMs":14,"heapBytes":129939960,"rooms":1,"sequences":8,"projectionBytes":130,"events":8}
+{"event":"room.store_initialized","initializationMs":11,"legacyColdStartMs":11,"clockSemantics":"runtime-dependent","cpuMeasured":false}
+{"event":"room.cold_start","clockSemantics":"runtime-dependent","durationMs":39,"integrity":"eager","phases":{"schema":{"ms":9,"rowsRead":0},"plugin":{"ms":17,"rowsRead":0},"fence":{"ms":11,"rowsRead":0},"verifies":{"ms":1,"rowsRead":0},"checksum":{"ms":0,"rowsRead":0}},"cpuMs":39,"heapBytes":140994392,"rooms":0,"sequences":0,"projectionBytes":0,"events":0}
+{"event":"room.store_initialized","initializationMs":39,"legacyColdStartMs":39,"clockSemantics":"runtime-dependent","cpuMeasured":false}
+[boot-config] ERROR: the agent card is UNSIGNED and no explicit opt-in was recorded at build time — members fetching /.well-known/agent-card.json will see an unsigned card (marked signed:false). To fix: set ROOM_AGENT_CARD_SIGNING_KEY and re-run scripts/sign-agent-card.mjs, or pass --allow-unsigned explicitly to record the choice.
+ROOM_SECURITY_CONTACT is unset; /.well-known/security.txt returns 404
+No magic-link mailer is configured: email-verification gates are relaxed (agent-invite escape hatch); /api/health reports emailVerification: relaxed-no-mailer
+✔ stable equal-time keyset reaches every pending request without whole-room hydration or writes (333.542ms)
+✔ expired backlog is filtered without a room-wide expiration write (2437.2565ms)
+✔ source changes, decided anchors, tampering and changed selection explicitly invalidate continuation (171.401459ms)
+✔ membership authority is rechecked before revealing any queue page (167.888791ms)
+✔ a cursor cannot cross current authorized credentials or survive credential revocation (174.906375ms)
+✔ cold service explicitly refuses old continuation while a fresh traversal remains available (81.548667ms)
+room diagnostic op_45ifJPxp 422 invalid_request input /api/rooms/:roomId/access-requests
+{"event":"room.cold_start","clockSemantics":"runtime-dependent","durationMs":39,"integrity":"eager","phases":{"schema":{"ms":9,"rowsRead":0},"plugin":{"ms":19,"rowsRead":0},"fence":{"ms":9,"rowsRead":0},"verifies":{"ms":1,"rowsRead":0},"checksum":{"ms":0,"rowsRead":0}},"cpuMs":50,"heapBytes":57617352,"rooms":0,"sequences":0,"projectionBytes":0,"events":0}
+{"event":"room.store_initialized","initializationMs":40,"legacyColdStartMs":39,"clockSemantics":"runtime-dependent","cpuMeasured":false}
+✔ HTTP refuses an unselected partial queue and exposes complete bounded traversal explicitly (129.417708ms)
+✔ hosted MCP retains bounded continuation, content trust and exact authorization (121.27075ms)
+{"event":"room.cold_start","clockSemantics":"runtime-dependent","durationMs":88,"integrity":"eager","phases":{"schema":{"ms":23,"rowsRead":0},"plugin":{"ms":38,"rowsRead":0},"fence":{"ms":19,"rowsRead":0},"verifies":{"ms":4,"rowsRead":0},"checksum":{"ms":0,"rowsRead":0}},"cpuMs":75,"heapBytes":40416936,"rooms":0,"sequences":0,"projectionBytes":0,"events":0}
+{"event":"room.store_initialized","initializationMs":89,"legacyColdStartMs":88,"clockSemantics":"runtime-dependent","cpuMeasured":false}
+[boot-config] ERROR: the agent card is UNSIGNED and no explicit opt-in was recorded at build time — members fetching /.well-known/agent-card.json will see an unsigned card (marked signed:false). To fix: set ROOM_AGENT_CARD_SIGNING_KEY and re-run scripts/sign-agent-card.mjs, or pass --allow-unsigned explicitly to record the choice.
+ROOM_SECURITY_CONTACT is unset; /.well-known/security.txt returns 404
+No magic-link mailer is configured: email-verification gates are relaxed (agent-invite escape hatch); /api/health reports emailVerification: relaxed-no-mailer
+{"event":"room.cold_start","clockSemantics":"runtime-dependent","durationMs":66,"integrity":"eager","phases":{"schema":{"ms":15,"rowsRead":0},"plugin":{"ms":28,"rowsRead":0},"fence":{"ms":20,"rowsRead":0},"verifies":{"ms":2,"rowsRead":0},"checksum":{"ms":0,"rowsRead":0}},"cpuMs":63,"heapBytes":50896392,"rooms":0,"sequences":0,"projectionBytes":0,"events":0}
+{"event":"room.store_initialized","initializationMs":66,"legacyColdStartMs":66,"clockSemantics":"runtime-dependent","cpuMeasured":false}
+✔ adoption cannot follow a departed human into a new membership (legacy) (181.183542ms)
+✔ adoption cannot follow a departed human into a new membership (normalized-current-v1) (134.254625ms)
+{"event":"room.cold_start","clockSemantics":"runtime-dependent","durationMs":84,"integrity":"eager","phases":{"schema":{"ms":14,"rowsRead":0},"plugin":{"ms":41,"rowsRead":0},"fence":{"ms":21,"rowsRead":0},"verifies":{"ms":2,"rowsRead":0},"checksum":{"ms":0,"rowsRead":0}},"cpuMs":65,"heapBytes":28892696,"rooms":0,"sequences":0,"projectionBytes":0,"events":0}
+{"event":"room.store_initialized","initializationMs":85,"legacyColdStartMs":84,"clockSemantics":"runtime-dependent","cpuMeasured":false}
+{"event":"room.cold_start","clockSemantics":"runtime-dependent","durationMs":13,"integrity":"eager","phases":{"schema":{"ms":3,"rowsRead":0},"plugin":{"ms":2,"rowsRead":0},"fence":{"ms":5,"rowsRead":0},"verifies":{"ms":1,"rowsRead":0},"checksum":{"ms":0,"rowsRead":0}},"cpuMs":16,"heapBytes":40928600,"rooms":1,"sequences":7,"projectionBytes":1484,"events":7}
+{"event":"room.store_initialized","initializationMs":13,"legacyColdStartMs":13,"clockSemantics":"runtime-dependent","cpuMeasured":false}
+{"event":"room.cold_start","clockSemantics":"runtime-dependent","durationMs":64,"integrity":"eager","phases":{"schema":{"ms":9,"rowsRead":0},"plugin":{"ms":37,"rowsRead":0},"fence":{"ms":14,"rowsRead":0},"verifies":{"ms":1,"rowsRead":0},"checksum":{"ms":0,"rowsRead":0}},"cpuMs":52,"heapBytes":29164376,"rooms":0,"sequences":0,"projectionBytes":0,"events":0}
+{"event":"room.store_initialized","initializationMs":64,"legacyColdStartMs":64,"clockSemantics":"runtime-dependent","cpuMeasured":false}
+{"event":"room.cold_start","clockSemantics":"runtime-dependent","durationMs":12,"integrity":"eager","phases":{"schema":{"ms":3,"rowsRead":0},"plugin":{"ms":3,"rowsRead":0},"fence":{"ms":3,"rowsRead":0},"verifies":{"ms":1,"rowsRead":0},"checksum":{"ms":0,"rowsRead":0}},"cpuMs":11,"heapBytes":40231384,"rooms":1,"sequences":8,"projectionBytes":1519,"events":8}
+{"event":"room.store_initialized","initializationMs":12,"legacyColdStartMs":12,"clockSemantics":"runtime-dependent","cpuMeasured":false}
+✔ approval fences real account code/access/refresh/descriptor after cold reopen without token-table walks (185.381708ms)
+✔ invitation epochs fence prior grants after cold adoption while a current consent-bound grant remains valid (202.97175ms)
+{"event":"room.cold_start","clockSemantics":"runtime-dependent","durationMs":88,"integrity":"eager","phases":{"schema":{"ms":18,"rowsRead":0},"plugin":{"ms":33,"rowsRead":0},"fence":{"ms":29,"rowsRead":0},"verifies":{"ms":2,"rowsRead":0},"checksum":{"ms":0,"rowsRead":0}},"cpuMs":68,"heapBytes":40502024,"rooms":0,"sequences":0,"projectionBytes":0,"events":0}
+{"event":"room.store_initialized","initializationMs":89,"legacyColdStartMs":88,"clockSemantics":"runtime-dependent","cpuMeasured":false}
+[boot-config] ERROR: the agent card is UNSIGNED and no explicit opt-in was recorded at build time — members fetching /.well-known/agent-card.json will see an unsigned card (marked signed:false). To fix: set ROOM_AGENT_CARD_SIGNING_KEY and re-run scripts/sign-agent-card.mjs, or pass --allow-unsigned explicitly to record the choice.
+ROOM_SECURITY_CONTACT is unset; /.well-known/security.txt returns 404
+No magic-link mailer is configured: email-verification gates are relaxed (agent-invite escape hatch); /api/health reports emailVerification: relaxed-no-mailer
+✔ Claude DCR browser consent requests approval, then connects the exact seat as nonowner human (266.660417ms)
+{"event":"room.cold_start","clockSemantics":"runtime-dependent","durationMs":92,"integrity":"eager","phases":{"schema":{"ms":19,"rowsRead":0},"plugin":{"ms":36,"rowsRead":0},"fence":{"ms":16,"rowsRead":0},"verifies":{"ms":9,"rowsRead":0},"checksum":{"ms":0,"rowsRead":0}},"cpuMs":64,"heapBytes":30082384,"rooms":0,"sequences":0,"projectionBytes":0,"events":0}
+{"event":"room.store_initialized","initializationMs":93,"legacyColdStartMs":92,"clockSemantics":"runtime-dependent","cpuMeasured":false}
+{"event":"room.cold_start","clockSemantics":"runtime-dependent","durationMs":67,"integrity":"eager","phases":{"schema":{"ms":14,"rowsRead":0},"plugin":{"ms":30,"rowsRead":0},"fence":{"ms":23,"rowsRead":0},"verifies":{"ms":1,"rowsRead":0},"checksum":{"ms":0,"rowsRead":0}},"cpuMs":52,"heapBytes":37835120,"rooms":0,"sequences":0,"projectionBytes":0,"events":0}
+{"event":"room.store_initialized","initializationMs":68,"legacyColdStartMs":67,"clockSemantics":"runtime-dependent","cpuMeasured":false}
+{"event":"room.cold_start","clockSemantics":"runtime-dependent","durationMs":94,"integrity":"eager","phases":{"schema":{"ms":18,"rowsRead":0},"plugin":{"ms":54,"rowsRead":0},"fence":{"ms":21,"rowsRead":0},"verifies":{"ms":1,"rowsRead":0},"checksum":{"ms":0,"rowsRead":0}},"cpuMs":73,"heapBytes":30134416,"rooms":0,"sequences":0,"projectionBytes":0,"events":0}
+{"event":"room.store_initialized","initializationMs":94,"legacyColdStartMs":94,"clockSemantics":"runtime-dependent","cpuMeasured":false}
+{"event":"room.cold_start","clockSemantics":"runtime-dependent","durationMs":65,"integrity":"eager","phases":{"schema":{"ms":19,"rowsRead":0},"plugin":{"ms":28,"rowsRead":0},"fence":{"ms":15,"rowsRead":0},"verifies":{"ms":2,"rowsRead":0},"checksum":{"ms":0,"rowsRead":0}},"cpuMs":58,"heapBytes":33305144,"rooms":0,"sequences":0,"projectionBytes":0,"events":0}
+{"event":"room.store_initialized","initializationMs":65,"legacyColdStartMs":65,"clockSemantics":"runtime-dependent","cpuMeasured":false}
+{"event":"room.cold_start","clockSemantics":"runtime-dependent","durationMs":61,"integrity":"eager","phases":{"schema":{"ms":13,"rowsRead":0},"plugin":{"ms":29,"rowsRead":0},"fence":{"ms":17,"rowsRead":0},"verifies":{"ms":1,"rowsRead":0},"checksum":{"ms":0,"rowsRead":0}},"cpuMs":61,"heapBytes":39780728,"rooms":0,"sequences":0,"projectionBytes":0,"events":0}
+{"event":"room.store_initialized","initializationMs":62,"legacyColdStartMs":61,"clockSemantics":"runtime-dependent","cpuMeasured":false}
+{"event":"room.cold_start","clockSemantics":"runtime-dependent","durationMs":43,"integrity":"eager","phases":{"schema":{"ms":11,"rowsRead":0},"plugin":{"ms":18,"rowsRead":0},"fence":{"ms":12,"rowsRead":0},"verifies":{"ms":2,"rowsRead":0},"checksum":{"ms":0,"rowsRead":0}},"cpuMs":45,"heapBytes":32183624,"rooms":0,"sequences":0,"projectionBytes":0,"events":0}
+{"event":"room.store_initialized","initializationMs":44,"legacyColdStartMs":43,"clockSemantics":"runtime-dependent","cpuMeasured":false}
+{"event":"room.cold_start","clockSemantics":"runtime-dependent","durationMs":52,"integrity":"eager","phases":{"schema":{"ms":9,"rowsRead":0},"plugin":{"ms":25,"rowsRead":0},"fence":{"ms":16,"rowsRead":0},"verifies":{"ms":1,"rowsRead":0},"checksum":{"ms":0,"rowsRead":0}},"cpuMs":54,"heapBytes":38552040,"rooms":0,"sequences":0,"projectionBytes":0,"events":0}
+{"event":"room.store_initialized","initializationMs":53,"legacyColdStartMs":52,"clockSemantics":"runtime-dependent","cpuMeasured":false}
+{"event":"room.cold_start","clockSemantics":"runtime-dependent","durationMs":45,"integrity":"eager","phases":{"schema":{"ms":10,"rowsRead":0},"plugin":{"ms":19,"rowsRead":0},"fence":{"ms":14,"rowsRead":0},"verifies":{"ms":2,"rowsRead":0},"checksum":{"ms":0,"rowsRead":0}},"cpuMs":46,"heapBytes":44997800,"rooms":0,"sequences":0,"projectionBytes":0,"events":0}
+{"event":"room.store_initialized","initializationMs":45,"legacyColdStartMs":45,"clockSemantics":"runtime-dependent","cpuMeasured":false}
+{"event":"room.cold_start","clockSemantics":"runtime-dependent","durationMs":48,"integrity":"eager","phases":{"schema":{"ms":13,"rowsRead":0},"plugin":{"ms":24,"rowsRead":0},"fence":{"ms":10,"rowsRead":0},"verifies":{"ms":1,"rowsRead":0},"checksum":{"ms":0,"rowsRead":0}},"cpuMs":50,"heapBytes":35233736,"rooms":0,"sequences":0,"projectionBytes":0,"events":0}
+{"event":"room.store_initialized","initializationMs":49,"legacyColdStartMs":48,"clockSemantics":"runtime-dependent","cpuMeasured":false}
+{"event":"room.cold_start","clockSemantics":"runtime-dependent","durationMs":47,"integrity":"eager","phases":{"schema":{"ms":11,"rowsRead":0},"plugin":{"ms":25,"rowsRead":0},"fence":{"ms":11,"rowsRead":0},"verifies":{"ms":1,"rowsRead":0},"checksum":{"ms":0,"rowsRead":0}},"cpuMs":52,"heapBytes":41574584,"rooms":0,"sequences":0,"projectionBytes":0,"events":0}
+{"event":"room.store_initialized","initializationMs":48,"legacyColdStartMs":47,"clockSemantics":"runtime-dependent","cpuMeasured":false}
+{"event":"room.cold_start","clockSemantics":"runtime-dependent","durationMs":57,"integrity":"eager","phases":{"schema":{"ms":16,"rowsRead":0},"plugin":{"ms":26,"rowsRead":0},"fence":{"ms":13,"rowsRead":0},"verifies":{"ms":1,"rowsRead":0},"checksum":{"ms":0,"rowsRead":0}},"cpuMs":58,"heapBytes":33665744,"rooms":0,"sequences":0,"projectionBytes":0,"events":0}
+{"event":"room.store_initialized","initializationMs":57,"legacyColdStartMs":57,"clockSemantics":"runtime-dependent","cpuMeasured":false}
+{"event":"room.cold_start","clockSemantics":"runtime-dependent","durationMs":38,"integrity":"eager","phases":{"schema":{"ms":9,"rowsRead":0},"plugin":{"ms":19,"rowsRead":0},"fence":{"ms":9,"rowsRead":0},"verifies":{"ms":1,"rowsRead":0},"checksum":{"ms":0,"rowsRead":0}},"cpuMs":38,"heapBytes":39869672,"rooms":0,"sequences":0,"projectionBytes":0,"events":0}
+{"event":"room.store_initialized","initializationMs":38,"legacyColdStartMs":38,"clockSemantics":"runtime-dependent","cpuMeasured":false}
+{"event":"room.cold_start","clockSemantics":"runtime-dependent","durationMs":37,"integrity":"eager","phases":{"schema":{"ms":10,"rowsRead":0},"plugin":{"ms":17,"rowsRead":0},"fence":{"ms":9,"rowsRead":0},"verifies":{"ms":1,"rowsRead":0},"checksum":{"ms":0,"rowsRead":0}},"cpuMs":38,"heapBytes":46834744,"rooms":0,"sequences":0,"projectionBytes":0,"events":0}
+{"event":"room.store_initialized","initializationMs":38,"legacyColdStartMs":37,"clockSemantics":"runtime-dependent","cpuMeasured":false}
+{"event":"room.cold_start","clockSemantics":"runtime-dependent","durationMs":51,"integrity":"eager","phases":{"schema":{"ms":9,"rowsRead":0},"plugin":{"ms":23,"rowsRead":0},"fence":{"ms":17,"rowsRead":0},"verifies":{"ms":2,"rowsRead":0},"checksum":{"ms":0,"rowsRead":0}},"cpuMs":52,"heapBytes":36595264,"rooms":0,"sequences":0,"projectionBytes":0,"events":0}
+{"event":"room.store_initialized","initializationMs":51,"legacyColdStartMs":51,"clockSemantics":"runtime-dependent","cpuMeasured":false}
+{"event":"room.cold_start","clockSemantics":"runtime-dependent","durationMs":41,"integrity":"eager","phases":{"schema":{"ms":9,"rowsRead":0},"plugin":{"ms":21,"rowsRead":0},"fence":{"ms":10,"rowsRead":0},"verifies":{"ms":1,"rowsRead":0},"checksum":{"ms":0,"rowsRead":0}},"cpuMs":40,"heapBytes":49069344,"rooms":0,"sequences":0,"projectionBytes":0,"events":0}
+{"event":"room.store_initialized","initializationMs":41,"legacyColdStartMs":41,"clockSemantics":"runtime-dependent","cpuMeasured":false}
+{"event":"room.cold_start","clockSemantics":"runtime-dependent","durationMs":42,"integrity":"eager","phases":{"schema":{"ms":10,"rowsRead":0},"plugin":{"ms":21,"rowsRead":0},"fence":{"ms":10,"rowsRead":0},"verifies":{"ms":1,"rowsRead":0},"checksum":{"ms":0,"rowsRead":0}},"cpuMs":44,"heapBytes":39065008,"rooms":0,"sequences":0,"projectionBytes":0,"events":0}
+{"event":"room.store_initialized","initializationMs":42,"legacyColdStartMs":42,"clockSemantics":"runtime-dependent","cpuMeasured":false}
+✔ recipient asks, owner approves the existing seat, OAuth refresh preserves identity and permissions (153.38725ms)
+✔ direct owner commands cannot fabricate recipient consent (77.447584ms)
+✔ approval refuses changed account epoch without adopting (105.789791ms)
+✔ approval refuses changed identity epoch without adopting (72.145166ms)
+✔ approval refuses changed recipient revision without adopting (71.64925ms)
+✔ approval refuses changed agent revision without adopting (49.718375ms)
+✔ approval refuses changed owner without adopting (59.808ms)
+✔ approval refuses changed account link without adopting (53.838917ms)
+✔ unrelated account, nonadministrator and expired request cannot adopt (55.059417ms)
+✔ interrupted approval rolls back membership and decision; original request retries exactly (55.054791ms)
+✔ approved adoption requires retained recipient and decision evidence, not a name or edited request row (65.540959ms)
+✔ selected old account grant is durably fenced without denying another seat (53.948333ms)
+✔ normalized current room with agent owner adopts the same existing seat and passes independent recovery (66.103125ms)
+✔ old managed connection history stays intact while its scoped key and binding are fenced (69.330875ms)
+✔ administrator needs both decision authority and all existing agent permissions (48.039625ms)
+✔ ordinary replies to adoption requests are not mistaken for permission-decision receipts (48.595791ms)
+✔ failed refresh unhides the section so the error and Refresh button are visible (0.832417ms)
+✔ failed refresh schedules an automatic retry (0.213792ms)
+✔ manual refresh supersedes a scheduled retry (no double fetch) (0.1115ms)
+✔ explicit null provider fails closed despite a stale privileged session member (0.610042ms)
+✔ explicit undefined provider fails closed despite a stale privileged session member (0.104375ms)
+✔ explicit null state fails closed despite a stale privileged session member (0.095625ms)
+✔ explicit undefined state fails closed despite a stale privileged session member (0.112084ms)
+✔ explicit missing current member fails closed despite a stale privileged session member (0.106625ms)
+✔ explicit mismatched room fails closed despite a stale privileged session member (0.095708ms)
+✔ current active admin renders the queue without calling the owner-only reader (0.754708ms)
+✔ revoked authority clears the card and suppresses late rollup success (0.573459ms)
+✔ revoked authority clears the card and suppresses late rollup failure (0.349542ms)
+✔ revoked authority clears the card and suppresses late queue success (0.338208ms)
+✔ revoked authority clears the card and suppresses late queue failure (0.324125ms)
+✔ inactive authority clears the card and suppresses late rollup success (0.232791ms)
+✔ inactive authority clears the card and suppresses late rollup failure (0.727583ms)
+✔ inactive authority clears the card and suppresses late queue success (0.160833ms)
+✔ inactive authority clears the card and suppresses late queue failure (0.378625ms)
+✔ state removed authority clears the card and suppresses late rollup success (0.20225ms)
+✔ state removed authority clears the card and suppresses late rollup failure (0.1685ms)
+✔ state removed authority clears the card and suppresses late queue success (0.142ms)
+✔ state removed authority clears the card and suppresses late queue failure (0.127833ms)
+✔ sync immediately clears a populated card while a revoked reviewer waits for a queue read (0.217791ms)
+✔ room sync preserves a manually selected page until the reader follows its stale continuation (0.304042ms)
+✔ ownership transfer clears a selected owner page while preserving the active admin queue (0.44325ms)
+✔ ownership transfer suppresses an in-flight owner rollup response even while admin authority remains (0.319625ms)
+✔ ownership transfer suppresses an in-flight owner queue response even while admin authority remains (0.180875ms)
+✔ attention starts independent reads together and waits for both (rollup first) (0.234875ms)
+✔ attention starts independent reads together and waits for both (queue first) (0.144833ms)
+✔ concurrent attention handles both rejected reads (rollup fails first) (11.313334ms)
+✔ concurrent attention handles both rejected reads (queue fails first) (0.924375ms)
+✔ updates during an attention read coalesce into one trailing read (2.481666ms)
+✔ coalesced attention changes retain bounded retry after a failed read (2.072541ms)
+✔ revocation discards a queued attention refresh (0.889916ms)
+{"event":"room.cold_start","clockSemantics":"runtime-dependent","durationMs":83,"integrity":"eager","phases":{"schema":{"ms":19,"rowsRead":0},"plugin":{"ms":39,"rowsRead":0},"fence":{"ms":16,"rowsRead":0},"verifies":{"ms":5,"rowsRead":0},"checksum":{"ms":0,"rowsRead":0}},"cpuMs":58,"heapBytes":45323176,"rooms":0,"sequences":0,"projectionBytes":0,"events":0}
+{"event":"room.store_initialized","initializationMs":84,"legacyColdStartMs":83,"clockSemantics":"runtime-dependent","cpuMeasured":false}
+[boot-config] ERROR: the agent card is UNSIGNED and no explicit opt-in was recorded at build time — members fetching /.well-known/agent-card.json will see an unsigned card (marked signed:false). To fix: set ROOM_AGENT_CARD_SIGNING_KEY and re-run scripts/sign-agent-card.mjs, or pass --allow-unsigned explicitly to record the choice.
+ROOM_SECURITY_CONTACT is unset; /.well-known/security.txt returns 404
+No magic-link mailer is configured: email-verification gates are relaxed (agent-invite escape hatch); /api/health reports emailVerification: relaxed-no-mailer
+✔ agent administrator reads only the rollup their identity allows (2.579542ms)
+✔ agent owner reads only the rollup their identity allows (0.395666ms)
+✔ human administrator reads only the rollup their identity allows (0.358041ms)
+✔ human owner reads only the rollup their identity allows (1.809917ms)
+✔ losing human-owner eligibility clears cached rollup before the authorized queue settles (0.688416ms)
+✔ revoked administration clears the card without any request or session bootstrap (0.236458ms)
+✔ late previous-owner response cannot replace a switched agent queue (0.181416ms)
+room diagnostic op_aeI6-hOE 403 owner_required access /api/rooms/:roomId/needs-attention
+✔ real agent browser session keeps owner-only 403 while the card reads its permitted queue only (159.764792ms)
+✔ existing-agent sponsorship card preserves the typed approve and deny contract (legacy) (0.69675ms)
+✔ existing-agent sponsorship card preserves the typed approve and deny contract (native) (0.282042ms)
+{"event":"room.cold_start","clockSemantics":"runtime-dependent","durationMs":72,"integrity":"eager","phases":{"schema":{"ms":11,"rowsRead":0},"plugin":{"ms":23,"rowsRead":0},"fence":{"ms":30,"rowsRead":0},"verifies":{"ms":2,"rowsRead":0},"checksum":{"ms":0,"rowsRead":0}},"cpuMs":64,"heapBytes":39078456,"rooms":0,"sequences":0,"projectionBytes":0,"events":0}
+{"event":"room.store_initialized","initializationMs":73,"legacyColdStartMs":72,"clockSemantics":"runtime-dependent","cpuMeasured":false}
+[boot-config] ERROR: the agent card is UNSIGNED and no explicit opt-in was recorded at build time — members fetching /.well-known/agent-card.json will see an unsigned card (marked signed:false). To fix: set ROOM_AGENT_CARD_SIGNING_KEY and re-run scripts/sign-agent-card.mjs, or pass --allow-unsigned explicitly to record the choice.
+ROOM_SECURITY_CONTACT is unset; /.well-known/security.txt returns 404
+No magic-link mailer is configured: email-verification gates are relaxed (agent-invite escape hatch); /api/health reports emailVerification: relaxed-no-mailer
+{"event":"room.cold_start","clockSemantics":"runtime-dependent","durationMs":70,"integrity":"eager","phases":{"schema":{"ms":9,"rowsRead":0},"plugin":{"ms":31,"rowsRead":0},"fence":{"ms":21,"rowsRead":0},"verifies":{"ms":6,"rowsRead":0},"checksum":{"ms":0,"rowsRead":0}},"cpuMs":66,"heapBytes":40846440,"rooms":0,"sequences":0,"projectionBytes":0,"events":0}
+{"event":"room.store_initialized","initializationMs":70,"legacyColdStartMs":70,"clockSemantics":"runtime-dependent","cpuMeasured":false}
+✔ logged-in GET /oauth/authorize renders the consent form; anonymous is bounced to login (164.546167ms)
+{"event":"room.cold_start","clockSemantics":"runtime-dependent","durationMs":53,"integrity":"eager","phases":{"schema":{"ms":12,"rowsRead":0},"plugin":{"ms":21,"rowsRead":0},"fence":{"ms":16,"rowsRead":0},"verifies":{"ms":1,"rowsRead":0},"checksum":{"ms":0,"rowsRead":0}},"cpuMs":53,"heapBytes":50680896,"rooms":0,"sequences":0,"projectionBytes":0,"events":0}
+{"event":"room.store_initialized","initializationMs":53,"legacyColdStartMs":53,"clockSemantics":"runtime-dependent","cpuMeasured":false}
+✔ consent form POST completes the flow and the code exchanges for tokens (108.511875ms)
+{"event":"room.cold_start","clockSemantics":"runtime-dependent","durationMs":50,"integrity":"eager","phases":{"schema":{"ms":9,"rowsRead":0},"plugin":{"ms":20,"rowsRead":0},"fence":{"ms":15,"rowsRead":0},"verifies":{"ms":2,"rowsRead":0},"checksum":{"ms":0,"rowsRead":0}},"cpuMs":51,"heapBytes":59935400,"rooms":0,"sequences":0,"projectionBytes":0,"events":0}
+{"event":"room.store_initialized","initializationMs":50,"legacyColdStartMs":50,"clockSemantics":"runtime-dependent","cpuMeasured":false}
+✔ consent POST enforces CSRF: forged token rejected, JSON without header rejected, header accepted (86.961375ms)
+{"event":"room.cold_start","clockSemantics":"runtime-dependent","durationMs":57,"integrity":"eager","phases":{"schema":{"ms":12,"rowsRead":0},"plugin":{"ms":24,"rowsRead":0},"fence":{"ms":17,"rowsRead":0},"verifies":{"ms":1,"rowsRead":0},"checksum":{"ms":0,"rowsRead":0}},"cpuMs":57,"heapBytes":68476104,"rooms":0,"sequences":0,"projectionBytes":0,"events":0}
+{"event":"room.store_initialized","initializationMs":58,"legacyColdStartMs":57,"clockSemantics":"runtime-dependent","cpuMeasured":false}
+✔ consent deny with an unregistered redirect_uri fails closed (no open redirect) (75.222875ms)
+{"event":"room.cold_start","clockSemantics":"runtime-dependent","durationMs":44,"integrity":"eager","phases":{"schema":{"ms":10,"rowsRead":0},"plugin":{"ms":19,"rowsRead":0},"fence":{"ms":12,"rowsRead":0},"verifies":{"ms":1,"rowsRead":0},"checksum":{"ms":0,"rowsRead":0}},"cpuMs":44,"heapBytes":56019168,"rooms":0,"sequences":0,"projectionBytes":0,"events":0}
+{"event":"room.store_initialized","initializationMs":45,"legacyColdStartMs":44,"clockSemantics":"runtime-dependent","cpuMeasured":false}
+✔ logged-out consent POST is rejected; unknown client fails on the consent screen (89.729458ms)
+oauth security event: {"type":"refresh_token_reuse_detected","familyId":"oarf_z3buScPrmAS3HnbThDBPqw","userId":"consent-user","clientId":"consent-test-client","revokedCount":3,"detectedAt":1793618541752}
+{"event":"room.cold_start","clockSemantics":"runtime-dependent","durationMs":51,"integrity":"eager","phases":{"schema":{"ms":9,"rowsRead":0},"plugin":{"ms":26,"rowsRead":0},"fence":{"ms":12,"rowsRead":0},"verifies":{"ms":2,"rowsRead":0},"checksum":{"ms":0,"rowsRead":0}},"cpuMs":52,"heapBytes":65475528,"rooms":0,"sequences":0,"projectionBytes":0,"events":0}
+{"event":"room.store_initialized","initializationMs":52,"legacyColdStartMs":51,"clockSemantics":"runtime-dependent","cpuMeasured":false}
+✔ POST /oauth/token: reuse of a rotated refresh token is invalid_grant with a reuse signal, and kills the family (76.140792ms)
+✔ registered consent cancellation preserves state and identifies its issuer (76.039792ms)
+ℹ tests 80
+ℹ suites 0
+ℹ pass 80
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 3946.882

@@ -493,3 +493,15 @@ test('native continuation accepts exact byte and room-count boundaries as opaque
     assert.deepEqual(result.observedThroughBySource.attention.cursor, cursor);
   }
 });
+
+test('compact resume retains validated native coverage without claiming global attention completeness', async () => {
+  const row = complete => ({ roomId: 'commons', available: true, mode: 'native_bounded',
+    conversation: { complete, examined: 1, direction: 'recent', range: { recentEventWindow: 500 } },
+    standingWorkAndRequests: { complete: false }, omitted: ['ambient bond and peer routing presentation', 'legacy board presentation'], globalAttentionComplete: false });
+  let pages = 0;
+  const f = transport(url => url.includes('/needs-me') ? page({ contractVersion: 2, nativeCoverage: [row(++pages > 1)], hasMore: pages === 1 }) : undefined);
+  const result = await resumeAgent({ connection, fetchImpl: f.fetchImpl });
+  assert.equal(result.observedThroughBySource.attention.hasMore, false);
+  assert.deepEqual(result.observedThroughBySource.attention.nativeCoverage, [row(true)]);
+  assert.equal(result.observedThroughBySource.attention.nativeCoverage[0].globalAttentionComplete, false);
+});

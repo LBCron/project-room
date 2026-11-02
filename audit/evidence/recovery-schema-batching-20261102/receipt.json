@@ -1,0 +1,1026 @@
+{
+  "baseline": "534632258",
+  "runtime": "27aa6a4ba",
+  "wholeRecoveryBounded": false,
+  "deployment": false,
+  "node": {
+    "affectedPass": 42,
+    "causalBaselineFail": 1,
+    "queryPlan": "one sqlite_master scan, no temp B-tree"
+  },
+  "native": {
+    "matchedBeforePass": 2,
+    "matchedAfterPass": 2,
+    "publicationBeforePass": 1,
+    "publicationAfterPass": 1,
+    "fullRecoveryQualifiedSizes": [
+      128
+    ],
+    "costOnlySizes": [
+      1000
+    ],
+    "comparisons": {
+      "before": [
+        {
+          "source": {
+            "n": 1000,
+            "archive": false,
+            "checkpoint": false,
+            "costOnly": true
+          },
+          "comparison": {
+            "sameReport": true,
+            "original": {
+              "statements": 14711,
+              "rowsRead": 110276,
+              "rowsWritten": 2,
+              "bytes": 6186736,
+              "unknown": 0,
+              "rebuilds": 1,
+              "boundBytes": 375253,
+              "sqlBytes": 2410786,
+              "totalTransferBytes": 8972775,
+              "topRows": [
+                {
+                  "sql": "SELECT sql FROM sqlite_master WHERE name=?",
+                  "statements": 24,
+                  "rowsRead": 37080,
+                  "bytes": 6541
+                },
+                {
+                  "sql": "SELECT sql FROM sqlite_master WHERE name=? AND type='trigger'",
+                  "statements": 5,
+                  "rowsRead": 7725,
+                  "bytes": 853
+                },
+                {
+                  "sql": "SELECT sql FROM sqlite_master WHERE name=? AND type='table'",
+                  "statements": 4,
+                  "rowsRead": 6180,
+                  "bytes": 1516
+                },
+                {
+                  "sql": "PRAGMA foreign_key_check",
+                  "statements": 1,
+                  "rowsRead": 6124,
+                  "bytes": 0
+                },
+                {
+                  "sql": "SELECT 1 FROM sqlite_master WHERE type='trigger' AND name=?",
+                  "statements": 3,
+                  "rowsRead": 4635,
+                  "bytes": 21
+                },
+                {
+                  "sql": "SELECT revision,present,payload_sha256,receipt_id FROM current_room_record_proofs WHERE room_id=? AND domain=? AND record_key=?",
+                  "statements": 3024,
+                  "rowsRead": 3024,
+                  "bytes": 607824
+                },
+                {
+                  "sql": "SELECT revision,payload_bytes,length(CAST(payload AS BLOB)) AS bytes,payload_sha256 FROM current_room_records WHERE room_id=? AND domain=? AND record_key=?",
+                  "statements": 3024,
+                  "rowsRead": 3024,
+                  "bytes": 387078
+                },
+                {
+                  "sql": "SELECT payload FROM current_room_records WHERE room_id=? AND domain=? AND record_key=?",
+                  "statements": 3024,
+                  "rowsRead": 3024,
+                  "bytes": 304439
+                }
+              ],
+              "topBytes": [
+                {
+                  "sql": "SELECT * FROM messages",
+                  "statements": 1,
+                  "rowsRead": 1004,
+                  "bytes": 652076
+                },
+                {
+                  "sql": "SELECT message_id,seq,channel_id,thread_root_id,reply_to_id,to_member_id,work_item_id,author_id,body,created_at,edited_at,deleted_at,reactions_json,pinned,record_json,reducer_extras_json,entity_hash FROM messages WHERE room_id=? AND message_id=?",
+                  "statements": 1004,
+                  "rowsRead": 1004,
+                  "bytes": 631996
+                },
+                {
+                  "sql": "SELECT revision,present,payload_sha256,receipt_id FROM current_room_record_proofs WHERE room_id=? AND domain=? AND record_key=?",
+                  "statements": 3024,
+                  "rowsRead": 3024,
+                  "bytes": 607824
+                },
+                {
+                  "sql": "SELECT * FROM current_room_records",
+                  "statements": 1,
+                  "rowsRead": 2020,
+                  "bytes": 580493
+                },
+                {
+                  "sql": "SELECT * FROM current_room_record_proofs",
+                  "statements": 1,
+                  "rowsRead": 2020,
+                  "bytes": 564129
+                },
+                {
+                  "sql": "SELECT counts_json FROM operator_actions WHERE id=? AND action=?",
+                  "statements": 27,
+                  "rowsRead": 27,
+                  "bytes": 387107
+                },
+                {
+                  "sql": "SELECT revision,payload_bytes,length(CAST(payload AS BLOB)) AS bytes,payload_sha256 FROM current_room_records WHERE room_id=? AND domain=? AND record_key=?",
+                  "statements": 3024,
+                  "rowsRead": 3024,
+                  "bytes": 387078
+                },
+                {
+                  "sql": "SELECT * FROM events",
+                  "statements": 1,
+                  "rowsRead": 1010,
+                  "bytes": 363927
+                }
+              ]
+            },
+            "consumed": {
+              "statements": 14713,
+              "rowsRead": 109852,
+              "rowsWritten": 2,
+              "bytes": 6375239,
+              "unknown": 0,
+              "rebuilds": 0,
+              "boundBytes": 364642,
+              "sqlBytes": 2410364,
+              "totalTransferBytes": 9150245,
+              "topRows": [
+                {
+                  "sql": "SELECT sql FROM sqlite_master WHERE name=?",
+                  "statements": 24,
+                  "rowsRead": 37080,
+                  "bytes": 6541
+                },
+                {
+                  "sql": "SELECT sql FROM sqlite_master WHERE name=? AND type='trigger'",
+                  "statements": 5,
+                  "rowsRead": 7725,
+                  "bytes": 853
+                },
+                {
+                  "sql": "SELECT sql FROM sqlite_master WHERE name=? AND type='table'",
+                  "statements": 4,
+                  "rowsRead": 6180,
+                  "bytes": 1516
+                },
+                {
+                  "sql": "PRAGMA foreign_key_check",
+                  "statements": 1,
+                  "rowsRead": 6124,
+                  "bytes": 0
+                },
+                {
+                  "sql": "SELECT 1 FROM sqlite_master WHERE type='trigger' AND name=?",
+                  "statements": 3,
+                  "rowsRead": 4635,
+                  "bytes": 21
+                },
+                {
+                  "sql": "SELECT revision,present,payload_sha256,receipt_id FROM current_room_record_proofs WHERE room_id=? AND domain=? AND record_key=?",
+                  "statements": 3024,
+                  "rowsRead": 3024,
+                  "bytes": 607824
+                },
+                {
+                  "sql": "SELECT revision,payload_bytes,length(CAST(payload AS BLOB)) AS bytes,payload_sha256 FROM current_room_records WHERE room_id=? AND domain=? AND record_key=?",
+                  "statements": 3024,
+                  "rowsRead": 3024,
+                  "bytes": 387078
+                },
+                {
+                  "sql": "SELECT payload FROM current_room_records WHERE room_id=? AND domain=? AND record_key=?",
+                  "statements": 3024,
+                  "rowsRead": 3024,
+                  "bytes": 304439
+                }
+              ],
+              "topBytes": [
+                {
+                  "sql": "SELECT * FROM messages",
+                  "statements": 1,
+                  "rowsRead": 1004,
+                  "bytes": 652076
+                },
+                {
+                  "sql": "SELECT message_id,seq,channel_id,thread_root_id,reply_to_id,to_member_id,work_item_id,author_id,body,created_at,edited_at,deleted_at,reactions_json,pinned,record_json,reducer_extras_json,entity_hash FROM messages WHERE room_id=? AND message_id=?",
+                  "statements": 1004,
+                  "rowsRead": 1004,
+                  "bytes": 631996
+                },
+                {
+                  "sql": "SELECT revision,present,payload_sha256,receipt_id FROM current_room_record_proofs WHERE room_id=? AND domain=? AND record_key=?",
+                  "statements": 3024,
+                  "rowsRead": 3024,
+                  "bytes": 607824
+                },
+                {
+                  "sql": "SELECT * FROM current_room_records",
+                  "statements": 1,
+                  "rowsRead": 2020,
+                  "bytes": 580493
+                },
+                {
+                  "sql": "SELECT * FROM current_room_record_proofs",
+                  "statements": 1,
+                  "rowsRead": 2020,
+                  "bytes": 564129
+                },
+                {
+                  "sql": "SELECT counts_json FROM operator_actions WHERE id=? AND action=?",
+                  "statements": 27,
+                  "rowsRead": 27,
+                  "bytes": 387107
+                },
+                {
+                  "sql": "SELECT revision,payload_bytes,length(CAST(payload AS BLOB)) AS bytes,payload_sha256 FROM current_room_records WHERE room_id=? AND domain=? AND record_key=?",
+                  "statements": 3024,
+                  "rowsRead": 3024,
+                  "bytes": 387078
+                },
+                {
+                  "sql": "SELECT * FROM events",
+                  "statements": 1,
+                  "rowsRead": 1010,
+                  "bytes": 363927
+                }
+              ]
+            },
+            "summary": {
+              "rooms": 1,
+              "deferred": 0,
+              "fields": 7,
+              "values": 3,
+              "messages": 1004,
+              "archived": 0
+            }
+          }
+        },
+        {
+          "source": {
+            "n": 128,
+            "archive": true,
+            "checkpoint": true
+          },
+          "comparison": {
+            "sameReport": true,
+            "original": {
+              "statements": 1963,
+              "rowsRead": 70827,
+              "rowsWritten": 2,
+              "bytes": 871578,
+              "unknown": 0,
+              "rebuilds": 1,
+              "boundBytes": 33857,
+              "sqlBytes": 286895,
+              "totalTransferBytes": 1192330,
+              "topRows": [
+                {
+                  "sql": "SELECT sql FROM sqlite_master WHERE name=?",
+                  "statements": 24,
+                  "rowsRead": 37080,
+                  "bytes": 6541
+                },
+                {
+                  "sql": "SELECT sql FROM sqlite_master WHERE name=? AND type='trigger'",
+                  "statements": 5,
+                  "rowsRead": 7725,
+                  "bytes": 853
+                },
+                {
+                  "sql": "SELECT sql FROM sqlite_master WHERE name=? AND type='table'",
+                  "statements": 4,
+                  "rowsRead": 6180,
+                  "bytes": 1516
+                },
+                {
+                  "sql": "SELECT 1 FROM sqlite_master WHERE type='trigger' AND name=?",
+                  "statements": 3,
+                  "rowsRead": 4635,
+                  "bytes": 21
+                },
+                {
+                  "sql": "SELECT name FROM sqlite_master WHERE type='table' ORDER BY name",
+                  "statements": 1,
+                  "rowsRead": 1773,
+                  "bytes": 6809
+                },
+                {
+                  "sql": "SELECT name FROM sqlite_master WHERE type='table' AND name NOT GLOB 'sqlite_*' AND name NOT GLOB '_cf_*' ORDER BY name",
+                  "statements": 1,
+                  "rowsRead": 1772,
+                  "bytes": 6783
+                },
+                {
+                  "sql": "SELECT name,sql FROM sqlite_master WHERE type='trigger' AND name GLOB 'writer_v*'",
+                  "statements": 1,
+                  "rowsRead": 1545,
+                  "bytes": 57057
+                },
+                {
+                  "sql": "SELECT sql FROM sqlite_master WHERE name='private_inbox_reads'",
+                  "statements": 1,
+                  "rowsRead": 1545,
+                  "bytes": 275
+                }
+              ],
+              "topBytes": [
+                {
+                  "sql": "SELECT * FROM current_restore_admission",
+                  "statements": 1,
+                  "rowsRead": 1,
+                  "bytes": 92221
+                },
+                {
+                  "sql": "SELECT * FROM messages",
+                  "statements": 1,
+                  "rowsRead": 132,
+                  "bytes": 85265
+                },
+                {
+                  "sql": "SELECT message_id,seq,channel_id,thread_root_id,reply_to_id,to_member_id,work_item_id,author_id,body,created_at,edited_at,deleted_at,reactions_json,pinned,record_json,reducer_extras_json,entity_hash FROM messages WHERE room_id=? AND message_id=?",
+                  "statements": 132,
+                  "rowsRead": 132,
+                  "bytes": 82625
+                },
+                {
+                  "sql": "SELECT revision,present,payload_sha256,receipt_id FROM current_room_record_proofs WHERE room_id=? AND domain=? AND record_key=?",
+                  "statements": 285,
+                  "rowsRead": 285,
+                  "bytes": 57285
+                },
+                {
+                  "sql": "SELECT name,sql FROM sqlite_master WHERE type='trigger' AND name GLOB 'writer_v*'",
+                  "statements": 1,
+                  "rowsRead": 1545,
+                  "bytes": 57057
+                },
+                {
+                  "sql": "SELECT * FROM events",
+                  "statements": 1,
+                  "rowsRead": 139,
+                  "bytes": 50417
+                },
+                {
+                  "sql": "SELECT sequence,id,body FROM events WHERE room_id=? ORDER BY sequence",
+                  "statements": 1,
+                  "rowsRead": 139,
+                  "bytes": 47637
+                },
+                {
+                  "sql": "SELECT * FROM current_room_records",
+                  "statements": 1,
+                  "rowsRead": 153,
+                  "bytes": 46709
+                }
+              ]
+            },
+            "consumed": {
+              "statements": 1967,
+              "rowsRead": 72821,
+              "rowsWritten": 2,
+              "bytes": 1379525,
+              "unknown": 0,
+              "rebuilds": 0,
+              "boundBytes": 33966,
+              "sqlBytes": 287855,
+              "totalTransferBytes": 1701346,
+              "topRows": [
+                {
+                  "sql": "SELECT sql FROM sqlite_master WHERE name=?",
+                  "statements": 24,
+                  "rowsRead": 37080,
+                  "bytes": 6541
+                },
+                {
+                  "sql": "SELECT sql FROM sqlite_master WHERE name=? AND type='trigger'",
+                  "statements": 5,
+                  "rowsRead": 7725,
+                  "bytes": 853
+                },
+                {
+                  "sql": "SELECT sql FROM sqlite_master WHERE name=? AND type='table'",
+                  "statements": 4,
+                  "rowsRead": 6180,
+                  "bytes": 1516
+                },
+                {
+                  "sql": "SELECT 1 FROM sqlite_master WHERE type='trigger' AND name=?",
+                  "statements": 3,
+                  "rowsRead": 4635,
+                  "bytes": 21
+                },
+                {
+                  "sql": "SELECT name,sql FROM sqlite_master WHERE type='trigger' AND name GLOB 'restore_frozen_*' ORDER BY name",
+                  "statements": 1,
+                  "rowsRead": 2208,
+                  "bytes": 228177
+                },
+                {
+                  "sql": "SELECT name FROM sqlite_master WHERE type='table' ORDER BY name",
+                  "statements": 1,
+                  "rowsRead": 1773,
+                  "bytes": 6809
+                },
+                {
+                  "sql": "SELECT name FROM sqlite_master WHERE type='table' AND name NOT GLOB 'sqlite_*' AND name NOT GLOB '_cf_*' ORDER BY name",
+                  "statements": 1,
+                  "rowsRead": 1772,
+                  "bytes": 6783
+                },
+                {
+                  "sql": "SELECT name,sql FROM sqlite_master WHERE type='trigger' AND name GLOB 'writer_v*'",
+                  "statements": 1,
+                  "rowsRead": 1545,
+                  "bytes": 57057
+                }
+              ],
+              "topBytes": [
+                {
+                  "sql": "SELECT state,restore_id,phase,revision,source_seal,coverage,latest_receipt FROM current_restore_admission WHERE singleton=1",
+                  "statements": 3,
+                  "rowsRead": 3,
+                  "bytes": 276621
+                },
+                {
+                  "sql": "SELECT name,sql FROM sqlite_master WHERE type='trigger' AND name GLOB 'restore_frozen_*' ORDER BY name",
+                  "statements": 1,
+                  "rowsRead": 2208,
+                  "bytes": 228177
+                },
+                {
+                  "sql": "SELECT * FROM current_restore_admission",
+                  "statements": 1,
+                  "rowsRead": 1,
+                  "bytes": 92221
+                },
+                {
+                  "sql": "SELECT * FROM messages",
+                  "statements": 1,
+                  "rowsRead": 132,
+                  "bytes": 85265
+                },
+                {
+                  "sql": "SELECT message_id,seq,channel_id,thread_root_id,reply_to_id,to_member_id,work_item_id,author_id,body,created_at,edited_at,deleted_at,reactions_json,pinned,record_json,reducer_extras_json,entity_hash FROM messages WHERE room_id=? AND message_id=?",
+                  "statements": 132,
+                  "rowsRead": 132,
+                  "bytes": 82625
+                },
+                {
+                  "sql": "SELECT revision,present,payload_sha256,receipt_id FROM current_room_record_proofs WHERE room_id=? AND domain=? AND record_key=?",
+                  "statements": 285,
+                  "rowsRead": 285,
+                  "bytes": 57285
+                },
+                {
+                  "sql": "SELECT name,sql FROM sqlite_master WHERE type='trigger' AND name GLOB 'writer_v*'",
+                  "statements": 1,
+                  "rowsRead": 1545,
+                  "bytes": 57057
+                },
+                {
+                  "sql": "SELECT * FROM events",
+                  "statements": 1,
+                  "rowsRead": 139,
+                  "bytes": 50417
+                }
+              ]
+            },
+            "summary": {
+              "rooms": 1,
+              "deferred": 0,
+              "fields": 9,
+              "values": 3,
+              "messages": 4,
+              "archived": 0
+            }
+          }
+        }
+      ],
+      "after": [
+        {
+          "source": {
+            "n": 1000,
+            "archive": false,
+            "checkpoint": false,
+            "costOnly": true
+          },
+          "comparison": {
+            "sameReport": true,
+            "original": {
+              "statements": 14697,
+              "rowsRead": 88646,
+              "rowsWritten": 2,
+              "bytes": 6187381,
+              "unknown": 0,
+              "rebuilds": 1,
+              "boundBytes": 375272,
+              "sqlBytes": 2410306,
+              "totalTransferBytes": 8972959,
+              "topRows": [
+                {
+                  "sql": "SELECT sql FROM sqlite_master WHERE name=?",
+                  "statements": 7,
+                  "rowsRead": 10815,
+                  "bytes": 1953
+                },
+                {
+                  "sql": "SELECT sql FROM sqlite_master WHERE name=? AND type='trigger'",
+                  "statements": 5,
+                  "rowsRead": 7725,
+                  "bytes": 853
+                },
+                {
+                  "sql": "SELECT sql FROM sqlite_master WHERE name=? AND type='table'",
+                  "statements": 4,
+                  "rowsRead": 6180,
+                  "bytes": 1516
+                },
+                {
+                  "sql": "PRAGMA foreign_key_check",
+                  "statements": 1,
+                  "rowsRead": 6124,
+                  "bytes": 0
+                },
+                {
+                  "sql": "SELECT 1 FROM sqlite_master WHERE type='trigger' AND name=?",
+                  "statements": 3,
+                  "rowsRead": 4635,
+                  "bytes": 21
+                },
+                {
+                  "sql": "SELECT name,sql FROM sqlite_master WHERE name IN (?,?) ORDER BY rowid",
+                  "statements": 2,
+                  "rowsRead": 3090,
+                  "bytes": 1494
+                },
+                {
+                  "sql": "SELECT revision,present,payload_sha256,receipt_id FROM current_room_record_proofs WHERE room_id=? AND domain=? AND record_key=?",
+                  "statements": 3024,
+                  "rowsRead": 3024,
+                  "bytes": 607824
+                },
+                {
+                  "sql": "SELECT revision,payload_bytes,length(CAST(payload AS BLOB)) AS bytes,payload_sha256 FROM current_room_records WHERE room_id=? AND domain=? AND record_key=?",
+                  "statements": 3024,
+                  "rowsRead": 3024,
+                  "bytes": 387078
+                }
+              ],
+              "topBytes": [
+                {
+                  "sql": "SELECT * FROM messages",
+                  "statements": 1,
+                  "rowsRead": 1004,
+                  "bytes": 652076
+                },
+                {
+                  "sql": "SELECT message_id,seq,channel_id,thread_root_id,reply_to_id,to_member_id,work_item_id,author_id,body,created_at,edited_at,deleted_at,reactions_json,pinned,record_json,reducer_extras_json,entity_hash FROM messages WHERE room_id=? AND message_id=?",
+                  "statements": 1004,
+                  "rowsRead": 1004,
+                  "bytes": 631996
+                },
+                {
+                  "sql": "SELECT revision,present,payload_sha256,receipt_id FROM current_room_record_proofs WHERE room_id=? AND domain=? AND record_key=?",
+                  "statements": 3024,
+                  "rowsRead": 3024,
+                  "bytes": 607824
+                },
+                {
+                  "sql": "SELECT * FROM current_room_records",
+                  "statements": 1,
+                  "rowsRead": 2020,
+                  "bytes": 580493
+                },
+                {
+                  "sql": "SELECT * FROM current_room_record_proofs",
+                  "statements": 1,
+                  "rowsRead": 2020,
+                  "bytes": 564129
+                },
+                {
+                  "sql": "SELECT counts_json FROM operator_actions WHERE id=? AND action=?",
+                  "statements": 27,
+                  "rowsRead": 27,
+                  "bytes": 387107
+                },
+                {
+                  "sql": "SELECT revision,payload_bytes,length(CAST(payload AS BLOB)) AS bytes,payload_sha256 FROM current_room_records WHERE room_id=? AND domain=? AND record_key=?",
+                  "statements": 3024,
+                  "rowsRead": 3024,
+                  "bytes": 387078
+                },
+                {
+                  "sql": "SELECT * FROM events",
+                  "statements": 1,
+                  "rowsRead": 1010,
+                  "bytes": 363927
+                }
+              ]
+            },
+            "consumed": {
+              "statements": 14699,
+              "rowsRead": 88222,
+              "rowsWritten": 2,
+              "bytes": 6375884,
+              "unknown": 0,
+              "rebuilds": 0,
+              "boundBytes": 364661,
+              "sqlBytes": 2409884,
+              "totalTransferBytes": 9150429,
+              "topRows": [
+                {
+                  "sql": "SELECT sql FROM sqlite_master WHERE name=?",
+                  "statements": 7,
+                  "rowsRead": 10815,
+                  "bytes": 1953
+                },
+                {
+                  "sql": "SELECT sql FROM sqlite_master WHERE name=? AND type='trigger'",
+                  "statements": 5,
+                  "rowsRead": 7725,
+                  "bytes": 853
+                },
+                {
+                  "sql": "SELECT sql FROM sqlite_master WHERE name=? AND type='table'",
+                  "statements": 4,
+                  "rowsRead": 6180,
+                  "bytes": 1516
+                },
+                {
+                  "sql": "PRAGMA foreign_key_check",
+                  "statements": 1,
+                  "rowsRead": 6124,
+                  "bytes": 0
+                },
+                {
+                  "sql": "SELECT 1 FROM sqlite_master WHERE type='trigger' AND name=?",
+                  "statements": 3,
+                  "rowsRead": 4635,
+                  "bytes": 21
+                },
+                {
+                  "sql": "SELECT name,sql FROM sqlite_master WHERE name IN (?,?) ORDER BY rowid",
+                  "statements": 2,
+                  "rowsRead": 3090,
+                  "bytes": 1494
+                },
+                {
+                  "sql": "SELECT revision,present,payload_sha256,receipt_id FROM current_room_record_proofs WHERE room_id=? AND domain=? AND record_key=?",
+                  "statements": 3024,
+                  "rowsRead": 3024,
+                  "bytes": 607824
+                },
+                {
+                  "sql": "SELECT revision,payload_bytes,length(CAST(payload AS BLOB)) AS bytes,payload_sha256 FROM current_room_records WHERE room_id=? AND domain=? AND record_key=?",
+                  "statements": 3024,
+                  "rowsRead": 3024,
+                  "bytes": 387078
+                }
+              ],
+              "topBytes": [
+                {
+                  "sql": "SELECT * FROM messages",
+                  "statements": 1,
+                  "rowsRead": 1004,
+                  "bytes": 652076
+                },
+                {
+                  "sql": "SELECT message_id,seq,channel_id,thread_root_id,reply_to_id,to_member_id,work_item_id,author_id,body,created_at,edited_at,deleted_at,reactions_json,pinned,record_json,reducer_extras_json,entity_hash FROM messages WHERE room_id=? AND message_id=?",
+                  "statements": 1004,
+                  "rowsRead": 1004,
+                  "bytes": 631996
+                },
+                {
+                  "sql": "SELECT revision,present,payload_sha256,receipt_id FROM current_room_record_proofs WHERE room_id=? AND domain=? AND record_key=?",
+                  "statements": 3024,
+                  "rowsRead": 3024,
+                  "bytes": 607824
+                },
+                {
+                  "sql": "SELECT * FROM current_room_records",
+                  "statements": 1,
+                  "rowsRead": 2020,
+                  "bytes": 580493
+                },
+                {
+                  "sql": "SELECT * FROM current_room_record_proofs",
+                  "statements": 1,
+                  "rowsRead": 2020,
+                  "bytes": 564129
+                },
+                {
+                  "sql": "SELECT counts_json FROM operator_actions WHERE id=? AND action=?",
+                  "statements": 27,
+                  "rowsRead": 27,
+                  "bytes": 387107
+                },
+                {
+                  "sql": "SELECT revision,payload_bytes,length(CAST(payload AS BLOB)) AS bytes,payload_sha256 FROM current_room_records WHERE room_id=? AND domain=? AND record_key=?",
+                  "statements": 3024,
+                  "rowsRead": 3024,
+                  "bytes": 387078
+                },
+                {
+                  "sql": "SELECT * FROM events",
+                  "statements": 1,
+                  "rowsRead": 1010,
+                  "bytes": 363927
+                }
+              ]
+            },
+            "summary": {
+              "rooms": 1,
+              "deferred": 0,
+              "fields": 7,
+              "values": 3,
+              "messages": 1004,
+              "archived": 0
+            }
+          }
+        },
+        {
+          "source": {
+            "n": 128,
+            "archive": true,
+            "checkpoint": true
+          },
+          "comparison": {
+            "sameReport": true,
+            "original": {
+              "statements": 1949,
+              "rowsRead": 49197,
+              "rowsWritten": 2,
+              "bytes": 872223,
+              "unknown": 0,
+              "rebuilds": 1,
+              "boundBytes": 33876,
+              "sqlBytes": 286415,
+              "totalTransferBytes": 1192514,
+              "topRows": [
+                {
+                  "sql": "SELECT sql FROM sqlite_master WHERE name=?",
+                  "statements": 7,
+                  "rowsRead": 10815,
+                  "bytes": 1953
+                },
+                {
+                  "sql": "SELECT sql FROM sqlite_master WHERE name=? AND type='trigger'",
+                  "statements": 5,
+                  "rowsRead": 7725,
+                  "bytes": 853
+                },
+                {
+                  "sql": "SELECT sql FROM sqlite_master WHERE name=? AND type='table'",
+                  "statements": 4,
+                  "rowsRead": 6180,
+                  "bytes": 1516
+                },
+                {
+                  "sql": "SELECT 1 FROM sqlite_master WHERE type='trigger' AND name=?",
+                  "statements": 3,
+                  "rowsRead": 4635,
+                  "bytes": 21
+                },
+                {
+                  "sql": "SELECT name,sql FROM sqlite_master WHERE name IN (?,?) ORDER BY rowid",
+                  "statements": 2,
+                  "rowsRead": 3090,
+                  "bytes": 1494
+                },
+                {
+                  "sql": "SELECT name FROM sqlite_master WHERE type='table' ORDER BY name",
+                  "statements": 1,
+                  "rowsRead": 1773,
+                  "bytes": 6809
+                },
+                {
+                  "sql": "SELECT name FROM sqlite_master WHERE type='table' AND name NOT GLOB 'sqlite_*' AND name NOT GLOB '_cf_*' ORDER BY name",
+                  "statements": 1,
+                  "rowsRead": 1772,
+                  "bytes": 6783
+                },
+                {
+                  "sql": "SELECT name,sql FROM sqlite_master WHERE type='trigger' AND name GLOB 'writer_v*'",
+                  "statements": 1,
+                  "rowsRead": 1545,
+                  "bytes": 57057
+                }
+              ],
+              "topBytes": [
+                {
+                  "sql": "SELECT * FROM current_restore_admission",
+                  "statements": 1,
+                  "rowsRead": 1,
+                  "bytes": 92221
+                },
+                {
+                  "sql": "SELECT * FROM messages",
+                  "statements": 1,
+                  "rowsRead": 132,
+                  "bytes": 85265
+                },
+                {
+                  "sql": "SELECT message_id,seq,channel_id,thread_root_id,reply_to_id,to_member_id,work_item_id,author_id,body,created_at,edited_at,deleted_at,reactions_json,pinned,record_json,reducer_extras_json,entity_hash FROM messages WHERE room_id=? AND message_id=?",
+                  "statements": 132,
+                  "rowsRead": 132,
+                  "bytes": 82625
+                },
+                {
+                  "sql": "SELECT revision,present,payload_sha256,receipt_id FROM current_room_record_proofs WHERE room_id=? AND domain=? AND record_key=?",
+                  "statements": 285,
+                  "rowsRead": 285,
+                  "bytes": 57285
+                },
+                {
+                  "sql": "SELECT name,sql FROM sqlite_master WHERE type='trigger' AND name GLOB 'writer_v*'",
+                  "statements": 1,
+                  "rowsRead": 1545,
+                  "bytes": 57057
+                },
+                {
+                  "sql": "SELECT * FROM events",
+                  "statements": 1,
+                  "rowsRead": 139,
+                  "bytes": 50417
+                },
+                {
+                  "sql": "SELECT sequence,id,body FROM events WHERE room_id=? ORDER BY sequence",
+                  "statements": 1,
+                  "rowsRead": 139,
+                  "bytes": 47637
+                },
+                {
+                  "sql": "SELECT * FROM current_room_records",
+                  "statements": 1,
+                  "rowsRead": 153,
+                  "bytes": 46709
+                }
+              ]
+            },
+            "consumed": {
+              "statements": 1953,
+              "rowsRead": 51191,
+              "rowsWritten": 2,
+              "bytes": 1380170,
+              "unknown": 0,
+              "rebuilds": 0,
+              "boundBytes": 33985,
+              "sqlBytes": 287375,
+              "totalTransferBytes": 1701530,
+              "topRows": [
+                {
+                  "sql": "SELECT sql FROM sqlite_master WHERE name=?",
+                  "statements": 7,
+                  "rowsRead": 10815,
+                  "bytes": 1953
+                },
+                {
+                  "sql": "SELECT sql FROM sqlite_master WHERE name=? AND type='trigger'",
+                  "statements": 5,
+                  "rowsRead": 7725,
+                  "bytes": 853
+                },
+                {
+                  "sql": "SELECT sql FROM sqlite_master WHERE name=? AND type='table'",
+                  "statements": 4,
+                  "rowsRead": 6180,
+                  "bytes": 1516
+                },
+                {
+                  "sql": "SELECT 1 FROM sqlite_master WHERE type='trigger' AND name=?",
+                  "statements": 3,
+                  "rowsRead": 4635,
+                  "bytes": 21
+                },
+                {
+                  "sql": "SELECT name,sql FROM sqlite_master WHERE name IN (?,?) ORDER BY rowid",
+                  "statements": 2,
+                  "rowsRead": 3090,
+                  "bytes": 1494
+                },
+                {
+                  "sql": "SELECT name,sql FROM sqlite_master WHERE type='trigger' AND name GLOB 'restore_frozen_*' ORDER BY name",
+                  "statements": 1,
+                  "rowsRead": 2208,
+                  "bytes": 228177
+                },
+                {
+                  "sql": "SELECT name FROM sqlite_master WHERE type='table' ORDER BY name",
+                  "statements": 1,
+                  "rowsRead": 1773,
+                  "bytes": 6809
+                },
+                {
+                  "sql": "SELECT name FROM sqlite_master WHERE type='table' AND name NOT GLOB 'sqlite_*' AND name NOT GLOB '_cf_*' ORDER BY name",
+                  "statements": 1,
+                  "rowsRead": 1772,
+                  "bytes": 6783
+                }
+              ],
+              "topBytes": [
+                {
+                  "sql": "SELECT state,restore_id,phase,revision,source_seal,coverage,latest_receipt FROM current_restore_admission WHERE singleton=1",
+                  "statements": 3,
+                  "rowsRead": 3,
+                  "bytes": 276621
+                },
+                {
+                  "sql": "SELECT name,sql FROM sqlite_master WHERE type='trigger' AND name GLOB 'restore_frozen_*' ORDER BY name",
+                  "statements": 1,
+                  "rowsRead": 2208,
+                  "bytes": 228177
+                },
+                {
+                  "sql": "SELECT * FROM current_restore_admission",
+                  "statements": 1,
+                  "rowsRead": 1,
+                  "bytes": 92221
+                },
+                {
+                  "sql": "SELECT * FROM messages",
+                  "statements": 1,
+                  "rowsRead": 132,
+                  "bytes": 85265
+                },
+                {
+                  "sql": "SELECT message_id,seq,channel_id,thread_root_id,reply_to_id,to_member_id,work_item_id,author_id,body,created_at,edited_at,deleted_at,reactions_json,pinned,record_json,reducer_extras_json,entity_hash FROM messages WHERE room_id=? AND message_id=?",
+                  "statements": 132,
+                  "rowsRead": 132,
+                  "bytes": 82625
+                },
+                {
+                  "sql": "SELECT revision,present,payload_sha256,receipt_id FROM current_room_record_proofs WHERE room_id=? AND domain=? AND record_key=?",
+                  "statements": 285,
+                  "rowsRead": 285,
+                  "bytes": 57285
+                },
+                {
+                  "sql": "SELECT name,sql FROM sqlite_master WHERE type='trigger' AND name GLOB 'writer_v*'",
+                  "statements": 1,
+                  "rowsRead": 1545,
+                  "bytes": 57057
+                },
+                {
+                  "sql": "SELECT * FROM events",
+                  "statements": 1,
+                  "rowsRead": 139,
+                  "bytes": 50417
+                }
+              ]
+            },
+            "summary": {
+              "rooms": 1,
+              "deferred": 0,
+              "fields": 9,
+              "values": 3,
+              "messages": 4,
+              "archived": 0
+            }
+          }
+        }
+      ]
+    },
+    "actualPublication": {
+      "before": {
+        "statements": 2380,
+        "rowsRead": 124248,
+        "rowsWritten": 6,
+        "bytes": 3463266,
+        "boundBytes": 2350246,
+        "sqlBytes": 567869,
+        "unknown": 0,
+        "totalTransferBytes": 6381381
+      },
+      "after": {
+        "statements": 2366,
+        "rowsRead": 102618,
+        "rowsWritten": 6,
+        "bytes": 3463939,
+        "boundBytes": 2350265,
+        "sqlBytes": 567389,
+        "unknown": 0,
+        "totalTransferBytes": 6381593
+      }
+    }
+  },
+  "accounting": "UTF8 strings, actual BLOB bytes,8B scalar bindings; SQL text plus returned row JSON bytes; excludes engine-internal memory and transport framing. Wall not CPU.",
+  "limitation": "Physical catalog scans reduced; total transfer effectively flat/slightly higher. Does not cure remaining proof-scope byte amplification.",
+  "artifacts": {
+    "recovery-schema-batch-lint.log.gz": "99bbbb2b58b836c1648b1a8d031ef73919bd82f43c9213d9aa37a333aebf95d4",
+    "recovery-schema-batch-matched-before-native.log.gz": "f0c1ab161324a4c0bb51bdfeb26b26170c4580bfc88859eeb495e5034f4cccd1",
+    "recovery-schema-batch-node.log.gz": "66242ed494b847e6a2361ae91e2b36c3c4e567c38c963564992a3e895ea4ccb9",
+    "recovery-schema-batch-publication-after.log.gz": "e585ad444c9b46f22923aa7a4c34a28bc4cb7e33019dd1f80843fcd86696ab7e",
+    "recovery-schema-batch-publication-before.log.gz": "eb185d6b4831ceed98abacc3190f467214b910cda68f48323188daf5ba2676e9",
+    "recovery-schema-batch-secret.log.gz": "e7c7cd96c65009a7fb69bda792d31999cad4cf5590cbd1c248092ae9ae8c926b",
+    "replay-equality-schema-batch-native.log.gz": "ac1edaf66c5e801b56eada813b8e0303e814b98903884e746e5fb24ed1069434",
+    "schema-verifier-query-batch-green.log.gz": "3a403070001c951b77018ae11693d0013d5ff3f4549c2f2fbef5564f6f482355",
+    "schema-verifier-query-batch-red.log.gz": "dede09978f8e186bc4d49e105fea56fd07e2a75aef2fc6b3353e550a3c5a8b35"
+  }
+}

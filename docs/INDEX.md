@@ -225,3 +225,33 @@ Dated plans, checkpoints, and working notes are in [history/](../archive/docs/hi
 
 - [Native launch failure status](research/2026-11-01-native-launch-failure-status.md): safe local failure codes, terminal status and qualification limits.
 - [Normalized current event reader qualification](research/2026-11-01-current-events-reader.md)
+
+## Offline normalized-storage qualification (2026-11-01)
+
+These source-bound design and qualification notes describe the offline schema45 candidate and its limits. They are not production deployment or live migration receipts.
+
+- [Production cutover contract for bounded replay](research/2026-11-01-bounded-replay-production-cutover.md)
+- [Bounded replay: executable first format increment](research/2026-11-01-bounded-replay-staging-prototype.md)
+- [Current browser background and selected files](research/2026-11-01-current-browser-background.md)
+- [Actual current browser port](research/2026-11-01-current-browser-port.md)
+- [Normalized consent authority and atomic receipt writer](research/2026-11-01-current-dm-consents.md)
+- [Bounded activation floor: original proposal and implementation status](research/2026-11-01-current-history-floor-v2-proposal.md)
+- [Normalized message erasure](research/2026-11-01-current-message-redaction.md)
+- [Existing active task migration: reviewed mirror retirement](research/2026-11-01-current-mirror-retirement.md)
+- [Compact normalized native inbox — first integration checkpoint](research/2026-11-01-current-native-inbox.md)
+- [Normalized reply cancellation writer](research/2026-11-01-current-reply-cancellation.md)
+- [Exact audit schema batching](research/2026-11-01-current-schema-batch.md)
+- [Normalized handoff and halt clear](research/2026-11-01-current-work-handoff.md)
+- [Independent review and human approval on current records](research/2026-11-01-current-work-review.md)
+- [Durable capture and binding checkpoint](research/2026-11-01-durable-replay-capture.md)
+- [Recent-first native inbox and addressed discovery — early runnable source](research/2026-11-01-native-inbox-recent-discovery.md)
+- [Native45 restore body ingestion](research/2026-11-01-native-restore-body-ingestion.md)
+- [Current serving representation: review draft](research/2026-11-01-normalized-current-serving-design.md)
+- [Projection-driven representation cutover contract](research/2026-11-01-projection-driven-cutover-contract.md)
+- [Receipt-bound codec continuation](research/2026-11-01-receipt-bound-replay-codec.md)
+- [Existing SQLite checks with durable progress](research/2026-11-01-recovery-engine-continuation.md)
+- [Bounded codec and whole-store recovery checkpoint](research/2026-11-01-replay-codec-recovery.md)
+- [Journal provenance boundary for bounded replay](research/2026-11-01-replay-journal-anchors.md)
+- [Portable witness continuation checkpoint](research/2026-11-01-replay-portable-witness.md)
+- [Supported schema admission investigation](research/2026-11-01-replay-schema-admission.md)
+- [Work cursor privacy correction](research/2026-11-01-work-cursor-privacy-correction.md)

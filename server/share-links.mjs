@@ -1,3 +1,4 @@
+import {shareLinkAgentPrefix as agentJoinPrefix,assertShareLinkUsage,assertShareLinkJoinEvidence,assertShareLinkRedemption} from './share-link-evidence.mjs';
 import { canInviteCoOwners, museDevelopmentAccess } from "../src/room-administration.js";
 import { createHash, randomBytes, randomUUID } from "node:crypto";
 import { validId, event, EVENT_TYPES as T, MEMBERSHIP_AUTHORITY_POLICY_VERSION, INVITATION_ROLE_POLICY_VERSION, INVITATION_ROLES, PERMISSIONS, NEVER_GRANT, canInviteMembers, historyVisibility, ownMember } from "../src/events.js";
@@ -14,7 +15,6 @@ import { PERSONAL_INVITE_PREFIX, PERSONAL_INVITE_TTL_MS, personalInviteToken, re
 
 // Agent admissions reuse the durable membership event as their receipt. The
 // link ID is public metadata; neither the invitation token nor its hash is exposed.
-const agentJoinPrefix = row => `sj_${row.id.replaceAll("-", "")}_`;
 const hash = value => createHash("sha256").update(value).digest("hex");
 const tokenPattern = /^[A-Za-z0-9_-]{43}$/;
 const fail = (status, code, message) => { throw new ServiceError(status, code, message); };
@@ -94,10 +94,6 @@ export const shareLinkAccessSchema = `
   CREATE TRIGGER IF NOT EXISTS share_link_access_immutable BEFORE UPDATE ON share_link_access BEGIN SELECT RAISE(ABORT,'link access is immutable'); END;
   CREATE TRIGGER IF NOT EXISTS share_link_access_no_delete BEFORE DELETE ON share_link_access BEGIN SELECT RAISE(ABORT,'link access is retained'); END;
 `;
-function roleMatchesLink(record, access) {
-  const role = ["co_admin", "co_owner"].includes(access) ? "moderator" : access === "member" ? "member" : "guest";
-  return record?.intended_role === role && record.intended_permissions_json === JSON.stringify(INVITATION_ROLES[role]);
-}
 export function linkPermissions(access) {
   return access === "co_owner" ? [...PERMISSIONS] : access === "co_admin" ? PERMISSIONS.filter(permission => !NEVER_GRANT.includes(permission)) : access === "member" ? [...INVITATION_ROLES.member] : [];
 }
@@ -620,31 +616,15 @@ export class ShareLinks {
   verifyJoin(join) {
     const link = this.db.prepare("SELECT * FROM share_links WHERE id=?").get(join.link_id);
     const { record } = this.store.verifyInvitationRecord(join.invitation_id);
-    const growth = typeof link?.request_id === "string" && link.request_id.startsWith(PERSONAL_INVITE_PREFIX);
-    const sponsored = growth && record?.issuer_member_id !== link.issuer_member_id;
-    const issuerMatch = sponsored || (
-      record?.issuer_account_id === link?.issuer_account_id
-      && record?.issuer_member_id === link?.issuer_member_id
-      && record?.issuer_account_auth_epoch === link?.issuer_auth_epoch
-      && record?.issuer_member_revision === link?.issuer_member_revision
-    );
-    if (!link || !issuerMatch || record.status !== "accepted" || record.room_id !== link.room_id
-      || !roleMatchesLink(record, this.accessOf(link))
-      || record.expires_at !== link.expires_at || record.accepted_at < link.created_at || record.accepted_at >= link.expires_at
-      || (link.revoked_at !== null && record.accepted_at > link.revoked_at) || join.fingerprint !== hash(record.intended_display_name)) {
-      fail(503, "link_integrity_error", "Invitation link history requires operator reconciliation");
-    }
+    assertShareLinkJoinEvidence(join,link,record,()=>this.accessOf(link));
   }
   verify() {
     for (const row of this.db.prepare("SELECT * FROM share_links").all()) {
-      if (this.count(row) > row.max_joins) fail(503, "link_integrity_error", "Invitation link usage requires operator reconciliation");
+      assertShareLinkUsage(this.count(row),row.max_joins);
     }
     for (const join of this.db.prepare("SELECT * FROM share_link_joins").all()) this.verifyJoin(join);
     for (const redemption of this.db.prepare("SELECT * FROM share_link_join_redemptions").all()) {
-      if (!this.db.prepare("SELECT 1 FROM share_links WHERE id=?").get(redemption.link_id)
-        || !this.db.prepare("SELECT 1 FROM accounts WHERE id=?").get(redemption.account_id)) {
-        fail(503, "link_integrity_error", "Invitation link usage requires operator reconciliation");
-      }
+      assertShareLinkRedemption(()=>Boolean(this.db.prepare("SELECT 1 FROM share_links WHERE id=?").get(redemption.link_id)),()=>Boolean(this.db.prepare("SELECT 1 FROM accounts WHERE id=?").get(redemption.account_id)));
     }
   }
 }

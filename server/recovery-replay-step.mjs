@@ -8,18 +8,19 @@ import {bindCurrentRecordContext} from '../src/current-record-context.js';
 import {replyContextOwners} from '../src/reply-requests.js';
 const supported=new Set(['room.created','member.added','member.access_changed','room.history_visibility_set','pair.requested','pair.approved','pair.denied','message.posted','work.proposed','work.accepted','work.started','work.completed','work_claim.updated']);
 // These handlers read only addressed member/work/channel records and room scalars.
+supported.add(EVENT_TYPES.MEMBER_JOINED_VIA_INVITATION);
 for(const name of ['ROOM_CHARTER_UPDATED','ROOM_POLICY_SET','ROOM_SPEND_ALLOWANCE_SET','ROOM_SPEND_PRICING_SET','ROOM_DEVELOPMENT_ACCESS_SET','ROOM_TRUST_SET','ROOM_PUBLIC_RECEIPTS_SET','ROOM_PUBLIC_PAGE_SET','ROOM_JOIN_LINK_SET','MEMBER_PUBLIC_NAME_SET','WORK_PUBLIC_SET','ROOM_ARCHIVED','OWNERSHIP_TRANSFERRED','MEMBER_STATUS_UPDATED','NOTIFICATION_PREFERENCES_SET','MEMBER_MUTE_SET','CAPABILITIES_ADVERTISED','ACCESS_REQUESTED','LAND_UPDATED','ROOM_STARTER_SEEDED','AGENT_INVITE_MINTED','ROOM_EXPORTED','DM_CONSENT_CHANGED','DM_POSTED','REFERRAL_COMPLETED','DECISION_RECORDED'])supported.add(EVENT_TYPES[name]);
 supported.add(RETIRED_REPLAY_EVENT_TYPES.MESSAGE_REACTION_SET);supported.add(EVENT_TYPES.MESSAGE_PINNED);supported.add(EVENT_TYPES.MESSAGE_UNPINNED);
 for(const type of ['claim.acquired','claim.released','claim.renewed','work.blocked','work.blocker_resolved','work.superseded','verification.recorded','owner.decision_recorded','session.started','session.status_changed','session.stop_requested','session.stopped'])supported.add(type);
-const memberFields=['memberId','toMemberId','accountableMemberId','verifierMemberId','humanDecisionMakerId','accountableHumanId','referredBy','producerId','referrerMemberId','refereeMemberId'];
+const memberFields=['invitedByMemberId','memberId','toMemberId','accountableMemberId','verifierMemberId','humanDecisionMakerId','accountableHumanId','referredBy','producerId','referrerMemberId','refereeMemberId'];
 const workMemberFields=['accountableMemberId','verifierMemberId','humanDecisionMakerId','proposedById'];
 const messageFields=['replyToId','sourceMessageId','progressMessageId','evidenceMessageId'];
 const own=(object,key)=>Object.hasOwn(object,key);
 const set=(object,key,value)=>Object.defineProperty(object,key,{value,enumerable:true,writable:true,configurable:true});
-export function applyRecoveryReplayStep(reader,incoming,counts,{claimOverlaps}={}){
+export function applyRecoveryReplayStep(reader,incoming,counts,{claimOverlaps,memberNameCensus}={}){
  if(incoming?.type==='claim.acquired'&&typeof claimOverlaps!=='function')return{supported:false,reason:'claim_overlap_census_incomplete'};
  if(!supported.has(incoming?.type))return{supported:false,reason:'event_dependency_plan_incomplete'};
- if(incoming.type==='member.added'&&[1,2].includes(incoming.data?.displayNamePolicyVersion))return{supported:false,reason:'member_name_census_incomplete'};
+ if(['member.added','member.joined_via_invitation'].includes(incoming.type)&&[1,2].includes(incoming.data?.displayNamePolicyVersion)&&typeof memberNameCensus!=='function')return{supported:false,reason:'member_name_census_incomplete'};
  if(!counts||!['members','channels','workItems','replyRequests'].every(key=>Number.isSafeInteger(counts[key])&&counts[key]>=0))throw Error('Invalid independently folded replay counts');
  if(counts.replyRequestsPresent!==undefined&&typeof counts.replyRequestsPresent!=='boolean')throw Error('Invalid replay map presence');
  if(counts.messages!==undefined&&(!Number.isSafeInteger(counts.messages)||counts.messages<0))throw Error('Invalid independently folded replay message count');
@@ -56,6 +57,7 @@ export function applyRecoveryReplayStep(reader,incoming,counts,{claimOverlaps}={
   const seen=read('seenEvents',incoming.id);if(seen!==undefined)set(state.seenEvents,incoming.id,seen);
   const earlier=read('seenIdempotencyKeys',incoming.idempotencyKey);if(earlier!==undefined){set(state.seenIdempotencyKeys,incoming.idempotencyKey,earlier);const fingerprint=read('seenEvents',earlier);if(fingerprint!==undefined)set(state.seenEvents,earlier,fingerprint);}
   bindCurrentRecordContext(state,{replyRequestCount:counts.replyRequests,claimOverlaps:claimOverlaps?((...args)=>{if(!active)throw Error('Replay read scope expired');return claimOverlaps(...args);}):undefined,
+   memberDisplayName:memberNameCensus?((name,version)=>{if(!active)throw Error('Replay read scope expired');return memberNameCensus(name,version);}):undefined,
    replyOwner:id=>{const value=read('messageOwner',id);if(value===undefined&&read('messages',id)!==undefined)throw Error('Missing independently folded reply owner');return value;},
    replyRootChannel:id=>{const value=read('messageRootChannel',id);if(value===undefined&&read('messages',id)!==undefined)throw Error('Missing independently folded root channel');return value;}});
   const next=applyEvent(state,incoming),patches=[],nextCounts={...counts,messages:counts.messages??0,replyRequestsPresent:Object.hasOwn(next,'replyRequests')},put=(domain,key,value)=>patches.push({domain,key,value});

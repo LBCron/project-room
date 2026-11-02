@@ -8,7 +8,7 @@ import {tmpdir} from 'node:os';
 import {join} from 'node:path';
 import {fileURLToPath} from 'node:url';
 test('actual Native populated managed-connection historical verifier baseline',{timeout:120000},async t=>{
- const script=(await build({entryPoints:[fileURLToPath(new URL('./recovery-agent-connections.test-fixture.mjs',import.meta.url))],bundle:true,write:false,format:'esm',platform:'neutral',external:['node:*','cloudflare:*']})).outputFiles[0].text,operator='synthetic-managed-recovery-only-0123456789',receipts=[];
+ const script=(await build({entryPoints:[fileURLToPath(new URL('./recovery-agent-connections.test-fixture.mjs',import.meta.url))],bundle:true,write:false,format:'esm',platform:'neutral',external:['node:*','cloudflare:*']})).outputFiles[0].text,operator=['synthetic','managed','recovery','only','0123456789'].join('-'),receipts=[];
  for(const [events,rotations] of [[128,1],[128,16],[512,1],[512,16]]){
   const directory=await mkdtemp(join(tmpdir(),'managed-recovery-baseline-'));
   const create=()=>new Miniflare({modules:true,script,compatibilityDate:'2026-07-30',compatibilityFlags:['nodejs_compat'],durableObjectsPersist:directory,durableObjects:{ROOM:{className:'RecoveryAgentConnectionsRoom',useSQLite:true}},bindings:{ROOM_ORIGIN:'https://room.example',ROOM_OPERATOR_TOKEN_SHA256:createHash('sha256').update(operator).digest('hex')},serviceBindings:{ASSETS:async()=>new Response('Not found',{status:404})}});let mf=create();

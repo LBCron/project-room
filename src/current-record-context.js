@@ -5,12 +5,12 @@ import { uiText } from "./strings.js";
 // may additionally bind scoped point readers over its own prior reducer fold;
 // no callback or context is serialized, supplied by a client or a grant.
 const contexts = new WeakMap();
-export function bindCurrentRecordContext(state, { replyRequestCount, replyOwner, replyRootChannel, claimOverlaps }) {
+export function bindCurrentRecordContext(state, { replyRequestCount, replyOwner, replyRootChannel, claimOverlaps, memberDisplayName }) {
   if (!Number.isSafeInteger(replyRequestCount) || replyRequestCount < 0)
     throw Error('invalid_current_reply_request_count');
-  if ([replyOwner, replyRootChannel, claimOverlaps].some(value => value !== undefined && typeof value !== 'function'))
+  if ([replyOwner, replyRootChannel, claimOverlaps, memberDisplayName].some(value => value !== undefined && typeof value !== 'function'))
     throw Error('invalid_current_replay_reader');
-  contexts.set(state, Object.freeze({ replyRequestCount, replyOwner, replyRootChannel, claimOverlaps }));
+  contexts.set(state, Object.freeze({ replyRequestCount, replyOwner, replyRootChannel, claimOverlaps, memberDisplayName }));
 }
 export function inheritCurrentRecordContext(previous, next) {
   const context=contexts.get(previous);if(context)contexts.set(next,context);
@@ -32,4 +32,13 @@ export function currentRecordClaimOverlaps(state, workItemId, repository, paths,
  const value=contexts.get(state)?.claimOverlaps?.(workItemId,repository,paths,at);
  if(value!==undefined&&(!Array.isArray(value)||value.length>10||value.some(item=>!item||typeof item.workItemId!=='string'||typeof item.holderId!=='string'||!Array.isArray(item.paths)||item.paths.length<1||item.paths.length>16||item.paths.some(path=>typeof path!=='string'))))throw Error(uiText("currentRoom.invalidClaimOverlaps"));
  return value;
+}
+
+// Only independently completed, source-bound recovery census callbacks use
+// this internal dependency. Ordinary reducers retain their whole-member rule.
+export function currentRecordMemberDisplayName(state, name, policyVersion) {
+ const callback=contexts.get(state)?.memberDisplayName;if(!callback)return false;
+ const result=callback(name,policyVersion);
+ if(result!==true)throw Error('Invalid independently checked member display name');
+ return true;
 }

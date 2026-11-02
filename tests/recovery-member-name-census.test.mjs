@@ -1,0 +1,27 @@
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import {RoomStore} from '../server/store.mjs';
+import {seedNormalizationAuth} from './helpers/operator-normalization-auth-source.mjs';
+import {event,emptyRoomState,replayEvents,applyEvent} from '../src/events.js';
+import {initialRoom} from '../server/bootstrap.mjs';
+import {applyRecoveryReplayStep} from '../server/recovery-replay-step.mjs';
+import {initialRecoveryMemberNames,advanceRecoveryMemberNames,completedRecoveryMemberNames} from '../server/recovery-member-name-census.mjs';
+const address=(d,k)=>JSON.stringify([d,k]);
+function fold(){const cells=new Map();let counts={members:0,channels:0,workItems:0,replyRequests:0,messages:0};const read=(d,k)=>structuredClone(cells.get(address(d,k)));return{read,get counts(){return counts;},apply(incoming,options={}){const result=applyRecoveryReplayStep(read,structuredClone(incoming),counts,options);if(result.supported){for(const p of result.patches)cells.set(address(p.domain,p.key),structuredClone(p.value));counts=result.counts;}return result;},name(incoming){let c=initialRecoveryMemberNames(incoming,counts.members),steps=0;while(!c.complete){const next=advanceRecoveryMemberNames(read,incoming,counts.members,c,{maxUnits:1});assert.ok(next.units<=1);c=next.cursor;steps++;}return{callback:completedRecoveryMemberNames(incoming,counts.members,c),steps,cursor:c};}};}
+function member(id,name,extra={}){return event({id:'add-'+id,roomId:'commons',actorId:'owner',type:'member.added',data:{memberId:id,displayName:name,kind:'agent',permissions:[],displayNamePolicyVersion:2,...extra}});}
+test('real managed owner/friend/invited-human source folds exact original historical authority with staged stamped names',()=>{
+ const s=new RoomStore(':memory:');try{seedNormalizationAuth(s);const events=s.db.prepare('SELECT body FROM events ORDER BY sequence').all().map(r=>JSON.parse(r.body)),actual=fold();let censuses=0;
+ for(let n=0;n<events.length;n++){const incoming=events[n];let options={};if(['member.added','member.joined_via_invitation'].includes(incoming.type)&&[1,2].includes(incoming.data.displayNamePolicyVersion)){assert.equal(actual.apply(incoming).reason,'member_name_census_incomplete');options={memberNameCensus:actual.name(incoming).callback};censuses++;}const result=actual.apply(incoming,options);assert.equal(result.supported,true,JSON.stringify(result));const expected=replayEvents(emptyRoomState(),structuredClone(events.slice(0,n+1)));for(const [id,m]of Object.entries(expected.members))assert.deepEqual(actual.read('members',id),m);assert.deepEqual(actual.read('metadata','room'),expected.room);}
+ assert.ok(censuses>=5);const joins=events.filter(e=>e.type==='member.joined_via_invitation');assert.equal(joins.length,1);
+ for(const operation of s.db.prepare('SELECT receipt_json,state_json FROM agent_connection_operations').all()){const receipt=JSON.parse(operation.receipt_json),state=JSON.parse(operation.state_json);if(receipt.version===2){const expected=replayEvents(emptyRoomState(),structuredClone(events.slice(0,receipt.authoritySequence)));assert.equal(expected.members[state.sponsor_member_id].revision,state.sponsor_member_revision);}}
+ }finally{s.close();}
+});
+for(const [name,extra,shouldPass]of [['Vega',{},false],['Vеga',{},false],['Vega Pilot',{},false],['Vega Pilot',{displayNamePolicyVersion:1},true],['Fresh',{},true],['Room owner',{},false]])test('staged original name predicate parity: '+name+' v'+(extra.displayNamePolicyVersion??2),()=>{
+ const es=initialRoom();es.push(member('vega','Vega'));const f=fold();for(const e of es){const options=e.data.displayNamePolicyVersion?{memberNameCensus:f.name(e).callback}:{};assert.equal(f.apply(e,options).supported,true);}
+ const incoming=member('candidate',name,extra),original=()=>applyEvent(replayEvents(emptyRoomState(),structuredClone(es)),structuredClone(incoming)),staged=()=>f.apply(incoming,{memberNameCensus:f.name(incoming).callback});if(shouldPass){assert.doesNotThrow(original);assert.doesNotThrow(staged);}else{assert.throws(original);assert.throws(staged);}
+});
+test('inactive names do not block; partial/wrong source/missing member and async or false callbacks refuse',()=>{
+ const f=fold();for(const e of initialRoom())assert.equal(f.apply(e).supported,true);const prior=member('vega','Vega');assert.equal(f.apply(prior,{memberNameCensus:f.name(prior).callback}).supported,true);assert.equal(f.apply(event({roomId:'commons',actorId:'owner',type:'member.access_changed',data:{memberId:'vega',expectedMemberRevision:0,active:false,permissions:[]}})).supported,true);const next=member('other','Vega');assert.equal(f.apply(next,{memberNameCensus:f.name(next).callback}).supported,true);
+ const incoming=member('fresh','Fresh'),partial=initialRecoveryMemberNames(incoming,f.counts.members);assert.throws(()=>completedRecoveryMemberNames(incoming,f.counts.members,partial));assert.throws(()=>advanceRecoveryMemberNames(()=>undefined,incoming,f.counts.members,partial));assert.throws(()=>advanceRecoveryMemberNames(f.read,{...incoming,id:'different'},f.counts.members,partial));
+ const complete=f.name(incoming);assert.throws(()=>complete.callback('Other',2));assert.throws(()=>f.apply(incoming,{memberNameCensus:async()=>true}));assert.throws(()=>f.apply(incoming,{memberNameCensus:()=>false}));assert.equal(f.apply(incoming,{memberNameCensus:complete.callback}).supported,true);
+});

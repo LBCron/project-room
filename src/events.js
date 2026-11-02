@@ -1,5 +1,5 @@
 import { prepareClaimOverlap, matchClaimOverlap } from './claim-overlap.js';
-import { currentRecordClaimOverlaps, inheritCurrentRecordContext } from './current-record-context.js';
+import { currentRecordClaimOverlaps, inheritCurrentRecordContext, currentRecordMemberDisplayName } from './current-record-context.js';
 import { canAdministerRoom, canInviteCoOwners, museDevelopmentAccess } from './room-administration.js';
 import { createWorkReducers } from "./work-reducers.js";
 import { createMessageReducers, isRedactedBody } from "./message-reducers.js";
@@ -498,10 +498,11 @@ export const MEMBERSHIP_AUTHORITY_POLICY_VERSION = 2;
 // the v1 rules; a tightened rule needs a new version, not a rewrite of v1.
 export const DISPLAY_NAME_POLICY_VERSION = 2;
 const DISPLAY_NAME_POLICY_VERSIONS = new Set([1, 2]);
-function assertStampedDisplayName(data, members) {
+function assertStampedDisplayName(data, state) {
   const version = data.displayNamePolicyVersion;
   if (!DISPLAY_NAME_POLICY_VERSIONS.has(version)) return;
-  assertMemberDisplayNameAvailable(data.displayName, members, { firstWordRule: version >= 2 });
+  if (!currentRecordMemberDisplayName(state,data.displayName,version))
+    assertMemberDisplayNameAvailable(data.displayName, state.members, { firstWordRule: version >= 2 });
 }
 // Live message.pinned commands stamp this (store.command injects it at
 // admission). Pin events written before the F-1 DM-party rule omit the field
@@ -1153,7 +1154,7 @@ function addMember(state, incoming) {
   // Reserved, duplicate, confusable, and control-character names are refused
   // on the live command path. The bootstrap owner is exempt so a room can
   // still be created under "Room owner". Older events omit the policy stamp.
-  if (!isBootstrapOwner) assertStampedDisplayName(incoming.data, state.members);
+  if (!isBootstrapOwner) assertStampedDisplayName(incoming.data, state);
   // Round-2 #101: a member record may be bound to a global agent identity.
   if (incoming.data.identityId != null
     && (typeof incoming.data.identityId !== "string" || incoming.data.identityId.length > 64)) throw new Error("identityId must be a short string");
@@ -1235,7 +1236,7 @@ function joinMemberViaInvitation(state, incoming) {
   // Reserved, duplicate, confusable, and control-character names are refused
   // on the invitation join path too. Older events omit the policy stamp, so
   // replay never throws for already-admitted members.
-  assertStampedDisplayName(incoming.data, state.members);
+  assertStampedDisplayName(incoming.data, state);
   state.members[memberId] = {
     id: memberId,
     displayName: incoming.data.displayName,

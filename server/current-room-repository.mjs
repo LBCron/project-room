@@ -31,7 +31,7 @@ const MAX_INPUT = 256 * 1024, MAX_RECORD = 128 * 1024;
 const maps = new Set(['members','channels','workItems','replyRequests','agentHalts','helpOffers','bonds']);
 const omitted = new Set(['messages','messageAuthority','eventLog','seenEvents','seenIdempotencyKeys']);
 const normalized = sql => sql?.trim().replace(/;$/,'').replace(/IF NOT EXISTS /g,'').replace(/\s+/g,' ');
-const schemaCache=new WeakMap(),formatScopes=new WeakMap();
+const schemaCache=new WeakMap(),auditSchemaLocations=new WeakMap(),formatScopes=new WeakMap();
 const definitions = [
   ['current_room_records',`CREATE TABLE IF NOT EXISTS current_room_records (
     room_id TEXT NOT NULL REFERENCES rooms(id) ON DELETE CASCADE, domain TEXT NOT NULL, record_key TEXT NOT NULL,
@@ -97,13 +97,36 @@ CREATE INDEX IF NOT EXISTS current_messages_outgoing_seq ON messages(room_id,aut
 CREATE INDEX IF NOT EXISTS current_messages_pair_seq ON messages(room_id,author_id,to_member_id,seq DESC,message_id DESC);
 `;
 export function verifyCurrentRoomSchema(db) {
-  for(const [name,sql] of [...definitions,...RESTORE_CONTROL_DEFINITIONS,...guardDefinitions,...RESTORE_CONTROL_GUARDS])
-    if(normalized(db.prepare('SELECT sql FROM sqlite_master WHERE name=?').get(name)?.sql)!==normalized(sql))
-      corrupt('schema requires reconciliation: '+name);
+  // Cache lookup locations only. Every invocation checks the complete ORIGINAL
+  // audit-owned set, exact names/cardinality/normalized SQL, and closed permit.
+  // Serving indexes/budgets and writer_v/history inventories stay with their
+  // existing independent verifiers; this is not a schema trust epoch.
+  const expected=new Map([...definitions,...RESTORE_CONTROL_DEFINITIONS,...guardDefinitions,...RESTORE_CONTROL_GUARDS]
+    .map(([name,sql])=>[name,normalized(sql)]));
+  const saved=auditSchemaLocations.get(db);
+  let rows;
+  try {
+    rows=saved
+      ?db.prepare('SELECT rowid,name,sql FROM sqlite_master WHERE rowid IN ('+saved.map(()=>'?').join(',')+')').all(...saved.map(row=>row.rowid))
+      :db.prepare('SELECT rowid,name,sql FROM sqlite_master WHERE name IN ('+[...expected].map(()=>'?').join(',')+')').all(...expected.keys());
+    const locations=saved?new Map(saved.map(row=>[row.rowid,row.name])):null;
+    const changed=rows.find(row=>!Number.isSafeInteger(row.rowid)||row.rowid<1
+      ||!expected.has(row.name)||expected.get(row.name)!==normalized(row.sql)
+      ||locations&&locations.get(row.rowid)!==row.name);
+    if(rows.length!==expected.size || changed) {
+      const missing=[...expected.keys()].find(name=>!rows.some(row=>row.name===name));
+      auditSchemaLocations.delete(db);
+      corrupt('schema requires reconciliation: '+(changed?.name??missing??'owned definition cardinality'));
+    }
+  } catch(error) { auditSchemaLocations.delete(db);throw error; }
+  if(!saved)auditSchemaLocations.set(db,rows.map(({rowid,name})=>({rowid,name})));
   const permit=db.prepare('SELECT singleton,enabled,room_id,receipt_id FROM current_room_writer_permit').all();
-  if(permit.length!==1 || permit[0].singleton!==1 || permit[0].enabled!==0 || permit[0].room_id!==null || permit[0].receipt_id!==null)
+  if(permit.length!==1 || permit[0].singleton!==1 || permit[0].enabled!==0 || permit[0].room_id!==null || permit[0].receipt_id!==null) {
+    auditSchemaLocations.delete(db);
     corrupt('writer permit is not closed');
+  }
 }
+
 export function withCurrentRoomWriter(db,roomId,operation) {
   if(!db.isTransaction)throw Error('Current room writer requires existing transaction');
   const previous=db.prepare('SELECT enabled,room_id,receipt_id FROM current_room_writer_permit WHERE singleton=1').get();
@@ -766,12 +789,12 @@ export function readCurrentHistoryFloor(db,roomId,memberId) {
 export function withCurrentRestoreTableRows(db,table,operation) {
   if(!inRestoreContext(db))throw Error('Bulk current restore requires privileged target context');
   const guards=guardDefinitions.filter(([name])=>name.startsWith('current_room_guard_'+table+'_'));
-  schemaCache.delete(db);
+  invalidateCurrentRoomSchema(db);
   try { return withExactRestoreGuards(db,guards,operation); }
-  finally { schemaCache.delete(db); }
+  finally { invalidateCurrentRoomSchema(db); }
 }
 
-export function invalidateCurrentRoomSchema(db) { schemaCache.delete(db); }
+export function invalidateCurrentRoomSchema(db) { schemaCache.delete(db);auditSchemaLocations.delete(db); }
 
 export function restoredCurrentFormatPresent(db) {
   return Boolean(db.prepare("SELECT 1 FROM current_room_head UNION ALL SELECT 1 FROM current_room_records UNION ALL SELECT 1 FROM current_room_record_proofs LIMIT 1").get()

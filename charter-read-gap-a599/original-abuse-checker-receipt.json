@@ -1,0 +1,31 @@
+{
+  "source": "a599faa29ff65567e5c080609cb2d000acd33666",
+  "node": "v24.22.1",
+  "checker": "scripts/qa2/abuse-guards.mjs",
+  "status": 1,
+  "signal": null,
+  "elapsedMs": 707,
+  "cases": [
+    {
+      "id": "H1",
+      "title": "a webhook URL that resolves to a non-public address is refused with 422 webhook_url_not_public and is not stored",
+      "status": "PASS",
+      "evidence": "refused hosts absent; public create 201"
+    },
+    {
+      "id": "D1",
+      "title": "a new display name that is reserved, duplicate, confusable, or has control characters is refused with 422 display_name_unavailable and the roster stays unchanged",
+      "status": "PASS",
+      "evidence": "roster before refusals Potter; existing member kept Helper"
+    },
+    {
+      "id": "setup",
+      "title": "checker setup",
+      "status": "FAIL",
+      "evidence": "create held: HTTP 409 legacy_work_retired {\"error\":{\"code\":\"legacy_work_retired\",\"message\":\"This room uses native work. Propose canonical work through work.proposed; legacy close and history inspection remain available.\"},\"status\":\"action_required\",\"reason\":\"legacy_work_retired\",\"h"
+    }
+  ],
+  "pass": 2,
+  "fail": 1,
+  "scope": "Existing checker on disposable local Node HTTP only; no source edit, Native, release or peer-device execution claim."
+}

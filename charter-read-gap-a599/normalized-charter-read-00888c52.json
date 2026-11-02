@@ -1,0 +1,34 @@
+{
+  "source": "00888c52110d36250d3e07629036701b72926d09",
+  "observations": [
+    {
+      "representation": "legacy",
+      "initialReadStatus": 200,
+      "initialReason": null,
+      "updateSucceeded": true,
+      "currentReadStatus": 200,
+      "currentReadReason": null,
+      "historicalReadStatus": 200,
+      "historicalReadReason": null,
+      "activationPackStatus": 200,
+      "activationPackHasInstructions": true,
+      "unauthenticatedStatus": 401,
+      "readsAddNoEvents": true
+    },
+    {
+      "representation": "normalized-current-v1",
+      "initialReadStatus": 409,
+      "initialReason": "current_room_context_required",
+      "updateSucceeded": true,
+      "currentReadStatus": 409,
+      "currentReadReason": "current_room_context_required",
+      "historicalReadStatus": 409,
+      "historicalReadReason": "current_room_context_required",
+      "activationPackStatus": 200,
+      "activationPackHasInstructions": true,
+      "unauthenticatedStatus": 401,
+      "readsAddNoEvents": true
+    }
+  ],
+  "scope": "Disposable real local Node HTTP; no runtime edits, Native, production, peer execution or release qualification."
+}

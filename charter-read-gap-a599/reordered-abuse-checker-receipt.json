@@ -1,0 +1,31 @@
+{
+  "source": "a599faa29ff65567e5c080609cb2d000acd33666",
+  "node": "v24.22.1",
+  "checker": "Local copy of original abuse-guards; independent R1/T1 blocks moved before legacy work setup; no assertions or runtime edits",
+  "status": 1,
+  "signal": null,
+  "elapsedMs": 571,
+  "cases": [
+    {
+      "id": "H1",
+      "title": "a webhook URL that resolves to a non-public address is refused with 422 webhook_url_not_public and is not stored",
+      "status": "PASS",
+      "evidence": "refused hosts absent; public create 201"
+    },
+    {
+      "id": "D1",
+      "title": "a new display name that is reserved, duplicate, confusable, or has control characters is refused with 422 display_name_unavailable and the roster stays unchanged",
+      "status": "PASS",
+      "evidence": "roster before refusals Potter; existing member kept Helper"
+    },
+    {
+      "id": "setup",
+      "title": "checker setup",
+      "status": "FAIL",
+      "evidence": "charter: HTTP 409 current_room_context_required {\"error\":{\"code\":\"current_room_context_required\",\"message\":\"Use an addressed current Room read\"},\"status\":\"action_required\",\"reason\":\"current_room_context_required\",\"hint\":\"This room requires a bounded read.\",\"next\":[{\"command\":\"Use the bou"
+    }
+  ],
+  "pass": 2,
+  "fail": 1,
+  "scope": "Existing checker on disposable local Node HTTP only; no source edit, Native, release or peer-device execution claim."
+}

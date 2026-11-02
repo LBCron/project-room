@@ -1192,7 +1192,7 @@ test("an agent owner can mint an owner-level invite; a co-owner agent and a non-
     roomId: "agent-den", title: "Agent den", purpose: "Owner seat stays put", kind: "personal", displayName: "Nia Cole",
   });
   const roomId = room.roomId;
-  assert.equal(store.room(roomId).state.room.ownerId, agentOwner.identityId);
+  assert.equal(store.roomAuthority(roomId).ownerId, agentOwner.identityId);
 
   const minted = await post(origin, `/api/rooms/${roomId}/agent-invites`, { ownerEquivalent: true, expiresInMinutes: 60 }, agentOwner.secret);
   assert.equal(minted.status, 201, minted.json?.error?.code ?? "identity mint failed");
@@ -1205,7 +1205,7 @@ test("an agent owner can mint an owner-level invite; a co-owner agent and a non-
   const viaRoom = await post(origin, `/api/rooms/${roomId}/agent-invites`, { ownerEquivalent: true }, room.mcpToken.credential);
   assert.equal(viaRoom.status, 201, viaRoom.json?.error?.code ?? "room connection mint failed");
   assert.equal(viaRoom.json.ownerEquivalent, true);
-  assert.equal(store.room(roomId).state.room.ownerId, agentOwner.identityId);
+  assert.equal(store.roomAuthority(roomId).ownerId, agentOwner.identityId);
 
   const mcp = await fetch(`${origin}/room/mcp`, {
     method: "POST",
@@ -1247,7 +1247,7 @@ test("an agent owner can mint an owner-level invite; a co-owner agent and a non-
   const redeemed = await redeem(origin, code, "Co Owner");
   assert.equal(redeemed.status, 201, redeemed.json?.error?.code ?? "redeem failed");
   assert.notEqual(redeemed.json.memberId, agentOwner.identityId);
-  assert.equal(store.room(roomId).state.room.ownerId, agentOwner.identityId);
+  assert.equal(store.roomAuthority(roomId).ownerId, agentOwner.identityId);
   const coOwnerDenied = await post(origin, `/api/rooms/${roomId}/agent-invites`, { ownerEquivalent: true }, redeemed.json.identitySecret);
   assert.equal(coOwnerDenied.status, 403, coOwnerDenied.json?.error?.code ?? "co-owner status");
   assert.equal(coOwnerDenied.json.error.code, "owner_equivalent_forbidden");
@@ -1263,7 +1263,7 @@ test("an agent owner can mint an owner-level invite; a co-owner agent and a non-
   const peerDenied = await post(origin, `/api/rooms/${roomId}/agent-invites`, { ownerEquivalent: true }, peer.json.secret);
   assert.equal(peerDenied.status, 403, peerDenied.json?.error?.code ?? "peer status");
   assert.equal(peerDenied.json.error.code, "owner_equivalent_forbidden");
-  assert.equal(store.room(roomId).state.room.ownerId, agentOwner.identityId);
+  assert.equal(store.roomAuthority(roomId).ownerId, agentOwner.identityId);
 
   const log = lines.join("\n");
   absent(log, code, "logs omit the invite code");

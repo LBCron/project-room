@@ -1,4 +1,4 @@
-import {currentInviteContext} from './current-room-repository.mjs';
+import {currentInviteContext,prepareCurrentWrite,withCurrentServingWriter} from './current-room-repository.mjs';
 import {shareLinkAgentPrefix as agentJoinPrefix,assertShareLinkUsage,assertShareLinkJoinEvidence,assertShareLinkRedemption} from './share-link-evidence.mjs';
 import { canInviteCoOwners, museDevelopmentAccess } from "../src/room-administration.js";
 import { createHash, randomBytes, randomUUID } from "node:crypto";
@@ -147,6 +147,22 @@ export class ShareLinks {
   authorityState(roomId,memberIds=[]) {
     return currentInviteContext(this.store,roomId,{memberIds})?.room.state ?? this.store.room(roomId).state;
   }
+  admissionRoom(roomId,memberIds=[]) {
+    const context=currentInviteContext(this.store,roomId,{memberIds,census:true});
+    return {context,room:context?.room ?? this.store.room(roomId)};
+  }
+  saveAdmission(room,context,state,incoming) {
+    const roomId=incoming.roomId,sequence=room.sequence+1;
+    const write=context?prepareCurrentWrite(this.store,{roomId,previous:room,state,event:incoming,sequence,current:context.current}):null;
+    const projection=write?.projection ?? this.store.storedProjection(roomId,state);
+    if(Buffer.byteLength(projection)>PILOT_LIMITS.projectionBytes)fail(409,'pilot_limit','This room has reached its storage limit; no data was changed. Ask the room owner to review storage capacity.');
+    withCurrentServingWriter(this.db,roomId,()=>{
+      this.db.prepare('INSERT INTO events VALUES(?,?,?,?)').run(roomId,sequence,incoming.id,JSON.stringify(incoming));
+      this.db.prepare('UPDATE rooms SET sequence=?,projection=? WHERE id=?').run(sequence,projection,roomId);
+      write?.persistEntities();
+    });
+    return sequence;
+  }
   // Cancelled, expired, and full rows stay (link history is retained) and do
   // not consume the 200 live links a room may hold.
   roomLinkCount(roomId) {
@@ -226,10 +242,10 @@ export class ShareLinks {
         try { this.store.authenticateAccountSession(accountToken, row.room_id, binding); }
         catch (error) { if ([401, 403, 409].includes(error.status)) unavailable(); throw error; }
       }
-      const members = this.store.room(row.room_id).state.members;
+      const roomState=this.authorityState(row.room_id,[row.issuer_member_id]);
+      const members=roomState.members;
       const issuer = members && Object.hasOwn(members, row.issuer_member_id) ? members[row.issuer_member_id] : null;
       const inviterDisplayName = typeof issuer?.displayName === "string" && issuer.displayName.trim() ? issuer.displayName.trim() : "A member";
-      const roomState = this.store.room(row.room_id).state;
       return { link, room: { id: row.room_id, title: roomState.room.title },
         access: previewAccessText(link.access, roomState),
         identity: "Names are self-chosen, not verified. New guest sessions last up to 8 hours in this browser.",
@@ -263,7 +279,7 @@ export class ShareLinks {
           // stand-in), so the reducer's canInviteMembers check applies honestly.
           // Links minted before the mint-time gate fail closed here.
           const growth = typeof row.request_id === "string" && row.request_id.startsWith(PERSONAL_INVITE_PREFIX);
-          if (growth && !canInviteMembers(this.store.room(row.room_id).state, row.issuer_member_id)) {
+          if (growth && !canInviteMembers(this.authorityState(row.room_id,[row.issuer_member_id]), row.issuer_member_id)) {
             fail(403, "invite_not_authorized", "This invite was issued by a member who cannot invite new members");
           }
         },
@@ -342,8 +358,9 @@ export class ShareLinks {
   // board itself still loads.
   personalInvite(auth, roomId, maxJoins) {
     const cap = Math.min(25, Math.max(1, Math.floor(maxJoins)));
+    const state=this.authorityState(roomId,[auth.member.id]);
     try {
-      enforceAutonomyTierForAction({ db: this.store.db, roomId, state: this.store.room(roomId).state, actor: auth.member, action: "share_link_create", fail });
+      enforceAutonomyTierForAction({ db: this.store.db, roomId, state: state, actor: auth.member, action: "share_link_create", fail });
     } catch (error) {
       if (error.code === "agent_readonly") return null;
       throw error;
@@ -352,7 +369,7 @@ export class ShareLinks {
     // (referral-invites.mjs) — the owner, or a member with invite_member or
     // manage_members. Guests and other members without invite rights get no
     // link; the board itself still loads.
-    if (!canInviteMembers(this.store.room(roomId).state, auth.member.id)) return null;
+    if (!canInviteMembers(state, auth.member.id)) return null;
     // Same f520ca69 email gate as create(): an unverified account gets no
     // personal link (the board still loads, as for a member without invite
     // rights). Without this the Invite dialog handed out a working guest
@@ -473,7 +490,7 @@ export class ShareLinks {
           }
         }
         const bound = this.db.prepare("SELECT member_id FROM member_accounts WHERE room_id=? AND account_id=?").get(row.room_id, auth.account.id);
-        if (this.store.room(row.room_id).state.members[bound.member_id]?.active === false) this.reactivateSelfLeft(row, bound.member_id, auth, redemptionId);
+        if (this.authorityState(row.room_id,[bound.member_id]).members[bound.member_id]?.active === false) this.reactivateSelfLeft(row, bound.member_id, auth, redemptionId);
         return this.result(slotToken, row.room_id, true); // Existing membership survives a full or expired invitation; removed members still fail authentication.
       }
       if (this.view(row).status !== "active") unavailable();
@@ -485,7 +502,7 @@ export class ShareLinks {
           return { roomId: row.room_id, duplicate: true, roomMode: true, session: this.store.sessionOwnership(existingRoom) };
         }
       }
-      const room = this.store.room(row.room_id), now = this.store.now();
+      const {room,context}=this.admissionRoom(row.room_id,[row.issuer_member_id]),now=this.store.now();
       assertAdmissibleMemberName(displayName.trim(), room.state.members); // Q3-D: roster check plus role names
       if (room.sequence >= PILOT_LIMITS.eventsPerRoom || activeMemberCount(room.state.members) >= PILOT_LIMITS.membersPerRoom) fail(409, "pilot_limit", "This room is full; ask its owner for help");
       const access = this.accessOf(row);
@@ -524,7 +541,8 @@ export class ShareLinks {
       this.store.appendInvitationJournal(record, "issued");
       const incoming = invitationJoinedEvent({ ...record, joined_event_id: randomUUID(), accepted_at: now, redemption_id: redemptionId });
       refuseArchivedWrite(room.state);
-      let state = { ...applyEventWithGrowth(room.state, incoming, growthCollector).state, eventLog: [], seenEvents: {}, seenIdempotencyKeys: {} };
+      const joinedState = { ...applyEventWithGrowth(room.state, incoming, growthCollector).state, eventLog: [], seenEvents: {}, seenIdempotencyKeys: {} };
+      let state=joinedState;
       // Co-admin: the room creator, who minted the link, raises the new
       // member from moderator to the link grant (linkPermissions, capped at
       // the NEVER_GRANT ceiling) in the same transaction.
@@ -533,11 +551,16 @@ export class ShareLinks {
         data: { memberId, expectedMemberRevision: state.members[memberId].revision, permissions: linkPermissions(access), active: true,
           authorityPolicyVersion: MEMBERSHIP_AUTHORITY_POLICY_VERSION } }) : null;
       if (grant) state = { ...applyEventWithGrowth(state, grant, growthCollector).state, eventLog: [], seenEvents: {}, seenIdempotencyKeys: {} };
+      if(context){
+        this.saveAdmission(room,context,joinedState,incoming);
+        if(grant){const next=this.admissionRoom(row.room_id,[row.issuer_member_id,memberId]);this.saveAdmission(next.room,next.context,state,grant);}
+      }else{
       const projection = this.store.storedProjection(row.room_id, state), sequence = room.sequence + (grant ? 2 : 1);
       if (Buffer.byteLength(projection) > PILOT_LIMITS.projectionBytes) fail(409, "pilot_limit", "This room has reached its storage limit; no data was changed. Ask the room owner to have older messages archived to free space.");
       this.db.prepare("INSERT INTO events VALUES(?,?,?,?)").run(row.room_id, room.sequence + 1, incoming.id, JSON.stringify(incoming));
       if (grant) this.db.prepare("INSERT INTO events VALUES(?,?,?,?)").run(row.room_id, sequence, grant.id, JSON.stringify(grant));
       this.db.prepare("UPDATE rooms SET sequence=?,projection=? WHERE id=?").run(sequence, projection, row.room_id);
+      }
       this.db.prepare("INSERT INTO member_accounts(room_id,member_id,account_id,origin) VALUES(?,?,?,?)").run(row.room_id, memberId, auth.account.id, `invitation:${invitationId}`);
       this.store.markAccountHadRoom(auth.account.id);
       this.db.prepare("UPDATE membership_invitations SET revision=1,status='accepted',accepted_at=?,accepted_by_account_id=?,redemption_id=?,joined_event_id=? WHERE id=?").run(now, auth.account.id, redemptionId, incoming.id, invitationId);
@@ -556,7 +579,7 @@ export class ShareLinks {
   // transaction, no second member_accounts row. A member the owner removed
   // stays out: the link is not a way around a removal.
   reactivateSelfLeft(row, memberId, auth, redemptionId) {
-    const room = this.store.room(row.room_id), member = room.state.members[memberId];
+    const {room,context}=this.admissionRoom(row.room_id,[row.issuer_member_id,memberId]),member=room.state.members[memberId];
     const last = this.db.prepare("SELECT body FROM events WHERE room_id=? AND json_extract(body,'$.type')=? AND json_extract(body,'$.data.memberId')=? ORDER BY sequence DESC LIMIT 1")
       .get(row.room_id, T.MEMBER_ACCESS_CHANGED, memberId);
     const lastEvent = last ? JSON.parse(last.body) : null;
@@ -571,17 +594,14 @@ export class ShareLinks {
     const rejoin = event({ id: randomUUID(), idempotencyKey: `link-rejoin:${row.id}:${redemptionId}`, roomId: row.room_id, actorId: admission.memberId, type: T.MEMBER_ACCESS_CHANGED, at: new Date(now).toISOString(),
       data: { memberId, expectedMemberRevision: member.revision, permissions: ["co_admin", "co_owner"].includes(access) ? linkPermissions(access) : [...INVITATION_ROLES[role]], active: true, authorityPolicyVersion: MEMBERSHIP_AUTHORITY_POLICY_VERSION } });
     const state = { ...applyEventWithGrowth(room.state, rejoin, growthCollector).state, eventLog: [], seenEvents: {}, seenIdempotencyKeys: {} };
-    const projection = this.store.storedProjection(row.room_id, state), sequence = room.sequence + 1;
-    if (Buffer.byteLength(projection) > PILOT_LIMITS.projectionBytes) fail(409, "pilot_limit", "This room has reached its storage limit; no data was changed. Ask the room owner to have older messages archived to free space.");
-    this.db.prepare("INSERT INTO events VALUES(?,?,?,?)").run(row.room_id, sequence, rejoin.id, JSON.stringify(rejoin));
-    this.db.prepare("UPDATE rooms SET sequence=?,projection=? WHERE id=?").run(sequence, projection, row.room_id);
+    this.saveAdmission(room,context,state,rejoin);
   }
   // A share link is an invite link: a first join credits the link's issuer on
   // the room's referral board (via "invite"), in the join's transaction, the
   // same way agent-invite redemption does. Retries return the duplicate path
   // before reaching here, and the referrals primary key keeps it exactly-once.
   creditReferral(row, refereeMemberId, at, trace = {}) {
-    const issuer = ownMember(this.store.room(row.room_id).state.members, row.issuer_member_id);
+    const issuer = ownMember(this.authorityState(row.room_id,[row.issuer_member_id]).members, row.issuer_member_id);
     if (!this.store.referrals || !issuer || issuer.active === false || row.issuer_member_id === refereeMemberId) return;
     this.store.referrals.record({ roomId: row.room_id, referrerMemberId: row.issuer_member_id, refereeMemberId, via: "invite", at });
     rememberReferee(this.store, row.room_id, refereeMemberId, trace);
@@ -603,7 +623,7 @@ export class ShareLinks {
     if (growth && !canInviteMembers(room.state, row.issuer_member_id)) {
       fail(403, "invite_not_authorized", "This invite was issued by a member who cannot invite new members");
     }
-    const ownerId = this.store.roomAuthority(row.room_id).ownerId;
+    const ownerId = room.state.room.ownerId;
     const issuer = room.state.members?.[row.issuer_member_id];
     const canAdmit = row.issuer_member_id === ownerId || issuer?.permissions?.includes("manage_members") === true;
     if (!growth || canAdmit) {

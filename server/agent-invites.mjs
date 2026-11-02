@@ -707,7 +707,7 @@ export class AgentInvites {
   // human join shares it).
   admitLinkAgent({ identity, roomId, displayName, permissions, historyGuest = false, actorId, eventId, grantActive, grantCheck }) {
     return this.store.transaction(() => {
-      const room = this.store.room(roomId);
+      const {room,context}=inviteRoom(this.store,roomId,[actorId,identity.identityId],true);
       const linked = this.db.prepare("SELECT member_id FROM identity_links WHERE room_id=? AND identity_id=?").get(roomId, identity.identityId);
       const member = linked && room.state.members[linked.member_id];
       // Recovery never consumes another place or restores removed membership.
@@ -733,10 +733,7 @@ export class AgentInvites {
           ...(historyGuest ? { historyGuest: true } : {}),
           authorityPolicyVersion: MEMBERSHIP_AUTHORITY_POLICY_VERSION } });
       const state = { ...applyEventWithGrowth(room.state, incoming, growthCollector).state, eventLog: [], seenEvents: {}, seenIdempotencyKeys: {} };
-      const projection = this.store.storedProjection(roomId, state), sequence = room.sequence + 1;
-      if (Buffer.byteLength(projection) > PILOT_LIMITS.projectionBytes) fail(409, "pilot_limit", "Room storage limit reached; no data was changed. Ask the room owner to have older messages archived to free space.");
-      this.db.prepare("INSERT INTO events VALUES(?,?,?,?)").run(roomId, sequence, eventId, JSON.stringify(incoming));
-      this.db.prepare("UPDATE rooms SET sequence=?,projection=? WHERE id=?").run(sequence, projection, roomId);
+      saveInviteEvent(this.store,roomId,room,context,state,incoming);
       this.db.prepare("INSERT INTO identity_links(room_id,identity_id,member_id,linked_at) VALUES(?,?,?,?)")
         .run(roomId, identity.identityId, identity.identityId, now);
       seedNewAgentPolicy(this.db, roomId, identity.identityId, now, state);

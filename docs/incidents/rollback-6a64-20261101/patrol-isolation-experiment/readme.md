@@ -9,3 +9,7 @@ Recovery restored exact prod65e553f4-f96f-4f7f-a4d4-ac8e18c209a5 and entryebd621
 A separate passive-tail attempt failed during startup with exit1 and zero captured events; it is not a45-second traffic sample and supplies no evidence about post-isolation traffic. No production writes, database replacement or load generation accompanied the independent checks.
 
 Research: production timers advance after I/O, so synchronous elapsed-time checks do not bound work (https://developers.cloudflare.com/workers/runtime-apis/performance/). Thrown alarms retry automatically (https://developers.cloudflare.com/durable-objects/api/alarms/). Storage timeouts reset in-memory state without deleting persisted storage; absence of a public incident does not rule out an object-specific service problem (https://developers.cloudflare.com/durable-objects/observability/troubleshooting/).
+
+## Boundary evidence after failed isolation
+
+See invocation-boundaries.json. The probe SELECT and application completion succeeded, yet the RPC was canceled after46.24s with1ms CPU. A separate presence request recorded30.174s CPU/44.966s wall and canceled; readJobHealth completed after44.579s with149ms CPU. This moves investigation beyond the SELECT itself toward shared durability/scheduling and competing work. It does not establish a CPU-limit exception or a platform cause. The legacy presence query has a correlated history predicate now undergoing actual Worker before/after qualification.

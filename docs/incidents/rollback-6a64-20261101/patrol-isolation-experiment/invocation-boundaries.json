@@ -1,0 +1,61 @@
+{
+  "source": "existing signed-in Cloudflare Workers Observability UI; fixed diagnostic fields only",
+  "windowUTC": [
+    "2026-11-02T02:25:00Z",
+    "2026-11-02T02:29:30Z"
+  ],
+  "scriptVersion": "9f4007b9-df23-48cc-8c01-5c0c4d9e404c",
+  "sourceRevision": "7ee5ad65a6628cd2b959c4561889e5741b3561e7",
+  "buildId": "2026-11-02T02:25:11.836Z",
+  "observations": [
+    {
+      "invocationId": "c6ecd3bb4343f21bcc36d21242b6435c",
+      "operation": "GET room presence",
+      "executionModel": "durableObject",
+      "outcome": "canceled",
+      "cpuTimeMs": 30174,
+      "wallTimeMs": 44966
+    },
+    {
+      "invocationId": "5828bb285d0a41e4fb4320c8a3ae6a8c",
+      "rpcMethod": "readJobHealth",
+      "executionModel": "durableObject",
+      "outcome": "ok",
+      "cpuTimeMs": 149,
+      "wallTimeMs": 44579
+    },
+    {
+      "invocationId": "f1c0dba423dabdaaf68431f80d611b37",
+      "rpcMethod": "probeStorage",
+      "executionModel": "durableObject",
+      "outcome": "canceled",
+      "cpuTimeMs": 1,
+      "wallTimeMs": 46241,
+      "appStages": [
+        {
+          "stage": "do_entered",
+          "outcome": "pending",
+          "epochMs": 1793586424496
+        },
+        {
+          "stage": "sql_completed",
+          "outcome": "ok",
+          "epochMs": 1793586424496,
+          "elapsedMs": 0
+        },
+        {
+          "stage": "do_completed",
+          "outcome": "ok",
+          "epochMs": 1793586424496,
+          "elapsedMs": 0
+        }
+      ]
+    }
+  ],
+  "interpretation": [
+    "Readiness application code and SELECT 1 completed successfully; eventual RPC cancellation is not evidence the SELECT itself hung.",
+    "Production IO-bound clocks explain identical stage time; zero elapsed does not measure synchronous CPU precisely.",
+    "Presence high CPU canceled outcome is not an exceededCpu exception. Earlier sample without CPU-limit exceptions is narrower evidence.",
+    "Shared commit/output gates or competing synchronous work are candidates, not proven causes. Correlate exact local presence query experiments before another release."
+  ]
+}

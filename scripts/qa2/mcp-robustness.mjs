@@ -6,7 +6,7 @@
 //   I3 JSON-RPC envelope is valid (jsonrpc "2.0", matching id, result XOR error);
 //   I4 the case's own expectation (error code range, isError, or success).
 // Usage: node scripts/qa2/mcp-robustness.mjs --url http://127.0.0.1:4173/mcp [--token-env ROOM_QA_TOKEN] [--room ROOM] [--foreign-room ROOM] [--json out.json] [--writes]
-// Read-only unless --writes (then it posts at most 3 messages to --room).
+// Read-only unless --writes (then it posts at most 2 messages to --room).
 import { argv, env, exit } from "node:process";
 import { writeFileSync } from "node:fs";
 
@@ -95,8 +95,11 @@ const cases = [
   ["GET with SSE accept", null, { method: "GET", accept: "text/event-stream" }, "any"],
 ];
 if (writes && room) {
-  cases.push(["post unicode/RTL/zero-width", call("room_post_message", { roomId: room, body: "qa2 \u202Egnirts desrever\u202C \u200B\u200D emoji 🧪 combining e\u0301 <script>alert(1)</script> ${7*7} {{7*7}}" }, 40), {}, "ok"]);
-  cases.push(["post NUL byte", call("room_post_message", { roomId: room, body: "qa2 nul\u0000byte" }, 41), {}, "any"]);
+  cases.push(["post Unicode/zero-width", call("room_post_message", { roomId: room, body: "qa2 Unicode العربية עברית \u200B\u200D emoji 🧪 combining e\u0301 <script>alert(1)</script> ${7*7} {{7*7}}" }, 40), {}, "ok"]);
+  cases.push(["post NUL byte refused", call("room_post_message", { roomId: room, body: "qa2 nul\u0000byte" }, 41), {}, "toolError"]);
+  // Directional control codes differ from ordinary RTL text; keep both contracts.
+  cases.push(["post bidi controls refused", call("room_post_message", { roomId: room, body: "qa2 bidi\u202Ehidden\u202C" }, 44), {}, "toolError"]);
+  cases.push(["post unpaired surrogate refused", call("room_post_message", { roomId: room, body: "qa2 surrogate\uD800" }, 45), {}, "toolError"]);
   const fixedId = `qa2-idem-${Date.now()}`;
   cases.push(["idempotent post #1", call("room_post_message", { roomId: room, id: fixedId, body: "qa2 idempotency probe" }, 42), {}, "ok"]);
   cases.push(["idempotent post #2 same id", call("room_post_message", { roomId: room, id: fixedId, body: "qa2 idempotency probe" }, 43), {}, "ok"]);

@@ -749,5 +749,8 @@ export default {
   "currentRoom.memberAccessUnavailable": "Member access unavailable",
   "currentRoom.recordLoading": "Loading…",
   "agentError.current_room_corrupt.hint": "Selected peer data failed its integrity check.",
-  "agentError.current_room_corrupt.recovery": "Stop the read and report the room ID, code and full message to the operator for integrity reconciliation. Do not retry unchanged or treat this as an empty result."
+  "agentError.current_room_corrupt.recovery": "Stop the read and report the room ID, code and full message to the operator for integrity reconciliation. Do not retry unchanged or treat this as an empty result.",
+  "agentSponsor.invalidConsent": "Invalid sponsorship consent",
+  "agentSponsor.permissionsNotHeld": "Cannot grant permissions not held",
+  "agentSponsor.requestTitle": "Connect {name} to the requesting human"
 };

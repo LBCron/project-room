@@ -3,7 +3,7 @@
 // never a Room account or a synthetic human. Secrets remain hash-only.
 import { createHash, randomBytes } from 'node:crypto';
 import { createOAuthProvider } from './oauth-provider.mjs';
-import { mcpOAuthIdentityEpoch, validateMcpInviteOAuthBinding } from './mcp-oauth.mjs';
+import { mcpInviteOAuthIdentityEpoch, validateMcpInviteOAuthBinding } from './mcp-oauth.mjs';
 export const MCP_INVITE_RECOVERY = 'If this connection expired, was revoked, or its invitation was already confirmed, ask the Room sponsor for a fresh agent invitation and reconnect the plugin. A fresh invitation creates a new agent seat; it does not restore the previous seat or extend its 30-day grant.';
 const hash = value => createHash('sha256').update(value).digest('hex');
 const escape = value => String(value ?? '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
@@ -81,7 +81,7 @@ export function createMcpInviteOAuth({ store, clients, resource, issuer = new UR
       const invite = db.prepare('SELECT created_by FROM agent_invite_codes WHERE code_hash=?').get(receipt.code_hash);
       const id = `oig_${randomBytes(24).toString('base64url')}`;
       db.prepare('INSERT INTO oauth_invite_grants(id,room_id,identity_id,member_id,identity_epoch,invite_hash,sponsor_member_id,created_at,expires_at) VALUES(?,?,?,?,?,?,?,?,?)')
-        .run(id, joined.roomId, joined.identityId, joined.memberId, mcpOAuthIdentityEpoch(store, joined.identityId), receipt.code_hash, invite.created_by, store.now(), store.now() + 30 * 86400000);
+        .run(id, joined.roomId, joined.identityId, joined.memberId, mcpInviteOAuthIdentityEpoch(store, joined.identityId, joined.roomId), receipt.code_hash, invite.created_by, store.now(), store.now() + 30 * 86400000);
       db.prepare('UPDATE oauth_invite_pending SET grant_id=?,approval_hash=? WHERE nonce_hash=?').run(id, approvalHash, hash(nonce));
       grant = db.prepare('SELECT * FROM oauth_invite_grants WHERE id=?').get(id);
     }

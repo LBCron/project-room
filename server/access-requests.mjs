@@ -31,6 +31,7 @@ import { currentInviteContext, prepareCurrentWrite, withCurrentServingWriter } f
 
 // G11: read at call time; store.mjs imports this module, so no module-level copy.
 import { PILOT_LIMITS } from "./store.mjs";
+import { AgentSponsorTransfers, sponsorTransferContents } from "./agent-sponsor-transfer.mjs";
 import { randomUUID, createHash } from "node:crypto";
 import { MemberPermissionRequests, permissionRequestContents } from "./member-permission-requests.mjs";
 import { createRateLimiter } from "./identity-ratelimit.mjs";
@@ -113,6 +114,8 @@ export const REQUEST_TTL_MS = 7 * 24 * 60 * 60 * 1000;
 // history must never reinterpret a stale upgrade as a fresh admission.
 const requestContents = row => {
   const stored = JSON.parse(row.requested_permissions);
+  const adoption=sponsorTransferContents(row);
+  if(adoption)return {permissions:[],upgrade:null,adoption};
   if (stored?.kind !== "account-admission") {
     if (row.status === ACCOUNT_PENDING_STATUS || row.identity_id.startsWith("account:")) fail(409, "invalid_request", "Unsupported stored account admission");
     return permissionRequestContents(row);
@@ -127,9 +130,10 @@ const accountPrincipal = (roomId, accountId) => `account:${createHash("sha256").
 const rowToRequest = row => row ? Object.freeze({
   requestId: row.request_id,
   roomId: row.room_id,
-  identityId: requestContents(row).account || requestContents(row).upgrade?.principalKind === "room-member" ? null : row.identity_id,
-  ...(requestContents(row).account ? { principalKind: "account" } : {}),
-  kind: requestContents(row).upgrade ? "permissions" : "join",
+  identityId: requestContents(row).adoption || requestContents(row).account || requestContents(row).upgrade?.principalKind === "room-member" ? null : row.identity_id,
+  ...(requestContents(row).account || requestContents(row).adoption ? { principalKind: "account" } : {}),
+  kind: requestContents(row).adoption ? "agent-sponsor-transfer" : requestContents(row).upgrade ? "permissions" : "join",
+  ...(requestContents(row).adoption ? {memberId:requestContents(row).adoption.memberId,recipientMemberId:requestContents(row).adoption.humanMemberId} : {}),
   ...(requestContents(row).upgrade ? { memberId: requestContents(row).upgrade.memberId } : {}),
   displayName: row.display_name,
   requestedPermissions: requestContents(row).permissions,
@@ -188,6 +192,7 @@ export class AccessRequests {
   constructor(store, { rateLimiter } = {}) {
     this.store = store;
     this.db = store.db;
+    this.sponsorTransfers = new AgentSponsorTransfers(this);
     this.memberPermissions = new MemberPermissionRequests(this, MAX_PENDING_PER_IDENTITY_ROOM);
     // Separate bucket from general API use: requesting access is rare and
     // sensitive. 5 requests per hour per identity is generous for humans
@@ -778,6 +783,7 @@ export class AccessRequests {
       const row = this.db.prepare("SELECT * FROM access_requests WHERE request_id=? AND room_id=?").get(requestId, roomId);
       if (!row) fail(404, "not_found", "No such join request");
       const live = this.maybeExpire(row);
+      if(sponsorTransferContents(row))return this.sponsorTransfers.review(token,roomId,live,{decision,permissions,note},auth,expectedSessionBinding);
       if (!isPending(live.status)) fail(409, "already_decided", `Request is already ${live.status}`);
       const now = this.store.now();
       if (this.upgradeBasis(row)) {

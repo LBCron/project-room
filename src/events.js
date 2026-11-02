@@ -1,3 +1,4 @@
+import { uiText } from './strings.js';
 import { prepareClaimOverlap, matchClaimOverlap } from './claim-overlap.js';
 import { currentRecordClaimOverlaps, inheritCurrentRecordContext } from './current-record-context.js';
 import { canAdministerRoom, canInviteCoOwners, museDevelopmentAccess } from './room-administration.js';
@@ -46,6 +47,7 @@ export const EVENT_TYPES = Object.freeze({
   PAIR_APPROVED: "pair.approved",
   PAIR_DENIED: "pair.denied",
   MEMBER_JOINED_VIA_INVITATION: "member.joined_via_invitation",
+  MEMBER_SPONSOR_TRANSFERRED: "member.sponsor_transferred",
   MEMBER_ACCESS_CHANGED: "member.access_changed",
   MEMBER_STATUS_UPDATED: "member.status_updated",
   NOTIFICATION_PREFERENCES_SET: "notifications.preferences_set",
@@ -708,6 +710,7 @@ function applyEventWithJournal(current, incoming, journal = null) {
     [EVENT_TYPES.PAIR_APPROVED]: recordPair,
     [EVENT_TYPES.PAIR_DENIED]: recordPair,
     [EVENT_TYPES.MEMBER_JOINED_VIA_INVITATION]: joinMemberViaInvitation,
+    [EVENT_TYPES.MEMBER_SPONSOR_TRANSFERRED]: transferMemberSponsor,
     [EVENT_TYPES.MEMBER_ACCESS_CHANGED]: changeMemberAccess,
     [EVENT_TYPES.MEMBER_STATUS_UPDATED]: updateMemberStatus,
     [EVENT_TYPES.NOTIFICATION_PREFERENCES_SET]: setNotificationPreferences,
@@ -1845,3 +1848,15 @@ const { postMessage, editMessage, deleteMessage, redactMessage, recordEvidenceWi
 
 // Compose work transitions once with the same authority guards as other domains.
 const { proposeWork, acceptWork, startWork, blockWork, recordHandoff, clearHalt, resolveBlocker, completeWork, supersedeWork, acquireClaim, releaseClaim, renewClaim, recordVerification, applySession, recordOwnerDecision } = createWorkReducers({ WORK_STATES, requirePermission, requireFields, requireMember, knownMember, receiptHasKnownProducer, requireWorkItem, assertRoomTrust, roomPolicy, claimIsActive, claimOverlaps, hasPermission, matchesReceipt, hasConfirmedIndependentPass, requirePublicDecisionSource });
+
+function transferMemberSponsor(state,incoming) {
+ requireFields(incoming.data,["requestId","requestDigest","memberId","expectedMemberRevision","toMemberId","expectedHumanRevision","previousSponsorId","identityId"]);
+ if(!ownerLevel(state,incoming.actorId))throw Error("Owner required");
+ const m=ownMember(state.members,incoming.data.memberId),human=ownMember(state.members,incoming.data.toMemberId);
+ if(!m||m.kind!=="agent"||m.active!==true||m.id===state.room.ownerId||!human||human.kind!=="human"||human.active!==true||m.id===human.id)throw Error("Unknown member");
+ if(m.revision!==incoming.data.expectedMemberRevision||human.revision!==incoming.data.expectedHumanRevision||m.accountableHumanId!==incoming.data.previousSponsorId||m.identityId!==incoming.data.identityId)throw Error("Stale revision");
+ if(!/^[a-f0-9]{64}$/.test(incoming.data.requestDigest))throw Error(uiText("agentSponsor.invalidConsent"));
+ const actor=ownMember(state.members,incoming.actorId);
+ if(incoming.actorId!==state.room.ownerId&&m.permissions.some(p=>!actor.permissions.includes(p)))throw Error(uiText("agentSponsor.permissionsNotHeld"));
+ m.accountableHumanId=human.id;m.sponsorAdoptionId=incoming.data.requestId;m.sponsorAdoptionDigest=incoming.data.requestDigest;m.revision+=1;
+}

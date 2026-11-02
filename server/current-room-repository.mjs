@@ -9,7 +9,7 @@ import {archiveRetains,recoverArchiveMarker} from './current-room-archive.mjs';
 import {messageRowForWrite} from './messages-store.mjs';
 import {messageProofHash} from './write-integrity.mjs';
 import { RESTORE_CONTROL_DEFINITIONS, RESTORE_CONTROL_GUARDS, RESTORE_CONTROL_SCHEMA, inRestoreContext, withExactRestoreGuards } from './restore-admission.mjs';
-import { messageInHistory, historyFloor as deriveHistoryFloor } from './history-visibility.mjs';
+import { messageInHistory, historyFloor as deriveHistoryFloor, historyActivationTuple, historyActivationValue } from './history-visibility.mjs';
 import { bindCurrentRecordContext } from '../src/current-record-context.js';
 // Current serving metadata, never replay staging. Version/fences are storage
 // compatibility and prospective write integrity, not authority against a DBA.
@@ -311,9 +311,7 @@ export function initializeCurrentRoom(store,state,events) {
     counts.threadParticipants=[...fields.keys()].filter(key=>JSON.parse(key)[0]==='threadParticipants').length;
     counts.historyFloors=0;counts.historyExclusions=0;
     for(const memberId of Object.keys(state.members)) {
-      const floor=deriveHistoryFloor(db,state,roomId,memberId,events.length);if(!floor)continue;
-      fields.set(JSON.stringify(['historyFloors',memberId]),{sequence:floor.sequence,at:floor.at,sameInstantCount:floor.sameInstant.size});counts.historyFloors++;
-      for(const id of floor.sameInstant){fields.set(JSON.stringify(['historyExclusions',memberId+'\0'+id]),true);counts.historyExclusions++;}
+      fields.set(JSON.stringify(['historyFloors',memberId]),historyActivationTuple(db,roomId,memberId,events.length));counts.historyFloors++;
     }
     counts.metadataRecords=fields.size;counts.metadataProofs=fields.size;
     if(Object.values(state.workItems).some(item=>item.suspended_by==='round_limit'))refuse('Round-limit index is not yet qualified');
@@ -565,6 +563,14 @@ export function prepareCurrentWrite(store,{roomId,previous,state,event,sequence,
   for(const [id,entry] of privacyChanges)if(!isDeepStrictEqual(entry.before,entry.value))changes.push({domain:'workPrivacy',key:id,value:entry.value});
   for(const [key,value] of linkChanges)if(!isDeepStrictEqual(readCurrentRecord(db,roomId,'workRequest',key,current.budget),value))changes.push({domain:'workRequest',key,value});
   const counts={...current.head.counts};
+  const joinedId=event.data?.memberId;
+  if(typeof joinedId==='string' && (event.type==='member.added'||event.type==='member.joined_via_invitation'
+    || event.type==='member.access_changed'&&event.data.active===true&&!previous.state.members[joinedId]?.active)) {
+    const prior=readCurrentRecord(db,roomId,'historyFloors',joinedId,current.budget);
+    changes.push({domain:'historyFloors',key:joinedId,value:historyActivationValue({sequence,at:event.at})});
+    if(prior===undefined)counts.historyFloors++;
+  }
+
   if(event.type==='message.posted') {
     const added=state.messages.filter(message=>!previous.state.messages.some(old=>old.id===message.id));
     for(const message of added) {
@@ -789,9 +795,13 @@ export function readCurrentRoomForAudit(store,roomId) {
   if(expected.size!==head.counts.threadParticipants||!isDeepStrictEqual(expected,participants))corrupt('complete thread participant census differs');
   const expectedFloors=new Map(),expectedExclusions=new Map();
   for(const id of Object.keys(state.members)) {
-    const floor=deriveHistoryFloor(db,state,roomId,id,head.sequence);if(!floor)continue;
-    expectedFloors.set(id,{sequence:floor.sequence,at:floor.at,sameInstantCount:floor.sameInstant.size});
-    for(const excluded of floor.sameInstant)expectedExclusions.set(id+'\0'+excluded,true);
+    const existing=floors.get(id);
+    if(existing?.version===2)expectedFloors.set(id,historyActivationTuple(db,roomId,id,head.sequence));
+    else {
+      const floor=deriveHistoryFloor(db,state,roomId,id,head.sequence);if(!floor)continue;
+      expectedFloors.set(id,{sequence:floor.sequence,at:floor.at,sameInstantCount:floor.sameInstant.size});
+      for(const excluded of floor.sameInstant)expectedExclusions.set(id+'\0'+excluded,true);
+    }
   }
   if(floors.size!==head.counts.historyFloors||exclusions.size!==head.counts.historyExclusions
     ||!isDeepStrictEqual(floors,expectedFloors)||!isDeepStrictEqual(exclusions,expectedExclusions))corrupt('complete history floor/exclusion census differs');
@@ -811,6 +821,20 @@ export function readCurrentHistoryFloor(db,roomId,memberId) {
   if(!room||!member)corrupt('missing history policy authority');
   const limited=memberHistoryVisibility({room,members:{[memberId]:member}},memberId)==='since_join';
   const floor=readCurrentRecord(db,roomId,'historyFloors',memberId,b);
+  if(floor?.version===2) {
+    if(Object.keys(floor).sort().join(',')!=='at,sequence,tieBreak,version'||floor.tieBreak!=='source-sequence'
+      ||!Number.isSafeInteger(floor.sequence)||floor.sequence<1||typeof floor.at!=='string'||!Number.isFinite(Date.parse(floor.at)))corrupt('invalid activation witness');
+    if(!limited)return null;
+    return {...floor,messageSequence(id){
+      if(!db.isTransaction)throw Error('Addressed history membership requires its read transaction');
+      const witness=readCurrentRecord(db,roomId,'messageWitness',id,b);
+      if(!witness||!Number.isSafeInteger(witness.sequence))corrupt('missing message activation sequence');return witness.sequence;
+    },eventSequence(id){
+      if(!db.isTransaction)throw Error('Addressed history membership requires its read transaction');
+      charge(b,256);const row=db.prepare('SELECT sequence FROM events WHERE id=? AND room_id=?').get(id,roomId);
+      if(!Number.isSafeInteger(row?.sequence))corrupt('missing event activation sequence');return row.sequence;
+    }};
+  }
   if(!limited){if(floor!==undefined)corrupt('unexpected limited history witness');return null;}
   if(!floor||!Number.isSafeInteger(floor.sequence)||floor.sequence<1||typeof floor.at!=='string'
     ||!Number.isSafeInteger(floor.sameInstantCount)||floor.sameInstantCount<0)corrupt('missing qualified history floor');

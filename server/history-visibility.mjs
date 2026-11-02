@@ -48,6 +48,25 @@ export function historyExclusionIds(entry) {
  return [entry.id,entry.messageId].flatMap(id=>typeof id==='string'?[id,`${id}:channel`]:[]);
 }
 
+// V2 activation tuple: initialization/full audit may enumerate history; serving
+// reads and invitation writes use the protected addressed tuple instead.
+export function historyActivationTuple(db,roomId,memberId,headSequence) {
+ const rows=db.prepare(`SELECT sequence,json_extract(body,'$.at') at,json_extract(body,'$.type') type,
+   json_extract(body,'$.data.active') active FROM events WHERE room_id=?
+   AND json_extract(body,'$.data.memberId')=? AND json_extract(body,'$.type') IN (?,?,?) ORDER BY sequence`)
+   .all(roomId,memberId,...JOIN_TYPES,T.MEMBER_ACCESS_CHANGED);
+ let activation={active:false,row:null};for(const row of rows)activation=advanceHistoryActivation(activation,row);
+ return historyActivationValue(historyJoinPoint(activation.row,headSequence));
+}
+export function historyActivationValue({sequence,at}) {
+ return {version:2,sequence,at,tieBreak:'source-sequence'};
+}
+function atOrAfterActivation(at,id,floor,sequenceFor) {
+ const instant=Date.parse(at),joined=Date.parse(floor.at);
+ if(!Number.isFinite(instant)||!Number.isFinite(joined))return false;
+ return instant>joined || instant===joined&&sequenceFor(id)>=floor.sequence;
+}
+
 // Returns null (no limit) or { sequence, at, sameInstant } for the member's
 // join event. Timestamps have millisecond precision, so `sameInstant` lists
 // the ids of messages and events that share the join's millisecond but come
@@ -83,6 +102,7 @@ export function historyFloor(db, state, roomId, memberId, headSequence = null) {
 export function messageInHistory(message, floor) {
   if (!floor) return true;
   const createdAt = message?.createdAt;
+  if(floor.version===2)return typeof createdAt==='string'&&atOrAfterActivation(createdAt,message.id,floor,floor.messageSequence);
   if (typeof createdAt !== "string" || createdAt < floor.at) return false;
   return createdAt > floor.at || !floor.sameInstant?.has(message.id);
 }
@@ -135,6 +155,7 @@ export function rowInHistory(row, floor, messagesById = null) {
 export function eventInHistory(event, floor, messagesById = null) {
   if (!floor) return true;
   const at = event?.at;
+  if(floor.version===2)return typeof at==='string'&&atOrAfterActivation(at,event.id,floor,floor.eventSequence)&&!targetsHiddenMessage(event,floor,messagesById);
   if (typeof at !== "string" || at < floor.at) return false;
   return (at > floor.at || !floor.sameInstant?.has(event.id)) && !targetsHiddenMessage(event, floor, messagesById);
 }

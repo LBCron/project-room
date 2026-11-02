@@ -298,10 +298,7 @@ const saveInviteEvent = (store, roomId, room, context, state, incoming) => {
   });
   return sequence;
 };
-const requireInviteHistorySupport = (context, room, permissions) => {
-  if (context && room.state.room.historyVisibility?.value === 'since_join' && !permissions.includes('manage_members'))
-    fail(409, 'current_room_context_unavailable', 'Invitation activation requires qualified since-join history-floor updates');
-};
+
 
 const ACTIVE_MEMBER_MESSAGE = "This identity is already an active member";
 
@@ -317,7 +314,6 @@ const reactivateLinkedMember = (invites, row, member, identityId, { requestId, r
   refuseArchivedWrite(room.state);
   const now = store.now();
   const permissions = JSON.parse(row.permissions_json);
-  requireInviteHistorySupport(context, room, permissions);
   const incoming = event({
     id: randomUUID(),
     idempotencyKey: hash(`agent-invite-reactivate:${row.code_hash}`),
@@ -585,7 +581,6 @@ export class AgentInvites {
       const name = typeof displayName === "string" && displayName.trim() ? displayName.trim()
         : row.display_name || DEFAULT_INVITE_NAME;
       if (name.length > 80) fail(422, "invalid_invite_name", "displayName must be 1-80 characters");
-      requireInviteHistorySupport(context, room, JSON.parse(row.permissions_json));
       // #3382: an already-linked identity redeeming a fresh code must get
       // the reconcile answer BEFORE the name guard runs — when it re-joins
       // under its own member name, the guard's collision IS its own

@@ -10,7 +10,7 @@ import {emptyWorkPrivacy,validateWorkPrivacy,applyWorkPrivacyRequest,workRequest
 import {currentWorkCapacity} from './current-work-capacity.mjs';
 import {archiveRetains,validateCurrentArchive,validateArchiveRetainedSlot} from './current-room-archive.mjs';
 import {MESSAGE_PROOF_SELECT} from './write-integrity.mjs';
-import {advanceHistoryActivation,historyJoinPoint,historyExclusionIds} from './history-visibility.mjs';
+import {advanceHistoryActivation,historyJoinPoint,historyExclusionIds,historyActivationValue} from './history-visibility.mjs';
 import {EVENT_TYPES,memberHistoryVisibility} from '../src/events.js';
 import {validId} from '../src/events.js';
 import {isCurrentRoom,withCurrentAuditUnits,currentAuditMessageRoot} from './current-room-repository.mjs';
@@ -91,7 +91,8 @@ export function advanceRecoveryCensus(store,restoreId,previous,sourceSeal){
       if(scalar.bytes<1||scalar.bytes>200)fail();const id=db.prepare('SELECT record_key FROM current_room_record_proofs WHERE rowid=?').get(scalar.rowid).record_key;
       const estimate=recordInputBytes(db,p.roomId,'members',id)+recordInputBytes(db,p.roomId,'metadata','room')+recordInputBytes(db,p.roomId,'historyFloors',id)+4096;if(units&&bytes+estimate>4*1024*1024)return false;
       const member=reader.record('members',id),room=reader.record('metadata','room'),floor=reader.record('historyFloors',id);
-      if(memberHistoryVisibility({room,members:{[id]:member}},id)!=='since_join'){if(floor!==undefined)fail();p.historyAfter=id;}
+      if(floor?.version===2){const activation=scratch.get('history',p.roomId,'activation',id),join=historyJoinPoint(activation?.row,reader.head.sequence),expected=historyActivationValue(join);if(!isDeepStrictEqual(floor,expected))fail();scratch.put('history',p.roomId,'expectedFloor',id,expected);p.expectedFloors++;p.historyAfter=id;}
+      else if(memberHistoryVisibility({room,members:{[id]:member}},id)!=='since_join'){if(floor!==undefined)fail();p.historyAfter=id;}
       else{const activation=scratch.get('history',p.roomId,'activation',id),join=historyJoinPoint(activation?.row,reader.head.sequence);p.historyMember=id;p.historyJoinSequence=join.sequence;p.historyJoinAt=join.at;p.historyJoinFound=join.found;p.historyPart=0;p.historyExcluded=0;p.stage='history_exclusions';}
       p.units++;p.bytes+=estimate;units++;bytes+=estimate;continue;
      }

@@ -5,10 +5,10 @@ import {repairLegacyMessages} from '../../server/operator-legacy-message-repair.
 import {textVersion} from '../../server/text-results.mjs';
 import {auditRecovery} from '../../server/recovery.mjs';
 import {replayCutoverSchema,captureReplayWitness,advanceReplayWitness,partitionReplayWitness,qualifyReplayHWork,qualifyReplayHMessages,advanceCurrentRoomConversion} from '../../server/replay-cutover.mjs';
-export function seedHistoricalRedactionSource(store){
+export function seedHistoricalRedactionSource(store,{extraPrefixMessages=0}={}){
  const es=historicalSequence(),intro=[
   event({roomId:'legacy-room',actorId:'owner',type:'member.added',data:{memberId:'worker',displayName:'Worker',kind:'agent',permissions:[]}}),
-  ...['prefix-one','prefix-two','prefix-private'].map(id=>event({roomId:'legacy-room',actorId:'owner',type:'message.posted',data:{messageId:id,body:'sensitive-'+id+'-original',...(id==='prefix-private'?{toMemberId:'worker'}:{})}})),
+  ...['prefix-one','prefix-two','prefix-private',...Array.from({length:extraPrefixMessages},(_,i)=>'prefix-extra-'+i)].map(id=>event({roomId:'legacy-room',actorId:'owner',type:'message.posted',data:{messageId:id,body:'sensitive-'+id+'-original',...(id==='prefix-private'?{toMemberId:'worker'}:{})}})),
   event({roomId:'legacy-room',actorId:'owner',type:'message.edited',data:{messageId:'prefix-one',body:'sensitive-prefix-one-edited',expectedMessageRevision:0}})
  ];
  const f=seedLegacyFixture(store,[...es.slice(0,2),...intro,...es.slice(2)]),plan=repairLegacyMessages(store,f.request),repair=repairLegacyMessages(store,{...f.request,planHash:plan.planHash,requestId:'derived-privacy-source'},true);

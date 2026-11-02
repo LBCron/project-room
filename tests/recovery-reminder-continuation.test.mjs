@@ -17,7 +17,7 @@ test('persisted reminder cursors and receipt gaps refuse ambiguous recovery',()=
  const cursor=initialRecoveryReminders();assert.doesNotThrow(()=>validateRecoveryReminders(cursor));
  assert.throws(()=>validateRecoveryReminders({...cursor,unexpected:true}));
  assert.throws(()=>validateRecoveryReminders({...cursor,version:1}));
- assert.throws(()=>validateRecoveryReminders({...cursor,after:-1}));
+ assert.throws(()=>validateRecoveryReminders({...cursor,after:0.5}));
  assert.throws(()=>recoveryReminderStep({revision:1,state:'active',dueAt:10},{revision:3,state:'cancelled',dueAt:10}));
 });
 const credential='synthetic-durable-restore-00000000000000',url='https://room.example/api/operator/restore';

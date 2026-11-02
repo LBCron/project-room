@@ -4,10 +4,10 @@ import {Buffer} from 'node:buffer';
 import {isCurrentRoom,withCurrentAuditUnits} from './current-room-repository.mjs';
 import {recoveryReminderReceipt,recoveryReminderStep,recoveryReminderCurrent} from './recovery-reminder-rules.mjs';
 const fail=()=>{throw Error('Recovery reminder ledger requires operator reconciliation');};
-export const initialRecoveryReminders=()=>({version:2,stage:'receipts',after:0,receipts:0,rows:0,groups:0,groupAfter:'',groupKey:null,revision:0,prior:null});
+export const initialRecoveryReminders=()=>({version:2,stage:'receipts',after:null,receipts:0,rows:0,groups:0,groupAfter:'',groupKey:null,revision:0,prior:null});
 export function validateRecoveryReminders(p){
  if(!p||Object.keys(p).sort().join(',')!=='after,groupAfter,groupKey,groups,prior,receipts,revision,rows,stage,version'||p.version!==2||!['receipts','history','rows','complete'].includes(p.stage))fail();
- if(!['after','receipts','rows','groups','revision'].every(key=>Number.isSafeInteger(p[key])&&p[key]>=0)||typeof p.groupAfter!=='string'||Buffer.byteLength(p.groupAfter)>1024||p.groupKey!==null&&(typeof p.groupKey!=='string'||Buffer.byteLength(p.groupKey)>1024))fail();
+ if(!(p.after===null||Number.isSafeInteger(p.after))||!['receipts','rows','groups','revision'].every(key=>Number.isSafeInteger(p[key])&&p[key]>=0)||typeof p.groupAfter!=='string'||Buffer.byteLength(p.groupAfter)>1024||p.groupKey!==null&&(typeof p.groupKey!=='string'||Buffer.byteLength(p.groupKey)>1024))fail();
  if(p.stage==='complete'&&(p.groupKey!==null||p.prior!==null||p.revision!==0))fail();
  if(p.prior!==null&&(!p.prior||Buffer.byteLength(JSON.stringify(p.prior))>4096||p.prior.revision!==p.revision)||p.groupKey===null&&(p.revision!==0||p.prior!==null))fail();
 }
@@ -79,8 +79,8 @@ export function advanceRecoveryReminders(store,scratch,restoreId,previous,seal){
  while(units<128){
   if(p.stage==='complete')return{cursor:p,units,bytes,done:true};
   if(p.stage==='receipts'){
-   const scalar=rowScalar(db,'private_reminder_commands','rowid>?',[p.after]);
-   if(!scalar){if(p.receipts!==commands.expected.rows)fail();p.stage='history';p.after=0;return{cursor:p,units,bytes,done:false};}
+   const scalar=rowScalar(db,'private_reminder_commands',p.after===null?'1':'rowid>?',p.after===null?[]:[p.after]);
+   if(!scalar){if(p.receipts!==commands.expected.rows)fail();p.stage='history';p.after=null;return{cursor:p,units,bytes,done:false};}
    admitted(scalar,commands);if(bytes+scalar.bytes>4*1024*1024){if(units)break;fail();}
    if(scratch.remaining<2)break;
    const row=db.prepare('SELECT * FROM private_reminder_commands WHERE rowid=?').get(scalar.rowid),receipt=recoveryReminderReceipt(row),key=JSON.stringify([row.room_id,row.member_id,receipt.workItemId]);
@@ -92,7 +92,7 @@ export function advanceRecoveryReminders(store,scratch,restoreId,previous,seal){
   if(p.stage==='history'){
    if(p.groupKey===null){
     const key=scratch.nextKey('actual','','reminderGroup',p.groupAfter);
-    if(key===undefined){p.stage='rows';p.after=0;continue;}
+    if(key===undefined){p.stage='rows';p.after=null;continue;}
     if(Buffer.byteLength(key)>1024)fail();p.groupKey=key;p.revision=0;p.prior=null;
    }
    const next=db.prepare("SELECT part,payload_bytes,length(CAST(payload AS BLOB)) bytes FROM current_restore_audit_scratch WHERE restore_id=(SELECT restore_id FROM current_restore_admission WHERE singleton=1) AND lane='actual' AND room_id='' AND domain='reminderReceipt' AND unit_key=? AND part>? ORDER BY part LIMIT 1").get(p.groupKey,p.revision);
@@ -111,7 +111,7 @@ export function advanceRecoveryReminders(store,scratch,restoreId,previous,seal){
    scratch.put('actual','','reminderVerified',p.groupKey,true);p.groups++;p.groupAfter=p.groupKey;p.groupKey=null;p.revision=0;p.prior=null;units++;bytes+=cost;continue;
   }
   if(p.stage==='rows'){
-   const scalar=rowScalar(db,'private_reminders','rowid>?',[p.after]);
+   const scalar=rowScalar(db,'private_reminders',p.after===null?'1':'rowid>?',p.after===null?[]:[p.after]);
    if(!scalar){if(p.rows!==reminders.expected.rows||p.rows!==p.groups)fail();p.stage='complete';continue;}
    admitted(scalar,reminders);if(bytes+scalar.bytes>4*1024*1024){if(units)break;fail();}
    const row=db.prepare('SELECT room_id,member_id,work_item_id FROM private_reminders WHERE rowid=?').get(scalar.rowid),key=JSON.stringify([row.room_id,row.member_id,row.work_item_id]);

@@ -71,3 +71,8 @@ test('consumption refuses incomplete, old-version, mismatched counts and changed
  store.db.exec('DROP TRIGGER "'+guard.name+'"');const before=restoreProgress(store.db);
  assert.throws(()=>withRestoreTransaction(store,()=>withCompletedRecoveryReminders(store,state.restore_id,state.seal.id,()=>null)),/reconciliation|schema/);assert.deepEqual(restoreProgress(store.db),before);store.db.exec(guard.sql);
 });
+
+test('zero and negative safe hidden rowids preserve original reminder semantics on sealed target',async t=>{
+ const f=await fixture(t);edit(f,['private_reminder_commands','private_reminders'],db=>{db.prepare("UPDATE private_reminder_commands SET rowid=-7 WHERE request_id='schedule-0001'").run();db.prepare("UPDATE private_reminders SET rowid=0 WHERE work_item_id='active'").run();});
+ assert.doesNotThrow(()=>withRestoreTransaction(f.store,()=>auditRecovery(f.store)));assert.equal(drive(f).stage,'complete');
+});

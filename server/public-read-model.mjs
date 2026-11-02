@@ -543,7 +543,7 @@ export function syncCurrentRoomPublication(store,{roomId,previous,state,event,ch
   const projected=members;
   if(projected.length>100)throw Error('current_room_corrupt: public roster exceeds admission');
   const agents=projected.filter(m=>m.kind==='agent').length;
-  const join=joinTokenFor(store,roomId,{...state,members:state.members},null);
+  const join={mode:joinLink(state).enabled===true?'open':'request',token:null,ownerId:state.room.ownerId};
   const at=event.at;
   store.db.prepare(`INSERT INTO public_rooms(slug,title,purpose,humans,agents,names_json,tasks_json,members_json,receipts_enabled,join_mode,join_token,owner_member_id,set_at,updated_at)
     VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?) ON CONFLICT(slug) DO UPDATE SET title=excluded.title,purpose=excluded.purpose,
@@ -1292,7 +1292,7 @@ export function loadPublicRoom(store, slug) {
     FROM public_rooms WHERE slug=?`).get(native?1:0,slug);
   if (!row) return null;
   return {
-    ...(native?{coverage:{tasks:{available:false},receipts:{available:false}}}:{}),
+    ...(native?{openAdmission:row.join_mode==='open',coverage:{tasks:{available:false},receipts:{available:false}}}:{}),
     slug: row.slug,
     title: row.title,
     purpose: row.purpose,
@@ -1300,7 +1300,7 @@ export function loadPublicRoom(store, slug) {
     names: parseJson(row.names_json, []),
     tasks: native?[]:parseJson(row.tasks_json, []),
     receiptsEnabled: !native&&row.receipts_enabled === 1,
-    joinMode: row.join_mode === "link" && row.join_token ? "link" : "request",
+    joinMode: native&&row.join_mode === "open" ? "open" : row.join_mode === "link" && row.join_token ? "link" : "request",
     joinToken: row.join_mode === "link" ? row.join_token : null,
     setAt: row.set_at,
   };

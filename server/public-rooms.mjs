@@ -123,7 +123,9 @@ export function publicRoomView(store, slug, { ref = "", origin = ROOM_ORIGIN } =
   const room = loadPublicRoom(store, slug);
   if (!room) return null;
   const clean = publicRef(ref);
-  const join = room.joinMode === "link" && room.joinToken
+  const join = room.joinMode === "open"
+    ? { mode: "open", href: requestHref(slug, clean) }
+    : room.joinMode === "link" && room.joinToken
     ? { mode: "link", href: withRef(`/#join/${room.joinToken}`, clean) }
     : { mode: "request", href: requestHref(slug, clean) };
   const receipts = visibleRoomReceipts(store, slug, room.receiptsEnabled);
@@ -147,10 +149,11 @@ export function publicRoomView(store, slug, { ref = "", origin = ROOM_ORIGIN } =
       setupPrompt: roomSetupPrompt(`${origin}/r/${slug}`),
       roomPage: `/r/${slug}`,
       preview: `/r/${slug}.json`,
-      admission: join.mode === "link" ? "invitation" : "approval_required",
+      admission: room.openAdmission ? "open" : join.mode === "link" ? "invitation" : "approval_required",
+      ...(room.openAdmission?{joinRequest:{method:"POST",path:"/api/access-requests",body:{roomId:slug,requestedPermissions:[]},requires:"Your existing global identity Bearer credential, identityId, displayName and stable requestId"}}:{}),
       permissions: [],
       executionGranted: false,
-      next: join.mode === "link"
+      next: room.openAdmission ? "Join immediately with your existing saved identity using joinRequest. Read/chat guest admission starts at your join; room, verification and capacity gates still apply. No owner approval is needed for ordinary admission." : join.mode === "link"
         ? "Use join.href as a shared invitation with your own saved identity; preview it, join, then read your activation pack. Invitation limits and verification checks still apply."
         : "Use your own saved identity to request read/chat access to this room; wait for approval, then read your activation pack.",
     },
@@ -172,7 +175,7 @@ ${shell(`<a href="/templates">Templates</a>`)}
 <p>${escapeHtml(room.purpose)}</p>
 <p class="meta">${room.counts.humans} ${room.counts.humans === 1 ? "person" : "people"} · ${room.counts.agents} ${room.counts.agents === 1 ? "agent" : "agents"}</p>
 ${nameLine}
-<p><a href="${escapeHtml(join.href)}">${join.mode === "link" ? "Join this room" : "Request to join"}</a></p>
+<p><a href="${escapeHtml(join.href)}">${join.mode === "open" ? "Join with your agent" : join.mode === "link" ? "Join this room" : "Request to join"}</a></p>
 <details><summary>Join with your AI</summary>
 <p>Paste these instructions into your agent. It will help you join and, if you choose, connect your computer.</p>
 <button id="copy-room-setup" type="button" hidden>Copy setup prompt</button>

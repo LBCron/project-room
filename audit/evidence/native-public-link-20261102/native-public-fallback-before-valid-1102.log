@@ -1,0 +1,60 @@
+{"event":"room.cold_start","clockSemantics":"runtime-dependent","durationMs":46,"integrity":"eager","phases":{"schema":{"ms":10,"rowsRead":0},"plugin":{"ms":19,"rowsRead":0},"fence":{"ms":10,"rowsRead":0},"verifies":{"ms":2,"rowsRead":0},"checksum":{"ms":0,"rowsRead":0}},"cpuMs":47,"heapBytes":32376840,"rooms":0,"sequences":0,"projectionBytes":0,"events":0}
+{"event":"room.store_initialized","initializationMs":47,"legacyColdStartMs":46,"clockSemantics":"runtime-dependent","cpuMeasured":false}
+{"event":"room.cold_start","clockSemantics":"runtime-dependent","durationMs":38,"integrity":"eager","phases":{"schema":{"ms":8,"rowsRead":0},"plugin":{"ms":18,"rowsRead":0},"fence":{"ms":9,"rowsRead":0},"verifies":{"ms":1,"rowsRead":0},"checksum":{"ms":0,"rowsRead":0}},"cpuMs":39,"heapBytes":34162616,"rooms":0,"sequences":0,"projectionBytes":0,"events":0}
+{"event":"room.store_initialized","initializationMs":39,"legacyColdStartMs":38,"clockSemantics":"runtime-dependent","cpuMeasured":false}
+✖ expired public invitation never blocks canonical public read/chat guest admission or cold exact retry (78.251083ms)
+✖ exhausted public link still admits ordinary participant; off blocks and upgrades remain reviewed (196.78925ms)
+ℹ tests 2
+ℹ suites 0
+ℹ pass 0
+ℹ fail 2
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 393.241542
+
+✖ failing tests:
+
+test at tests/native-public-admission.test.mjs:6:1
+✖ expired public invitation never blocks canonical public read/chat guest admission or cold exact retry (78.251083ms)
+  AssertionError [ERR_ASSERTION]: Expected values to be strictly equal:
+  + actual - expected
+  
+  + 'pending'
+  - 'approved'
+  
+      at TestContext.<anonymous> (file:///Users/johnpotter/src/pr-native-public-link-1102/tests/native-public-admission.test.mjs:6:741)
+      at Test.runInAsyncScope (node:async_hooks:227:14)
+      at Test.run (node:internal/test_runner/test:1402:25)
+      at Test.start (node:internal/test_runner/test:1262:17)
+      at startSubtestAfterBootstrap (node:internal/test_runner/harness:387:17) {
+    generatedMessage: true,
+    code: 'ERR_ASSERTION',
+    actual: 'pending',
+    expected: 'approved',
+    operator: 'strictEqual',
+    diff: 'simple'
+  }
+
+test at tests/native-public-admission.test.mjs:7:1
+✖ exhausted public link still admits ordinary participant; off blocks and upgrades remain reviewed (196.78925ms)
+  AssertionError [ERR_ASSERTION]: Expected values to be strictly equal:
+  + actual - expected
+  
+  + 'pending'
+  - 'approved'
+  
+      at TestContext.<anonymous> (file:///Users/johnpotter/src/pr-native-public-link-1102/tests/native-public-admission.test.mjs:7:583)
+      at Test.runInAsyncScope (node:async_hooks:227:14)
+      at Test.run (node:internal/test_runner/test:1402:25)
+      at Test.processPendingSubtests (node:internal/test_runner/test:974:18)
+      at Test.postRun (node:internal/test_runner/test:1542:19)
+      at Test.run (node:internal/test_runner/test:1467:12)
+      at async startSubtestAfterBootstrap (node:internal/test_runner/harness:387:3) {
+    generatedMessage: true,
+    code: 'ERR_ASSERTION',
+    actual: 'pending',
+    expected: 'approved',
+    operator: 'strictEqual',
+    diff: 'simple'
+  }

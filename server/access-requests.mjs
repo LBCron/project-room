@@ -40,7 +40,7 @@ import { createRateLimiter } from "./identity-ratelimit.mjs";
 // an owner notification. These imports follow the agent-invites.mjs
 // precedent (same Workers bundle, same optional list in
 // scripts/runtime-package.mjs).
-import { event, EVENT_TYPES as T, isRoomArchived, memberCan, ownMember } from "../src/events.js";
+import { event, EVENT_TYPES as T, isRoomArchived, memberCan, ownMember, publicPage, joinLink, canInviteMembers } from "../src/events.js";
 import { enforceAutonomyTierForAction } from "./autonomy-tiers.mjs";
 import { assertAdmissibleMemberName, assertMemberDisplayNameAvailable, checkAgentDisplayName } from "./display-name-guard.mjs";
 import { applyEventWithGrowth, growthCollector } from "../src/growth-emit.js";
@@ -608,9 +608,26 @@ export class AccessRequests {
     if (requestContents(row).account) return { approved: false, pendingNote: "Account admission requires owner review." };
     if (this.upgradeBasis(row)) return { approved: false, pendingNote:
       "Additional permissions for an existing member require an authorized review; this request waits for a decision." };
+    const requested = requestContents(row).permissions;
+    // Owner-published open joining is existing invitation consent, not a
+    // standing permission upgrade or an implicit consequence of visibility.
+    if (!requested.length && !this.db.prepare("SELECT 1 FROM identity_links WHERE room_id=? AND identity_id=?").get(row.room_id,row.identity_id)) {
+      const room=accessRoom(this.store,row.room_id),ownerId=room.state.room.ownerId;
+      if (publicPage(room.state).enabled===true && joinLink(room.state).enabled===true && !isRoomArchived(room.state)) {
+        const identity=this.store.identities.get(row.identity_id);
+        if (!identity || identity.active===false) fail(401,"unauthenticated","Active agent identity required");
+        this.store.invites.admitLinkAgent({identity,roomId:row.room_id,displayName:row.display_name,permissions:[],historyGuest:true,
+          actorId:ownerId,eventId:createHash("sha256").update(`public-join:${row.room_id}:${requestId}`).digest("hex"),
+          grantActive:()=>publicPage(room.state).enabled===true&&joinLink(room.state).enabled===true&&!isRoomArchived(room.state),
+          grantCheck:()=>{if(!canInviteMembers(room.state,ownerId))fail(403,"invite_not_authorized","Current owner cannot admit members");}});
+        const now=this.store.now();
+        this.db.prepare("UPDATE access_requests SET status='approved',decided_at=?,decided_by='auto-approve',decision_note=? WHERE request_id=?")
+          .run(now,`read/chat guest admitted under public join enabled by ${ownerId}`,requestId);
+        return {approved:true,response:this.autoApproveResponse(rowToRequest(this.db.prepare("SELECT * FROM access_requests WHERE request_id=?").get(requestId)),row.identity_id,[])};
+      }
+    }
     const config = this.getAutoApproveConfig(row.room_id);
     if (!config) return { approved: false, pendingNote: null };
-    const requested = requestContents(row).permissions;
     if (!requested.length || !requested.every(p => config.permissions.includes(p))) {
       return { approved: false, pendingNote:
         `This room auto-approves ${config.permissions.join(", ")}; the requested ${requested.join(", ") || "read/chat access"} is outside the rule, so it waits for an owner decision.` };

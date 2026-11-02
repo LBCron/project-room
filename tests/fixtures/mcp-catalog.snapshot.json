@@ -842,7 +842,7 @@
       }
     },
     "room_list_files": {
-      "inputSchema": "9c4dedb9bd1af453",
+      "inputSchema": "4c4b2d829f4b58aa",
       "annotations": {
         "readOnlyHint": true,
         "destructiveHint": false,
@@ -1483,7 +1483,7 @@
       }
     },
     "room_list_files": {
-      "inputSchema": "9c4dedb9bd1af453",
+      "inputSchema": "4c4b2d829f4b58aa",
       "annotations": {
         "readOnlyHint": true,
         "destructiveHint": false,
@@ -2009,7 +2009,7 @@
       }
     },
     "room_list_files": {
-      "inputSchema": "9c4dedb9bd1af453",
+      "inputSchema": "4c4b2d829f4b58aa",
       "annotations": {
         "readOnlyHint": true,
         "destructiveHint": false,

@@ -10,5 +10,10 @@ test('actual Native bounded merge/hash point queries, not production source enco
   console.log('REPORT_NATIVE_POINT '+JSON.stringify({n,calls,max,total}));
   // A merge unit: 3 reference reads + 2 chunk reads, each scalar+payload, and 1 write.
   assert.ok(max.statements<=16*11);assert.ok(max.rowsRead<=16*11*2);assert.ok(max.bytes<=2*1024*1024);results.push({n,calls,max,total});
- }console.log('REPORT_NATIVE_COST '+JSON.stringify({scope:'merge/hash SQL only; excludes constructor/source ingestion/control checkpoint; no production endpoint proof',results}));}finally{await mf.dispose();await rm(directory,{recursive:true,force:true});}
+ }
+ const sourceStart=await mf.dispatchFetch('https://fixture.test/source-init'),source=await sourceStart.json();assert.equal(sourceStart.status,200);assert.equal(source.blobKind,'ArrayBuffer');
+ const hash=createHash('sha256');let sourceCarry='',sourceCalls=0,sourceMax={statements:0,rowsRead:0,rowsWritten:0,bytes:0};
+ for(;;){const response=await mf.dispatchFetch('https://fixture.test/source-step');assert.equal(response.status,200);const row=await response.json();if(row.chunk!==null){let text=sourceCarry+row.chunk;sourceCarry='';if(!row.last&&/[\ud800-\udbff]$/.test(text)){sourceCarry=text.slice(-1);text=text.slice(0,-1);}hash.update(text);}for(const k of Object.keys(sourceMax))sourceMax[k]=Math.max(sourceMax[k],row.cost[k]);if(++sourceCalls===2){await mf.dispose();mf=create();}if(row.last)break;assert.ok(sourceCalls<2000);}
+ assert.equal(hash.digest('hex'),source.expected);assert.ok(sourceMax.statements<=64);assert.ok(sourceMax.rowsRead<=128);assert.equal(sourceMax.rowsWritten,0);console.log('REPORT_NATIVE_SOURCE '+JSON.stringify({sourceCalls,sourceMax,blobKind:source.blobKind,coldRestart:true,exactWholeRowOracle:true}));
+ console.log('REPORT_NATIVE_COST '+JSON.stringify({scope:'merge/hash SQL only; excludes constructor/source ingestion/control checkpoint; no production endpoint proof',results}));}finally{await mf.dispose();await rm(directory,{recursive:true,force:true});}
 });

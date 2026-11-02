@@ -1,3 +1,4 @@
+import {recoveryReportFingerprint} from './recovery-report-scope.mjs';
 import {verifyShareLinksForRecovery} from './recovery-share-links.mjs';
 import {recoveryReminderReceipt,recoveryReminderStep,recoveryReminderCurrent} from './recovery-reminder-rules.mjs';
 import {validateRecoveryHistoryEntry} from './recovery-history-entry.mjs';
@@ -212,7 +213,8 @@ export function auditRecovery(store) {
       byWork.delete(key);
     }
     requireState(byWork.size === 0);
-    const contents = applicationTables.map(table => {
+    const fingerprint = recoveryReportFingerprint(store);
+    const contents = fingerprint?.tables ?? applicationTables.map(table => {
       const rows = store.db.prepare(`SELECT * FROM ${table}`).all().map(canonical).sort();
       return { table, rows: rows.length, sha256: digest(rows) };
     });
@@ -221,7 +223,8 @@ export function auditRecovery(store) {
       rooms: rooms.size, events: eventCount, legacyCheckpoints: checkpointCount,
       replay: { basis: "retained checkpoint plus strict tail, or full history without a checkpoint", checkpointEvents, replayedEvents: eventCount - checkpointEvents },
       invitations: invitations.invitations, reminders: reminders.length, reminderReceipts: receipts.length,
-      tables: contents, dataSha256: digest(contents),
+      tables: contents, dataSha256: fingerprint?.dataSha256 ?? digest(contents),
+      ...(fingerprint ? {fingerprintScope:fingerprint.scope} : {}),
       authorityFreshness: "capture-only; later revocations, writes and external effects require reconciliation" };
   });
 }

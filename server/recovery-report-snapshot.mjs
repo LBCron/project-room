@@ -63,3 +63,11 @@ export function reportSnapshotCellBytes(scratch,h,column,offset,count,cache){
  while(written<count){const index=Math.floor((offset+written)/PART),start=(offset+written)%PART,data=part(scratch,h,column,index,cache),take=Math.min(count-written,data.length-start);if(take<1)fail();out.set(data.subarray(start,start+take),written);written+=take;}
  return out.toString('hex').toUpperCase();
 }
+
+export function verifyRecoveryReportSnapshotParts(scratch,h){
+ for(const field of fields){const info=h.fields[field];if(info?.kind==='null')continue;
+  if(info?.kind!=='text'||!Number.isSafeInteger(info.bytes)||info.bytes<0||info.bytes>MAX||!Array.isArray(info.parts)||info.parts.length!==Math.ceil(info.bytes/PART))fail();
+  let whole=initialReplayHash();for(let i=0;i<info.parts.length;i++)whole=advanceReplayHash(whole,part(scratch,h,field,i));
+  if(finishReplayHash(whole)!==info.sha256)fail();
+ }
+}

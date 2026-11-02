@@ -265,3 +265,5 @@ These source-bound design and qualification notes describe the offline schema45 
 [Storage-timeout investigation](research/storage-timeout-20261101/findings.md) records native size measurement and incident diagnosis.
 
 [Invitation recovery continuation qualification](research/2026-11-01-recovery-invitations.md) records protocol16 recovery checks and remaining bounds.
+
+[Pending-constructor write proof qualification](research/2026-11-02-pending-constructor-write-protocol.md) records the reproduced post-recovery integrity defect and fix.

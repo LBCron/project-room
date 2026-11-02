@@ -1,0 +1,16 @@
+{
+  "commit": "1084460ddcf6d22d36aeb6e8deed24e91e6ba927",
+  "tree": "0a360f9afd74f2b0693e5f8b582bee4959594e78",
+  "parent": "56c1b7e3bc400fff2eb8ed25748edb68bf288882",
+  "files": [
+    "tests/invite-only-boundary.test.js",
+    "tests/route-publication.test.js"
+  ],
+  "tests": 12,
+  "pass": 12,
+  "fail": 0,
+  "eslintExit": 0,
+  "fetchedBytesEqual": true,
+  "trackedClean": true,
+  "runtimeChanges": false
+}

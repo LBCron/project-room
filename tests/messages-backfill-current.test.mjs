@@ -42,11 +42,36 @@ test('legacy replay refuses a closed current marker without its independent head
  assert.throws(()=>s.backfillMessages({limit:100}),/closed current marker lacks its independent head/);
  assert.equal(s.db.prepare('SELECT projection FROM rooms WHERE id=?').get('broken').projection,before);
 });
-test('legacy replay refuses a selected corrupt native head rather than skipping its failure',t=>{
+test('legacy selection does not certify excluded current heads; independent audit still rejects corruption',t=>{
  const s=mixed(t);
- // Named fault injection removes only the protection needed to forge the head;
- // the reader must also detect the exact schema drift before skipping it.
  s.db.exec('DROP TRIGGER current_room_guard_current_room_head_update');
  s.transaction(()=>s.db.prepare("UPDATE current_room_head SET head_sha256='forged' WHERE room_id='native'").run());
- assert.throws(()=>s.backfillMessages({limit:100}),/owned serving schema changed|head commitment changed/);
+ assert.equal(s.backfillMessages({limit:100}).done,true);
+ assert.throws(()=>s.checkMessagesParity({roomId:'native'}),/owned serving schema changed|head commitment changed/);
+ assert.throws(()=>auditRecovery(s),/schema|head|guard|commitment/i);
+});
+test('many native rooms do not hydrate native metadata during legacy candidate selection',t=>{
+ const s=new RoomStore(':memory:');t.after(()=>s.close());
+ for(let i=0;i<40;i++)s.initialize(initialRoom('a-native-'+String(i).padStart(2,'0')),{representation:'normalized-current-v1'});
+ s.initialize(initialRoom('z-legacy'),{representation:null});
+ const prepare=s.db.prepare.bind(s.db);let nativeHeadReads=0,nativeRecordReads=0,selectedCandidates=0;
+ s.db.prepare=sql=>{
+  const statement=prepare(sql);
+  if(/FROM current_room_head WHERE room_id=/.test(sql)){
+   const get=statement.get.bind(statement);statement.get=(...args)=>{if(String(args[0]).startsWith('a-native-'))nativeHeadReads++;return get(...args);};
+  }
+  if(/FROM current_room_records WHERE/.test(sql))nativeRecordReads++;
+  if(sql.includes('SELECT r.id AS id, r.sequence AS sequence')){
+   const get=statement.get.bind(statement);statement.get=(...args)=>{const row=get(...args);if(row)selectedCandidates++;return row;};
+  }
+  return statement;
+ };
+ try{
+  assert.equal(s.backfillMessages({limit:100}).done,true);
+  assert.equal(s.checkMessagesParity().roomId,'z-legacy');
+ }finally{s.db.prepare=prepare;}
+ assert.equal(nativeHeadReads,0);assert.equal(nativeRecordReads,0);assert.equal(selectedCandidates,1);
+ assert.equal(s.db.prepare("SELECT count(*) AS n FROM messages_backfill_cursor WHERE room_id LIKE 'a-native-%'").get().n,0);
+ // Anti-join selection may examine room IDs in SQLite; this proves bounded
+ // returned payload/JS work, not constant physical SQL cost for all room counts.
 });

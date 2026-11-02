@@ -1079,16 +1079,16 @@ function loadState(store, room, cursor, budget, admitState) {
 // no per-call NOT IN list is needed: binding one value per room parked in
 // this call broke past 100 (the Worker's Durable Object SQL limit) exactly
 // when many rooms stop replaying at once.
-// Legacy replay may never rewrite the independently protected current messages.
-// Validate each selected current head before moving past it; malformed markers
-// or proofs refuse instead of silently becoming a legacy reconstruction.
+// Normalized heads belong to the separate current-record integrity audit.
+// Excluding them is maintenance selection, not certification or a grant. A
+// marker without its independent head remains a candidate and must refuse.
 function normalizedMessageSource(db,roomId) {
   if(!isCurrentRoom(db,roomId))return false;
   withCurrentReadContext(db,roomId,()=>readCurrentHead(db,roomId));
   return true;
 }
 function nextRoom(db) {
-  const statement=db.prepare(`SELECT r.id AS id, r.sequence AS sequence
+  const room=db.prepare(`SELECT r.id AS id, r.sequence AS sequence
     FROM rooms r
     LEFT JOIN messages_backfill_cursor c ON c.room_id = r.id
     WHERE (c.room_id IS NULL
@@ -1098,15 +1098,11 @@ function nextRoom(db) {
         WHERE e.room_id = r.id AND e.sequence = c.applied_seq AND e.id = c.applied_event_id
       )))
       AND NOT EXISTS (SELECT 1 FROM messages_backfill_blocks b WHERE b.room_id = r.id AND b.skipped=0)
-    AND r.id > ?
+      AND NOT EXISTS (SELECT 1 FROM current_room_head h WHERE h.room_id=r.id)
     ORDER BY r.id
-    LIMIT 1`);
-  let after="";
-  for(;;){
-    const room=statement.get(after);if(!room)return null;
-    if(!normalizedMessageSource(db,room.id))return room;
-    after=room.id;
-  }
+    LIMIT 1`).get() ?? null;
+  if(room)normalizedMessageSource(db,room.id);
+  return room;
 }
 
 // True when a room's messages table has replayed to the room's current
@@ -1491,6 +1487,7 @@ function caughtUpSql(after) {
           )
         )
         AND r.id > ?
+        AND NOT EXISTS (SELECT 1 FROM current_room_head h WHERE h.room_id=r.id)
       ORDER BY r.id
       LIMIT 1`,
     after
@@ -1499,15 +1496,11 @@ function caughtUpSql(after) {
 
 function nextParityRoom(db, after) {
   const query = caughtUpSql(after);
-  const find=start=>{
-    const statement=db.prepare(query.sql);let cursor=start;
-    for(;;){
-      const room=statement.get(cursor);if(!room)return null;
-      if(!normalizedMessageSource(db,room.id))return room.id;
-      cursor=room.id;
-    }
-  };
-  return find(query.after) ?? find("");
+  const roomId=db.prepare(query.sql).get(query.after)?.id
+    ?? db.prepare(caughtUpSql("").sql).get("")?.id
+    ?? null;
+  if(roomId)normalizedMessageSource(db,roomId);
+  return roomId;
 }
 
 function parityNumbers(db, roomId) {

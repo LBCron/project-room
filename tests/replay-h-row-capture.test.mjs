@@ -1,10 +1,20 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
+import { withCurrentRoomWriter } from '../server/current-room-repository.mjs';
 import { RoomStore } from '../server/store.mjs';
 import { initialRoom } from '../server/bootstrap.mjs';
 import { event } from '../src/events.js';
 import { MESSAGE_PROOF_SELECT, messageProofMatches } from '../server/write-integrity.mjs';
 import { replayCutoverSchema, captureReplayWitness, readReplayHMessage, readReplayHMessagePage } from '../server/replay-cutover.mjs';
+
+// Synthetic trigger probes use the same transactional room scope as serving
+// writers. Unscoped/old writers must remain rejected after capture admission.
+function scopedProbe(store, operation) {
+  const result = store.transaction(() => withCurrentRoomWriter(store.db, 'commons', operation));
+  assert.deepEqual({ ...store.db.prepare('SELECT enabled,room_id,receipt_id FROM current_room_writer_permit').get() },
+    { enabled: 0, room_id: null, receipt_id: null });
+  return result;
+}
 
 function fixture(t, body = 'Independently proved original', beforeCapture = () => {}) {
   const store = new RoomStore(':memory:', { maintainMessageCertification: true });
@@ -102,37 +112,43 @@ test('insert then proof update permanently remains absent at H', t => {
   f.store.command(f.key, 'commons', { id:'new', type:'message.posted',
     data:{messageId:'new-after-h',body:'New current row'} });
   assert.equal(readH(f, 'new-after-h').absent, true);
-  f.store.db.prepare(`UPDATE messages SET entity_hash=entity_hash
-    WHERE room_id='commons' AND message_id='new-after-h'`).run();
+  scopedProbe(f.store, () => f.store.db.prepare(`UPDATE messages SET entity_hash=entity_hash
+    WHERE room_id='commons' AND message_id='new-after-h'`).run());
   assert.equal(readH(f, 'new-after-h').absent, true);
   assert.equal(f.unit('h-message', 'new-after-h'), undefined);
 });
 
 test('proof-only updates preserve old proof bytes without rewriting current authority', t => {
   const f = fixture(t);
-  f.store.db.prepare(`UPDATE messages SET entity_hash=entity_hash
-    WHERE room_id='commons' AND message_id='existing'`).run();
+  scopedProbe(f.store, () => f.store.db.prepare(`UPDATE messages SET entity_hash=entity_hash
+    WHERE room_id='commons' AND message_id='existing'`).run());
   assert.deepEqual(readH(f).row, { ...f.original });
   assert.deepEqual(f.current(), f.original);
 });
 
 test('a message key move preserves old H membership and records new-key H absence', t => {
   const f = fixture(t);
-  f.store.db.prepare(`UPDATE messages SET message_id='moved'
-    WHERE room_id='commons' AND message_id='existing'`).run();
+  scopedProbe(f.store, () => f.store.db.prepare(`UPDATE messages SET message_id='moved'
+    WHERE room_id='commons' AND message_id='existing'`).run());
   assert.deepEqual(readH(f).row, { ...f.original });
   assert.equal(readH(f, 'moved').absent, true);
 });
 
-test('room moves protect both old and new active generations', t => {
+test('cross-room raw moves are refused and both active generations stay intact', t => {
   const f = fixture(t);
   f.store.initialize(initialRoom('other'));
   const other = captureReplayWitness(f.store, { roomId:'other', requestId:'capture-other',
     expectedHead:2, reason:'Synthetic second-room consistency' });
-  f.store.db.prepare(`UPDATE messages SET room_id='other'
+  const move = () => f.store.db.prepare(`UPDATE messages SET room_id='other'
     WHERE room_id='commons' AND message_id='existing'`).run();
+  assert.throws(move, /unsupported current room writer/);
+  assert.throws(() => scopedProbe(f.store, move), /unsupported current room writer/);
+  assert.deepEqual(f.current(), f.original);
+  assert.equal(f.store.db.prepare("SELECT 1 FROM messages WHERE room_id='other' AND message_id='existing'").get(), undefined);
   assert.deepEqual(readH(f).row, { ...f.original });
-  assert.equal(readH(f, 'existing', other.generation, 'other').absent, true);
+  assert.throws(() => readH(f, 'existing', other.generation, 'other'), /unchanged H row admission required/,
+    'a refused move cannot create an authoritative absence marker');
+  assert.equal(f.store.db.prepare("SELECT 1 FROM message_replay_units WHERE generation=? AND domain='h-message-absent' AND unit_key='existing'").get(other.generation), undefined);
 });
 
 test('legal oversized old row abandons derived capture without rejecting ordinary edit', t => {
@@ -177,7 +193,7 @@ test('malformed two-MiB numeric control is refused before H payload capture', t 
   });
   // Raw SQL is intentional here: ordinary command validation already refuses
   // this corrupt row. The capture trigger must independently guard its control.
-  f.store.db.prepare("UPDATE messages SET body='Changed' WHERE room_id='commons'").run();
+  scopedProbe(f.store, () => f.store.db.prepare("UPDATE messages SET body='Changed' WHERE room_id='commons'").run());
   assert.equal(f.unit('h-message'), undefined);
   assert.throws(() => readH(f), /replay capture abandoned/);
   const receipt = f.store.db.prepare(`SELECT counts_json FROM operator_actions
@@ -204,7 +220,7 @@ test('bounded H membership merges current and first-H ranges without post-H IDs 
   const f=fixture(t);const original=f.original;
   f.edit(0,'Current value differs');
   for(let i=0;i<24;i++)f.store.command(f.key,'commons',{id:'new-'+i,type:'message.posted',data:{messageId:'new-'+String(i).padStart(2,'0'),body:'Post H'}});
-  f.store.db.prepare("UPDATE messages SET message_id='moved' WHERE message_id='existing'").run();
+  scopedProbe(f.store, () => f.store.db.prepare("UPDATE messages SET message_id='moved' WHERE message_id='existing'").run());
   const all=[];let after='',done=false,pages=0,examined=0;
   while(!done&&pages++<20){
     const page=readReplayHMessagePage(f.store,{roomId:'commons',generation:f.captured.generation,after,limit:7});
@@ -214,6 +230,6 @@ test('bounded H membership merges current and first-H ranges without post-H IDs 
   assert.equal(done,true);assert.equal(examined,26);assert.deepEqual(all,[{key:'existing',row:{...original}}]);
 });
 test('bounded H membership refuses oversized corrupt keys before returning row payload',t=>{
-  const f=fixture(t);f.store.db.prepare("INSERT INTO messages(room_id,message_id,seq,author_id,created_at) VALUES('commons',?,3,'owner','now')").run(Buffer.alloc(2*1024*1024,97));
+  const f=fixture(t);scopedProbe(f.store, () => f.store.db.prepare("INSERT INTO messages(room_id,message_id,seq,author_id,created_at) VALUES('commons',?,3,'owner','now')").run(Buffer.alloc(2*1024*1024,97)));
   assert.throws(()=>readReplayHMessagePage(f.store,{roomId:'commons',generation:f.captured.generation,after:'',limit:16}),/key admission required/);
 });

@@ -36,12 +36,14 @@ test('tail consumer requires original append binding and exact immutable source 
   assert.throws(()=>cutover.readReplayTailEvent(f.store,input),/prospective replay source changed/);
 });
 test('raw older writer cannot obtain prospective authority through a later read',t=>{
-  const f=fixture(t);f.store.transaction(()=>f.store.db.exec(`INSERT INTO events VALUES('commons',3,'old-writer','{"id":"old-writer","roomId":"commons","type":"message.posted","data":{}}')`));
+  const f=fixture(t);assert.throws(()=>f.store.transaction(()=>f.store.db.exec(`INSERT INTO events VALUES('commons',3,'old-writer','{"id":"old-writer","roomId":"commons","type":"message.posted","data":{}}')`)), /unsupported current room writer/);
   assert.throws(()=>cutover.readReplayTailEvent(f.store,{roomId:'commons',generation:f.capture.generation,sequence:3}),/missing independent replay audit binding/);
+  assert.equal(f.store.db.prepare("SELECT 1 FROM events WHERE room_id='commons' AND sequence=3").get(),undefined);
   assert.equal(f.store.db.prepare("SELECT 1 FROM message_replay_units WHERE domain='tail-event'").get(),undefined);
 });
-test('out-of-transaction SQL append stays unbound rather than claiming atomic capture',t=>{
-  const f=fixture(t);f.store.db.prepare('INSERT INTO events VALUES(?,?,?,?)').run('commons',3,'outside','{"id":"outside","roomId":"commons","type":"message.posted"}');
+test('out-of-transaction SQL append is refused before claiming atomic capture',t=>{
+  const f=fixture(t);assert.throws(()=>f.store.db.prepare('INSERT INTO events VALUES(?,?,?,?)').run('commons',3,'outside','{"id":"outside","roomId":"commons","type":"message.posted"}'), /unsupported current room writer/);
+  assert.equal(f.store.db.prepare("SELECT 1 FROM events WHERE room_id='commons' AND sequence=3").get(),undefined);
   assert.equal(f.store.db.prepare("SELECT 1 FROM message_replay_units WHERE domain='tail-event'").get(),undefined);
 });
 test('large valid ordinary post is accepted without laundering unsupported tail into bounded continuation',t=>{

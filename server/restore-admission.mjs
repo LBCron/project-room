@@ -7,7 +7,7 @@ import { CURRENT_WRITER_FORMAT } from './current-room-format.mjs';
 // to a target, and no ordinary SQL writer may clear an interrupted restore.
 export const RESTORE_CONTROL_TABLE = 'current_restore_admission';
 export const RESTORE_AUDIT_TABLE='current_restore_audit_scratch';
-export const RESTORE_AUDIT_VERSION=16,RESTORE_REPORT_VERSION=1;
+export const RESTORE_AUDIT_VERSION=17,RESTORE_REPORT_VERSION=1;
 export const RESTORE_AUDIT_UNIT_BYTES=131072+2048;
 export const RESTORE_CONTROL_DEFINITIONS = [[RESTORE_CONTROL_TABLE, `CREATE TABLE IF NOT EXISTS current_restore_admission (
   singleton INTEGER PRIMARY KEY CHECK(singleton=1), state TEXT NOT NULL CHECK(state IN ('clear','pending')),
@@ -138,4 +138,13 @@ export function withRestoreAuditRows(db,restoreId,operation){
  if(result?.then)throw Error('Restore scratch must remain synchronous');
  if(pending.length)withExactRestoreGuards(db,guards,()=>{const insert=db.prepare('INSERT INTO current_restore_audit_scratch(restore_id,lane,room_id,domain,unit_key,part,payload_bytes,payload) VALUES(?,?,?,?,?,?,?,?)');const update=db.prepare('INSERT INTO current_restore_audit_scratch(restore_id,lane,room_id,domain,unit_key,part,payload_bytes,payload) VALUES(?,?,?,?,?,?,?,?) ON CONFLICT(restore_id,lane,room_id,domain,unit_key,part) DO UPDATE SET payload_bytes=excluded.payload_bytes,payload=excluded.payload');for(const row of pending)(row[8]?update:insert).run(...row.slice(0,8));});
  return result;
+}
+
+// Publication is immutable; only its target-owned cleanup sidecar advances.
+export function checkpointRestoreCleanup(db,before,cleanup){
+ if(!db.isTransaction||!scopes.has(db))throw Error('Restore cleanup requires its privileged transaction');
+ const state=restoreProgress(db);if(state.state!=='clear'||JSON.stringify(state.latest)!==JSON.stringify(before))throw Error('Restore cleanup checkpoint is stale');
+ const latest={...before,cleanup},encoded=JSON.stringify(latest);if(Buffer.byteLength(encoded)>RESTORE_PROGRESS_MAX_BYTES)throw Error('Restore cleanup receipt exceeds admitted bound');
+ withExactRestoreGuards(db,RESTORE_CONTROL_GUARDS.filter(([name])=>name===RESTORE_CONTROL_TABLE+'_update'),()=>db.prepare("UPDATE current_restore_admission SET latest_receipt=? WHERE singleton=1 AND state='clear'").run(encoded));
+ if(JSON.stringify(restoreProgress(db).latest)!==encoded)throw Error('Restore cleanup receipt did not persist atomically');
 }

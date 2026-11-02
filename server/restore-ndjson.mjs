@@ -1,7 +1,8 @@
+import {initialRestoreCleanup,restoreCleanupNext,continueRestoreCleanup} from './restore-cleanup.mjs';
 import {recoveryInvitationSummary} from './recovery-invitation-continuation.mjs';
 import {initialRecoveryCensus,validateRecoveryCensus,advanceRecoveryCensus} from './recovery-census-continuation.mjs';
 import { CURRENT_WRITER_FORMAT } from './current-room-format.mjs';
-import { applicationTables, lazyAdditiveTables, RESTORE_OPERATIONAL_TABLES, installRestoreFreeze, verifyRestoreFreeze, removeRestoreFreeze } from './writer-fence.mjs';
+import { applicationTables, lazyAdditiveTables, RESTORE_OPERATIONAL_TABLES, installRestoreFreeze, verifyRestoreFreeze } from './writer-fence.mjs';
 import { RESTORE_AUDIT_VERSION, RESTORE_REPORT_VERSION, withRestoreTransaction, beginRestore, completeRestore, restorePending, verifyRestoreControl, restoreProgress, checkpointRestore } from './restore-admission.mjs';
 import { verifyCurrentRoomSchema, invalidateCurrentRoomSchema, restoredCurrentFormatPresent } from './current-room-repository.mjs';
 // Whole-store NDJSON restore into an already-open store.
@@ -242,7 +243,8 @@ export function continueRestoreCoverage(store,input){
    // as bounded until its replay/SQLite/subsystem/report scans are resumable.
    const recovery=auditRecovery(store),invitations=store.verifyInvitationAudit();if(JSON.stringify(invitations)!==JSON.stringify(recoveryInvitationSummary(state.progress.audit.invitations)))throw Error('Independent invitation audit differs from full oracle');validateCoverageState(db,state);verifyCurrentRoomSchema(db);
    const result={ok:true,verified:true,pending:false,reportVersion:recovery.contractVersion,engineChecks:state.progress.audit.engine,subsystemContinuation:{invitations:recoveryInvitationSummary(state.progress.audit.invitations),replyRequests:{rooms:state.progress.audit.replyRooms,deferred:state.progress.audit.replyDeferred,requestsScanned:state.progress.audit.replyRequests,messagesCompared:state.progress.audit.replyMessages},workHelp:{rooms:state.progress.audit.helpRooms,deferred:state.progress.audit.helpDeferred,offersScanned:state.progress.audit.helpOffers,offerChecks:state.progress.audit.helpOfferChecks,helpsScanned:state.progress.audit.helpValues},charters:{rooms:state.progress.audit.charterRooms},textResults:{rooms:state.progress.audit.textRooms,projected:state.progress.audit.textProjected,audited:state.progress.audit.textAudited},privateReminders:{complete:state.progress.audit.reminders?.stage==='complete',receipts:state.progress.audit.reminders?.receipts??0,rows:state.progress.audit.reminders?.rows??0,groups:state.progress.audit.reminders?.groups??0}},replayContinuation:{rooms:state.progress.audit.replayRooms,deferred:state.progress.audit.replayDeferred,originalFullOracleRequired:true},resumed:true,contentVerification:'full',events:state.seal.events,tables:state.seal.tables.length,backedUpAt:state.seal.backedUpAt,recovery,audit:{ok:true},...invitations};
-   removeRestoreFreeze(db,state.seal.inventory);completeRestore(db,{...input,result});invalidateCurrentRoomSchema(db);return result;
+   const cleanup=initialRestoreCleanup(db,input.restoreId,input.sourceSeal,state.seal.inventory);result.cleanupComplete=cleanup.complete;result.nextCleanup=restoreCleanupNext(cleanup);
+   completeRestore(db,{...input,result,cleanup});invalidateCurrentRoomSchema(db);return result;
   }
   const p={...state.progress,bag:{...state.progress.bag}};let rows=0,bytes=0;
   while(p.tableIndex < state.seal.tables.length && rows < COVERAGE_ROWS){
@@ -998,7 +1000,7 @@ export async function operatorRestoreResponse(request, token, store, kv = null) 
   if (auth === "denied") return jsonResponse(401, { error: { code: "unauthorized", message: "Operator token required" } });
   if (!store) return jsonResponse(503, { error: { code: "unavailable", message: "Restore unavailable" } });
   if(/^application\/json(?:;|$)/i.test(request.headers.get('content-type')??'')){
-    try{const body=await readRestoreBody(request,8192);if(body.tooLarge)return jsonResponse(413,{error:{code:'too_large',message:'Restore continuation metadata is too large'}});const result=continueRestoreCoverage(store,JSON.parse(body.text));return jsonResponse(result.verified?200:202,result);}
+    try{const body=await readRestoreBody(request,8192);if(body.tooLarge)return jsonResponse(413,{error:{code:'too_large',message:'Restore continuation metadata is too large'}});const input=JSON.parse(body.text),result=input?.cleanup===true?continueRestoreCleanup(store,input):continueRestoreCoverage(store,input);return jsonResponse(result.cleanupComplete===false&&input?.cleanup===true?202:result.verified?200:202,result);}
     catch(error){const message=error?.message??String(error);return jsonResponse(/stale|binding differs|source differs/.test(message)?409:422,{error:{code:'restore_continuation_refused',message}});}
   }
   // Explicit operator opt-in: ?audit=report lands a drifted backup with

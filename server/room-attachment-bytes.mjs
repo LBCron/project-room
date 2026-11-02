@@ -262,15 +262,33 @@ export class RoomAttachmentBytes {
     return this.store.transaction(() => withCurrentReadContext(this.db,roomId,() => {
       const auth = this.store.authenticate(token, roomId);
       if (!validId(id)) fail(422, "invalid_attachment", "Attachment id is not valid");
-      if(!isCurrentRoom(this.db,roomId))this.expire(roomId, this.store.now());
-      if(isCurrentRoom(this.db,roomId)){const scalar=this.db.prepare('SELECT CASE WHEN length(CAST(uploader_id AS BLOB))<=512 THEN uploader_id END uploader_id,CASE WHEN length(CAST(message_id AS BLOB))<=512 THEN message_id END message_id,state,length(CAST(filename AS BLOB))+length(CAST(media_type AS BLOB))+length(CAST(uploader_id AS BLOB))+coalesce(length(CAST(message_id AS BLOB)),0)+length(CAST(sha256 AS BLOB))+128 AS n FROM room_attachments WHERE room_id=? AND id=?').get(roomId,id);if(scalar){if(!this.visibleTo(scalar,this.messageIndex(roomId),auth.member.id))fail(404,'attachment_not_found','Attachment not found');if(!Number.isSafeInteger(scalar.n)||scalar.n>4096)fail(409,'attachment_metadata_unavailable','File metadata requires recovery');}}
+      const current=isCurrentRoom(this.db,roomId),selected=new Map();
+      // Only this attachment's bound message, within this authenticated TX.
+      // Repeated visibility checks must not hydrate the same payload twice.
+      const messages=current?{get:messageId=>{
+        if(!selected.has(messageId)){
+          if(selected.size)fail(409,'attachment_metadata_unavailable','Attachment binding changed');
+          selected.set(messageId,readCurrentMessage(this.db,roomId,messageId)?.value);
+        }
+        return selected.get(messageId);
+      }}:this.messageIndex(roomId);
+      if(!current)this.expire(roomId, this.store.now());
+      if(current){const scalar=this.db.prepare('SELECT CASE WHEN length(CAST(uploader_id AS BLOB))<=512 THEN uploader_id END uploader_id,CASE WHEN length(CAST(message_id AS BLOB))<=512 THEN message_id END message_id,state,length(CAST(filename AS BLOB))+length(CAST(media_type AS BLOB))+length(CAST(uploader_id AS BLOB))+coalesce(length(CAST(message_id AS BLOB)),0)+length(CAST(sha256 AS BLOB))+128 AS n FROM room_attachments WHERE room_id=? AND id=?').get(roomId,id);if(scalar){if(!this.visibleTo(scalar,messages,auth.member.id))fail(404,'attachment_not_found','Attachment not found');if(!Number.isSafeInteger(scalar.n)||scalar.n>4096)fail(409,'attachment_metadata_unavailable','File metadata requires recovery');}}
       const row = this.db.prepare(`SELECT ${FILE_METADATA},bytes IS NOT NULL AS has_bytes
         FROM room_attachments WHERE room_id=? AND id=?`).get(roomId, id);
       if (!row) fail(404, "attachment_not_found", "Attachment not found");
       // Terminal states must preserve the bound message's visibility too:
       // a 410 would reveal a hidden DM attachment's existence.
-      if (!this.visibleTo(row, this.messageIndex(roomId), auth.member.id)) {
+      if (!this.visibleTo(row, messages, auth.member.id)) {
         fail(404, "attachment_not_found", "Attachment not found");
+      }
+      // Knowing a file id is not permission to bypass the conversation floor.
+      // Bind every current committed/terminal file to its protected message
+      // before fetching bytes; an orphan never becomes a room-wide file.
+      if(current&&(row.message_id||row.state==='committed')){
+        const message=row.message_id?messages.get(row.message_id):undefined;
+        const floor=readCurrentHistoryFloor(this.db,roomId,auth.member.id);
+        if(!message||!messageInHistory(message,floor))fail(404,'attachment_not_found','Attachment not found');
       }
       if ((row.state !== "staged" && row.state !== "committed") || (row.state==="staged"&&row.expires_at<=this.store.now()) || !row.has_bytes) {
         fail(410, "attachment_unavailable", "Attachment bytes are no longer available");

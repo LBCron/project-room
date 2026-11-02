@@ -135,7 +135,7 @@ export const hostedRoomTools = [
     messageIds: { type: "array", items: idField, minItems: 1, maxItems: 8, uniqueItems: true, description: "Required for normalized rooms: visible message ids whose committed files to inspect. Keep the same selection across pages." },
     cursor: { type: "string", minLength: 1, maxLength: 4096, description: "Opaque page.nextCursor from this same selection. On expiry, restart without cursor." }
   }, ["roomId"])),
-  tool("room_get_file", "Download one room file from room_attachments. Returns canonical base64 in attachment.data plus sha256. Staged files are uploader-only. Committed DM files are author-and-recipient-only; other committed files are readable by current room members. Discarded, expired, and deleted files are unavailable.", schema({
+  tool("room_get_file", "Download one room file from room_attachments. Returns canonical base64 in attachment.data plus sha256. Staged files are uploader-only. Committed files require a visible protected bound message, including the current history floor; DM files are author-and-recipient-only. Knowing a file id grants no extra access. Discarded, expired, and deleted files are unavailable.", schema({
     roomId: roomIdField,
     id: { ...idField, description: "Attachment id returned by room_put_file or room_list_files." }
   }, ["roomId", "id"])),
@@ -143,7 +143,7 @@ export const hostedRoomTools = [
     roomId: roomIdField,
     id: { ...idField, description: "Staged or committed attachment id." }
   }, ["roomId", "id"]), false),
-  tool("room_commit_file", "Commit one staged room file onto a chat message this identity posted. Sets message_id and state committed on the existing room_attachments row. The uploader commits their own staged file. The same id and messageId returns duplicate true. A different messageId conflicts and does not move the file. Discarded, expired, and deleted files are refused. This does not post a new chat message and does not upload bytes. Committed DM bytes are author-and-recipient-only; other committed bytes are readable by current room members. room_discard_file deletes a committed file.", schema({
+  tool("room_commit_file", "Commit one staged room file onto a chat message this identity posted. Sets message_id and state committed on the existing room_attachments row. The uploader commits their own staged file. The same id and messageId returns duplicate true. A different messageId conflicts and does not move the file. Discarded, expired, and deleted files are refused. This does not post a new chat message and does not upload bytes. Committed bytes follow the bound message history and DM visibility rules. room_discard_file deletes a committed file.", schema({
     roomId: roomIdField,
     id: { ...idField, description: "Staged attachment id from room_put_file." },
     messageId: { ...idField, description: "Chat message id this identity posted." }

@@ -28,15 +28,16 @@ function serve(t, { now = () => Date.now() } = {}) {
       await new Promise(done => server.close(done));
       store.close(); rmSync(directory, { recursive: true, force: true });
     });
-    resolve({ origin: `http://127.0.0.1:${server.address().port}`, store, rooms });
+    resolve({ origin: `http://127.0.0.1:${server.address().port}`, store, rooms, server });
   }));
 }
 
-function rpc(origin, method, params, secret) {
+function rpc(origin, method, params, secret, {dropAck=false}={}) {
   return fetch(`${origin}/room/mcp`, {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
+      ...(dropAck ? {"x-fixture-drop-ack":"1"} : {}),
       ...(secret ? { Authorization: `Bearer ${secret}` } : {})
     },
     body: JSON.stringify({ jsonrpc: "2.0", id: "t", method, ...(params === undefined ? {} : { params }) })
@@ -483,7 +484,7 @@ test("staged files stay with the uploader; DM-committed files stay with the DM p
 });
 
 test("[legacy compatibility] a committed DM file whose message is missing from the projection is not room-visible (#2950)", async t => {
-  const { origin, store, rooms } = await serve(t);
+  const { origin, store } = await serve(t);
   const owner = store.identities.create("Orphan owner");
   const peer = store.identities.create("Orphan peer");
   const third = store.identities.create("Orphan third");
@@ -546,17 +547,79 @@ test("[legacy compatibility] a committed DM file whose message is missing from t
 });
 
 test('hosted normalized file listing exposes and forwards exact selected-message continuation',async t=>{
- const {origin,store,rooms}=await serve(t),owner=store.identities.create('Selected file owner');
- const created=rooms.create(owner.secret,{roomId:'selected-files',title:'Selected files',purpose:'Bounded file discovery',starter:false});
+ const {origin,store,rooms}=await serve(t),owner=store.identities.create('Selected file owner'),peer=store.identities.create('Selected file peer');
+ const created=rooms.create(owner.secret,{roomId:'selected-files',title:'Selected files',purpose:'Bounded file discovery',starter:false});linkWithProof(store,owner.secret,created.roomId,peer,{permissions:[]});
  const listing=await(await rpc(origin,'tools/list',{profile:'full'},owner.secret)).json(),tool=listing.result.tools.find(x=>x.name==='room_list_files');
  assert.equal(tool.inputSchema.properties.messageIds.type,'array');assert.equal(tool.inputSchema.properties.messageIds.maxItems,8);assert.equal(tool.inputSchema.properties.cursor.maxLength,4096);
- const posted=await call(origin,'room_post_message',{roomId:created.roomId,id:'selected-post',messageId:'selected-message',body:'Saved files belong here'},owner.secret);assert.equal(posted.value.status,'posted');
+ const posted=await call(origin,'room_post_message',{roomId:created.roomId,id:'selected-post',messageId:'selected-message',body:'Saved files belong here'},owner.secret);assert.equal(posted.value.status,'posted');store.command(owner.secret,created.roomId,{id:'selected-alt',type:'message.posted',data:{messageId:'selected-alt',body:'Another visible selection'}});
  for(let i=0;i<9;i++){
   const staged=await call(origin,'room_put_file',{roomId:created.roomId,id:'selected-'+i,filename:'note.txt',mediaType:'text/plain',data:Buffer.from('Useful '+i).toString('base64')},owner.secret);assert.equal(staged.value.status,'staged');
   const committed=await call(origin,'room_commit_file',{roomId:created.roomId,id:'selected-'+i,messageId:'selected-message'},owner.secret);assert.equal(committed.value.status,'committed');
  }
  const first=await call(origin,'room_list_files',{roomId:created.roomId,messageIds:['selected-message']},owner.secret);assert.equal(first.body.result.isError,undefined);assert.equal(first.value.contractVersion,2);assert.equal(first.value.files.length,8);assert.equal(first.value.coverage.complete,false);assert.equal(first.value.page.hasMore,true);
+ const foreign=await call(origin,'room_list_files',{roomId:created.roomId,messageIds:['selected-message'],cursor:first.value.page.nextCursor},peer.secret);assert.equal(foreign.value.status,409);
+ const changed=await call(origin,'room_list_files',{roomId:created.roomId,messageIds:['selected-message','selected-alt'],cursor:first.value.page.nextCursor},owner.secret);assert.equal(changed.value.status,409);
  const next=await call(origin,'room_list_files',{roomId:created.roomId,messageIds:['selected-message'],cursor:first.value.page.nextCursor},owner.secret);assert.equal(next.value.page.hasMore,false);assert.equal(next.value.files.length,1);assert.equal(new Set([...first.value.files,...next.value.files].map(x=>x.id)).size,9);
  const read=await call(origin,'room_get_file',{roomId:created.roomId,id:next.value.files[0].id},owner.secret);assert.equal(Buffer.from(read.value.attachment.data,'base64').toString(),'Useful 8');
+ for(let i=0;i<8;i++)assert.equal((await call(origin,'room_discard_file',{roomId:created.roomId,id:'selected-'+i},owner.secret)).value.status,'deleted');
+ const empty=await call(origin,'room_list_files',{roomId:created.roomId,messageIds:['selected-message']},owner.secret);assert.deepEqual(empty.value.files,[]);assert.equal(empty.value.page.hasMore,true);assert.equal(empty.value.coverage.complete,false);
+ const remaining=await call(origin,'room_list_files',{roomId:created.roomId,messageIds:['selected-message'],cursor:empty.value.page.nextCursor},owner.secret);assert.deepEqual(remaining.value.files.map(x=>x.id),['selected-8']);assert.equal(remaining.value.page.hasMore,false);
  for(const selection of [[],['selected-message','selected-message'],Array.from({length:9},(_,i)=>'m'+i),[42]]){const bad=await call(origin,'room_list_files',{roomId:created.roomId,messageIds:selection},owner.secret);assert.equal(bad.body.error?.code,-32602);}
+});
+
+test('hosted file stage and commit survive lost responses and reject interrupted saves atomically',async t=>{
+ const {origin,store,rooms,server}=await serve(t),owner=store.identities.create('Durable file owner');
+ const created=rooms.create(owner.secret,{roomId:'durable-files',title:'Durable files',purpose:'Keep exact file operation identity',starter:false});
+ let dropped=0;server.on('request',(req,res)=>{if(req.headers['x-fixture-drop-ack']==='1'){res.end=()=>{dropped++;req.socket.destroy();return res;};}});
+ const stage={roomId:created.roomId,id:'saved-file',filename:'saved.txt',mediaType:'text/plain',data:Buffer.from('Useful durable bytes').toString('base64')};
+ await assert.rejects(rpc(origin,'tools/call',{name:'room_put_file',arguments:stage},owner.secret,{dropAck:true}));
+ assert.equal(dropped,1);assert.equal(store.db.prepare('SELECT count(*) n FROM room_attachments WHERE room_id=?').get(created.roomId).n,1);
+ const retryStage=await call(origin,'room_put_file',stage,owner.secret);assert.equal(retryStage.value.duplicate,true);
+ const posted=await call(origin,'room_post_message',{roomId:created.roomId,id:'durable-post',messageId:'durable-message',body:'Saved attachment pointer'},owner.secret);assert.equal(posted.value.status,'posted');
+ const commit={roomId:created.roomId,id:'saved-file',messageId:'durable-message'},write=store.roomAttachments.write.bind(store.roomAttachments);
+ store.roomAttachments.write=(roomId,operation)=>write(roomId,()=>{operation();throw Error('Injected attachment save fault');});
+ try{const refused=await call(origin,'room_commit_file',commit,owner.secret);assert.equal(refused.body.result.isError,true);assert.equal(refused.value.status,500);}finally{store.roomAttachments.write=write;}
+ const rolledBack=store.db.prepare('SELECT state,message_id FROM room_attachments WHERE room_id=? AND id=?').get(created.roomId,'saved-file');assert.deepEqual({...rolledBack},{state:'staged',message_id:null});
+ await assert.rejects(rpc(origin,'tools/call',{name:'room_commit_file',arguments:commit},owner.secret,{dropAck:true}));assert.equal(dropped,2);
+ const retry=await call(origin,'room_commit_file',commit,owner.secret);assert.equal(retry.value.duplicate,true);assert.equal(retry.value.attachment.messageId,'durable-message');
+ const listed=await call(origin,'room_list_files',{roomId:created.roomId,messageIds:['durable-message']},owner.secret);assert.deepEqual(listed.value.files.map(x=>x.id),['saved-file']);
+ const read=await call(origin,'room_get_file',{roomId:created.roomId,id:'saved-file'},owner.secret);assert.equal(read.value.attachment.data,stage.data);
+ assert.deepEqual({...store.db.prepare('SELECT enabled,room_id,receipt_id FROM current_room_writer_permit').get()},{enabled:0,room_id:null,receipt_id:null});
+});
+
+test('normalized hosted file reads fail closed if a committed message loses its independent membership source',async t=>{
+ const {origin,store,rooms}=await serve(t),owner=store.identities.create('Protected file owner'),peer=store.identities.create('Protected file peer');
+ const created=rooms.create(owner.secret,{roomId:'protected-files',title:'Protected files',purpose:'No orphan fallback',starter:false});linkWithProof(store,owner.secret,created.roomId,peer,{permissions:[]});
+ const posted=await call(origin,'room_post_message',{roomId:created.roomId,id:'protected-post',messageId:'protected-message',body:'Committed file message'},owner.secret);assert.equal(posted.value.status,'posted');
+ const stage=await call(origin,'room_put_file',{roomId:created.roomId,id:'protected-file',filename:'protected.txt',mediaType:'text/plain',data:Buffer.from('PROTECTED_FILE_SENTINEL').toString('base64')},owner.secret);assert.equal(stage.value.status,'staged');
+ assert.equal((await call(origin,'room_commit_file',{roomId:created.roomId,id:'protected-file',messageId:'protected-message'},owner.secret)).value.status,'committed');
+ const {withCurrentRoomWriter}=await import('../server/current-room-repository.mjs');store.transaction(()=>withCurrentRoomWriter(store.db,created.roomId,()=>store.db.prepare('DELETE FROM messages WHERE room_id=? AND message_id=?').run(created.roomId,'protected-message')));
+ for(const secret of [owner.secret,peer.secret]){
+  const selected=await call(origin,'room_list_files',{roomId:created.roomId,messageIds:['protected-message']},secret);assert.equal(selected.body.result.isError,true);assert.equal(selected.value.files,undefined);
+  const read=await call(origin,'room_get_file',{roomId:created.roomId,id:'protected-file'},secret);assert.equal(read.body.result.isError,true);assert.equal(read.value.attachment,undefined);assert.doesNotMatch(JSON.stringify(read.body),/PROTECTED_FILE_SENTINEL/);
+ }
+ assert.equal(store.db.prepare('SELECT state FROM room_attachments WHERE room_id=? AND id=?').get(created.roomId,'protected-file').state,'committed','bytes remain available for authorized recovery, never relabeled public');
+});
+
+test('normalized hosted file selection and downloads enforce the same since-join history floor',async t=>{
+ const now=Date.parse('2026-01-06T00:00:00Z'),{origin,store}=await serve(t,{now:()=>now});
+ const owner=store.identities.create('Floor file owner'),peer=store.identities.create('Floor file reader'),roomId='floor-files';
+ const {event,PERMISSIONS}=await import('../src/events.js');
+ const entry=(type,data,at)=>event({roomId,actorId:owner.identityId,type,data,at});
+ store.initialize([
+  entry('room.created',{roomId,ownerId:owner.identityId,title:'History scoped files',purpose:'No older file body disclosure'},'2026-01-01T00:00:00Z'),
+  entry('member.added',{memberId:owner.identityId,identityId:owner.identityId,displayName:'Floor file owner',kind:'agent',permissions:[...PERMISSIONS]},'2026-01-01T00:00:00Z'),
+  entry('room.history_visibility_set',{historyVisibility:'since_join'},'2026-01-01T01:00:00Z'),
+  entry('message.posted',{messageId:'prejoin-message',body:'Old file pointer'},'2026-01-02T00:00:00Z'),
+  entry('member.added',{memberId:peer.identityId,identityId:peer.identityId,displayName:'Floor file reader',kind:'agent',permissions:[]},'2026-01-03T00:00:00Z')
+ ],{representation:'normalized-current-v1'});
+ // Synthetic code-owned canonical journal membership, not an onboarding claim.
+ for(const identity of[owner,peer])store.db.prepare('INSERT INTO identity_links(room_id,identity_id,member_id,linked_at) VALUES(?,?,?,?)').run(roomId,identity.identityId,identity.identityId,now);
+ const data=Buffer.from('PREJOIN_FILE_SENTINEL').toString('base64');assert.equal((await call(origin,'room_put_file',{roomId,id:'prejoin-file',filename:'old.txt',mediaType:'text/plain',data},owner.secret)).value.status,'staged');
+ assert.equal((await call(origin,'room_commit_file',{roomId,id:'prejoin-file',messageId:'prejoin-message'},owner.secret)).value.status,'committed');
+ const selected=await call(origin,'room_list_files',{roomId,messageIds:['prejoin-message']},peer.secret);assert.equal(selected.value.status,404);assert.equal(selected.value.files,undefined);
+ assert.throws(()=>store.roomAttachments.get(peer.secret,roomId,'prejoin-file'),e=>e.status===404&&e.code==='attachment_not_found');
+ const http=await fetch(origin+'/api/rooms/'+roomId+'/files/prejoin-file',{headers:{Authorization:`Bearer ${peer.secret}`}});assert.equal(http.status,404);assert.doesNotMatch(await http.text(),/PREJOIN_FILE_SENTINEL/);
+ const read=await call(origin,'room_get_file',{roomId,id:'prejoin-file'},peer.secret);assert.equal(read.value.status,404);assert.equal(read.value.attachment,undefined);assert.doesNotMatch(JSON.stringify(read.body),/PREJOIN_FILE_SENTINEL/);const absent=await call(origin,'room_get_file',{roomId,id:'unknown-file'},peer.secret);assert.equal(absent.value.status,read.value.status);assert.equal(absent.value.code,read.value.code);
+ assert.equal((await call(origin,'room_get_file',{roomId,id:'prejoin-file'},owner.secret)).value.attachment.data,data,'owner keeps established unlimited history');
 });

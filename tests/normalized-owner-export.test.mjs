@@ -4,6 +4,7 @@ import {randomUUID} from 'node:crypto';
 import {RoomStore} from '../server/store.mjs';
 import {initialRoom} from '../server/bootstrap.mjs';
 import {createRoomServer} from '../server/http.mjs';
+import {auditRecovery} from '../server/recovery.mjs';
 import {operatorNormalization} from '../server/operator-normalization.mjs';
 
 test('normalized owner exports redacted public history, never private DMs, without full room hydration',async t=>{
@@ -28,5 +29,13 @@ test('normalized owner exports redacted public history, never private DMs, witho
   assert.equal(s.headSequence('commons'),before+1);
   if(format==='jsonl'){const rows=body.trim().split('\n').map(JSON.parse);assert.deepEqual(rows.map(r=>r.sequence),rows.map((_,i)=>i+1));assert.ok(rows.length>16);}
  }
+ // A later source-page failure cannot become a plausible successful prefix.
+ const beforeFailure=s.headSequence('commons'),eventsAfter=s.eventsAfter.bind(s);
+ s.eventsAfter=(...args)=>{if(args[2]>0)throw Error('injected export page failure');return eventsAfter(...args);};
+ const failed=await get('jsonl');assert.equal(failed.status,500);assert.doesNotMatch(await failed.text(),/current text|public row/);assert.equal(s.headSequence('commons'),beforeFailure);s.eventsAfter=eventsAfter;
+ const command=s.command.bind(s);s.command=(...args)=>{if(args[2].type==='room.exported')throw Error('injected export audit failure');return command(...args);};
+ const unaudited=await get('html');assert.equal(unaudited.status,500);assert.doesNotMatch(await unaudited.text(),/current text|public row/);assert.equal(s.headSequence('commons'),beforeFailure);s.command=command;
+ const repaired=await get('jsonl');assert.equal(repaired.status,200);assert.equal(s.headSequence('commons'),beforeFailure+1);
+ assert.doesNotThrow(()=>auditRecovery(s));
  const last=s.db.prepare("SELECT body FROM events WHERE room_id='commons' ORDER BY sequence DESC LIMIT 1").get();assert.equal(JSON.parse(last.body).type,'room.exported');
 });

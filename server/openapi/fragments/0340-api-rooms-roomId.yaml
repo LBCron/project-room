@@ -8,7 +8,13 @@
         view) is the read-only Catch up boundary: that marker moved past the
         viewer's own unbroken run of events, the same boundary the return
         brief uses. Reading it never writes a marker. `?view=work` returns the
-        work-focused snapshot (`snapshotView`, `snapshotVersion`). Header
+        work-focused snapshot (`snapshotView`, `snapshotVersion`). Normalized
+        work and orientation views return version 2 with at most four exact
+        current task records, viewer-scoped private definitions and `workWindow`.
+        Its `hasMore`, encrypted `nextCursor` and exact `nextRead.path` continue
+        the source using `work_cursor`; absence from a page is not absence from
+        the room. Source change or process restart invalidates the cursor.
+        Legacy work/orientation remain version 1. Header
         `x-project-room-help-context: 1` (with `view=work`) adds help
         context; `x-project-room-offer-context: 1` (full view only) adds
         offer context. Room routes accept a room bearer key, a browser room
@@ -45,6 +51,10 @@
         - name: view
           in: query
           schema: { type: string, enum: [work, identity, orientation] }
+        - name: work_cursor
+          in: query
+          schema: { type: string, maxLength: 4096 }
+          description: Exact opaque continuation from a normalized work or orientation view; only with the same view.
         - name: messages
           in: query
           schema: { type: string, enum: [recent] }

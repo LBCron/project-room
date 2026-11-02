@@ -5,7 +5,7 @@ import { renderInviteOAuthPage } from "./routes/mcp-invite-oauth.mjs";
 import { createMcpInviteOAuth, MCP_INVITE_RECOVERY } from "./mcp-invite-oauth.mjs";
 import { createMcpEventsRuntime } from "./mcp-events-runtime.mjs";
 import { mcpOAuthResourceMetadata, listMcpOAuthAgents, validateMcpOAuthBinding } from './mcp-oauth.mjs';
-import { messageRepository } from "./message-repository.mjs";
+import { messageRepository, selectedMessageRecord } from "./message-repository.mjs";
 // JDOT-PUBLIC-CSP-RUM begin: public-page policy
 import { dmEventVisibility, dmConsentEventVisible } from "./dm-event-visibility.mjs";
 import { recordedReceiptsOptOut } from "./public-visibility.mjs";
@@ -4604,9 +4604,10 @@ export function createRoomServer({ store, origin, assetRoot = new URL("../", imp
           reject(422, "invalid_snapshot_view", "Choose a supported snapshot view");
         }
         if (params.has("view") && (params.getAll("view").length !== 1 || !["work", "orientation"].includes(params.get("view"))
-          || [...params.keys()].some(key => !["view", "auth"].includes(key) || params.getAll(key).length !== 1))) {
+          || [...params.keys()].some(key => !["view", "auth", "work_cursor"].includes(key) || params.getAll(key).length !== 1))) {
           reject(422, "invalid_snapshot_view", "Choose a supported snapshot view");
         }
+        if(params.has("work_cursor")&&!params.has("view"))reject(422,"invalid_snapshot_view","Work cursor requires a work view");
         const helpContext = req.headers["x-project-room-help-context"];
         if (helpContext !== undefined && (helpContext !== "1" || params.get("view") !== "work")) reject(422, "invalid_help_context", "Choose version 1 with the current work view");
         const offerContext = req.headers["x-project-room-offer-context"];
@@ -4620,6 +4621,7 @@ export function createRoomServer({ store, origin, assetRoot = new URL("../", imp
         }
         return json(res, 200, readRoomSnapshot(store, selected.token, roomId, fence, {
           view: snapshotView,
+          workCursor: params.get("work_cursor"),
           helpContext: helpContext === "1",
           offerContext: offerContext === "1",
           auditView: auditHeader ? "activity" : "full",
@@ -4759,7 +4761,7 @@ export function createRoomServer({ store, origin, assetRoot = new URL("../", imp
         // re-resolve each hit against the projection and drop targeted DMs
         // the viewer is not a party to. Fail closed when a hit cannot be resolved.
         if (result.messages?.length) {
-          const byId = messageRepository(store, roomId);
+          const byId = result.contractVersion===2 ? {get:id=>store.readTransaction(()=>selectedMessageRecord(store,roomId,id))} : messageRepository(store, roomId);
           result.messages = result.messages.filter(hit => {
             const message = byId.get(hit.id);
             return message ? dmMessageVisible(message) : false;

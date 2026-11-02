@@ -79,7 +79,7 @@ function seedThenPrivateAsk(w, { workItemId } = {}) {
 
 test('content privacy holds: the bystander cannot read the private request, participants can', t => {
   const w = world(t), { privateMessageId } = seedThenPrivateAsk(w);
-  const carolView = readRoomSnapshot(w.store, w.carol.secret, w.roomId, null);
+  const carolView = readRoomSnapshot(w.store, w.carol.secret, w.roomId, null, {windowed:true});
   assert.equal(carolView.state.messages.some(m => m.id === privateMessageId), false);
   assert.equal(Object.hasOwn(carolView.state.replyRequests, privateMessageId), false);
   assert.throws(() => w.store.replyRequests.selected(w.carol.secret, w.roomId, privateMessageId), { status: 404 });
@@ -163,10 +163,11 @@ function seedPrivateWorkItem(w) {
 test('metadata: the full snapshot exposes no title or definition-of-done to non-participants', t => {
   const w = world(t);
   seedPrivateWorkItem(w);
-  const bobView = readRoomSnapshot(w.store, w.bob.secret, w.roomId, null);
+  assert.throws(()=>readRoomSnapshot(w.store,w.bob.secret,w.roomId,null),{status:409,code:"current_snapshot_selection_unavailable"});
+  const bobView = readRoomSnapshot(w.store, w.bob.secret, w.roomId, null, {windowed:true});
   assert.equal(bobView.state.workItems['priv-container']?.title, 'PRIV-TITLE-MARKER');
-  assert.equal(bobView.state.workItems['priv-container']?.definitionOfDone, 'PRIV-DOD-MARKER');
-  const carolView = readRoomSnapshot(w.store, w.carol.secret, w.roomId, null);
+  assert.equal(w.store.workContext(w.bob.secret,w.roomId,'priv-container').work.definitionOfDone, 'PRIV-DOD-MARKER');
+  const carolView = readRoomSnapshot(w.store, w.carol.secret, w.roomId, null, {windowed:true});
   assert.equal(carolView.state.workItems['priv-container']?.title, null);
   assert.equal(carolView.state.workItems['priv-container']?.definitionOfDone, null);
   const exposed = JSON.stringify(carolView.state.workItems ?? {}) + JSON.stringify(carolView.state.eventLog ?? []);
@@ -182,7 +183,7 @@ test('metadata: room bootstrap exposes no title or definition-of-done to non-par
   seedPrivateWorkItem(w);
   const bobBoot = buildRoomBootstrap(w.store, w.bob.secret, w.roomId, null);
   assert.equal(bobBoot.snapshot.state.workItems['priv-container']?.title, 'PRIV-TITLE-MARKER');
-  assert.equal(bobBoot.snapshot.state.workItems['priv-container']?.definitionOfDone, 'PRIV-DOD-MARKER');
+  assert.equal(w.store.workContext(w.bob.secret,w.roomId,'priv-container').work.definitionOfDone, 'PRIV-DOD-MARKER');
   const carolBoot = buildRoomBootstrap(w.store, w.carol.secret, w.roomId, null);
   assert.equal(carolBoot.snapshot.state.workItems['priv-container']?.title, null);
   assert.equal(carolBoot.snapshot.state.workItems['priv-container']?.definitionOfDone, null);
@@ -199,7 +200,8 @@ test('metadata: room search neither matches on nor returns a private item title 
   // Participant control: Bob finds the item by its definition-of-done
   // and by its title, and receives the title.
   const bobDod = w.store.search(w.bob.secret, w.roomId, 'PRIV-DOD-MARKER', 'work');
-  assert.equal(bobDod.total, 1);
+  assert.equal(bobDod.total, null);
+  assert.equal(bobDod.workItems.length, 1);
   assert.equal(bobDod.workItems[0]?.id, 'priv-container');
   assert.equal(bobDod.workItems[0]?.title, 'PRIV-TITLE-MARKER');
   const bobTitle = w.store.search(w.bob.secret, w.roomId, 'PRIV-TITLE-MARKER', 'all');
@@ -208,7 +210,7 @@ test('metadata: room search neither matches on nor returns a private item title 
   // and returns no title, for either kind.
   for (const kind of ['work', 'all']) {
     const carolDod = w.store.search(w.carol.secret, w.roomId, 'PRIV-DOD-MARKER', kind);
-    assert.equal(carolDod.total, 0, `non-participant search kind=${kind} matched the private definition-of-done`);
+    assert.equal(carolDod.workItems.length, 0, `non-participant search kind=${kind} matched the private definition-of-done`);
     assert.equal(carolDod.workItems.length, 0);
     const carolTitle = w.store.search(w.carol.secret, w.roomId, 'PRIV-TITLE-MARKER', kind);
     assert.equal(carolTitle.workItems.some(item => item.id === 'priv-container'), false,

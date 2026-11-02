@@ -123,10 +123,10 @@ function viewerFilter(store, roomId, viewerId) {
 }
 
 // The member snapshot. windowed uses the shared message window and byte budget.
-export function readRoomSnapshot(store, token, roomId, fence, { view = "full", helpContext = false, offerContext = false, auditView = "full", windowed = false, visibility = null } = {}) {
+export function readRoomSnapshot(store, token, roomId, fence, { view = "full", helpContext = false, offerContext = false, auditView = "full", windowed = false, visibility = null, workCursor = null } = {}) {
   if (view === "orientation") {
     if (helpContext || offerContext || auditView !== "full" || windowed) fail(422, "invalid_snapshot_view", "Orientation does not accept snapshot context options");
-    return readAgentOrientation(store, token, roomId, fence);
+    return readAgentOrientation(store, token, roomId, fence, {cursor:workCursor});
   }
   if (view === "full" && isCurrentRoom(store.db, roomId)) {
     if (!windowed || helpContext || !["full","activity"].includes(auditView))
@@ -169,7 +169,7 @@ export function readRoomSnapshot(store, token, roomId, fence, { view = "full", h
   // compat ?full=1 read; the work view returns before the messages branch),
   // so it opts in to full history at the store. The windowed default passes
   // no opt-in and stays bounded.
-  const snapshot = store.snapshot(token, roomId, fence, view, helpContext, offerContext, auditView, windowed ? SNAPSHOT_WINDOW_MESSAGES : null, !windowed);
+  const snapshot = store.snapshot(token, roomId, fence, view, helpContext, offerContext, auditView, windowed ? SNAPSHOT_WINDOW_MESSAGES : null, !windowed, workCursor);
   if (view === "work") {
     delete snapshot.state.agentHalts;
     return snapshot;

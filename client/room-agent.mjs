@@ -1161,10 +1161,11 @@ export class RoomAgentClient {
     }
     return receipt;
   }
-  search(query, { kind = "all", limit, signal } = {}) {
+  search(query, { kind = "all", limit, before, signal } = {}) {
     const params = new URLSearchParams({ q: query });
     if (kind !== "all") params.set("kind", kind);
     if (limit !== undefined) params.set("limit", String(limit));
+    if (before !== undefined) params.set("before", before);
     return this.#request(`/search?${params}`, undefined, signal);
   }
   messageThread(messageId, { signal } = {}) {
@@ -1502,9 +1503,13 @@ export class RoomAgentClient {
     if (!["all", "needs_me", "help_wanted", "results"].includes(focus)) throw new RoomClientError(0, "invalid_focus", "Choose all work, work needing you, help invitations, or results");
     if (query !== undefined && !validWorkSearchQuery(query)) throw new RoomClientError(0, "invalid_query", "Use a nonblank work query of at most 200 UTF-16 code units");
     if (sort !== undefined && sort !== "curiosity") throw new RoomClientError(0, "invalid_sort", "Sort is omitted or curiosity");
-    const snapshot = focus !== "all" || query !== undefined
-      ? checkedWorkSnapshot(await this.#request("?view=work", undefined, signal, focus === "help_wanted"), this.#roomId)
-      : checkedWorkSnapshot(await this.#request("?view=orientation", undefined, signal), this.#roomId, "orientation");
+    const raw = await this.#request(focus !== "all" || query !== undefined ? "?view=work" : "?view=orientation", undefined, signal, focus === "help_wanted");
+    if(raw?.snapshotVersion===2&&raw?.representation==='normalized-current-v1') {
+      if(raw.roomId!==this.#roomId||raw.viewerId!==this.#memberId||raw.workWindow?.hasMore!==Boolean(raw.workWindow?.nextCursor))
+        throw new RoomClientError(200,'invalid_response','Room returned an invalid bounded work snapshot');
+      return this.orient({paginate:true,focus,...(query===undefined?{}:{query}),...(sort===undefined?{}:{sort}),signal});
+    }
+    const snapshot = checkedWorkSnapshot(raw,this.#roomId,focus !== "all" || query !== undefined ? "work" : "orientation");
     const member = snapshot.state.members[snapshot.viewerId];
     const charter = snapshot.charter === undefined ? null : checkedCharter(snapshot.charter, snapshot.sequence);
     try {

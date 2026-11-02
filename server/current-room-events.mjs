@@ -1,7 +1,7 @@
 import {ownMember} from '../src/events.js';
 // Normalized event-log compatibility reader. Candidate admission precedes all
 // residual/audience filters; an empty visible page can still have more source.
-import {currentRoomAuthority,readCurrentRecord,readCurrentHead,readCurrentMessage,readCurrentHistoryFloor,withCurrentReadContext,chargeCurrentReadBudget} from './current-room-repository.mjs';
+import {currentRoomAuthority,readCurrentWorkSummaryForViewer,readCurrentRecord,readCurrentHead,readCurrentMessage,readCurrentHistoryFloor,withCurrentReadContext,chargeCurrentReadBudget} from './current-room-repository.mjs';
 import {dmEventVisibility,dmConsentEventVisible,DM_FOLLOW_UP_TYPES} from './dm-event-visibility.mjs';
 import {peerEventVisible} from './bonds.mjs';
 import {rowInHistory,messageInHistory} from './history-visibility.mjs';
@@ -81,7 +81,15 @@ export function readCurrentEventWindow(store,roomId,viewerId,{after=0,limit=100,
    if(chips.length)e.mentions=chips.map(chip=>({memberId:chip.memberId,state:effectiveMentionState(chip,store.now()),displayName:chipMember(chip.memberId)?.displayName??chip.memberId}));
   }
   const next=selected.length?selected.at(-1).sequence:head.sequence;
-  let page=redactEventPage({events:visible,next,hasMore:next<head.sequence},[...messages.values()].filter(Boolean));
+  const workDefinitions=new Map();
+  const privateWorkEvents=visible.map(row=>{
+   const e=row.event,id=e.data?.workItemId;
+   if(typeof id!=='string'||!Object.hasOwn(e.data,'title')&&!Object.hasOwn(e.data,'definitionOfDone'))return row;
+   if(!workDefinitions.has(id))workDefinitions.set(id,readCurrentWorkSummaryForViewer(db,roomId,id,viewerId,b));
+   if(workDefinitions.get(id).title!==null)return row;
+   return {...row,event:{...e,data:{...e.data,...(Object.hasOwn(e.data,'title')?{title:null}:{}),...(Object.hasOwn(e.data,'definitionOfDone')?{definitionOfDone:null}:{})}}};
+  });
+  let page=redactEventPage({events:privateWorkEvents,next,hasMore:next<head.sequence},[...messages.values()].filter(Boolean));
   if(opts.compact===true)page={...page,events:page.events.map(row=>({...row,event:compactEvent(row.event)}))};
   contexts.set(page,{roomId,messages:[...messages.values()].filter(Boolean)});
   return page;

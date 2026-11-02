@@ -8,6 +8,7 @@ import { createAcceptanceFixture } from "./acceptance-fixture.mjs";
 import { createRoomServer } from "../server/http.mjs";
 import { signInFixture } from "./auth-signin.mjs";
 import { clickChrome } from "./room-chrome.mjs";
+import { RoomStore } from "../server/store.mjs";
 
 test("growth invite: copy kit, inviter landing, dead link", { timeout: 60000 }, async t => {
   const fixture = createAcceptanceFixture();
@@ -99,5 +100,39 @@ test("growth invite: copy kit, inviter landing, dead link", { timeout: 60000 }, 
   assert.equal(await dead.locator("#join-account-choices").isVisible(), true);
   await dead.screenshot({ path: "test-results/growth-invite-dead.png" });
   await deadContext.close();
+  assert.deepEqual(errors, []);
+});
+
+for (const width of [1280, 390]) test(`normalized invitation kit opens and creates an agent invitation at ${width}`, { timeout: 60000 }, async t => {
+  const store = new RoomStore(':memory:');
+  store.createAccount('invite-owner');
+  const slot = store.createAccountSessionSlot(), session = store.loginAccountSession(slot.token, store.issueAccountAccessKey('invite-owner'), 0);
+  const made = store.createAccountRoom(slot.token, session.sessionBinding, { roomId: 'invite-native', title: 'A clean project', purpose: 'Useful work', kind: 'personal', displayName: 'Owner' });
+  const owner = store.issueAccessKey('invite-native', made.room.memberId), server = createRoomServer({ store });
+  await new Promise(resolve => server.listen(0, '127.0.0.1', resolve));
+  const browser = await chromium.launch({ headless: true, ...(process.env.ROOM_TEST_CHROMIUM_PATH ? { executablePath: process.env.ROOM_TEST_CHROMIUM_PATH } : {}) });
+  t.after(async () => { await browser.close(); server.closeStreams(); server.closeAllConnections(); await new Promise(resolve => server.close(resolve)); store.close(); });
+  const page = await browser.newPage({ viewport: { width, height: 900 }, reducedMotion: 'reduce' }), errors = [], reads = [];
+  page.on('pageerror', error => errors.push(error.message));
+  page.on('request', request => { if (request.url().includes('/referrals')) reads.push(new URL(request.url()).search); });
+  page.setDefaultTimeout(10000);
+  await page.goto(`http://127.0.0.1:${server.address().port}/?room=invite-native`);
+  await signInFixture(page, owner); await clickChrome(page, '#invite-people-button');
+  await page.waitForFunction(() => document.querySelector('#growth-invite-url')?.value.includes('#join/'));
+  assert.deepEqual(reads, ['?view=invitation']);
+  assert.equal(await page.locator('#growth-kit-retry').isVisible(), false);
+  assert.equal(await page.locator('#growth-copy-link').isEnabled(), true);
+  assert.equal(await page.locator('#growth-copy-agent').isEnabled(), true);
+  assert.equal(await page.locator('#share-link-dialog').evaluate(el => el.scrollWidth > el.clientWidth + 1), false);
+  await page.locator('#share-link-access').selectOption('guest');
+  await page.locator('#growth-copy-agent').focus(); await page.keyboard.press('Enter');
+  await page.locator('#agent-invite-dialog[open]').waitFor();
+  assert.equal(await page.locator('#agent-invite-profile').inputValue(), 'guest');
+  await page.locator('#agent-invite-mint').click();
+  await page.locator('#agent-invite-link[href*="/join/RM-"]').waitFor();
+  const row = store.db.prepare('SELECT redeemed_at FROM agent_invite_codes').get();
+  assert.equal(row.redeemed_at, null, 'Creating an invitation must not redeem it or create another agent');
+  mkdirSync('test-results', { recursive: true });
+  await page.screenshot({ path: `test-results/normalized-invitation-kit-${width}.png` });
   assert.deepEqual(errors, []);
 });

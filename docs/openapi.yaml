@@ -1952,9 +1952,18 @@ paths:
         Issue #6 B2. The room's pinned messages in the order they were pinned,
         joined with the live message (author, body, createdAt). Members only;
         membership is re-checked on every call. Deleted messages (tombstones)
-        never appear. At most 50 pins per room.
+        never appear. At most 50 pins per room. Legacy rooms return the complete
+        list. Normalized rooms return contractVersion 2: at most four source
+        candidates per read, filtered by DM participation and history floor.
+        count describes this visible page, not a total. Follow page.nextRead
+        while page.hasMore, including after an empty page. Cursors are opaque,
+        viewer/head-bound and invalid after a restart; restart without cursor.
       parameters:
         - $ref: '#/components/parameters/RoomId'
+        - in: query
+          name: cursor
+          schema: { type: string, maxLength: 4096 }
+          description: Normalized pin-page continuation from page.nextRead
       responses:
         '200':
           description: Ordered pinned list
@@ -1964,6 +1973,8 @@ paths:
                 $ref: '#/components/schemas/PinnedList'
         '401':
           description: No room credential, or membership ended (unauthenticated)
+        '422':
+          description: Invalid, stale, cross-viewer or restart-expired cursor
     post:
       summary: Pin or unpin one message
       description: |
@@ -4628,9 +4639,16 @@ paths:
         a plain leaderboard ranked by successful referrals, and the caller's
         own referral rows and count. A referral counts only on actual join
         (invite redemption or approved access request); ids and display names
-        only, no credential data.
+        only. With view=invitation, returns only the caller's own private
+        invitation and any verification blocker, without loading the board
+        or settling reward activations from message history. The invitation
+        token grants its stated access and must not be logged or published.
       parameters:
         - $ref: '#/components/parameters/RoomId'
+        - in: query
+          name: view
+          schema: { type: string, enum: [invitation] }
+          description: Select only the invitation needed by the Invite dialog; omit for the full referral board.
       responses:
         '200':
           description: The room's referral board
@@ -4640,6 +4658,9 @@ paths:
                 type: object
                 properties:
                   roomId: { type: string }
+                  contractVersion: { type: integer, enum: [1], description: Present for the invitation-only view. }
+                  invite: { type: object, nullable: true, description: Caller-owned invitation with token, hash, expiry, join limits, status and message. }
+                  inviteBlocked: { type: string, enum: [email_unverified] }
                   referrals:
                     type: array
                     description: Newest first
@@ -14814,7 +14835,10 @@ paths:
       summary: Room instructions (charter)
       description: >-
         Member read of the room's instructions at the current or a past
-        `?revision=N` (docs/ROOM-INSTRUCTIONS.md). No other query parameter
+        `?revision=N` (docs/ROOM-INSTRUCTIONS.md). Normalized rooms support the
+        current version and revision 0 through protected bounded reads. An older
+        nonzero revision remains retained but returns explicit 409 with a Link
+        rel=latest pointing to this route without revision; no history scan occurs. No other query parameter
         is accepted.
       parameters:
         - $ref: '#/components/parameters/RoomId'
@@ -19391,7 +19415,25 @@ components:
         roomId: { type: string }
         sequence: { type: integer, description: Room sequence the list was read at }
         limit: { type: integer, description: Maximum pins per room (50) }
-        count: { type: integer }
+        count: { type: integer, description: Visible pins in this page; not a global total for contractVersion 2 }
+        contractVersion: { type: integer, enum: [2], description: Present for bounded normalized pages }
+        sourceWindow:
+          type: object
+          required: [complete, sourceBound]
+          properties:
+            complete: { type: boolean, description: This continuation reached the end of its pin source }
+            sourceBound: { type: integer, const: 4 }
+        page:
+          type: object
+          required: [hasMore, nextCursor, nextRead]
+          properties:
+            hasMore: { type: boolean }
+            nextCursor: { type: [string, 'null'] }
+            nextRead:
+              type: [object, 'null']
+              properties:
+                method: { type: string, const: GET }
+                path: { type: string }
         pins:
           type: array
           items:

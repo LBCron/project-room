@@ -1,0 +1,151 @@
+{
+  "reviewed_source": "89e1a58827483f7019085a39205eba62abcd15ba",
+  "review_type": "Read-only source and committed-log consistency review; no new runtime executions",
+  "existing_authority_evidence_record": "582dc51036817278e1a7bebfe4bed5086feaaa09",
+  "provenance_finding": {
+    "recorded_unresolvable_reference": "c7e2c913c6663105295ccdc70f20949dc7be4e32",
+    "git_fetch_observed": "remote upload-pack not our ref (exit128)",
+    "github_short_commit_observed": "422 No commit found for SHA c7e2c913c",
+    "verified_composed_history": {
+      "guide_fix": "8a1c47a123482e60d09c3f67b783ec12383c01e7",
+      "test_fixture_addition": "c9f4199e9ce331e4b7667f6ae0920f7cb5595b41",
+      "evidence_log_addition": "582dc51036817278e1a7bebfe4bed5086feaaa09"
+    },
+    "limit": "Verified composed history locations, not proof of equality to an unavailable original commit"
+  },
+  "table_count_finding": {
+    "metadata_claim": 25,
+    "actual_listed_snapshot_tables": 24,
+    "mismatch": true,
+    "acceptance_file": "audit/evidence/operator-normalization-auth-20261102/acceptance.json",
+    "snapshot_file": "tests/helpers/operator-normalization-auth-source.mjs",
+    "snapshot_tables": [
+      "credentials",
+      "accounts",
+      "account_credentials",
+      "account_session_slots",
+      "account_login_methods",
+      "member_accounts",
+      "agent_identities",
+      "identity_links",
+      "agent_key_registry",
+      "agent_api_keys",
+      "agent_connections",
+      "agent_connection_operations",
+      "membership_invitations",
+      "membership_invitation_events",
+      "membership_invitation_journal",
+      "oauth_provider_codes",
+      "oauth_provider_access_tokens",
+      "oauth_provider_refresh_tokens",
+      "oauth_invite_grants",
+      "oauth_invite_codes",
+      "oauth_invite_access_tokens",
+      "oauth_invite_refresh_tokens",
+      "events",
+      "commands"
+    ],
+    "recommendation": "Correct metadata count to24 or explicitly justify a changed intended fixture; do not infer a runtime failure"
+  },
+  "selected_source_comparison": [
+    {
+      "path": "server/operator-normalization.mjs",
+      "record_source_sha256": "5311c610b86897d913e2a466bf0e3db18eefe416e73c509bf0c4b3a6d374233b",
+      "reviewed_source_sha256": "5311c610b86897d913e2a466bf0e3db18eefe416e73c509bf0c4b3a6d374233b",
+      "identical": true
+    },
+    {
+      "path": "server/room-guide.mjs",
+      "record_source_sha256": "347b9bb2b81a31a93db3c1612dd54ec810d90e09f07684ebb11ddd5c3085d51c",
+      "reviewed_source_sha256": "347b9bb2b81a31a93db3c1612dd54ec810d90e09f07684ebb11ddd5c3085d51c",
+      "identical": true
+    },
+    {
+      "path": "server/agent-connections.mjs",
+      "record_source_sha256": "5de6215debeab9902e820a1e208e98367f1b496efa845ca861759e47323e4789",
+      "reviewed_source_sha256": "277dbb0461225c34abf319036446d097475b919e1d136d415879834444d32f3e",
+      "identical": false
+    },
+    {
+      "path": "tests/helpers/operator-normalization-auth-source.mjs",
+      "record_source_sha256": "ae68084b4c35148c3d986f006be23c054e84eb22ada88a6a540cf01842efb2f8",
+      "reviewed_source_sha256": "ae68084b4c35148c3d986f006be23c054e84eb22ada88a6a540cf01842efb2f8",
+      "identical": true
+    },
+    {
+      "path": "tests/operator-normalization-auth.test.mjs",
+      "record_source_sha256": "456b33474b6beec000835764940a46c9e7dc07d2eeec02d1e9aa635204b8ab3a",
+      "reviewed_source_sha256": "456b33474b6beec000835764940a46c9e7dc07d2eeec02d1e9aa635204b8ab3a",
+      "identical": true
+    },
+    {
+      "path": "cloudflare/operator-normalization-auth.check.mjs",
+      "record_source_sha256": "4fcef7f0f9f2a1e386f224f30187e9b4daf03552edeea23b218c2490b8a286b0",
+      "reviewed_source_sha256": "4fcef7f0f9f2a1e386f224f30187e9b4daf03552edeea23b218c2490b8a286b0",
+      "identical": true
+    },
+    {
+      "path": "cloudflare/operator-normalization-auth.test-fixture.mjs",
+      "record_source_sha256": "80b5fd6ef91ae4e19de9491a1a1193276d4c3e2facf91233e36be19cf761e1a5",
+      "reviewed_source_sha256": "80b5fd6ef91ae4e19de9491a1a1193276d4c3e2facf91233e36be19cf761e1a5",
+      "identical": true
+    }
+  ],
+  "existing_logs_inspected": [
+    {
+      "path": "audit/evidence/operator-normalization-auth-20261102/node-green.log.gz",
+      "compressed_sha256": "25e19401ef9d61742b0b3c75e114742dc27fe02482139eeac60d5018cebd8d73",
+      "uncompressed_sha256": "128d357eaa71a384e5fe2ab7d8b56975d4dee8fcc63242f6c23c304f02668727",
+      "uncompressed_bytes": 2030,
+      "reported_pass": 3,
+      "reported_fail": 0,
+      "reported_skip": 0,
+      "new_workload_executed": false
+    },
+    {
+      "path": "audit/evidence/operator-normalization-auth-20261102/native-green.log.gz",
+      "compressed_sha256": "7a43592c56c7e3666171c5c7b925e940f5d01c63be3f178eddab3bb7927a592c",
+      "uncompressed_sha256": "af8d43959c87ae1e9eb255c415370f041aa96b90af4138af09ff7923a554b856",
+      "uncompressed_bytes": 6159,
+      "reported_pass": 1,
+      "reported_fail": 0,
+      "reported_skip": 0,
+      "new_workload_executed": false
+    },
+    {
+      "path": "audit/evidence/normalized-connection-lifecycle-20261102/native.log.gz",
+      "compressed_sha256": "c1fe05d3689c37cbb5df1716b613bbef620c6bee5f573d5c7aab2806528d63ff",
+      "uncompressed_sha256": "8e45cc99d8a3186a6cbfcc0024948a03c869bbc50c08400f567ab905ae38c813",
+      "uncompressed_bytes": 6174,
+      "reported_pass": 1,
+      "reported_fail": 0,
+      "reported_skip": 0,
+      "new_workload_executed": false
+    },
+    {
+      "path": "audit/evidence/normalized-composition-20261102/connection-listener-native.log.gz",
+      "compressed_sha256": "a9e140e4a424439c6a2336e47a8371fdcd8620b47707e2c16c847d251b91b6f3",
+      "uncompressed_sha256": "8cc1ec570db5e2879667beb69760c6b3f4a17ac19685f0d0192a520148cea80d",
+      "uncompressed_bytes": 7188,
+      "reported_pass": 2,
+      "reported_fail": 0,
+      "reported_skip": 0,
+      "new_workload_executed": false
+    }
+  ],
+  "covered_assertions": [
+    "24 listed auth/event/command tables equal across adoption and injected final-receipt fault",
+    "Native cold exact execute retry after lost response",
+    "Active owner/friend identity access remains; revoked/expired/disconnected remain refused",
+    "Accepted human invitation/account session and account/invited OAuth access+refresh",
+    "Native ordinary-credential negatives cover plan; Node also tests selected execute refusals",
+    "Separate post-adoption connection create/rotate/disconnect, fault rollback and cold retry evidence exists"
+  ],
+  "limits": [
+    "Observed committed passes, not new execution on reviewed current source",
+    "Selected file equality is not equality of all transitive dependencies",
+    "AgentConnections changed since original auth evidence; newer lifecycle evidence stays separate",
+    "No real provider/account, hosted OAuth consent or physical host pairing was tested",
+    "Metadata discrepancies do not establish an authentication bug or data loss"
+  ]
+}

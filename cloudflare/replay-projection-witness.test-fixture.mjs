@@ -6,6 +6,8 @@ import {initialRoom} from '../server/bootstrap.mjs';
 import {DurableDatabase,durableStorage} from './storage.mjs';
 import {WITNESS_SCHEMA,captureProjectionWitness,witnessChunk} from '../scripts/prototypes/replay-projection-witness.mjs';
 import {initialReplayHash,advanceReplayHash,finishReplayHash,encodeReplayHash,decodeReplayHash} from '../server/replay-sha256.mjs';
+// Experimental local upper bound, independent of the production room policy.
+const WITNESS_TEST_CEILING_BYTES = 8 * 1024 * 1024;
 export class ReplayWitnessRoom extends DurableObject{
   constructor(ctx,env){super(ctx,env);this.ctx=ctx;this.stats={statements:0,rowsRead:0,rowsWritten:0,unknown:0};const fixture=this,originalSql=ctx.storage.sql;const storage=new Proxy(ctx.storage,{get(target,key){if(key==='sql')return {exec(...args){try{return originalSql.exec(...args);}catch(error){fixture.nativeFailure={name:error.name,code:error.code??null,message:error.message,stack:String(error.stack).split('\n').slice(0,6)};throw error;}}};const value=Reflect.get(target,key,target);return typeof value==='function'?value.bind(target):value;}});this.db=new DurableDatabase(storage,{observeStatement:()=>sample=>{this.stats.statements++;this.stats.rowsRead+=sample.rowsRead??0;this.stats.rowsWritten+=sample.rowsWritten??0;if(sample.rowsRead===null||sample.rowsWritten===null)this.stats.unknown++;}});this.s=new RoomStore(null,{database:this.db,storagePlatform:durableStorage,integrity:"deferred"});this.db.exec(WITNESS_SCHEMA);}
   async fetch(request){const u=new URL(request.url),s=this.s,db=this.db;try{
@@ -25,7 +27,7 @@ export class ReplayWitnessRoom extends DurableObject{
     if(u.pathname==='/capture'){this.nativeFailure=null;
       const before={...this.stats},original=db.prepare.bind(db);let phase='transaction',result;
       db.prepare=sql=>{if(sql.includes("SELECT ?,'whole'"))phase='whole-copy';else if(sql.startsWith('WITH RECURSIVE'))phase='page-copy';else if(sql.startsWith('INSERT INTO replay_projection_witness'))phase='header-copy';else if(sql.includes('FROM rooms r LEFT JOIN'))phase='admission';return original(sql);};
-      try{result=s.transaction(()=>{try{return captureProjectionWitness(db,{captureId:'one-capture',roomId:'commons',expectedHead:2,mode:u.searchParams.get('mode')??'whole',ceilingBytes:Number(u.searchParams.get('ceiling')??8388608)});}catch(error){error.witnessPhase=phase;throw error;}});}finally{db.prepare=original;}
+      try{result=s.transaction(()=>{try{return captureProjectionWitness(db,{captureId:'one-capture',roomId:'commons',expectedHead:2,mode:u.searchParams.get('mode')??'whole',ceilingBytes:Number(u.searchParams.get('ceiling')??WITNESS_TEST_CEILING_BYTES)});}catch(error){error.witnessPhase=phase;throw error;}});}finally{db.prepare=original;}
       const cost=Object.fromEntries(Object.keys(before).map(key=>[key,this.stats[key]-before[key]]));return Response.json({result,cost});
     }
     if(u.pathname==='/slice'){const before={...this.stats},start=performance.now();const chunk=witnessChunk(db,'one-capture',Number(u.searchParams.get('offset')));return Response.json({wallMs:performance.now()-start,cost:Object.fromEntries(Object.keys(before).map(key=>[key,this.stats[key]-before[key]])),bytes:chunk?.byteLength??0,base64:chunk?Buffer.from(chunk).toString('base64'):''});}

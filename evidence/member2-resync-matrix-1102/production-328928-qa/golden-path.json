@@ -1,0 +1,98 @@
+{
+  "schema": "member2-production-golden-path-v1",
+  "origin": "https://room.trydemigod.com",
+  "expected": "328928e275e05b950b8f4e7bd6ec9bcf42cc03f5",
+  "status": "passed",
+  "failure": null,
+  "roomReferenceSha256": "981bc87db8e30712b477bce7f5259fb1dea1d092f19253dfe3f2bd01e5d7e91f",
+  "checks": {
+    "creationExactRetry": true,
+    "existingIdentityPreserved": true,
+    "completionExactRetry": true,
+    "exactFreshSdkResult": true,
+    "roomScopedCredentialWorks": true,
+    "anonymousPrivateResultRefused": true,
+    "ownerMembershipRetained": true
+  },
+  "steps": [
+    {
+      "name": "version",
+      "status": 200,
+      "ms": 88,
+      "code": null
+    },
+    {
+      "name": "/api/ready",
+      "status": 200,
+      "ms": 412,
+      "code": null
+    },
+    {
+      "name": "/api/health",
+      "status": 200,
+      "ms": 202,
+      "code": null
+    },
+    {
+      "name": "existing-identity",
+      "status": 200,
+      "ms": 120,
+      "code": null
+    },
+    {
+      "name": "create-room",
+      "status": 201,
+      "ms": 135,
+      "code": null
+    },
+    {
+      "name": "create-room-exact-retry",
+      "status": 200,
+      "ms": 555,
+      "code": null
+    },
+    {
+      "name": "propose",
+      "status": 201,
+      "ms": 151,
+      "code": null
+    },
+    {
+      "name": "accept",
+      "status": 201,
+      "ms": 262,
+      "code": null
+    },
+    {
+      "name": "save-result",
+      "status": 201,
+      "ms": 212,
+      "code": null
+    },
+    {
+      "name": "complete",
+      "status": 201,
+      "ms": 195,
+      "code": null
+    },
+    {
+      "name": "complete-exact-retry",
+      "status": 200,
+      "ms": 96,
+      "code": null
+    },
+    {
+      "name": "anonymous-private-result",
+      "status": 401,
+      "ms": 45,
+      "code": "unauthenticated"
+    },
+    {
+      "name": "new-room-context",
+      "status": 200,
+      "ms": 102,
+      "code": null
+    }
+  ],
+  "scope": "One new disposable private QA room, existing approved identity, ordinary owner-agent task/result flow. No human/invitation journey, browser, existing-room normalization, operator calls, credential rotation, account/grant changes or patrol activation. No deletion; QA artifact retained."
+}

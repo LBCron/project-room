@@ -1,0 +1,11 @@
+# Independent production QA of328928
+
+Requested by release owner Root26059/26061, performed independently from this laptop. PASS on source328928e275e05b950b8f4e7bd6ec9bcf42cc03f5 / build2026-11-02T09:29:04.101Z. Independently read deployment41420891164 terminal success.
+
+Unchanged production scripts/live-smoke.mjs exits0, main current, public discovery/pages pass. Only existing known warning is the work-receipt extension URI404. Direct Worker+DO version endpoints report exact expected source/build. ready/health200. Existing enrolled room member remains active; actual RoomAgentClient agentWork validates viewer/executionGrantedfalse and request-list parses. Existing saved global identity lists its rooms200.
+
+One new isolated private QA room under that same existing identity exercises ordinary owner-agent propose -> accept -> saved result -> complete. Room-create exactretry returns same room duplicate; completion exactretry returns same event duplicate; fresh actual SDK workResult returns exact text/hash/receipt/producer and revision2. Newly issued room-scoped credential reads same result. Anonymous private result401. Owner membership retained. Real hosted MCP room_check_access and room_read_result both200/no JSON-RPC error and same scope/text/hash/receipt/revision. No new identity or human account was created.
+
+QA room intentionally retained for inspection; public report includes only its hash. Raw room ID, credentials, cookies/response bodies and write-operation journal stay private on this laptop. No Muse content mutation, normalization, operator call, credential rotation, existing grant/account changes, deletion, patrol or automation activation. Human/invitation/browser flows were not independently qualified by this pass. Source code itself selects normalized new-room creation; this test does not inspect production SQL directly or claim existing rooms normalized.
+
+These are scoped independent live QA receipts, not a claim that every main CI check passed. Two separate main CI failures had already been handed to Root: test alias dependency scan and a contract secret-scan assignment. Root retains serialized release/integration and operator custody resolution. No duplicate deployment occurred.

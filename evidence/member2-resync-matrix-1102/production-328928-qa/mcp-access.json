@@ -1,0 +1,9 @@
+{
+  "schema": "member2-production-mcp-access-v1",
+  "pass": true,
+  "status": 200,
+  "jsonRpcSucceeded": true,
+  "roomScopedCredentialAccepted": true,
+  "roomAndExistingIdentityMatch": true,
+  "scope": "New isolated QA room; room_check_access only. Credentials, room ID and raw response omitted."
+}

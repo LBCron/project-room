@@ -1,0 +1,52 @@
+{
+  "schema": "member2-production-readonly-qa-v1",
+  "expected": "328928e275e05b950b8f4e7bd6ec9bcf42cc03f5",
+  "pass": true,
+  "error": null,
+  "steps": [
+    {
+      "path": "/api/version/worker",
+      "status": 200,
+      "ms": 60,
+      "sourceRevision": "328928e275e05b950b8f4e7bd6ec9bcf42cc03f5",
+      "buildId": "2026-11-02T09:29:04.101Z"
+    },
+    {
+      "path": "/api/version",
+      "status": 200,
+      "ms": 660,
+      "sourceRevision": "328928e275e05b950b8f4e7bd6ec9bcf42cc03f5",
+      "buildId": "2026-11-02T09:29:04.101Z"
+    },
+    {
+      "path": "/api/rooms/[existing-room]?view=work",
+      "status": 200,
+      "ms": 265,
+      "existingIdentityAccepted": true
+    },
+    {
+      "check": "actual-SDK-agentWork",
+      "passed": true,
+      "viewerMatches": true,
+      "executionGranted": false
+    },
+    {
+      "check": "actual-SDK-replyRequests",
+      "passed": true,
+      "count": 3
+    },
+    {
+      "check": "existing-global-identity-read",
+      "configured": true,
+      "recognizedIdentityFormat": true,
+      "status": 200,
+      "accepted": true,
+      "responseKeys": [
+        "identityId",
+        "rooms",
+        "nextCursor"
+      ]
+    }
+  ],
+  "limits": "Read-only. No normalization, room/identity creation, grants/credential changes, content writes, or operator calls."
+}

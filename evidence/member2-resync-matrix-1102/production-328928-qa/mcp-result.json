@@ -1,0 +1,9 @@
+{
+  "schema": "member2-production-mcp-result-v1",
+  "pass": true,
+  "status": 200,
+  "jsonRpcSucceeded": true,
+  "exactSavedTextHashAndReceipt": true,
+  "currentWorkRevision": 2,
+  "scope": "New isolated QA room; room_read_result with scoped credential. No new write; raw response omitted."
+}

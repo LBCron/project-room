@@ -31,8 +31,11 @@ populated native5 data migration or arbitrary historical guard admission.
 Important confidence limit: same-source staging run41415262669 is completed
 FAILURE per independent GitHub read. These local passes do not establish staging
 recovery, production readiness, full-suite clearance or preserved live accounts.
-Root retains runtime/release; exact hosted constructor cause remains its live-tail
-investigation. No existing production data or credentials were used here.
+Root retains runtime/release. Updated job-log inspection shows Worker200/517ms
+and DO200/891ms at this exact SHA. Smoke failed only deploy_diverged: the live
+staging candidate is not an ancestor of main; the known extension404 is a warning.
+This is not a recurrence of the earlier constructor503. Review isolated-candidate
+pinning separately from production ancestry; do not disable production checks. No existing production data or credentials were used here.
 
 These upgrade fixtures seed a retained room key/account/session, not a complete
 preexisting OAuth/agent-connection population. Those broader auth contracts have

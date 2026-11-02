@@ -50,6 +50,13 @@
     "head_sha": "2ebce68b3c556f313476716afdae84f2a2b33e6d",
     "status": "completed",
     "conclusion": "failure",
-    "scope": "Independent GitHub run read, not a local test outcome or constructor cause diagnosis"
+    "scope": "Independent GitHub run read, not a local test outcome or constructor cause diagnosis",
+    "worker_cold_status": 200,
+    "worker_cold_ms": 517,
+    "do_cold_status": 200,
+    "do_cold_ms": 891,
+    "smoke_failure_code": "deploy_diverged",
+    "smoke_failure_detail": "live 2ebce68b is not an ancestor of main",
+    "constructor_failure_not_observed_in_this_run": true
   }
 }

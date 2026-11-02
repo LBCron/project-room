@@ -1,3 +1,5 @@
+import {isCurrentRoom,readCurrentRoomForAudit} from '../server/current-room-repository.mjs';
+const forensicRoom=(store,roomId)=>isCurrentRoom(store.db,roomId)?store.readTransaction(()=>readCurrentRoomForAudit(store,roomId)):store.room(roomId);
 // QA2 finding P2-11: account deletion must not leave an ownerless room
 // full of the deleted account's content. The HTTP confirm-then-delete
 // routes are the contract: personal rooms are archived and purged, a
@@ -108,7 +110,7 @@ for (const entityProjection of [false, true]) test(`a solely owned personal room
   const receipt = await res.json();
   assert.ok(receipt.receipt.retained.some(row => row.category === "audit"));
 
-  const room = ctx.f.store.room(roomId);
+  const room = forensicRoom(ctx.f.store,roomId);
   assert.equal(typeof room.state.room.archivedAt, "string");
   assert.equal(room.state.messages.find(message => message.id === "secret-note").body, null);
   const logged = ctx.f.store.db.prepare("SELECT body FROM events WHERE room_id=?").all(roomId).map(row => row.body).join("\n");
@@ -148,7 +150,7 @@ test("a shared room with another owner transfers and the account is deleted", as
   const res = await authedPost(ctx.origin, "/api/account/delete", { confirmationToken: planned.confirmationToken }, ctx.creds);
   assert.equal(res.status, 200, await res.clone().text());
 
-  const state = ctx.f.store.room(roomId).state;
+  const state = forensicRoom(ctx.f.store,roomId).state;
   assert.equal(state.room.ownerId, "partner");
   assert.equal(state.room.archivedAt, undefined);
   assert.equal(state.messages.find(message => message.id === "kept-note").body, "keep-this-history");
@@ -176,8 +178,8 @@ test("the sole owner of a shared room with other members is refused and listed",
   assert.equal(body.error.code, "transfer_ownership_required");
   assert.ok(body.rooms.some(room => room.id === roomId && room.title === "Shared project"));
   assert.equal(ctx.f.store.account(ctx.accountId).active, true);
-  assert.equal(ctx.f.store.room(roomId).state.room.ownerId, "owner");
-  assert.equal(ctx.f.store.room(roomId).state.messages.find(message => message.id === "live-note").body, "still-here");
+  assert.equal(forensicRoom(ctx.f.store,roomId).state.room.ownerId, "owner");
+  assert.equal(forensicRoom(ctx.f.store,roomId).state.messages.find(message => message.id === "live-note").body, "still-here");
   assert.equal(ctx.f.store.db.prepare("SELECT count(*) AS n FROM account_credentials WHERE account_id=?").get(ctx.accountId).n > 0, true);
 });
 
@@ -193,12 +195,12 @@ test("the confirmation token covers room contents, so a later message requires a
   assert.equal(stale.status, 409);
   assert.equal((await stale.json()).error.code, "plan_changed");
   assert.equal(ctx.f.store.account(ctx.accountId).active, true);
-  assert.equal(ctx.f.store.room(roomId).state.messages.find(message => message.id === "later-note").body, "after-confirm");
+  assert.equal(forensicRoom(ctx.f.store,roomId).state.messages.find(message => message.id === "later-note").body, "after-confirm");
 
   const fresh = await (await get(ctx.origin, "/api/account/deletion/plan", ctx.creds.cookie)).json();
   const done = await authedPost(ctx.origin, "/api/account/delete", { confirmationToken: fresh.confirmationToken }, ctx.creds);
   assert.equal(done.status, 200, await done.clone().text());
-  const messages = ctx.f.store.room(roomId).state.messages;
+  const messages = forensicRoom(ctx.f.store,roomId).state.messages;
   assert.equal(messages.find(message => message.id === "later-note").body, null);
   assert.equal(messages.find(message => message.id === "first-note").body, null);
 });

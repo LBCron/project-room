@@ -50,8 +50,15 @@ export function verifyRoomLifecycle(store) {
   // #4126: a room whose projection is unreadable is quarantined at boot and
   // named in the quarantine record; it cannot agree or disagree here, so it
   // is excluded instead of throwing malformed JSON over the whole boot.
-  if (store.db.prepare("SELECT 1 FROM rooms WHERE json_valid(projection) AND archived_at IS NOT json_extract(projection,'$.room.archivedAt') LIMIT 1").get()) {
+  if (store.db.prepare("SELECT 1 FROM rooms WHERE json_valid(projection) AND json_type(projection,'$.normalizedCurrent') IS NULL AND archived_at IS NOT json_extract(projection,'$.room.archivedAt') LIMIT 1").get()) {
     throw new Error("Room lifecycle requires operator reconciliation");
+  }
+  // The closed current carrier deliberately has no room metadata. Verify its
+  // SQL lifecycle column against the independently protected singleton, not
+  // against a fabricated NULL from the legacy JSON path.
+  for(const row of store.db.prepare("SELECT id,archived_at FROM rooms WHERE json_valid(projection) AND json_type(projection,'$.normalizedCurrent') IS NOT NULL").iterate()) {
+    const room=withCurrentReadContext(store.db,row.id,()=>readCurrentRecord(store.db,row.id,'metadata','room'));
+    if(!room||room.id!==row.id||(room.archivedAt??null)!==row.archived_at)throw new Error("Room lifecycle requires operator reconciliation");
   }
 }
 

@@ -19,7 +19,7 @@ import { assertMessageWrite, recordMessageWrite } from './write-integrity.mjs';
 import { createHash, createHmac, randomBytes, timingSafeEqual } from "node:crypto";
 import { EVENT_TYPES, MEMBERSHIP_AUTHORITY_POLICY_VERSION, applyEvent, event, isRoomArchived, roomKind, ownMember } from "../src/events.js";
 import { commitMessageRedaction, readRedactionLog, redactRemainingMessageBodies } from "./message-redaction.mjs";
-import { isCurrentRoom,readCurrentHead,readCurrentRecord,withCurrentReadContext,chargeCurrentReadBudget,withCurrentServingWriter } from './current-room-repository.mjs';
+import { isCurrentRoom,readCurrentHead,readCurrentMessage,readCurrentRecord,withCurrentReadContext,chargeCurrentReadBudget,withCurrentServingWriter } from './current-room-repository.mjs';
 import { hasMessageAuthority } from './message-authority.mjs';
 import { resyncRoomMessageRows } from "./messages-store.mjs";
 import { canonicalLane } from "./bounty-escrow.mjs";
@@ -329,7 +329,21 @@ function saveRoomProjection(store, roomId, sequence, state) {
     ON CONFLICT(room_id) DO UPDATE SET sequence=excluded.sequence, projection=excluded.projection`).run(roomId, sequence, JSON.stringify(checkpoint));
 }
 
+function withDeletionMemberKey(store,roomId,memberId,operation) {
+  const binding=store.db.prepare('SELECT account_id FROM member_accounts WHERE room_id=? AND member_id=?').get(roomId,memberId);
+  if(!binding)fail(409,'plan_changed','Account membership changed during deletion; request a fresh plan');
+  const key=store.mintAccessKey(roomId,memberId,60000,binding.account_id);
+  try{return operation(key);}finally{store.revoke(key);}
+}
+
 function appendRoomEvent(store, roomId, actorId, type, data) {
+  if(isCurrentRoom(store.db,roomId)) {
+    // Store.command owns this live policy stamp; it is not a public argument.
+    const {authorityPolicyVersion: _policy,...commandData}=data;
+    return withDeletionMemberKey(store,roomId,actorId,key=>store.command(key,roomId,{
+      id:'account-delete-'+createHash('sha256').update(JSON.stringify([roomId,actorId,type,data])).digest('hex').slice(0,32),type,data:commandData
+    }));
+  }
   const current = store.room(roomId);
   const incoming = event({ type, actorId, roomId, at: new Date(store.now()).toISOString(), data });
   let next;
@@ -429,6 +443,32 @@ function rebuildRoom(store, roomId) {
   });
 }
 
+// Explicit destructive account action, not an ordinary serving read. Walk
+// canonical identities once and use the existing addressed privacy command;
+// every message/head/proof transition remains inside the account transaction.
+function archiveCurrentPersonalRoom(store,room) {
+  const metadata=withCurrentReadContext(store.db,room.id,()=>readCurrentRecord(store.db,room.id,'metadata','room'));
+  if(isRoomArchived({room:metadata}))fail(409,'current_account_erasure_unavailable','Archived normalized room erasure requires its preserved privacy publication path');
+  return withDeletionMemberKey(store,room.id,room.memberId,key=>{
+    let removed=0;
+    const ids=store.db.prepare('SELECT message_id FROM messages WHERE room_id=? ORDER BY message_id').all(room.id);
+    for(const {message_id:id}of ids){
+      const message=withCurrentReadContext(store.db,room.id,()=>readCurrentMessage(store.db,room.id,id)?.value);
+      if(!message)fail(409,'current_room_context_unavailable','Personal room canonical message is missing');
+      if(message.body==null)continue;
+      store.command(key,room.id,{id:'account-delete-msg-'+createHash('sha256').update(room.id+':'+id).digest('hex').slice(0,32),type:EVENT_TYPES.MESSAGE_DELETED,data:{messageId:id,expectedMessageRevision:message.revision??0,reason:'Account deletion'}});removed++;
+    }
+    // A legacy peer-only event has no canonical message command dependency.
+    // Never report an erasure while any unowned body survives.
+    if(store.db.prepare("SELECT 1 FROM events WHERE room_id=? AND json_extract(body,'$.type') IN ('message.posted','message.edited','dm.posted') AND json_type(body,'$.data.body')='text' LIMIT 1").get(room.id))
+      fail(409,'current_account_erasure_unavailable','Personal room has a noncanonical historical body requiring privacy reconciliation');
+    removed+=withCurrentServingWriter(store.db,room.id,()=>store.db.prepare("UPDATE room_attachments SET state='deleted',bytes=NULL,filename='purged' WHERE room_id=? AND state IN ('staged','committed')").run(room.id).changes);
+    for(const table of ['room_code_checks','room_code_drops'])if(tableExists(store.db,table))store.db.prepare('DELETE FROM '+table+' WHERE room_id=?').run(room.id);
+    store.command(key,room.id,{id:'account-delete-archive-'+createHash('sha256').update(room.id).digest('hex').slice(0,32),type:EVENT_TYPES.ROOM_ARCHIVED,data:{reason:'Account deletion'}});
+    return removed;
+  });
+}
+
 // Archive a solely owned personal room and strip message and file bytes.
 // Events are redacted, then the projection is rebuilt so recovery matches.
 function archivePersonalRoom(store, room) {
@@ -437,6 +477,7 @@ function archivePersonalRoom(store, room) {
     if (store.db.prepare("SELECT 1 FROM sqlite_master WHERE type='table' AND name=?").get(table))
       store.db.prepare(`DELETE FROM ${table} WHERE room_id=?`).run(room.id);
   }
+  if(isCurrentRoom(store.db,room.id))return archiveCurrentPersonalRoom(store,room);
   const removed = redactRoomMessages(store, room.id, room.memberId);
   const state = store.room(room.id).state;
   if (!isRoomArchived(state)) {
@@ -606,8 +647,8 @@ export function planAccountDeletion(store, accountId) {
 
 function deactivateBoundMembers(store, accountId) {
   for (const { room_id: roomId, member_id: memberId } of memberBindings(store, accountId)) {
-    const state = store.room(roomId).state;
-    const member = state.members?.[memberId];
+    const state = isCurrentRoom(store.db,roomId)?currentDeletionRoom(store,roomId,memberId).state:store.room(roomId).state;
+    const member = ownMember(state.members,memberId);
     if (!member || member.active === false || isRoomArchived(state)) continue;
     if (store.roomAuthority(roomId).ownerId === memberId) continue;
     const key = store.issueAccessKey(roomId, memberId, 60000, accountId);
@@ -754,10 +795,11 @@ const EXECUTORS = {
       const lapse = store.delegation.revokeAllGrantedBy(roomId, memberId, { actorId: "account_deleted" });
       revoked += lapse.revoked;
       if (!lapse.stripTargets.length) continue;
-      const state = store.room(roomId).state;
+      const current=isCurrentRoom(store.db,roomId);
+      const state = current?currentDeletionRoom(store,roomId,memberId).state:store.room(roomId).state;
       if (isRoomArchived(state) || store.roomAuthority(roomId).ownerId !== memberId) continue;
       for (const target of lapse.stripTargets) {
-        const member = store.room(roomId).state.members?.[target.memberId];
+        const member = current?withCurrentReadContext(store.db,roomId,()=>readCurrentRecord(store.db,roomId,'members',target.memberId)):ownMember(store.room(roomId).state.members,target.memberId);
         if (!member || member.active === false || !member.permissions.includes("invite_member")) continue;
         appendRoomEvent(store, roomId, memberId, EVENT_TYPES.MEMBER_ACCESS_CHANGED, {
           memberId: member.id, expectedMemberRevision: member.revision,

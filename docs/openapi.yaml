@@ -18319,6 +18319,25 @@ paths:
         '404': { description: work_claim_not_found }
         '422': { description: "invalid_claim_input — the claim id must match [A-Za-z0-9_-]{1,128}" }
         '429': { description: Rate limit exceeded (rate_limited). }
+  /extensions/work-receipt/v1:
+    get:
+      summary: Read the optional A2A work-receipt metadata convention
+      description: |
+        Public static Markdown for the extension URI advertised in the agent
+        card. Declarative only: project-room-receipt/1 metadata, no RPC methods,
+        authentication changes, or claim that public receipt records are signed.
+      security: []
+      responses:
+        '200':
+          description: Declarative specification summary and canonical full specification link
+          content:
+            text/markdown:
+              schema: { type: string }
+    head:
+      summary: Read A2A work-receipt specification headers
+      security: []
+      responses:
+        '200': { description: Same content headers, no response body }
   /oauth/register:
     post:
       operationId: registerNativeMcpOAuthClient

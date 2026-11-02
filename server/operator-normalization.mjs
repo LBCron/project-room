@@ -8,8 +8,9 @@ const hash=value=>createHash('sha256').update(value).digest('hex');
 const fail=(code,message,status=409)=>{throw new ServiceError(status,code,message);};
 const validId=value=>typeof value==='string'&&/^[A-Za-z0-9_-]{1,64}$/.test(value);
 function input(value,execute){
- const keys=execute?['roomId','planHash','requestId','reason','discardLegacyAssignments']:['roomId','discardLegacyAssignments'];
+ const keys=execute?['roomId','planHash','requestId','reason','discardLegacyAssignments','adoptAbsentInlineProofs']:['roomId','discardLegacyAssignments','adoptAbsentInlineProofs'];
  if(!value||typeof value!=='object'||Array.isArray(value)||Object.keys(value).some(key=>!keys.includes(key))||!validId(value.roomId)||typeof value.discardLegacyAssignments!=='boolean'
+  ||value.adoptAbsentInlineProofs!==undefined&&typeof value.adoptAbsentInlineProofs!=='boolean'
   ||execute&&(!validId(value.requestId)||!/^[a-f0-9]{64}$/.test(value.planHash??'')||typeof value.reason!=='string'||!value.reason.trim()||Buffer.byteLength(value.reason)>280))fail('invalid_normalization_request','Select room, explicit legacy assignment disposition, and reviewed exact execute inputs',422);
  return value;
 }
@@ -20,7 +21,8 @@ function inspect(store,selection){
  if(!row||!Number.isSafeInteger(row.sequence)||row.sequence<1||typeof row.eventId!=='string'||!/^[a-f0-9]{64}$/.test(row.metadata_hash??''))fail('normalization_requires_reconciliation','Current room head and independent metadata proof are required');
  if(store.db.prepare('SELECT 1 FROM current_room_records WHERE room_id=? UNION ALL SELECT 1 FROM current_room_record_proofs WHERE room_id=? LIMIT 1').get(selection.roomId,selection.roomId))fail('normalization_candidate_exists','Resolve existing unpublished normalized candidate before one-time adoption');
  const legacy={};for(const table of ['work_claims','work_claim_history','collab_assignments'])legacy[table]=store.db.prepare(`SELECT count(*) n FROM ${table} WHERE room_id=?`).get(selection.roomId).n;
- const binding={version:1,roomId:selection.roomId,sequence:row.sequence,eventId:row.eventId,projectionBytes:row.bytes,metadataHash:row.metadata_hash,writerFormat:CURRENT_WRITER_FORMAT,discardLegacyAssignments:selection.discardLegacyAssignments,legacy};
+ const messages=store.db.prepare('SELECT count(*) total,sum(CASE WHEN entity_hash IS NULL THEN 1 ELSE 0 END) missingProofs FROM messages WHERE room_id=?').get(selection.roomId);
+ const binding={version:1,roomId:selection.roomId,sequence:row.sequence,eventId:row.eventId,projectionBytes:row.bytes,metadataHash:row.metadata_hash,writerFormat:CURRENT_WRITER_FORMAT,discardLegacyAssignments:selection.discardLegacyAssignments,adoptAbsentInlineProofs:selection.adoptAbsentInlineProofs===true,messages:{total:messages.total,missingProofs:messages.missingProofs??0},legacy};
  return {...binding,planHash:hash(JSON.stringify(binding)),operation:'One-time current-state materialization; no historical replay certification',
   retained:['room identity','accounts','members and exact permissions/revisions','credentials and revocations','OAuth and agent connections','original event/command and security journals','canonical messages and work'],
   discarded:selection.discardLegacyAssignments?['legacy board assignments/history','legacy collaboration assignments']:[],historyProvenance:'unknown',certified:false};
@@ -38,10 +40,10 @@ export function operatorNormalization(store,selection,execute=false){
   stage='current_state_read';const current=store.room(request.roomId); // Deliberate ONE-TIME whole-state load.
   if(current.sequence!==plan.sequence)fail('plan_changed','Room changed during adoption');
   stage='legacy_assignment_cleanup';if(request.discardLegacyAssignments)for(const table of ['work_claim_history','work_claims','collab_assignments'])store.db.prepare(`DELETE FROM ${table} WHERE room_id=?`).run(request.roomId);
-  stage='entity_materialization';initializeCurrentRoom(store,current.state,[],{adoptExisting:{sequence:plan.sequence,eventId:plan.eventId}});
+  stage='entity_materialization';initializeCurrentRoom(store,current.state,[],{adoptExisting:{sequence:plan.sequence,eventId:plan.eventId,adoptAbsentInlineProofs:request.adoptAbsentInlineProofs===true}});
   const bytes=store.db.prepare('SELECT octet_length(projection) bytes FROM rooms WHERE id=?').get(request.roomId).bytes;
   const result={roomId:request.roomId,sequence:plan.sequence,representation:'normalized-current-v1',writerFormat:CURRENT_WRITER_FORMAT,
-   previousProjectionBytes:plan.projectionBytes,projectionBytes:bytes,legacyDiscarded:request.discardLegacyAssignments?plan.legacy:{},accountsAndConnectionsPreserved:true,historyProvenance:'unknown',certified:false,duplicate:false};
+   previousProjectionBytes:plan.projectionBytes,projectionBytes:bytes,legacyDiscarded:request.discardLegacyAssignments?plan.legacy:{},accountsAndConnectionsPreserved:true,adoptAbsentInlineProofs:request.adoptAbsentInlineProofs===true,historyProvenance:'unknown',certified:false,duplicate:false};
   stage='receipt_save';store.db.prepare('INSERT INTO operator_actions(id,at,action,target_kind,target_id,reason,plan_hash,counts_json,result,request_id) VALUES(?,?,?,?,?,?,?,?,?,?)')
    .run(id,store.now(),'operator_normalization_adopt','room',request.roomId,request.reason,request.planHash,JSON.stringify({fingerprint,result}),'committed',request.requestId);
   return result;

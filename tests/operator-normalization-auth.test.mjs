@@ -1,10 +1,10 @@
 import test from 'node:test';import assert from 'node:assert/strict';import {createHash} from 'node:crypto';import {RoomStore} from '../server/store.mjs';import {createRoomServer} from '../server/http.mjs';import {operatorNormalization} from '../server/operator-normalization.mjs';import {seedNormalizationAuth,normalizationAuthSnapshot,normalizationAuthFacts} from './helpers/operator-normalization-auth-source.mjs';import {auditRecovery} from '../server/recovery.mjs';
-test('operator adoption is unavailable to Room/account credentials and preserves actual invitation/connection/OAuth authority',async t=>{
+for(const adoptAbsentInlineProofs of [false,true])test(`operator adoption (absent proof mode=${adoptAbsentInlineProofs}) is unavailable to Room/account credentials and preserves actual invitation/connection/OAuth authority`,async t=>{
  const saved=process.env.ROOM_OPERATOR_TOKEN_SHA256,operator='synthetic-normalization-authority-0123456789';process.env.ROOM_OPERATOR_TOKEN_SHA256=createHash('sha256').update(operator).digest('hex');
  const s=new RoomStore(':memory:'),f=seedNormalizationAuth(s),server=createRoomServer({store:s});await new Promise(r=>server.listen(0,'127.0.0.1',r));const base=`http://127.0.0.1:${server.address().port}`;
  t.after(async()=>{server.closeStreams();server.closeAllConnections();await new Promise(r=>server.close(r));s.close();if(saved===undefined)delete process.env.ROOM_OPERATOR_TOKEN_SHA256;else process.env.ROOM_OPERATOR_TOKEN_SHA256=saved;});
  const post=(path,authorization,data,cookie)=>fetch(base+path,{method:'POST',headers:{'Content-Type':'application/json',...(authorization?{Authorization:authorization}:{}),...(cookie?{Cookie:cookie}:{})},body:JSON.stringify(data)});
- const selection={roomId:'commons',discardLegacyAssignments:true},before=normalizationAuthSnapshot(s),facts=normalizationAuthFacts(s,f);
+ const selection={roomId:'commons',discardLegacyAssignments:true,adoptAbsentInlineProofs},before=normalizationAuthSnapshot(s),facts=normalizationAuthFacts(s,f);
  for(const [authorization,cookie]of [[null,null],['Bearer '+f.owner,null],['Operator '+f.owner,null],[null,'__Host-account_session='+f.human.token]]){
   assert.equal((await post('/api/operator/normalization/plan',authorization,selection,cookie)).status,404);if(cookie||authorization?.startsWith('Bearer'))assert.equal((await post('/api/operator/normalization/execute',authorization,{...selection,planHash:'a'.repeat(64),requestId:'forged',reason:'forged'},cookie)).status,404);
  }

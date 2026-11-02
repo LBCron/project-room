@@ -1,5 +1,6 @@
+import {inboxNext} from './inbox-next.mjs';
 import {readCurrentInboxDiscovery} from './current-inbox-discovery.mjs';
-import {withCurrentReadContext,readCurrentHead,readCurrentMessage,chargeCurrentReadBudget,currentConversationRows} from './current-room-repository.mjs';
+import {withCurrentReadContext,readCurrentHead,readCurrentMessage,readCurrentRecord,chargeCurrentReadBudget,currentConversationRows} from './current-room-repository.mjs';
 import {conversationCursorCodec} from './conversation-sync.mjs';
 import {ServiceError} from './service-error.mjs';
 import {readCurrentEventWindow} from './current-room-events.mjs';
@@ -47,7 +48,20 @@ export function readCurrentNativeInbox(store,secret,roomId,{limit=50,after,older
   }
   const ownerId=store.roomAuthority(roomId,{memberId}).ownerId,discovery=readCurrentInboxDiscovery(store,roomId,auth.member,ownerId,floor,b),replyRequests=discovery.requests;
   const workNext={tool:'room_list_work',arguments:{roomId,focus:'needs_me',limit:1}},conversationNext=page.hasMore?{tool:'room_read_inbox',arguments:{limit,after:page.next}}:null;
-  const next=[{action:'list-my-work',nextRead:workNext},{action:'list-open-requests',nextRead:workNext},...(conversationNext?[{action:'continue-conversation',nextRead:conversationNext}]:[])];
+  const requestStates={};
+  for(const item of [...directMessages,...directMentions])if(item.requestKind==='reply'){
+   const request=readCurrentRecord(store.db,roomId,'replyRequests',item.messageId,b);
+   if(request&&[request.requesterId,request.recipientId].includes(memberId))requestStates[item.messageId]=request;
+  }
+  for(const request of replyRequests)requestStates[request.id]={...request,status:'open'};
+  const formalPointers=replyRequests.map(request=>({nextRead:request.nextRead}));
+  const next=inboxNext(roomId,directMessages,[],[],[...formalPointers,...directMentions],[],[],requestStates)
+   .map(step=>step.nextRead?{...step,nextRead:{...step.nextRead,arguments:{roomId,...step.nextRead.arguments}}}:step);
+  if(conversationNext)next.unshift({action:'continue-conversation',nextRead:conversationNext});
+  if(older?.nextRead)next.push({action:'read-older-conversation',nextRead:older.nextRead});
+  // A bounded empty source page is not proof that conversation is empty.
+  const empty=next.find(step=>step.action==='watch-inbox');
+  if(empty){const i=next.indexOf(empty);next[i]={...empty,description:'No conversation items in this bounded page. Follow conversation continuations and list-open-requests/list-my-work; reading does not acknowledge or accept anything.'};}
   return stampInbox({agentId:memberId,roomId,directMessages,directMentions,replies:stampInbox({directMessages:replies},memberId).directMessages,nativeWork:discovery.work,replyRequests,
    assignments:[],mentions:[],bondProposals:[],peerMessages:[],dmRequests:[],
    cursor:{after:page.next,hasMore:page.hasMore,nextRead:conversationNext},older,

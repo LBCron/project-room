@@ -1,3 +1,4 @@
+import {readCurrentRecord} from '../server/current-room-repository.mjs';
 // RC-2026-09-18-052: the agent inbox teaches its own follow-ups.
 // GET /api/rooms/{roomId}/agent-inbox carries next[] — an empty inbox
 // names what it will carry; a DM present teaches the reply-dm command
@@ -138,7 +139,7 @@ test("agent inbox keeps ordinary conversation readable without requiring an ackn
     },
   }, ownerSecret);
   assert.equal(dmRes.status, 201);
-  const sequence = fixture.store.room(roomId).sequence;
+  const sequence = fixture.store.headSequence(roomId);
   const res = await get(origin, `/api/rooms/${roomId}/agent-inbox`, friendSecret);
   assert.equal(res.status, 200);
   const json = await res.json();
@@ -159,7 +160,7 @@ test("agent inbox keeps ordinary conversation readable without requiring an ackn
   const requests = await (await get(origin, json.next[1].path, friendSecret)).json();
   assert.deepEqual(requests.requests, []);
   assert.equal(json.directMessages[0].body, "Thanks, nothing more needed from me.");
-  assert.equal(fixture.store.room(roomId).sequence, sequence);
+  assert.equal(fixture.store.headSequence(roomId), sequence);
 });
 
 
@@ -185,10 +186,11 @@ test("inbox discovery finds older open requests outside its DM window through ex
   store.command(ownerSecret, roomId, { id: "recent-chat", type: "message.posted", data: {
     messageId: "recent-chat", body: "A more recent ordinary DM", toMemberId: memberId
   } });
-  const sequence = store.room(roomId).sequence;
+  const sequence = store.headSequence(roomId);
   const inbox = await (await get(origin, `/api/rooms/${roomId}/agent-inbox?limit=1`, friendSecret)).json();
   assert.deepEqual(inbox.directMessages.map(message => message.messageId), ["recent-chat"]);
-  assert.equal(inbox.next[0].optional, true);
+  assert.equal(inbox.next.find(step=>step.action === "reply-dm").optional, true);
+  assert.equal(inbox.next[0].required,true,"standing open request takes priority over optional recent chat");
   const expanded = await (await get(origin, `/api/rooms/${roomId}/agent-inbox`, friendSecret)).json();
   assert.equal(expanded.next[0].action, "read-request");
   assert.equal(expanded.next[0].nextRead.arguments.requestMessageId, "old-open");
@@ -211,14 +213,15 @@ test("inbox discovery finds older open requests outside its DM window through ex
   const mcpList = await rpc("tools/call", { name: pointer.tool, arguments: pointer.arguments });
   assert.equal(mcpList.result.isError, undefined, JSON.stringify(mcpList));
   assert.deepEqual(mcpList.result.structuredContent.requests.map(request => request.id), ["old-open"]);
-  assert.equal(store.room(roomId).sequence, sequence);
-  assert.equal(store.room(roomId).state.replyRequests["old-open"].status, "open");
+  assert.equal(store.headSequence(roomId), sequence);
+  assert.equal(store.readTransaction(()=>readCurrentRecord(store.db,roomId,"replyRequests","old-open")).status, "open");
   ask("latest-cancelled");
   store.command(ownerSecret, roomId, { id: "cancel-latest", type: "reply_request.cancelled", data: {
     requestMessageId: "latest-cancelled", expectedRequestRevision: 0, reason: "No longer needed"
   } });
   const historical = await (await get(origin, `/api/rooms/${roomId}/agent-inbox?limit=1`, friendSecret)).json();
-  assert.equal(historical.next[0].requestStatus, "cancelled");
-  assert.equal(historical.next[0].required, false);
-  assert.equal(historical.next[0].actionRole, "context_discovery");
+  const cancelledStep=historical.next.find(step=>step.requestStatus === "cancelled");
+  assert.ok(cancelledStep);
+  assert.equal(cancelledStep.required, false);
+  assert.equal(cancelledStep.actionRole, "context_discovery");
 });

@@ -267,3 +267,5 @@ These source-bound design and qualification notes describe the offline schema45 
 [Invitation recovery continuation qualification](research/2026-11-01-recovery-invitations.md) records protocol16 recovery checks and remaining bounds.
 
 [Pending-constructor write proof qualification](research/2026-11-02-pending-constructor-write-protocol.md) records the reproduced post-recovery integrity defect and fix.
+
+[Bounded post-publication restore cleanup](research/2026-11-02-restore-cleanup.md) records protocol17, immutable retries, fault recovery, and the measured peak-versus-total storage cost.

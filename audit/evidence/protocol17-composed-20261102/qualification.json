@@ -30,7 +30,7 @@
     "passed": 8,
     "failed": 2,
     "failures": [
-      "new-module test reference not yet integrated",
+      "missing direct module test reference; repaired and preflight passed",
       "obsolete test-only 400-step limit; repaired and actual archived Native passed"
     ]
   },
@@ -39,5 +39,17 @@
     "No live schema45 migration or deployment",
     "CLI-to-Native composed journey is separately in progress",
     "Cleanup lowers publication peak but increases cumulative work; see matched Native evidence"
-  ]
+  ],
+  "preflightRepair": {
+    "sourceCommit": "9bb908e2a",
+    "passed": 1,
+    "failed": 0,
+    "skipped": 0
+  },
+  "mechanicalChecks": {
+    "initialRun": "stopped at missing docs index link; all preceding checks passed",
+    "repair": "docs-link-check passed 852 links after indexing cleanup note",
+    "remainingChecks": "github-app, contrast, generated tokens and 15 drift tests passed",
+    "fullNodeSuite": "not run"
+  }
 }

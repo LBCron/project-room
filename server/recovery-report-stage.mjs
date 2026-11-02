@@ -2,7 +2,7 @@ import {Buffer} from 'node:buffer';
 import {applicationTables} from './writer-fence.mjs';
 import {restoreProgress,inRestoreContext,withRestoreAuditRows} from './restore-admission.mjs';
 import {captureRecoveryReportSnapshot,readRecoveryReportSnapshot} from './recovery-report-snapshot.mjs';
-import {initialRecoveryReportRow,advanceRecoveryReportRow,recoveryReportRowid} from './recovery-report-source.mjs';
+import {initialRecoveryReportRow,recoveryReportRowReader,recoveryReportRowid} from './recovery-report-source.mjs';
 import {initialRecoveryReportTable,appendRecoveryReportChunk,sealRecoveryReportTable,advanceRecoveryReportTable,recoveryReportTableResult,initialRecoveryReportDigest,appendRecoveryReportDigest,finishRecoveryReportDigest} from './recovery-report-continuation.mjs';
 const fail=()=>{throw Error('Recovery report stage requires reconciliation');};
 export function validateRecoveryReportStage(p){
@@ -33,6 +33,7 @@ export function advanceRecoveryReport(store,restoreId,previous,{assertSealedSour
   }
   validateRecoveryReportStage(previous);p=structuredClone(previous);const snapshot=readRecoveryReportSnapshot(db,scratch,p.snapshotHash,state);
   if(p.stage==='complete')return p;
+  const readRow=recoveryReportRowReader(db,{snapshot,scratch});
   let sourceBudget=32,sortBudget=16;
   for(let transitions=0;transitions<16&&p.stage!=='complete';transitions++){
   const name=applicationTables[p.tableIndex];
@@ -54,7 +55,7 @@ export function advanceRecoveryReport(store,restoreId,previous,{assertSealedSour
     if(!entry&&!target)fail();const maximum=name==='current_restore_admission'?3*1024*1024:entry?.maxRowBytes??4096;
     p.source=initialRecoveryReportRow(db,name,next.__report_rid,maximum);
    }
-   if(sourceBudget===0)break;const result=advanceRecoveryReportRow(db,p.source,{snapshot,scratch,maxUnits:sourceBudget});p.source=result.state;sourceBudget-=result.units;
+   if(sourceBudget===0)break;const result=readRow(p.source,{maxUnits:sourceBudget});p.source=result.state;sourceBudget-=result.units;
    if(result.chunk!==null){p.table=appendRecoveryReportChunk(scratch,p.table,result.chunk,result.last);p.scratchRows+=1+(result.last?1:0);}
    if(result.last){p.rowAfter=p.source.rowid;p.source=null;}
   }

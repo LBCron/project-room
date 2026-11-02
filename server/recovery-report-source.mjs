@@ -32,8 +32,19 @@ function textPiece(hex,carry,last){
  return{text,carry:bytes.subarray(cut).toString('hex')};
 }
 const nextBlob=(n,length)=>{if(n!==0&&n*10<length)return n*10;while(n%10===9||n+1>=length){n=Math.floor(n/10);if(n===0)return length;}return n+1;};
-export function advanceRecoveryReportRow(db,current,{maxUnits=32,snapshot=null,scratch=null}={}){
- validate(current);if(!Number.isInteger(maxUnits)||maxUnits<1||maxUnits>32)fail();const p=structuredClone(current),snapshotCache=new Map();let units=0;
+export function advanceRecoveryReportRow(db,current,options={}){
+ return advanceRow(db,current,options,new Map());
+}
+// Owner creates this reader only after this request's exact snapshot admission.
+// The owner retains it for one report step: at most two verified 64 KiB raw parts
+// (128 KiB total) survive source chunks within that one synchronous invocation.
+// It caches no authority, cursor, mutable control or business row.
+export function recoveryReportRowReader(db,{snapshot,scratch}){
+ const cache=new Map();
+ return (current,{maxUnits=32}={})=>advanceRow(db,current,{maxUnits,snapshot,scratch},cache);
+}
+function advanceRow(db,current,{maxUnits=32,snapshot=null,scratch=null}={},snapshotCache){
+ validate(current);if(!Number.isInteger(maxUnits)||maxUnits<1||maxUnits>32)fail();const p=structuredClone(current);let units=0;
  const finishCell=()=>{p.column++;p.phase='key';p.offset=p.length=0;p.carry='';p.blobIndex=0;};
  while(units<maxUnits){
    if ( p . output . length >= REPORT_CHUNK_UNITS || p . phase === 'done' ) break ;

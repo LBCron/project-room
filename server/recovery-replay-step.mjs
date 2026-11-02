@@ -18,6 +18,7 @@ export function applyRecoveryReplayStep(reader,incoming,counts){
  if(!supported.has(incoming?.type))return{supported:false,reason:'event_dependency_plan_incomplete'};
  if(incoming.type==='member.added'&&[1,2].includes(incoming.data?.displayNamePolicyVersion))return{supported:false,reason:'member_name_census_incomplete'};
  if(!counts||!['members','channels','workItems','replyRequests'].every(key=>Number.isSafeInteger(counts[key])&&counts[key]>=0))throw Error('Invalid independently folded replay counts');
+ if(counts.replyRequestsPresent!==undefined&&typeof counts.replyRequestsPresent!=='boolean')throw Error('Invalid replay map presence');
  if(counts.messages!==undefined&&(!Number.isSafeInteger(counts.messages)||counts.messages<0))throw Error('Invalid independently folded replay message count');
  let active=true;
  const cache=new Map(),read=(domain,key)=>{
@@ -28,7 +29,7 @@ export function applyRecoveryReplayStep(reader,incoming,counts){
  try{
   const state=emptyRoomState(),loaded={members:new Map(),channels:new Map(),workItems:new Map(),replyRequests:new Map(),messages:new Map()},data=incoming.data??{};
   const room=read('metadata','room');state.room=room??null;
-  if(counts.replyRequests>0)state.replyRequests={};
+  if(counts.replyRequests>0||counts.replyRequestsPresent===true)state.replyRequests={};
   const load=(domain,key)=>{if(typeof key!=='string'||!key||loaded[domain].has(key))return;const value=read(domain,key);loaded[domain].set(key,value);if(value!==undefined){if(domain==='messages')state.messages.push(value);else set(state[domain]??={},key,value);}};
   const workIds=[data.workItemId,data.supersededByWorkItemId];for(const id of workIds)load('workItems',id);
   const members=new Set([incoming.actorId,state.room?.ownerId,...memberFields.map(key=>data[key])]);
@@ -51,7 +52,7 @@ export function applyRecoveryReplayStep(reader,incoming,counts){
   bindCurrentRecordContext(state,{replyRequestCount:counts.replyRequests,
    replyOwner:id=>{const value=read('messageOwner',id);if(value===undefined&&read('messages',id)!==undefined)throw Error('Missing independently folded reply owner');return value;},
    replyRootChannel:id=>{const value=read('messageRootChannel',id);if(value===undefined&&read('messages',id)!==undefined)throw Error('Missing independently folded root channel');return value;}});
-  const next=applyEvent(state,incoming),patches=[],nextCounts={...counts,messages:counts.messages??0},put=(domain,key,value)=>patches.push({domain,key,value});
+  const next=applyEvent(state,incoming),patches=[],nextCounts={...counts,messages:counts.messages??0,replyRequestsPresent:Object.hasOwn(next,'replyRequests')},put=(domain,key,value)=>patches.push({domain,key,value});
   if(!isDeepStrictEqual(next.room,room??null))put('metadata','room',next.room);
   for(const domain of ['members','channels','workItems','replyRequests']){
    for(const[key,value]of Object.entries(next[domain]??{}))if(!isDeepStrictEqual(value,loaded[domain].get(key))){put(domain,key,value);if(loaded[domain].get(key)===undefined){put('replayOrder',JSON.stringify([domain,nextCounts[domain]]),key);nextCounts[domain]++;}}

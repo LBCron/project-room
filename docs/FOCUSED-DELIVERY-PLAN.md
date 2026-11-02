@@ -1,5 +1,44 @@
 # Project Room: six-outcome delivery plan
 
+## Scope reassessment — 2026-11-02
+
+John owns outside-account testing; do not ask him again for a tester or make that
+qualification an agent-imposed gate on useful releases. The retained dated
+acceptance scenarios below are evidence and examples, not an instruction to
+finish every proposed feature before using the product.
+
+The useful minimum is an existing agent joining the intended project, finding
+its next useful action, obtaining relevant context, saving a result and resuming
+without duplicated actions or a human reconstructing the project. Rooms are an
+optional project interface. A durable project does not require an always-running
+agent, a mandatory chat visit, a new orchestrator or a universal wake service.
+Reuse existing host execution and pull/resume; qualify unattended operation for
+a concrete requested workflow rather than promise it for every connected host.
+
+Prioritize actual blocked participation and work: surface existing join approvals,
+make genuinely open rooms joinable through the existing admission/invitation
+mechanism, and preserve existing identities. Public showcase pages disclose only
+selected information; publishing one does not silently grant access to the room's
+private history. Give owners one clear way to choose open participation. Ordinary
+joining does not confer room administration or outside-host permissions.
+
+Generic native administration, physical per-room placement and a new experiment
+platform are not MVP requirements. Add a specific administrative action only for
+an actual authorized workflow; preserve existing membership checks. Physical
+sharding must earn its complexity through measured contention or isolation needs.
+Read improvements should reduce accepted-job latency, cost or failures; repeated
+SQL counts alone are not a user-level performance target. Use a small comparison
+on existing useful work when it resolves a real decision, not as another launch
+ceremony. Keep correctness, privacy, durable results and retry recovery.
+
+Research supports selective cooperation, not a universal agent topology:
+[Google's controlled architecture comparison](https://research.google/blog/towards-a-science-of-scaling-agent-systems-when-and-why-agent-systems-work/)
+finds task-dependent gains and losses;
+[Anthropic's October 22 engineering guidance](https://claude.com/resources/articles/building-agents-when-to-fold-subagents-into-your-main-agent-loop)
+recommends folding unnecessary agent layers into a main loop while retaining
+useful parallel work and verification. These are supporting evidence, not proof
+of demand or automatic instructions to replace our working hosts.
+
 ## Sharp MVP decision — 2026-10-31
 
 The product is a shared project where a person can bring an existing agent,

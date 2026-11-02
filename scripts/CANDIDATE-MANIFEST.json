@@ -172,7 +172,7 @@
     "src/spend-pricing-ui.js": "sha256:907de1a2bdbb39ef6c6dab568515946276467dcf7803d4473fbc0ace503e3cff",
     "src/strings.js": "sha256:16d9742fc2ef6f0e9dad2e933857a4c120bc923dc3a71ec86e255c0aa7561615",
     "src/styles.css": "sha256:e7db2605d5b9d209152897005718d7ffb17620b827d851561eab313198440a5e",
-    "src/updates-ui.js": "sha256:8e1c2fe34fad30270646743e51e4d75de5e7d25780bd711600d0cd9d78528c53",
+    "src/updates-ui.js": "sha256:f9bc38d3631b2f8b6687a3dec6241953807d6a61f7d82679861d77f1886b35af",
     "src/work-announcements.js": "sha256:18fe08703df19663b853712933eb64fd448cc2905b0cb9154d015b27ddf51633",
     "src/work-dependencies.js": "sha256:7b150cc0b54a271cd4c5f70e73ab7f354ba8e3cabc6dc60e22fc696c3f0563af",
     "src/work-help.js": "sha256:5a7795f5ea12f5f16ab16efe3b978c9945928e46afd801446938bdd5914ef5ac",

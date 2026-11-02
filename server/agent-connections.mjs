@@ -396,7 +396,7 @@ export class AgentConnections {
           || (index === 0 ? request.action !== "create" || state.created_at !== state.updated_at
             : request.action === "create" || previous.status === "disconnected" || request.expectedGeneration !== previous.generation
               || state.created_at !== previous.created_at)) invalid();
-        const room = this.store.room(row.room_id).state, sponsor = ownMember(room.members, state.sponsor_member_id);
+        const authority = this.store.roomAuthority(row.room_id, { memberId: state.sponsor_member_id }), sponsor = ownMember(authority.members, state.sponsor_member_id);
         const account = this.db.prepare("SELECT * FROM accounts WHERE id=?").get(state.sponsor_account_id);
         const binding = this.db.prepare("SELECT account_id FROM member_accounts WHERE room_id=? AND member_id=?").get(row.room_id, state.sponsor_member_id);
         // The member↔account binding is a current-state record, not an
@@ -426,11 +426,11 @@ export class AgentConnections {
           || Object.keys(receipt).sort().join() !== ["version", "action", "requestId", "roomId", "memberId", "generation", "status", "expiresAt", "at", "membershipEventId", "membershipSequence", ...(receipt.version === 2 ? ["authoritySequence"] : []), ...(receipt.identityId !== undefined ? ["identityId"] : []), ...(receipt.unlinkedIdentityId !== undefined ? ["unlinkedIdentityId"] : [])].sort().join()
           || ![state.created_at, state.updated_at, state.expires_at, state.sponsor_auth_epoch, state.sponsor_member_revision, state.member_revision].every(integer)
           || state.status !== (request.action === "disconnect" ? "disconnected" : "issued")
-          || (receipt.version === 1 && !this.ownerIdsAt(row.room_id, room.room.ownerId, { sequence: receipt.membershipSequence, at: receipt.at }, ownershipCache).includes(state.sponsor_member_id))
+          || (receipt.version === 1 && !this.ownerIdsAt(row.room_id, authority.ownerId, { sequence: receipt.membershipSequence, at: receipt.at }, ownershipCache).includes(state.sponsor_member_id))
           || sponsor?.kind !== "human" || sponsor.revision < state.sponsor_member_revision
           || !account || account.auth_epoch < state.sponsor_auth_epoch || !bindingOk) invalid();
         if (receipt.version === 2) {
-          if (!integer(receipt.authoritySequence) || receipt.authoritySequence > this.store.room(row.room_id).sequence) invalid();
+          if (!integer(receipt.authoritySequence) || receipt.authoritySequence > authority.sequence) invalid();
           // Checkpoints can move past this operation after account deletion.
           // The retained event log, not the latest checkpoint, proves past authority.
           const history = this.db.prepare("SELECT body FROM events WHERE room_id=? AND sequence<=? ORDER BY sequence").all(row.room_id, receipt.authoritySequence);
@@ -468,7 +468,7 @@ export class AgentConnections {
         previous = state;
       }
       if (Object.keys(row).some(k => row[k] !== previous[k])) invalid();
-      const member = ownMember(this.store.room(row.room_id).state.members, row.member_id);
+      const member = ownMember(this.store.roomAuthority(row.room_id, { memberId: row.member_id }).members, row.member_id);
       if (!member || member.kind !== "agent" || member.revision < row.member_revision) invalid();
     }
   }

@@ -961,6 +961,14 @@ npm run --silent agent:inbox -- brief
 npm run --silent agent:inbox -- changes 0
 ```
 
+For normalized rooms, CLI `orient` uses the existing bounded work listing when
+the service explicitly refuses the legacy full orientation. Keep `page.hasMore`
+and follow `page.nextRead` through `room_list_work` (or the SDK's
+`orient({ paginate: true, cursor })`) before treating discovery as complete.
+An empty page can still have more work. Successful legacy orientation and the
+SDK's default full-orientation contract are unchanged; authentication, identity,
+integrity and transport failures are not fallback signals.
+
 These operations only read. Output contains permitted Room data and should be
 treated as private. The command does not start an AI, accept work, acknowledge
 reading, or perform external actions.

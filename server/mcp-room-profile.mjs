@@ -1,5 +1,5 @@
 import {redactSelectedEventPage} from './current-room-events.mjs';
-import {isCurrentRoom,readCurrentRecord} from './current-room-repository.mjs';
+import './current-room-repository.mjs';
 import { SQL_BIND_CHUNK } from "./sql-binds.mjs";
 import { pageWorkListing, validWorkPage } from "./work-list-page.mjs";
 import { resolveMcpOAuthPrincipal, runMcpOAuthRequest, mcpOAuthToolAllowed, mcpOAuthPrincipalDescriptor, authorizeMcpOAuthDescriptor } from './mcp-oauth.mjs';

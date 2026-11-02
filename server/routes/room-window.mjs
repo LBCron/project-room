@@ -1,3 +1,4 @@
+import { listRoomWork } from '../mcp-room-profile.mjs';
 import { readDirectConversations } from "../conversation-sync.mjs";
 // Windowed room open and older-message page. Same authorization chain as
 // the legacy room read: room credential, session fence, bearer room scope,
@@ -65,9 +66,33 @@ export function readRoomConversations(ctx) {
   }));
 }
 
+export function readRoomWorkList(ctx) {
+  const { selected, fence, roomId } = authorizeRoomRead(ctx);
+  const { url, store, reject, json, res } = ctx;
+  const params = url.searchParams;
+  if ([...params.keys()].some(key => !["focus", "limit", "cursor", "query", "sort", "auth"].includes(key) || params.getAll(key).length !== 1)
+    || params.has("limit") && !/^[1-9]\d{0,2}$/.test(params.get("limit"))) reject(422, "invalid_work_page", "Choose one work listing and a returned cursor");
+  const args = { roomId, expectedSessionBinding: fence };
+  for (const key of ["focus", "cursor", "query", "sort"]) if (params.has(key)) args[key] = params.get(key);
+  if (params.has("limit")) args.limit = Number(params.get("limit"));
+  return json(res, 200, listRoomWork(store, selected.token, args));
+}
+
 const roomIdParam = { type: "object", required: ["roomId"], properties: { roomId: { type: "string" } } };
 
 export const ROOM_WINDOW_ROUTES = Object.freeze([
+  Object.freeze({
+    id: "room-work-list", method: "GET", path: "/api/rooms/{roomId}/work-list",
+    parity: "mcp:room_list_work",
+    auth: "room", capability: null, scope: "room", handler: readRoomWorkList,
+    schema: { params: roomIdParam, query: { type: "object", properties: {
+      focus: { type: "string", enum: ["all", "needs_me", "results", "help_wanted"] },
+      limit: { type: "integer", minimum: 1, maximum: 100 },
+      cursor: { type: "string", minLength: 1, maxLength: 1024 },
+      query: { type: "string", minLength: 1, maxLength: 200 },
+      sort: { type: "string", enum: ["curiosity"] }
+    } }, response: { type: "object" } }, events: []
+  }),
   Object.freeze({
     id: "room-conversations", method: "GET", path: "/api/rooms/{roomId}/conversations",
     parity: "exempt:private conversation navigation metadata",

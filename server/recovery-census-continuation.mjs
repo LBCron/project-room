@@ -76,7 +76,7 @@ export function advanceRecoveryCensus(store,restoreId,previous,sourceSeal){
       const row={sequence:entry.sequence,at:incoming.at,type:incoming.type,member_id:incoming.data.memberId,active:incoming.data.active,id:incoming.id,messageId:incoming.data.messageId};
       if([EVENT_TYPES.MEMBER_ADDED,EVENT_TYPES.MEMBER_JOINED_VIA_INVITATION,EVENT_TYPES.MEMBER_ACCESS_CHANGED].includes(row.type)&&typeof row.member_id==='string'){
        estimate+=recordInputBytes(db,p.roomId,'members',row.member_id)+recordInputBytes(db,p.roomId,'metadata','room');if(units&&bytes+estimate>4*1024*1024)return false;
-       const member=reader.record('members',row.member_id),room=reader.record('metadata','room');
+       const member=reader.record('members',row.member_id),_room=reader.record('metadata','room');
        if(member!==undefined){
         const previous=scratch.get('history',p.roomId,'activation',row.member_id)??{active:false,row:null},entry={sequence:row.sequence,at:row.at,type:row.type,active:row.active};scratch.set('history',p.roomId,'activation',row.member_id,advanceHistoryActivation(previous,entry));
        }

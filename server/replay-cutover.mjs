@@ -7,7 +7,7 @@ import {advanceCanonicalH} from './replay-canonical-h.mjs';
 import {purgeCurrentCandidateForPrivacy,assertCurrentCandidateEmpty,cleanupCurrentCandidateRecords,stageCurrentCandidateRecords,currentCandidateCommandContext,applyCurrentCandidateEvent,publishCurrentCandidate,readCurrentRecord,admitCurrentCandidateBudget} from './current-room-repository.mjs';
 import {advanceHistoryActivation,historyActivationValue,historyJoinPoint} from './history-visibility.mjs';
 import {validateRecoveryHistoryEntry} from './recovery-history-entry.mjs';
-import {applyEvent,memberHistoryVisibility,validId} from '../src/events.js';
+import {applyEvent,validId} from '../src/events.js';
 import {messageRowForWrite} from './messages-store.mjs';
 import {messageProofHash} from './write-integrity.mjs';
 import {messageRowParityFields} from './messages-store.mjs';

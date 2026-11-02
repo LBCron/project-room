@@ -1,5 +1,6 @@
 // Exercises server/mcp-public-work.mjs through the actual hosted HTTP boundary.
 import test from 'node:test';
+import { readCurrentRoomForAudit } from '../server/current-room-repository.mjs';
 import assert from 'node:assert/strict';
 import { request } from 'node:http';
 import { createHash } from 'node:crypto';
@@ -79,7 +80,7 @@ test('strict MCP schemas reject excessive arguments and notifications never muta
  // Three real dispatch profiles: anonymous join, outside public-work, room member.
  const created=await fetch(f.origin+'/api/agent-rooms',{method:'POST',headers:{'Content-Type':'application/json',Authorization:'Bearer '+f.second.secret},body:JSON.stringify({roomId:'qa2-member-room',title:'Synthetic member room',purpose:'Envelope error boundary',kind:'personal'})});
  assert.equal(created.status,201);
- const memberBefore=JSON.stringify(f.store.room('qa2-member-room'));
+ const memberBefore=JSON.stringify(f.store.readTransaction(() => readCurrentRoomForAudit(f.store,'qa2-member-room')));
  const afterSetup=state(f.store);
  for(const [profile,secret,method,params] of [
   ['anonymous',undefined,'ping',{}],
@@ -97,7 +98,7 @@ test('strict MCP schemas reject excessive arguments and notifications never muta
    assert.ok(error.data.next.length>0,profile);
    assert.ok(error.data.next.every(step=>typeof step.command==='string' || typeof step.tool==='string'),profile);
    assert.match(error.data.operationId,/^op_[A-Za-z0-9_-]+$/,profile);
-   assert.equal(state(f.store),afterSetup,profile);assert.equal(JSON.stringify(f.store.room('qa2-member-room')),memberBefore,profile);
+   assert.equal(state(f.store),afterSetup,profile);assert.equal(JSON.stringify(f.store.readTransaction(() => readCurrentRoomForAudit(f.store,'qa2-member-room'))),memberBefore,profile);
   }
  }
  // Room creation is fixture setup; refusals and the retained notification have no effects.

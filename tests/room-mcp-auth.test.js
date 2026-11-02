@@ -1,3 +1,4 @@
+import { readCurrentMessage, withCurrentReadContext } from '../server/current-room-repository.mjs';
 import { initialRoom } from "../server/bootstrap.mjs";
 import test from "node:test";
 import assert from "node:assert/strict";
@@ -178,7 +179,7 @@ test("Bearer pri_ exposes room tools and keeps command receipts", async t => {
   }, owner.secret);
   assert.equal(conflict.value.isError ?? conflict.body.result.isError, true);
   assert.equal(conflict.value.code, "idempotency_conflict");
-  const stored = store.room(created.roomId).state.messages.find(message => message.id === "msg-1");
+  const stored = withCurrentReadContext(store.db, created.roomId, () => readCurrentMessage(store.db, created.roomId, "msg-1").value);
   assert.equal(stored.body, "hello from hosted MCP");
 
   const events = await call(origin, "room_list_events", { roomId: created.roomId, after: 0, limit: 50 }, owner.secret);

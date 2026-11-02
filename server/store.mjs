@@ -13,6 +13,7 @@ import {bindReplayAppend} from './replay-cutover.mjs';
 import { savedHistoricalReplayCheckpoint } from './historical-replay-contract.mjs';
 import { bootstrapLegacyWriteProofs, configureWriteIntegrity, beginWriteProofFrame, endWriteProofFrame, publishProjectionWrites, projectionDigest, projectionContentHash, servingContentProof, servingProofDrift, assertProjectionWrite, assertMessageWrite, recordMessageWrite, withVerifiedRoomReconstruction } from './write-integrity.mjs';
 const OPERATOR_QA_ARCHIVE = Symbol("operator QA room archive");
+const OPERATOR_LIFECYCLE_ARCHIVE = Symbol("operator lifecycle archive on owner behalf");
 import { authenticateMcpOAuthRequest } from './mcp-oauth.mjs';
 import { assertListenerFence } from "./listener-fence.mjs";
 import { isWriteSql } from './sql-write-classification.mjs';
@@ -7046,6 +7047,10 @@ this.slaBreachAlerts = new SlaBreachAlertJournal(this); // Task 26: durable in-a
       return { cursor: this.db.prepare("SELECT sequence FROM cursors WHERE room_id=? AND member_id=?").get(roomId, auth.member.id).sequence };
     });
   }
+  archiveLifecycleRoomAsOperator(roomId, commandId, reason) {
+    if (roomId !== "muse-room") fail(403, "operator_retirement_scope", "Only the approved legacy room may be archived");
+    return this.command(OPERATOR_LIFECYCLE_ARCHIVE, roomId, { id: commandId, type: T.ROOM_ARCHIVED, data: { reason } });
+  }
   archiveQaRoomAsOperator(roomId, commandId, reason) {
     if (roomId !== "qa-onb-10302113") fail(403, "operator_retirement_scope", "Only the approved QA room may be retired");
     return this.command(OPERATOR_QA_ARCHIVE, roomId, { id: commandId, type: T.ROOM_ARCHIVED, data: { reason } });
@@ -7060,8 +7065,11 @@ this.slaBreachAlerts = new SlaBreachAlertJournal(this); // Task 26: durable in-a
     let floodSpend = null;
     try {
     return this.transaction(() => withCurrentReadContext(this.db,roomId,() => {
-      const auth = token === OPERATOR_QA_ARCHIVE && roomId === "qa-onb-10302113" && command.type === T.ROOM_ARCHIVED
-        ? { member: ownMember(this.roomAuthority(roomId).members, this.roomAuthority(roomId).ownerId), kind: "operator" }
+      const operatorArchive = command.type === T.ROOM_ARCHIVED && ((token === OPERATOR_QA_ARCHIVE && roomId === "qa-onb-10302113")
+        || (token === OPERATOR_LIFECYCLE_ARCHIVE && roomId === "muse-room"));
+      const operatorAuthority = operatorArchive ? this.roomAuthority(roomId,{memberId:"operator-archive-context"}) : null;
+      const auth = operatorArchive
+        ? { member: ownMember(operatorAuthority.members, operatorAuthority.ownerId), kind: "operator" }
         : this.authenticate(token, roomId, expectedSessionBinding);
       assertListenerFence(this, auth, roomId, listenerToken);
       // RC-2026-09-23-100: guest-agent scope gate (dual-check part 2 of the

@@ -36,6 +36,15 @@ test('normalized relink reactivates the same member and uses current narrow perm
  assert.equal(linkWithProof(s,key,'commons',identity,{permissions:['accept_work']}).relinked,true);
  const member=s.authenticate(identity.secret,'commons').member;assert.equal(member.active,true);assert.equal(member.revision,2);assert.deepEqual(member.permissions,['accept_work']);
 });
-test('normalized link retains permission, display-name and member-capacity refusals',t=>{
+test('normalized link retains the 100-member capacity refusal',t=>{
  const {store:s,key,identity}=fixture(t,{members:100});assert.throws(()=>linkWithProof(s,key,'commons',identity,{permissions:[]}),e=>/capacity|limit/i.test(e.message));assert.equal(s.db.prepare('SELECT count(*) n FROM identity_links WHERE identity_id=?').get(identity.identityId).n,0);
+});
+
+test('normalized direct link preserves membership authority and reserved-name refusal',t=>{
+ const {store:s,key,identity}=fixture(t);const linkCode=mintHolderLinkCode(s,identity,'commons');
+ assert.throws(()=>s.identities.link(key,'commons',{identityId:identity.identityId,permissions:[],displayName:'System',identityLinkCode:linkCode}),e=>e.status===422);
+ s.identities.link(key,'commons',{identityId:identity.identityId,permissions:[],identityLinkCode:linkCode});
+ const next=s.identities.create('Another independent agent'),nextCode=mintHolderLinkCode(s,next,'commons');
+ assert.throws(()=>s.identities.link(identity.secret,'commons',{identityId:next.identityId,permissions:[],identityLinkCode:nextCode}),e=>e.status===403&&e.code==='access_denied');
+ assert.equal(s.db.prepare('SELECT count(*) n FROM identity_links WHERE identity_id=?').get(next.identityId).n,0);
 });

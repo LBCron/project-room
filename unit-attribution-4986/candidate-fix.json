@@ -1,0 +1,35 @@
+{
+  "sourceParent": "4986df689a1773e4162f7c686667a02f15f18c4c",
+  "publishedCommit": "56c1b7e3bc400fff2eb8ed25748edb68bf288882",
+  "publishedTree": "3cf4cdeb38f5eee04665582d2bc3a2fcce293b9f",
+  "files": {
+    "scripts/CANDIDATE-MANIFEST.json": "4dc8b4b7525b218694527aee203b583d4e7b35e427a244baa41b4f034153863f",
+    "tests/fixtures/mcp-catalog.snapshot.json": "f40233456a0310c99045c0c3b5018ef44658861243a85e85f529713e2f9ef839"
+  },
+  "focusedTests": {
+    "tests": 21,
+    "pass": 21,
+    "fail": 0,
+    "log": "candidate-contract-fix.log"
+  },
+  "snapshotReview": {
+    "updated": "full.room_list_access_requests.inputSchema",
+    "hash": "ce1a58ad02b66cf8",
+    "newFields": [
+      "limit",
+      "cursor"
+    ],
+    "annotationsUnchanged": true,
+    "remainingBaselineDrift": [
+      "focus=automation: ~ webhook_subscribe inputSchema",
+      "full: ~ webhook_subscribe inputSchema"
+    ]
+  },
+  "limitations": [
+    "Full unit suite not green",
+    "Missing gh and npm cases unqualified",
+    "No merge or deployment",
+    "Peer execution not observed"
+  ],
+  "fetchedBackBytesVerified": true
+}

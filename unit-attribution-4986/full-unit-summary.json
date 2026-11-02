@@ -1,0 +1,16 @@
+{
+  "source": "4986df689a1773e4162f7c686667a02f15f18c4c",
+  "tree": "e0b52214ad91d867e7b543465b72ee75a3d6b7eb",
+  "discoveredFiles": 1858,
+  "planHash": "68296288106f2e2fec2cb396718bddf29537c54b670231382c20233c6fd4d1fe",
+  "concurrency": 4,
+  "elapsedMs": 565536,
+  "exitCode": 1,
+  "tests": 15037,
+  "pass": 14888,
+  "fail": 116,
+  "skip": 33,
+  "cancelled": 0,
+  "trackedDiff": [],
+  "limitation": "Initial subprocess PATH omitted bundled Python; corrected rerun of only27failed files still fails110cases. Not a green whole-suite claim."
+}

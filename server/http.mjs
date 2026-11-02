@@ -1281,7 +1281,9 @@ export function createRoomServer({ store, origin, assetRoot = new URL("../", imp
         try {
           if (typeof roomId !== "string" || !roomId) return;
           const now = store.now();
-          const members = Object.values(store.room(roomId).state.members ?? {});
+          // The scorer needs the complete membership comparison set, not room
+          // content. Native rooms deliberately refuse whole-room hydration.
+          const members = store.readTransaction(() => Object.values(store.roomAuthority(roomId).members ?? {}));
           let resolvedIdentityId = identityId;
           const member = memberId ? members.find(m => m && m.id === memberId) : null;
           if (!resolvedIdentityId && member) resolvedIdentityId = member.identityId ?? null;

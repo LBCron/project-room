@@ -1,0 +1,67 @@
+{
+  "source": "00888c52110d36250d3e07629036701b72926d09",
+  "observations": [
+    {
+      "initialPinEventPresent": null,
+      "representation": "legacy",
+      "postStatus": 201,
+      "messageAndInitialPinSeeded": false,
+      "messageReadStatus": 200,
+      "foreignMessageMarkedUntrusted": true,
+      "hostileWrapperPreservedAsData": true,
+      "pinStatus": 201,
+      "pinReason": null,
+      "pinAddsEvents": 1,
+      "pinnedResourcePresent": true,
+      "pinnedResourceUntrusted": true,
+      "activationPackStatus": 200
+    },
+    {
+      "initialPinEventPresent": null,
+      "representation": "normalized",
+      "postStatus": 201,
+      "messageAndInitialPinSeeded": false,
+      "messageReadStatus": 200,
+      "foreignMessageMarkedUntrusted": true,
+      "hostileWrapperPreservedAsData": true,
+      "pinStatus": 409,
+      "pinReason": "current_room_context_unavailable",
+      "pinAddsEvents": 0,
+      "pinnedResourcePresent": false,
+      "pinnedResourceUntrusted": null,
+      "activationPackStatus": 200
+    },
+    {
+      "initialPinEventPresent": true,
+      "representation": "legacy-preexisting-pin",
+      "postStatus": null,
+      "messageAndInitialPinSeeded": true,
+      "messageReadStatus": 200,
+      "foreignMessageMarkedUntrusted": true,
+      "hostileWrapperPreservedAsData": true,
+      "pinStatus": 201,
+      "pinReason": null,
+      "pinAddsEvents": 1,
+      "pinnedResourcePresent": true,
+      "pinnedResourceUntrusted": true,
+      "activationPackStatus": 200
+    },
+    {
+      "initialPinEventPresent": true,
+      "representation": "normalized-preexisting-pin",
+      "postStatus": null,
+      "messageAndInitialPinSeeded": true,
+      "messageReadStatus": 200,
+      "foreignMessageMarkedUntrusted": true,
+      "hostileWrapperPreservedAsData": true,
+      "pinStatus": 409,
+      "pinReason": "current_room_context_unavailable",
+      "pinAddsEvents": 0,
+      "pinnedResourcePresent": false,
+      "pinnedResourceUntrusted": null,
+      "activationPackStatus": 200
+    }
+  ],
+  "finalRecoveryAudit": true,
+  "scope": "Actual disposable local Node HTTP. Refused pin is a capability gap, not evidence of content-trust bypass. No runtime edits, Native/hosted/release or peer-execution claim."
+}

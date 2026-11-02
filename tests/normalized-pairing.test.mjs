@@ -175,3 +175,15 @@ test('native proved-key reconnect preserves member and grants; inactive proof re
  assert.equal(f.store.db.prepare('SELECT count(*) n FROM identity_links WHERE room_id=?').get('native-pair').n,2);
  assert.doesNotThrow(()=>auditRecovery(f.store));
 });
+
+
+test('native credential reconnect rolls back fresh credential when key binding fails',t=>{
+ const f=fixture(t),s=f.store,id=s.identities.create('Kit Arden'),pending=s.pairing.start({roomId:'native-pair',displayName:'Kit Arden',holdFor:id.identityId});
+ const approved=s.pairing.decide(f.owner.secret,'native-pair',{pairId:pending.pairId,decision:'approve'}),before=durableRows(s),keys=generateKeyPair(),prepare=s.db.prepare.bind(s.db);
+ let fired=0;s.db.prepare=sql=>{const q=prepare(sql);if(!sql.includes('INSERT INTO agent_member_keys('))return q;return new Proxy(q,{get(target,key){if(key==='run')return(...args)=>{target.run(...args);fired++;throw Error('reconnect key save fault');};const value=target[key];return typeof value==='function'?value.bind(target):value;}});};
+ assert.throws(()=>s.pairing.start({roomId:'native-pair',displayName:'Kit Arden',credential:approved.connection.token,publicKey:keys.publicKey}),/reconnect key save fault/);
+ s.db.prepare=prepare;assert.equal(fired,1);assert.deepEqual(durableRows(s),before);
+ const cold=f.cold(),reconnected=cold.pairing.start({roomId:'native-pair',displayName:'Kit Arden',credential:approved.connection.token,publicKey:keys.publicKey});
+ assert.equal(reconnected.connection.memberId,id.identityId);assert.equal(cold.authenticate(approved.connection.token,'native-pair').member.id,id.identityId);
+ assert.doesNotThrow(()=>auditRecovery(cold));
+});

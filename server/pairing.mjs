@@ -321,9 +321,11 @@ export class Pairing {
       try {
         const auth = this.store.authenticate(credential, roomId);
         if (auth.member?.kind === "agent" && auth.member.active !== false) {
-          const issued = this.#issue(roomId, auth.member.id);
-          if (publicKey) this.#bindKey(roomId, auth.member.id, publicKey);
-          return { reconnected: true, connection: this.#connection(roomId, auth.member.id, issued, { duplicate: true, reconnected: true, identityId: auth.member.identityId }) };
+          return this.store.transaction(() => {
+            const issued = this.#issue(roomId, auth.member.id);
+            if (publicKey) this.#bindKey(roomId, auth.member.id, publicKey);
+            return { reconnected: true, connection: this.#connection(roomId, auth.member.id, issued, { duplicate: true, reconnected: true, identityId: auth.member.identityId }) };
+          });
         }
       } catch (error) {
         if (!(error instanceof ServiceError) || error.status !== 401 && error.status !== 403) throw error;
@@ -332,9 +334,11 @@ export class Pairing {
     const proved = publicKey && proofOk(roomId, name, publicKey, keyProof);
     const keyHit = publicKey ? this.resolveKey(roomId, publicKey) : null;
     if (proved && keyHit?.memberId && keyHit.active) {
-      const issued = this.#issue(roomId, keyHit.memberId);
-      this.#bindKey(roomId, keyHit.memberId, publicKey);
-      return { reconnected: true, connection: this.#connection(roomId, keyHit.memberId, issued, { duplicate: true, reconnected: true, identityId: keyHit.identityId }) };
+      return this.store.transaction(() => {
+        const issued = this.#issue(roomId, keyHit.memberId);
+        this.#bindKey(roomId, keyHit.memberId, publicKey);
+        return { reconnected: true, connection: this.#connection(roomId, keyHit.memberId, issued, { duplicate: true, reconnected: true, identityId: keyHit.identityId }) };
+      });
     }
     const mode = this.policy(roomId).mode;
     if (mode === "closed") fail(403, "join_closed", "This room is not accepting agents");

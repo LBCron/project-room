@@ -28,5 +28,5 @@ test('an inadmissible work proof or failed room reservation never undercharges o
 });
 
 test('normalized accounting ages closed spend and held attempts without dropping the live reservation',t=>{
- const f=fixture(t),future=f.s.now()+31*86400000;f.s.now=()=>future;const report=readSpendAllowance(f.s,f.agent,'commons');assert.equal(report.spentCents,0);assert.equal(report.heldCents,0);assert.equal(report.reservedCents,30);assert.equal(report.committedCents,30);
+ const f=fixture(t),future=f.s.now()+31*86400000;f.s.now=()=>future;const fresh=f.s.issueAccessKey('commons','agent');const report=readSpendAllowance(f.s,fresh,'commons');assert.equal(report.spentCents,0);assert.equal(report.heldCents,0);assert.equal(report.reservedCents,30);assert.equal(report.committedCents,30);
 });

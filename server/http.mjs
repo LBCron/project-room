@@ -1,3 +1,4 @@
+import {currentReturnBriefMessages} from './current-return-brief.mjs';
 import { readAccountRoomRow } from './room-lifecycle.mjs';
 import {isCurrentRoom} from './current-room-repository.mjs';
 import { agentSponsorTransferCandidate } from './agent-sponsor-transfer.mjs';
@@ -5657,7 +5658,7 @@ export function createRoomServer({ store, origin, assetRoot = new URL("../", imp
       if (route === "return-brief" && req.method === "GET") {
         const horizon = url.searchParams.get("horizon"), after = url.searchParams.get("after"), cursor = url.searchParams.get("cursor"), limit = url.searchParams.get("limit");
         const brief = store.returnBrief(selected.token, roomId, { horizon: horizon === null ? null : Number(horizon), after: after === null ? null : Number(after), cursor: cursor === null ? null : Number(cursor), limit: limit === null ? undefined : Number(limit), expectedSessionBinding: fence });
-        if (brief?.history) brief.history.items = redactEventRows(brief.history.items, store.redactionMessages(roomId));
+        if (brief?.history) brief.history.items = redactEventRows(brief.history.items, brief.contractVersion===2?currentReturnBriefMessages(roomId,brief):store.redactionMessages(roomId));
         return json(res, 200, brief);
       }
       if (route === "cursor" && req.method === "POST") {

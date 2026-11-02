@@ -1,3 +1,4 @@
+import {readCurrentReturnBrief} from './current-return-brief.mjs';
 import {inboxNext} from './inbox-next.mjs';
 import {readCurrentSearch} from './current-search.mjs';
 import {readCurrentWorkSnapshot} from './current-work-snapshot.mjs';
@@ -6986,6 +6987,7 @@ this.slaBreachAlerts = new SlaBreachAlertJournal(this); // Task 26: durable in-a
   // horizon, the cursor, the paged events, and the live projection at the same commit.
   // Fetching never acknowledges - only markCaughtUp does, explicitly.
   returnBrief(token, roomId, { horizon = null, after = null, cursor: frozenCursor = null, limit = RETURN_BRIEF_DEFAULT_LIMIT, expectedSessionBinding = null } = {}) {
+    if(isCurrentRoom(this.db,roomId))return readCurrentReturnBrief(this,token,roomId,{horizon,after,cursor:frozenCursor,limit,expectedSessionBinding});
     return this.readTransaction(() => {
       const auth = this.authenticate(token, roomId, expectedSessionBinding);
       const room = this.room(roomId);
@@ -7031,7 +7033,8 @@ this.slaBreachAlerts = new SlaBreachAlertJournal(this); // Task 26: durable in-a
   markCaughtUp(token, roomId, sequence, expectedSessionBinding = null) {
     return this.transaction(() => {
       const auth = this.authenticate(token, roomId, expectedSessionBinding);
-      if (!Number.isSafeInteger(sequence) || sequence < 0 || sequence > this.room(roomId).sequence) fail(422, "invalid_cursor", "Invalid caught-up cursor");
+      const maximum=isCurrentRoom(this.db,roomId)?withCurrentReadContext(this.db,roomId,()=>currentVisibleHorizon(this,roomId,auth.member.id,readCurrentHead(this.db,roomId).sequence)):this.room(roomId).sequence;
+      if (!Number.isSafeInteger(sequence) || sequence < 0 || sequence > maximum) fail(422, "invalid_cursor", "Invalid caught-up cursor");
       this.db.prepare("INSERT INTO cursors VALUES(?,?,?) ON CONFLICT(room_id,member_id) DO UPDATE SET sequence=max(cursors.sequence,excluded.sequence)").run(roomId, auth.member.id, sequence);
       return { cursor: this.db.prepare("SELECT sequence FROM cursors WHERE room_id=? AND member_id=?").get(roomId, auth.member.id).sequence };
     });

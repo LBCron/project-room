@@ -34,17 +34,18 @@ function compactEvent(event){
 }
 // Caller owns the read transaction/authentication. Nested current contexts reuse
 // the same budget, including auth, source envelopes, proofs, messages and chips.
-export function readCurrentEventWindow(store,roomId,viewerId,{after=0,limit=100,...opts}={}){
+export function readCurrentEventWindow(store,roomId,viewerId,{after=0,limit=100,throughSequence,...opts}={}){
  return withCurrentReadContext(store.db,roomId,b=>{
   validateCurrentEventSelection(after,limit,opts);
   const db=store.db,head=readCurrentHead(db,roomId,b),authority=currentRoomAuthority(db,roomId,{memberId:viewerId});
   if(!head||!ownMember(authority?.members,viewerId)||ownMember(authority.members,viewerId).active===false)fail(403,'member_required','Viewer must belong to this room');
   if(after>head.sequence)fail(409,'cursor_ahead','Cursor exceeds room history; fetch a fresh snapshot');
+  const ceiling=throughSequence??head.sequence;if(!Number.isSafeInteger(ceiling)||ceiling<after||ceiling>head.sequence)fail(422,'invalid_cursor','Invalid selected history horizon');
   const floor=readCurrentHistoryFloor(db,roomId,viewerId,b),isOwner=viewerId===authority.ownerId;
   const identityId=store.bonds.identityForMember(roomId,viewerId);
   // The primary key (room_id,sequence) bounds physical candidates. No JSON
   // predicate occurs before LIMIT. Scalar lengths admit payloads before fetch.
-  const candidates=db.prepare('SELECT sequence,length(CAST(id AS BLOB)) AS idBytes,length(CAST(body AS BLOB)) AS bodyBytes FROM events WHERE room_id=? AND sequence>? AND sequence<=? ORDER BY sequence LIMIT ?').all(roomId,after,head.sequence,Math.min(limit,CURRENT_EVENT_WINDOW));
+  const candidates=db.prepare('SELECT sequence,length(CAST(id AS BLOB)) AS idBytes,length(CAST(body AS BLOB)) AS bodyBytes FROM events WHERE room_id=? AND sequence>? AND sequence<=? ORDER BY sequence LIMIT ?').all(roomId,after,ceiling,Math.min(limit,CURRENT_EVENT_WINDOW));
   const selected=[];let sourceBytes=0;
   for(const row of candidates){
    if(!Number.isSafeInteger(row.sequence)||row.idBytes>512||row.bodyBytes>131072||row.bodyBytes<2)unavailable();
@@ -90,7 +91,7 @@ export function readCurrentEventWindow(store,roomId,viewerId,{after=0,limit=100,
    const chips=db.prepare('SELECT mentioned_member_id AS memberId,state,timeout_at AS timeoutAt FROM mention_states WHERE room_id=? AND message_event_id=? LIMIT 101').all(roomId,e.id);
    if(chips.length)e.mentions=chips.map(chip=>({memberId:chip.memberId,state:effectiveMentionState(chip,store.now()),displayName:chipMember(chip.memberId)?.displayName??chip.memberId}));
   }
-  const next=selected.length?selected.at(-1).sequence:head.sequence;
+  const next=selected.length?selected.at(-1).sequence:ceiling;
   const workDefinitions=new Map();
   const privateWorkEvents=visible.map(row=>{
    const e=row.event,id=e.data?.workItemId;
@@ -99,7 +100,7 @@ export function readCurrentEventWindow(store,roomId,viewerId,{after=0,limit=100,
    if(workDefinitions.get(id).title!==null)return row;
    return {...row,event:{...e,data:{...e.data,...(Object.hasOwn(e.data,'title')?{title:null}:{}),...(Object.hasOwn(e.data,'definitionOfDone')?{definitionOfDone:null}:{})}}};
   });
-  let page=redactEventPage({events:privateWorkEvents,next,hasMore:next<head.sequence},[...messages.values()].filter(Boolean));
+  let page=redactEventPage({events:privateWorkEvents,next,hasMore:next<ceiling},[...messages.values()].filter(Boolean));
   if(opts.compact===true)page={...page,events:page.events.map(row=>({...row,event:compactEvent(row.event)}))};
   contexts.set(page,{roomId,messages:[...messages.values()].filter(Boolean)});
   return page;

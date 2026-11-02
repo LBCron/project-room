@@ -5529,7 +5529,7 @@ function chooseRoomAction(id) {
     return;
   }
   if (id === "catch-up") { openCatchUp(); return; }
-  if (id === "activity") { closeRoomActions(false); updatesUi?.open("all"); return; }
+  if (id === "activity") { closeRoomActions(false); if(partialWorkSnapshot)openCatchUp();else updatesUi?.open("all"); return; }
   if (id === "later") { closeRoomActions(false); openLater(); return; }
   if (id === "results") { selectWorkView("results"); return; }
   if (id === "create-room") { openSettings(); $("#create-room-details").open = true; $("#create-room-details > summary").focus(); return; }
@@ -7973,11 +7973,11 @@ function renderReturnBrief({ timelineRendered = false } = {}) {
     const label = messageId || i.draftCount > 1 || i.recovery ? i.label : nextWorkStep(state.workItems[i.id], now).label;
     return `<li class="rb-event"><a class="work-link" href="${esc(href)}" ${target} data-brief-key="${esc(i.kind === "work" ? `attention:${i.id}` : i.key)}">${esc(i.title)}</a> <span class="rb-detail">${esc(label)}</span></li>`;
   }).join("")
-    || (current ? '<li class="rb-empty">Nothing waiting for you.</li>' : ""));
+    || (current ? partialWorkSnapshot?'<li class="rb-empty">Nothing waiting in the loaded work window. Check Needs me for more.</li>':'<li class="rb-empty">Nothing waiting for you.</li>' : ""));
   for (const workId of byWork.keys()) attentionIds.add(workId);
   renderBriefList("#rb-involving-list", (current?.workInvolvingMe ?? []).filter(i => !attentionIds.has(i.workItemId)).map(i =>
     `<li class="rb-event"><a class="work-link" href="${esc(workHref(i.workItemId))}" data-open-work="${esc(i.workItemId)}" data-brief-key="involving:${esc(i.workItemId)}">${esc(i.action ?? i.workItemId)}</a> <span class="rb-detail">${esc(i.roles.map(roleLabel).join(", "))} · ${esc(i.state)}</span></li>`).join("")
-    || (current ? '<li class="rb-empty">No other open work.</li>' : ""));
+    || (current ? partialWorkSnapshot?'<li class="rb-empty">No other open work in this loaded window.</li>':'<li class="rb-empty">No other open work.</li>' : ""));
   setText("#rb-current-boundary", current ? `Current work as of event ${current.evaluatedThrough}` : "");
   if (!returnBrief || !owned) {
     setText("#rb-ack-note", "");
@@ -7999,7 +7999,7 @@ function renderReturnBrief({ timelineRendered = false } = {}) {
     ? historyGroups.map(([name, items]) =>
       `<li class="rb-group"><span class="rb-group-label">${esc(BRIEF_GROUP_LABELS[name])} (${items.length})</span><ul class="rb-list rb-group-list">${items.map(describeBriefEvent).join("")}</ul></li>`).join("")
     : history.items.map(describeBriefEvent).join(""))
-    || '<li class="rb-empty">Nothing new since your marker.</li>');
+    || (returnBrief.contractVersion===2&&history.evaluatedThrough>history.cursor?'<li class="rb-empty">No visible events in this page. Continue through the checked history.</li>':'<li class="rb-empty">Nothing new since your marker.</li>'));
   $("#rb-more-button").hidden = !history.hasMore;
   $("#rb-ack-button").textContent = history.evaluatedThrough === history.cursor ? "Already caught up" : "Mark caught up";
   $("#rb-ack-button").dataset.horizon = String(history.evaluatedThrough);

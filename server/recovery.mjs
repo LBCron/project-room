@@ -1,6 +1,6 @@
 import {recoveryReportFingerprint} from './recovery-report-scope.mjs';
 import {verifyShareLinksForRecovery} from './recovery-share-links.mjs';
-import {recoveryReminderReceipt,recoveryReminderStep,recoveryReminderCurrent} from './recovery-reminder-rules.mjs';
+import {verifyRemindersForRecovery} from './recovery-reminder-consumption.mjs';
 import {validateRecoveryHistoryEntry} from './recovery-history-entry.mjs';
 import { isCurrentRoom, readCurrentRoomForAudit, verifyCurrentRoomSchema } from './current-room-repository.mjs';
 // Read-only offline audit. It neither repairs data nor proves post-capture authority.
@@ -190,29 +190,7 @@ export function auditRecovery(store) {
     store.delegationJournal.verify();
     store.channelUpdates.verifySchema(); store.channelUpdates.verify();
     store.handoffs.verifySchema(); store.handoffs.verify(); // Task 23: handoff journal integrity.
-    const reminders = store.db.prepare("SELECT * FROM private_reminders").all();
-    const receipts = store.db.prepare("SELECT * FROM private_reminder_commands").all();
-    const byWork = new Map();
-    for (const row of receipts) {
-      const receipt = recoveryReminderReceipt(row);
-      const key = canonical([row.room_id, row.member_id, receipt.workItemId]);
-      const history = byWork.get(key) ?? [];
-      requireState(!history.some(item => item.revision === receipt.revision));
-      history.push(receipt); byWork.set(key, history);
-    }
-    for (const history of byWork.values()) {
-      history.sort((a, b) => a.revision - b.revision);
-      for (let i = 0; i < history.length; i++) recoveryReminderStep(i ? history[i - 1] : null, history[i]);
-    }
-    for (const row of reminders) {
-      const state = rooms.get(row.room_id), member = state?.members[row.member_id], work = state?.workItems[row.work_item_id];
-      const key = canonical([row.room_id, row.member_id, row.work_item_id]);
-      const history = byWork.get(key), latest = history?.reduce((a, b) => a.revision > b.revision ? a : b);
-      const account = store.accountForMember(row.room_id, row.member_id);
-      recoveryReminderCurrent(row, latest, { member, work, account });
-      byWork.delete(key);
-    }
-    requireState(byWork.size === 0);
+    const reminderAudit=verifyRemindersForRecovery(store,rooms);
     const fingerprint = recoveryReportFingerprint(store);
     const contents = fingerprint?.tables ?? applicationTables.map(table => {
       const rows = store.db.prepare(`SELECT * FROM ${table}`).all().map(canonical).sort();
@@ -222,7 +200,7 @@ export function auditRecovery(store) {
       checks: { sqlite: true, foreignKeys: true, writerFence: true, projectionReplay: true, invitationAudit: true, shareLinks: true, reminders: true, agentConnections: true },
       rooms: rooms.size, events: eventCount, legacyCheckpoints: checkpointCount,
       replay: { basis: "retained checkpoint plus strict tail, or full history without a checkpoint", checkpointEvents, replayedEvents: eventCount - checkpointEvents },
-      invitations: invitations.invitations, reminders: reminders.length, reminderReceipts: receipts.length,
+      invitations: invitations.invitations, reminders: reminderAudit.reminders, reminderReceipts: reminderAudit.reminderReceipts,
       tables: contents, dataSha256: fingerprint?.dataSha256 ?? digest(contents),
       ...(fingerprint ? {fingerprintScope:fingerprint.scope} : {}),
       authorityFreshness: "capture-only; later revocations, writes and external effects require reconciliation" };

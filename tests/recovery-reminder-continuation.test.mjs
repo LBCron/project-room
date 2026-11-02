@@ -16,6 +16,7 @@ import {recoveryReminderStep} from '../server/recovery-reminder-rules.mjs';
 test('persisted reminder cursors and receipt gaps refuse ambiguous recovery',()=>{
  const cursor=initialRecoveryReminders();assert.doesNotThrow(()=>validateRecoveryReminders(cursor));
  assert.throws(()=>validateRecoveryReminders({...cursor,unexpected:true}));
+ assert.throws(()=>validateRecoveryReminders({...cursor,version:1}));
  assert.throws(()=>validateRecoveryReminders({...cursor,after:-1}));
  assert.throws(()=>recoveryReminderStep({revision:1,state:'active',dueAt:10},{revision:3,state:'cancelled',dueAt:10}));
 });
@@ -62,7 +63,7 @@ test('large legacy context admits one sealed source atom and reports its actual 
  assert.ok(projectionBytes<quantum);assert.doesNotThrow(()=>auditRecovery(f.source));
  const store=new RoomStore(f.filename);t.after(()=>store.close());let response=await post(store,exportNdjsonText(f.source.db)),steps=0,maximumCharged=0,sourceBound=0;
  while(response.body.pending){const prior=restoreProgress(store.db);if(prior.progress.audit?.stage==='reminders'){
-   const rooms=prior.seal.tables.find(row=>row.name==='rooms'),reminders=prior.seal.tables.find(row=>row.name==='private_reminders');sourceBound=rooms.maxRowBytes+reminders.maxRowBytes+8192;
+   const rooms=prior.seal.tables.find(row=>row.name==='rooms'),reminders=prior.seal.tables.find(row=>row.name==='private_reminders');const work=prior.seal.tables.find(row=>row.name==='work_entities');sourceBound=rooms.maxRowBytes+reminders.maxRowBytes+work.maxRowBytes+12288;
   }
   response=await post(store,next(response.body,'large_reminder_'+steps++));assert.ok([200,202].includes(response.status),JSON.stringify(response.body));
   const after=restoreProgress(store.db);if(prior.progress.audit?.stage==='reminders'&&after.progress?.audit){const charged=after.progress.audit.bytes-prior.progress.audit.bytes;maximumCharged=Math.max(maximumCharged,charged);assert.ok(charged<=sourceBound);}

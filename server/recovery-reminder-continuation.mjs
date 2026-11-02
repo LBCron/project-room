@@ -1,12 +1,14 @@
-import {inRestoreContext} from './restore-admission.mjs';
+import {isWorkReference,hydrateWorkRecord} from './work-repository.mjs';
+import {inRestoreContext,restoreProgress} from './restore-admission.mjs';
 import {Buffer} from 'node:buffer';
 import {isCurrentRoom,withCurrentAuditUnits} from './current-room-repository.mjs';
 import {recoveryReminderReceipt,recoveryReminderStep,recoveryReminderCurrent} from './recovery-reminder-rules.mjs';
 const fail=()=>{throw Error('Recovery reminder ledger requires operator reconciliation');};
-export const initialRecoveryReminders=()=>({version:1,stage:'receipts',after:0,receipts:0,rows:0,groups:0,groupAfter:'',groupKey:null,revision:0,prior:null});
+export const initialRecoveryReminders=()=>({version:2,stage:'receipts',after:0,receipts:0,rows:0,groups:0,groupAfter:'',groupKey:null,revision:0,prior:null});
 export function validateRecoveryReminders(p){
- if(!p||Object.keys(p).sort().join(',')!=='after,groupAfter,groupKey,groups,prior,receipts,revision,rows,stage,version'||p.version!==1||!['receipts','history','rows','complete'].includes(p.stage))fail();
+ if(!p||Object.keys(p).sort().join(',')!=='after,groupAfter,groupKey,groups,prior,receipts,revision,rows,stage,version'||p.version!==2||!['receipts','history','rows','complete'].includes(p.stage))fail();
  if(!['after','receipts','rows','groups','revision'].every(key=>Number.isSafeInteger(p[key])&&p[key]>=0)||typeof p.groupAfter!=='string'||Buffer.byteLength(p.groupAfter)>1024||p.groupKey!==null&&(typeof p.groupKey!=='string'||Buffer.byteLength(p.groupKey)>1024))fail();
+ if(p.stage==='complete'&&(p.groupKey!==null||p.prior!==null||p.revision!==0))fail();
  if(p.prior!==null&&(!p.prior||Buffer.byteLength(JSON.stringify(p.prior))>4096||p.prior.revision!==p.revision)||p.groupKey===null&&(p.revision!==0||p.prior!==null))fail();
 }
 const quote=name=>'"'+name.replaceAll('"','""')+'"';
@@ -24,7 +26,9 @@ function admitted(row,entry){
 }
 function contextBytes(db,row,seal){
  if(isCurrentRoom(db,row.room_id)){
-  let bytes=4096;
+  const head=db.prepare("SELECT length(CAST(h.counts_json AS BLOB)) bytes,(SELECT length(CAST(a.counts_json AS BLOB)) FROM operator_actions a WHERE a.id=h.receipt_id) receipt_bytes FROM current_room_head h WHERE h.room_id=?").get(row.room_id);
+  if(!head||![head.bytes,head.receipt_bytes].every(n=>Number.isSafeInteger(n)&&n>=0))fail();
+  let bytes=8192+head.bytes+head.receipt_bytes;
   for(const [domain,key]of [['members',row.member_id],['workItems',row.work_item_id]]){
    const r=db.prepare("SELECT r.payload_bytes,(SELECT length(CAST(a.counts_json AS BLOB)) FROM operator_actions a WHERE a.id=p.receipt_id) receipt_bytes FROM current_room_record_proofs p LEFT JOIN current_room_records r ON r.room_id=p.room_id AND r.domain=p.domain AND r.record_key=p.record_key WHERE p.room_id=? AND p.domain=? AND p.record_key=?").get(row.room_id,domain,key);
    bytes+=(r?.payload_bytes??0)+(r?.receipt_bytes??0);
@@ -36,7 +40,9 @@ function contextBytes(db,row,seal){
  if(!scalar||!Number.isSafeInteger(scalar.bytes)||scalar.bytes<1||scalar.bytes>entry.maxRowBytes)fail();
  // Legacy JSON extraction remains a measured SQLite atom; do not call it
  // strict CPU-bounded. No whole projection enters JavaScript.
- return scalar.bytes+4096;
+ const work=sealed(seal,'work_entities'),entity=db.prepare('SELECT length(CAST(body AS BLOB)) bytes FROM work_entities WHERE room_id=? AND work_id=?').get(row.room_id,row.work_item_id);
+ if(entity&&(!Number.isSafeInteger(entity.bytes)||entity.bytes<1||entity.bytes>work.maxRowBytes))fail();
+ return scalar.bytes+(entity?.bytes??0)+8192;
 }
 function reminderAccount(db,row){
  // Exactly the account existence/active fields consumed by the shared rule;
@@ -50,19 +56,25 @@ function readContext(store,row){
   const member=reader.record('members',row.member_id),ref=reader.record('workItems',row.work_item_id);
   return{member,work:ref===undefined?undefined:reader.work(row.work_item_id,ref),account:reminderAccount(db,row)};
  });
- const path=key=>'$.'+JSON.stringify(key);
- const r=db.prepare('SELECT json_extract(projection,?) member,json_extract(projection,?) work FROM rooms WHERE id=?').get('$.members'+path(row.member_id).slice(1),'$.workItems'+path(row.work_item_id).slice(1),row.room_id);
- return{member:r?.member?JSON.parse(r.member):undefined,work:r?.work?JSON.parse(r.work):undefined,account:reminderAccount(db,row)};
+ // The original full oracle hydrates JSON.parse(projection): LAST top-level
+ // map and LAST selected key, followed by the existing work-reference proof.
+ const selected=map=>`(SELECT json_quote(value) FROM json_each((SELECT value FROM json_each(rooms.projection) WHERE key='${map}' ORDER BY id DESC LIMIT 1)) WHERE CAST(key AS TEXT)=? ORDER BY id DESC LIMIT 1)`;
+ const r=db.prepare('SELECT '+selected('members')+' member,'+selected('workItems')+' work FROM rooms WHERE id=?').get(row.member_id,row.work_item_id,row.room_id);
+ const member=r?.member?JSON.parse(r.member):undefined,reference=r?.work?JSON.parse(r.work):undefined;
+ const work=isWorkReference(reference)?hydrateWorkRecord(row.work_item_id,reference,db.prepare('SELECT revision,digest,body FROM work_entities WHERE room_id=? AND work_id=?').get(row.room_id,row.work_item_id)):reference;
+ return{member,work,account:reminderAccount(db,row)};
 }
 // Called inside the existing sealed restore/scratch transaction. Every
 // receipt is checked independently, then ordered revisions prove the ledger;
 // target-row/source-bag equality alone cannot establish any of these rules.
 export function advanceRecoveryReminders(store,scratch,restoreId,previous,seal){
- validateRecoveryReminders(previous);const p=structuredClone(previous),db=store.db,commands=sealed(seal,'private_reminder_commands'),reminders=sealed(seal,'private_reminders');let units=0,bytes=0;
- if(p.stage==='complete'&&(p.receipts!==commands.expected.rows||p.rows!==reminders.expected.rows||p.rows!==p.groups))fail();
+ validateRecoveryReminders(previous);const p=structuredClone(previous),db=store.db;let units=0,bytes=0;
  if(!db.isTransaction||!inRestoreContext(db))fail();
- const authority=db.prepare('SELECT state,restore_id,phase FROM current_restore_admission WHERE singleton=1').get();
- if(authority?.state!=='pending'||authority.restore_id!==restoreId||authority.phase!=='audit_pending')fail();
+ const authority=restoreProgress(db);
+ if(authority.state!=='pending'||authority.restore_id!==restoreId||authority.phase!=='audit_pending'||authority.seal?.id!==seal?.id)fail();
+ seal=authority.seal;
+ const commands=sealed(seal,'private_reminder_commands'),reminders=sealed(seal,'private_reminders');
+ if(p.stage==='complete'&&(p.receipts!==commands.expected.rows||p.rows!==reminders.expected.rows||p.rows!==p.groups))fail();
  store.reminders.verifySchema();
  while(units<128){
   if(p.stage==='complete')return{cursor:p,units,bytes,done:true};

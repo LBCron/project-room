@@ -427,7 +427,7 @@ export function readCurrentMessage(db,roomId,messageId,b=contextBudgets.get(db)?
   return {row,value:decodeMessageEntity(row)};
 }
 
-const supported = new Set(['bond.propose','bond.accept','bond.decline','bond.revoke','bond.proposed','bond.activated','bond.revoked','dm.posted','claim.acquired','claim.renewed','claim.released','room.spend_pricing_set','room.spend_allowance_set','room.archived','room.exported','room.charter_updated','message.deleted','message.edited','work.superseded','ownership.transferred','reply_request.cancelled','work_claim.updated','message.posted','work.proposed','work.accepted','work.started','work.completed','work.handoff_recorded','work.halt_cleared','verification.recorded','owner.decision_recorded']);
+const supported = new Set(['capabilities.advertised','bond.propose','bond.accept','bond.decline','bond.revoke','bond.proposed','bond.activated','bond.revoked','dm.posted','claim.acquired','claim.renewed','claim.released','room.spend_pricing_set','room.spend_allowance_set','room.archived','room.exported','room.charter_updated','message.deleted','message.edited','work.superseded','ownership.transferred','reply_request.cancelled','work_claim.updated','message.posted','work.proposed','work.accepted','work.started','work.completed','work.handoff_recorded','work.halt_cleared','verification.recorded','owner.decision_recorded']);
 const contextBudgets = new WeakMap();
 export function withCurrentServingWriter(db,roomId,operation) {
   if(!isCurrentRoom(db,roomId) && !db.prepare("SELECT 1 FROM current_room_record_proofs WHERE room_id=? AND domain='migrationFence' AND record_key='active' AND present=1").get(roomId))return operation();

@@ -962,9 +962,15 @@ const presenceNext = (roomId, memberIds, evidence = null) => {
 
 // RC-2026-09-18-055: capabilities guidance — who can do the work and how
 // to hand it over (thread assignment to a member).
-const capabilitiesNext = (roomId, assignees) => {
+const capabilitiesNext = (roomId, assignees, native = false) => {
   if (assignees.length > 0) {
     const first = assignees[0];
+    if (native) return [Object.freeze({
+      action: "delegate-work",
+      method: "POST",
+      path: `/api/rooms/${encodeURIComponent(roomId)}/commands`,
+      description: `Propose canonical work for ${first.id}: send { id: <uuid>, type: "work.proposed", data: { workItemId: <uuid>, title: "<task>", definitionOfDone: "<verifiable result>", accountableMemberId: "${first.id}", mode: "read" } }. The task still requires acceptance; self-described capabilities grant no permissions.`,
+    })];
     return [Object.freeze({
       action: "delegate-work",
       method: "POST",
@@ -6020,7 +6026,7 @@ this.slaBreachAlerts = new SlaBreachAlertJournal(this); // Task 26: durable in-a
         // RC-2026-09-18-055: finding who can do the work is half the
         // delegation loop — name how to hand it over. The first listed
         // member is a concrete assignee example.
-        next: Object.freeze(capabilitiesNext(roomId, listed.map(m => ({ id: m.id, kind: m.kind })))),
+        next: Object.freeze(capabilitiesNext(roomId, listed.map(m => ({ id: m.id, kind: m.kind })), isCurrentRoom(this.db, roomId))),
       };
     });
   }

@@ -2,7 +2,7 @@ import {seedHistoricalRedactionSource} from './historical-redaction-source.mjs';
 import {auditRecovery} from '../../server/recovery.mjs';
 import {textVersion} from '../../server/text-results.mjs';
 import {setTier} from '../../server/autonomy-tiers.mjs';
-export function seedRecoveryWorkHelpSource(store,{checkpoint=true,extraOffers=0,beforeCapture:extendBeforeCapture}={}){
+export function seedRecoveryWorkHelpSource(store,{checkpoint=true,extraOffers=0,beforeCapture:extendBeforeCapture,captureOptions}={}){
  let saved=null,serial=0,now=Date.now(),helpEventId;
  const f=seedHistoricalRedactionSource(store,{beforeCapture(s,{key,workerKey}){
   s.now=()=>now;const send=(who,type,data)=>{now+=3000;return s.command(who,'legacy-room',{id:'help-audit-'+serial++,type,data});};
@@ -29,7 +29,7 @@ export function seedRecoveryWorkHelpSource(store,{checkpoint=true,extraOffers=0,
   }
 
   extendBeforeCapture?.(s,{key,workerKey,send});
- }});
+ },captureOptions});
  if(checkpoint)store.transaction(()=>store.db.prepare('INSERT INTO projection_checkpoints(room_id,sequence,projection) VALUES(?,?,?)').run('legacy-room',saved.sequence,saved.projection));
  auditRecovery(store);return{...f,helpEventId,checkpointSequence:checkpoint?saved.sequence:null};
 }

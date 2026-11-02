@@ -14,7 +14,7 @@ export function validateRecoveryTextResults(p){
 }
 function scratchBytes(db,restoreId,roomId,domain,key){
  const row=db.prepare("SELECT payload_bytes,length(CAST(payload AS BLOB)) bytes FROM current_restore_audit_scratch WHERE restore_id=? AND lane='actual' AND room_id=? AND domain=? AND unit_key=? AND part=0").get(restoreId,roomId,domain,key);
- if(!row||row.bytes!==row.payload_bytes||!Number.isSafeInteger(row.bytes)||row.bytes<1||row.bytes>RESTORE_AUDIT_UNIT_BYTES)fail();return row.bytes;
+ if(!row||row.bytes !== row.payload_bytes || !Number.isSafeInteger(row.bytes) || row.bytes < 1 || row.bytes > RESTORE_AUDIT_UNIT_BYTES)fail();return row.bytes;
 }
 export function advanceRecoveryTextResults(store,scratch,restoreId,roomId,previous,seal){
  validateRecoveryTextResults(previous);const p={...previous},db=store.db;let bytes=0,units=0;

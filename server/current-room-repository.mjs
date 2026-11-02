@@ -607,7 +607,8 @@ export function prepareCurrentWrite(store,{roomId,previous,state,event,sequence,
   const headHash=hash(JSON.stringify(headValue(nextHead)));
   const projection=JSON.stringify({normalizedCurrent:{version:1,headRevision:nextHead.revision,headHash}});
   if(!current.candidate)recordProjectionWrite(db,roomId,projection);
-  return {projection,retainedMessageIds:[],persistEntities(){
+  const receiptBytesUpperBound=Buffer.byteLength(JSON.stringify({version:1,roomId,headHash,records:changes.map(({domain,key,value})=>[domain,key,Number.MAX_SAFE_INTEGER,value===undefined?0:1,'f'.repeat(64)])}));
+  return {projection,receiptBytesUpperBound,retainedMessageIds:[],persistEntities(){
     if(current.candidate) {
       for(const row of workWrites)current.candidate.writeWork(row);
       current.candidate.writeMessages(previous.state,state,event,sequence);

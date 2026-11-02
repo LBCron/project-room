@@ -1482,7 +1482,13 @@ export class RoomAgentClient {
       if(sort!==undefined&&sort!=='curiosity')throw new RoomClientError(0,'invalid_sort','Sort is omitted or curiosity');
       const params=new URLSearchParams({focus});
       for(const [key,value] of Object.entries({limit,cursor,query,sort}))if(value!==undefined)params.set(key,String(value));
-      const listing=await this.#request('/work-list?'+params,undefined,signal);
+      let listing;
+      try { listing=await this.#request('/work-list?'+params,undefined,signal); }
+      catch(error) {
+        if(focus==='help_wanted'&&error.status===404)
+          throw new RoomClientError(error.status,'help_context_unavailable','This service does not support paged help discovery');
+        throw error;
+      }
       if(listing?.roomId!==this.#roomId||listing.member?.id!==this.#memberId||listing.viewerId!==this.#memberId
         ||listing.viewerAccountId!==null||listing.viewerAuthEpoch!==null||listing.viewerSessionBinding!==null||listing.viewerSessionRevision!==null||!Array.isArray(listing.work)
         ||!listing.page||typeof listing.page.hasMore!=='boolean'||listing.page.hasMore!==Boolean(listing.page.nextRead)

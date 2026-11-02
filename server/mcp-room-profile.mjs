@@ -445,7 +445,9 @@ export function listRoomWork(store, secret, args) {
     viewerSessionBinding:snapshot.viewerSessionBinding??null,viewerSessionRevision:snapshot.viewerSessionRevision??null,
     member: member ? { id: member.id, kind: member.kind, permissions: [...member.permissions] } : null,
     charter: snapshot.charter ?? null,
-    ...(matches ? { selection: { query: args.query.trim(), matches: matches.total, shown: work.length } } : {}),
+    ...(matches ? { selection: { query: args.query.trim(), matches: matches.total, shown: work.length } }
+      : help ? { selection: { totalWork: items.length, helpWanted: work.length,
+        guidance: "Explicit current invitations, not assignments, queue eligibility or permission to execute. Follow nextRead to inspect current offer capacity and selection before contributing. No automatic offer or dispatch." } } : {}),
     ...(sort ? { sort } : {}),
     work, ...(focus === "needs_me" ? { replyRequests, replyRequestsEvaluatedThrough: replyListing.evaluatedThrough } : {})
   }, args, secret, "hosted"));

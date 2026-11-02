@@ -1,0 +1,1342 @@
+{
+  "parent": "0d7770cb084bac5996dfe28c048cff468845705b",
+  "candidate": "62f935f9880a37c6ad9fccb2584c0570a00d2378",
+  "cases": {
+    "parent": {
+      "source": "0d7770cb084bac5996dfe28c048cff468845705b",
+      "node": "v24.22.1",
+      "count": 1000,
+      "completed": false,
+      "failure": {
+        "name": "Error",
+        "code": null,
+        "message": "Ordinary post-publication challenge failed in 3 operations; failures retained, cold phase measured separately"
+      },
+      "finalAuditOk": true,
+      "continuationCalls": 299,
+      "targetBeforeFinal": {
+        "events": 1007,
+        "records": 2017,
+        "admission": {
+          "pending": true
+        }
+      },
+      "pendingReady": {
+        "status": 503,
+        "hostWallMs": 365.819833,
+        "meter": {
+          "statements": 6,
+          "failedStatements": 0,
+          "rowsRead": 51,
+          "rowsWritten": 0,
+          "unknownCounters": 0,
+          "returnedRows": 27,
+          "returnedTextBytes": 9099,
+          "returnedBlobBytes": 0,
+          "numericCells": 24,
+          "returnedPayloadBytes": 9099,
+          "distinctSql": 2,
+          "attributedRowsRead": 51,
+          "attributedReturnedPayloadBytes": 9099,
+          "categories": [
+            {
+              "category": "catalog",
+              "statements": 3,
+              "failedStatements": 0,
+              "rowsRead": 48,
+              "rowsWritten": 0,
+              "unknownCounters": 0,
+              "returnedRows": 24,
+              "returnedTextBytes": 8946,
+              "returnedBlobBytes": 0,
+              "numericCells": 24,
+              "returnedPayloadBytes": 8946
+            },
+            {
+              "category": "select-data",
+              "statements": 3,
+              "failedStatements": 0,
+              "rowsRead": 3,
+              "rowsWritten": 0,
+              "unknownCounters": 0,
+              "returnedRows": 3,
+              "returnedTextBytes": 153,
+              "returnedBlobBytes": 0,
+              "numericCells": 0,
+              "returnedPayloadBytes": 153
+            }
+          ]
+        },
+        "constructorMeter": {
+          "statements": 13,
+          "failedStatements": 0,
+          "rowsRead": 5223,
+          "rowsWritten": 0,
+          "unknownCounters": 0,
+          "returnedRows": 167,
+          "returnedTextBytes": 60436,
+          "returnedBlobBytes": 0,
+          "numericCells": 23,
+          "returnedPayloadBytes": 60436,
+          "localWallMs": 6
+        }
+      },
+      "preparedWriterRefusal": {
+        "status": 200,
+        "hostWallMs": 1.4265829999999369,
+        "meter": {
+          "statements": 3,
+          "failedStatements": 1,
+          "rowsRead": 2,
+          "rowsWritten": 1,
+          "unknownCounters": 2,
+          "returnedRows": 1,
+          "returnedTextBytes": 0,
+          "returnedBlobBytes": 0,
+          "numericCells": 1,
+          "returnedPayloadBytes": 0,
+          "distinctSql": 3,
+          "attributedRowsRead": 2,
+          "attributedReturnedPayloadBytes": 0,
+          "categories": [
+            {
+              "category": "select-data",
+              "statements": 1,
+              "failedStatements": 0,
+              "rowsRead": 1,
+              "rowsWritten": 0,
+              "unknownCounters": 0,
+              "returnedRows": 1,
+              "returnedTextBytes": 0,
+              "returnedBlobBytes": 0,
+              "numericCells": 1,
+              "returnedPayloadBytes": 0
+            },
+            {
+              "category": "update",
+              "statements": 2,
+              "failedStatements": 1,
+              "rowsRead": 1,
+              "rowsWritten": 1,
+              "unknownCounters": 2,
+              "returnedRows": 0,
+              "returnedTextBytes": 0,
+              "returnedBlobBytes": 0,
+              "numericCells": 0,
+              "returnedPayloadBytes": 0
+            }
+          ]
+        },
+        "constructorMeter": {
+          "statements": 13,
+          "failedStatements": 0,
+          "rowsRead": 5223,
+          "rowsWritten": 0,
+          "unknownCounters": 0,
+          "returnedRows": 167,
+          "returnedTextBytes": 60436,
+          "returnedBlobBytes": 0,
+          "numericCells": 23,
+          "returnedPayloadBytes": 60436,
+          "localWallMs": 6
+        },
+        "refused": true,
+        "error": "restore target is sealed: SQLITE_CONSTRAINT (extended: SQLITE_CONSTRAINT_TRIGGER)"
+      },
+      "finalization": {
+        "index": 298,
+        "inputPhase": "audit_pending",
+        "inputStage": "full_audit_pending",
+        "status": 200,
+        "hostWallMs": 309.55675000000065,
+        "meter": {
+          "statements": 15700,
+          "failedStatements": 0,
+          "rowsRead": 1091713,
+          "rowsWritten": 6,
+          "unknownCounters": 0,
+          "returnedRows": 30039,
+          "returnedTextBytes": 4090920,
+          "returnedBlobBytes": 0,
+          "numericCells": 52102,
+          "returnedPayloadBytes": 4090920,
+          "distinctSql": 1189,
+          "attributedRowsRead": 1091713,
+          "attributedReturnedPayloadBytes": 4090920,
+          "categories": [
+            {
+              "category": "drop-trigger",
+              "statements": 666,
+              "failedStatements": 0,
+              "rowsRead": 797535,
+              "rowsWritten": 0,
+              "unknownCounters": 0,
+              "returnedRows": 0,
+              "returnedTextBytes": 0,
+              "returnedBlobBytes": 0,
+              "numericCells": 0,
+              "returnedPayloadBytes": 0
+            },
+            {
+              "category": "catalog",
+              "statements": 381,
+              "failedStatements": 0,
+              "rowsRead": 251102,
+              "rowsWritten": 0,
+              "unknownCounters": 0,
+              "returnedRows": 4517,
+              "returnedTextBytes": 376496,
+              "returnedBlobBytes": 0,
+              "numericCells": 2668,
+              "returnedPayloadBytes": 376496
+            },
+            {
+              "category": "select-data",
+              "statements": 14417,
+              "failedStatements": 0,
+              "rowsRead": 30658,
+              "rowsWritten": 0,
+              "unknownCounters": 0,
+              "returnedRows": 25279,
+              "returnedTextBytes": 3713734,
+              "returnedBlobBytes": 0,
+              "numericCells": 49386,
+              "returnedPayloadBytes": 3713734
+            },
+            {
+              "category": "pragma quick_check",
+              "statements": 227,
+              "failedStatements": 0,
+              "rowsRead": 6296,
+              "rowsWritten": 0,
+              "unknownCounters": 0,
+              "returnedRows": 227,
+              "returnedTextBytes": 454,
+              "returnedBlobBytes": 0,
+              "numericCells": 0,
+              "returnedPayloadBytes": 454
+            },
+            {
+              "category": "pragma foreign_key_check",
+              "statements": 1,
+              "failedStatements": 0,
+              "rowsRead": 6115,
+              "rowsWritten": 0,
+              "unknownCounters": 0,
+              "returnedRows": 0,
+              "returnedTextBytes": 0,
+              "returnedBlobBytes": 0,
+              "numericCells": 0,
+              "returnedPayloadBytes": 0
+            },
+            {
+              "category": "update",
+              "statements": 3,
+              "failedStatements": 0,
+              "rowsRead": 7,
+              "rowsWritten": 3,
+              "unknownCounters": 0,
+              "returnedRows": 0,
+              "returnedTextBytes": 0,
+              "returnedBlobBytes": 0,
+              "numericCells": 0,
+              "returnedPayloadBytes": 0
+            },
+            {
+              "category": "pragma table_info",
+              "statements": 2,
+              "failedStatements": 0,
+              "rowsRead": 0,
+              "rowsWritten": 0,
+              "unknownCounters": 0,
+              "returnedRows": 16,
+              "returnedTextBytes": 236,
+              "returnedBlobBytes": 0,
+              "numericCells": 48,
+              "returnedPayloadBytes": 236
+            },
+            {
+              "category": "create-trigger",
+              "statements": 3,
+              "failedStatements": 0,
+              "rowsRead": 0,
+              "rowsWritten": 3,
+              "unknownCounters": 0,
+              "returnedRows": 0,
+              "returnedTextBytes": 0,
+              "returnedBlobBytes": 0,
+              "numericCells": 0,
+              "returnedPayloadBytes": 0
+            }
+          ]
+        },
+        "constructorMeter": {
+          "statements": 13,
+          "failedStatements": 0,
+          "rowsRead": 5223,
+          "rowsWritten": 0,
+          "unknownCounters": 0,
+          "returnedRows": 167,
+          "returnedTextBytes": 60436,
+          "returnedBlobBytes": 0,
+          "numericCells": 23,
+          "returnedPayloadBytes": 60436,
+          "localWallMs": 6
+        },
+        "outputPhase": null,
+        "outputStage": null,
+        "pending": false,
+        "verified": true,
+        "logicalRows": null
+      },
+      "ordinary": [
+        {
+          "label": "warm-0-read",
+          "status": 200,
+          "hostWallMs": 6.7227920000004815,
+          "meter": {
+            "statements": 128,
+            "failedStatements": 0,
+            "rowsRead": 3296,
+            "rowsWritten": 0,
+            "unknownCounters": 0,
+            "returnedRows": 477,
+            "returnedTextBytes": 229112,
+            "returnedBlobBytes": 0,
+            "numericCells": 508,
+            "returnedPayloadBytes": 229112,
+            "distinctSql": 29,
+            "attributedRowsRead": 3296,
+            "attributedReturnedPayloadBytes": 229112
+          },
+          "errorCode": null
+        },
+        {
+          "label": "warm-0-write",
+          "status": 201,
+          "hostWallMs": 10.170834000000468,
+          "meter": {
+            "statements": 184,
+            "failedStatements": 0,
+            "rowsRead": 2644,
+            "rowsWritten": 37,
+            "unknownCounters": 0,
+            "returnedRows": 494,
+            "returnedTextBytes": 216620,
+            "returnedBlobBytes": 0,
+            "numericCells": 522,
+            "returnedPayloadBytes": 216620,
+            "distinctSql": 47,
+            "attributedRowsRead": 2644,
+            "attributedReturnedPayloadBytes": 216620
+          },
+          "duplicate": false
+        },
+        {
+          "label": "warm-0-exact-retry",
+          "status": 200,
+          "hostWallMs": 3.2102089999998498,
+          "meter": {
+            "statements": 100,
+            "failedStatements": 0,
+            "rowsRead": 799,
+            "rowsWritten": 2,
+            "unknownCounters": 0,
+            "returnedRows": 435,
+            "returnedTextBytes": 208601,
+            "returnedBlobBytes": 0,
+            "numericCells": 452,
+            "returnedPayloadBytes": 208601,
+            "distinctSql": 22,
+            "attributedRowsRead": 799,
+            "attributedReturnedPayloadBytes": 208601
+          },
+          "duplicate": true
+        },
+        {
+          "label": "warm-1-read",
+          "status": 500,
+          "hostWallMs": 4.053790999999364,
+          "meter": {
+            "statements": 121,
+            "failedStatements": 0,
+            "rowsRead": 824,
+            "rowsWritten": 0,
+            "unknownCounters": 0,
+            "returnedRows": 463,
+            "returnedTextBytes": 210760,
+            "returnedBlobBytes": 0,
+            "numericCells": 497,
+            "returnedPayloadBytes": 210760,
+            "distinctSql": 25,
+            "attributedRowsRead": 824,
+            "attributedReturnedPayloadBytes": 210760
+          },
+          "errorCode": "internal_error"
+        },
+        {
+          "label": "warm-1-write",
+          "status": 201,
+          "hostWallMs": 4.354417000000467,
+          "meter": {
+            "statements": 191,
+            "failedStatements": 0,
+            "rowsRead": 4385,
+            "rowsWritten": 37,
+            "unknownCounters": 0,
+            "returnedRows": 502,
+            "returnedTextBytes": 215532,
+            "returnedBlobBytes": 0,
+            "numericCells": 528,
+            "returnedPayloadBytes": 215532,
+            "distinctSql": 50,
+            "attributedRowsRead": 4385,
+            "attributedReturnedPayloadBytes": 215532
+          },
+          "duplicate": false
+        },
+        {
+          "label": "warm-1-exact-retry",
+          "status": 200,
+          "hostWallMs": 3.185375000000022,
+          "meter": {
+            "statements": 100,
+            "failedStatements": 0,
+            "rowsRead": 799,
+            "rowsWritten": 2,
+            "unknownCounters": 0,
+            "returnedRows": 435,
+            "returnedTextBytes": 208601,
+            "returnedBlobBytes": 0,
+            "numericCells": 452,
+            "returnedPayloadBytes": 208601,
+            "distinctSql": 22,
+            "attributedRowsRead": 799,
+            "attributedReturnedPayloadBytes": 208601
+          },
+          "duplicate": true
+        },
+        {
+          "label": "warm-2-read",
+          "status": 500,
+          "hostWallMs": 5.56591600000047,
+          "meter": {
+            "statements": 121,
+            "failedStatements": 0,
+            "rowsRead": 824,
+            "rowsWritten": 0,
+            "unknownCounters": 0,
+            "returnedRows": 463,
+            "returnedTextBytes": 210782,
+            "returnedBlobBytes": 0,
+            "numericCells": 497,
+            "returnedPayloadBytes": 210782,
+            "distinctSql": 25,
+            "attributedRowsRead": 824,
+            "attributedReturnedPayloadBytes": 210782
+          },
+          "errorCode": "internal_error"
+        },
+        {
+          "label": "warm-2-write",
+          "status": 201,
+          "hostWallMs": 4.530625000000327,
+          "meter": {
+            "statements": 191,
+            "failedStatements": 0,
+            "rowsRead": 4385,
+            "rowsWritten": 37,
+            "unknownCounters": 0,
+            "returnedRows": 502,
+            "returnedTextBytes": 215532,
+            "returnedBlobBytes": 0,
+            "numericCells": 528,
+            "returnedPayloadBytes": 215532,
+            "distinctSql": 50,
+            "attributedRowsRead": 4385,
+            "attributedReturnedPayloadBytes": 215532
+          },
+          "duplicate": false
+        },
+        {
+          "label": "warm-2-exact-retry",
+          "status": 200,
+          "hostWallMs": 2.7618750000001455,
+          "meter": {
+            "statements": 100,
+            "failedStatements": 0,
+            "rowsRead": 799,
+            "rowsWritten": 2,
+            "unknownCounters": 0,
+            "returnedRows": 435,
+            "returnedTextBytes": 208601,
+            "returnedBlobBytes": 0,
+            "numericCells": 452,
+            "returnedPayloadBytes": 208601,
+            "distinctSql": 22,
+            "attributedRowsRead": 799,
+            "attributedReturnedPayloadBytes": 208601
+          },
+          "duplicate": true
+        },
+        {
+          "label": "after-cold-read",
+          "status": 500,
+          "hostWallMs": 8.266999999999825,
+          "meter": {
+            "statements": 121,
+            "failedStatements": 0,
+            "rowsRead": 1558,
+            "rowsWritten": 0,
+            "unknownCounters": 0,
+            "returnedRows": 463,
+            "returnedTextBytes": 210804,
+            "returnedBlobBytes": 0,
+            "numericCells": 497,
+            "returnedPayloadBytes": 210804,
+            "distinctSql": 26,
+            "attributedRowsRead": 1558,
+            "attributedReturnedPayloadBytes": 210804
+          },
+          "errorCode": "internal_error"
+        },
+        {
+          "label": "after-cold-write",
+          "status": 201,
+          "hostWallMs": 11.670458999999937,
+          "meter": {
+            "statements": 200,
+            "failedStatements": 0,
+            "rowsRead": 5264,
+            "rowsWritten": 39,
+            "unknownCounters": 0,
+            "returnedRows": 507,
+            "returnedTextBytes": 215997,
+            "returnedBlobBytes": 0,
+            "numericCells": 533,
+            "returnedPayloadBytes": 215997,
+            "distinctSql": 56,
+            "attributedRowsRead": 5264,
+            "attributedReturnedPayloadBytes": 215997
+          },
+          "duplicate": false
+        },
+        {
+          "label": "after-cold-exact-retry",
+          "status": 200,
+          "hostWallMs": 3.3569159999997282,
+          "meter": {
+            "statements": 101,
+            "failedStatements": 0,
+            "rowsRead": 800,
+            "rowsWritten": 2,
+            "unknownCounters": 0,
+            "returnedRows": 436,
+            "returnedTextBytes": 208601,
+            "returnedBlobBytes": 0,
+            "numericCells": 453,
+            "returnedPayloadBytes": 208601,
+            "distinctSql": 22,
+            "attributedRowsRead": 800,
+            "attributedReturnedPayloadBytes": 208601
+          },
+          "duplicate": true
+        }
+      ],
+      "ordinaryFailures": [
+        {
+          "label": "warm-1-read",
+          "status": 500,
+          "error": {
+            "code": "internal_error",
+            "message": "Service could not complete the request; no success is claimed"
+          },
+          "fingerprint": "4464cdd33bba72fc9b04e4336a7013bcf424bec41ce7b6bd6690a1ed8c089035"
+        },
+        {
+          "label": "warm-2-read",
+          "status": 500,
+          "error": {
+            "code": "internal_error",
+            "message": "Service could not complete the request; no success is claimed"
+          },
+          "fingerprint": "4464cdd33bba72fc9b04e4336a7013bcf424bec41ce7b6bd6690a1ed8c089035"
+        },
+        {
+          "label": "after-cold-read",
+          "status": 500,
+          "error": {
+            "code": "internal_error",
+            "message": "Service could not complete the request; no success is claimed"
+          },
+          "fingerprint": "587fccd4aae800fa9dff74de23a40caa1eb17f07d71678c9ee58c3e209d09c0e"
+        }
+      ],
+      "coldReady": {
+        "status": 200,
+        "hostWallMs": 375.4159580000005,
+        "meter": {
+          "statements": 13,
+          "failedStatements": 0,
+          "rowsRead": 102,
+          "rowsWritten": 0,
+          "unknownCounters": 0,
+          "returnedRows": 55,
+          "returnedTextBytes": 17922,
+          "returnedBlobBytes": 0,
+          "numericCells": 49,
+          "returnedPayloadBytes": 17922,
+          "distinctSql": 3,
+          "attributedRowsRead": 102,
+          "attributedReturnedPayloadBytes": 17922,
+          "categories": [
+            {
+              "category": "catalog",
+              "statements": 6,
+              "failedStatements": 0,
+              "rowsRead": 96,
+              "rowsWritten": 0,
+              "unknownCounters": 0,
+              "returnedRows": 48,
+              "returnedTextBytes": 17892,
+              "returnedBlobBytes": 0,
+              "numericCells": 48,
+              "returnedPayloadBytes": 17892
+            },
+            {
+              "category": "select-data",
+              "statements": 7,
+              "failedStatements": 0,
+              "rowsRead": 6,
+              "rowsWritten": 0,
+              "unknownCounters": 0,
+              "returnedRows": 7,
+              "returnedTextBytes": 30,
+              "returnedBlobBytes": 0,
+              "numericCells": 1,
+              "returnedPayloadBytes": 30
+            }
+          ]
+        },
+        "constructorMeter": {
+          "statements": 51,
+          "failedStatements": 0,
+          "rowsRead": 5240,
+          "rowsWritten": 14,
+          "unknownCounters": 0,
+          "returnedRows": 70,
+          "returnedTextBytes": 3889,
+          "returnedBlobBytes": 0,
+          "numericCells": 141,
+          "returnedPayloadBytes": 3889,
+          "localWallMs": 7
+        },
+        "constructorPlusRequest": {
+          "statements": 64,
+          "rowsRead": 5342,
+          "rowsWritten": 14,
+          "returnedPayloadBytes": 21811,
+          "failedStatements": 0,
+          "unknownCounters": 0
+        }
+      },
+      "limits": [
+        "Actual local workerd SQLite DO with production restore routes, synthetic data only; no deployment/live conversion.",
+        "Native constructor measured separately through test-only storage.sql shadow; per-request counters exclude constructor. Constructor local wall is not CPU. Cold-ready included rows/bytes are constructor plus coldReady request, never repeated constructor headers.",
+        "Same passive native cursor meter as baseline; test-only context/storage proxy also observes constructor and direct storage SQL. No forced drain, no bindings captured. UTF-8/BLOB bytes exclude numeric encodings, column names, wire/disk overhead.",
+        "Host wall time is not production CPU usage. No source limits or checks disabled; Miniflare defaults retained.",
+        "No duplicate/restart correctness campaign; existing 500-event correctness lane is separate."
+      ]
+    },
+    "candidate": {
+      "source": "62f935f9880a37c6ad9fccb2584c0570a00d2378",
+      "node": "v24.22.1",
+      "count": 1000,
+      "completed": false,
+      "failure": {
+        "name": "Error",
+        "code": null,
+        "message": "Ordinary post-publication challenge failed in 3 operations; failures retained, cold phase measured separately"
+      },
+      "finalAuditOk": true,
+      "continuationCalls": 299,
+      "targetBeforeFinal": {
+        "events": 1007,
+        "records": 2017,
+        "admission": {
+          "pending": true
+        }
+      },
+      "pendingReady": {
+        "status": 503,
+        "hostWallMs": 370.718625,
+        "meter": {
+          "statements": 6,
+          "failedStatements": 0,
+          "rowsRead": 51,
+          "rowsWritten": 0,
+          "unknownCounters": 0,
+          "returnedRows": 27,
+          "returnedTextBytes": 9099,
+          "returnedBlobBytes": 0,
+          "numericCells": 24,
+          "returnedPayloadBytes": 9099,
+          "distinctSql": 2,
+          "attributedRowsRead": 51,
+          "attributedReturnedPayloadBytes": 9099,
+          "categories": [
+            {
+              "category": "catalog",
+              "statements": 3,
+              "failedStatements": 0,
+              "rowsRead": 48,
+              "rowsWritten": 0,
+              "unknownCounters": 0,
+              "returnedRows": 24,
+              "returnedTextBytes": 8946,
+              "returnedBlobBytes": 0,
+              "numericCells": 24,
+              "returnedPayloadBytes": 8946
+            },
+            {
+              "category": "select-data",
+              "statements": 3,
+              "failedStatements": 0,
+              "rowsRead": 3,
+              "rowsWritten": 0,
+              "unknownCounters": 0,
+              "returnedRows": 3,
+              "returnedTextBytes": 153,
+              "returnedBlobBytes": 0,
+              "numericCells": 0,
+              "returnedPayloadBytes": 153
+            }
+          ]
+        },
+        "constructorMeter": {
+          "statements": 13,
+          "failedStatements": 0,
+          "rowsRead": 5223,
+          "rowsWritten": 0,
+          "unknownCounters": 0,
+          "returnedRows": 167,
+          "returnedTextBytes": 60436,
+          "returnedBlobBytes": 0,
+          "numericCells": 23,
+          "returnedPayloadBytes": 60436,
+          "localWallMs": 6
+        }
+      },
+      "preparedWriterRefusal": {
+        "status": 200,
+        "hostWallMs": 1.5922080000000278,
+        "meter": {
+          "statements": 3,
+          "failedStatements": 1,
+          "rowsRead": 2,
+          "rowsWritten": 1,
+          "unknownCounters": 2,
+          "returnedRows": 1,
+          "returnedTextBytes": 0,
+          "returnedBlobBytes": 0,
+          "numericCells": 1,
+          "returnedPayloadBytes": 0,
+          "distinctSql": 3,
+          "attributedRowsRead": 2,
+          "attributedReturnedPayloadBytes": 0,
+          "categories": [
+            {
+              "category": "select-data",
+              "statements": 1,
+              "failedStatements": 0,
+              "rowsRead": 1,
+              "rowsWritten": 0,
+              "unknownCounters": 0,
+              "returnedRows": 1,
+              "returnedTextBytes": 0,
+              "returnedBlobBytes": 0,
+              "numericCells": 1,
+              "returnedPayloadBytes": 0
+            },
+            {
+              "category": "update",
+              "statements": 2,
+              "failedStatements": 1,
+              "rowsRead": 1,
+              "rowsWritten": 1,
+              "unknownCounters": 2,
+              "returnedRows": 0,
+              "returnedTextBytes": 0,
+              "returnedBlobBytes": 0,
+              "numericCells": 0,
+              "returnedPayloadBytes": 0
+            }
+          ]
+        },
+        "constructorMeter": {
+          "statements": 13,
+          "failedStatements": 0,
+          "rowsRead": 5223,
+          "rowsWritten": 0,
+          "unknownCounters": 0,
+          "returnedRows": 167,
+          "returnedTextBytes": 60436,
+          "returnedBlobBytes": 0,
+          "numericCells": 23,
+          "returnedPayloadBytes": 60436,
+          "localWallMs": 6
+        },
+        "refused": true,
+        "error": "restore target is sealed: SQLITE_CONSTRAINT (extended: SQLITE_CONSTRAINT_TRIGGER)"
+      },
+      "finalization": {
+        "index": 298,
+        "inputPhase": "audit_pending",
+        "inputStage": "full_audit_pending",
+        "status": 200,
+        "hostWallMs": 256.4440000000004,
+        "meter": {
+          "statements": 15037,
+          "failedStatements": 0,
+          "rowsRead": 302743,
+          "rowsWritten": 6,
+          "unknownCounters": 0,
+          "returnedRows": 30039,
+          "returnedTextBytes": 4090920,
+          "returnedBlobBytes": 0,
+          "numericCells": 52102,
+          "returnedPayloadBytes": 4090920,
+          "distinctSql": 526,
+          "attributedRowsRead": 302743,
+          "attributedReturnedPayloadBytes": 4090920,
+          "categories": [
+            {
+              "category": "catalog",
+              "statements": 381,
+              "failedStatements": 0,
+              "rowsRead": 255080,
+              "rowsWritten": 0,
+              "unknownCounters": 0,
+              "returnedRows": 4517,
+              "returnedTextBytes": 376496,
+              "returnedBlobBytes": 0,
+              "numericCells": 2668,
+              "returnedPayloadBytes": 376496
+            },
+            {
+              "category": "select-data",
+              "statements": 14417,
+              "failedStatements": 0,
+              "rowsRead": 30658,
+              "rowsWritten": 0,
+              "unknownCounters": 0,
+              "returnedRows": 25279,
+              "returnedTextBytes": 3713734,
+              "returnedBlobBytes": 0,
+              "numericCells": 49386,
+              "returnedPayloadBytes": 3713734
+            },
+            {
+              "category": "pragma quick_check",
+              "statements": 227,
+              "failedStatements": 0,
+              "rowsRead": 6296,
+              "rowsWritten": 0,
+              "unknownCounters": 0,
+              "returnedRows": 227,
+              "returnedTextBytes": 454,
+              "returnedBlobBytes": 0,
+              "numericCells": 0,
+              "returnedPayloadBytes": 454
+            },
+            {
+              "category": "pragma foreign_key_check",
+              "statements": 1,
+              "failedStatements": 0,
+              "rowsRead": 6115,
+              "rowsWritten": 0,
+              "unknownCounters": 0,
+              "returnedRows": 0,
+              "returnedTextBytes": 0,
+              "returnedBlobBytes": 0,
+              "numericCells": 0,
+              "returnedPayloadBytes": 0
+            },
+            {
+              "category": "drop-trigger",
+              "statements": 3,
+              "failedStatements": 0,
+              "rowsRead": 4587,
+              "rowsWritten": 0,
+              "unknownCounters": 0,
+              "returnedRows": 0,
+              "returnedTextBytes": 0,
+              "returnedBlobBytes": 0,
+              "numericCells": 0,
+              "returnedPayloadBytes": 0
+            },
+            {
+              "category": "update",
+              "statements": 3,
+              "failedStatements": 0,
+              "rowsRead": 7,
+              "rowsWritten": 3,
+              "unknownCounters": 0,
+              "returnedRows": 0,
+              "returnedTextBytes": 0,
+              "returnedBlobBytes": 0,
+              "numericCells": 0,
+              "returnedPayloadBytes": 0
+            },
+            {
+              "category": "pragma table_info",
+              "statements": 2,
+              "failedStatements": 0,
+              "rowsRead": 0,
+              "rowsWritten": 0,
+              "unknownCounters": 0,
+              "returnedRows": 16,
+              "returnedTextBytes": 236,
+              "returnedBlobBytes": 0,
+              "numericCells": 48,
+              "returnedPayloadBytes": 236
+            },
+            {
+              "category": "create-trigger",
+              "statements": 3,
+              "failedStatements": 0,
+              "rowsRead": 0,
+              "rowsWritten": 3,
+              "unknownCounters": 0,
+              "returnedRows": 0,
+              "returnedTextBytes": 0,
+              "returnedBlobBytes": 0,
+              "numericCells": 0,
+              "returnedPayloadBytes": 0
+            }
+          ]
+        },
+        "constructorMeter": {
+          "statements": 13,
+          "failedStatements": 0,
+          "rowsRead": 5223,
+          "rowsWritten": 0,
+          "unknownCounters": 0,
+          "returnedRows": 167,
+          "returnedTextBytes": 60436,
+          "returnedBlobBytes": 0,
+          "numericCells": 23,
+          "returnedPayloadBytes": 60436,
+          "localWallMs": 6
+        },
+        "outputPhase": null,
+        "outputStage": null,
+        "pending": false,
+        "verified": true,
+        "logicalRows": null
+      },
+      "ordinary": [
+        {
+          "label": "warm-0-read",
+          "status": 200,
+          "hostWallMs": 6.71875,
+          "meter": {
+            "statements": 128,
+            "failedStatements": 0,
+            "rowsRead": 5285,
+            "rowsWritten": 0,
+            "unknownCounters": 0,
+            "returnedRows": 477,
+            "returnedTextBytes": 229112,
+            "returnedBlobBytes": 0,
+            "numericCells": 508,
+            "returnedPayloadBytes": 229112,
+            "distinctSql": 29,
+            "attributedRowsRead": 5285,
+            "attributedReturnedPayloadBytes": 229112
+          },
+          "errorCode": null
+        },
+        {
+          "label": "warm-0-write",
+          "status": 201,
+          "hostWallMs": 10.561208999999508,
+          "meter": {
+            "statements": 184,
+            "failedStatements": 0,
+            "rowsRead": 3983,
+            "rowsWritten": 37,
+            "unknownCounters": 0,
+            "returnedRows": 494,
+            "returnedTextBytes": 216620,
+            "returnedBlobBytes": 0,
+            "numericCells": 522,
+            "returnedPayloadBytes": 216620,
+            "distinctSql": 47,
+            "attributedRowsRead": 3983,
+            "attributedReturnedPayloadBytes": 216620
+          },
+          "duplicate": false
+        },
+        {
+          "label": "warm-0-exact-retry",
+          "status": 200,
+          "hostWallMs": 3.144792000000052,
+          "meter": {
+            "statements": 100,
+            "failedStatements": 0,
+            "rowsRead": 799,
+            "rowsWritten": 2,
+            "unknownCounters": 0,
+            "returnedRows": 435,
+            "returnedTextBytes": 208601,
+            "returnedBlobBytes": 0,
+            "numericCells": 452,
+            "returnedPayloadBytes": 208601,
+            "distinctSql": 22,
+            "attributedRowsRead": 799,
+            "attributedReturnedPayloadBytes": 208601
+          },
+          "duplicate": true
+        },
+        {
+          "label": "warm-1-read",
+          "status": 500,
+          "hostWallMs": 4.062417000000096,
+          "meter": {
+            "statements": 121,
+            "failedStatements": 0,
+            "rowsRead": 824,
+            "rowsWritten": 0,
+            "unknownCounters": 0,
+            "returnedRows": 463,
+            "returnedTextBytes": 210760,
+            "returnedBlobBytes": 0,
+            "numericCells": 497,
+            "returnedPayloadBytes": 210760,
+            "distinctSql": 25,
+            "attributedRowsRead": 824,
+            "attributedReturnedPayloadBytes": 210760
+          },
+          "errorCode": "internal_error"
+        },
+        {
+          "label": "warm-1-write",
+          "status": 201,
+          "hostWallMs": 4.246708000000581,
+          "meter": {
+            "statements": 191,
+            "failedStatements": 0,
+            "rowsRead": 7050,
+            "rowsWritten": 37,
+            "unknownCounters": 0,
+            "returnedRows": 502,
+            "returnedTextBytes": 215532,
+            "returnedBlobBytes": 0,
+            "numericCells": 528,
+            "returnedPayloadBytes": 215532,
+            "distinctSql": 50,
+            "attributedRowsRead": 7050,
+            "attributedReturnedPayloadBytes": 215532
+          },
+          "duplicate": false
+        },
+        {
+          "label": "warm-1-exact-retry",
+          "status": 200,
+          "hostWallMs": 2.920625000000655,
+          "meter": {
+            "statements": 100,
+            "failedStatements": 0,
+            "rowsRead": 799,
+            "rowsWritten": 2,
+            "unknownCounters": 0,
+            "returnedRows": 435,
+            "returnedTextBytes": 208601,
+            "returnedBlobBytes": 0,
+            "numericCells": 452,
+            "returnedPayloadBytes": 208601,
+            "distinctSql": 22,
+            "attributedRowsRead": 799,
+            "attributedReturnedPayloadBytes": 208601
+          },
+          "duplicate": true
+        },
+        {
+          "label": "warm-2-read",
+          "status": 500,
+          "hostWallMs": 3.100000000000364,
+          "meter": {
+            "statements": 121,
+            "failedStatements": 0,
+            "rowsRead": 824,
+            "rowsWritten": 0,
+            "unknownCounters": 0,
+            "returnedRows": 463,
+            "returnedTextBytes": 210782,
+            "returnedBlobBytes": 0,
+            "numericCells": 497,
+            "returnedPayloadBytes": 210782,
+            "distinctSql": 25,
+            "attributedRowsRead": 824,
+            "attributedReturnedPayloadBytes": 210782
+          },
+          "errorCode": "internal_error"
+        },
+        {
+          "label": "warm-2-write",
+          "status": 201,
+          "hostWallMs": 5.401208999999653,
+          "meter": {
+            "statements": 191,
+            "failedStatements": 0,
+            "rowsRead": 7050,
+            "rowsWritten": 37,
+            "unknownCounters": 0,
+            "returnedRows": 502,
+            "returnedTextBytes": 215532,
+            "returnedBlobBytes": 0,
+            "numericCells": 528,
+            "returnedPayloadBytes": 215532,
+            "distinctSql": 50,
+            "attributedRowsRead": 7050,
+            "attributedReturnedPayloadBytes": 215532
+          },
+          "duplicate": false
+        },
+        {
+          "label": "warm-2-exact-retry",
+          "status": 200,
+          "hostWallMs": 2.9375419999996666,
+          "meter": {
+            "statements": 100,
+            "failedStatements": 0,
+            "rowsRead": 799,
+            "rowsWritten": 2,
+            "unknownCounters": 0,
+            "returnedRows": 435,
+            "returnedTextBytes": 208601,
+            "returnedBlobBytes": 0,
+            "numericCells": 452,
+            "returnedPayloadBytes": 208601,
+            "distinctSql": 22,
+            "attributedRowsRead": 799,
+            "attributedReturnedPayloadBytes": 208601
+          },
+          "duplicate": true
+        },
+        {
+          "label": "after-cold-read",
+          "status": 500,
+          "hostWallMs": 8.018750000000182,
+          "meter": {
+            "statements": 121,
+            "failedStatements": 0,
+            "rowsRead": 2221,
+            "rowsWritten": 0,
+            "unknownCounters": 0,
+            "returnedRows": 463,
+            "returnedTextBytes": 210804,
+            "returnedBlobBytes": 0,
+            "numericCells": 497,
+            "returnedPayloadBytes": 210804,
+            "distinctSql": 26,
+            "attributedRowsRead": 2221,
+            "attributedReturnedPayloadBytes": 210804
+          },
+          "errorCode": "internal_error"
+        },
+        {
+          "label": "after-cold-write",
+          "status": 201,
+          "hostWallMs": 11.85254200000054,
+          "meter": {
+            "statements": 200,
+            "failedStatements": 0,
+            "rowsRead": 8595,
+            "rowsWritten": 39,
+            "unknownCounters": 0,
+            "returnedRows": 507,
+            "returnedTextBytes": 215997,
+            "returnedBlobBytes": 0,
+            "numericCells": 533,
+            "returnedPayloadBytes": 215997,
+            "distinctSql": 56,
+            "attributedRowsRead": 8595,
+            "attributedReturnedPayloadBytes": 215997
+          },
+          "duplicate": false
+        },
+        {
+          "label": "after-cold-exact-retry",
+          "status": 200,
+          "hostWallMs": 3.488749999999527,
+          "meter": {
+            "statements": 101,
+            "failedStatements": 0,
+            "rowsRead": 800,
+            "rowsWritten": 2,
+            "unknownCounters": 0,
+            "returnedRows": 436,
+            "returnedTextBytes": 208601,
+            "returnedBlobBytes": 0,
+            "numericCells": 453,
+            "returnedPayloadBytes": 208601,
+            "distinctSql": 22,
+            "attributedRowsRead": 800,
+            "attributedReturnedPayloadBytes": 208601
+          },
+          "duplicate": true
+        }
+      ],
+      "ordinaryFailures": [
+        {
+          "label": "warm-1-read",
+          "status": 500,
+          "error": {
+            "code": "internal_error",
+            "message": "Service could not complete the request; no success is claimed"
+          },
+          "fingerprint": "32ae94cf52a62e86cef49dcf13334cad289962313aa4bb75d0379af13619f133"
+        },
+        {
+          "label": "warm-2-read",
+          "status": 500,
+          "error": {
+            "code": "internal_error",
+            "message": "Service could not complete the request; no success is claimed"
+          },
+          "fingerprint": "32ae94cf52a62e86cef49dcf13334cad289962313aa4bb75d0379af13619f133"
+        },
+        {
+          "label": "after-cold-read",
+          "status": 500,
+          "error": {
+            "code": "internal_error",
+            "message": "Service could not complete the request; no success is claimed"
+          },
+          "fingerprint": "fa7802b51a32db6e0753836d28407da2dc18274791587fc4dcb8985357891db9"
+        }
+      ],
+      "coldReady": {
+        "status": 200,
+        "hostWallMs": 381.4101249999994,
+        "meter": {
+          "statements": 13,
+          "failedStatements": 0,
+          "rowsRead": 102,
+          "rowsWritten": 0,
+          "unknownCounters": 0,
+          "returnedRows": 55,
+          "returnedTextBytes": 17922,
+          "returnedBlobBytes": 0,
+          "numericCells": 49,
+          "returnedPayloadBytes": 17922,
+          "distinctSql": 3,
+          "attributedRowsRead": 102,
+          "attributedReturnedPayloadBytes": 17922,
+          "categories": [
+            {
+              "category": "catalog",
+              "statements": 6,
+              "failedStatements": 0,
+              "rowsRead": 96,
+              "rowsWritten": 0,
+              "unknownCounters": 0,
+              "returnedRows": 48,
+              "returnedTextBytes": 17892,
+              "returnedBlobBytes": 0,
+              "numericCells": 48,
+              "returnedPayloadBytes": 17892
+            },
+            {
+              "category": "select-data",
+              "statements": 7,
+              "failedStatements": 0,
+              "rowsRead": 6,
+              "rowsWritten": 0,
+              "unknownCounters": 0,
+              "returnedRows": 7,
+              "returnedTextBytes": 30,
+              "returnedBlobBytes": 0,
+              "numericCells": 1,
+              "returnedPayloadBytes": 30
+            }
+          ]
+        },
+        "constructorMeter": {
+          "statements": 51,
+          "failedStatements": 0,
+          "rowsRead": 9220,
+          "rowsWritten": 14,
+          "unknownCounters": 0,
+          "returnedRows": 70,
+          "returnedTextBytes": 3889,
+          "returnedBlobBytes": 0,
+          "numericCells": 141,
+          "returnedPayloadBytes": 3889,
+          "localWallMs": 8
+        },
+        "constructorPlusRequest": {
+          "statements": 64,
+          "rowsRead": 9322,
+          "rowsWritten": 14,
+          "returnedPayloadBytes": 21811,
+          "failedStatements": 0,
+          "unknownCounters": 0
+        }
+      },
+      "limits": [
+        "Actual local workerd SQLite DO with production restore routes, synthetic data only; no deployment/live conversion.",
+        "Native constructor measured separately through test-only storage.sql shadow; per-request counters exclude constructor. Constructor local wall is not CPU. Cold-ready included rows/bytes are constructor plus coldReady request, never repeated constructor headers.",
+        "Same passive native cursor meter as baseline; test-only context/storage proxy also observes constructor and direct storage SQL. No forced drain, no bindings captured. UTF-8/BLOB bytes exclude numeric encodings, column names, wire/disk overhead.",
+        "Host wall time is not production CPU usage. No source limits or checks disabled; Miniflare defaults retained.",
+        "No duplicate/restart correctness campaign; existing 500-event correctness lane is separate."
+      ]
+    }
+  },
+  "proofReproduction": {
+    "parent-pending": {
+      "event": "pending-publication-proof-repro",
+      "variant": "cold-while-pending-reproduction",
+      "publicationVerified": true,
+      "commandRecorded": true,
+      "messageHasEntityHash": false,
+      "messageProofMatches": false,
+      "readError": {
+        "name": "Error",
+        "message": "current_room_corrupt: message field proof changed"
+      }
+    },
+    "parent-coldAfterControl": {
+      "event": "pending-publication-proof-repro",
+      "variant": "cold-after-publication-control",
+      "publicationVerified": true,
+      "commandRecorded": true,
+      "messageHasEntityHash": true,
+      "messageProofMatches": true,
+      "readError": null
+    },
+    "candidate-pending": {
+      "event": "pending-publication-proof-repro",
+      "variant": "cold-while-pending-reproduction",
+      "publicationVerified": true,
+      "commandRecorded": true,
+      "messageHasEntityHash": false,
+      "messageProofMatches": false,
+      "readError": {
+        "name": "Error",
+        "message": "current_room_corrupt: message field proof changed"
+      }
+    },
+    "candidate-coldAfterControl": {
+      "event": "pending-publication-proof-repro",
+      "variant": "cold-after-publication-control",
+      "publicationVerified": true,
+      "commandRecorded": true,
+      "messageHasEntityHash": true,
+      "messageProofMatches": true,
+      "readError": null
+    }
+  }
+}

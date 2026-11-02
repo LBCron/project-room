@@ -1,0 +1,35 @@
+{
+  "source": "9eea8ec403e5849ae307da5cc34a361cb32097bf",
+  "expectParity": true,
+  "parity": false,
+  "results": [
+    {
+      "representation": "legacy",
+      "get": {
+        "status": 200,
+        "code": null
+      },
+      "post": {
+        "status": 201,
+        "code": null,
+        "state": "draft"
+      },
+      "rowCount": 1,
+      "inputSha256": "6d276c66a101c30787f3ef5cbdaaa4f39371ab6dadf0f763791beab9e0ce1397"
+    },
+    {
+      "representation": "normalized-current-v1",
+      "get": {
+        "status": 409,
+        "code": "current_room_context_required"
+      },
+      "post": {
+        "status": 409,
+        "code": "current_room_context_required",
+        "state": "action_required"
+      },
+      "rowCount": 0,
+      "inputSha256": "6d276c66a101c30787f3ef5cbdaaa4f39371ab6dadf0f763791beab9e0ce1397"
+    }
+  ]
+}

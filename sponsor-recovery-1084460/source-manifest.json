@@ -1,0 +1,43 @@
+{
+  "source": "1084460ddcf6d22d36aeb6e8deed24e91e6ba927",
+  "tree": "0a360f9afd74f2b0693e5f8b582bee4959594e78",
+  "baseline": "00888c52110d36250d3e07629036701b72926d09",
+  "files": {
+    "server/mcp-oauth.mjs": {
+      "sha256": "714b335d454f953d7510ee0f58e43eaf0a747ee9dd639388d326a7e3278ae0a1",
+      "gitBlob": "3c81ed4384c240abf1901eb25a9299e27fb9137f"
+    },
+    "server/agent-sponsor-transfer.mjs": {
+      "sha256": "c2bcac082b613cb4f036f4b19235ecda56d8472430e898b7477835acaedaa0e2",
+      "gitBlob": "ddcc95332ff58d8f0fc9e223bd188dfeb56983cc"
+    },
+    "server/recovery-engine-continuation.mjs": {
+      "sha256": "b3633c5c75c34a7367d89454ad9618429d399cab056c929052ff6bdae5967167",
+      "gitBlob": "66bff7fbe7535954b03f295a368f0f8e7f15cf87"
+    },
+    "server/store.mjs": {
+      "sha256": "0bda6ea7fbb0547dcb1963ff05eca4984c74dde1c48a877ba28e84f81b1a8674",
+      "gitBlob": "5efd675d4be14e787d8665210bd62eb674ff39f5"
+    },
+    "server/room-export.mjs": {
+      "sha256": "7808d0ccdf7cc3251d502d4d376c8b1da18b73bc277e7f145f723ad24d3278e7",
+      "gitBlob": "0b51e41fdcbfbdf95cb675983daa4f55857422d0"
+    },
+    "server/http.mjs": {
+      "sha256": "a794a2f016d77f19bbb924cecda292bc172eb1dba9f09c1cb6756b155232cff1",
+      "gitBlob": "36f99d215cd8212f95297428a087bec3af1e7aae"
+    },
+    "server/access-requests.mjs": {
+      "sha256": "00559648c3824079ee701b0356d70cc5f0f8fc9698e016b915f30c4146915d60",
+      "gitBlob": "a1d3728f110003d074c8b7430f9b3ad93e95c8d4"
+    },
+    "src/events.js": {
+      "sha256": "8a4fbfbf7a2f50f17fe1bddb7a46e2be0344bbde4f4827c0adfe4678ab8d46de",
+      "gitBlob": "62eb6fd25e6981acd27ae319427807450576dbda"
+    }
+  },
+  "workerdSha256": "b887d31d8839e80798bf3f92c416343c5db7dd9b22d7fe21bcf877f5d411936f",
+  "restoreRunnerExitCode": 0,
+  "enumerationCandidateExitCode": 1,
+  "enumerationBaselineExitCode": 1
+}

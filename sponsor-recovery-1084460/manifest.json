@@ -1,0 +1,10 @@
+{
+  "source-manifest.json": "57cb4eb41a54fb2aab3eb287277042b698d00407bc64bd525e062dbc8f20bb06",
+  "enumeration-candidate.json": "3ce528148b5418b5e7c3b1dc3533ecbf6607e6da6033f0874692b609834273e4",
+  "sponsor_transfer_native_restore.mjs": "f44874cd96fde49892e54a15a44fd9c54c8172ed3d9158771a63a62ab23a890d",
+  "enumeration-baseline.json": "5288522b7f7944fc607a1b6fdf5e2e6a3a9b412c3894aea713259936f3e1d856",
+  "README.md": "c77067df48c692a6fb7a96994aeb40630cf71871c28f0357a880232498cc9001",
+  "sponsor_default_enumeration_repro.mjs": "3570ace50425286c8acfb98b8683dce29ebdfaa14c86d199fbe847a626ec5489",
+  "restore-receipt.json": "ae2727df8d264f266da644b234bc2c4ab39023d67b66812ac7eeeb6cbe06db8d",
+  "sponsor_transfer_restore_fixture.mjs": "fb90f822ac5c462ca4647c42ff76e0ef2ca12ce3bf89063d3970e4e42dc3f893"
+}

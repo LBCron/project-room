@@ -1,0 +1,109 @@
+{
+  "source": "1084460ddcf6d22d36aeb6e8deed24e91e6ba927",
+  "tree": "0a360f9afd74f2b0693e5f8b582bee4959594e78",
+  "node": "v24.22.1",
+  "scope": "Actual local Native full restore of a transferred managed seat with old/new/unrelated OAuth grants. No production, hosted limits, release or peer-execution claim.",
+  "backupBytes": 45408,
+  "backupSha256": "d6ba3d7697f0ff57afdef0e94219e2736bf7724dde189f7f4cdb7d4c2f2870fd",
+  "sourceSecurity": {
+    "oldAccessDenied": true,
+    "oldAccessRowStillUnrevoked": true,
+    "oldRefreshRowStillUnrevoked": true,
+    "recipientAccessAllowed": true,
+    "unrelatedAccessAllowed": true,
+    "managedCredentialRevoked": true,
+    "oldSponsorCannotSelectSeat": true,
+    "recipientSelectsSameSeat": true
+  },
+  "sourceTables": {
+    "access_requests": {
+      "rows": 1,
+      "sha256": "be744627e84b70edc84d8fd69945ae6646ee621a1873c6eec7cd10d8bd62c366"
+    },
+    "events": {
+      "rows": 7,
+      "sha256": "c7da2335bfc09703a4fd5045832373cee69a0cd1c58b3309ef16e01c55aa7c3c"
+    },
+    "commands": {
+      "rows": 4,
+      "sha256": "89cd07c108aebbfc18af2195df324303a0ad3bab5e58541c01e2e68fc237c4b3"
+    },
+    "identity_links": {
+      "rows": 2,
+      "sha256": "8b87cdb4b12ca8674eccbecb1887e57cd6eaabec346810d023c35ee6013b90de"
+    },
+    "member_accounts": {
+      "rows": 2,
+      "sha256": "95aa1481f7adeee470d115dd14a5b07fd83443a894a42e1ac1b0b543fc80da3e"
+    },
+    "agent_connections": {
+      "rows": 1,
+      "sha256": "acd016b3aba4301bfedbae08f6a680eab5ec9726d807f18022724bba0183d466"
+    },
+    "agent_connection_operations": {
+      "rows": 1,
+      "sha256": "be4ed9b085a071b08b37b9694e1afaa14787601caa68f6fa77c063ea7d0f8783"
+    },
+    "credentials": {
+      "rows": 3,
+      "sha256": "071e14ad538c114f43d9cbe79154d1f8ea256763eec47e50c0d42c7702e3e314"
+    },
+    "oauth_provider_codes": {
+      "rows": 4,
+      "sha256": "253a5c921906d2b09b95495bc5f335aeb0eb18caa6eb54a627b1578476bcaa55"
+    },
+    "oauth_provider_access_tokens": {
+      "rows": 3,
+      "sha256": "a4025ff3d275d5b5742ce9ddb7196314b48a712be8f28c05622b500c34322a9b"
+    },
+    "oauth_provider_refresh_tokens": {
+      "rows": 3,
+      "sha256": "6bbdbbc0992fc50449bac08c75fa3e323a9f7c1b769085eb67b79f1b64ab2505"
+    }
+  },
+  "sourceEnumeration": {
+    "defaultRecipientSeatListed": false,
+    "configuredRecipientSeatListed": true,
+    "hydrationError": "current_room_context_required"
+  },
+  "partialReadinessRefused": true,
+  "exactColdSourceResume": true,
+  "restore": {
+    "calls": 113,
+    "cleanupCalls": 46,
+    "uniqueFrontiers": 66,
+    "diagnosticBudget": 20000,
+    "verified": true,
+    "auditOk": true,
+    "contentVerification": "full",
+    "cleanupComplete": true
+  },
+  "allElevenTableFingerprintsPreserved": true,
+  "sameSeatIdentityPermissionsSponsorPreserved": true,
+  "restoredSecurity": {
+    "oldAccessDenied": true,
+    "oldAccessRowStillUnrevoked": true,
+    "oldRefreshRowStillUnrevoked": true,
+    "recipientAccessAllowed": true,
+    "unrelatedAccessAllowed": true,
+    "managedCredentialRevoked": true,
+    "oldSponsorCannotSelectSeat": true,
+    "recipientSelectsSameSeat": true
+  },
+  "admissionClear": true,
+  "restoredEnumeration": {
+    "defaultRecipientSeatListed": false,
+    "configuredRecipientSeatListed": true,
+    "hydrationError": "current_room_context_required"
+  },
+  "exercise": {
+    "oldManagedKeyRefused": true,
+    "oldRefreshRefused": true,
+    "oldCodeRefused": true,
+    "recipientRefreshWorks": true,
+    "unrelatedRefreshWorks": true,
+    "exactDecisionRetryAddsNoEvent": true,
+    "finalAuditPassed": true
+  },
+  "sourceKvClean": true
+}

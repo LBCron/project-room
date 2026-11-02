@@ -1,0 +1,95 @@
+{
+  "source": "00888c52110d36250d3e07629036701b72926d09",
+  "observations": [
+    {
+      "representation": "legacy",
+      "hydrationError": null,
+      "defaultListed": true,
+      "configuredListed": true,
+      "httpConsent": [
+        {
+          "client": "without-preference",
+          "status": 200,
+          "error": null,
+          "selectableAgentBinding": true,
+          "title": "Connect General client",
+          "formFields": [
+            "viewport",
+            "resource",
+            "agent_binding",
+            "client_id",
+            "redirect_uri",
+            "scope",
+            "state",
+            "code_challenge",
+            "code_challenge_method",
+            "csrf_token",
+            "decision",
+            "decision"
+          ]
+        },
+        {
+          "client": "with-preference",
+          "status": 200,
+          "error": null,
+          "selectableAgentBinding": true,
+          "title": "Connect Configured client",
+          "formFields": [
+            "viewport",
+            "resource",
+            "agent_binding",
+            "client_id",
+            "redirect_uri",
+            "scope",
+            "state",
+            "code_challenge",
+            "code_challenge_method",
+            "csrf_token",
+            "decision",
+            "decision"
+          ]
+        }
+      ]
+    },
+    {
+      "representation": "normalized-current-v1",
+      "hydrationError": "current_room_context_required",
+      "defaultListed": false,
+      "configuredListed": true,
+      "httpConsent": [
+        {
+          "client": "without-preference",
+          "status": 409,
+          "error": "agent_connection_required",
+          "selectableAgentBinding": false,
+          "title": null,
+          "formFields": []
+        },
+        {
+          "client": "with-preference",
+          "status": 200,
+          "error": null,
+          "selectableAgentBinding": true,
+          "title": "Connect Configured client",
+          "formFields": [
+            "viewport",
+            "resource",
+            "agent_binding",
+            "client_id",
+            "redirect_uri",
+            "scope",
+            "state",
+            "code_challenge",
+            "code_challenge_method",
+            "csrf_token",
+            "decision",
+            "decision"
+          ]
+        }
+      ]
+    }
+  ],
+  "defaultEnumerationContractSatisfied": false,
+  "scope": "Disposable Node HTTP/repository reproduction, supported by separate actual Native before/after-restore observation. No production or runtime edits.",
+  "assertFixedExitCode": 1
+}

@@ -5,7 +5,10 @@ const fail=()=>{throw Error('Recovery projection equality proof requires reconci
 function authority(store,id,sealId) {
  const db=store.db;if(!db.isTransaction||!inRestoreContext(db))fail();
  const state=restoreProgress(db),a=state.progress?.audit;
- if(state.state!=='pending'||state.phase!=='audit_pending'||state.restore_id!==id||state.seal?.id!==sealId||state.seal.auditVersion!==RESTORE_AUDIT_VERSION||a?.version!==RESTORE_AUDIT_VERSION||a.stage!=='full_audit_pending')fail();
+ if (state.state !== 'pending' || state.phase !== 'audit_pending'
+  || state.restore_id !== id || state.seal?.id !== sealId
+  || state.seal.auditVersion !== RESTORE_AUDIT_VERSION
+  || a?.version !== RESTORE_AUDIT_VERSION || a.stage !== 'full_audit_pending') fail();
  const expected=name=>state.seal.tables.find(t=>t.name===name)?.expected.rows;
  if(!['equalityRooms','equalityDeferred','legacyRooms','rooms'].every(k=>Number.isSafeInteger(a[k])&&a[k]>=0)||a.equalityDeferred>a.equalityRooms||!/^[a-f0-9]{64}$/.test(a.equalityHash??''))fail();
  if(a.rooms!==a.equalityRooms||a.rooms+a.legacyRooms!==expected('rooms')||a.rooms!==expected('current_room_head'))fail();

@@ -18,7 +18,7 @@
     "ownerAndFriendIdentityConnectionsPreserved": true,
     "revokedExpiredDisconnectedStillRefused": true,
     "accountAndInvitedOAuthRefresh": true,
-    "securityEventCommandTablesHashUnchanged": 25,
+    "securityEventCommandTablesHashUnchanged": 24,
     "finalReceiptFaultRollback": true,
     "exactExecuteRetryAfterColdLostAck": true,
     "originalFullAudit": true
@@ -28,5 +28,13 @@
     "Behavioral authority and transaction checks only; no Worker CPU, physical cost or large-room bound claim.",
     "Source is direct materialization preserving canonical content and full history, not destructive reset and not H equivalence certification.",
     "Root owns composed release/new-room/default-source qualification."
-  ]
+  ],
+  "metadataCorrection": {
+    "date": "2026-11-02",
+    "tables": 24,
+    "reason": "Count matches normalizationAuthSnapshot literal table inventory; prior value25 was a documentation error.",
+    "historicalGuideRuntimeVerified": false,
+    "verifiedComposedGuideFix": "8a1c47a123482e60d09c3f67b783ec12383c01e7",
+    "note": "Original guideRuntime retained as historical provenance, not asserted equivalent to composed fix."
+  }
 }

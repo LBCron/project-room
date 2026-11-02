@@ -5,7 +5,7 @@ import {ensureDefaultChannelState} from '../src/default-channel-state.js';
 import {readCurrentEventWindow,currentEventRedactionMessages} from './current-room-events.mjs';
 import { assertRestoreAdmitted, restorePending, verifyRestoreControl } from './restore-admission.mjs';
 import {readCurrentWorkListing} from './current-work-list.mjs';
-import { CURRENT_ROOM_SCHEMA, CURRENT_ROOM_GUARDS, currentInviteContext, initializeCurrentRoom, currentRoomAuthority, isCurrentRoom, currentDmConsentEventContext, currentCommandContext, prepareCurrentWrite, withCurrentServingWriter, readCurrentRecord, readCurrentHistoryFloor, withCurrentReadContext, readCurrentSelectedWorkState, readCurrentOverviewWindow, currentVisibleHorizon, readCurrentPrivateWorkParties } from './current-room-repository.mjs';
+import { CURRENT_ROOM_SCHEMA, CURRENT_ROOM_GUARDS, currentInviteContext, initializeCurrentRoom, currentRoomAuthority, isCurrentRoom, currentDmConsentEventContext, currentCommandContext, prepareCurrentWrite, withCurrentServingWriter, readCurrentRecord, readCurrentHistoryFloor, withCurrentReadContext, readCurrentSelectedWorkState, readCurrentOverviewWindow, currentVisibleHorizon, readCurrentPrivateWorkParties, readCurrentHead, currentConversationRows, chargeCurrentReadBudget } from './current-room-repository.mjs';
 import {bindReplayAppend} from './replay-cutover.mjs';
 import { savedHistoricalReplayCheckpoint } from './historical-replay-contract.mjs';
 import { bootstrapLegacyWriteProofs, configureWriteIntegrity, beginWriteProofFrame, endWriteProofFrame, publishProjectionWrites, projectionDigest, projectionContentHash, servingContentProof, servingProofDrift, assertProjectionWrite, assertMessageWrite, recordMessageWrite, withVerifiedRoomReconstruction } from './write-integrity.mjs';
@@ -6919,6 +6919,37 @@ this.slaBreachAlerts = new SlaBreachAlertJournal(this); // Task 26: durable in-a
   // shown only to that message's two parties. A database from before the
   // #658 schema has no mention_states table and simply has no mentions.
   openDirectMentions(roomId, memberId, limit = 50, nowMs = this.now(), window = null) {
+    if (isCurrentRoom(this.db, roomId)) return this.readTransaction(() => withCurrentReadContext(this.db, roomId, b => {
+      if (!Number.isSafeInteger(limit) || limit < 1 || limit > 200) fail(422, 'invalid_inbox_cursor', 'Choose a mention limit from 1 to 200');
+      const head=readCurrentHead(this.db,roomId),floor=this.historyFloor(roomId,memberId,head.sequence);
+      const after=window?.after??0,through=Math.min(window?.through??head.sequence,head.sequence);
+      if(!Number.isSafeInteger(after)||after<0||!Number.isSafeInteger(through)||through<0)fail(422,'invalid_inbox_cursor','Choose a valid mention source window');
+      const source=currentConversationRows(this,roomId,{viewerId:memberId,limit:8,before:through+1,beforeId:'',messageId:null,channelId:null,peerMemberId:null,floor});
+      const rows=[];
+      for(const point of source.rows){
+        if(point.position<=after)break;
+        const message=JSON.parse(point.body);if(message.deletedAt||message.body==null)continue;
+        const event=this.db.prepare('SELECT id FROM events WHERE room_id=? AND sequence=?').get(roomId,point.position);
+        if(!event)fail(409,'current_room_context_unavailable','Mention opening is unavailable; inspect the current inbox');
+        chargeCurrentReadBudget(b,256);
+        const chip=this.db.prepare(`SELECT m.state,m.timeout_at AS timeoutAt,o.acknowledged_at AS acknowledgedAt,
+          o.late_acknowledged_at AS lateAcknowledgedAt,o.responded_at AS respondedAt
+          FROM mention_states m LEFT JOIN mention_observations o ON o.room_id=m.room_id AND o.message_event_id=m.message_event_id AND o.mentioned_member_id=m.mentioned_member_id
+          WHERE m.room_id=? AND m.message_event_id=? AND m.mentioned_member_id=?`).get(roomId,event.id,memberId);
+        if(!chip||!['delivered','acknowledged','timed_out'].includes(chip.state))continue;
+        if(chip.state==='timed_out'&&(Number.isSafeInteger(chip.respondedAt)||Number.isSafeInteger(chip.lateAcknowledgedAt)
+          ||Number.isSafeInteger(chip.acknowledgedAt)&&chip.acknowledgedAt>chip.timeoutAt))continue;
+        const request=readCurrentRecord(this.db,roomId,'replyRequests',message.id,b);
+        rows.push(Object.freeze({sequence:point.position,eventId:event.id,messageId:message.id,replyToId:message.id,from:message.authorId,
+          body:message.body,at:message.createdAt,state:chip.state!=='timed_out'&&chip.timeoutAt<=nowMs?'timed_out':chip.state,
+          channel:message.channelId??'general',private:Boolean(message.toMemberId),...(message.toMemberId?{replyToMemberId:message.authorId}:{}),
+          ...(request&&[request.requesterId,request.recipientId].includes(memberId)?{requestKind:'reply',nextRead:{tool:'room_read_request',arguments:{requestMessageId:message.id}}}:{})}));
+        if(rows.length===limit)return rows;
+      }
+      if(!source.complete&&source.rows.at(-1)?.position>after)fail(409,'current_room_context_unavailable','Mention array exceeds its bounded source; continue the current room inbox instead');
+      return rows;
+    }));
+
     // R211-1: the event log holds the body as originally posted; the live
     // projection is the current state. A mention deleted after posting must
     // not surface at all (it listed a tombstone with a room_reply next step),

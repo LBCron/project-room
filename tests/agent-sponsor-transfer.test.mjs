@@ -77,16 +77,17 @@ test('approved adoption requires retained recipient and decision evidence, not a
  f.s.db.prepare('UPDATE access_requests SET requested_permissions=? WHERE request_id=?').run(JSON.stringify(intent),'adopt_claude');
  assert.equal(validateMcpOAuthBinding(f.s,f.account.id,choice.binding),null);
 });
-test('selected old account grant is persistently revoked without revoking another seat',t=>{
- const f=fixture(t),provider=createOAuthProvider({db:f.s.db});
+test('selected old account grant is durably fenced without denying another seat',t=>{
+ const f=fixture(t),sponsor=f.s.bindHumanAccount('commons','owner');
+ const other=f.s.identities.create('Unrelated agent');linkWithProof(f.s,f.owner,'commons',other,{permissions:['accept_work']});
+ const provider=createOAuthProvider({db:f.s.db,isBindingActive:(id,binding)=>!!validateMcpOAuthBinding(f.s,id,binding)});
  provider.registerClient({clientId:'old',name:'Old connection',redirectUris:['https://client.example/callback']});
- const verifier='v'.repeat(43),epoch=createHash('sha256').update('mcp-oauth-identity:'+f.s.db.prepare('SELECT secret_hash FROM agent_identities WHERE identity_id=?').get(f.identity.identityId).secret_hash).digest('hex');
- const mint=memberId=>{
-  const binding={resource,roomId:'commons',identityId:f.identity.identityId,memberId,humanMemberId:'owner',identityEpoch:epoch};
-  const code=provider.issueCode({clientId:'old',userId:'old-account',redirectUri:'https://client.example/callback',scopes:['chat:read'],codeChallenge:createHash('sha256').update(verifier).digest('base64url'),binding}).code;
+ const verifier='v'.repeat(43),mint=memberId=>{
+  const binding=listMcpOAuthAgents(f.s,sponsor.id,resource,{preferredRoomId:'commons',preferredMemberId:memberId}).find(value=>value.binding.memberId===memberId).binding;
+  const code=provider.issueCode({clientId:'old',userId:sponsor.id,redirectUri:'https://client.example/callback',scopes:['chat:read'],codeChallenge:createHash('sha256').update(verifier).digest('base64url'),binding}).code;
   return provider.exchangeCode({code,clientId:'old',redirectUri:'https://client.example/callback',codeVerifier:verifier,resource});
  };
- const old=mint(f.identity.identityId),unrelated=mint('different-seat');assert.ok(provider.verifyAccessToken(old.accessToken,{resource}));
+ const old=mint(f.identity.identityId),unrelated=mint(other.identityId);assert.ok(provider.verifyAccessToken(old.accessToken,{resource}));
  f.ask();f.decide();
  assert.equal(provider.verifyAccessToken(old.accessToken,{resource}),null);assert.throws(()=>provider.refresh({refreshToken:old.refreshToken,clientId:'old',resource}));assert.ok(provider.verifyAccessToken(unrelated.accessToken,{resource}));
 });

@@ -199,6 +199,22 @@ export function mcpOAuthIdentityEpoch(store, identityId) {
   return createHash('sha256').update(`mcp-oauth-identity:${row.secret_hash}`).digest('hex');
 }
 
+// Invitation identity epochs retain their historical value until adoption.
+// Once sponsorship changes, bind new invitation grants to that persisted
+// consent marker without rotating the identity or walking token history.
+function invitationEpoch(identityEpoch,member) {
+  if(!identityEpoch||!member)return null;
+  if(!member.sponsorAdoptionId)return identityEpoch;
+  if(typeof member.sponsorAdoptionId!=='string'||!/^[A-Za-z0-9][A-Za-z0-9_-]{0,63}$/.test(member.sponsorAdoptionId)
+    ||!/^[a-f0-9]{64}$/.test(member.sponsorAdoptionDigest??''))return null;
+  return createHash('sha256').update(`mcp-invite-adoption-v1:${identityEpoch}:${member.sponsorAdoptionId}:${member.sponsorAdoptionDigest}`).digest('hex');
+}
+export function mcpInviteOAuthIdentityEpoch(store,identityId,roomId) {
+  let member;try{member=store.identities.resolveIdentityLink(identityId,roomId)?.member;}catch{return null;}
+  if(!member||member.kind!=='agent'||member.active!==true)return null;
+  return invitationEpoch(mcpOAuthIdentityEpoch(store,identityId),member);
+}
+
 export function validateMcpInviteOAuthBinding(store, grantId, binding) {
   const fields = ['principalType', 'invitationGrantId', 'resource', 'roomId', 'identityId', 'memberId', 'identityEpoch'];
   if (!binding || Object.keys(binding).length !== fields.length || binding.principalType !== 'invited-agent'
@@ -206,12 +222,13 @@ export function validateMcpInviteOAuthBinding(store, grantId, binding) {
   const grant = store.db.prepare('SELECT * FROM oauth_invite_grants WHERE id=?').get(grantId);
   if (!grant || grant.revoked_at !== null || grant.expires_at <= store.now()
     || grant.room_id !== binding.roomId || grant.identity_id !== binding.identityId || grant.member_id !== binding.memberId
-    || grant.identity_epoch !== binding.identityEpoch || mcpOAuthIdentityEpoch(store, binding.identityId) !== binding.identityEpoch) return null;
+    || grant.identity_epoch !== binding.identityEpoch) return null;
   const invite = store.db.prepare('SELECT redeemed_identity_id,revoked_at FROM agent_invite_codes WHERE code_hash=?').get(grant.invite_hash);
   if (!invite || invite.revoked_at !== null || invite.redeemed_identity_id !== binding.identityId) return null;
   let member;
   try { member = store.identities.resolveIdentityLink(binding.identityId, binding.roomId)?.member; } catch { return null; }
-  if (!member || member.id !== binding.memberId || member.kind !== 'agent' || member.active !== true) return null;
+  if (!member || member.id !== binding.memberId || member.kind !== 'agent' || member.active !== true
+    || invitationEpoch(mcpOAuthIdentityEpoch(store,binding.identityId),member)!==binding.identityEpoch) return null;
   return Object.freeze({ principalType: 'invited-agent', invitationGrantId: grantId, roomId: binding.roomId,
     identityId: binding.identityId, memberId: binding.memberId, sponsorMemberId: grant.sponsor_member_id,
     controllerVerification: 'invitation-capability' });

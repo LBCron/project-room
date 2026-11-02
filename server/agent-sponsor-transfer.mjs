@@ -82,12 +82,10 @@ export class AgentSponsorTransfers {
    if(connection?.status==='issued'){
     this.db.prepare('UPDATE credentials SET revoked=1 WHERE hash=?').run(connection.credential_hash);
    }
-   for(const table of ['oauth_provider_codes','oauth_provider_access_tokens','oauth_provider_refresh_tokens','oauth_invite_codes','oauth_invite_access_tokens','oauth_invite_refresh_tokens']){
-    if(!this.db.prepare("SELECT 1 FROM sqlite_master WHERE type='table' AND name=?").get(table))continue;
-    const update=table.endsWith('_codes')?'expires_at=0':'revoked=1';
-    this.db.prepare(`UPDATE ${table} SET ${update} WHERE json_extract(binding_json,'$.roomId')=? AND json_extract(binding_json,'$.memberId')=?`).run(roomId,value.memberId);
-   }
-   if(this.db.prepare("SELECT 1 FROM sqlite_master WHERE type='table' AND name='oauth_invite_grants'").get())this.db.prepare('UPDATE oauth_invite_grants SET revoked_at=? WHERE room_id=? AND member_id=? AND revoked_at IS NULL').run(this.store.now(),roomId,value.memberId);
+   // The persisted member adoption marker fences pre-transfer OAuth codes,
+   // access/refresh tokens and descriptors through their normal validators.
+   // Do not scan unrelated token history or rewrite immutable grant receipts.
+
   }
   this.db.prepare('UPDATE access_requests SET status=?,decided_at=?,decided_by=?,decision_note=? WHERE request_id=?').run(decision==='approve'?'approved':'denied',this.store.now(),auth.member.id,note?.trim()||null,row.request_id);
   return this.access.toRequest(this.db.prepare('SELECT * FROM access_requests WHERE request_id=?').get(row.request_id));

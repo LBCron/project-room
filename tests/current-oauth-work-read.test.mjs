@@ -5,6 +5,9 @@ import {mkdtempSync,rmSync} from 'node:fs';
 import {tmpdir} from 'node:os';
 import {join} from 'node:path';
 import {RoomStore} from '../server/store.mjs';
+import {withCurrentReadContext} from '../server/current-room-repository.mjs';
+import {runMcpOAuthRequest} from '../server/mcp-oauth.mjs';
+import {providerFor,resource} from './helpers/work-linked-post-oauth.mjs';
 import {createRoomServer} from '../server/http.mjs';
 import {client} from './helpers/work-linked-post-oauth.mjs';
 import {seedOAuthWorkRead} from './helpers/oauth-work-read-source.mjs';
@@ -28,4 +31,15 @@ test('adopted OAuth reads saved verified work through actual hosted single, batc
  const missing=await f.call('room_read_work',{workItemId:'absent',brief:true});assert.ok(missing.body.result?.isError||missing.status===404);
  f.store.identities.revoke(f.saved.identityId,f.saved.identitySecret);
  const denied=await f.call('room_read_work',{workItemId:'task',brief:true});assert.ok(denied.status===401||denied.body.result?.isError);assert.equal(f.store.headSequence('commons'),head);
+});
+
+test('selected work reserves records only, retaining an inherited stricter context',t=>{
+ const s=new RoomStore(':memory:');t.after(()=>s.close());const saved=seedOAuthWorkRead(s);
+ s.room=()=>{throw Error('whole-room hydration');};
+ const auth={store:s,provider:providerFor(s),token:saved.token,resource,roomId:'commons'};
+ let small,large;
+ assert.throws(()=>s.readTransaction(()=>withCurrentReadContext(s.db,'commons',b=>{small=b;return runMcpOAuthRequest(auth,()=>s.workContext(saved.token,'commons','task'));})),e=>e.code==='current_room_context_unavailable');
+ s.readTransaction(()=>withCurrentReadContext(s.db,'commons',b=>{large=b;assert.equal(runMcpOAuthRequest(auth,()=>s.workContext(saved.token,'commons','task')).work.revision,4);},{maxRecords:512}));
+ assert.equal(small.records,201);assert.ok(large.records>200&&large.records<=512);assert.ok(large.bytes<=256*1024);
+ t.diagnostic(JSON.stringify({failed:{records:small.records,bytes:small.bytes},accepted:{records:large.records,bytes:large.bytes}}));
 });

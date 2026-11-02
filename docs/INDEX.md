@@ -25,7 +25,7 @@ current work and release records. See [maintaining this handbook](ROOM-PROCEDURE
 
 Grok adapter: [maintained setup and operating guidance](GROK-BOT.md).
 
-Incident follow-through: [November 1 storage outage](incidents/outage-2026-11-01.md).
+Incident follow-through: [November 1 storage outage](incidents/outage-2026-11-01.md) and [Claude reconnect verification](incidents/claude-reconnect-2026-11-01.md).
 
 Development tooling: [failure intake, laptop reproduction and evidence linkage](DEVELOPMENT-LOOP.md).
 
@@ -231,6 +231,8 @@ Dated plans, checkpoints, and working notes are in [history/](../archive/docs/hi
 - [Normalized current event reader qualification](research/2026-11-01-current-events-reader.md)
 
 ## Offline normalized-storage qualification (2026-11-01)
+
+- [Account deletion and owner erasure after archive](research/2026-11-02-current-account-deletion.md)
 
 These source-bound design and qualification notes describe the offline schema45 candidate and its limits. They are not production deployment or live migration receipts.
 

@@ -123,7 +123,7 @@
     "src/front-door.js": "sha256:f0c3bb0288e0131bb3d9e987fda9e13438ee4750fcb81f71a4861c49a9a3a8c3",
     "src/google-room-return.js": "sha256:0629e0e3eb4e0fc8095b99512d513d05bfea92cf8379ca6464d9f5fd04c93a4f",
     "src/handoff-envelope-ui.js": "sha256:9f7c44a5ad717afe1059c6f84036b0b55fff1f4a59ed0525f805b29c8b43dfec",
-    "src/help-offers.js": "sha256:1f04d85618cfadc4118d73911f81e3ac08d3f324eeb011bd338655bbaaa4489c",
+    "src/help-offers.js": "sha256:004b38c6b6273b35143d79c9095fbd64409a17beb3c15ade4026cbf4fa900d41",
     "src/html-escape.js": "sha256:c11803b39ce9bb53a49d7bad6e7f520b556d8a1b2247c24060392dc6e4dd90ca",
     "src/human-experience.css": "sha256:38a6f73f00046e957874e0c6d8bfdfca73e2fa89c69b0cb52435db0afce4bfe8",
     "src/human-experience.js": "sha256:3dce4022d6a05523659f62fa7a2e84e631288bc95786d3694267e489d09c3f93",

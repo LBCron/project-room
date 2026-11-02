@@ -19,7 +19,7 @@ import { emptyRoomState, memberHistoryVisibility, validId } from '../src/events.
 import { messageProofMatches, MESSAGE_PROOF_SELECT, recordProjectionWrite } from './write-integrity.mjs';
 import { decodeMessageEntity } from './message-entity-projection.mjs';
 import { referenceWorkItems } from './work-repository.mjs';
-import { syncMessageRows } from './messages-store.mjs';
+import { syncMessageRows, materializeCurrentMessageRows } from './messages-store.mjs';
 import { ServiceError } from './service-error.mjs';
 
 export const CURRENT_ROOM_TABLES = Object.freeze(['current_room_records','current_room_record_proofs','current_room_head','current_room_writer_permit']);
@@ -258,13 +258,13 @@ function fieldsOf(state) {
   }
   return out;
 }
-function saveTransition(db,roomId,sequence,eventId,oldHead,changes,counts,{publishHead=true}={}) {
+function saveTransition(db,roomId,sequence,eventId,oldHead,changes,counts,{publishHead=true,initial=false}={}) {
   if(changes.length>128)refuse('Too many current metadata changes in one transition');
   const revision=(oldHead?.revision??-1)+1,head={room_id:roomId,sequence,event_id:eventId,revision,counts_json:JSON.stringify(counts)};
   const headHash=hash(JSON.stringify(headValue(head)));
   const tuples=[],writes=[];
   for(const {domain,key,value} of changes) {
-    const prior=db.prepare('SELECT revision FROM current_room_record_proofs WHERE room_id=? AND domain=? AND record_key=?').get(roomId,domain,key);
+    const prior=initial?undefined:db.prepare('SELECT revision FROM current_room_record_proofs WHERE room_id=? AND domain=? AND record_key=?').get(roomId,domain,key);
     const recordRevision=(prior?.revision??-1)+1,present=value===undefined?0:1,payload=present?JSON.stringify(value):'',digest=hash(payload);
     if(present&&(Buffer.byteLength(payload)>MAX_RECORD))refuse('Current metadata record exceeds bounded input');
     tuples.push([domain,key,recordRevision,present,digest]);writes.push({domain,key,recordRevision,present,payload,digest});
@@ -274,6 +274,13 @@ function saveTransition(db,roomId,sequence,eventId,oldHead,changes,counts,{publi
   const receiptId='oa_current_'+hash(JSON.stringify([roomId,sequence,revision,headHash,oldHead?.receipt_id??null,tuples]));
   const saved=JSON.stringify({version:1,roomId,headHash,records:tuples});
   if(Buffer.byteLength(saved)>MAX_RECORD)refuse('Current transition receipt exceeds bounded input');
+  if(initial){
+    const records=writes.filter(row=>row.present).map(({domain,key,recordRevision,payload,digest})=>[roomId,domain,key,recordRevision,Buffer.byteLength(payload),digest,payload]);
+    const proofs=writes.map(({domain,key,recordRevision,present,digest})=>[roomId,domain,key,recordRevision,present,digest,receiptId]);
+    for(const [table,rows]of [['current_room_records',records],['current_room_record_proofs',proofs]])for(let offset=0;offset<rows.length;offset+=12){
+      const batch=rows.slice(offset,offset+12);db.prepare(`INSERT INTO ${table} VALUES ${batch.map(row=>'('+row.map(()=>'?').join(',')+')').join(',')}`).run(...batch.flat());
+    }
+  }else{
   for(const {domain,key,recordRevision,present,payload,digest} of writes) {
     if(present)db.prepare(`INSERT INTO current_room_records VALUES(?,?,?,?,?,?,?) ON CONFLICT(room_id,domain,record_key)
       DO UPDATE SET revision=excluded.revision,payload_bytes=excluded.payload_bytes,payload_sha256=excluded.payload_sha256,payload=excluded.payload`)
@@ -283,6 +290,7 @@ function saveTransition(db,roomId,sequence,eventId,oldHead,changes,counts,{publi
       DO UPDATE SET revision=excluded.revision,present=excluded.present,payload_sha256=excluded.payload_sha256,receipt_id=excluded.receipt_id`)
       .run(roomId,domain,key,recordRevision,present,digest,receiptId);
   }
+  }
   db.prepare('INSERT INTO operator_actions(id,at,action,target_kind,target_id,counts_json,result) VALUES(?,?,?,?,?,?,?)')
     .run(receiptId,Date.now(),'current_room_transition','room',roomId,saved,'committed');
   if(publishHead)db.prepare(`INSERT INTO current_room_head VALUES(?,1,?,?,?,?,?,?) ON CONFLICT(room_id) DO UPDATE SET
@@ -291,15 +299,24 @@ function saveTransition(db,roomId,sequence,eventId,oldHead,changes,counts,{publi
   return publishHead?serializeCurrentCarrier(revision,headHash):
     {...head,format_version:1,head_sha256:headHash,receipt_id:receiptId,counts:JSON.parse(head.counts_json)};
 }
-export function initializeCurrentRoom(store,state,events) {
+export function initializeCurrentRoom(store,state,events,{adoptExisting=null}={}) {
   const db=store.db,roomId=state.room.id;
   return withCurrentRoomWriter(db,roomId,()=>{
-    // New room only. Existing-room adoption must come through H/tail equality.
-    if(db.prepare('SELECT 1 FROM rooms WHERE id=?').get(roomId))throw Error('Current room initialization requires a new room');
+    // Fresh room or explicitly operator-authorized one-time current-state adoption.
+    const existing=db.prepare('SELECT sequence FROM rooms WHERE id=?').get(roomId);
+    if(adoptExisting){if(!existing||existing.sequence!==adoptExisting.sequence)throw Error('Current room adoption head changed');assertCurrentCandidateEmpty(store,roomId);}
+    else if(existing)throw Error('Current room initialization requires a new room');
+    const sequence=adoptExisting?.sequence??events.length,eventId=adoptExisting?.eventId??events.at(-1)?.id??'';
     assertLegacyWorkReconciled(db,roomId);
-    db.prepare('INSERT INTO rooms(id,sequence,projection,archived_at) VALUES(?,?,?,NULL)').run(roomId,events.length,'{}');
-    const insert=db.prepare('INSERT INTO events VALUES(?,?,?,?)');
-    events.forEach((event,index)=>{insert.run(roomId,index+1,event.id,JSON.stringify(event));syncMessageRows(db,{roomId,sequence:index+1,event,state});});
+    if(!adoptExisting){
+      db.prepare('INSERT INTO rooms(id,sequence,projection,archived_at) VALUES(?,?,?,NULL)').run(roomId,sequence,'{}');
+      const insert=db.prepare('INSERT INTO events VALUES(?,?,?,?)');
+      events.forEach((event,index)=>{insert.run(roomId,index+1,event.id,JSON.stringify(event));syncMessageRows(db,{roomId,sequence:index+1,event,state});});
+    }
+    const messageRows=adoptExisting?materializeCurrentMessageRows(db,roomId,state):db.prepare('SELECT * FROM messages WHERE room_id=? ORDER BY seq,message_id').all(roomId);
+    const rowById=new Map(messageRows.map(row=>[row.message_id,row]));
+    for(const row of messageRows)if(!messageProofMatches(row))corrupt('initial canonical proof changed');
+    if(messageRows.length!==state.messages.length+(state.messagesArchive?.count??0))corrupt('initial canonical membership differs');
     const referenced=referenceWorkItems(db,roomId,state,{enabled:true});
     const fields=fieldsOf(referenced);
     for(const [id,item] of Object.entries(state.workItems)) {
@@ -309,38 +326,38 @@ export function initializeCurrentRoom(store,state,events) {
     const privacy=deriveWorkPrivacy(state);
     for(const [id,value] of privacy.privacy)fields.set(JSON.stringify(['workPrivacy',id]),value);
     for(const [key,value] of privacy.links)fields.set(JSON.stringify(['workRequest',key]),value);
-    const counts={messages:state.messages.length,workItems:Object.keys(state.workItems).length,workCapacity:Object.keys(state.workItems).length,
+    const counts={messages:messageRows.length,workItems:Object.keys(state.workItems).length,workCapacity:Object.keys(state.workItems).length,
       replyRequests:Object.keys(state.replyRequests??{}).length,members:Object.keys(state.members).length,roundLimitPauses:0,threadParticipants:0};
-    for(const message of state.messages) {
-      const row=db.prepare('SELECT seq,entity_hash FROM messages WHERE room_id=? AND message_id=?').get(roomId,message.id);
-      if(!row)corrupt('initial canonical message missing');
-      fields.set(JSON.stringify(['messageWitness',message.id]),{sequence:row.seq,entityHash:row.entity_hash});
+    for(const row of messageRows)fields.set(JSON.stringify(['messageWitness',row.message_id]),{sequence:row.seq,entityHash:row.entity_hash});
+    if(state.messagesArchive){
+      const archive=state.messagesArchive;
+      if(!Number.isSafeInteger(archive.count)||archive.count<0||!Number.isSafeInteger(archive.throughSeq)||!Array.isArray(archive.retainedIds))corrupt('invalid adoption archive');
+      fields.set(JSON.stringify(['metadata','messagesArchive']),{version:1,throughSeq:archive.throughSeq,count:archive.count,retainedCount:archive.retainedIds.length});
+      archive.retainedIds.forEach((id,index)=>fields.set(JSON.stringify(['archiveRetained',id]),index));
     }
-    const messageById=new Map(state.messages.map(message=>[message.id,message]));
-    for(const message of state.messages) {
-      let root=message;const visited=new Set();
-      while(root.replyToId) {if(visited.has(root.id))corrupt('initial reply cycle');visited.add(root.id);const parent=messageById.get(root.replyToId);if(!parent)break;root=parent;}
-      fields.set(JSON.stringify(['threadParticipants',root.id+'\0'+message.authorId]),{threadRootId:root.id,memberId:message.authorId});
+    for(const message of state.messages){
+      const row=rowById.get(message.id);if(!row)corrupt('initial canonical message missing');
+      fields.set(JSON.stringify(['threadParticipants',(row.thread_root_id??message.id)+'\0'+message.authorId]),{threadRootId:row.thread_root_id??message.id,memberId:message.authorId});
     }
     counts.threadParticipants=[...fields.keys()].filter(key=>JSON.parse(key)[0]==='threadParticipants').length;
     counts.historyFloors=0;counts.historyExclusions=0;
     for(const memberId of Object.keys(state.members)) {
-      fields.set(JSON.stringify(['historyFloors',memberId]),historyActivationTuple(db,roomId,memberId,events.length));counts.historyFloors++;
+      fields.set(JSON.stringify(['historyFloors',memberId]),historyActivationTuple(db,roomId,memberId,sequence));counts.historyFloors++;
     }
     counts.metadataRecords=fields.size;counts.metadataProofs=fields.size;
     if(Object.values(state.workItems).some(item=>item.suspended_by==='round_limit'))refuse('Round-limit index is not yet qualified');
     const changes=[...fields].map(([address,value])=>{const [domain,key]=JSON.parse(address);return {domain,key,value};});
     let carrier,oldHead=null;
     for(let offset=0;offset<changes.length||offset===0;offset+=128) {
-      carrier=saveTransition(db,roomId,events.length,events.at(-1)?.id??'',oldHead,changes.slice(offset,offset+128),counts);
+      carrier=saveTransition(db,roomId,sequence,eventId,oldHead,changes.slice(offset,offset+128),counts,{initial:true});
       oldHead={revision:(oldHead?.revision??-1)+1};
     }
     db.prepare('UPDATE rooms SET projection=? WHERE id=?').run(carrier,roomId);
     // Existing integrity metadata protects the small marker; entity proofs stay
     // those produced by their code-owned repository writes above.
     store.ensureIntegrityRoomState();
-    db.prepare('INSERT INTO integrity_room_state(room_id,sequence,projection_bytes,projection_hash,metadata_hash) VALUES(?,?,?,?,?)')
-      .run(roomId,events.length,Buffer.byteLength(carrier),null,hash(carrier));
+    db.prepare('INSERT INTO integrity_room_state(room_id,sequence,projection_bytes,projection_hash,metadata_hash) VALUES(?,?,?,?,?) ON CONFLICT(room_id) DO UPDATE SET sequence=excluded.sequence,projection_bytes=excluded.projection_bytes,projection_hash=NULL,metadata_hash=excluded.metadata_hash')
+      .run(roomId,sequence,Buffer.byteLength(carrier),null,hash(carrier));
     return roomId;
   });
 }

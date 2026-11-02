@@ -1879,3 +1879,25 @@ export function archivedMessageCommandContext(store, roomId, room, messageId, { 
     count: Math.max(0, marker.count-restored.length), retainedIds: [...marker.retainedIds,...restoredIds] } };
   return { ...room, state: next };
 }
+
+
+// Explicit operator one-time adoption: reuse proved canonical rows, materialize
+// only missing/stale retained rows through the existing code-owned writer.
+export function materializeCurrentMessageRows(db,roomId,state) {
+  const rows=db.prepare('SELECT * FROM messages WHERE room_id=?').all(roomId),existing=new Map(rows.map(row=>[row.message_id,row]));
+  const byId=new Map([...rows.map(row=>[row.message_id,{id:row.message_id,replyToId:row.reply_to_id}]),...state.messages.map(message=>[message.id,message])]);
+  const pinned=new Set((state.pins??[]).map(pin=>pin.messageId)),sequences=new Map();
+  for(const message of state.messages){
+    const row=existing.get(message.id);
+    if(row&&!messageProofMatches(row))throw Error('projection_corrupt: canonical adoption message proof differs');
+    if(row&&!messageRowParityFields(row,message,{sequence:row.seq,pinned:pinned.has(message.id),threadMessages:byId}).length)continue;
+    let sequence=row?.seq;
+    if(sequence===undefined){
+      sequence=db.prepare(`SELECT sequence FROM events INDEXED BY current_redaction_message_events WHERE room_id=? AND CASE WHEN json_type(body,'$.data.messageId')='text' AND json_extract(body,'$.data.messageId')<>'' THEN json_extract(body,'$.data.messageId') ELSE id END=? AND json_extract(body,'$.type')='message.posted' ORDER BY sequence LIMIT 1`).get(roomId,message.id)?.sequence;
+    }
+    if(!Number.isSafeInteger(sequence)||sequence<1)throw Error('Missing original message posting sequence');
+    sequences.set(message.id,sequence);
+  }
+  writeMessageRows(db,{roomId,state,sequenceById:sequences,messageIndex:byId,exactSequence:true});
+  return db.prepare('SELECT * FROM messages WHERE room_id=? ORDER BY seq,message_id').all(roomId);
+}

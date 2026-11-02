@@ -1,0 +1,310 @@
+{
+  "source": "ad2f4f4ba35aeeccf8e30fa18b43ce1d1f1e82ac",
+  "measurement": {
+    "timeToUsefulResultMs": 342.537417,
+    "httpCalls": 21,
+    "requestBodyBytes": 3264,
+    "responseBodyBytes": 39668,
+    "humanInterventionsDuringRun": 0,
+    "fixtureProvisioning": true,
+    "autonomousSuccessorModelRun": false
+  },
+  "httpMetrics": [
+    {
+      "path": "/api/account-rooms",
+      "method": "POST",
+      "status": 201,
+      "requestBodyBytes": 167,
+      "responseBodyBytes": 338,
+      "wallMs": 21.78883400000001
+    },
+    {
+      "path": "/api/rooms/fresh-owner-room",
+      "method": "GET",
+      "status": 200,
+      "requestBodyBytes": 0,
+      "responseBodyBytes": 3330,
+      "wallMs": 7.70008299999995
+    },
+    {
+      "path": "/api/rooms/fresh-owner-room/project-offers",
+      "method": "POST",
+      "status": 201,
+      "requestBodyBytes": 333,
+      "responseBodyBytes": 571,
+      "wallMs": 7.37420800000001
+    },
+    {
+      "path": "/api/rooms/fresh-owner-room/project-offers/synthetic-offer/publish",
+      "method": "POST",
+      "status": 200,
+      "requestBodyBytes": 50,
+      "responseBodyBytes": 575,
+      "wallMs": 4.653999999999996
+    },
+    {
+      "path": "/api/rooms/fresh-owner-room/agent-invites",
+      "method": "POST",
+      "status": 201,
+      "requestBodyBytes": 24,
+      "responseBodyBytes": 1400,
+      "wallMs": 25.872625000000028
+    },
+    {
+      "path": "/api/agent-invites/redeem",
+      "method": "POST",
+      "status": 201,
+      "requestBodyBytes": 98,
+      "responseBodyBytes": 4779,
+      "wallMs": 27.936165999999957
+    },
+    {
+      "path": "/api/rooms/fresh-owner-room/commands",
+      "method": "POST",
+      "status": 201,
+      "requestBodyBytes": 90,
+      "responseBodyBytes": 357,
+      "wallMs": 7.867750000000001
+    },
+    {
+      "path": "/api/rooms/fresh-owner-room/commands",
+      "method": "POST",
+      "status": 201,
+      "requestBodyBytes": 219,
+      "responseBodyBytes": 470,
+      "wallMs": 4.878416000000016
+    },
+    {
+      "path": "/api/rooms/fresh-owner-room/commands",
+      "method": "POST",
+      "status": 201,
+      "requestBodyBytes": 88,
+      "responseBodyBytes": 354,
+      "wallMs": 4.383874999999989
+    },
+    {
+      "path": "/api/rooms/fresh-owner-room/commands",
+      "method": "POST",
+      "status": 201,
+      "requestBodyBytes": 143,
+      "responseBodyBytes": 411,
+      "wallMs": 4.154333000000008
+    },
+    {
+      "path": "/api/rooms/fresh-owner-room/commands",
+      "method": "POST",
+      "status": 201,
+      "requestBodyBytes": 424,
+      "responseBodyBytes": 688,
+      "wallMs": 5.453082999999992
+    },
+    {
+      "path": "/api/rooms/fresh-owner-room/commands",
+      "method": "POST",
+      "status": 200,
+      "requestBodyBytes": 424,
+      "responseBodyBytes": 687,
+      "wallMs": 11.10070799999994
+    },
+    {
+      "path": "/api/rooms/fresh-owner-room/project-offers",
+      "method": "GET",
+      "status": 200,
+      "requestBodyBytes": 0,
+      "responseBodyBytes": 608,
+      "wallMs": 5.347000000000094
+    },
+    {
+      "path": "/api/rooms/fresh-owner-room/project-offers",
+      "method": "POST",
+      "status": 201,
+      "requestBodyBytes": 333,
+      "responseBodyBytes": 571,
+      "wallMs": 4.711125000000038
+    },
+    {
+      "path": "/api/rooms/fresh-owner-room/project-offers",
+      "method": "POST",
+      "status": 409,
+      "requestBodyBytes": 328,
+      "responseBodyBytes": 450,
+      "wallMs": 4.874957999999992
+    },
+    {
+      "path": "/api/rooms/fresh-owner-room",
+      "method": "GET",
+      "status": 200,
+      "requestBodyBytes": 0,
+      "responseBodyBytes": 7812,
+      "wallMs": 5.427374999999984
+    },
+    {
+      "path": "/api/rooms/fresh-owner-room",
+      "method": "GET",
+      "status": 200,
+      "requestBodyBytes": 0,
+      "responseBodyBytes": 7723,
+      "wallMs": 3.8721249999999827
+    },
+    {
+      "path": "/api/rooms/fresh-owner-room/commands",
+      "method": "POST",
+      "status": 409,
+      "requestBodyBytes": 421,
+      "responseBodyBytes": 500,
+      "wallMs": 3.05437500000005
+    },
+    {
+      "path": "/api/rooms/fresh-owner-room/agent-invites",
+      "method": "POST",
+      "status": 201,
+      "requestBodyBytes": 20,
+      "responseBodyBytes": 1375,
+      "wallMs": 26.635500000000093
+    },
+    {
+      "path": "/api/agent-invites/redeem",
+      "method": "POST",
+      "status": 201,
+      "requestBodyBytes": 102,
+      "responseBodyBytes": 4768,
+      "wallMs": 30.669417000000067
+    },
+    {
+      "path": "/api/rooms/fresh-owner-room/work-result?workItemId=task",
+      "method": "GET",
+      "status": 200,
+      "requestBodyBytes": 0,
+      "responseBodyBytes": 1901,
+      "wallMs": 4.405208000000016
+    }
+  ],
+  "node": "v24.22.1",
+  "steps": [
+    {
+      "operation": "account-owned room create",
+      "status": 201
+    },
+    {
+      "operation": "owner unpaid offer draft and publish",
+      "statuses": [
+        201,
+        200
+      ]
+    },
+    {
+      "operation": "existing identity join",
+      "status": 201,
+      "noNewIdentity": true
+    },
+    {
+      "operation": "post/propose/accept/save/complete",
+      "statuses": [
+        201,
+        201,
+        201,
+        201,
+        201
+      ],
+      "attributed": true
+    },
+    {
+      "operation": "new-process cold restart/exact completion retry",
+      "status": 200,
+      "duplicate": true,
+      "sameEvent": true,
+      "noBusinessWrites": true
+    },
+    {
+      "operation": "offer reopen/exact create retry/changed intent after new process",
+      "statuses": [
+        200,
+        201,
+        409
+      ],
+      "sameDraft": true,
+      "noBusinessWrites": true
+    },
+    {
+      "operation": "changed-intent refusal after restart",
+      "status": 409,
+      "noBusinessWrites": true
+    },
+    {
+      "operation": "second independent identity reads saved exact result",
+      "status": 200,
+      "sameCompletion": true,
+      "noRecompute": true
+    }
+  ],
+  "processStarts": 2,
+  "representation": "normalized-current-v1",
+  "recoveryAudit": true,
+  "accountSessionAndIdentitySurviveNewProcess": true,
+  "finalFacts": {
+    "fingerprints": {
+      "rooms": {
+        "rows": 1,
+        "sha256": "6c93bef7a466864760dab32b126e17a1c5dd9d1eb740d90415537d0963205435"
+      },
+      "events": {
+        "rows": 11,
+        "sha256": "72ebcd096f60005fab9a26842c9ea7457568861162ea7c81ba92ca96e4f973f4"
+      },
+      "commands": {
+        "rows": 5,
+        "sha256": "1a520c14d95636c87fd5f096fffa191ac77457e3b54707ed952013daf015b54e"
+      },
+      "work_entities": {
+        "rows": 1,
+        "sha256": "e6c8eab67bb7e76a0b8dd790ecf18870d00b183e33c92b4c6dc8fb6fa277fb7f"
+      },
+      "work_claims": {
+        "rows": 0,
+        "sha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+      },
+      "current_room_records": {
+        "rows": 19,
+        "sha256": "c42db74d8856c6aba1fb4886ddce8d6f6859e94190b0cc8ed739effc48bfbc93"
+      },
+      "current_room_record_proofs": {
+        "rows": 19,
+        "sha256": "d44f5579950a1054783b25d7ff06f8ff6e13cac4b6367e95a3d1a1f80c53e7ab"
+      },
+      "current_room_head": {
+        "rows": 1,
+        "sha256": "a0896ebc31d3d088169d9a97929b0dca53af68c8bd5c968885ab4fb7be74d47b"
+      },
+      "operator_actions": {
+        "rows": 32,
+        "sha256": "984da58fe5d1cca0425c436d845c731c9813ad3e74ae3577516452e932d5a428"
+      },
+      "work_claim_config": {
+        "rows": 0,
+        "sha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+      },
+      "project_offers": {
+        "rows": 1,
+        "sha256": "2b5e3c282c8a2b4832550de9916afde6c75dfc21dd878dfd6ecb28c716fbd142"
+      },
+      "project_offer_requests": {
+        "rows": 2,
+        "sha256": "53ac7925dbd78096fa373cb3f2cdb2a699357d31b4b260bab47e331b43427845"
+      },
+      "bounty_journal": {
+        "rows": 0,
+        "sha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+      }
+    },
+    "identities": 2,
+    "accounts": 1,
+    "recoveryAudit": true,
+    "cost": {
+      "cpuUserMicros": 369133,
+      "cpuSystemMicros": 38299,
+      "rssBytes": 238157824
+    }
+  },
+  "wallMs": 702.2345419999999,
+  "scope": "Actual local HTTP/fileSQLite with fresh fixture-provisioned account/session and two preexisting global identities; room/create/invite/join/work are actual HTTP. New server process on same disk database, not backup restore, SIGKILL/power failure, signup/provider or hosted/peer-device qualification."
+}

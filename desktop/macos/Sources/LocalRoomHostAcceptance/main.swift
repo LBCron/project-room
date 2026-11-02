@@ -16,16 +16,22 @@ if CommandLine.arguments.count > 3, CommandLine.arguments[2].hasPrefix("--") {
     if args[2] == "--stop-watch" { fm.createFile(atPath: journal + ".stop", contents: Data()); exit(0) }
     try? fm.removeItem(atPath: journal + ".stop")
     let mode = String(data: try Data(contentsOf: URL(fileURLWithPath: args[4])), encoding: .utf8)!
+    if mode == "early-invalid-runtime" { fputs("PRIVATE-CHILD-DIAGNOSTIC", stderr); exit(72) }
     let directory = journal + ".watch"
     let pinned = ProcessInfo.processInfo.environment["ROOM_HOST_SCOPE"] ?? "missing"
     try pinned.write(toFile: journal + ".scope", atomically: true, encoding: .utf8)
     try fm.createDirectory(atPath: directory, withIntermediateDirectories: true, attributes: [.posixPermissions: 0o700])
     let started = stamp(), session = UUID().uuidString.lowercased()
     func status(_ phase: String) throws {
-        try write(["schemaVersion":1,"pid": mode == "wrongpid" ? Int(getpid()) + 1 : Int(getpid()), "sessionId":session,
+        var value: [String: Any] = ["schemaVersion":1,"pid": mode == "wrongpid" ? Int(getpid()) + 1 : Int(getpid()), "sessionId":session,
             "startedAt":started,"updatedAt":mode == "stale" ? "2000-01-01T00:00:00.000Z" : stamp(),
             "origin":"https://fixture.invalid", "roomId":"fixture", "memberId":"agent", "phase":phase,
-            "protocol": mode == "unverified" ? "unverified" : "qualified", "credentials":"not_required", "modelExecution":"not_tested"], directory + "/status.json")
+            "protocol": mode == "unverified" ? "unverified" : "qualified", "credentials":"not_required", "modelExecution":"not_tested"]
+        if mode == "profile-lock" { value["failureCode"] = "profile_lock_requires_reconciliation" }
+        if mode == "login-failure" { value["failureCode"] = "login_required" }
+        if mode == "private-failure" { value["failureCode"] = "PRIVATE-CHILD-DIAGNOSTIC" }
+        value["error"] = "PRIVATE-CHILD-DIAGNOSTIC"
+        try write(value, directory + "/status.json")
     }
     if mode == "resistant" {
         signal(SIGTERM, SIG_IGN)
@@ -37,6 +43,10 @@ if CommandLine.arguments.count > 3, CommandLine.arguments[2].hasPrefix("--") {
         let code = argv.withUnsafeBufferPointer { posix_spawn(&child, "/bin/sh", nil, nil, UnsafeMutablePointer(mutating:$0.baseAddress!), &empty) }
         guard code == 0 else { exit(5) }
         try String(child).write(toFile: journal + ".child", atomically: true, encoding: .utf8)
+    }
+    if ["profile-lock", "login-failure", "private-failure"].contains(mode) {
+        try status("stopped"); fputs("PRIVATE-CHILD-DIAGNOSTIC", stderr)
+        exit(mode == "profile-lock" ? 70 : mode == "login-failure" ? 71 : 3)
     }
     try status("watching_room")
     if mode == "exit" { exit(3) }
@@ -313,6 +323,28 @@ for mode in ["wrongpid","stale","unverified","exit"] {
     }
     check(other.stopAndWait(), "\(mode) cleanup bounded")
 }
+for (mode, code, message) in [
+    ("profile-lock", "profile_lock_requires_reconciliation", "Agent profile is locked"),
+    ("login-failure", "login_required", "Sign in to the dedicated Codex account"),
+    ("early-invalid-runtime", "invalid_runtime", "Check the selected Codex runtime")
+] {
+    let (failed, folder) = try fixture(mode); try failed.start()
+    check(until { failed.snapshot()["running"] as? Bool == false }, "\(mode) owned child exited")
+    let status = failed.snapshot()
+    check(status["failureCode"] as? String == code && (status["message"] as? String ?? "").hasPrefix(message), "\(mode) safe reason survives process cleanup")
+    check(status["lastExit"] as? String == "setup_failed" && status["phase"] as? String == "stopped", "\(mode) is not a confirmed healthy stop")
+    check(status["protocol"] as? String == "unverified" && status["credentials"] as? String == "unknown", "\(mode) never asserts current readiness")
+    check(!String(describing: status).contains("PRIVATE-CHILD-DIAGNOSTIC"), "\(mode) private diagnostics excluded")
+    try "normal".write(to: folder.appendingPathComponent("runtime.json"), atomically: true, encoding: .utf8)
+    try failed.start()
+    check(until { failed.snapshot()["statusFresh"] as? Bool == true }, "\(mode) later start obtains fresh status")
+    check(failed.snapshot()["failureCode"] == nil, "\(mode) later start clears prior terminal reason")
+    check(failed.stopAndWait(), "\(mode) recovered child stops normally")
+}
+let (privateFailure, _) = try fixture("private-failure"); try privateFailure.start()
+check(until { privateFailure.snapshot()["running"] as? Bool == false }, "private failure child exited")
+check(privateFailure.snapshot()["failureCode"] == nil && !String(describing: privateFailure.snapshot()).contains("PRIVATE-CHILD-DIAGNOSTIC"), "unknown private reason is never promoted to status")
+check(privateFailure.snapshot()["lastExit"] as? String == "unconfirmed", "unknown nonzero exit is not confirmed stop")
 let (resistant,_) = try fixture("resistant"); try resistant.start()
 let childPath = resistant.journalURL!.path + ".child"
 check(until { fm.fileExists(atPath:childPath) }, "resistant descendant started")

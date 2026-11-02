@@ -1,3 +1,4 @@
+import { readWorkItem } from "./work-repository.mjs";
 import { assertListenerFence, LISTENER_TOKEN_HEADER } from "./listener-fence.mjs";
 import { messageRepository } from "./message-repository.mjs";
 // Work-claim HTTP routes (task RC-2026-09-18-041; receipts RC-2026-09-24-205).
@@ -881,6 +882,24 @@ function handleWorkClaimsCore({ req, res, url, store, roomId, auth, workClaimRou
   if (req.method === "POST" && typeof workClaimId === "string") {
     const linked = registry.get(roomId, workClaimId);
     const data = body(req);
+    // Historical generated cards can name work that never existed. Keep
+    // their records intact and keep cleanup available, but do not take new
+    // execution authority or advertise a work-context destination that 404s.
+    if (linked?.workItemId && store.db && !["release", "close", "cancel"].includes(workClaimRoute)) {
+      const canonical = readWorkItem(store.db, roomId, linked.workItemId);
+      if (!canonical || canonical.state === "proposed") {
+        const error = new ServiceError(409, "work_claim_conflict", canonical
+          ? "The linked work has not been accepted. Read its contract and use canonical acceptance."
+          : "The linked work is unavailable. This saved card does not authorize new execution; ask a steerer to recover the original work or explicitly propose a new task.");
+        error.body = { error: error.message, code: error.code, workItemId: linked.workItemId,
+          linkedWork: { status: canonical ? "awaiting_acceptance" : "unavailable", workItemId: linked.workItemId },
+          next: [{ path: canonical
+            ? `/api/rooms/${encodeURIComponent(roomId)}/work-context?workItemId=${encodeURIComponent(linked.workItemId)}`
+            : `/api/rooms/${encodeURIComponent(roomId)}/work-claims` },
+            { path: `/api/rooms/${encodeURIComponent(roomId)}/commands` }] };
+        throw error;
+      }
+    }
     const acceptance = workClaimRoute === "review" && data?.verdict !== undefined
       || workClaimRoute === "update" && (["done", "delivered"].includes(data?.state)
         || linked?.state === "delivered" && data?.state === "in_progress");

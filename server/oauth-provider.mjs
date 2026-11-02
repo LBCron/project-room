@@ -24,23 +24,11 @@
 import { createHash, randomBytes, timingSafeEqual } from "node:crypto";
 import { createOAuthProviderSqlite } from "./oauth-provider-store.mjs";
 
-class OAuthProviderError extends Error {
-  constructor(code, message) { super(message); this.name = "OAuthProviderError"; this.code = code; }
-}
+import { OAuthProviderError, OAUTH_SCOPES, validateOAuthClient } from "./oauth-client-contract.mjs";
+export { OAUTH_SCOPES } from "./oauth-client-contract.mjs";
 const fail = (code, message) => { throw new OAuthProviderError(code, message); };
 const check = (condition, message) => { if (!condition) fail("invalid_request", message); };
 
-// Valid scope strings for connector authorization.
-export const OAUTH_SCOPES = Object.freeze([
-  "rooms:read",
-  "chat:read",
-  "chat:write",
-  "work:read",
-  "work:write",
-  "members:invite",
-]);
-
-const CLIENT_ID_PATTERN = /^[A-Za-z0-9_-]{1,64}$/;
 const SCOPE_PATTERN = /^[a-z0-9:_*-]+$/;
 const CODE_CHALLENGE_PATTERN = /^[A-Za-z0-9_-]{43,128}$/;
 
@@ -61,7 +49,7 @@ const validateBinding = binding => {
   if (binding === undefined || binding === null) return null; // legacy desktop grant
   const fields = binding?.principalType === "invited-agent"
     ? ["resource", "roomId", "identityId", "memberId", "principalType", "invitationGrantId", "identityEpoch"]
-    : ["resource", "roomId", "identityId", "memberId", "humanMemberId", "identityEpoch"];
+    : ["resource", "roomId", "identityId", "memberId", "humanMemberId", "identityEpoch", ...(["account-owned-agent","account-adopted-agent"].includes(binding?.principalType) ? ["principalType", "accountEpoch", ...(binding?.principalType==="account-adopted-agent"?["adoptionId"]:[])] : [])];
   check(binding && typeof binding === "object" && !Array.isArray(binding)
     && Object.keys(binding).length === fields.length
     && fields.every(key => typeof binding[key] === "string" && binding[key].length > 0 && binding[key].length <= 512),
@@ -77,7 +65,7 @@ const checkResource = (record, resource) => {
     fail("invalid_target", "resource does not match this grant");
 };
 
-export function createOAuthProvider({ clients, codes, accessTokens, refreshTokens, db, clock, onSecurityEvent, isAccountActive, isBindingActive, tokenKind = "account" } = {}) {
+export function createOAuthProvider({ clients, codes, accessTokens, refreshTokens, db, clock, onSecurityEvent, onAccessRejected, isAccountActive, isBindingActive, tokenKind = "account" } = {}) {
   check(["account", "invite"].includes(tokenKind), "unsupported principal type");
   const prefix = tokenKind === "invite" ? { code: "iac", access: "iat", refresh: "iar" } : { code: "oac", access: "oat", refresh: "oar" };
   check(db === undefined || (clients === undefined && codes === undefined && accessTokens === undefined && refreshTokens === undefined),
@@ -106,25 +94,12 @@ export function createOAuthProvider({ clients, codes, accessTokens, refreshToken
   // Caller-owned sink for security signals (e.g. reuse-detected). The module
   // itself does no I/O; the HTTP layer wires this to its logging/journaling.
   const emitSecurityEvent = onSecurityEvent ?? (() => {});
+  check(onAccessRejected === undefined || typeof onAccessRejected === "function", "onAccessRejected must be a function if given");
 
   // Register an OAuth client (e.g. Muse). redirectUris must be exact-match
   // https URIs (http allowed only for localhost, per RFC 6749 §3.1.2.1).
   const registerClient = ({ clientId, name, redirectUris }) => {
-    check(typeof clientId === "string" && CLIENT_ID_PATTERN.test(clientId),
-      "clientId must match [A-Za-z0-9_-]{1,64}");
-    check(typeof name === "string" && name.length > 0 && name.length <= 80,
-      "name must be a non-empty string up to 80 chars");
-    check(Array.isArray(redirectUris) && redirectUris.length > 0,
-      "redirectUris must be a non-empty array");
-    for (const uri of redirectUris) {
-      check(typeof uri === "string", "every redirectUri must be a string");
-      let parsed;
-      try { parsed = new URL(uri); } catch { fail("invalid_request", `redirectUri is not a URL: ${uri}`); }
-      const isLocalhost = parsed.hostname === "localhost" || parsed.hostname === "127.0.0.1";
-      check(parsed.protocol === "https:" || (parsed.protocol === "http:" && isLocalhost),
-        "redirectUri must be https (http allowed only for localhost)");
-      check(!parsed.hash, "redirectUri must not contain a fragment");
-    }
+    validateOAuthClient({ clientId, name, redirectUris });
     const existing = clientStore.get(clientId);
     if (existing && !isExpired(existing, now)) {
       const sameName = existing.name === name;
@@ -286,6 +261,9 @@ export function createOAuthProvider({ clients, codes, accessTokens, refreshToken
   // (record.rotatedBy set) then revokes the whole family (F-01).
   const issueTokenPair = ({ clientId, userId, scopes, familyId = `oarf_${newSecret(16)}`, session, binding } = {}) => {
     const validScopes = validateScopes(scopes);
+    // Active dynamic clients follow the sliding refresh lifetime as well.
+    const client = getClient(clientId);
+    if (client) registerClient(client);
     const accessToken = `${prefix.access}_${newSecret()}`;
     const refreshToken = `${prefix.refresh}_${newSecret()}`;
     const at = now();
@@ -374,10 +352,12 @@ export function createOAuthProvider({ clients, codes, accessTokens, refreshToken
     check(typeof token === "string" && token.length > 0, "token must be a non-empty string");
     const digest = sha256(token);
     const record = accessStore.get(digest);
-    if (!record) return null;
-    if (isExpired(record, now)) { accessStore.delete(digest); return null; }
-    if (record.revoked || !bindingActive(record)) return null;
-    if (record.binding ? resource !== record.binding.resource : resource !== undefined) return null;
+    const rejected = reason => { onAccessRejected?.({reason}); return null; };
+    if (!record) return rejected("unknown_token");
+    if (isExpired(record, now)) { accessStore.delete(digest); return rejected("expired_token"); }
+    if (record.revoked) return rejected("revoked_grant");
+    if (!bindingActive(record)) return rejected("inactive_agent_binding");
+    if (record.binding ? resource !== record.binding.resource : resource !== undefined) return rejected("wrong_resource");
     // Deleted/deactivated accounts lose API access immediately, even if a
     // token row somehow survived the deletion purge.
     if (isAccountActive && !isAccountActive(record.userId)) return null;

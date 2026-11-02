@@ -1,3 +1,4 @@
+import { uiText } from "./strings.js";
 // Updates destination. Needs me, Mentions, and All activity.
 // The badge counts actionable items only. Opening a row marks it read.
 // Done and Clear are the handled and dismissed marks. Keyboard reachable,
@@ -201,6 +202,7 @@ export function mountUpdates({ client, host, getContext, onOpenWork, onOpenMessa
     paintOperations(); paintPaging();
   }
   async function load(next = filter, { append = false, budget = next === filter ? Math.max(1, loadedPages) : 1, notice = "" } = {}) {
+    if(client.sectionAvailability?.('updates')?.available===false){status.textContent=uiText("currentRoom.updatesUnavailable");badge.textContent='';loadMore.hidden=true;return;}
     const owned = currentContext();
     if (!owned || (append && (loading || !hasMore || !cursor))) return false;
     const mine = ++ticket;
@@ -407,6 +409,7 @@ export function mountUpdates({ client, host, getContext, onOpenWork, onOpenMessa
   });
   // Coalesce room events without replacing a pending action or stealing focus.
   function sync(force = false) {
+    if(client.sectionAvailability?.('updates')?.available===false){clearTimeout(refreshTimer);refreshTimer=null;badge.textContent='';return;}
     const value = context();
     if (!value) { reset(); return; }
     const signature = `${value}:${client.sequence}`;

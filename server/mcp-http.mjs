@@ -310,6 +310,15 @@ export async function writeRoomMcpNode(req, res, url, { bodyText, accept, roomMc
       category: "input",
     })));
   }
+  // The authenticated entry point must challenge at initialization so hosted
+  // clients start OAuth. Explicit discovery remains available without a grant.
+  if (oauthMetadataUrl && message?.method === "initialize" && (!req.headers.authorization || /^(?:bearer)?\s*$/i.test(req.headers.authorization))
+    && url.searchParams.get("auth") !== "discovery") {
+    console.info(JSON.stringify({event:"room.mcp_auth",reason:"missing_bearer",method:"initialize",status:401}));
+    const reply = {jsonrpc:"2.0",id:message.id ?? null,error:{code:MCP_AUTH_REQUIRED,message:"Connect your existing agent with OAuth"}};
+    res.writeHead(401,{...cors,...mcpAuthHeaders(reply,oauthMetadataUrl),"Content-Type":"application/json","Cache-Control":"no-store"});
+    return res.end(JSON.stringify(reply));
+  }
   const modern = modernMcpRequest(message, req.headers);
   if (modern) cors['MCP-Protocol-Version'] = modern.version;
   let reply;

@@ -29,6 +29,7 @@ the body is read.
 |---|---|---|
 | `GET /demo` and `HEAD /demo` | none | Curated static illustrative multiplayer conversation; no live private room data, membership or credentials. |
 | `GET /download` and `HEAD /download` | none | Public install status: web app ready, Node runtime version and deployed SHA, Mac dev build only. No live room data, membership, or credentials. |
+| `GET /extensions/work-receipt/v1` and `HEAD /extensions/work-receipt/v1` | none | Static declarative A2A work-receipt metadata specification; no room data, grants, RPC methods or signed-public-receipt claim. |
 | `GET /api/public-work/receipts/{receiptId}/review` and `HEAD /api/public-work/receipts/{receiptId}/review` | saved global identity secret | Only the submitting identity sees sanitized review status/feedback; no anonymous access, private room or reviewer bindings. |
 | `GET /api/rooms/{roomId}/public-work/results` and `HEAD /api/rooms/{roomId}/public-work/results` | room credential | Owner-only bounded result list, including withdrawn offers. |
 | `GET /api/rooms/{roomId}/public-work/receipts/{receiptId}` and `HEAD /api/rooms/{roomId}/public-work/receipts/{receiptId}` | room credential | Owner or current designated reviewer; current revision and authority. |
@@ -120,6 +121,7 @@ bounded reader as JSON bodies (8 MB instead of 16 KB): an oversized
 sending fails the request with `400 aborted` instead of holding it until the
 server request timeout.
 
+| `POST /oauth/register` | none (public client metadata only) | Native MCP OAuth must be configured; exact configured callbacks only, at most 5 URIs, public PKCE client with no token-endpoint secret. Rate-limited before reading the body; 1024-entry client registry cap. No membership, sponsorship, identity or token grant; consent and current authority remain separate. |
 | `POST /oauth/invite` | invitation capability, exact Origin and short-lived HttpOnly nonce cookie | Configured native OAuth clients only; preview or accept bounded agent access without a Room human account. Consent returns a PKCE-bound code to the registered client; no raw identity credential. |
 | `GET /api/auth/desktop/start` | none; bounded state/challenge | Native PKCE request redirects only to Room consent. |
 | `GET /api/auth/desktop/callback` | none; bounded state/code or denial | Fixed app scheme; no account credential in the URL. |

@@ -217,7 +217,9 @@ one profile. Keep both paths stable. Ctrl-C/SIGTERM interrupts owned work and
 closes the runtime process group; uncertain outcomes remain recoverable in Room.
 
 JSON status lines distinguish `watching_room`, `protocol_qualified`, `running`,
-`settled`, `recovery_pending`, `retrying_room`, and `stopped`. Protocol qualification
+`settled`, `recovery_pending`, `report_reconciliation_pending` (a result is saved
+but its run report is not yet settled with the room; it survives restart),
+`retrying_room`, and `stopped`. Protocol qualification
 still does not prove provider login. Missing credentials require dedicated login;
 unsupported runtime questions require a separately connected decision interface.
 An idle supervisor currently has local status only: Room's existing connected

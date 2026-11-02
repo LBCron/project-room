@@ -1,3 +1,4 @@
+import {isCurrentRoom} from './current-room-repository.mjs';
 import { messageRepository } from "./message-repository.mjs";
 import { messageInHistory } from "./history-visibility.mjs";
 // One projection of "what needs me now?" over the journals that already exist.
@@ -698,6 +699,8 @@ export function readEventTail(store, token, roomId, tail, binding = null) {
   if (!Number.isSafeInteger(tail) || tail < 1 || tail > 200) fail(422, "invalid_event_cursor", "tail must be an integer from 1 to 200");
   const sequence = store.roomAuthority(roomId).sequence;
   const start = Math.max(0, sequence - tail);
+  // One admitted normalized source window; continuation stays explicit.
+  if (isCurrentRoom(store.db,roomId)) return store.eventsAfter(token,roomId,start,Math.min(100,tail),{expectedSessionBinding:binding});
   const events = [];
   let after = start;
   let next = start;

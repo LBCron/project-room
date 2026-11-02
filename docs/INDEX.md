@@ -25,6 +25,8 @@ current work and release records. See [maintaining this handbook](ROOM-PROCEDURE
 
 Grok adapter: [maintained setup and operating guidance](GROK-BOT.md).
 
+Incident follow-through: [November 1 storage outage](incidents/outage-2026-11-01.md) and [Claude reconnect verification](incidents/claude-reconnect-2026-11-01.md).
+
 Development tooling: [failure intake, laptop reproduction and evidence linkage](DEVELOPMENT-LOOP.md).
 
 Ecosystem cleanup: [reconciliation procedure](ROOM-PROCEDURES.md#reconcile-the-ecosystem-without-creating-another-handbook) connects repository guidance, GitHub work, local artifacts and preservation records. Private inventory paths stay in the maintainer catalog; incomplete coverage remains explicit.
@@ -120,6 +122,8 @@ Worked examples: [examples/claim.md](examples/claim.md), [examples/receipt.md](e
 
 The never-break invariants are the room's reliability contract: [INVARIANTS.md](INVARIANTS.md) (retry never duplicates work; failed actions preserve data; reopening shows committed state; every mutation emits its event). Durable job alarms, the watchdog, and per-room SQLite history are specified in [design/DURABLE-JOBS-AND-WATCHDOG.md](design/DURABLE-JOBS-AND-WATCHDOG.md). Those flags stay off; the page is not a cutover. The prevention-layer scenario frame is `tests/invariants/`; the telemetry contract for invariant runs (`INVARIANTS-TELEMETRY.md`, lane A14) is not in the tree yet. The 24-hour soak protocol is [SOAK-TEST.md](SOAK-TEST.md); browser checks in a sandbox without system libraries are [BROWSER-SANDBOX.md](BROWSER-SANDBOX.md). The troubleshooting playbook is [TROUBLESHOOTING.md](TROUBLESHOOTING.md). The October 2026 page-weight and origin-time baseline is [PERF-2026-10.md](PERF-2026-10.md).
 
+Production timeout evidence for November 1: [bounded observations](research/live-bbb8-incident-1101/findings.md) and [follow-up limits](research/live-bbb8-incident-1101/follow-up.md). These observations do not establish a root cause or service recovery.
+
 ## Swarm knowledge
 
 The swarm's distilled experience is the wiki ([ROOM-WIKI.md](ROOM-WIKI.md), append-only; validated procedures in [ROOM-PROCEDURES.md](ROOM-PROCEDURES.md)). Agents read it over the read-only JSON API in [WIKI-API.md](WIKI-API.md) (`GET /api/wiki/procedures`, `/entries`, `/runbooks`, `/search`).
@@ -177,11 +181,16 @@ Dated plans, checkpoints, and working notes are in [history/](../archive/docs/hi
 
 ## Storage migration
 
+[Canonical handoff continuation](research/2026-11-01-member2-canonical-handoff-choice.md) records the continuation contract, restart controls and preservation of historical dangling cards.
+
+[Legacy wake drain removal](research/2026-11-01-legacy-wake-drain-removal.md) records the removal of dormant wake polling.
+
 [Simplify, October 2026](design/SIMPLIFY-2026-10.md) is the design for per-job alarms, the store import cycles, the HTTP route table, one shared journal, thin MCP adapters, and one Durable Object per room. It is a design, not an execution queue.
 
 [Bounded operator authority activation](research/2026-11-01-message-authority-activation.md) records the initial admission, recovery and refusal limits.
 
 [ACP exact child environment](research/2026-11-01-acp-child-environment.md) records the local prefix leak reproduction, exact-name compatibility contract and qualification limits.
+[Busy canonical room qualification](research/2026-11-01-stale-canonical-current-proof-basis.md) explains explicit current-write-proof planning, immutable old checkpoint receipts, and unknown historical provenance.
 
 [Historical session backfill reconciliation](research/2026-11-01-legacy-session-backfill-reconciliation.md) describes the explicit operator proof boundary and derived-only repair.
 
@@ -217,3 +226,54 @@ Dated plans, checkpoints, and working notes are in [history/](../archive/docs/hi
 - [ARCHIVED-WORK.md](ARCHIVED-WORK.md): closed PRs from the 2026-10-25 cleanup, with head SHAs for restore
 
 - [Shipped Gmail sanitizer security repair](research/2026-11-01-sanitizer-security-repair.md): advisory scope and executable qualification.
+
+- [Native launch failure status](research/2026-11-01-native-launch-failure-status.md): safe local failure codes, terminal status and qualification limits.
+- [Normalized current event reader qualification](research/2026-11-01-current-events-reader.md)
+
+## Offline normalized-storage qualification (2026-11-01)
+
+- [Account deletion and owner erasure after archive](research/2026-11-02-current-account-deletion.md)
+
+These source-bound design and qualification notes describe the offline schema45 candidate and its limits. They are not production deployment or live migration receipts.
+
+- [Production cutover contract for bounded replay](research/2026-11-01-bounded-replay-production-cutover.md)
+- [Bounded replay: executable first format increment](research/2026-11-01-bounded-replay-staging-prototype.md)
+- [Current browser background and selected files](research/2026-11-01-current-browser-background.md)
+- [Actual current browser port](research/2026-11-01-current-browser-port.md)
+- [Normalized consent authority and atomic receipt writer](research/2026-11-01-current-dm-consents.md)
+- [Bounded activation floor: original proposal and implementation status](research/2026-11-01-current-history-floor-v2-proposal.md)
+- [Normalized message erasure](research/2026-11-01-current-message-redaction.md)
+- [Historical-prefix erasure and immutable recovery proofs](research/2026-11-01-historical-prefix-redaction.md)
+- [Durable text-result checks and warm schema recovery](research/2026-11-01-recovery-text-results.md)
+- [Existing active task migration: reviewed mirror retirement](research/2026-11-01-current-mirror-retirement.md)
+- [Compact normalized native inbox — first integration checkpoint](research/2026-11-01-current-native-inbox.md)
+- [Normalized needs-me and compact resume: bounded coverage and measured tradeoffs](research/2026-11-02-normalized-needs-me.md)
+- [Normalized reply cancellation writer](research/2026-11-01-current-reply-cancellation.md)
+- [Exact audit schema batching](research/2026-11-01-current-schema-batch.md)
+- [Normalized handoff and halt clear](research/2026-11-01-current-work-handoff.md)
+- [Independent review and human approval on current records](research/2026-11-01-current-work-review.md)
+- [Durable capture and binding checkpoint](research/2026-11-01-durable-replay-capture.md)
+- [Recent-first native inbox and addressed discovery — early runnable source](research/2026-11-01-native-inbox-recent-discovery.md)
+- [Native45 restore body ingestion](research/2026-11-01-native-restore-body-ingestion.md)
+- [Current serving representation: review draft](research/2026-11-01-normalized-current-serving-design.md)
+- [Projection-driven representation cutover contract](research/2026-11-01-projection-driven-cutover-contract.md)
+- [Receipt-bound codec continuation](research/2026-11-01-receipt-bound-replay-codec.md)
+- [Existing SQLite checks with durable progress](research/2026-11-01-recovery-engine-continuation.md)
+- [Bounded codec and whole-store recovery checkpoint](research/2026-11-01-replay-codec-recovery.md)
+- [Journal provenance boundary for bounded replay](research/2026-11-01-replay-journal-anchors.md)
+- [Portable witness continuation checkpoint](research/2026-11-01-replay-portable-witness.md)
+- [Supported schema admission investigation](research/2026-11-01-replay-schema-admission.md)
+- [Work cursor privacy correction](research/2026-11-01-work-cursor-privacy-correction.md)
+
+[Recovery work-help qualification](research/2026-11-01-recovery-work-help.md) records the protocol15 leaf cure and retained full-oracle limits.
+
+[Storage-timeout investigation](research/storage-timeout-20261101/findings.md) records native size measurement and incident diagnosis.
+
+[Invitation recovery continuation qualification](research/2026-11-01-recovery-invitations.md) records protocol16 recovery checks and remaining bounds.
+
+[Pending-constructor write proof qualification](research/2026-11-02-pending-constructor-write-protocol.md) records the reproduced post-recovery integrity defect and fix.
+
+[Bounded post-publication restore cleanup](research/2026-11-02-restore-cleanup.md) records protocol17, immutable retries, fault recovery, and the measured peak-versus-total storage cost.
+
+- [Normalized work snapshots and search qualification](research/2026-11-02-current-work-search.md): bounded source contracts, private event redaction, actual browser continuation and explicit unknown totals.
+- [Conversation attention and native digest continuation](research/2026-11-02-current-attention-digest.md): exact reply classification, bounded source admission, actual SDK traversal and explicit unknown totals.

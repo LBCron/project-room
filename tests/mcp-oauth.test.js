@@ -91,3 +91,18 @@ test('resource metadata and challenges are explicit and reject header injection'
   assert.throws(() => mcpOAuthChallenge('https://room.example/\r\nInjected:yes'));
   assert.throws(() => mcpOAuthResourceMetadata('http://room.example/mcp', 'https://room.example'));
 });
+
+test('historical agent-shaped owner requires a verified account link for distinct owned-agent consent',()=>{
+ // Models already persisted legacy metadata, not permission to enroll this
+ // historical sponsor shape through today's member-creation API.
+ const f=setup(true);try{
+  f.db.exec('ALTER TABLE accounts ADD COLUMN auth_epoch INTEGER NOT NULL DEFAULT 0');
+  f.state.room={ownerId:'friend'};f.state.members.friend.kind='agent';
+  const direct={...binding,principalType:'account-owned-agent',accountEpoch:'0'};
+  const code=f.provider.issueCode({...request,binding:direct}).code;
+  const pair=f.exchange(code);
+  const resolve=()=>resolveMcpOAuthPrincipal({store:f.store,provider:f.provider,token:pair.accessToken,resource,roomId:'room'});
+  assert.equal(resolve().memberId,'agent');assert.notEqual(resolve().memberId,'friend');
+  f.db.prepare("UPDATE member_accounts SET account_id='another-account'").run();assert.equal(resolve(),null);
+ }finally{f.db.close();}
+});

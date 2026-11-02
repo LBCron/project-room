@@ -1,22 +1,16 @@
+import { approvedAgentAdoption } from './agent-sponsor-transfer.mjs';
 // OAuth resource and principal validation. This module does not mint agent
 // identities or grant room membership. Wire it only after an explicit human
 // consent flow selects an agent already sponsored by that human.
 import { createHash } from 'node:crypto';
 import { AsyncLocalStorage } from 'node:async_hooks';
 import { OAUTH_SCOPES } from './oauth-provider.mjs';
+import { ownMember } from '../src/events.js';
 import { PILOT_LIMITS } from './store.mjs';
 import { hasMessageAuthority } from './message-authority.mjs';
 import { assertProjectionWrite } from './write-integrity.mjs';
 
-export function mcpOAuthResourceMetadata(resource, issuer) {
-  for (const value of [resource, issuer]) {
-    const url = new URL(value);
-    if (url.protocol !== 'https:' || url.username || url.password || url.hash || url.search || (url.href !== value && url.origin !== value))
-      throw new TypeError('Exact HTTPS resource and issuer required');
-  }
-  return Object.freeze({ resource, authorization_servers: [issuer],
-    bearer_methods_supported: ['header'], scopes_supported: [...OAUTH_SCOPES] });
-}
+export { mcpOAuthResourceMetadata } from "./oauth-metadata.mjs";
 
 export function mcpOAuthChallenge(metadataUrl) {
   const url = new URL(metadataUrl);
@@ -27,11 +21,13 @@ export function mcpOAuthChallenge(metadataUrl) {
 
 // Binding authorization consumes only membership metadata, never history. This
 // does not certify unrelated message rows or change their recovery/count proof.
-function canonicalOAuthBindingMembers(store, roomId) {
+function canonicalOAuthBindingMembers(store, roomId, memberId, humanMemberId) {
   // Existing lightweight store adapters retain their original room reader.
   if (typeof store.roomAuthority !== 'function' || typeof store.readTransaction !== 'function') return null;
   return store.readTransaction(() => {
     const db = store.db;
+    const current = db.prepare("SELECT json_extract(projection,'$.normalizedCurrent.version') version FROM rooms WHERE id=?").get(roomId);
+    if(current?.version === 1) return {...store.roomAuthority(roomId,{memberId}).members,...store.roomAuthority(roomId,{memberId:humanMemberId}).members};
     const sizes = db.prepare(`SELECT length(CAST(r.projection AS BLOB)) AS projection_bytes,
       length(CAST(i.metadata_hash AS BLOB)) AS metadata_hash_bytes,
       COALESCE(length(CAST(i.projection_hash AS BLOB)),0) AS projection_hash_bytes,
@@ -58,24 +54,45 @@ function canonicalOAuthBindingMembers(store, roomId) {
 // here so a provider built without isAccountActive cannot bypass it.
 export function validateMcpOAuthBinding(store, userId, binding) {
   if (!binding || !userId) return null;
-  const fields = ['resource', 'roomId', 'identityId', 'memberId', 'humanMemberId', 'identityEpoch'];
+  const adopted=binding.principalType==='account-adopted-agent';
+  const direct = binding.principalType === 'account-owned-agent';
+  const fields = ['resource', 'roomId', 'identityId', 'memberId', 'humanMemberId', 'identityEpoch', ...(direct || adopted ? ['principalType','accountEpoch'] : []),...(adopted?['adoptionId']:[])];
   if (Object.keys(binding).length !== fields.length || fields.some(key => typeof binding[key] !== 'string' || !binding[key] || binding[key].length > 512)) return null;
   const { roomId, identityId, memberId, humanMemberId } = binding;
   const currentEpoch = mcpOAuthIdentityEpoch(store, identityId);
   if (!currentEpoch || binding.identityEpoch !== currentEpoch) return null;
-  const account = store.db.prepare('SELECT active FROM accounts WHERE id=?').get(userId);
-  if (account?.active !== 1) return null;
+  const account = store.db.prepare(direct || adopted ? 'SELECT active,auth_epoch FROM accounts WHERE id=?' : 'SELECT active FROM accounts WHERE id=?').get(userId);
+  if (account?.active !== 1 || (direct || adopted) && binding.accountEpoch !== String(account.auth_epoch)) return null;
   const humanLink = store.db.prepare('SELECT account_id FROM member_accounts WHERE room_id=? AND member_id=?').get(roomId, humanMemberId);
   if (humanLink?.account_id !== userId) return null;
   const identityLink = store.db.prepare('SELECT member_id FROM identity_links WHERE room_id=? AND identity_id=?').get(roomId, identityId);
   if (identityLink?.member_id !== memberId) return null;
   let state;
   try {
-    const members = canonicalOAuthBindingMembers(store, roomId);
-    state = members === null ? store.room(roomId).state : { members };
+    const members = canonicalOAuthBindingMembers(store, roomId, memberId, humanMemberId);
+    state = members === null ? store.room(roomId).state : { members, room: store.roomAuthority(roomId,{memberId}) };
   } catch { return null; }
-  const human = state.members?.[humanMemberId];
-  const agent = state.members?.[memberId];
+  const human = ownMember(state.members,humanMemberId);
+  const agent = ownMember(state.members,memberId);
+  if(adopted){
+    const approval=approvedAgentAdoption(store,roomId,agent,userId);
+    if(!approval||approval.humanMemberId!==humanMemberId||agent.accountableHumanId!==humanMemberId
+      ||approval.accountEpoch!==Number(binding.accountEpoch)||approval.identityEpoch!==binding.identityEpoch
+      ||binding.adoptionId!==agent.sponsorAdoptionId||human?.kind!=='human'||human.active!==true||agent.active!==true)return null;
+    return Object.freeze({userId,roomId,identityId,memberId,humanMemberId,principalType:'account-adopted-agent'});
+  }
+  if(agent?.sponsorAdoptionId)return null; // Never revive a pre-adoption grant.
+  if (direct) {
+    // Explicit account consent sponsors this existing seat, not its old API key.
+    // Legacy rooms may bind the owner's account to an agent-shaped member.
+    // The verified account link, current room ownership and accountable link
+    // are all mandatory; neither a display name nor an owner bearer suffices.
+    const ownerId = state.room?.ownerId;
+    if (ownerId !== humanMemberId || human?.active !== true || memberId === humanMemberId
+      || agent?.kind !== 'agent' || agent.active !== true
+      || agent.accountableHumanId !== humanMemberId || agent.identityId !== identityId) return null;
+    return Object.freeze({userId,roomId,identityId,memberId,humanMemberId,principalType:'account-owned-agent'});
+  }
   if (human?.kind !== 'human' || human.active !== true || agent?.kind !== 'agent' || agent.active !== true
     || agent.accountableHumanId !== humanMemberId || agent.identityId !== identityId) return null;
   const connection = store.agentConnections?.row?.(roomId, memberId);
@@ -128,7 +145,7 @@ const scopeTools = {
   'chat:read': ['room_read_messages', 'room_read_inbox', 'room_list_requests', 'room_read_request'],
   'chat:write': ['room_post_message', 'room_reply', 'room_request_reply', 'room_respond_to_request'],
   'work:read': ['room_list_work', 'room_read_board', 'room_read_work', 'room_read_work_discussion', 'room_read_result'],
-  'work:write': ['room_claim', 'room_accept_work', 'room_start_work', 'room_block_work', 'room_resolve_blocker', 'room_handoff', 'room_submit_text_result'],
+  'work:write': ['room_claim', 'room_acquire_claim', 'room_release_claim', 'room_renew_claim', 'room_accept_work', 'room_start_work', 'room_block_work', 'room_resolve_blocker', 'room_handoff', 'room_submit_text_result'],
 };
 // Mixed projections must satisfy every data category, in discovery and dispatch.
 // Keep this separate from membership checks: OAuth consent cannot widen them.
@@ -145,17 +162,31 @@ export function mcpOAuthToolAllowed(name, scopes) {
   return Object.entries(scopeTools).some(([scope, names]) => scopes.includes(scope) && names.includes(name));
 }
 
-export function listMcpOAuthAgents(store, userId, resource) {
+export function listMcpOAuthAgents(store, userId, resource, {preferredRoomId,preferredMemberId}={}) {
   const humans = store.db.prepare('SELECT room_id,member_id FROM member_accounts WHERE account_id=?').all(userId);
   const result = [];
   for (const human of humans) {
     let state;
-    try { state = store.room(human.room_id).state; } catch { continue; }
+    try {
+      if(preferredRoomId === human.room_id && preferredMemberId) {
+        const authority=store.roomAuthority(human.room_id,{memberId:preferredMemberId});
+        state={room:{id:human.room_id,ownerId:authority.ownerId},members:authority.members};
+      } else state = store.room(human.room_id).state;
+    } catch { continue; }
     for (const member of Object.values(state.members ?? {})) {
       if (member.kind !== 'agent' || member.accountableHumanId !== human.member_id || !member.identityId) continue;
       const binding = { resource, roomId: human.room_id, identityId: member.identityId, memberId: member.id, humanMemberId: human.member_id, identityEpoch: mcpOAuthIdentityEpoch(store, member.identityId) };
-      if (validateMcpOAuthBinding(store, userId, binding)) result.push({ binding,
-        label: `${member.displayName || member.id} — ${state.room?.title || human.room_id}` });
+      const directBinding = {...binding, principalType:'account-owned-agent',accountEpoch:String(store.db.prepare('SELECT auth_epoch FROM accounts WHERE id=?').get(userId)?.auth_epoch)};
+      // Accountability alone does not prove that the account controls an invited
+      // agent. A durable owner grant starts from the explicitly configured seat
+      // or the existing managed connection proof; never from every sponsored seat.
+      const configured = preferredRoomId === human.room_id && preferredMemberId === member.id;
+      const adoptedBinding={...binding,principalType:'account-adopted-agent',accountEpoch:String(store.db.prepare('SELECT auth_epoch FROM accounts WHERE id=?').get(userId)?.auth_epoch),adoptionId:member.sponsorAdoptionId};
+      const adopted=member.sponsorAdoptionId&&validateMcpOAuthBinding(store,userId,adoptedBinding);
+      const managed = validateMcpOAuthBinding(store,userId,binding);
+      const selected = adopted ? adoptedBinding : (configured || managed) && validateMcpOAuthBinding(store,userId,directBinding) ? directBinding
+        : managed ? binding : null;
+      if (selected) result.push({binding:selected, label:`${member.displayName || member.id} — ${state.room?.title || human.room_id}`});
     }
   }
   return result;
@@ -169,6 +200,22 @@ export function mcpOAuthIdentityEpoch(store, identityId) {
   return createHash('sha256').update(`mcp-oauth-identity:${row.secret_hash}`).digest('hex');
 }
 
+// Invitation identity epochs retain their historical value until adoption.
+// Once sponsorship changes, bind new invitation grants to that persisted
+// consent marker without rotating the identity or walking token history.
+function invitationEpoch(identityEpoch,member) {
+  if(!identityEpoch||!member)return null;
+  if(!member.sponsorAdoptionId)return identityEpoch;
+  if(typeof member.sponsorAdoptionId!=='string'||!/^[A-Za-z0-9][A-Za-z0-9_-]{0,63}$/.test(member.sponsorAdoptionId)
+    ||!/^[a-f0-9]{64}$/.test(member.sponsorAdoptionDigest??''))return null;
+  return createHash('sha256').update(`mcp-invite-adoption-v1:${identityEpoch}:${member.sponsorAdoptionId}:${member.sponsorAdoptionDigest}`).digest('hex');
+}
+export function mcpInviteOAuthIdentityEpoch(store,identityId,roomId) {
+  let member;try{member=store.identities.resolveIdentityLink(identityId,roomId)?.member;}catch{return null;}
+  if(!member||member.kind!=='agent'||member.active!==true)return null;
+  return invitationEpoch(mcpOAuthIdentityEpoch(store,identityId),member);
+}
+
 export function validateMcpInviteOAuthBinding(store, grantId, binding) {
   const fields = ['principalType', 'invitationGrantId', 'resource', 'roomId', 'identityId', 'memberId', 'identityEpoch'];
   if (!binding || Object.keys(binding).length !== fields.length || binding.principalType !== 'invited-agent'
@@ -176,12 +223,13 @@ export function validateMcpInviteOAuthBinding(store, grantId, binding) {
   const grant = store.db.prepare('SELECT * FROM oauth_invite_grants WHERE id=?').get(grantId);
   if (!grant || grant.revoked_at !== null || grant.expires_at <= store.now()
     || grant.room_id !== binding.roomId || grant.identity_id !== binding.identityId || grant.member_id !== binding.memberId
-    || grant.identity_epoch !== binding.identityEpoch || mcpOAuthIdentityEpoch(store, binding.identityId) !== binding.identityEpoch) return null;
+    || grant.identity_epoch !== binding.identityEpoch) return null;
   const invite = store.db.prepare('SELECT redeemed_identity_id,revoked_at FROM agent_invite_codes WHERE code_hash=?').get(grant.invite_hash);
   if (!invite || invite.revoked_at !== null || invite.redeemed_identity_id !== binding.identityId) return null;
   let member;
   try { member = store.identities.resolveIdentityLink(binding.identityId, binding.roomId)?.member; } catch { return null; }
-  if (!member || member.id !== binding.memberId || member.kind !== 'agent' || member.active !== true) return null;
+  if (!member || member.id !== binding.memberId || member.kind !== 'agent' || member.active !== true
+    || invitationEpoch(mcpOAuthIdentityEpoch(store,binding.identityId),member)!==binding.identityEpoch) return null;
   return Object.freeze({ principalType: 'invited-agent', invitationGrantId: grantId, roomId: binding.roomId,
     identityId: binding.identityId, memberId: binding.memberId, sponsorMemberId: grant.sponsor_member_id,
     controllerVerification: 'invitation-capability' });
@@ -192,7 +240,7 @@ export function mcpOAuthPrincipalDescriptor(principal) {
     .map(key => [key, principal[key]])), scopes: Object.freeze([...principal.scopes].sort()) });
 }
 export function authorizeMcpOAuthDescriptor({ store, accountProvider, inviteProvider, resource, descriptor, requiredScopes = ['chat:read'] }) {
-  if (!descriptor || !['account-agent', 'invited-agent'].includes(descriptor.principalType) || descriptor.resource !== resource) return null;
+  if (!descriptor || !['account-agent', 'account-owned-agent', 'account-adopted-agent', 'invited-agent'].includes(descriptor.principalType) || descriptor.resource !== resource) return null;
   const provider = descriptor.principalType === 'invited-agent' ? inviteProvider : accountProvider;
   const grant = provider?.verifyGrantFamily(descriptor.familyId, { resource });
   if (!grant?.binding || requiredScopes.some(scope => !grant.scopes.includes(scope))
@@ -200,6 +248,6 @@ export function authorizeMcpOAuthDescriptor({ store, accountProvider, inviteProv
   const principal = descriptor.principalType === 'invited-agent'
     ? validateMcpInviteOAuthBinding(store, grant.userId, grant.binding)
     : validateMcpOAuthBinding(store, grant.userId, grant.binding);
-  if (!principal || ['roomId', 'identityId', 'memberId'].some(key => principal[key] !== descriptor[key])) return null;
+  if (!principal || (principal.principalType ?? 'account-agent') !== descriptor.principalType || ['roomId', 'identityId', 'memberId'].some(key => principal[key] !== descriptor[key])) return null;
   return Object.freeze({ ...principal, ...descriptor, clientId: grant.clientId, scopes: grant.scopes });
 }

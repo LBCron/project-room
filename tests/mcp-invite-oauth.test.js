@@ -28,7 +28,7 @@ async function setup(t, { client = CLIENT, clients = [client] } = {}) {
   await new Promise(resolve => server.listen(0, '127.0.0.1', resolve));
   t.after(async () => { server.closeStreams(); server.closeAllConnections(); await new Promise(resolve => server.close(resolve)); store.close(); });
   const base = `http://127.0.0.1:${server.address().port}`;
-  const start = () => fetch(base + '/oauth/authorize?' + new URLSearchParams({ client_id: client.clientId, redirect_uri: client.redirectUris[0], scope: 'rooms:read chat:read chat:write work:read work:write', state: 'native-state', code_challenge: challenge, code_challenge_method: 'S256', resource }));
+  const start = () => fetch(base + '/oauth/authorize?' + new URLSearchParams({ client_id: client.clientId, redirect_uri: client.redirectUris[0], scope: 'rooms:read chat:read chat:write work:read work:write', state: 'native-state', code_challenge: challenge, code_challenge_method: 'S256', resource, connection: 'invite' }));
   const initial = await start(); assert.equal(initial.status, 200);
   const html = await initial.text(); assert.match(html, /No Project Room signup/);
   const nonce = html.match(/name="nonce" value="([^"]+)"/)[1];
@@ -72,6 +72,13 @@ test('invitation native OAuth needs no account, survives lost consent response w
   assert.equal(listMcpOAuthAgents(f.store, sponsorAccount, resource).length, 0, 'Room accountability is not agent controller proof');
   const invitedGrant = f.store.db.prepare('SELECT * FROM oauth_invite_grants').get();
   assert.equal(validateMcpOAuthBinding(f.store, sponsorAccount, { resource, roomId: 'commons', identityId: invitedGrant.identity_id, memberId: invitedGrant.member_id, humanMemberId: 'owner', identityEpoch: invitedGrant.identity_epoch }), null);
+  const slot=f.store.createAccountSessionSlot();
+  const sponsorSession=f.store.loginAccountSession(slot.token,f.store.issueAccountAccessKey(sponsorAccount),0);
+  const beforeCodes=f.store.db.prepare('SELECT count(*) n FROM oauth_provider_codes').get().n;
+  const forgedOwned={resource,roomId:'commons',identityId:invitedGrant.identity_id,memberId:invitedGrant.member_id,humanMemberId:'owner',identityEpoch:invitedGrant.identity_epoch,principalType:'account-owned-agent',accountEpoch:String(f.store.db.prepare('SELECT auth_epoch FROM accounts WHERE id=?').get(sponsorAccount).auth_epoch)};
+  const takeover=await fetch(f.base+'/oauth/authorize',{method:'POST',headers:{Cookie:`__Host-account_session=${slot.token}`,Origin:origin,'Content-Type':'application/json','X-CSRF-Token':sponsorSession.csrf},body:JSON.stringify({client_id:CLIENT.clientId,redirect_uri:CLIENT.redirectUris[0],scope:'rooms:read',code_challenge:challenge,code_challenge_method:'S256',resource,agent_binding:JSON.stringify(forgedOwned),decision:'allow'})});
+  assert.equal(new URL(takeover.headers.get('location')).searchParams.get('error'),'access_denied','sponsoring an invitation does not authorize an account-owned-agent grant');
+  assert.equal(f.store.db.prepare('SELECT count(*) n FROM oauth_provider_codes').get().n,beforeCodes);
   const principal = resolveMcpOAuthPrincipal({ store: f.store, provider: restarted.provider, token: tokens.access_token, resource, roomId: 'commons' });
   assert.equal(principal.principalType, 'invited-agent');
   const descriptor = mcpOAuthPrincipalDescriptor(principal);
@@ -330,7 +337,7 @@ test('hosted portable public client preserves the existing client and separates 
 // Claude custom connectors (claude.com/docs/connectors/building/authentication):
 // hosted Claude surfaces send exactly https://claude.ai/api/mcp/auth_callback,
 // and Claude accepts a user-entered client ID with no secret as a public client.
-test('hosted Claude public client is registered with the published callback and completes consent', async t => {
+test('hosted Claude public client retains explicit invitation consent at the published callback', async t => {
   const config = JSON.parse(readFileSync(new URL('../cloudflare/wrangler.jsonc', import.meta.url), 'utf8'));
   const clients = JSON.parse(config.env.production.vars.ROOM_MCP_OAUTH_CLIENTS);
   const client = clients.find(c => c.clientId === 'project-room-claude');
@@ -345,7 +352,7 @@ test('hosted Claude public client is registered with the published callback and 
   ]) {
     const response = await fetch(f.base + '/oauth/authorize?' + new URLSearchParams({
       client_id: client.clientId, redirect_uri: client.redirectUris[0], scope: 'rooms:read',
-      code_challenge: challenge, code_challenge_method: 'S256', resource, ...changes,
+      code_challenge: challenge, code_challenge_method: 'S256', resource, connection: 'invite', ...changes,
     }));
     assert.equal(response.status, 400, JSON.stringify(changes));
     assert.equal(response.headers.get('location'), null, 'invalid authorization must not redirect to an untrusted callback');

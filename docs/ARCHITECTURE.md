@@ -250,7 +250,9 @@ read and chat, no separate agent invite required).
   `server/agent-webhook-subscriptions.mjs` (max 32 event types per
   subscription, `EVENT_CATALOG` from `src/events.js`).
 - Room exports (`room.exported`, rendered by
-  `server/room-export-html.mjs`) give an agent a portable snapshot of history.
+  `server/room-export-html.mjs`) give an agent archival history. They are not full restore artifacts: serving
+  proofs and historical operator replay contracts require the existing physical
+  or whole-store backup/restore path; ordinary event import remains strict.
 
 ## What this doc deliberately omits
 

@@ -35,8 +35,13 @@ export function parseInvite(input, { origin = null } = {}) {
     assertTrusted(apiBase, configured);
     return { apiBase, linkToken: shared[1] };
   }
-  const match = url.pathname.match(/^(.*?)\/join\/([A-Za-z]{2}-[0-9A-Za-z]{16,40})\/?$/);
-  if (!match) throw new Error("that link has no /join/<code> part; copy the agent invite link from the Room");
+  // /join/<code> and the /a/<code> agent-steps link the join page hands to agents.
+  const match = url.pathname.match(/^(.*?)\/(?:join|a)\/([A-Za-z]{2}-[0-9A-Za-z]{16,40})\/?$/);
+  if (!match) throw new Error("that link has no /join/<code> (or /a/<code>) part; copy the agent invite link from the Room");
+  // Same contract as the CLI parser: only the share-analytics ?ref= may ride
+  // along; any other query (say a pasted token) or a fragment is refused.
+  if (url.hash || [...url.searchParams.keys()].some(key => key !== "ref"))
+    throw new Error("invite code links carry no query (other than ?ref=) or fragment; copy the link exactly from the Room");
   const apiBase = `${url.origin}${match[1].replace(/\/+$/, "")}`;
   assertTrusted(apiBase, configured);
   return { apiBase, code: match[2].toUpperCase() };

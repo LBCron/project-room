@@ -82,7 +82,7 @@ export class GuestAgentLinks {
     // exemption): an agent owner may mint guest links on their identity
     // bearer. The mint itself stays account-bound: guest member ids derive
     // from the sponsor account (see guest-invites.mjs).
-    if (!auth.delegate && (auth.member?.id !== this.store.room(roomId).state.room.ownerId
+    if (!auth.delegate && (auth.member?.id !== this.store.roomAuthority(roomId,{memberId:auth.member.id}).ownerId
       || !auth.member.permissions.includes("manage_members"))) {
       fail(403, "owner_required", "Only the room owner can mint a guest invite. Use Add agent for a durable key.");
     }

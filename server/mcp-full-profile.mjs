@@ -1,3 +1,4 @@
+import {redactSelectedEventPage} from './current-room-events.mjs';
 import { resolveNamedReviewers, hasCurrentReview } from "./work-claims.mjs";
 import { RoomAssistant } from "./room-assistant.mjs";
 import { isAssistantTool } from "../client/assistant-tools.mjs";
@@ -26,7 +27,6 @@ import { readBoard } from "./board-read.mjs";
 import { readWorkSelection, workReadRefusal } from "../client/work-preparation.mjs";
 import { beginSelectedWork, findBeginReceipt } from "../client/begin-work.mjs";
 import { validId } from "../src/events.js";
-import { redactEventPage } from "./redact-read.mjs";
 import { confirmsWorkReturn } from "../src/workflow.js";
 import { paginateRoomMessages, latestSnapshotPage } from "../client/room-agent.mjs";
 import { roomTools, validRoomToolArguments, buildDraftCommand } from "../client/mcp-stdio.mjs";
@@ -95,9 +95,8 @@ async function roomMessages(store, secret, roomId, args, memberId) {
   const latest = args.latest ?? false;
   // Edit/delete redaction is per-event (projection-indexed), so applying it
   // per scanned page is equivalent to applying it to the whole log.
-  const currentMessages = store.redactionMessages(roomId);
   const fetchPage = (cursor, pageLimit) =>
-    redactEventPage(store.eventsAfter(secret, roomId, cursor, pageLimit), currentMessages);
+    redactSelectedEventPage(store, roomId, store.eventsAfter(secret, roomId, cursor, pageLimit));
   const mapMessage = ({ sequence, event }) => ({
     sequence, eventId: event.id, messageId: event.data?.messageId ?? event.id, from: event.actorId, at: event.at,
     body: event.data?.body ?? "", replyToId: event.data?.replyToId ?? null, workItemId: event.data?.workItemId ?? null, private: Boolean(event.data?.toMemberId),
@@ -273,6 +272,10 @@ async function dispatchHostedStdioTool(store, secret, name, args) {
       if (value.responseActions) value.responseActions = value.responseActions.map(action => ({
         ...action, arguments: { roomId, ...action.arguments }
       }));
+      if(value.contractVersion===2&&value.nextRead){
+        value.nextRead={...value.nextRead,arguments:{roomId,...value.nextRead.arguments}};
+        if(value.page)value.page={...value.page,nextRead:value.nextRead};
+      }
       if (value.nextReads) value.nextReads = value.nextReads.map(pointer => ({ ...pointer,
         nextRead: { ...pointer.nextRead, arguments: { roomId, ...pointer.nextRead.arguments } }
       }));
@@ -391,7 +394,8 @@ async function dispatchHostedStdioTool(store, secret, name, args) {
     }), isError: false };
   }
   if (name === "room_read_inbox") {
-    const inbox = store.agentInbox(secret, roomId, { limit: rest.limit ?? 50, after: rest.after ?? 0 });
+    const inbox = store.agentInbox(secret, roomId, { limit: rest.limit ?? 50, after: rest.after, olderCursor:rest.olderCursor });
+    if(inbox.coverage?.mode==='native_bounded')return {value:{...inbox,boardAssignments:[],boardAssignmentsHasMore:false,boardReviewRequests:[],boardReviewRequestsHasMore:false},isError:false};
     // Dispatch and agentInbox already authenticate; OAuth also requires work:read.
     // Read fresh membership without materializing the full formal-work snapshot.
     const { members } = store.roomAuthority(roomId);

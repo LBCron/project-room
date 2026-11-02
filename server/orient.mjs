@@ -25,19 +25,25 @@ import { ServiceError } from "./store.mjs";
 import { messageVisibleToViewer, summaryHistoryFloor } from "./history-visibility.mjs"; // QA4 Q4-SEC-1
 import { availableClaimsFromBoard, memoizeBoardList } from "./available-work.mjs";
 import { contextVersion } from "./room-context.mjs";
+import { workRoleHolder } from "./work-context.mjs";
 
 // Context embeds current Board orientation as well as formal work. Decide
 // conditional freshness only after composing both under the same read view.
 // Transient updates, fleet assessments, next-action rankings and transport
 // clocks/cursors are not structural context; they have their own fresh reads.
-export function readComposedRoomContext(store, token, roomId, { sinceVersion = null, expectedSessionBinding = null } = {}) {
+export function readComposedRoomContext(store, token, roomId, { sinceVersion = null, expectedSessionBinding = null, workAfter = "" } = {}) {
   return store.readTransaction(() => {
-    let context = store.roomContext(token, roomId, { sinceVersion, expectedSessionBinding });
+    let context = store.roomContext(token, roomId, { sinceVersion, expectedSessionBinding, workAfter });
     // A caller may still hold the old formal-only version from before this
     // composition contract. Refresh it once rather than omit its projection.
-    if (context.not_modified) context = store.roomContext(token, roomId, { expectedSessionBinding });
+    if (context.not_modified) context = store.roomContext(token, roomId, { expectedSessionBinding, workAfter });
+    // A structural version certifies a successful observation. Read the board
+    // before the glance builder's catch-to-empty fallback so an unavailable
+    // registry cannot be certified as an unchanged empty board. The surrounding
+    // read transaction maps storage failures to its existing typed refusal.
+    const board = context.workScope === "workWindow" ? null : store.workClaims.list(roomId);
     const options = {
-      text: false, token, binding: expectedSessionBinding, boardList: memoizeBoardList(store)
+      text: false, token, binding: expectedSessionBinding, workAfter, boardList: () => board
     };
     const orient = buildOrient(store, roomId, context.viewerId, { ...options, structuralOnly: true });
     const { room, member, instructions, claims, availableClaims, workItems, orientation, work, workTotal, links } = orient;
@@ -55,6 +61,19 @@ export function readComposedRoomContext(store, token, roomId, { sinceVersion = n
     }
     return { ...context, context_version: version, orient: buildOrient(store, roomId, context.viewerId, options) };
   });
+}
+
+function withPrivateDefinitionsWithheld(store, roomSlug, state, viewerId) {
+  const privatePartiesByWork = typeof store.privateWorkParties === "function" ? store.privateWorkParties(roomSlug) : null;
+  if (!privatePartiesByWork?.size || !state.workItems) return state;
+  let changed = false;
+  const workItems = Object.fromEntries(Object.entries(state.workItems).map(([id, item]) => {
+    const parties = privatePartiesByWork.get(id);
+    if (!item || !parties || parties.has(viewerId) || workRoleHolder(item, viewerId)) return [id, item];
+    changed = true;
+    return [id, { ...item, title: null, definitionOfDone: null }];
+  }));
+  return changed ? { ...state, workItems } : state;
 }
 
 // Work states that count as open; completed and superseded work is history,
@@ -170,9 +189,29 @@ function fleetSelfOrNull(store, roomSlug, room, viewerId, boardList = null) {
 // viewer's own claims; `work`/`openWork` still derive from Work Items.
 
 export function buildOrient(store, roomSlug, viewerId, options = {}) {
+  const overview=store.currentOverview?.(roomSlug,viewerId,{workAfter:options.workAfter??''});
+  if(overview) {
+    const query=parseOrientQuery(options);
+    if(query.q)throw new ServiceError(409,'current_room_context_unavailable','Orient text search requires an indexed query preserving its corpus semantics');
+    const {state,visibleSequence:sequence,workWindow}=overview,member=Object.getOwnPropertyDescriptor(state.members,viewerId).value,now=store.now();
+    const work=Object.values(state.workItems).filter(item=>OPEN_WORK_STATES.has(item.state));
+    return withContentTrust({contract:{name:'project-room/orient',version:1},
+      room:{slug:state.room.id,title:state.room.title,state:state.room.archivedAt?'archived':'active',kind:roomKind(state.room)},
+      member:memberOf(member),you:{member:memberOf(member),profile:{displayName:member.displayName,kind:member.kind,identityId:member.identityId??null},capabilities:[...member.permissions]},
+      instructions:{charter:charterContext(state.room)},focus:query.focus,
+      workItems:work.filter(item=>item.accountableMemberId===viewerId||item.claim?.holderId===viewerId||item.verifierMemberId===viewerId).map(item=>workOf(item,now)),
+      work:work.map(item=>workOf(item,now)),workTotal:workWindow.complete?work.length:null,workWindow,workScope:'workWindow',
+      omitted:['message_updates','board_claims','fleet','next_actions','pinned_message_bodies','full_room_orientation'],
+      cursors:{eventCursor:sequence,evaluatedThrough:sequence},evaluatedThrough:sequence,eventCursor:sequence,
+      links:{activationPack:`/api/rooms/${state.room.id}/activation-pack`},generatedAt:new Date(now).toISOString()});
+  }
   // Unknown rooms fail here with the store's 404 (room_not_found).
-  const { sequence, state } = store.room(roomSlug);
-  if (!state.room) throw new Error("Room projection is missing its room record");
+  const { sequence, state: rawState } = store.room(roomSlug);
+  if (!rawState.room) throw new Error("Room projection is missing its room record");
+  // Private work definitions: the same predicate as default orientation
+  // (agent-orientation.mjs) — a non-party, non-role-holder sees the item
+  // with title and definitionOfDone withheld, on every orient consumer.
+  const state = withPrivateDefinitionsWithheld(store, roomSlug, rawState, viewerId);
   const member = state.members?.[viewerId];
   if (!member) throw new Error("Viewer is not a member of this room");
   const now = store.now();
@@ -181,7 +220,19 @@ export function buildOrient(store, roomSlug, viewerId, options = {}) {
   // (agent viewers), and the next-actions snapshot (token callers) —
   // shares this per-request memo; a caller composing several reads in one
   // request (activation pack, context) passes its own memo in.
-  const boardList = options.boardList ?? memoizeBoardList(store);
+  const sharedBoardList = options.boardList ?? memoizeBoardList(store);
+  // Board rows carry their own title, so the private-definition boundary
+  // applied to state.workItems above must also cover every board consumer
+  // (availableClaims, claims, next actions, fleet badge).
+  const withheldIds = new Set(Object.keys(state.workItems ?? {})
+    .filter(id => state.workItems[id] !== rawState.workItems?.[id]));
+  const boardList = withheldIds.size === 0 ? sharedBoardList : slug => {
+    const rows = sharedBoardList(slug);
+    if (slug !== roomSlug || !Array.isArray(rows)) return rows;
+    return rows.map(row => (row && withheldIds.has(row.workItemId)
+      ? { ...row, title: null, ...(row.definitionOfDone !== undefined ? { definitionOfDone: null } : {}) }
+      : row));
+  };
   // Internal version checks need only the structural fields. Defer transient
   // attention, fleet and action reads until a full response is actually sent.
   const structuralOnly = options.structuralOnly === true;

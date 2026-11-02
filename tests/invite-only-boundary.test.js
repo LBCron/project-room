@@ -104,6 +104,8 @@ const PROBES = {
   "POST /room/mcp": [{}, 200],
   // Native connection is disabled when no deployment OAuth client is configured.
   "POST /oauth/invite": [{}, 404],
+  // Registration is public metadata only and unavailable without configured MCP clients.
+  "POST /oauth/register": [{}, 404],
   "POST /a2a": [{}, 200],
   "GET /api/version": [undefined, 200],
   "GET /api/ready": [undefined, 200],

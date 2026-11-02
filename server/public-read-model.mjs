@@ -573,22 +573,44 @@ export function syncRoomPublication(store, { roomId, state, previous = null, aut
   // (#3594) — "never recorded" and "recorded false" both keep the lot
   // private, and the mirror keeps the exact recorded value. The lot
   // read no longer gates on this mirror (it consults the authoritative
-  // recorded setting at read time — server/public-visibility.mjs), so
-  // the mirror is now a legacy record for predating stores and purge
-  // accounting, kept honest here rather than load-bearing. The setter
-  // bumps the recorded revision on every record, so an unchanged
-  // revision needs no write; a null previous (bootstrap, import,
-  // backfill) is an authoritative state and always re-mirrors; and a
-  // state that DROPS a previously recorded setting (a restore/import of
-  // a pre-opt-in history, B2-4-F1) must re-mirror too — it deletes the
-  // row below — where the old guard left the stale row behind.
+  // recorded setting at read time — server/public-visibility.mjs), but
+  // the mirror stays load-bearing for stored-row receipts: the
+  // recorded-opt-out leg (RECORDED_OPTOUT_RECEIPT_SQL and its JS twin)
+  // reads this copy on every public read, because public reads never
+  // touch rooms.projection. A mirror that disagrees with the recorded
+  // setting therefore moves stored-row exposure in both directions —
+  // a stale 0 hides an opted-in room's rows, a missing row serves an
+  // opted-out room's rows — so the mirror is maintained
+  // LEVEL-triggered: this sync compares the STORED row against the
+  // recorded value and rewrites it on any mismatch, which makes every
+  // write to the room a reconciliation of its mirror. The earlier
+  // guard rewrote only on a recorded-revision edge (or a null
+  // previous), so a mirror desynced at an unchanged revision — a
+  // predating store the one-shot backfill skipped, a repair that
+  // rewrites only the projection, a restored read-model table — was
+  // never corrected by ordinary activity and drifted indefinitely
+  // (S3, wave 2026-11-01-fifty: tests/public-mirror-level-trigger
+  // .test.js). The revision edge is retained as the fallback for a
+  // store whose mirror row cannot be read at all. A state that DROPS
+  // a previously recorded setting (a restore/import of a pre-opt-in
+  // history, B2-4-F1) deletes the row below, as before — the value
+  // comparison reaches that outcome directly, stored row vs no
+  // recorded setting.
   const recorded = state.room.publicReceipts;
   const hasRecorded = !!recorded && typeof recorded.enabled === "boolean";
-  const recordedWas = previous?.room?.publicReceipts ?? null;
-  const mirrorSetting = previous === null
-    || (hasRecorded && (!recordedWas || typeof recordedWas.enabled !== "boolean"
-      || recordedWas.revision !== recorded.revision))
-    || (!hasRecorded && !!recordedWas && typeof recordedWas.enabled === "boolean");
+  let mirrorSetting;
+  try {
+    const stored = store.db.prepare("SELECT enabled FROM room_public_receipts_setting WHERE room_id=?").get(roomId);
+    mirrorSetting = hasRecorded
+      ? !stored || stored.enabled !== (recorded.enabled ? 1 : 0)
+      : !!stored;
+  } catch {
+    const recordedWas = previous?.room?.publicReceipts ?? null;
+    mirrorSetting = previous === null
+      || (hasRecorded && (!recordedWas || typeof recordedWas.enabled !== "boolean"
+        || recordedWas.revision !== recorded.revision))
+      || (!hasRecorded && !!recordedWas && typeof recordedWas.enabled === "boolean");
+  }
   if (!pageOn && !pageWas && !receiptsOn && !receiptsWere && !mirrorSetting) return;
   const write = () => {
     if (mirrorSetting) {

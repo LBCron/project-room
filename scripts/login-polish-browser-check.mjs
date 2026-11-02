@@ -1,3 +1,4 @@
+import {readCurrentMessage,withCurrentReadContext} from "../server/current-room-repository.mjs";
 import test from "node:test";
 import assert from "node:assert/strict";
 import { mkdirSync, rmSync } from "node:fs";
@@ -165,12 +166,15 @@ test("signup reconciles a committed account when its response body is interrupte
     throw new Error(`${error.message}; room status: ${await page.locator('#account-rooms-status').textContent()}; form: ${await page.locator('#account-room-create').innerText()}`);
   });
   await page.locator('#message-input').fill('First message after recovery');
+  const postedResponse = page.waitForResponse(response => new URL(response.url()).pathname.endsWith('/commands') && response.request().method() === 'POST' && response.request().postDataJSON()?.type === 'message.posted');
   await page.locator('#message-form button[type="submit"]').click();
   await page.locator('#message-list').getByText('First message after recovery', { exact: true }).waitFor();
   const roomId = new URL(page.url()).searchParams.get('room');
-  const room = store.room(roomId).state;
-  const message = Object.values(room.messages).find(message => message.body === 'First message after recovery');
+  const posted = await postedResponse; assert.equal(posted.status(), 201);
+  const messageId = posted.request().postDataJSON().data.messageId;
+  const message = withCurrentReadContext(store.db, roomId, () => readCurrentMessage(store.db, roomId, messageId)?.value);
   assert.ok(message, 'the first useful action is durable, not an optimistic UI echo');
+  assert.equal(message.body, 'First message after recovery');
   assert.equal(store.accountForMember(roomId, message.authorId).id, actual.account.id);
 });
 

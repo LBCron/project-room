@@ -1,3 +1,4 @@
+import { readCurrentRoomForAudit } from "../server/current-room-repository.mjs";
 // Public templates, opt-in room pages, and the agent directory.
 // Proved through the real HTTP server and RoomStore: a private message,
 // member name, or file never appears on a public room page; only the owner
@@ -189,16 +190,18 @@ test("template start is idempotent, carries ref, and the gallery is indexable", 
   assert.equal(created.duplicate, false);
   assert.equal(created.ref, "Ada");
   assert.equal(created.template, "bug-bash");
-  const room = store.room("room-from-template").state;
+  const room = store.readTransaction(() => readCurrentRoomForAudit(store, "room-from-template")).state;
   const friction = Object.values(room.workItems).find(item => item.labels?.includes("friction"));
   assert.ok(friction);
   assert.equal(friction.publicTask.enabled, true);
   assert.equal(JSON.stringify(room.room).includes("Ada"), false);
+  assert.equal(store.workClaims.list("room-from-template").length, 0, "native template must not seed a second task system");
+  assert.ok(Object.values(room.channels).some(channel => channel.name === "bugs"));
   const tasks = Object.keys(room.workItems).length;
   const second = await raw(origin, "/api/account-rooms/from-template", { method: "POST", headers, body: JSON.stringify(body) });
   assert.equal(second.status, 200);
   assert.equal(JSON.parse(second.text).duplicate, true);
-  assert.equal(Object.keys(store.room("room-from-template").state.workItems).length, tasks);
+  assert.equal(Object.keys(store.readTransaction(() => readCurrentRoomForAudit(store, "room-from-template")).state.workItems).length, tasks);
   const ownerKey = store.issueAccessKey("alpha", "owner");
   store.command(ownerKey, "alpha", { id: "publish-page", type: "room.public_page_set", data: { enabled: true } });
   const map = await raw(origin, "/sitemap.xml");

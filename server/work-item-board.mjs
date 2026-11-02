@@ -1,3 +1,5 @@
+import { boardStateForWorkItem, liveClaim } from "./work-item-state.mjs";
+export { boardStateForWorkItem, liveClaim } from "./work-item-state.mjs";
 import { terminalWork } from "../src/workflow.js";
 import { hydrateWorkItems } from "./work-repository.mjs";
 // Decision #10 (workItems -> board claims) — the migration core.
@@ -106,7 +108,6 @@ export function boardClaimId(workItemId) {
 
 const iso = ms => new Date(ms).toISOString();
 const isoOrNull = value => (typeof value === "string" && Number.isFinite(Date.parse(value)) ? value : null);
-const msOf = value => (typeof value === "string" ? Date.parse(value) : Number.NaN);
 const cleanText = (value, max) => (typeof value === "string" && value.length > 0 ? value.slice(0, max) : null);
 
 // Files a claimed work item pins, in the board's stored shape (files: path
@@ -402,25 +403,6 @@ function evidenceForWorkItem(item) {
 // A claim is live only while its status is active and its lease has not
 // expired at `nowMs` — an expired lease is exactly what the board's own
 // sweep would release.
-export function boardStateForWorkItem(item, nowMs) {
-  switch (item?.state) {
-    case "superseded": return "closed";
-    case "completed": return terminalWork(item) ? "done" : "delivered";
-    case "blocked": return "blocked";
-    case "working": return "in_progress";
-    case "accepted": return liveClaim(item, nowMs) ? "claimed" : "unclaimed";
-    default: return "unclaimed"; // proposed
-  }
-}
-
-export function liveClaim(item, nowMs) {
-  const claim = item?.claim;
-  if (!claim || claim.status !== "active") return null;
-  const expires = msOf(claim.expiresAt);
-  if (!Number.isFinite(expires) || expires <= nowMs) return null;
-  return claim;
-}
-
 // The mapped board row for one work item. `existing` is the row already
 // on the board for this item (decoded from work_claims), if any: fields
 // the board owns natively and the work item cannot express (ci, deploy
@@ -516,7 +498,7 @@ export function boardClaimForWorkItem(item, facts = null, { nowMs = Date.now(), 
     if (event.type === "work.superseded" && typeof event.data?.supersededByWorkItemId === "string") {
       chain.push({ kind: "supersede", targetId: boardClaimId(event.data.supersededByWorkItemId), at: atIso, actorId: event.actorId ?? "system", note: cleanText(event.data?.reason, 2000) });
     } else if (event.type === "work.handoff_recorded") {
-      chain.push({ kind: "handoff", targetId: boardClaimId(`${item.id}-next`), at: atIso, actorId: event.actorId ?? "system", note: cleanText(event.data?.nextAction, 2000) });
+      chain.push({ kind: "handoff", targetId: boardClaimId(item.id), at: atIso, actorId: event.actorId ?? "system", note: cleanText(event.data?.nextAction, 2000) });
     }
   }
 
@@ -787,23 +769,10 @@ export function planWorkItemBoardBackfill({ items, events = [], existing = new M
       }));
     }
   }
-  // Handoff successors: "<item>-next" phantom cards for items with a
-  // recorded handoff, when no row for them exists yet. The title is the
-  // FIRST handoff's nextAction — the mirror creates the card at the
-  // first handoff and never retitles it.
-  for (const item of items ?? []) {
-    if (!item || (!item.handoff && !(item.handoffHistory?.length > 0))) continue;
-    const nextId = boardClaimId(`${item.id}-next`);
-    if (rows.has(nextId) || existing.has(nextId)) continue;
-    const firstHandoff = (factsByItem.get(item.id)?.events ?? []).find(event => event.type === "work.handoff_recorded");
-    rows.set(nextId, phantomSuccessorCard({
-      targetId: `${item.id}-next`,
-      title: firstHandoff?.data?.nextAction ?? item.handoff?.nextAction ?? `${item.id}-next`,
-      at: firstHandoff?.at ?? item.updatedAt,
-      by: firstHandoff?.actorId,
-      dependsOn: [boardClaimId(item.id)],
-    }));
-  }
+  // A handoff is partial progress on the original contract. It does not
+  // propose or accept another task; its chain points back to the real work.
+  // Existing historical successor rows are left untouched, including any
+  // ownership, delivery or review history they have accumulated.
   return { rows, diverged };
 }
 
@@ -1073,8 +1042,8 @@ export function syncWorkItemClaim(store, roomId, actorId, incoming, state) {
   // Occupied-successor refusal (the mirror's work_claim_conflict): a
   // handoff/supersede successor card that is a live claim NOT already
   // chained to this source belongs to someone else's work.
-  if (incoming.type === "work.handoff_recorded" || (incoming.type === "work.superseded" && typeof data.supersededByWorkItemId === "string")) {
-    const targetId = incoming.type === "work.handoff_recorded" ? boardClaimId(`${workItemId}-next`) : boardClaimId(data.supersededByWorkItemId);
+  if (incoming.type === "work.superseded" && typeof data.supersededByWorkItemId === "string") {
+    const targetId = boardClaimId(data.supersededByWorkItemId);
     const successorRow = existing.get(targetId);
     if (successorRow && SYNC_ACTIVE.has(successorRow.state) && !(successorRow.dependsOn ?? []).includes(claimId)) {
       refuse(409, "work_claim_conflict", `Board card ${targetId} is already claimed. It is not a successor of ${claimId}.`);

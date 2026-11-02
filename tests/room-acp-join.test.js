@@ -45,6 +45,22 @@ test("parseInvite: a link naming any non-issuer origin is refused (RES-0129)", (
   assert.throws(() => parseInvite(`https://rooms.example.net/join/${CODE}`, { origin: "https://other.example.net" }), /not a Room address/);
 });
 
+test("parseInvite: the /a/<code> agent-steps link parses like /join/ under the same issuer policy", () => {
+  assert.deepEqual(parseInvite(`https://room.trydemigod.com/a/${CODE}`), { apiBase: "https://room.trydemigod.com", code: CODE });
+  assert.deepEqual(parseInvite(`https://www.getdasha.com/room/a/${CODE.toLowerCase()}/`), { apiBase: "https://www.getdasha.com/room", code: CODE });
+  assert.deepEqual(parseInvite(`https://room.trydemigod.com/a/${CODE}?ref=share`), { apiBase: "https://room.trydemigod.com", code: CODE });
+  assert.equal(parseInvite(`http://127.0.0.1:49152/a/${CODE}`).apiBase, "http://127.0.0.1:49152");
+  assert.equal(parseInvite(`https://rooms.example.net/a/${CODE}`, { origin: "https://rooms.example.net" }).apiBase, "https://rooms.example.net");
+  for (const link of [`https://evil.example.com/a/${CODE}`, `https://room.trydemigod.com.evil.example/a/${CODE}`,
+    `https://user:pw@room.trydemigod.com/a/${CODE}`, `http://room.trydemigod.com/a/${CODE}`])
+    assert.throws(() => parseInvite(link), /not a Room address|credentials in the URL|https/, link);
+  assert.throws(() => parseInvite(`https://room.trydemigod.com/a/${CODE}/extra`), /join/);
+  assert.throws(() => parseInvite(`https://room.trydemigod.com/ab/${CODE}`), /join/);
+  // Code links carry only the share-analytics ?ref=; any other query or a fragment is refused.
+  for (const path of ["a", "join"]) for (const suffix of ["?token=x", "?ref=a&token=x", "#x", "?ref=a#frag"])
+    assert.throws(() => parseInvite(`https://room.trydemigod.com/${path}/${CODE}${suffix}`), /query|fragment/, `${path}${suffix}`);
+});
+
 test("redact hides credentials, codes and registered secrets", () => {
   registerSecret("s3cret-value-123");
   const out = redact(`rak_abcdefgh123 pri_zzzzzzzz9 ${CODE} Authorization: Bearer xyz s3cret-value-123`);
@@ -79,4 +95,22 @@ test("join redeems the link, saves 0600, and never prints the credential", async
   assert.ok(!lines.join("\n").includes(code));
   assert.equal(await main(["logout"], { print: () => {}, env: room.env }), 0);
   assert.equal(loadConnection({}, room.env), null);
+});
+
+test("the invite.url the server emits joins through room-acp unchanged", async t => {
+  const room = await startRoom(t);
+  // Contract: the real agent-invite create endpoint's url, not a handcrafted /join link.
+  const response = await fetch(`${room.origin}/api/rooms/commons/agent-invites`, { method: "POST",
+    headers: { Authorization: `Bearer ${room.ownerKey}`, "Content-Type": "application/json" },
+    body: JSON.stringify({ profile: "contribute", displayName: "Coder" }) });
+  assert.equal(response.status, 201);
+  const invite = await response.json();
+  assert.equal(new URL(invite.url).pathname, `/a/${encodeURIComponent(invite.code)}`);
+  assert.deepEqual(parseInvite(invite.url), { apiBase: room.origin, code: invite.code });
+  const lines = [];
+  assert.equal(await main([invite.url, "--name", "Coder"], { print: line => lines.push(line), env: room.env, joinOnly: true }), 0, lines.join("\n"));
+  const saved = loadConnection({}, room.env);
+  assert.equal(saved.roomId, "commons");
+  assert.match(saved.credential, /^rak_/);
+  for (const secret of [saved.credential, invite.code]) assert.ok(!lines.join("\n").includes(secret));
 });

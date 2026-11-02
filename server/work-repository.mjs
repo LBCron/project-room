@@ -1,6 +1,8 @@
+import { isCurrentRoom, readCurrentWorkItem } from './current-room-repository.mjs';
 // Canonical work payloads. References identify exact content, not merely a
 // mutable row. The caller owns the transaction containing event + carrier.
 import { createHash } from 'node:crypto';
+import { sqlChunks, sqlPlaceholders } from './sql-binds.mjs';
 
 export const WORK_REPOSITORY_SCHEMA = `
 CREATE TABLE IF NOT EXISTS work_entities (
@@ -27,7 +29,7 @@ export const isWorkReference = value => value?._workEntity === 1;
 const digestOf = text => createHash('sha256').update(text).digest('hex');
 const corrupt = () => { throw new Error('work_projection_corrupt: missing or mismatched work record'); };
 
-function hydrateWorkRecord(id, reference, row) {
+export function hydrateWorkRecord(id, reference, row) {
   if (!row || reference.id !== id || row.revision !== reference.revision || row.digest !== reference.digest || digestOf(row.body) !== reference.digest) corrupt();
   const item = JSON.parse(row.body);
   if (item.id !== id || item.revision !== reference.revision) corrupt();
@@ -69,10 +71,29 @@ export function referenceWorkItems(db, roomId, input, { enabled = modes.get(db) 
 }
 
 export function readWorkItem(db, roomId, workId) {
+  if (isCurrentRoom(db,roomId)) return readCurrentWorkItem(db,roomId,workId);
   const row = db.prepare("SELECT item.value FROM rooms,json_each(rooms.projection,'$.workItems') AS item WHERE rooms.id=? AND item.key=?").get(roomId, workId);
   if (!row) return null;
   const item = JSON.parse(row.value);
   if (!isWorkReference(item)) return item;
   const entity = db.prepare('SELECT revision,digest,body FROM work_entities WHERE room_id=? AND work_id=?').get(roomId, workId);
   return hydrateWorkRecord(workId, item, entity);
+}
+
+// Batch only selected records, using the same reference/hash checks as the
+// single-work read. Legacy room JSON is still examined in SQLite; this is not
+// a bound on its cost. Unrelated work bodies never cross into this result.
+export function readWorkItems(db, roomId, workIds) {
+  const selected = new Map();
+  for (const ids of sqlChunks([...new Set(workIds)])) {
+    const rows = db.prepare(`SELECT item.key,item.value FROM rooms,json_each(rooms.projection,'$.workItems') AS item
+      WHERE rooms.id=? AND item.key IN (${sqlPlaceholders(ids)})`).all(roomId, ...ids);
+    const parsed = rows.map(row => [row.key, JSON.parse(row.value)]);
+    const references = parsed.filter(([, value]) => isWorkReference(value)).map(([id]) => id);
+    const entities = references.length ? new Map(db.prepare(`SELECT work_id,revision,digest,body FROM work_entities
+      WHERE room_id=? AND work_id IN (${sqlPlaceholders(references)})`).all(roomId, ...references).map(row => [row.work_id, row])) : new Map();
+    for (const [id, value] of parsed) selected.set(id, isWorkReference(value)
+      ? hydrateWorkRecord(id, value, entities.get(id)) : value);
+  }
+  return selected;
 }

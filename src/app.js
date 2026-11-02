@@ -358,12 +358,24 @@ let agentInvitesUI = null;
 let instructionsUI = null;
 let workspaceUI = null;
 let state = null, session = null, pendingMessage = null, pendingWork = null, pendingAction = null;
+let partialWorkSnapshot = false, inspectedWorkRecord = null;
 // JDOT-COH-NAV begin
 let updatesUi = null, resetNavigationBoard = null, navigationBoardReady = null, navigationBoardRevealClaim = null;
 const SOURCE_UNAVAILABLE_NOTICE = "That source is no longer available in this room.";
 const workNavigationOrigins = new Map();
 let activeWorkNavigation = null, activeWorkNavigationId = null, workNavigationEpoch = 0, workHistoryReplayKey = null;
 let navigationBoardEpoch = 0;
+// #3892: a cold deep link reaches revealClaimRecord before the lazy board
+// module has installed navigationBoardReady; wait for installation (or its
+// failure/close) instead of exiting on undefined.
+let navigationBoardWaiters = [];
+function settleNavigationBoardWaiters(installed) {
+  const waiters = navigationBoardWaiters; navigationBoardWaiters = [];
+  for (const resolve of waiters) resolve(installed);
+}
+function whenNavigationBoardInstalled() {
+  return navigationBoardReady ? Promise.resolve(true) : new Promise(resolve => navigationBoardWaiters.push(resolve));
+}
 // JDOT-COH-NAV end
 // Phase 2 channels: the visible channel; persisted per room, defaults to the main channel.
 let activeChannelId = DEFAULT_CHANNEL_ID, activeChannelRoomId = null;
@@ -419,7 +431,7 @@ const viewPositions = new Map(), pendingPins = new Set(), locallyOwnedMessageIds
 const timelinePin = createTimelinePin();
 let pinScrollTop = null; // where the pin last moved the list; that scroll event is not the reader's
 let newVisibleMessages = 0, unreadAnchorId = null, mentionIndex = 0;
-let mutedThreads = new Set(), threadMuteBusy = false;
+let mutedThreads = new Set(), threadMuteBusy = false,threadMuteKnown=new Set(),threadMuteGeneration=-1;
 let roomCursor = 0, catchUpBoundary = 0, roomGeneration = -1, showAllAttention = false, returnClock = null;
 let signoutOperationId = 0, signoutLoading = false;
 let refreshOperationId = 0, submitOperationId = 0;
@@ -429,6 +441,7 @@ window.addEventListener("pagehide", cancelStartupRestore);
 window.addEventListener("popstate", cancelStartupRestore);
 window.addEventListener("hashchange", cancelStartupRestore);
 let snapshotAuditView = "full", recordLoading = null, recordLoadFailed = false;
+let nativeEventsWindow=null,recordPageReading=false;
 let submitControls = null, noticeTimer = null, noticeVersion = 0, workFormOpener = null;
 let accessEndContext = null;
 let lastComposerSelection = null;
@@ -459,6 +472,7 @@ let leavingPage = false;
 let composerFiles = [];
 let composerReselectId = null;
 let roomFilesByMessage = new Map();
+let roomFilesSelection = [], roomFilesNextCursor = null, roomFilesLoading = false, roomFilesAttemptKey = null, roomFilesFlight = null;
 const messageFileDownloads = new Map();
 try { recovery = new DraftRecovery(navigator.userAgent.includes("ProjectRoomMac/") ? window.localStorage : window.sessionStorage); } catch { recovery = new DraftRecovery(null); }
 const draftScope = draftRecoveryScope;
@@ -470,6 +484,7 @@ const client = new RoomClient({
   lazyHistory: true,
   // Live refresh: a peer's consent decision arrives as dm.consent_changed.
   onConsentChange: () => { void refreshDmConsents(); },
+  onBondChange: () => { void refreshFriendBonds(); },
   onOptimistic(command) {
     const data = command?.data;
     const authorId = session?.member?.id;
@@ -493,12 +508,16 @@ const client = new RoomClient({
   },
   onSnapshot(snapshot, identity) {
     snapshotAuditView = snapshot.auditView ?? "full";
+    nativeEventsWindow=snapshot.snapshotVersion===2?snapshot.eventsWindow:null;
     const firstSnapshot = !state;
+    const priorWorkDetailsOpen = activeWorkNavigationId ? workRecord(activeWorkNavigationId)?.querySelector(".work-details")?.open : false;
     const presenceBoundary = firstSnapshot || state.room?.id !== snapshot.state.room?.id || roomGeneration !== client.generation;
     if (presenceBoundary) { selectedMessage.clear(); directDirectory.clear(); }
     if (presenceBoundary) { recordLoading = null; recordLoadFailed = false; }
     if (presenceBoundary) stopPresencePoll();
     const pendingSends = (state?.messages ?? []).filter(message => message.pendingSend && !snapshot.state.messages.some(held => held.id === message.id));
+    partialWorkSnapshot = snapshot.snapshotVersion === 2;
+    inspectedWorkRecord = null;
     state = pendingSends.length ? { ...snapshot.state, messages: [...snapshot.state.messages, ...pendingSends] } : snapshot.state;
     session = identity;
     displayNames = createMemberDisplayNames(state.members);
@@ -543,6 +562,7 @@ const client = new RoomClient({
     agentConnectionsUI?.sync();
     agentInvitesUI?.sync();
     if (presenceBoundary) startPresencePoll();
+    if(partialWorkSnapshot&&!firstSnapshot)void refreshRoomFiles();
     if (firstSnapshot) {
       rememberLastRoom(roomId, undefined, state.room?.title);
       const accountId = accountClient.session?.account?.id ?? session?.account?.id;
@@ -580,6 +600,7 @@ const client = new RoomClient({
     }
     if (!briefView.owns(briefView.chain)) loadReturnBrief();
     if (firstSnapshot) revealLocationHash();
+    else if (partialWorkSnapshot && !presenceBoundary && activeWorkNavigationId) void revealWork(activeWorkNavigationId, Boolean(priorWorkDetailsOpen));
     retryPendingHashReveal();
     resumeConfirmedWorkNavigation();
   },
@@ -606,12 +627,13 @@ const client = new RoomClient({
     releaseSubmission(submitControls);
     submitOperationId += 1; busy = false;
     displayNames = createMemberDisplayNames({});
+    partialWorkSnapshot = false; inspectedWorkRecord = null;
     state = null; session = null; pendingMessage = null; pendingWork = null; pendingAction = null; offerContextVersion = null; actionEpoch++;
     pendingHashReveal = null; selectedMessage.clear(); directDirectory.clear();
     // JDOT-COH-NAV begin
     clearWorkNavigation(); updatesUi?.reset();
     // JDOT-COH-NAV end
-    mutedThreads = new Set(); threadMuteBusy = false;
+    mutedThreads = new Set(); threadMuteBusy = false;threadMuteKnown=new Set();threadMuteGeneration=-1;
     dmConsents = []; dmConsentSeq++;
     friendBonds = []; friendSeq++; friendBusy = false; friendDmPeerId = null;
     $("#friend-dm-dialog")?.close();
@@ -685,7 +707,7 @@ const client = new RoomClient({
     showSigninMethods();
     clearStoredPasswords();
     composerFiles = [];
-    roomFilesByMessage = new Map();
+    roomFilesByMessage = new Map();roomFilesSelection=[];roomFilesNextCursor=null;roomFilesLoading=false;roomFilesAttemptKey=null;roomFilesFlight=null;
     messageFileDownloads.clear();
     renderComposerFiles();
     $("#work-dialog").close();
@@ -1326,7 +1348,7 @@ function syncRoomLifecycle() {
   badge.textContent = room ? roomKindLabel(roomKind(room)) : ""; badge.hidden = !room;
   const note = $("#room-archived-note");
   note.hidden = !archived;
-  note.textContent = archived ? `Archived ${new Date(room.archivedAt).toLocaleString()}${room.archivedById ? ` by ${displayName(room.archivedById)}` : ""} · read only. Reading and export stay available; nothing new is recorded.` : "";
+  note.textContent = archived ? `Archived ${new Date(room.archivedAt).toLocaleString()}${room.archivedById ? ` by ${displayName(room.archivedById)}` : ""} · read only. Reading, export and explicit owner erasure stay available; ordinary coordination is closed.` : "";
   $("#main").classList.toggle("room-archived", archived); // The composer and New work follow in syncRequestComposer and render.
   const owner = Boolean(viewer) && viewer.kind === "human" && viewer.id === room?.ownerId;
   $("#room-archive-button").hidden = !viewer || archived || !owner;
@@ -2154,11 +2176,12 @@ function render() {
     const ownedBy = serverPresence?.ownerIdentityId
       ? `<span class="member-owned-by">Agent identity: <code>${esc(serverPresence.ownerIdentityId)}</code></span>`
       : "";
+    const connectionScope=serverPresence?.coverage?.execution==='not-evaluated'?`<p class="member-observation">${esc(uiText("currentRoom.connectionScope"))}</p>`:'';
     const hostReport = Number.isFinite(serverPresence?.presence?.lastSeenAt)
       ? `<p class="member-observation">Last host report: <time datetime="${esc(new Date(serverPresence.presence.lastSeenAt).toISOString())}">${esc(new Date(serverPresence.presence.lastSeenAt).toLocaleString())}</time></p>` : "";
     const lastReport = agent && presenceStale && serverState
       ? `<p class="member-observation">Last reported availability: ${esc(presenceLabel(serverState))}</p>` : "";
-    return `<div id="${recordDomId("member", m.id)}" class="presence-member" tabindex="-1" role="group" aria-label="${esc(memberRowName(m, availability))}" data-member-record-id="${esc(m.id)}" data-presence="${esc(presence)}" data-disclosure-host="${esc(m.id)}" data-focus-key="member:${esc(m.id)}"${m.agentType ? ` data-agent-type="${esc(m.agentType)}"` : ""} ${m.active === false ? "" : `title="${esc(`Address ${m.displayName} in chat`)}"`}><div class="member-avatar ${m.kind}" aria-hidden="true"><span>${initials(m.displayName)}</span><i class="presence-dot presence-${esc(presence)}" title="${esc(availability)}"></i></div><div><div class="member-head"><strong class="member-handle${m.kind === "agent" ? " member-handle-agent" : ""}">${esc(handle)}</strong><span class="sr-only">${esc(availability)}</span>${doneChip}${agentPauses.has(m.id) && m.active !== false ? `<span class="pause-chip" data-paused-member="${esc(m.id)}" title="Queued wakes will not start; a running attempt may finish">Wakes paused</span>` : ""}${friendBondHtml(m)}</div>${agent ? `<span class="member-availability">${esc(availability)}</span>` : ""}${workingOnTitle}${agent ? `<p class="member-status member-assignment">${esc(status)}</p>` : ""}<details class="member-profile"><summary data-focus-key="member-profile:${esc(m.id)}" aria-label="Member options for ${esc(m.displayName)}" title="Member options"><span aria-hidden="true">···</span></summary><div class="member-profile-body"><p class="form-hint">Member ID: <code>${esc(m.id)}</code></p><div class="member-profile-badges">${typeChip}${stateChip}${ownerChip}</div><p class="member-status">${esc(status)}</p>${lastReport}${hostReport}${ownedBy}${agentPauses.has(m.id) && agent ? `<p class="member-pause-explanation">Queued wakes will not start; a running attempt may finish.</p>` : ""}${memberActions(m)}${workControl(m)}<details><summary data-focus-key="member-capabilities:${esc(m.id)}">Room capabilities</summary><p>${esc(m.permissions.join(", ") || "conversation only")}</p>${adminControl(m)}${muteControl(m)}</details>${dmConsentDetails(m)}${directoryCardDetails(m)}</div></details></div></div>`;
+    return `<div id="${recordDomId("member", m.id)}" class="presence-member" tabindex="-1" role="group" aria-label="${esc(memberRowName(m, availability))}" data-member-record-id="${esc(m.id)}" data-presence="${esc(presence)}" data-disclosure-host="${esc(m.id)}" data-focus-key="member:${esc(m.id)}"${m.agentType ? ` data-agent-type="${esc(m.agentType)}"` : ""} ${m.active === false ? "" : `title="${esc(`Address ${m.displayName} in chat`)}"`}><div class="member-avatar ${m.kind}" aria-hidden="true"><span>${initials(m.displayName)}</span><i class="presence-dot presence-${esc(presence)}" title="${esc(availability)}"></i></div><div><div class="member-head"><strong class="member-handle${m.kind === "agent" ? " member-handle-agent" : ""}">${esc(handle)}</strong><span class="sr-only">${esc(availability)}</span>${doneChip}${agentPauses.has(m.id) && m.active !== false ? `<span class="pause-chip" data-paused-member="${esc(m.id)}" title="Queued wakes will not start; a running attempt may finish">Wakes paused</span>` : ""}${friendBondHtml(m)}</div>${agent ? `<span class="member-availability">${esc(availability)}</span>` : ""}${workingOnTitle}${agent ? `<p class="member-status member-assignment">${esc(status)}</p>` : ""}<details class="member-profile"><summary data-focus-key="member-profile:${esc(m.id)}" aria-label="Member options for ${esc(m.displayName)}" title="Member options"><span aria-hidden="true">···</span></summary><div class="member-profile-body"><p class="form-hint">Member ID: <code>${esc(m.id)}</code></p><div class="member-profile-badges">${typeChip}${stateChip}${ownerChip}</div><p class="member-status">${esc(status)}</p>${lastReport}${hostReport}${connectionScope}${ownedBy}${agentPauses.has(m.id) && agent ? `<p class="member-pause-explanation">Queued wakes will not start; a running attempt may finish.</p>` : ""}${memberActions(m)}${workControl(m)}<details><summary data-focus-key="member-capabilities:${esc(m.id)}">Room capabilities</summary><p>${esc(m.permissions.join(", ") || "conversation only")}</p>${adminControl(m)}${muteControl(m)}</details>${dmConsentDetails(m)}${directoryCardDetails(m)}</div></details></div></div>`;
   };
   // E4: mute is the viewer's own preference; the owner (the appeal path) and yourself are never mutable.
   const muteControl = m => m.id === session?.member?.id || m.id === state.room.ownerId ? "" : `<button type="button" class="text-button mute-toggle" data-mute-member="${esc(m.id)}" data-muted="${isMutedBy(state, session?.member?.id, m.id)}" aria-pressed="${isMutedBy(state, session?.member?.id, m.id)}">${isMutedBy(state, session?.member?.id, m.id) ? `Unmute ${esc(m.displayName)}` : `Mute ${esc(m.displayName)} for me`}</button>`;
@@ -2276,22 +2299,32 @@ function renderRecordPanel() {
     return;
   }
   recordLoadFailed = false;
-  renderContent("#event-list", [...state.eventLog].reverse().map(e => `<li id="${recordDomId("event", e.id)}" tabindex="-1" data-event-record-id="${esc(e.id)}" data-focus-key="event:${esc(e.id)}"><span>${esc(humanize(e.type))}</span><strong>${esc(memberLabel(e.actorId))}</strong><time datetime="${esc(e.at)}">${esc(time(e.at))}</time><code>${esc(e.id)}</code></li>`).join(""));
+  const coverage=nativeEventsWindow?`<li class="rb-empty">${esc(uiText(nativeEventsWindow.complete?"currentRoom.recordComplete":"currentRoom.recordPartial"))}${nativeEventsWindow.hasOlder?` <button type="button" data-record-older ${recordPageReading?'disabled':''}>${esc(uiText(recordPageReading?"currentRoom.recordLoading":"currentRoom.recordOlder"))}</button>`:''}</li>`:'';
+  renderContent("#event-list", coverage+[...state.eventLog].reverse().map(e => `<li id="${recordDomId("event", e.id)}" tabindex="-1" data-event-record-id="${esc(e.id)}" data-focus-key="event:${esc(e.id)}"><span>${esc(humanize(e.type))}</span><strong>${esc(memberLabel(e.actorId))}</strong><time datetime="${esc(e.at)}">${esc(time(e.at))}</time><code>${esc(e.id)}</code></li>`).join(""));
 
   // Decision register (backlog F2): the register is read from the event feed.
   const decisions = state.eventLog.filter(e => e.type === T.DECISION_RECORDED || e.type === T.OWNER_DECISION_RECORDED);
   setText("#decision-count", decisions.length || "");
   renderContent("#decision-list", [...decisions].reverse().map(e =>
     `<li><strong>${esc(e.type === T.DECISION_RECORDED ? e.data.statement : `${humanize(e.data.decision)}${e.data.reason ? `: ${e.data.reason}` : ""}`)}</strong>${e.data.sourceMessageId ? ` <a class="source-link" href="${esc(recordHref("message", e.data.sourceMessageId))}" data-open-message="${esc(e.data.sourceMessageId)}" data-focus-key="decision-source:${esc(e.id)}">source</a>` : ""}${e.data.note ? ` <span class="rb-detail">${esc(e.data.note)}</span>` : ""} <span class="rb-detail">${esc(memberLabel(e.actorId))} · ${esc(time(e.at))}</span></li>`).join("")
-    || '<li class="rb-empty">No decisions recorded yet.</li>');
+    || (nativeEventsWindow&&!nativeEventsWindow.complete?`<li class="rb-empty">${esc(uiText("currentRoom.noDecisionsWindow"))}</li>`:'<li class="rb-empty">No decisions recorded yet.</li>'));
 }
 $("#record-panel").addEventListener("toggle", () => {
   if (!$("#record-panel").open) { recordLoadFailed = false; void client.setAuditView("activity").catch(() => {}); }
   renderRecordPanel();
 });
 $("#event-list").addEventListener("click", event => {
+  if(event.target.closest('[data-record-older]')){void loadEarlierRecord();return;}
   if (event.target.closest("[data-record-retry]")) { recordLoadFailed = false; void client.refresh(null, { revalidate: true }).catch(() => { recordLoadFailed = true; renderRecordPanel(); }); renderRecordPanel(); }
 });
+async function loadEarlierRecord(){
+ if(recordPageReading||!nativeEventsWindow?.hasOlder||!state||!session)return;
+ const anchor=nativeEventsWindow,generation=client.generation,identity=session,held=state;recordPageReading=true;renderRecordPanel();
+ try{const page=await client.recordPage({after:anchor.olderAfter});if(!page||client.generation!==generation||session!==identity||state!==held||nativeEventsWindow!==anchor)return;
+  const seen=new Set(state.eventLog.map(e=>e.id)),older=page.events.filter(row=>row.sequence<=anchor.after&&!seen.has(row.event.id)).map(row=>row.event);
+  state={...state,eventLog:[...older,...state.eventLog]};nativeEventsWindow={...anchor,after:anchor.olderAfter,olderAfter:anchor.olderAfter>0?Math.max(0,anchor.olderAfter-16):null,hasOlder:anchor.olderAfter>0,complete:anchor.olderAfter===0};
+ }catch(error){if(client.generation===generation)notice(error.message,true);}finally{recordPageReading=false;renderRecordPanel();}
+}
 // Phase 2 channels: one main channel plus user-created channels. Chat and work
 // share the timeline of the selected channel; work cards follow the channel of
 // their proposal message (the main channel when there is none).
@@ -2520,6 +2553,7 @@ function renderMessages() {
   directWindow.pin(activeDirectMemberId ? currentThreadId : null);
   if (activeDirectMemberId) directWindow.sync(client.sequence);
   const pairWindow = directWindow.view();
+  if(partialWorkSnapshot&&session&&!roomFilesLoading){const key=JSON.stringify([client.generation,client.sequence,visibleConversationMessages().filter(m=>!m.pendingSend&&!m.deletedAt).slice(-8).map(m=>m.id).sort()]);if(key!==roomFilesAttemptKey){roomFilesAttemptKey=key;queueMicrotask(()=>void refreshRoomFiles());}}
   const list = $("#message-list"), view = conversationViewKey();
   const sameView = list.dataset.view === view;
   if (!sameView) syncChatSuggestions();
@@ -2813,11 +2847,13 @@ function messageLinksHTML(m, { linked, moderation, count, muted }) {
 }
 function messageFileChips(messageId) {
   const files = roomFilesByMessage.get(messageId) ?? [];
-  if (!files.length) return "";
+  const more=partialWorkSnapshot&&roomFilesNextCursor&&roomFilesSelection[0]===messageId?`<button type="button" data-more-message-files${roomFilesLoading?" disabled":""}>${esc(uiText("currentRoom.moreFiles"))}</button>`:"";
+  const inspect=partialWorkSnapshot&&!roomFilesSelection.includes(messageId)?`<button type="button" data-check-message-files="${esc(messageId)}">${esc(uiText("currentRoom.checkFiles"))}</button>`:"";
+  if (!files.length&&!more&&!inspect) return "";
   return `<div class="message-files">${files.map(file => {
     const download = messageFileDownloads.get(file.id);
     return `<span class="file-chip"><button type="button" data-download-file="${esc(file.id)}" data-file-message="${esc(messageId)}" data-focus-key="file-download:${esc(file.id)}" aria-label="${esc(uiText("file.download.action", { filename: fileChipLabel(file.filename) }))}"${download?.busy ? ' aria-disabled="true" aria-busy="true"' : ""}>${esc(fileChipLabel(file.filename))}</button>${download?.status ? `<span role="status">${esc(download.status)}</span>` : ""}</span>`;
-  }).join("")}</div>`;
+  }).join("")}${more}${inspect}</div>`;
 }
 async function downloadMessageFile(id, messageId) {
   const file = roomFilesByMessage.get(messageId)?.find(entry => entry.id === id);
@@ -2897,23 +2933,32 @@ function scheduleRoomFilesRefresh() {
   roomFilesRefreshTimers.forEach(clearTimeout);
   roomFilesRefreshTimers = ROOM_FILE_REFRESH_DELAYS_MS.map(delay => setTimeout(() => void refreshRoomFiles(), delay));
 }
-async function refreshRoomFiles() {
-  if (!state || !session || !client.session) return;
+async function refreshRoomFiles(more=false, selectedIds=null) {
+  if (!state || !session || !client.session || roomFilesLoading) return;
   const generation = client.generation;
-  const roomId = state.room?.id;
+  const roomId = state.room?.id, authSession=client.session, viewKey=conversationViewKey(), ticket={};
   try {
-    const body = await client.request(client.path("/files"));
-    if (generation !== client.generation || state?.room?.id !== roomId) return;
-    const next = new Map();
+    const selection=partialWorkSnapshot?more?roomFilesSelection:selectedIds??[...new Set(visibleConversationMessages().filter(m=>!m.pendingSend&&!m.deletedAt).slice(-8).map(m=>m.id))].sort():[];
+    if(partialWorkSnapshot&&!selection.length)return;
+    const cursor=more?roomFilesNextCursor:null;
+    if(more&&JSON.stringify(selection)!==JSON.stringify(roomFilesSelection))return;
+    const query=new URLSearchParams();for(const id of selection)query.append('messageId',id);if(cursor)query.set('cursor',cursor);
+    roomFilesFlight=ticket;roomFilesLoading=true;renderMessages();
+    const body = await client.request(client.path("/files")+(query.size?'?'+query:''));
+    if (generation !== client.generation || state?.room?.id !== roomId || client.session!==authSession || session!==authSession || !client.ownsAccountSession() || conversationViewKey()!==viewKey) return;
+    if(partialWorkSnapshot&&(body.contractVersion!==2||body.coverage?.kind!=='selected-messages'||JSON.stringify(body.coverage.messageIds)!==JSON.stringify(selection)||body.coverage.complete!==!body.page?.hasMore||Boolean(body.page?.nextCursor)!==body.page?.hasMore))throw Error(uiText("currentRoom.invalidFileSelection"));
+    const next = partialWorkSnapshot?new Map(roomFilesByMessage):new Map();
+    if(partialWorkSnapshot&&!more)for(const id of selection)next.delete(id);
     for (const file of body.files ?? []) {
       if (file.state !== "committed" || !file.messageId) continue;
       const list = next.get(file.messageId) ?? [];
-      list.push(file);
+      if(!list.some(held=>held.id===file.id))list.push(file);
       next.set(file.messageId, list);
     }
-    roomFilesByMessage = next;
+    roomFilesByMessage = next;roomFilesSelection=selection;roomFilesNextCursor=body.page?.nextCursor??null;
     if (state) renderMessages();
   } catch { /* The last chips stay until the next successful read. */ }
+  finally{if(roomFilesFlight===ticket){roomFilesFlight=null;roomFilesLoading=false;if(generation===client.generation&&state?.room?.id===roomId)renderMessages();}}
 }
 function composerFileOwner(file) {
   const authSession = client.session, generation = client.generation, roomId = state?.room?.id;
@@ -2925,6 +2970,7 @@ function composerFileOwner(file) {
   return { authSession, owns };
 }
 async function attachComposerFiles(fileList) {
+  if(client.sectionAvailability('fileUploads')?.available===false){setComposerError(uiText("currentRoom.uploadUnavailable"));return;}
   if (!state || !client.session || isRoomArchived(state)) return;
   const batch = composerFileOwner();
   for (const file of [...(fileList ?? [])]) {
@@ -3017,7 +3063,7 @@ function renderSearch(now = Date.now()) {
   if (resultsOnly) {
     $("#search-results").hidden = searchCollapsed;
     $("#clear-search").hidden = false;
-    setText("#search-count", uiText("result.searchCount", { count: completedResults(state).length }));
+    setText("#search-count", partialWorkSnapshot ? uiText("currentRoom.searchResultCount", { count: completedResults(state).length }) : uiText("result.searchCount", { count: completedResults(state).length }));
     return;
   }
   const parsed = parseSearchQuery(query);
@@ -3032,11 +3078,11 @@ function renderSearch(now = Date.now()) {
   const work = only || pinnedOnly ? { work: [], total: 0 } : searchWork(state, parsed.term || query);
   const total = result.total + work.total, shown = result.messages.length + work.work.length;
   const noun = only && !parsed.term ? (total === 1 ? "mention" : "mentions") : pinnedOnly && !parsed.term ? (total === 1 ? "pinned message" : "pinned messages") : (total === 1 ? "match" : "matches");
-  setText("#search-count", `${total} ${noun}${total > shown ? ` · ${shown} shown` : ""} in this room${loadingOlder ? " · loading older messages…" : ""}`);
+  setText("#search-count", partialWorkSnapshot ? uiText("currentRoom.searchShownCount", { count: shown }) : `${total} ${noun}${total > shown ? ` · ${shown} shown` : ""} in this room${loadingOlder ? " · loading older messages…" : ""}`);
   const list = $("#search-list"), focused = list.contains(document.activeElement) ? document.activeElement.dataset.searchKey : null;
   const empty = only && !parsed.term ? "No one has @-mentioned you yet." : pinnedOnly && !parsed.term ? "Nothing is pinned yet." : pinnedOnly ? "No pinned messages match." : "No matches. Try a name or another phrase.";
   const html = work.work.map(({ item, excerpt }) => `<li><a href="${esc(workHref(item.id))}" data-open-work="${esc(item.id)}" data-search-key="work:${esc(item.id)}"><strong>${esc(item.title)}</strong><span>${esc(excerpt)}</span><small>Work · ${esc(workStatus(item, now).label)}</small></a></li>`).join("")
-    + result.messages.filter(m => !isMutedBy(state, session?.member?.id, m.authorId)).map(m => `<li><a href="${esc(recordHref("message", m.id))}" data-open-message="${esc(m.id)}" data-search-key="message:${esc(m.id)}"><strong>${esc(name(m.authorId))}</strong><span>${esc(m.deletedAt ? "Message deleted" : clipGraphemes(m.body ?? "", 240))}</span><small>${m.replyToId ? "Open thread at this reply" : "Open in room"}</small></a></li>`).join("") || `<li class="empty-note">${empty}</li>`;
+    + result.messages.filter(m => !isMutedBy(state, session?.member?.id, m.authorId)).map(m => `<li><a href="${esc(recordHref("message", m.id))}" data-open-message="${esc(m.id)}" data-search-key="message:${esc(m.id)}"><strong>${esc(name(m.authorId))}</strong><span>${esc(m.deletedAt ? "Message deleted" : clipGraphemes(m.body ?? "", 240))}</span><small>${m.replyToId ? "Open thread at this reply" : "Open in room"}</small></a></li>`).join("") || `<li class="empty-note">${partialWorkSnapshot ? esc(uiText("currentRoom.searchNoMatches")) : empty}</li>`;
   if (list._content !== html) { list.innerHTML = html; list._content = html; }
   if (focused) ([...list.querySelectorAll("[data-search-key]")].find(e => e.dataset.searchKey === focused) || $("#message-search")).focus({ preventScroll: true });
 }
@@ -3090,6 +3136,7 @@ function restoreComposer(draft) {
   autosizeComposer();
 }
 function requestRunLabel(id) {
+  if(client.sectionAvailability('requestRuns')?.available===false)return uiText("currentRoom.executionUnavailable");
   const run = requestRuns[id];
   if (!run || state?.replyRequests?.[id]?.status !== "open") return "";
   const status = run.state === "working" && Date.now() - run.updatedAt > 120000 ? "unknown" : run.state;
@@ -3097,6 +3144,7 @@ function requestRunLabel(id) {
     needs_attention: "Host needs attention · original attempt retained", unknown: "Host connection lost · original attempt retained" })[status] ?? "";
 }
 async function refreshRequestRuns({ force = false } = {}) {
+  if(client.sectionAvailability('requestRuns')?.available===false)return;
   if (!state || !session || requestRunsReading || document.hidden) return;
   const openIds = Object.values(state.replyRequests ?? {}).filter(request => request.status === "open").map(request => request.id).sort();
   if (!openIds.length) { requestRuns = {}; requestRunsReadKey = ""; return; }
@@ -3193,6 +3241,7 @@ async function openRequestMode(kind, id) {
     if (!current()) return;
     await client.refresh();
     if (!current()) return;
+    if(partialWorkSnapshot&&!state.replyRequests?.[id])state={...state,replyRequests:{...state.replyRequests,[id]:selected.request}};
     const request = state.replyRequests?.[id], basis = selected.current;
     if (!request || request.status !== "open" || selected.request.revision !== request.revision
       || selected.request.contextEventId !== request.contextEventId) throw new Error("Request changed. Open it again");
@@ -3278,6 +3327,7 @@ function switchThread(threadId, focusComposer = false, preserveWork = false) {
   if (leavingResultQuestion) renderReturnBrief();
   if (focusComposer) $("#message-input").focus();
   else (currentThreadId ? $("#thread-title") : $("#conversation-title")).focus({ preventScroll: true });
+  if(partialWorkSnapshot)void refreshMutedThreads();
 }
 function revealMessage(id) {
   if (state && !busy && !conversation.byId.has(id)) {
@@ -3346,6 +3396,16 @@ function revealWorkTimeline(id) {
 }
 // JDOT-COH-NAV begin
 function revealWork(id, expandDetails = false) {
+  // A normalized snapshot carries a bounded summary window. Missing entries
+  // are unknown, and held summaries are not full records or action authority.
+  if (partialWorkSnapshot && inspectedWorkRecord !== state?.workItems?.[id]) {
+    if (activeWorkNavigationId && activeWorkNavigationId !== id) {
+      const previous = workRecord(activeWorkNavigationId)?.querySelector(".work-details");
+      if (previous) previous.open = false;
+    }
+    activeWorkNavigationId = id;
+    return readSelectedWorkRecord(id, expandDetails);
+  }
   // #3795: a record id the legacy workItems projection does not hold may be
   // a board claim — its record lives on the board. Reveal it there instead
   // of reporting the record missing; deep links, reloads and the
@@ -3366,6 +3426,33 @@ function revealWork(id, expandDetails = false) {
   focusRecord(card);
   syncWorkReturnControl();
   return card;
+}
+async function readSelectedWorkRecord(id, expandDetails) {
+  const context = workNavigationContext();
+  if (!context || busy) return null;
+  const generation = client.generation, identity = session, held = state;
+  const epoch = workNavigationEpoch, url = location.href;
+  const current = () => context === workNavigationContext() && generation === client.generation
+    && identity === session && held === state && epoch === workNavigationEpoch && url === location.href && activeWorkNavigationId === id;
+  try {
+    const selected = await client.workContext(id);
+    if (!current()) return null;
+    const item = selected?.work;
+    if (!selected || !client.ownsResponse(selected, identity) || selected.roomId !== identity.roomId
+      || selected.viewerId !== identity.member.id || item?.id !== id || typeof item.title !== "string"
+      || typeof item.definitionOfDone !== "string" || !Number.isSafeInteger(item.revision) || item.revision < 0
+      || Number.isSafeInteger(held.workItems[id]?.revision) && item.revision < held.workItems[id].revision) {
+      notice(SOURCE_UNAVAILABLE_NOTICE, true); return null;
+    }
+    // Mount only this independently selected current record. The room's
+    // summary window and completeness metadata remain unchanged.
+    inspectedWorkRecord = structuredClone(item);
+    state = { ...state, workItems: { ...state.workItems, [id]: inspectedWorkRecord } };
+    return revealWork(id, expandDetails);
+  } catch (error) {
+    if (current()) notice(error.message || SOURCE_UNAVAILABLE_NOTICE, true);
+    return null;
+  }
 }
 function workNavigationContext() {
   const member = session?.member?.id;
@@ -3441,14 +3528,21 @@ async function revealClaimRecord(id) {
   const epoch = workNavigationEpoch;
   if (!$("#board-dialog").open) $("#tasks-board-open").click();
   const opening = navigationBoardEpoch;
-  if (!await navigationBoardReady?.() || opening !== navigationBoardEpoch || epoch !== workNavigationEpoch
-    || !workNavigationContext()) return;
-  await navigationBoardRevealClaim?.(id);
+  const context = workNavigationContext();
+  const current = () => opening === navigationBoardEpoch && epoch === workNavigationEpoch && context === workNavigationContext();
+  if (!await whenNavigationBoardInstalled() || !current()) return;
+  if (!await navigationBoardReady?.() || !current()) return;
+  // #3892: surface a failed reveal like the click path does instead of
+  // leaving the board open on nothing — but only if the user is still on
+  // this destination after the (possibly forced) board read.
+  const revealed = await navigationBoardRevealClaim?.(id);
+  if (!current()) return;
+  if (!revealed) notice(SOURCE_UNAVAILABLE_NOTICE, true);
   syncWorkReturnControl();
 }
 function navigateWorkRecord(kind, id, extra = {}) {
   if (!workNavigationContext() || busy) return false;
-  if (kind === "work" ? !Object.hasOwn(state.workItems, id) || state.workItems[id]?.id !== id : !conversation?.byId.has(id) && !client.owesHistory) {
+  if (kind === "work" ? !partialWorkSnapshot && (!Object.hasOwn(state.workItems, id) || state.workItems[id]?.id !== id) : !conversation?.byId.has(id) && !client.owesHistory) {
     notice(SOURCE_UNAVAILABLE_NOTICE, true); return false;
   }
   const presentation = extra.presentation ?? "focus";
@@ -3634,6 +3728,12 @@ $("#work-navigation-return").addEventListener("click", () => {
 });
 // JDOT-COH-NAV end
 function revealDrafts(id) {
+  if (partialWorkSnapshot && inspectedWorkRecord !== state?.workItems?.[id]) {
+    const epoch = workNavigationEpoch, url = location.href;
+    return Promise.resolve(revealWork(id, false)).then(card => {
+      if (card && epoch === workNavigationEpoch && url === location.href) return revealDrafts(id);
+    });
+  }
   const card = revealWorkTimeline(id);
   if (!card) return;
   const choices = card.querySelector('.work-drafts');
@@ -3661,9 +3761,14 @@ function revealEvent(id, requireExisting = false) {
   if (!state || busy) return;
   const generation = client.generation, navigationHash = location.hash;
   if (!requireExisting) openSettings("record-panel");
-  void client.setAuditView("full").then(() => {
+  void client.setAuditView("full").then(async () => {
     if (generation !== client.generation || !state) return;
     if (requireExisting && location.hash !== navigationHash) return;
+    if(nativeEventsWindow&&!state.eventLog.some(event=>event.id===id)){
+      const held=state,identity=session,page=await client.recordPage({eventId:id});
+      if(!page||generation!==client.generation||state!==held||session!==identity||requireExisting&&location.hash!==navigationHash)return;
+      state={...state,eventLog:[page.events[0].event,...state.eventLog]};renderRecordPanel();
+    }
     if (requireExisting && !state.eventLog.some(event => event.id === id)) {
       if (!$("#settings-dialog").open || !$("#record-panel").open) void client.setAuditView("activity").catch(() => {});
       return;
@@ -3673,7 +3778,9 @@ function revealEvent(id, requireExisting = false) {
     focusRecord([...$("#event-list").querySelectorAll("[data-event-record-id]")]
       .find(node => node.dataset.eventRecordId === id));
   }).catch(error => {
-    if (generation === client.generation && ([401, 403].includes(error.status) || error.code === "session_binding_changed")) client.handleFailure(error);
+    if(generation!==client.generation||requireExisting&&location.hash!==navigationHash)return;
+    if ([401, 403].includes(error.status) || error.code === "session_binding_changed") client.handleFailure(error);
+    else notice(error.message,true);
   });
 }
 function decodeFragment(value) {
@@ -3988,6 +4095,13 @@ function releaseSubmission(ticket, { restoreFocus = false } = {}) {
 // Unified timeline: work items render inline in #message-list, interleaved
 // chronologically with messages (Discord/Slack-style). Work cards follow the
 // active channel: a card shows when its proposal message is in the channel.
+function workSummaryCard(item) {
+  const card = document.createElement("article"), heading = document.createElement("h3"), link = document.createElement("a");
+  card.className = "work-card"; card.dataset.workSummaryId = item.id;
+  link.className = "source-link"; link.href = workHref(item.id); link.dataset.openWork = item.id; link.textContent = item.title;
+  heading.append(link); card.append(heading);
+  return card.outerHTML;
+}
 function timelineWorkEntries(onlyId) {
   if (onlyId === null) return [];
   const now = Date.now();
@@ -4010,7 +4124,9 @@ function timelineWorkEntries(onlyId) {
       // proposal determines the work card's channel.
       const mostRecent = proposals[0];
       return { item, channelId: mostRecent ? messageChannelId(mostRecent) : DEFAULT_CHANNEL_ID,
-        ts: Date.parse(item.updatedAt) || 0, html: workCard(item, now, proposals, state.messages) };
+        ts: Date.parse(item.updatedAt) || 0, html: partialWorkSnapshot && item !== inspectedWorkRecord
+          ? workSummaryCard(item)
+          : workCard(item, now, proposals, state.messages) };
     })
     .sort((a, b) => a.ts - b.ts);
 }
@@ -4746,6 +4862,8 @@ $("#message-list").addEventListener("click", e => {
     renderMessages();
     return;
   }
+  const checkFiles=e.target.closest('[data-check-message-files]');if(checkFiles){const id=checkFiles.dataset.checkMessageFiles;if(visibleConversationMessages().some(m=>m.id===id))void refreshRoomFiles(false,[id]);return;}
+  if(e.target.closest("[data-more-message-files]")){void refreshRoomFiles(true);return;}
   const file = e.target.closest("[data-download-file]");
   if (file) { void downloadMessageFile(file.dataset.downloadFile, file.dataset.fileMessage); return; }
   if (e.target.closest("[data-empty-write]")) { $("#message-input").focus(); return; }
@@ -4820,13 +4938,19 @@ $("#thread-back").addEventListener("click", () => switchThread(null));
 // unmuting restores it on the next read. The server resolves any message id
 // to the thread root, so the local set holds root ids.
 async function refreshMutedThreads() {
-  mutedThreads = new Set();
+  if(!partialWorkSnapshot)mutedThreads=new Set();
+  if(threadMuteGeneration!==client.generation){threadMuteKnown=new Set();threadMuteGeneration=client.generation;}
   if (!session || !client.session) return;
   const generation = client.generation;
   try {
-    const result = await client.threadMutes();
+    const selected=partialWorkSnapshot?[...new Set([currentThreadId,...state.messages.map(m=>conversation.rootById.get(m.id)??m.id)].filter(Boolean))].slice(0,16):null;
+    if(selected?.length===0)return;
+    const result = await client.threadMutes(selected);
     if (generation !== client.generation || !state) return;
-    if (result && Array.isArray(result.threadIds)) mutedThreads = new Set(result.threadIds);
+    if(result&&Array.isArray(result.threadIds)){
+      if(partialWorkSnapshot){if(result.coverage?.kind!=='selected-threads'||result.coverage.complete!==true||JSON.stringify(result.coverage.selectedThreadIds)!==JSON.stringify(selected))throw Error(uiText("currentRoom.muteUnconfirmed"));for(const id of selected){threadMuteKnown.add(id);if(result.threadIds.includes(id))mutedThreads.add(id);else mutedThreads.delete(id);}}
+      else mutedThreads=new Set(result.threadIds);
+    }
   } catch {
     // The button still works; the list just starts empty until the next load.
     if (generation !== client.generation || !state) return;
@@ -4835,12 +4959,14 @@ async function refreshMutedThreads() {
 }
 function syncThreadMuteButton() {
   const button = $("#thread-mute");
+  if(partialWorkSnapshot&&currentThreadId&&(!threadMuteKnown.has(currentThreadId)||threadMuteGeneration!==client.generation)){button.removeAttribute('aria-pressed');button.textContent=uiText("currentRoom.checkMute");return;}
   const muted = Boolean(currentThreadId && mutedThreads.has(currentThreadId));
   button.setAttribute("aria-pressed", String(muted));
   button.textContent = muted ? "Unmute thread" : "Mute thread";
 }
 $("#thread-mute").addEventListener("click", async () => {
   if (!state || !currentThreadId || threadMuteBusy) return;
+  if(partialWorkSnapshot&&(!threadMuteKnown.has(currentThreadId)||threadMuteGeneration!==client.generation)){await refreshMutedThreads();return;}
   threadMuteBusy = true;
   const button = $("#thread-mute");
   button.disabled = true;
@@ -6997,7 +7123,7 @@ window.addEventListener("pageshow", e => {
 // Return brief: one compact entry before conversation. Fetch on return and
 // on open; history stays fixed through the frozen horizon H, the action sections are live
 // through N, and only the explicit button acknowledges - exactly H, never the latest event.
-function loadReturnBrief() { return briefView.refresh(); }
+function loadReturnBrief() { if(client.sectionAvailability('returnBrief')?.available===false){renderReturnBrief();return;}return briefView.refresh(); }
 // Notification feed (B4): items are derived on the server from events after your
 // caught-up marker and filtered by your notification preferences. Fetching never
 // acknowledges; "Mark read" moves the marker to exactly the sequence the list was
@@ -7091,6 +7217,7 @@ humanPushUi = installHumanPush({
   eligible: () => Boolean(state) && ownsNotifications(notificationOwner) && client.session?.member?.kind !== "agent"
 });
 async function loadNotifications() {
+  if(client.sectionAvailability('notifications')?.available===false){setText('#notification-status',uiText("currentRoom.notificationsUnavailable"));return;}
   const pagingFocus = ["notification-older", "notification-newest"].includes(document.activeElement?.id) ? document.activeElement : null;
   const ticket = notificationOwner, request = ++notificationSerial;
   if (!ownsNotifications(ticket)) return;
@@ -7338,6 +7465,7 @@ $("#later-list").addEventListener("click", async event => {
   }
 });
 function syncNotifications() {
+  if(client.sectionAvailability('notifications')?.available===false){clearTimeout(notificationTimer);notificationTimer=null;return;}
   if (!client.session || !client.ownsAccountSession() || !state) { resetNotifications(); return; }
   if (!ownsNotifications(notificationOwner)) { resetNotifications(); notificationOwner = { generation: client.generation, session: client.session, inputs: null, sequence: null }; }
   // Inputs that change the feed directly refetch at once: your cursor, your membership
@@ -7495,15 +7623,15 @@ async function runDmConsentAction(action, peerId, button) {
 async function refreshFriendBonds() {
   if (!state || !session || $("#main").hidden || friendBusy) return;
   if (session.member.kind !== "agent") return;
-  const seq = ++friendSeq, generation = client.generation, room = state;
+  const seq = ++friendSeq, generation = client.generation, roomId = session.roomId;
   try {
     const result = await client.request(client.path("/bonds"));
-    if (seq !== friendSeq || generation !== client.generation || state !== room) return;
+    if (seq !== friendSeq || generation !== client.generation || session?.roomId !== roomId) return;
     friendBonds = Array.isArray(result?.bonds) ? result.bonds : [];
   } catch {
-    if (seq !== friendSeq || generation !== client.generation || state !== room) return;
+    if (seq !== friendSeq || generation !== client.generation || session?.roomId !== roomId) return;
   } finally {
-    if (seq === friendSeq && generation === client.generation && state === room) render();
+    if (seq === friendSeq && generation === client.generation && session?.roomId === roomId) render();
   }
 }
 function friendPeerTarget(peer) {
@@ -7805,7 +7933,7 @@ function renderReturnBrief({ timelineRendered = false } = {}) {
     const items = Object.values(state.workItems);
     if (!timelineRendered) syncTimelineWork();
     const resultFocus = $("#room-results-list").contains(document.activeElement) ? document.activeElement : null;
-    preserveResultFocus($("#room-results-list"), () => renderContent("#room-results-list", completedResults(state).map(resultRow).join("") || '<li class="empty-note">No completed results yet.</li>'));
+    preserveResultFocus($("#room-results-list"), () => renderContent("#room-results-list", completedResults(state).map(resultRow).join("") || (partialWorkSnapshot?`<li class="empty-note">${esc(uiText("currentRoom.resultsWindowEmpty"))}</li>`:'<li class="empty-note">No completed results yet.</li>')));
     if (resultFocus && !resultFocus.isConnected && document.activeElement === document.body) $("#room-results-list").focus({ preventScroll: true });
     resultStatus();
     syncResultComparisons();
@@ -7817,8 +7945,8 @@ function renderReturnBrief({ timelineRendered = false } = {}) {
   const newer = returnBrief && client.sequence > returnBrief.history.evaluatedThrough;
   // The reconciliation note comes first: it is the one thing here that says
   // what was already saved, which the generic brief message does not.
-  setText("#rb-status", owned ? briefReconcileNote || briefView.message || (newer ? "New changes available. Refresh catch-up." : "") : "");
-  $("#rb-refresh-button").disabled = !owned || briefView.busy;
+  setText("#rb-status", owned && client.sectionAvailability('returnBrief')?.available===false ? uiText("currentRoom.catchupUnavailable") : owned ? briefReconcileNote || briefView.message || (newer ? "New changes available. Refresh catch-up." : "") : "");
+  $("#rb-refresh-button").disabled = !owned || briefView.busy || client.sectionAvailability('returnBrief')?.available===false;
   $("#return-brief-panel").setAttribute("aria-busy", briefView.busy ? "true" : "false");
   $("#rb-more-button").disabled = briefView.busy;
   $("#rb-ack-button").disabled = true;
@@ -8150,17 +8278,20 @@ async function restoreAtStartup(roomId = null) {
 }
 const ready = (async () => {
   const initialResult = await initialSignin;
-  // Returning members land on ?room=... after OAuth. Their pending native
-  // consent owns this navigation before any Room session/snapshot restoration.
+  // Returning members land on ?room=... after OAuth. Any pending validated
+  // consent owns this navigation before Room session/snapshot restoration.
   // Keep account and terms checks; an uncertain read leaves the target for retry.
-  let nativeReturn = null;
-  try { nativeReturn = sessionStorage.getItem(oauthReturnKey); } catch { /* Ordinary navigation remains available. */ }
-  if (new URLSearchParams(location.search).get("oauth") !== "login" && validatedDesktopConsent(nativeReturn)) {
+  let consentReturn = null;
+  try { consentReturn = validatedOAuthReturn(sessionStorage.getItem(oauthReturnKey)); } catch { /* Ordinary navigation remains available. */ }
+  const returnParams = new URLSearchParams(location.search);
+  const providerReturned = returnParams.get("google") === "signed-in" || returnParams.get("github") === "signed-in";
+  if (returnParams.get("oauth") !== "login" && consentReturn
+    && (validatedDesktopConsent(consentReturn) || providerReturned)) {
     const account = await ensureAccountSession();
     if (account?.authenticated) {
       if (resumeOAuthConsent()) return;
-      showAccountWorkspace(); // Terms must be accepted before native consent.
-    } else location.assign(nativeReturn); // The consent endpoint requires sign-in.
+      showAccountWorkspace(); // Terms must be accepted before connector consent.
+    } else location.assign(consentReturn); // The consent endpoint requires sign-in.
     return;
   }
   if (await resumeEmailVerification()) return;
@@ -8316,12 +8447,13 @@ const ready = (async () => {
         .catch(() => { /* keyboard nav is progressive enhancement; the board works without it */ });
       navigationBoardReady = () => controller.whenReady();
       navigationBoardRevealClaim = id => controller.revealClaim(id);
+      settleNavigationBoardWaiters(true);
       return controller;
     },
     // JDOT-COH-NAV end
-    onError: () => notice("Could not load the board. Close and reopen to retry.", true) });
+    onError: () => { settleNavigationBoardWaiters(false); notice("Could not load the board. Close and reopen to retry.", true); } });
   // JDOT-COH-NAV begin
-  resetNavigationBoard = () => { $("#board-dialog").close(); $("#board-panel").open = false; board.reset(); };
+  resetNavigationBoard = () => { settleNavigationBoardWaiters(false); $("#board-dialog").close(); $("#board-panel").open = false; board.reset(); };
   // JDOT-COH-NAV end
   // #3688: the native <dialog> close returns focus to whatever was focused
   // before showModal() — for the board that chain can bottom out at <body>
@@ -8350,7 +8482,7 @@ const ready = (async () => {
   // once on workspace arrival through this hook (see openBoardFromEntrance).
   openBoardFromEntrance = () => { openBoard(); return $("#board-dialog")?.open === true; };
   // JDOT-COH-NAV begin
-  $("#board-close").addEventListener("click", () => { navigationBoardEpoch++; $("#board-dialog").close(); $("#board-panel").open = false; });
+  $("#board-close").addEventListener("click", () => { navigationBoardEpoch++; settleNavigationBoardWaiters(false); $("#board-dialog").close(); $("#board-panel").open = false; });
   $("#board-dialog").addEventListener("cancel", () => { navigationBoardEpoch++; });
   $("#board-dialog").addEventListener("close", () => {
     const opener = boardOpener; boardOpener = null;

@@ -7,7 +7,7 @@ import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 
 export const roomAcpInputs = Object.freeze(['package.json', 'README.md',
-  ...['agent-host', 'agents', 'args', 'bridge', 'cli', 'credentials', 'join',
+  ...['agent-host', 'agents', 'args', 'bridge', 'cli', 'credentials', 'join', 'import-identity',
     'jsonrpc', 'link', 'permission', 'prompt', 'queue', 'redact', 'render',
     'room', 'run', 'sessions', 'private-state'].map(name => `src/${name}.mjs`)]);
 

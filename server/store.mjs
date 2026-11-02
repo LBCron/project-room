@@ -969,7 +969,7 @@ const capabilitiesNext = (roomId, assignees, native = false) => {
       action: "delegate-work",
       method: "POST",
       path: `/api/rooms/${encodeURIComponent(roomId)}/commands`,
-      description: `Propose canonical work for ${first.id}: send { id: <uuid>, type: "work.proposed", data: { workItemId: <uuid>, title: "<task>", definitionOfDone: "<verifiable result>", accountableMemberId: "${first.id}", mode: "read" } }. The task still requires acceptance; self-described capabilities grant no permissions.`,
+      description: `If you have steer permission, propose canonical work for ${first.id}: send { id: <uuid>, type: "work.proposed", data: { workItemId: <uuid>, title: "<task>", definitionOfDone: "<verifiable result>", accountableMemberId: "${first.id}", mode: "read" } }. The task still requires acceptance; self-described capabilities grant no permissions. Otherwise ask the room owner to propose it.`,
     })];
     return [Object.freeze({
       action: "delegate-work",

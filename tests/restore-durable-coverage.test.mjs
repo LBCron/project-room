@@ -220,3 +220,16 @@ test('historical basis save faults and a mismatched saved digest refuse without 
  // Deliberate target-owned cursor corruption; source receipts stay immutable.
  const current=restoreProgress(store.db),progress=structuredClone(current.progress);progress.audit.replay.checkpoint.sourceDigest='0'.repeat(64);withRestoreTransaction(store,()=>checkpointRestore(store.db,{restoreId:current.restore_id,expectedRevision:current.revision,phase:'audit_pending',seal:current.seal,progress,latest:null}));const changed=restoreProgress(store.db),denied=await post(store,{restoreId:changed.restore_id,sourceSeal:changed.seal.id,expectedRevision:changed.revision,requestId:'wrong_historical_basis'},{json:true});assert.equal(denied.status,422);assert.match(JSON.stringify(denied.body),/basis changed/);assert.deepEqual(restoreProgress(store.db),changed);assert.throws(()=>store.headSequence('legacy-room'),error=>error.status===503);assert.equal(store.db.prepare('SELECT count(*) n FROM projection_checkpoints').get().n,0);
 });
+
+test('actual operator resumes exact claim overlap census with numeric-first map order',async t=>{
+ const extra=[],push=(type,data)=>extra.push(event({roomId:'commons',actorId:'owner',type,data,at:'2026-11-01T00:00:00.000Z'}));
+ const ids=['z-first',...Array.from({length:150},(_,n)=>'no-overlap-'+n),'20','2','4294967294','01','4294967295','target'];
+ for(const id of ids){push('work.proposed',{workItemId:id,title:id,definitionOfDone:'Preserve exact overlap evidence',accountableMemberId:'owner',mode:'write'});push('work.accepted',{workItemId:id,expectedRevision:0});}
+ const claimed=['z-first','20','2','4294967294','01','4294967295'];for(const id of claimed)push('claim.acquired',{workItemId:id,expectedRevision:1,repository:' Synthetic/Repo ',ref:'branch-'+id,paths:['src/**','notes.txt'],expiresAt:'2099-01-01T00:00:00.000Z'});
+ push('claim.acquired',{workItemId:'target',expectedRevision:1,repository:'synthetic/repo',ref:'target',paths:['src/file.js'],expiresAt:'2099-01-01T00:00:00.000Z'});
+ const f=setup(t,0,extra);let store=new RoomStore(f.filename),response=await post(store,f.text),steps=0,scans=0;
+ try{while(response.body.pending){assert.equal(response.status,202,JSON.stringify(response.body));const saved=restoreProgress(store.db);if(saved.progress?.audit?.replay?.expansion)scans++;const input=request(response.body,'claim_'+steps);store.close();store=new RoomStore(f.filename);response=await post(store,input,{json:true});assert.ok([200,202].includes(response.status),JSON.stringify(response.body));assert.deepEqual(await post(store,input,{json:true}),response);assert.ok(++steps<500);}
+  assert.equal(response.status,200,JSON.stringify(response.body));assert.equal(response.body.replayContinuation.deferred,0);assert.ok(scans>1,'actual durable scan must span cold calls');assert.deepEqual(store.readWorkItems('commons').find(item=>item.id==='target').claim.overlaps.map(item=>item.workItemId),['2','20','4294967294','z-first','01','4294967295']);
+ }finally{store.close();}
+ t.diagnostic(JSON.stringify({workItems:ids.length,claimEvents:7,coldSteps:steps,durableScanSteps:scans,originalFullOracleRequired:true}));
+});

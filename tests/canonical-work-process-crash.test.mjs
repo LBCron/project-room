@@ -59,7 +59,8 @@ test('canonical HTTP commits survive SIGKILL and lost replies without replay wri
       });
     let diagnostics = '';
     child.stderr.on('data', chunk => { diagnostics = (diagnostics + chunk).slice(-4096); });
-    const exited = new Promise(resolve => child.once('exit', (code, signal) => resolve({code, signal})));
+    // A failed spawn emits error/close without exit; cleanup must settle too.
+    const exited = new Promise(resolve => child.once('close', (code, signal) => resolve({code, signal})));
     const entry = {child, exited};
     workers.push(entry);
     const ready = await new Promise((resolve, reject) => {

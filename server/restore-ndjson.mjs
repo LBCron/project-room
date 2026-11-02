@@ -1,6 +1,6 @@
 import {initialRecoveryCensus,validateRecoveryCensus,advanceRecoveryCensus} from './recovery-census-continuation.mjs';
 import { CURRENT_WRITER_FORMAT } from './current-room-format.mjs';
-import { applicationTables, lazyAdditiveTables, RESTORE_OPERATIONAL_TABLES, installRestoreFreeze, verifyRestoreFreeze, removeRestoreFreeze } from './writer-fence.mjs';
+import { applicationTables, lazyAdditiveTables, RESTORE_OPERATIONAL_TABLES, installRestoreFreeze, verifyRestoreFreeze, retainRestoreFreeze } from './writer-fence.mjs';
 import { RESTORE_AUDIT_VERSION, RESTORE_REPORT_VERSION, withRestoreTransaction, beginRestore, completeRestore, restorePending, verifyRestoreControl, restoreProgress, checkpointRestore } from './restore-admission.mjs';
 import { verifyCurrentRoomSchema, invalidateCurrentRoomSchema, restoredCurrentFormatPresent } from './current-room-repository.mjs';
 // Whole-store NDJSON restore into an already-open store.
@@ -241,7 +241,7 @@ export function continueRestoreCoverage(store,input){
    // as bounded until its replay/SQLite/subsystem/report scans are resumable.
    const recovery=auditRecovery(store),invitations=store.verifyInvitationAudit();validateCoverageState(db,state);verifyCurrentRoomSchema(db);
    const result={ok:true,verified:true,pending:false,reportVersion:recovery.contractVersion,engineChecks:state.progress.audit.engine,replayContinuation:{rooms:state.progress.audit.replayRooms,deferred:state.progress.audit.replayDeferred,originalFullOracleRequired:true},resumed:true,contentVerification:'full',events:state.seal.events,tables:state.seal.tables.length,backedUpAt:state.seal.backedUpAt,recovery,audit:{ok:true},...invitations};
-   removeRestoreFreeze(db,state.seal.inventory);completeRestore(db,{...input,result});invalidateCurrentRoomSchema(db);return result;
+   retainRestoreFreeze(db,state.seal.inventory);completeRestore(db,{...input,result});invalidateCurrentRoomSchema(db);return result;
   }
   const p={...state.progress,bag:{...state.progress.bag}};let rows=0,bytes=0;
   while(p.tableIndex < state.seal.tables.length && rows < COVERAGE_ROWS){

@@ -681,12 +681,17 @@ export function verifyRestoreFreeze(db,tables,catalog=null) {
 }
 export function installRestoreFreeze(db,tables) {
   if(!db.isTransaction)throw Error('Restore freeze requires an existing transaction');
-  if(db.prepare("SELECT 1 FROM sqlite_master WHERE type='trigger' AND name GLOB 'restore_frozen_*' LIMIT 1").get())throw Error('Restore freeze already requires reconciliation');
-  for(const def of restoreFreezeDefinitions(tables))db.exec(def.sql);
+  // Completed restores retain their exact guards. Their pending-state
+  // predicate is inactive at rest and automatically reactivates on a new seal.
+  // Never accept a partial or altered family as a reusable guard set.
+  if(!db.prepare("SELECT 1 FROM sqlite_master WHERE type='trigger' AND name GLOB 'restore_frozen_*' LIMIT 1").get())
+    for(const def of restoreFreezeDefinitions(tables))db.exec(def.sql);
   verifyRestoreFreeze(db,tables);
 }
-export function removeRestoreFreeze(db,tables) {
-  if(!db.isTransaction)throw Error('Restore freeze removal requires an existing transaction');
+export function retainRestoreFreeze(db,tables) {
+  if(!db.isTransaction)throw Error('Restore freeze publication requires an existing transaction');
+  // Publication clears the protected admission row in this same transaction.
+  // Keeping the already verified predicates avoids hundreds of schema DDL
+  // changes without opening a single business table before that commit.
   verifyRestoreFreeze(db,tables);
-  for(const def of restoreFreezeDefinitions(tables))db.exec(`DROP TRIGGER ${def.name}`);
 }

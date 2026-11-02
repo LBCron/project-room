@@ -188,7 +188,8 @@ export class RoomClient {
   }
   async performRequest(path, { method = "GET", data, authMode = this.session?.authMode, authSession = this.session, offerContext = false, auditView = "full" } = {}) {
     const controller = new AbortController();
-    const timer = setTimeout(() => controller.abort(), 10000);
+    let timedOut = false;
+    const timer = setTimeout(() => { timedOut = true; controller.abort(); }, 10000);
     try {
       const response = await this.fetcher(path, { method, credentials: "same-origin", signal: controller.signal,
         headers: { ...(data === undefined ? {} : { "Content-Type": "application/json" }), ...(authSession?.csrf ? { "X-CSRF-Token": authSession.csrf } : {}),
@@ -216,6 +217,16 @@ export class RoomClient {
         }
         throw error; }
       return body;
+    } catch (failure) {
+      // Only this request's deadline is ours to classify. An abort does not
+      // establish whether a write committed: callers retain their exact retry.
+      if (timedOut && controller.signal.aborted && failure?.name === "AbortError") {
+        const error = new Error(uiText("request.timedOut"), { cause: failure });
+        error.name = "AbortError";
+        error.code = "request_timeout";
+        throw error;
+      }
+      throw failure;
     } finally { clearTimeout(timer); }
   }
   async restore(roomId = null) {

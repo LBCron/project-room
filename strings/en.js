@@ -1,5 +1,6 @@
 // Generated from strings/en.json by scripts/build-ui-strings.mjs.
 export default {
+  "request.timedOut": "The request timed out before confirmation. Please try again.",
   "_meta": {
     "locale": "en",
     "note": "Seed strings catalog for the i18n harness (backlog Q012). Seeded from server/notify-email.mjs notification copy. Placeholders are named ({count}), never positional ({0}, %s). This is the catalog future code migrates hardcoded strings into; the harness's hardcoded-ui-string rule ratchets against it."

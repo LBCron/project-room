@@ -17,9 +17,9 @@ test('normalized pricing/allowance writes keep owner authorization, exact retrie
  f.s.command(f.owner,'commons',{id:'delegate-pricing-admin',type:'member.access_changed',data:{memberId:'agent',expectedMemberRevision:0,permissions:['manage_members'],active:true}});setSpendPricing(f.s,f.agent,'commons',{enabled:false,requestId:'delegated-disable'});assert.throws(()=>setSpendAllowance(f.s,f.agent,'commons',{allowanceCents:1000}),e=>e.code==='owner_required');assert.doesNotThrow(()=>auditRecovery(f.s));
 });
 test('normalized accounting covers the full 500-item admitted room rather than one page',t=>{
- const f=fixture(t,{extra:497}),prepare=f.s.db.prepare.bind(f.s.db);let bodyReads=0;
- f.s.db.prepare=sql=>{const st=prepare(sql);if(!sql.startsWith('SELECT revision,digest,body FROM work_entities'))return st;return new Proxy(st,{get(target,k){if(k==='all')return()=>{throw Error('unbounded work body allocation');};const value=Reflect.get(target,k,target);if(k!=='get')return typeof value==='function'?value.bind(target):value;return(...args)=>{bodyReads++;return value.apply(target,args);};}});};
- const report=readSpendAllowance(f.s,f.agent,'commons');f.s.db.prepare=prepare;assert.equal(bodyReads,500);assert.deepEqual(report,{roomId:'commons',evaluatedThrough:f.s.headSequence('commons'),...f.expected});assert.equal(report.committedCents,120);
+ const f=fixture(t,{extra:497}),prepare=f.s.db.prepare.bind(f.s.db);let bodyReads=0,schemaReads=0;
+ f.s.db.prepare=sql=>{if(sql.includes('FROM sqlite_master WHERE'))schemaReads++;const st=prepare(sql);if(!sql.startsWith('SELECT revision,digest,body FROM work_entities'))return st;return new Proxy(st,{get(target,k){if(k==='all')return()=>{throw Error('unbounded work body allocation');};const value=Reflect.get(target,k,target);if(k!=='get')return typeof value==='function'?value.bind(target):value;return(...args)=>{bodyReads++;return value.apply(target,args);};}});};
+ const report=readSpendAllowance(f.s,f.agent,'commons');f.s.db.prepare=prepare;assert.equal(bodyReads,500);assert.ok(schemaReads<=8,'schema admission must be constant per fold, observed '+schemaReads);assert.deepEqual(report,{roomId:'commons',evaluatedThrough:f.s.headSequence('commons'),...f.expected});assert.equal(report.committedCents,120);
 });
 test('an inadmissible work proof or failed room reservation never undercharges or leaves a reservation',t=>{
  const f=fixture(t);issueSpendGrantRoute(f.s,f.owner,'commons',{agentId:'agent',capCents:'1000',perTxCapCents:'100'});const prepare=f.s.db.prepare.bind(f.s.db);

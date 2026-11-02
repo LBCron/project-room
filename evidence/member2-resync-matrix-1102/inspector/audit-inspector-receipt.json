@@ -1,0 +1,10 @@
+{
+  "zip_sha256": "f60c50a774fd2b54166830d61af9d2fe975d8f5a2224efaf211db4381dc77e14",
+  "zip_bytes": 18105,
+  "archive_readback_verified": true,
+  "tests_passed": 10,
+  "real_matrix_checkout_consistency": true,
+  "real_native_checkout_consistency": true,
+  "wrong_checkout_refused": true,
+  "scope": "Offline consistency inspector, not runtime rerun or authenticity proof"
+}

@@ -5,7 +5,7 @@ import {repairLegacyMessages} from '../../server/operator-legacy-message-repair.
 import {textVersion} from '../../server/text-results.mjs';
 import {auditRecovery} from '../../server/recovery.mjs';
 import {replayCutoverSchema,captureReplayWitness,advanceReplayWitness,partitionReplayWitness,qualifyReplayHWork,qualifyReplayHMessages,advanceCurrentRoomConversion} from '../../server/replay-cutover.mjs';
-export function seedHistoricalRedactionSource(store,{extraPrefixMessages=0,beforeCapture}={}){
+export function seedHistoricalRedactionSource(store,{extraPrefixMessages=0,beforeCapture,captureOptions}={}){
  const es=historicalSequence(),intro=[
   event({roomId:'legacy-room',actorId:'owner',type:'member.added',data:{memberId:'worker',displayName:'Worker',kind:'agent',permissions:[]}}),
   ...['prefix-one','prefix-two','prefix-private',...Array.from({length:extraPrefixMessages},(_,i)=>'prefix-extra-'+i)].map(id=>event({roomId:'legacy-room',actorId:'owner',type:'message.posted',data:{messageId:id,body:'sensitive-'+id+'-original',...(id==='prefix-private'?{toMemberId:'worker'}:{})}})),
@@ -18,7 +18,7 @@ export function seedHistoricalRedactionSource(store,{extraPrefixMessages=0,befor
  beforeCapture?.(store,{key,workerKey});
  store.transaction(()=>store.db.prepare('DELETE FROM projection_checkpoints WHERE room_id=?').run('legacy-room'));auditRecovery(store);
  store.db.exec(replayCutoverSchema({durable:!!store.db.storage}));
- const captured=captureReplayWitness(store,{roomId:'legacy-room',requestId:'privacy-H',expectedHead:store.headSequence('legacy-room'),reason:'Historical privacy qualification'}),base={roomId:'legacy-room',generation:captured.generation};
+ const captured=captureReplayWitness(store,{roomId:'legacy-room',requestId:'privacy-H',expectedHead:store.headSequence('legacy-room'),reason:'Historical privacy qualification',...(captureOptions?.(store)??{})}),base={roomId:'legacy-room',generation:captured.generation};
  const run=(advance,start,complete,field)=>{let value=start,i=0;do{assert.ok(i<500);value=advance(store,{...base,requestId:field+'-'+i++,...field==='hash'||field==='codec'?{expectedBytes:value.bytes}:field==='work'?{expectedWorkCount:value.workCount}:field==='messages'?{expectedSteps:value.hMessageSteps}:{expectedSteps:value.currentSteps}});}while(!complete(value));return value;};
  run(advanceReplayWitness,{bytes:0},v=>v.phase==='witness_verified','hash');
  run(partitionReplayWitness,{bytes:0},v=>v.phase==='codec_partitioned','codec');

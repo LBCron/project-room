@@ -6,10 +6,18 @@ import {initializeCurrentInviteJourney} from '../tests/helpers/current-agent-inv
 import {textVersion} from '../server/text-results.mjs';
 import {readConversation} from '../server/conversation-sync.mjs';
 import {auditRecovery} from '../server/recovery.mjs';
+import {replayCutoverSchema,captureReplayWitness,advanceReplayWitness,partitionReplayWitness,qualifyReplayHWork,qualifyReplayHMessages,advanceCurrentRoomConversion} from '../server/replay-cutover.mjs';
 export class InviteJourneyRoom extends DurableObject {
  constructor(ctx,env){super(ctx,env);this.ctx=ctx;this.stats={rowsRead:0,rowsWritten:0};this.db=new DurableDatabase(ctx.storage,{observeStatement:()=>s=>{this.stats.rowsRead+=s.rowsRead??0;this.stats.rowsWritten+=s.rowsWritten??0;}});this.store=new RoomStore(null,{database:this.db,storagePlatform:durableStorage,integrity:'deferred'});}
  async fetch(request){const path=new URL(request.url).pathname,before={...this.stats},cost=()=>Object.fromEntries(Object.keys(before).map(k=>[k,this.stats[k]-before[k]]));
   try{
+   if(path==='/h-prepare') {
+    const events=await request.json(),s=this.store;s.initialize(events);const reader=s.issueAccessKey('commons','reader');await this.ctx.storage.put('h-reader',reader);
+    while(!s.backfillMessages({limit:200}).done){}s.checkMessagesParity({roomId:'commons'});this.db.exec(replayCutoverSchema({durable:true}));const capture=captureReplayWitness(s,{roomId:'commons',requestId:'h-capture',expectedHead:s.headSequence('commons'),reason:'Disposable since-join Native qualification'});let n=0,p={bytes:0};
+    while(p.phase!=='witness_verified')p=advanceReplayWitness(s,{roomId:'commons',generation:capture.generation,requestId:'h-hash-'+n++,expectedBytes:p.bytes});p={bytes:0};n=0;while(p.phase!=='codec_partitioned')p=partitionReplayWitness(s,{roomId:'commons',generation:capture.generation,requestId:'h-codec-'+n++,expectedBytes:p.bytes});qualifyReplayHWork(s,{roomId:'commons',generation:capture.generation,requestId:'h-work',expectedWorkCount:0});p={hMessageSteps:0};n=0;while(!p.hMessagesQualified)p=qualifyReplayHMessages(s,{roomId:'commons',generation:capture.generation,requestId:'h-message-'+n++,expectedSteps:p.hMessageSteps});await this.ctx.storage.put('h-state',{capture,steps:0});return Response.json({ready:true,cost:cost()});
+   }
+   if(path==='/h-step') {const h=await this.ctx.storage.get('h-state'),result=advanceCurrentRoomConversion(this.store,{roomId:'commons',generation:h.capture.generation,requestId:'h-current-'+h.steps,expectedSteps:h.steps});await this.ctx.storage.put('h-state',{...h,steps:result.currentSteps});return Response.json({result,cost:cost()});}
+   if(path==='/h-read') {const key=await this.ctx.storage.get('h-reader');let hidden=false;try{readConversation(this.store,key,'commons',{messageId:'before'});}catch(e){hidden=e.status===404;}const visible=readConversation(this.store,key,'commons',{messageId:'after'}).messages[0].body==='Visible H result';auditRecovery(this.store);return Response.json({hidden,visible,cost:cost()});}
    if(path==='/seed'){const state=initializeCurrentInviteJourney(this.store,await request.json());await this.ctx.storage.put('fixture',state);return Response.json({ready:true,cost:cost()});}
    const f=await this.ctx.storage.get('fixture'),s=this.store;
    if(f.testJoinAt)s.now=()=>f.testJoinAt;

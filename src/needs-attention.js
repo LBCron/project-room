@@ -55,7 +55,7 @@ export function createNeedsAttentionCard(options) {
   function requestItem(request) {
     const path = client.path(`/access-requests/${encodeURIComponent(request.requestId)}/decide`);
     if(request.kind==='agent-sponsor-transfer')return {kind:'access_request',id:request.requestId,severity:'action',requestKind:request.kind,
-      title:`Connect ${request.displayName} to the requesting human`,detail:request.note,requestedPermissions:[],
+      title:uiText("agentSponsor.requestTitle", {name:request.displayName}),detail:request.note,requestedPermissions:[],
       actions:['approve','deny'].map(decision=>({action:decision,method:'POST',path,body:{decision}}))};
     return { kind: "access_request", id: request.requestId, severity: "action", requestKind: request.kind,
       title: request.kind === "permissions" ? `${request.displayName} wants more permissions` : `${request.displayName} asks to join`,

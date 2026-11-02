@@ -1,3 +1,4 @@
+import { uiText } from './strings.js';
 import { prepareClaimOverlap, matchClaimOverlap } from './claim-overlap.js';
 import { currentRecordClaimOverlaps, inheritCurrentRecordContext } from './current-record-context.js';
 import { canAdministerRoom, canInviteCoOwners, museDevelopmentAccess } from './room-administration.js';
@@ -1854,8 +1855,8 @@ function transferMemberSponsor(state,incoming) {
  const m=ownMember(state.members,incoming.data.memberId),human=ownMember(state.members,incoming.data.toMemberId);
  if(!m||m.kind!=="agent"||m.active!==true||m.id===state.room.ownerId||!human||human.kind!=="human"||human.active!==true||m.id===human.id)throw Error("Unknown member");
  if(m.revision!==incoming.data.expectedMemberRevision||human.revision!==incoming.data.expectedHumanRevision||m.accountableHumanId!==incoming.data.previousSponsorId||m.identityId!==incoming.data.identityId)throw Error("Stale revision");
- if(!/^[a-f0-9]{64}$/.test(incoming.data.requestDigest))throw Error("Invalid sponsorship consent");
+ if(!/^[a-f0-9]{64}$/.test(incoming.data.requestDigest))throw Error(uiText("agentSponsor.invalidConsent"));
  const actor=ownMember(state.members,incoming.actorId);
- if(incoming.actorId!==state.room.ownerId&&m.permissions.some(p=>!actor.permissions.includes(p)))throw Error("Cannot grant permissions not held");
+ if(incoming.actorId!==state.room.ownerId&&m.permissions.some(p=>!actor.permissions.includes(p)))throw Error(uiText("agentSponsor.permissionsNotHeld"));
  m.accountableHumanId=human.id;m.sponsorAdoptionId=incoming.data.requestId;m.sponsorAdoptionDigest=incoming.data.requestDigest;m.revision+=1;
 }

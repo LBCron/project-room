@@ -45,3 +45,38 @@ for(const [name,mutation] of [
 ])test('cold independent recovery refuses '+name,t=>{
  const {s,erase,original}=fixture(t);erase('prefix-one');mutation(s);assert.deepEqual(originals(s),original);assert.throws(()=>auditRecovery(s),/Saved historical replay evidence|Recovery data requires operator reconciliation/);const target=new RoomStore(':memory:');t.after(()=>target.close());assert.throws(()=>replayNdjsonInto(exportNdjsonText(s.db),target),/Saved historical replay evidence|Recovery data requires operator reconciliation/);
 });
+
+test('oversized privacy proof is refused before any new source erasure',t=>{
+ const {s,erase}=fixture(t);erase('prefix-one');
+ changeProof(s,'historical_replay_privacy_basis',value=>{value.padding='x'.repeat(64*1024);});
+ const before=snapshot(s),prepare=s.db.prepare.bind(s.db);let rewrites=0;
+ s.db.prepare=sql=>{const statement=prepare(sql);if(sql==='UPDATE events SET body=? WHERE room_id=? AND sequence=?'){const run=statement.run.bind(statement);statement.run=(...args)=>{rewrites++;return run(...args);};}return statement;};
+ try{assert.throws(()=>erase('prefix-two'),/Saved historical replay evidence/);}finally{s.db.prepare=prepare;}
+ assert.equal(rewrites,0);assert.deepEqual(snapshot(s),before);
+});
+
+test('post-write verification exempts only its current open permit, never an earlier erasure',t=>{
+ const {s,erase}=fixture(t);erase('prefix-one');const before=snapshot(s),prior=JSON.parse(s.db.prepare("SELECT counts_json FROM operator_actions WHERE action='historical_replay_erased'").get().counts_json),closed=prior.admission[0]+'_closed',guard=s.db.prepare("SELECT sql FROM sqlite_master WHERE name='operator_actions_append_only_delete'").get().sql,prepare=s.db.prepare.bind(s.db);let injected=false;
+ s.db.prepare=sql=>{const statement=prepare(sql),run=statement.run.bind(statement);statement.run=(...args)=>{const result=run(...args);if(args[2]==='historical_replay_erased'){injected=true;s.db.exec('DROP TRIGGER operator_actions_append_only_delete');try{prepare('DELETE FROM operator_actions WHERE id=?').run(closed);}finally{s.db.exec(guard);}}return result;};return statement;};
+ try{assert.throws(()=>erase('prefix-two'),/Saved historical replay evidence/);}finally{s.db.prepare=prepare;}
+ assert.equal(injected,true);assert.deepEqual(snapshot(s),before);assert.doesNotThrow(()=>auditRecovery(s));
+});
+
+test('legal escaped reason bytes remain within aggregate admission and preserve command causation binding',t=>{
+ const {s,key,original}=fixture(t),command={id:'escaped-prefix-erasure',causationId:s.db.prepare("SELECT id FROM events WHERE room_id='legacy-room' ORDER BY sequence LIMIT 1").get().id,type:'message.deleted',data:{messageId:'prefix-one',expectedMessageRevision:1,reason:''}};
+ while(Buffer.byteLength(JSON.stringify(command))+6<=16384)command.data.reason+='\u0000';
+ assert.ok(Buffer.byteLength(JSON.stringify(command))<=16384);
+ s.command(key,'legacy-room',command);
+ const deleted=s.db.prepare("SELECT length(CAST(body AS BLOB)) bytes FROM events WHERE room_id='legacy-room' AND json_extract(body,'$.type')='message.deleted' ORDER BY sequence DESC LIMIT 1").get();
+ assert.ok(deleted.bytes>16384,'server event envelope exceeds the legal command byte cap');assert.doesNotThrow(()=>auditRecovery(s));assert.deepEqual(originals(s),original);assert.equal(s.command(key,'legacy-room',command).duplicate,true);
+});
+
+ test('aggregate privacy admission refuses legal repeated erasures before source mutation',t=>{
+ const s=new RoomStore(':memory:');t.after(()=>s.close());const {key}=seedHistoricalRedactionSource(s,{extraPrefixMessages:12});let succeeded=0,refused=false;
+ for(let i=0;i<12;i++){
+  const command={id:'large-erase-'+i,type:'message.deleted',data:{messageId:'prefix-extra-'+i,expectedMessageRevision:0,reason:''}};
+  while(Buffer.byteLength(JSON.stringify(command))+6<=16384)command.data.reason+='\u0000';
+  const before=snapshot(s);try{s.command(key,'legacy-room',command);succeeded++;}catch(error){assert.match(error.message,/Saved historical replay evidence/);assert.deepEqual(snapshot(s),before);refused=true;break;}
+ }
+ assert.ok(succeeded>1);assert.equal(refused,true);assert.doesNotThrow(()=>auditRecovery(s));
+});

@@ -1,0 +1,562 @@
+{
+  "source": "a599faa29ff65567e5c080609cb2d000acd33666",
+  "node": "v24.22.1",
+  "roles": [
+    "owner",
+    "collaborator",
+    "contributor",
+    "reviewer",
+    "chat",
+    "guest",
+    "outsider",
+    "anonymous",
+    "revoked"
+  ],
+  "rolePermissions": {
+    "collaborator": [
+      "steer",
+      "accept_work",
+      "complete_work",
+      "verify"
+    ],
+    "contributor": [
+      "accept_work",
+      "complete_work"
+    ],
+    "reviewer": [
+      "verify"
+    ],
+    "chat": [],
+    "revoked": [
+      "steer",
+      "accept_work",
+      "complete_work",
+      "verify"
+    ],
+    "guest": []
+  },
+  "actualShareLinkGuest": true,
+  "actions": [
+    "propose",
+    "accept-own",
+    "acquire-contributor",
+    "renew-contributor",
+    "release-contributor",
+    "configure"
+  ],
+  "cells": [
+    {
+      "action": "propose",
+      "role": "owner",
+      "expected": "allow",
+      "status": 201,
+      "code": null,
+      "matched": true
+    },
+    {
+      "action": "propose",
+      "role": "collaborator",
+      "expected": "allow",
+      "status": 201,
+      "code": null,
+      "matched": true
+    },
+    {
+      "action": "propose",
+      "role": "contributor",
+      "expected": "deny",
+      "status": 422,
+      "code": "command_rejected",
+      "matched": true,
+      "authoritativeTablesUnchanged": true
+    },
+    {
+      "action": "propose",
+      "role": "reviewer",
+      "expected": "deny",
+      "status": 422,
+      "code": "command_rejected",
+      "matched": true,
+      "authoritativeTablesUnchanged": true
+    },
+    {
+      "action": "propose",
+      "role": "chat",
+      "expected": "deny",
+      "status": 422,
+      "code": "command_rejected",
+      "matched": true,
+      "authoritativeTablesUnchanged": true
+    },
+    {
+      "action": "propose",
+      "role": "guest",
+      "expected": "deny",
+      "status": 422,
+      "code": "command_rejected",
+      "matched": true,
+      "authoritativeTablesUnchanged": true
+    },
+    {
+      "action": "propose",
+      "role": "outsider",
+      "expected": "deny",
+      "status": 403,
+      "code": "no_access",
+      "matched": true,
+      "authoritativeTablesUnchanged": true,
+      "taskMarkerAbsent": true
+    },
+    {
+      "action": "propose",
+      "role": "anonymous",
+      "expected": "deny",
+      "status": 401,
+      "code": "unauthenticated",
+      "matched": true,
+      "authoritativeTablesUnchanged": true,
+      "taskMarkerAbsent": true
+    },
+    {
+      "action": "propose",
+      "role": "revoked",
+      "expected": "deny",
+      "status": 401,
+      "code": "unauthenticated",
+      "matched": true,
+      "authoritativeTablesUnchanged": true,
+      "taskMarkerAbsent": true
+    },
+    {
+      "action": "accept-own",
+      "role": "owner",
+      "expected": "allow",
+      "status": 201,
+      "code": null,
+      "matched": true
+    },
+    {
+      "action": "accept-own",
+      "role": "collaborator",
+      "expected": "allow",
+      "status": 201,
+      "code": null,
+      "matched": true
+    },
+    {
+      "action": "accept-own",
+      "role": "contributor",
+      "expected": "allow",
+      "status": 201,
+      "code": null,
+      "matched": true
+    },
+    {
+      "action": "accept-own",
+      "role": "reviewer",
+      "expected": "deny",
+      "status": 422,
+      "code": "command_rejected",
+      "matched": true,
+      "authoritativeTablesUnchanged": true
+    },
+    {
+      "action": "accept-own",
+      "role": "chat",
+      "expected": "deny",
+      "status": 422,
+      "code": "command_rejected",
+      "matched": true,
+      "authoritativeTablesUnchanged": true
+    },
+    {
+      "action": "accept-own",
+      "role": "guest",
+      "expected": "deny",
+      "status": 422,
+      "code": "command_rejected",
+      "matched": true,
+      "authoritativeTablesUnchanged": true
+    },
+    {
+      "action": "accept-own",
+      "role": "outsider",
+      "expected": "deny",
+      "status": 403,
+      "code": "no_access",
+      "matched": true,
+      "authoritativeTablesUnchanged": true,
+      "taskMarkerAbsent": true
+    },
+    {
+      "action": "accept-own",
+      "role": "anonymous",
+      "expected": "deny",
+      "status": 401,
+      "code": "unauthenticated",
+      "matched": true,
+      "authoritativeTablesUnchanged": true,
+      "taskMarkerAbsent": true
+    },
+    {
+      "action": "accept-own",
+      "role": "revoked",
+      "expected": "deny",
+      "status": 401,
+      "code": "unauthenticated",
+      "matched": true,
+      "authoritativeTablesUnchanged": true,
+      "taskMarkerAbsent": true
+    },
+    {
+      "action": "acquire-contributor",
+      "role": "owner",
+      "expected": "deny",
+      "status": 422,
+      "code": "command_rejected",
+      "matched": true,
+      "authoritativeTablesUnchanged": true
+    },
+    {
+      "action": "acquire-contributor",
+      "role": "collaborator",
+      "expected": "deny",
+      "status": 422,
+      "code": "command_rejected",
+      "matched": true,
+      "authoritativeTablesUnchanged": true
+    },
+    {
+      "action": "acquire-contributor",
+      "role": "contributor",
+      "expected": "allow",
+      "status": 201,
+      "code": null,
+      "matched": true
+    },
+    {
+      "action": "acquire-contributor",
+      "role": "reviewer",
+      "expected": "deny",
+      "status": 422,
+      "code": "command_rejected",
+      "matched": true,
+      "authoritativeTablesUnchanged": true
+    },
+    {
+      "action": "acquire-contributor",
+      "role": "chat",
+      "expected": "deny",
+      "status": 403,
+      "code": "work_claims_not_permitted",
+      "matched": true,
+      "authoritativeTablesUnchanged": true
+    },
+    {
+      "action": "acquire-contributor",
+      "role": "guest",
+      "expected": "deny",
+      "status": 403,
+      "code": "work_claims_not_permitted",
+      "matched": true,
+      "authoritativeTablesUnchanged": true
+    },
+    {
+      "action": "acquire-contributor",
+      "role": "outsider",
+      "expected": "deny",
+      "status": 403,
+      "code": "no_access",
+      "matched": true,
+      "authoritativeTablesUnchanged": true,
+      "taskMarkerAbsent": true
+    },
+    {
+      "action": "acquire-contributor",
+      "role": "anonymous",
+      "expected": "deny",
+      "status": 401,
+      "code": "unauthenticated",
+      "matched": true,
+      "authoritativeTablesUnchanged": true,
+      "taskMarkerAbsent": true
+    },
+    {
+      "action": "acquire-contributor",
+      "role": "revoked",
+      "expected": "deny",
+      "status": 401,
+      "code": "unauthenticated",
+      "matched": true,
+      "authoritativeTablesUnchanged": true,
+      "taskMarkerAbsent": true
+    },
+    {
+      "action": "renew-contributor",
+      "role": "owner",
+      "expected": "deny",
+      "status": 422,
+      "code": "command_rejected",
+      "matched": true,
+      "authoritativeTablesUnchanged": true
+    },
+    {
+      "action": "renew-contributor",
+      "role": "collaborator",
+      "expected": "deny",
+      "status": 422,
+      "code": "command_rejected",
+      "matched": true,
+      "authoritativeTablesUnchanged": true
+    },
+    {
+      "action": "renew-contributor",
+      "role": "contributor",
+      "expected": "allow",
+      "status": 201,
+      "code": null,
+      "matched": true
+    },
+    {
+      "action": "renew-contributor",
+      "role": "reviewer",
+      "expected": "deny",
+      "status": 422,
+      "code": "command_rejected",
+      "matched": true,
+      "authoritativeTablesUnchanged": true
+    },
+    {
+      "action": "renew-contributor",
+      "role": "chat",
+      "expected": "deny",
+      "status": 403,
+      "code": "work_claims_not_permitted",
+      "matched": true,
+      "authoritativeTablesUnchanged": true
+    },
+    {
+      "action": "renew-contributor",
+      "role": "guest",
+      "expected": "deny",
+      "status": 403,
+      "code": "work_claims_not_permitted",
+      "matched": true,
+      "authoritativeTablesUnchanged": true
+    },
+    {
+      "action": "renew-contributor",
+      "role": "outsider",
+      "expected": "deny",
+      "status": 403,
+      "code": "no_access",
+      "matched": true,
+      "authoritativeTablesUnchanged": true,
+      "taskMarkerAbsent": true
+    },
+    {
+      "action": "renew-contributor",
+      "role": "anonymous",
+      "expected": "deny",
+      "status": 401,
+      "code": "unauthenticated",
+      "matched": true,
+      "authoritativeTablesUnchanged": true,
+      "taskMarkerAbsent": true
+    },
+    {
+      "action": "renew-contributor",
+      "role": "revoked",
+      "expected": "deny",
+      "status": 401,
+      "code": "unauthenticated",
+      "matched": true,
+      "authoritativeTablesUnchanged": true,
+      "taskMarkerAbsent": true
+    },
+    {
+      "action": "release-contributor",
+      "role": "owner",
+      "expected": "allow",
+      "status": 201,
+      "code": null,
+      "matched": true
+    },
+    {
+      "action": "release-contributor",
+      "role": "collaborator",
+      "expected": "deny",
+      "status": 422,
+      "code": "command_rejected",
+      "matched": true,
+      "authoritativeTablesUnchanged": true
+    },
+    {
+      "action": "release-contributor",
+      "role": "contributor",
+      "expected": "allow",
+      "status": 201,
+      "code": null,
+      "matched": true
+    },
+    {
+      "action": "release-contributor",
+      "role": "reviewer",
+      "expected": "deny",
+      "status": 422,
+      "code": "command_rejected",
+      "matched": true,
+      "authoritativeTablesUnchanged": true
+    },
+    {
+      "action": "release-contributor",
+      "role": "chat",
+      "expected": "deny",
+      "status": 403,
+      "code": "work_claims_not_permitted",
+      "matched": true,
+      "authoritativeTablesUnchanged": true
+    },
+    {
+      "action": "release-contributor",
+      "role": "guest",
+      "expected": "deny",
+      "status": 403,
+      "code": "work_claims_not_permitted",
+      "matched": true,
+      "authoritativeTablesUnchanged": true
+    },
+    {
+      "action": "release-contributor",
+      "role": "outsider",
+      "expected": "deny",
+      "status": 403,
+      "code": "no_access",
+      "matched": true,
+      "authoritativeTablesUnchanged": true,
+      "taskMarkerAbsent": true
+    },
+    {
+      "action": "release-contributor",
+      "role": "anonymous",
+      "expected": "deny",
+      "status": 401,
+      "code": "unauthenticated",
+      "matched": true,
+      "authoritativeTablesUnchanged": true,
+      "taskMarkerAbsent": true
+    },
+    {
+      "action": "release-contributor",
+      "role": "revoked",
+      "expected": "deny",
+      "status": 401,
+      "code": "unauthenticated",
+      "matched": true,
+      "authoritativeTablesUnchanged": true,
+      "taskMarkerAbsent": true
+    },
+    {
+      "action": "configure",
+      "role": "owner",
+      "expected": "allow",
+      "status": 200,
+      "code": null,
+      "matched": true
+    },
+    {
+      "action": "configure",
+      "role": "collaborator",
+      "expected": "deny",
+      "status": 403,
+      "code": "work_claims_not_permitted",
+      "matched": true,
+      "authoritativeTablesUnchanged": true
+    },
+    {
+      "action": "configure",
+      "role": "contributor",
+      "expected": "deny",
+      "status": 403,
+      "code": "work_claims_not_permitted",
+      "matched": true,
+      "authoritativeTablesUnchanged": true
+    },
+    {
+      "action": "configure",
+      "role": "reviewer",
+      "expected": "deny",
+      "status": 403,
+      "code": "work_claims_not_permitted",
+      "matched": true,
+      "authoritativeTablesUnchanged": true
+    },
+    {
+      "action": "configure",
+      "role": "chat",
+      "expected": "deny",
+      "status": 403,
+      "code": "work_claims_not_permitted",
+      "matched": true,
+      "authoritativeTablesUnchanged": true
+    },
+    {
+      "action": "configure",
+      "role": "guest",
+      "expected": "deny",
+      "status": 403,
+      "code": "work_claims_not_permitted",
+      "matched": true,
+      "authoritativeTablesUnchanged": true
+    },
+    {
+      "action": "configure",
+      "role": "outsider",
+      "expected": "deny",
+      "status": 403,
+      "code": "no_access",
+      "matched": true,
+      "authoritativeTablesUnchanged": true,
+      "taskMarkerAbsent": true
+    },
+    {
+      "action": "configure",
+      "role": "anonymous",
+      "expected": "deny",
+      "status": 401,
+      "code": "unauthenticated",
+      "matched": true,
+      "authoritativeTablesUnchanged": true,
+      "taskMarkerAbsent": true
+    },
+    {
+      "action": "configure",
+      "role": "revoked",
+      "expected": "deny",
+      "status": 401,
+      "code": "unauthenticated",
+      "matched": true,
+      "authoritativeTablesUnchanged": true,
+      "taskMarkerAbsent": true
+    }
+  ],
+  "total": 54,
+  "pass": 54,
+  "allowed": 10,
+  "refused": 44,
+  "finalRecoveryAudit": true,
+  "noLegacyMirrorRows": true,
+  "refusalSnapshotTables": [
+    "rooms",
+    "events",
+    "commands",
+    "work_entities",
+    "work_claims",
+    "current_room_records",
+    "current_room_record_proofs",
+    "current_room_head",
+    "operator_actions",
+    "work_claim_config"
+  ],
+  "scope": "Actual local Node HTTP role/action boundaries on normalized work with model-seeded isolated lifecycle fixtures. Actual agent-room owner, invitation profile joins, identity revocation and share-link join; no full autonomy/delegation matrix, Native, hosted, release or peer-device execution claim."
+}

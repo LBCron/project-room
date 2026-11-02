@@ -60,5 +60,19 @@
     "No automatic consent approval; oauth_provider_codes stays empty until human Allow.",
     "Existing desktop auto-provider/cancel validation unchanged. Generic continuation requires explicit successful provider marker; Google callback supplies google=signed-in.",
     "Root regenerates candidate manifest and publishes."
-  ]
+  ],
+  "finalManifest": {
+    "schema": 44,
+    "onlyChangedAsset": "src/app.js",
+    "candidateManifestTests": {
+      "exit": 0,
+      "pass": 8,
+      "skip": 0
+    },
+    "ciModeCheck": {
+      "exit": 0,
+      "nodeSuite": "explicitly skipped in CI; dedicated jobs own it"
+    },
+    "checkLogSha256": "92656c64510e7697b2632cdfd63a352008f6d5e8db9d4899394ca7b9895277c5"
+  }
 }

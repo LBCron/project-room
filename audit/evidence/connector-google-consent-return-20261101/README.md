@@ -9,3 +9,5 @@ Original app with final functional fixture fails waiting for `/oauth/authorize` 
 The initial broader generic-return change caused retained invalid/generic failed-provider retry behavior to navigate; narrowed to successful provider return, preserving previous desktop continuation. First fixture setup attempts lacked HTTPS resource and sponsor permissions/identity; these were fixture corrections, not production policy changes. Original final-fixture red is preserved separately from those setup failures. Registration gate initially correctly rejected a missing measured duration; the real six-journey local measurement is now registered without exemption.
 
 Compressed logs preserve original bytes; receipt lists uncompressed hashes. This is synthetic-provider browser qualification, not Claude cloud/live deployment proof. Root owns publication and manifest regeneration.
+
+Final manifest regenerated through existing generator: schema44,177 assets,9 deployment files, only app.js asset digest changes. Eight manifest tests pass. CI=1 npm run check exits0; full Node suite explicitly skipped by existing CI contract. No source/runtime changes during final gates.

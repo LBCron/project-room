@@ -775,7 +775,7 @@ export class AccessRequests {
   // AgentIdentities.link() path as the manual owner flow.
   decide(token, roomId, requestId, { decision, permissions, note } = {}, expectedSessionBinding = null) {
     if (!DECISIONS.includes(decision)) fail(422, "invalid_request", "decision must be 'approve' or 'deny'");
-    const { auth } = this.#requireMembershipAdministration(token, roomId, expectedSessionBinding);
+    const { auth, authority } = this.#requireMembershipAdministration(token, roomId, expectedSessionBinding);
     // Deciding access requests is a membership write: the read-only autonomy
     // tier applies even when the agent holds manage_members (issue #996).
     enforceAutonomyTierForAction({ db: this.db, roomId, state: accessRoom(this.store, roomId).state, actor: auth.member, action: "access_decide", fail });

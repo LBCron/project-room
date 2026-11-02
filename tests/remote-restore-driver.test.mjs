@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import {createServer} from 'node:http';
 import {execFile} from 'node:child_process';
 import {promisify} from 'node:util';
-import {mkdtempSync,readFileSync,writeFileSync,statSync,rmSync} from 'node:fs';
+import {mkdtempSync,readFileSync,writeFileSync,statSync,rmSync,unlinkSync} from 'node:fs';
 import {tmpdir} from 'node:os';
 import {join} from 'node:path';
 import {fileURLToPath} from 'node:url';
@@ -21,7 +21,7 @@ async function setup(t,handle){
  await new Promise(resolve=>server.listen(0,'127.0.0.1',resolve));t.after(()=>{server.closeAllConnections();server.close();rmSync(dir,{recursive:true,force:true});});
  const origin='http://127.0.0.1:'+server.address().port;
  const args=['--continue-receipt',receipt,'--origin',origin,'--checkpoint',checkpoint];
- const run=async extra=>{try{const result=await exec(process.execPath,[script,...args,...(extra??[])],{env:{...process.env,ROOM_RESTORE_TOKEN:token},timeout:10000});return{code:0,...result};}catch(error){return{code:error.code,stdout:error.stdout,stderr:error.stderr};}};
+ const run=async extra=>{try{const result=await exec(process.execPath,[script,...args,...(extra??[])],{env:{...process.env,ROOM_RESTORE_TOKEN:token},timeout:30000});return{code:0,...result};}catch(error){return{code:error.code,stdout:error.stdout,stderr:error.stderr};}};
  return{run,posts,checkpoint,args,receipt,origin};
 }
 const send=(res,body)=>{res.writeHead(body.pending||!body.cleanupComplete&&body.cleanup?202:200,{'content-type':'application/json'});res.end(JSON.stringify(body));};
@@ -51,7 +51,7 @@ test('remote mode refuses local restore options',async()=>{
  await assert.rejects(exec(process.execPath,[script,'--continue-receipt','unused','--origin','https://room.example','--checkpoint','unused','--to','must-not-create'],{env:{...process.env,ROOM_RESTORE_TOKEN:token}}),error=>error.code===1&&/remote_restore_invalid_options/.test(error.stderr));
 });
 
-test('process death after durable send restarts exact body and reconciles only dead local lock',async t=>{
+test('process death blocks simultaneous restarts until explicit lock reconciliation',async t=>{
  let first=true,child;
  const f=await setup(t,({res,input})=>{
    if(first){first=false;child.kill('SIGKILL');res.destroy();return;}
@@ -61,6 +61,11 @@ test('process death after durable send restarts exact body and reconciles only d
  child=execFile(process.execPath,[script,...f.args],{env:{...process.env,ROOM_RESTORE_TOKEN:token}},()=>{});
  const signal=await new Promise(resolve=>child.once('exit',(_code,signal)=>resolve(signal)));
  assert.equal(signal,'SIGKILL');assert.equal(JSON.parse(readFileSync(f.checkpoint,'utf8')).pending.body,f.posts[0]);
+ const lockBefore=readFileSync(f.checkpoint+'.lock','utf8');const blocked=await Promise.all([f.run(),f.run()]);
+ assert.ok(blocked.every(r=>r.code===1&&/checkpoint_locked/.test(r.stderr)));assert.equal(f.posts.length,1);
+ assert.equal(readFileSync(f.checkpoint+'.lock','utf8'),lockBefore);
+ // Explicit operator reconciliation after the owner exited and both other drivers stopped.
+ unlinkSync(f.checkpoint+'.lock');
  const result=await f.run();assert.equal(result.code,0,result.stderr);assert.equal(f.posts[0],f.posts[1]);
 });
 
@@ -72,4 +77,25 @@ test('pending HTTP200 and a false cleanup zero proof cannot complete',async t=>{
  let result=await f.run();assert.equal(result.code,1);assert.match(result.stderr,/invalid_response_status/);
  mode='zero';result=await f.run();assert.equal(result.code,1);assert.match(result.stderr,/invalid_cleanup_progress|missing_zero_proof/);
  assert.equal(f.posts[0],f.posts[1]);
+});
+for(const at of [0,1])test(`cleanup batch ${at} lost ACK resumes latest checkpoint instead of publication rev0`,async t=>{
+ let lost=false;const replies=new Map();
+ const f=await setup(t,({req,res,input,body})=>{
+   let reply=replies.get(input.requestId);
+   if(!reply){reply=input.cleanup?cleaned(input.expectedRevision===1):input.expectedRevision===1?coverage:publication;replies.set(input.requestId,reply);}
+   if(input.cleanup&&input.expectedRevision===at&&!lost){lost=true;req.socket.destroy();return;}
+   send(res,reply);
+ });
+ assert.equal((await f.run()).code,1);
+ const pending=JSON.parse(readFileSync(f.checkpoint,'utf8')).pending.body;
+ assert.equal(JSON.parse(pending).expectedRevision,at);assert.equal(JSON.parse(pending).cleanup,true);
+ const count=f.posts.length;const done=await f.run();assert.equal(done.code,0,done.stderr);assert.equal(f.posts[count],pending);
+});
+test('more than400 progressing receipts complete without a fixed step cap',async t=>{
+ const f=await setup(t,({res,input})=>{
+   if(input.cleanup)return send(res,cleaned(input.expectedRevision===1));
+   if(input.expectedRevision>501)return send(res,publication);
+   const revision=input.expectedRevision+1;send(res,{...coverage,revision,progress:{...coverage.progress,rows:revision-1,bytes:(revision-1)*10}});
+ });
+ const result=await f.run();assert.equal(result.code,0,result.stderr);assert.ok(JSON.parse(result.stdout).requests>500);
 });

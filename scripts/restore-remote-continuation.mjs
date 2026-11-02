@@ -27,13 +27,11 @@ function save(path, value) {
 }
 function lock(path) {
   const name = path + '.lock';
-  if (existsSync(name)) {
-    let owner;try { owner = JSON.parse(privateFile(name)); } catch { fail('checkpoint_locked'); }
-    if (owner.host !== hostname() || !Number.isSafeInteger(owner.pid) || owner.pid <= 0) fail('checkpoint_locked');
-    try { process.kill(owner.pid, 0); fail('checkpoint_locked'); } catch (error) { if (error.code !== 'ESRCH') throw error; }
-    unlinkSync(name);
-  }
-  const fd = openSync(name, 'wx', 0o600);writeFileSync(fd, JSON.stringify({pid:process.pid,host:hostname()}));closeSync(fd);
+  let fd;try { fd=openSync(name, 'wx', 0o600); } catch(error) { if(error.code==='EEXIST')fail('checkpoint_locked');throw error; }
+  try { writeFileSync(fd, JSON.stringify({pid:process.pid,host:hostname()}));fsyncSync(fd); } finally { closeSync(fd); }
+  // Never steal a stale lock: a second restart could otherwise remove a new
+  // owner's lock between observation and unlink. Operator reconciliation is
+  // explicit and preserves the durable request checkpoint.
   return () => unlinkSync(name);
 }
 function binding(value) {

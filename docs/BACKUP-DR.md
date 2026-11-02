@@ -136,8 +136,21 @@ others. The script atomically writes and fsyncs a mode0600 checkpoint containing
 the exact request before sending it. After an interrupted response or process
 restart, rerun the **same command with the same initial receipt and checkpoint**;
 the saved requestId and body are reused. A live lock refuses concurrent drivers;
-a dead local process lock can be reconciled, while unknown/other-host locks fail
-closed. Preserve checkpoint files until the operation is reconciled.
+all existing locks (including stale ones) fail closed. After a process crash,
+stop other continuation drivers and inspect the private `.lock` file's host/PID.
+Only after verifying the owner is no longer running and no driver is acquiring
+the checkpoint may the operator remove that **lock file alone** and rerun the
+same command. Never delete the durable checkpoint to bypass a lock. The script
+does not automatically steal locks, because simultaneous recovery attempts
+could otherwise erase a live owner's lock. Preserve checkpoint files until the
+operation is reconciled.
+
+After multiple cleanup acknowledgements, the original immutable publication
+receipt still names cleanup revision0; it cannot recover the current cleanup
+cursor by itself. The original receipt **and its durable checkpoint** are needed.
+If that checkpoint is lost, starting a fresh one from the old publication receipt
+fails409 safely; stop and reconcile operator progress rather than restarting the
+restore or manufacturing a new revision.
 
 Verified data publication is separate from guard cleanup. The driver follows
 only the exact `nextCleanup.body` template, including HTTP202 maintenance

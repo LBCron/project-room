@@ -9,7 +9,9 @@ export function validateRecoveryMemberNames(c){if(!c||Object.keys(c).sort().join
 // the same durable transaction as the returned census cursor.
 export function advanceRecoveryMemberNames(read,incoming,memberCount,previous,{maxUnits=32}={}){
  validateRecoveryMemberNames(previous);if(typeof read!=='function'||!Number.isInteger(maxUnits)||maxUnits<1||maxUnits>128||previous.source!==binding(incoming)||previous.members!==memberCount||!['member.added','member.joined_via_invitation'].includes(incoming.type)||![1,2].includes(incoming.data?.displayNamePolicyVersion))fail();
- const c={...previous},options={firstWordRule:incoming.data.displayNamePolicyVersion>=2};let units=0;
+ const c = {...previous};
+ const options = { firstWordRule: incoming.data.displayNamePolicyVersion >= 2 };
+ let units=0;
  // Original invalid-name behavior is intentionally retained: this assertion
  // owns admission reasons, while the caller retains empty/length validation.
  assertMemberDisplayNameAvailable(incoming.data.displayName,[],options);

@@ -154,7 +154,7 @@ for (const [version, baseline] of [[8, v8ConnectionBaseline], [9, v9TextBaseline
   assert.deepEqual(auditRecovery(current).tables.filter(comparable), before.tables.filter(comparable));
   assert.deepEqual(current.email.verify(), version >= 18 ? { connections: 1, folders: 1, sources: 1 } : { connections: 0, folders: 0, sources: 0 });
   assert.equal(current.authenticate(f.keys.agent).member.id, "agent");
-  assert.throws(() => cached.run(f.owner.session.account.id), /project_room_writer_v44|unsupported database writer/);
+  assert.throws(() => cached.run(f.owner.session.account.id), new RegExp(`project_room_writer_v${STORE_SCHEMA_VERSION}|unsupported database writer`));
   assert.throws(() => new OldStore(f.filename), /newer than this service/);
   current.createAccount("after-v36-upgrade");
   assert.equal(current.account("after-v36-upgrade").active, true);

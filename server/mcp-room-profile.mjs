@@ -416,6 +416,7 @@ export function listRoomWork(store, secret, args) {
   }, args.query);
   let work = (matches?.work ?? candidates.map(item => ({ item }))).map(({ item, excerpt }) => ({
     ...workRecord(item, now),
+    nextRead: { tool: "room_read_work", arguments: { workItemId: item.id, ...(help ? { includeOffers: true } : {}) } },
     ...(excerpt === undefined ? {} : { excerpt })
   }));
   let sort = null;

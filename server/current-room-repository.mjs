@@ -680,12 +680,40 @@ export function currentThreadParticipants(db,roomId,rootId) {
 
 export function readCurrentWorkItem(db,roomId,id,b=contextBudgets.get(db)??budget()) {
   const head=readCurrentHead(db,roomId,b);if(!head)return null;
+  return readCurrentWorkFromVerifiedHead(db,roomId,id,b);
+}
+function readCurrentWorkFromVerifiedHead(db,roomId,id,b) {
   const ref=readCurrentRecord(db,roomId,'workItems',id,b);if(ref===undefined)return null;
   const scalar=db.prepare('SELECT length(CAST(body AS BLOB)) AS bytes FROM work_entities WHERE room_id=? AND work_id=?').get(roomId,id);
   if(!scalar||scalar.bytes>MAX_RECORD)corrupt('missing or oversized work payload');charge(b,scalar.bytes+256);
   const row=db.prepare('SELECT revision,digest,body FROM work_entities WHERE room_id=? AND work_id=?').get(roomId,id);
   if(ref._workEntity!==1||ref.id!==id||ref.revision!==row.revision||ref.digest!==row.digest||hash(row.body)!==ref.digest)corrupt('work reference changed');
   const item=JSON.parse(row.body);if(item.id!==id||item.revision!==ref.revision)corrupt('work identity changed');return item;
+}
+
+// One synchronous, consistent head/schema snapshot for a complete work fold.
+// Each addressed item keeps the original fresh input budget and independent
+// reference/body proofs. Only four immutable receipts may be shared in this TX.
+export function withCurrentWorkReadUnits(store,roomId,operation) {
+  const db=store.db;
+  if(!db.isTransaction)throw Error('Current work units require an existing transaction');
+  const receipts=new Map(),initial={...budget(),auditReceipts:receipts};
+  const head=readCurrentHead(db,roomId,initial);
+  if(!head)refuse('Current work units require a normalized room');
+  const expectedHead=head.head_sha256,verifiedHead=Object.freeze({...head,counts:Object.freeze({...head.counts})});
+  let active=true;
+  const assertActive=()=>{if(!active||!db.isTransaction)throw Error('Current work unit scope expired');};
+  try {
+    const result=operation({head:verifiedHead,work:id=>{
+      assertActive();
+      return readCurrentWorkFromVerifiedHead(db,roomId,id,{...budget(),schemaVerified:true,auditReceipts:receipts});
+    }});
+    if(result?.then)throw Error('Current work units must remain synchronous');
+    assertActive();
+    const final=readCurrentHead(db,roomId,{...budget(),auditReceipts:receipts});
+    if(!final||final.head_sha256!==expectedHead)corrupt('work read head changed during fold');
+    return result;
+  } finally {active=false;receipts.clear();}
 }
 
 // Three separately indexed visibility streams avoid scanning private history

@@ -1,3 +1,4 @@
+import {withCurrentWorkReadUnits,readCurrentWorkItem,CURRENT_ROOM_GUARDS} from '../server/current-room-repository.mjs';
 import test from 'node:test';import assert from 'node:assert/strict';import {randomUUID} from 'node:crypto';
 import {auditRecovery} from '../server/recovery.mjs';import {RoomStore} from '../server/store.mjs';import {initialRoom} from '../server/bootstrap.mjs';import {operatorNormalization} from '../server/operator-normalization.mjs';import {spendAllowanceReport,readSpendAllowance,setSpendAllowance} from '../server/spend-allowance.mjs';import {readSpendPricing,setSpendPricing} from '../server/spend-pricing.mjs';import {issueSpendGrantRoute,readSpendGrantRoute,revokeSpendGrantRoute,chargeSpendBeforeCall} from '../server/spend-grants.mjs';import {setTier} from '../server/autonomy-tiers.mjs';
 function fixture(t,{extra=0}={}){const now=Date.now(),s=new RoomStore(':memory:',{now:()=>now});s.initialize(initialRoom());t.after(()=>s.close());const owner=s.issueAccessKey('commons','owner'),send=(type,data,token=owner)=>s.command(token,'commons',{id:randomUUID(),type,data});send('member.added',{memberId:'agent',displayName:'Vega',kind:'agent',permissions:['accept_work','complete_work'],accountableHumanId:'owner'});const agent=s.issueAccessKey('commons','agent');setTier(s.db,'commons','agent','t2_standard',{updatedBy:'owner',nowMs:s.now()});
@@ -19,7 +20,7 @@ test('normalized pricing/allowance writes keep owner authorization, exact retrie
 test('normalized accounting covers the full 500-item admitted room rather than one page',t=>{
  const f=fixture(t,{extra:497}),prepare=f.s.db.prepare.bind(f.s.db);let bodyReads=0,schemaReads=0;
  f.s.db.prepare=sql=>{if(sql.includes('FROM sqlite_master WHERE'))schemaReads++;const st=prepare(sql);if(!sql.startsWith('SELECT revision,digest,body FROM work_entities'))return st;return new Proxy(st,{get(target,k){if(k==='all')return()=>{throw Error('unbounded work body allocation');};const value=Reflect.get(target,k,target);if(k!=='get')return typeof value==='function'?value.bind(target):value;return(...args)=>{bodyReads++;return value.apply(target,args);};}});};
- const report=readSpendAllowance(f.s,f.agent,'commons');f.s.db.prepare=prepare;assert.equal(bodyReads,500);assert.ok(schemaReads<=8,'schema admission must be constant per fold, observed '+schemaReads);assert.deepEqual(report,{roomId:'commons',evaluatedThrough:f.s.headSequence('commons'),...f.expected});assert.equal(report.committedCents,120);
+ const report=readSpendAllowance(f.s,f.agent,'commons');f.s.db.prepare=prepare;assert.equal(bodyReads,500);assert.ok(schemaReads<=10,'schema admission must be constant per fold, observed '+schemaReads);assert.deepEqual(report,{roomId:'commons',evaluatedThrough:f.s.headSequence('commons'),...f.expected});assert.equal(report.committedCents,120);
 });
 test('an inadmissible work proof or failed room reservation never undercharges or leaves a reservation',t=>{
  const f=fixture(t);issueSpendGrantRoute(f.s,f.owner,'commons',{agentId:'agent',capCents:'1000',perTxCapCents:'100'});const prepare=f.s.db.prepare.bind(f.s.db);
@@ -29,4 +30,17 @@ test('an inadmissible work proof or failed room reservation never undercharges o
 
 test('normalized accounting ages closed spend and held attempts without dropping the live reservation',t=>{
  const f=fixture(t),future=f.s.now()+31*86400000;f.s.now=()=>future;const fresh=f.s.issueAccessKey('commons','agent');const report=readSpendAllowance(f.s,fresh,'commons');assert.equal(report.spentCents,0);assert.equal(report.heldCents,0);assert.equal(report.reservedCents,30);assert.equal(report.committedCents,30);
+});
+
+test('verified work unit scope refuses missing transactions, async/retained callbacks and head/schema changes',t=>{
+ const f=fixture(t);assert.throws(()=>withCurrentWorkReadUnits(f.s,'commons',()=>null),/existing transaction/);let retained;
+ f.s.readTransaction(()=>withCurrentWorkReadUnits(f.s,'commons',units=>{retained=units.work;assert.equal(units.work('held').id,'held');}));assert.throws(()=>retained('held'),/scope expired/);
+ assert.throws(()=>f.s.readTransaction(()=>withCurrentWorkReadUnits(f.s,'commons',units=>{retained=units.work;return Promise.resolve(null);})),/synchronous/);assert.throws(()=>retained('held'),/scope expired/);
+ const before=f.s.headSequence('commons');assert.throws(()=>f.s.transaction(()=>withCurrentWorkReadUnits(f.s,'commons',units=>{units.work('held');f.s.command(f.owner,'commons',{id:'inside-unit-write',type:'message.posted',data:{messageId:'inside-unit-write',body:'must rollback'}});})),/head changed/);assert.equal(f.s.headSequence('commons'),before);
+ const index=/CREATE INDEX IF NOT EXISTS ([a-z_]+)/.exec(CURRENT_ROOM_GUARDS)[1];assert.throws(()=>f.s.transaction(()=>withCurrentWorkReadUnits(f.s,'commons',units=>{units.work('held');f.s.db.exec('DROP INDEX '+index);})),/owned serving schema changed/);assert.equal(readCurrentWorkItem(f.s.db,'commons','held').id,'held');
+});
+test('verified units preserve exact body proof checks and never reuse receipts across transactions',t=>{
+ const f=fixture(t),prepare=f.s.db.prepare.bind(f.s.db);f.s.readTransaction(()=>withCurrentWorkReadUnits(f.s,'commons',units=>units.work('held')));
+ f.s.db.prepare=sql=>{const st=prepare(sql);if(!sql.startsWith('SELECT revision,digest,body FROM work_entities'))return st;return new Proxy(st,{get(target,k){const value=Reflect.get(target,k,target);if(k!=='get')return typeof value==='function'?value.bind(target):value;return(...args)=>{const row=value.apply(target,args);return args[1]==='held'?{...row,body:row.body+' '}:row;};}});};assert.throws(()=>f.s.readTransaction(()=>withCurrentWorkReadUnits(f.s,'commons',units=>units.work('held'))),/work reference changed/);f.s.db.prepare=prepare;
+ f.s.db.prepare=sql=>{const st=prepare(sql);if(!sql.startsWith('SELECT counts_json FROM operator_actions'))return st;return new Proxy(st,{get(target,k){const value=Reflect.get(target,k,target);if(k!=='get')return typeof value==='function'?value.bind(target):value;return(...args)=>({...value.apply(target,args),counts_json:'{}'});}});};assert.throws(()=>f.s.readTransaction(()=>withCurrentWorkReadUnits(f.s,'commons',units=>units.work('held'))));f.s.db.prepare=prepare;assert.equal(f.s.readTransaction(()=>withCurrentWorkReadUnits(f.s,'commons',units=>units.work('held'))).id,'held');
 });

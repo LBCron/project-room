@@ -1,0 +1,77 @@
+{
+  "source": "a599faa29ff65567e5c080609cb2d000acd33666",
+  "intervention": "Fixture-only initialization option interception; no runtime/UI source edits",
+  "interventions": [
+    {
+      "kind": "human",
+      "requested": "normalized-current-v1",
+      "used": "legacy"
+    },
+    {
+      "kind": "human",
+      "requested": "normalized-current-v1",
+      "used": "legacy"
+    }
+  ],
+  "node": "v24.22.1",
+  "browser": "Installed Chromium via Playwright",
+  "observations": [
+    {
+      "viewport": "desktop",
+      "width": 1280,
+      "signupStatus": 202,
+      "observedRepresentation": "legacy",
+      "explicitAssistantUnavailable": false,
+      "assistantSetupVisible": true,
+      "assistantRowVisible": false,
+      "assistantUnavailableExplanationPatternMatchedInSettings": false,
+      "plainRoomAddressedMessageVisible": true,
+      "setupDialogReachable": true,
+      "setupLabel": "Connect",
+      "setupChoices": 1,
+      "setupEligibleChoices": 0,
+      "explicitReadHorizonPostStatus": 200,
+      "explicitReadHorizonPositionSurvivesReload": true,
+      "readHorizonProofMode": "Explicit context HTTP, not automatic page request",
+      "updatesUnavailableNoticeVisible": false,
+      "reloadKeepsSameRoomMessageAndConnect": true,
+      "readHorizonStatuses": [],
+      "pageErrors": [],
+      "blockedExternalRequests": 0,
+      "screenshots": [
+        "desktop-settings.png",
+        "desktop-setup.png",
+        "desktop-updates.png"
+      ]
+    },
+    {
+      "viewport": "phone",
+      "width": 390,
+      "signupStatus": 202,
+      "observedRepresentation": "legacy",
+      "explicitAssistantUnavailable": false,
+      "assistantSetupVisible": true,
+      "assistantRowVisible": false,
+      "assistantUnavailableExplanationPatternMatchedInSettings": false,
+      "plainRoomAddressedMessageVisible": true,
+      "setupDialogReachable": true,
+      "setupLabel": "Connect",
+      "setupChoices": 1,
+      "setupEligibleChoices": 0,
+      "explicitReadHorizonPostStatus": 200,
+      "explicitReadHorizonPositionSurvivesReload": true,
+      "readHorizonProofMode": "Explicit context HTTP, not automatic page request",
+      "updatesUnavailableNoticeVisible": false,
+      "reloadKeepsSameRoomMessageAndConnect": true,
+      "readHorizonStatuses": [],
+      "pageErrors": [],
+      "blockedExternalRequests": 0,
+      "screenshots": [
+        "phone-settings.png",
+        "phone-setup.png",
+        "phone-updates.png"
+      ]
+    }
+  ],
+  "scope": "Rendered local default self-host signup without configured mailer/provider, disposable data, outside network blocked. Narrow rendered legacy-initializer intervention only; no chosen patch, product approval, configured host execution, Native, migration/restore/performance, release or peer-device proof. A reachable Connect is not a connected assistant."
+}

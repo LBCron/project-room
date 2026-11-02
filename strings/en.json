@@ -1,4 +1,5 @@
 {
+  "agent.existing.separate": "Create a separate agent",
   "request.timedOut": "The request timed out before confirmation. Please try again.",
   "_meta": {
     "locale": "en",

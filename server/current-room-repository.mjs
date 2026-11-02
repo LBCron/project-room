@@ -369,7 +369,7 @@ export function initializeCurrentRoom(store,state,events,{adoptExisting=null}={}
       const insert=db.prepare('INSERT INTO events VALUES(?,?,?,?)');
       events.forEach((event,index)=>{insert.run(roomId,index+1,event.id,JSON.stringify(event));syncMessageRows(db,{roomId,sequence:index+1,event,state});});
     }
-    const messageRows=adoptExisting?materializeCurrentMessageRows(db,roomId,state):db.prepare('SELECT * FROM messages WHERE room_id=? ORDER BY seq,message_id').all(roomId);
+    const messageRows=adoptExisting?materializeCurrentMessageRows(db,roomId,state,{adoptAbsentInlineProofs:adoptExisting.adoptAbsentInlineProofs===true}):db.prepare('SELECT * FROM messages WHERE room_id=? ORDER BY seq,message_id').all(roomId);
     const rowById=new Map(messageRows.map(row=>[row.message_id,row]));
     for(const row of messageRows)if(!messageProofMatches(row))corrupt('initial canonical proof changed');
     if(messageRows.length!==state.messages.length+(state.messagesArchive?.count??0))corrupt('initial canonical membership differs');

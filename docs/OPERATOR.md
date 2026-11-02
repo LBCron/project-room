@@ -39,6 +39,15 @@ When explicitly selected, `discardLegacyAssignments: true` removes only this roo
 legacy `work_claims`, `work_claim_history` and `collab_assignments`. Review their
 counts in the plan. It does not complete or delete canonical tasks.
 
+Legacy inline rooms may explicitly select `adoptAbsentInlineProofs: true` in both
+plan and execute. The plan binds this intent and reports canonical message and
+missing-proof counts. This mode can adopt only a SQL NULL proof where independently
+protected inline state, verified body references, every persisted message field
+and the original indexed posting event agree. It refuses conflicting proofs,
+shadowed JSON keys and missing proofs justified only by an entity reference or
+archive membership. It does not certify historical replay. Omit the option to
+retain the ordinary strict refusal; a missing proof is not silently repaired.
+
 Publication and its receipt commit in one transaction. A save failure rolls back.
 After a lost response, resend the exact original execute body and request ID;
 the saved receipt returns with `duplicate: true`. A changed head or assignment

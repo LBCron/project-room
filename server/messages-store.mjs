@@ -1,7 +1,7 @@
 import {isCurrentRoom,readCurrentHead,withCurrentReadContext} from './current-room-repository.mjs';
 import {ServiceError} from './service-error.mjs';
 import { savedHistoricalReplayCheckpoint, SavedHistoricalReplayError } from './historical-replay-contract.mjs';
-import { assertMessageWrite, recordMessageWrite, servingProofDrift, messageProofMatches, MESSAGE_PROOF_SELECT, MESSAGE_PROOF_FIELDS } from './write-integrity.mjs';
+import { assertMessageWrite, recordMessageWrite, servingProofDrift, messageProofMatches, projectionDigest, assertProjectionWrite, MESSAGE_PROOF_SELECT, MESSAGE_PROOF_FIELDS } from './write-integrity.mjs';
 import { writeMessageReplaySnapshot, discardMessageReplaySnapshot, decodeMessageReplaySnapshot } from './message-replay-snapshot.mjs';
 import { hydrateProjection, storedProjection } from "./projection-at-rest.mjs";
 import { hasMessageAuthority } from './message-authority.mjs';
@@ -1906,34 +1906,78 @@ export function archivedMessageCommandContext(store, roomId, room, messageId, { 
 }
 
 
+const adoptionProofFailure = kind => { throw Error('normalization_' + kind); };
+function adoptionPostingSequence(db, roomId, message, byId, sequence) {
+  if(sequence===undefined){
+    sequence=db.prepare(`SELECT sequence FROM events INDEXED BY current_redaction_message_events WHERE room_id=? AND CASE WHEN json_type(body,'$.data.messageId')='text' AND json_extract(body,'$.data.messageId')<>'' THEN json_extract(body,'$.data.messageId') ELSE id END=? AND json_extract(body,'$.type')='message.posted' ORDER BY sequence LIMIT 1`).get(roomId,message.id)?.sequence;
+  }
+  if(sequence===undefined && message.id.endsWith(':channel')){
+    const parentId=message.id.slice(0,-':channel'.length);
+    const origin=db.prepare(`SELECT sequence,body FROM events INDEXED BY current_redaction_message_events WHERE room_id=? AND CASE WHEN json_type(body,'$.data.messageId')='text' AND json_extract(body,'$.data.messageId')<>'' THEN json_extract(body,'$.data.messageId') ELSE id END=? AND json_extract(body,'$.type')='message.posted' ORDER BY sequence LIMIT 1`).get(roomId,parentId);
+    const posted=origin?JSON.parse(origin.body):null,parent=byId.get(parentId);
+    if(!createsChannelCopy(posted,message.id)||!parent||message.authorId!==posted.actorId||message.createdAt!==posted.at
+    ||messageChannelId(message)!==messageChannelId(parent)||message.replyToId||message.toMemberId||message.workItemId
+    ||!message.editedAt&&!message.deletedAt&&!isDeepStrictEqual(message.body,posted.data.body))throw Error('Invalid derived channel copy posting binding');
+    sequence=origin.sequence;
+  }
+  if(!Number.isSafeInteger(sequence)||sequence<1)throw Error('Missing original message posting sequence');
+  return sequence;
+}
+function independentInlineProofBasis(db, roomId, state) {
+  assertProjectionWrite(db,roomId);
+  const source=db.prepare('SELECT projection FROM rooms WHERE id=?').get(roomId),proof=db.prepare('SELECT metadata_hash FROM integrity_room_state WHERE room_id=?').get(roomId);
+  if(!source||!proof?.metadata_hash||projectionDigest(source.projection)!==proof.metadata_hash)adoptionProofFailure('absent_proof_source_unavailable');
+  if(!db.prepare('SELECT json_valid(?) ok').get(source.projection).ok
+    ||db.prepare('SELECT 1 FROM json_tree(?) WHERE key IS NOT NULL GROUP BY parent,key HAVING count(*)>1 LIMIT 1').get(source.projection))adoptionProofFailure('absent_proof_source_unavailable');
+  const raw=JSON.parse(source.projection);
+  if(raw.room?.id!==roomId||Object.hasOwn(raw,'messageAuthority')||!Array.isArray(raw.messages)
+    ||raw.messages.some(message=>!message||typeof message!=='object'||Array.isArray(message)||Object.hasOwn(message,'_entity')))adoptionProofFailure('absent_proof_source_unavailable');
+  const hydrated=hydrateProjection(db,roomId,raw,{verifyBodyHashes:true,workEntities:false});
+  if(hydrated.missing.length||!isDeepStrictEqual(hydrated.state.messages,state.messages))adoptionProofFailure('absent_proof_source_unavailable');
+  const messages=new Map(hydrated.state.messages.map(message=>[message.id,message]));
+  if(messages.size!==hydrated.state.messages.length)adoptionProofFailure('absent_proof_source_unavailable');
+  return {messages,pins:new Set((raw.pins??[]).map(pin=>pin.messageId))};
+}
+function exactAbsentMessageFields(db,row,message,context){
+  const expected=messageRowForWrite(message,context);
+  return MESSAGE_PROOF_FIELDS.every(field=>{
+    if(!['record_json','reducer_extras_json'].includes(field))return row[field]===expected[field];
+    if(typeof row[field]!=='string'||!db.prepare('SELECT json_valid(?) ok').get(row[field]).ok
+      ||db.prepare('SELECT 1 FROM json_tree(?) WHERE key IS NOT NULL GROUP BY parent,key HAVING count(*)>1 LIMIT 1').get(row[field]))return false;
+    return isDeepStrictEqual(JSON.parse(row[field]),JSON.parse(expected[field]));
+  });
+}
+
 // Explicit operator one-time adoption: reuse proved canonical rows, materialize
 // only missing/stale retained rows through the existing code-owned writer.
-export function materializeCurrentMessageRows(db,roomId,state) {
+export function materializeCurrentMessageRows(db,roomId,state,{adoptAbsentInlineProofs=false}={}) {
   const rows=db.prepare('SELECT * FROM messages WHERE room_id=?').all(roomId),existing=new Map(rows.map(row=>[row.message_id,row]));
   const byId=new Map([...rows.map(row=>[row.message_id,{id:row.message_id,replyToId:row.reply_to_id,channelId:row.channel_id}]),...state.messages.map(message=>[message.id,message])]);
-  const pinned=new Set((state.pins??[]).map(pin=>pin.messageId)),sequences=new Map();
+  const pinned=new Set((state.pins??[]).map(pin=>pin.messageId)),sequences=new Map(),absent=[];
+  // Validate every persisted row before any materialization, including archived
+  // rows. A missing proof must never authorize its own row or a corrupt neighbor.
+  for(const row of rows)if(!messageProofMatches(row)){
+    if(row.entity_hash!==null)adoptionProofFailure('message_proof_mismatch');
+    absent.push(row);
+  }
+  if(absent.length&&!adoptAbsentInlineProofs)adoptionProofFailure('message_proof_missing');
+  const basis=absent.length?independentInlineProofBasis(db,roomId,state):null;
+  for(const row of absent){
+    const message=basis.messages.get(row.message_id);
+    if(!message)adoptionProofFailure('absent_proof_source_unavailable');
+    // Resolve from the posting journal, not this unproved row's sequence.
+    const sequence=adoptionPostingSequence(db,roomId,message,byId,undefined);
+    if(!exactAbsentMessageFields(db,row,message,{sequence,pinned:basis.pins.has(message.id),threadMessages:byId}))adoptionProofFailure('absent_proof_fields_mismatch');
+    sequences.set(message.id,sequence);
+  }
   for(const message of state.messages){
     const row=existing.get(message.id);
-    if(row&&!messageProofMatches(row))throw Error('projection_corrupt: canonical adoption message proof differs');
+    if(sequences.has(message.id))continue;
     // Legacy erasure may intentionally clear extras to SQL NULL. Current readers
     // require the reducer's explicit erased history, so materialize that selected
     // current value through the existing writer instead of reusing the row.
     if(row&&typeof row.reducer_extras_json==='string'&&!messageRowParityFields(row,message,{sequence:row.seq,pinned:pinned.has(message.id),threadMessages:byId}).length)continue;
-    let sequence=row?.seq;
-    if(sequence===undefined){
-      sequence=db.prepare(`SELECT sequence FROM events INDEXED BY current_redaction_message_events WHERE room_id=? AND CASE WHEN json_type(body,'$.data.messageId')='text' AND json_extract(body,'$.data.messageId')<>'' THEN json_extract(body,'$.data.messageId') ELSE id END=? AND json_extract(body,'$.type')='message.posted' ORDER BY sequence LIMIT 1`).get(roomId,message.id)?.sequence;
-    }
-    if(sequence===undefined && message.id.endsWith(':channel')){
-      const parentId=message.id.slice(0,-':channel'.length);
-      const origin=db.prepare(`SELECT sequence,body FROM events INDEXED BY current_redaction_message_events WHERE room_id=? AND CASE WHEN json_type(body,'$.data.messageId')='text' AND json_extract(body,'$.data.messageId')<>'' THEN json_extract(body,'$.data.messageId') ELSE id END=? AND json_extract(body,'$.type')='message.posted' ORDER BY sequence LIMIT 1`).get(roomId,parentId);
-      const posted=origin?JSON.parse(origin.body):null,parent=byId.get(parentId);
-      if(!createsChannelCopy(posted,message.id)||!parent||message.authorId!==posted.actorId||message.createdAt!==posted.at
-        ||messageChannelId(message)!==messageChannelId(parent)||message.replyToId||message.toMemberId||message.workItemId
-        ||!message.editedAt&&!message.deletedAt&&!isDeepStrictEqual(message.body,posted.data.body))throw Error('Invalid derived channel copy posting binding');
-      sequence=origin.sequence;
-    }
-    if(!Number.isSafeInteger(sequence)||sequence<1)throw Error('Missing original message posting sequence');
-    sequences.set(message.id,sequence);
+    sequences.set(message.id,adoptionPostingSequence(db,roomId,message,byId,row?.seq));
   }
   writeMessageRows(db,{roomId,state,sequenceById:sequences,messageIndex:byId,exactSequence:true});
   return db.prepare('SELECT * FROM messages WHERE room_id=? ORDER BY seq,message_id').all(roomId);

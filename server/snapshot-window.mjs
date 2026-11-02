@@ -13,6 +13,7 @@ import { peerEventVisible, visibleBonds } from "./bonds.mjs";
 import { redactMessageTree, redactSnapshotState } from "./redact-read.mjs";
 import { ServiceError } from "./service-error.mjs";
 import { readAgentOrientation } from "./agent-orientation.mjs";
+import { workRoleHolder } from "./work-context.mjs";
 
 export const SNAPSHOT_WINDOW_MESSAGES = 100;
 export const SNAPSHOT_WINDOW_BYTES = 30 * 1024;
@@ -191,18 +192,22 @@ export function readRoomSnapshot(store, token, roomId, fence, { view = "full", h
   // a member party to any request on an item keeps its full record.
   // The store snapshot already applies this; repeating it here keeps
   // the boundary at this serialiser even if a snapshot source changes.
+  // The exception matches every other read site: a member the item
+  // itself names in a work role (proposer, accountable, verifier,
+  // human decision maker, or claim holder) keeps its full record —
+  // a private request on the item must not lock them out of it.
   const privatePartiesByWork = new Map();
   for (const request of Object.values(snapshot.state.replyRequests ?? {})) {
     if (!request?.workItemId) continue;
     if (!privatePartiesByWork.has(request.workItemId)) privatePartiesByWork.set(request.workItemId, new Set());
     privatePartiesByWork.get(request.workItemId).add(request.requesterId).add(request.recipientId);
   }
-  const workItemsForViewer = itemId => {
+  const workItemsForViewer = (itemId, item) => {
     const parties = privatePartiesByWork.get(itemId);
-    return parties && !parties.has(snapshot.viewerId);
+    return parties && !parties.has(snapshot.viewerId) && !workRoleHolder(item, snapshot.viewerId);
   };
   const workItems = snapshot.state.workItems ? Object.fromEntries(Object.entries(snapshot.state.workItems).map(([id, item]) =>
-    workItemsForViewer(id) ? [id, { ...item, title: null, definitionOfDone: null }] : [id, item])) : snapshot.state.workItems;
+    workItemsForViewer(id, item) ? [id, { ...item, title: null, definitionOfDone: null }] : [id, item])) : snapshot.state.workItems;
   const replyRequests = Object.fromEntries(Object.entries(snapshot.state.replyRequests ?? {}).filter(([, request]) =>
     [request.requesterId, request.recipientId].includes(snapshot.viewerId)
     && messageInHistory({ id: request.id, createdAt: request.createdAt }, historyFloor)));
@@ -213,7 +218,7 @@ export function readRoomSnapshot(store, token, roomId, fence, { view = "full", h
     ...(snapshot.state.replyRequests === undefined ? {} : { replyRequests }),
     eventLog: (snapshot.state.eventLog ?? []).filter(roomEventVisible).map(event => {
       const workItemId = event?.data?.workItemId;
-      if (typeof workItemId !== "string" || !workItemsForViewer(workItemId)) return event;
+      if (typeof workItemId !== "string" || !workItemsForViewer(workItemId, snapshot.state.workItems?.[workItemId])) return event;
       if (!Object.hasOwn(event.data, "title") && !Object.hasOwn(event.data, "definitionOfDone")) return event;
       return { ...event, data: { ...event.data,
         ...(Object.hasOwn(event.data, "title") ? { title: null } : {}),

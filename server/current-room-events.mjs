@@ -52,7 +52,7 @@ export function readCurrentEventWindow(store,roomId,viewerId,{after=0,limit=100,
    // Preserve progress for one admitted legal atom. Subsequent payloads stay
    // behind a byte prefix so current-body/proof reads retain their shared
    // input budget; the cursor never advances over the excluded candidate.
-   if(selected.length&&sourceBytes+bytes>CURRENT_EVENT_SOURCE_BYTES)break;
+   if (selected.length && sourceBytes + bytes > CURRENT_EVENT_SOURCE_BYTES) break;
    chargeCurrentReadBudget(b,bytes);sourceBytes+=bytes;selected.push(row);
   }
   const rows=selected.map(row=>{

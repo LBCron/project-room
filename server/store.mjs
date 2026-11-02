@@ -7063,7 +7063,7 @@ this.slaBreachAlerts = new SlaBreachAlertJournal(this); // Task 26: durable in-a
       // bond.list is a read. It does not append a ledger event, so an archived
       // room can still answer it. Writes below still hit refuseArchivedWrite.
       if (command.type === "bond.list") {
-        const listed = this.room(roomId);
+        const listed = this.roomAuthority(roomId, { memberId: auth.member.id });
         return { sequence: listed.sequence, duplicate: false, event: null, bonds: this.bonds.listForMember(roomId, auth.member.id) };
       }
       const messageContext = currentCommandContext(this,roomId,command,{actorId:auth.member.id})
@@ -7225,6 +7225,7 @@ this.slaBreachAlerts = new SlaBreachAlertJournal(this); // Task 26: durable in-a
         if (bondEffect.kind === "idempotent") {
           return { sequence: room.sequence, duplicate: true, event: null, bond: bondEffect.bond };
         }
+        if (bondEffect.data?.bondId) messageContext?.current?.loadBond?.(bondEffect.data.bondId);
       }
       const memberAuthorityEvent = [T.MEMBER_ADDED, T.MEMBER_ACCESS_CHANGED].includes(command.type);
       if (agentConnectionSponsor && (!memberAuthorityEvent || auth.member.kind !== "human" || !auth.account || auth.kind !== "session"))

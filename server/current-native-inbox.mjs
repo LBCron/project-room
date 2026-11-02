@@ -34,13 +34,13 @@ export function readCurrentNativeInbox(store,secret,roomId,{limit=50,after,older
   }else page=readCurrentEventWindow(store,roomId,memberId,{after,limit:Math.min(limit,4)});
   const directMessages=[],directMentions=[],replies=[],parents=new Map();
   for(const {sequence,event:e}of page.events){if(e.type!=='message.posted'||e.actorId===memberId||e.data.body===null)continue;
-   const id=e.data.messageId??e.id,row={sequence,eventId:e.id,messageId:id,replyToId:id,from:e.actorId,body:e.data.body,at:e.at,channel:e.data.channelId??'general',private:Boolean(e.data.toMemberId),...(e.data.toMemberId?{replyToMemberId:e.actorId}:{}),...(e.data.requestKind==='reply'&&e.data.requestPolicyVersion===1?{requestKind:'reply',nextRead:{tool:'room_read_request',arguments:{requestMessageId:id}}}:{})};
+   const id=e.data.messageId??e.id,row={sequence,eventId:e.id,messageId:id,replyToId:id,from:e.actorId,body:e.data.body,at:e.at,channel:e.data.channelId??'general',private:Boolean(e.data.toMemberId),...(e.data.toMemberId?{replyToMemberId:e.actorId}:{}),...(e.data.requestKind==='reply'&&e.data.requestPolicyVersion===1?{requestKind:'reply',nextRead:{tool:'room_read_request',arguments:{roomId,requestMessageId:id}}}:{})};
    if(e.data.toMemberId===memberId)directMessages.push(row);
    const chip=e.mentions?.find(x=>x.memberId===memberId&&['delivered','acknowledged','timed_out'].includes(x.state));if(chip){
     const observed=store.db.prepare('SELECT responded_at,late_acknowledged_at FROM mention_observations WHERE room_id=? AND message_event_id=? AND mentioned_member_id=?').get(roomId,e.id,memberId);chargeCurrentReadBudget(b,256);
     if(observed?.responded_at==null&&observed?.late_acknowledged_at==null)directMentions.push({...row,state:chip.state});
    }
-   if(typeof e.data.replyToId==='string'){
+   if(typeof e.data.replyToId==='string'&&e.data.requestKind!=='reply'){
     if(!parents.has(e.data.replyToId))parents.set(e.data.replyToId,readCurrentMessage(store.db,roomId,e.data.replyToId)?.value);
     const parent=parents.get(e.data.replyToId);
     if(parent?.authorId===memberId)replies.push({...row,inReplyTo:e.data.replyToId});
@@ -55,21 +55,25 @@ export function readCurrentNativeInbox(store,secret,roomId,{limit=50,after,older
   }
   for(const request of replyRequests)requestStates[request.id]={...request,status:'open'};
   const formalPointers=replyRequests.map(request=>({nextRead:request.nextRead}));
-  const next=inboxNext(roomId,directMessages,[],[],[...formalPointers,...directMentions],[],[],requestStates)
+  const peer=store.bonds.nativeInboxForMember(roomId,memberId,limit,(bytes,records)=>chargeCurrentReadBudget(b,bytes,records));
+  const next=inboxNext(roomId,directMessages,[],[],[...formalPointers,...directMentions],peer.bondProposals,peer.peerMessages,requestStates)
    .map(step=>step.nextRead?{...step,nextRead:{...step.nextRead,arguments:{roomId,...step.nextRead.arguments}}}:step);
+  if(!peer.coverage.bonds.complete)next.push({action:'inspect-bonds',method:'POST',path:`/api/rooms/${encodeURIComponent(roomId)}/commands`,description:'This bounded proposal source is incomplete. Inspect bond.list before treating bond attention as complete.'});
+  if(!peer.coverage.peerMessages.complete)next.push({action:'inspect-peer-messages',method:'GET',path:`/api/rooms/${encodeURIComponent(roomId)}/peer-dms`,description:'This bounded peer-message source is incomplete. Read selected peer threads for earlier messages.'});
   if(conversationNext)next.unshift({action:'continue-conversation',nextRead:conversationNext});
   if(older?.nextRead)next.push({action:'read-older-conversation',nextRead:older.nextRead});
   // A bounded empty source page is not proof that conversation is empty.
   const empty=next.find(step=>step.action==='watch-inbox');
   if(empty){const i=next.indexOf(empty);next[i]={...empty,description:'No conversation items in this bounded page. Follow conversation continuations and list-open-requests/list-my-work; reading does not acknowledge or accept anything.'};}
   return stampInbox({agentId:memberId,roomId,directMessages,directMentions,replies:stampInbox({directMessages:replies},memberId).directMessages,nativeWork:discovery.work,replyRequests,
-   assignments:[],mentions:[],bondProposals:[],peerMessages:[],dmRequests:[],
+   assignments:[],mentions:[],bondProposals:peer.bondProposals,peerMessages:peer.peerMessages,dmRequests:[],
    cursor:{after:page.next,hasMore:page.hasMore,nextRead:conversationNext},older,
    attention:{pendingMentions:directMentions.map(({sequence,replyToId,from,private:isPrivate})=>({sequence,replyToId,from,private:isPrivate})),hasMore:page.hasMore,acknowledges:false,nextRead:conversationNext},
    coverage:{mode:'native_bounded',globalAttentionComplete:false,conversation:{direction:recent?'recent':'catch_up',examined:recent?older.examined:page.next-after,through:page.next,complete:recent?!older.hasMore:!page.hasMore},
     work:{complete:false,nextRead:workNext,examined:discovery.examinedWork},requests:{complete:false,nextRead:workNext,examined:discovery.examinedRequests},
     standingMentions:{complete:false,nextRead:{tool:'room_read_inbox',arguments:{limit,after:0}}},
-    omitted:['ambient fleet and bond presentation','peer-routing presentation','global unresolved-mention census'],
+    peer:peer.coverage,
+    omitted:['ambient fleet presentation','global unresolved-mention census'],
     legacyAssignments:{reconciledBeforeActivation:true,historyInspect:{method:'GET',path:`/api/rooms/${encodeURIComponent(roomId)}/collab/assignments`}}},
    sequence:head.sequence,next},memberId);
  }));

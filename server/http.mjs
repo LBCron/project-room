@@ -4341,7 +4341,7 @@ export function createRoomServer({ store, origin, assetRoot = new URL("../", imp
       const peerContext = {
         memberId: viewerId,
         identityId: store.bonds.identityForMember(roomId, viewerId),
-        isOwner: viewerId === store.roomAuthority(roomId).ownerId
+        isOwner: viewerId === store.roomAuthority(roomId, { memberId: viewerId }).ownerId
       };
       const roomEventVisible = event => dmEventVisible(event) && dmConsentEventVisible(event, viewerId, peerContext.isOwner)
         && peerEventVisible(event, peerContext);

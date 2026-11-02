@@ -427,7 +427,7 @@ export function readCurrentMessage(db,roomId,messageId,b=contextBudgets.get(db)?
   return {row,value:decodeMessageEntity(row)};
 }
 
-const supported = new Set(['claim.acquired','claim.renewed','claim.released','room.spend_pricing_set','room.spend_allowance_set','room.archived','room.exported','room.charter_updated','message.deleted','message.edited','work.superseded','ownership.transferred','reply_request.cancelled','work_claim.updated','message.posted','work.proposed','work.accepted','work.started','work.completed','work.handoff_recorded','work.halt_cleared','verification.recorded','owner.decision_recorded']);
+const supported = new Set(['bond.propose','bond.accept','bond.decline','bond.revoke','bond.proposed','bond.activated','bond.revoked','dm.posted','claim.acquired','claim.renewed','claim.released','room.spend_pricing_set','room.spend_allowance_set','room.archived','room.exported','room.charter_updated','message.deleted','message.edited','work.superseded','ownership.transferred','reply_request.cancelled','work_claim.updated','message.posted','work.proposed','work.accepted','work.started','work.completed','work.handoff_recorded','work.halt_cleared','verification.recorded','owner.decision_recorded']);
 const contextBudgets = new WeakMap();
 export function withCurrentServingWriter(db,roomId,operation) {
   if(!isCurrentRoom(db,roomId) && !db.prepare("SELECT 1 FROM current_room_record_proofs WHERE room_id=? AND domain='migrationFence' AND record_key='active' AND present=1").get(roomId))return operation();
@@ -642,7 +642,24 @@ function commandContextFromHead(store,roomId,command,head,b,{readMessage,readWor
   const claims=command.type==='claim.acquired'?currentClaimAdmission(store,roomId,actorId,state.workItems[workId],command,b):null;
   bindCurrentRecordContext(state,{replyRequestCount:head.counts.replyRequests,...(claims?{claimOverlaps:claims.overlaps}:{})});
   const before=fieldsOf({...state,workItems:Object.fromEntries(workRefs)});
-  return {room:{sequence:head.sequence,state},current:{head,before,workRefs,budget:b,messageRows:messages,...(claims?{claimConflict:claims.conflict}:{})},count:head.counts.messages};
+  // A live proposal chooses its receipt ID in Bonds.prepare, after this
+  // context exists. Bind that exact protected record before the reducer and
+  // before diffing; accepting/revoking must retain the prior proposal fields.
+  const loadedBonds = new Set();
+  const loadBond = id => {
+    if(loadedBonds.has(id))return;
+    loadedBonds.add(id);
+    if(typeof id!=='string'||!id)return;
+    const prior=readCurrentRecord(db,roomId,'bonds',id,b);
+    if(prior!==undefined){
+      if(prior.id!==id)corrupt('selected bond identity differs');
+      (state.bonds??={})[id]=prior;
+      before.set(JSON.stringify(['shape','bonds']),'object');
+      before.set(JSON.stringify(['bonds',id]),prior);
+    }
+  };
+  if(['bond.accept','bond.decline','bond.revoke','bond.proposed','bond.activated','bond.revoked'].includes(command.type))loadBond(command.data.bondId);
+  return {room:{sequence:head.sequence,state},current:{head,before,workRefs,budget:b,messageRows:messages,loadBond,...(claims?{claimConflict:claims.conflict}:{})},count:head.counts.messages};
 }
 // Trusted invitation/referral writers use the same protected current facts and
 // transition writer. A name/capacity decision admits the bounded full roster;

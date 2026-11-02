@@ -53,6 +53,11 @@ function fakeClient({ identityId = "ai_test123", calls = [] } = {}) {
 
 test("general door defaults to the open community room", () => {
   assert.equal(GENERAL_REQUEST_DEFAULT_ROOM_ID, "room-fafdae79cf8c");
+  const html = readFileSync(new URL("../join.html", import.meta.url), "utf8");
+  const field = html.match(/<input id="join-request-room"[^>]*>/)?.[0];
+  assert.ok(field);
+  assert.ok(field.includes(`value="${GENERAL_REQUEST_DEFAULT_ROOM_ID}"`), "static field and script default must agree");
+  assert.doesNotMatch(html, /muse-room<\/code> is the open community room/);
 });
 
 test("build: valid fields produce a submittable body", () => {

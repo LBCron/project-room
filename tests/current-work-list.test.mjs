@@ -30,6 +30,7 @@ function pages(store,key,args={}) {
 test('current work source pages traverse excluded backlog without false completion or hydration',t=>{
   const {store,keys}=fixture(t),listed=pages(store,keys.worker,{focus:'needs_me',limit:100});
   assert.deepEqual(listed[0].work.map(item=>item.id),['task-18']);
+  assert.deepEqual(listed[0].scope,{kind:'room',permissions:[],externalExecution:false});
   assert.deepEqual(listed[0].replyRequests.map(item=>item.id),['request-12']);
   assert.equal(listed[0].selection.source,'addressed-role-indexes');
   assert.equal(listed[0].page.hasMore,false);

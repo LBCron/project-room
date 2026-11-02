@@ -34,8 +34,8 @@ import { walkProvenance, ClaimError } from "./work-claims.mjs";
 import { claimThread } from "./claim-thread.mjs";
 import { randomUUID } from "node:crypto";
 import { validId, ownMember, ROOM_KINDS, MAX_MESSAGE_BODY_CHARS } from "../src/events.js";
-import { nextWorkStep } from "../src/workflow.js";
-import { completedResults, searchWorkMatches as searchWork } from "../src/work-selectors.js";
+import { nextWorkStep, workActions } from "../src/workflow.js";
+import { completedResults, currentResult, searchWorkMatches as searchWork } from "../src/work-selectors.js";
 import { sortWorkByCuriosity, viewerHistory } from "../src/curiosity-rank.mjs";
 import { workHelpContext } from "../src/work-help.js";
 import { HOSTED_ROOM_MCP_TOOLS, HOSTED_MCP_FOLLOW_UPS, ROOM_MCP_SERVER_NAME, ROOM_MCP_SERVER_VERSION, canonicalMcpToolName, PUBLIC_WORK_MCP_TOOLS } from "../src/room-mcp-join.js";
@@ -397,7 +397,7 @@ export function listRoomWork(store, secret, args) {
   const focus = args.focus ?? "all";
   const help = focus === "help_wanted";
   const snapshot = store.snapshot(secret, args.roomId, args.expectedSessionBinding??null, "work", help);
-  const member = snapshot.state.members[snapshot.viewerId];
+  const member = ownMember(snapshot.state.members, snapshot.viewerId);
   const now = help ? Date.parse(snapshot.evaluatedAt) : Date.now();
   const items = Object.values(snapshot.state.workItems);
   let candidates = items;
@@ -415,7 +415,15 @@ export function listRoomWork(store, secret, args) {
     workItems: Object.fromEntries(candidates.map(item => [item.id, item]))
   }, args.query);
   let work = (matches?.work ?? candidates.map(item => ({ item }))).map(({ item, excerpt }) => ({
-    ...workRecord(item, now),
+    ...(focus === "all" ? workRecord(item, now) : {
+      id: item.id, title: item.title, state: item.state, revision: item.revision,
+      mode: item.mode, next: nextWorkStep(item, now)
+    }),
+    availableRoomActions: workActions(item, member, now).map(([action, label]) => ({ action, label })),
+    ...(help ? { help: workHelpContext(snapshot.state, item.id, member.id, snapshot.evaluatedAt) } : {}),
+    ...(focus === "results" ? { result: currentResult(item),
+      nextResultRead: item.receipt.nativeText ? { tool: "room_read_result",
+        arguments: { workItemId: item.id, completionEventId: item.receipt.eventId } } : null } : {}),
     nextRead: { tool: "room_read_work", arguments: { workItemId: item.id, ...(help ? { includeOffers: true } : {}) } },
     ...(excerpt === undefined ? {} : { excerpt })
   }));
@@ -445,6 +453,7 @@ export function listRoomWork(store, secret, args) {
     viewerSessionBinding:snapshot.viewerSessionBinding??null,viewerSessionRevision:snapshot.viewerSessionRevision??null,
     member: member ? { id: member.id, kind: member.kind, permissions: [...member.permissions] } : null,
     charter: snapshot.charter ?? null,
+    scope: { kind: "room", permissions: [...member.permissions], externalExecution: false },
     ...(matches ? { selection: { query: args.query.trim(), matches: matches.total, shown: work.length } }
       : help ? { selection: { totalWork: items.length, helpWanted: work.length,
         guidance: "Explicit current invitations, not assignments, queue eligibility or permission to execute. Follow nextRead to inspect current offer capacity and selection before contributing. No automatic offer or dispatch." } } : {}),

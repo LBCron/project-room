@@ -122,6 +122,7 @@ export function readCurrentWorkListing(store,secret,roomId,args={}) {
         viewerSessionBinding:auth.sessionBinding??null,viewerSessionRevision:auth.sessionRevision??null,
         evaluatedThrough,evaluatedAt:new Date(now).toISOString(),clockSource:'service',focus,
         member:{id:member.id,kind:member.kind,permissions:[...member.permissions]},charter:charterContext(overview.state.room),
+        scope:{kind:"room",permissions:[...member.permissions],externalExecution:false},
         work,...(focus==='needs_me'?{replyRequests,replyRequestsEvaluatedThrough:evaluatedThrough}:{}),
         workScope:'bounded_source_window',selection:{order:'id',...(addressed?{source:'addressed-role-indexes',examinedWorkKeys:source?.examinedKeys??0}:{}),examinedWork:items.length,examinedRequests:requests?.requests.length??0,
           matches:null,guidance:'Follow every page, including empty filtered pages. Counts describe examined sources, not all matches. Read selected work or request before acting.'},

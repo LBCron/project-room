@@ -1,0 +1,27 @@
+{
+  "atEpoch": 1793626476.275685,
+  "rootPids": [
+    89277
+  ],
+  "processes": [
+    {
+      "pid": 89277,
+      "parent": 46487,
+      "cpuPercent": 4.5,
+      "executable": "node"
+    },
+    {
+      "pid": 89297,
+      "parent": 89277,
+      "cpuPercent": 0.0,
+      "executable": "esbuild"
+    },
+    {
+      "pid": 89307,
+      "parent": 89277,
+      "cpuPercent": 98.0,
+      "executable": "workerd"
+    }
+  ],
+  "limitation": "Single physical-local process snapshot only; no peak/total CPU or peer utilization claim."
+}

@@ -1,0 +1,30 @@
+{
+  "target": "1084460ddcf6d22d36aeb6e8deed24e91e6ba927",
+  "tree": "0a360f9afd74f2b0693e5f8b582bee4959594e78",
+  "source": "00888c52110d36250d3e07629036701b72926d09",
+  "runtimeFiles": {
+    "server/access-requests.mjs": "00559648c3824079ee701b0356d70cc5f0f8fc9698e016b915f30c4146915d60",
+    "server/recovery-engine-continuation.mjs": "b3633c5c75c34a7367d89454ad9618429d399cab056c929052ff6bdae5967167",
+    "server/restore-ndjson.mjs": "47a578faecaa3a5e7f889d019848e0e74f5b8e15851d40c2efff41dc014ce553",
+    "server/restore-admission.mjs": "d06e61c745e6fdca22e3d3f49f368a6361031f82a737e0e516cbafa6657226e1",
+    "cloudflare/room.mjs": "50079eed473b80eaea61ca639d64167b809c5d06d8e710a660a29fda514d6324",
+    "cloudflare/storage.mjs": "8ab552b91c75ef7fb87e9a5c001a242b54739f6f6bf0a21702633b718f657432"
+  },
+  "fixtureFiles": {
+    "local-lab/access_request_seed_5k.mjs": "c566d9b080d455907a4670defe7a044cfe26396b8798c1b50d13d8e30467f846",
+    "local-lab/access_request_native_restore_5k.mjs": "f18fbb12e58fd4599bc1eabef32d2e4d7198a29cd828a7db9aff465a394e3b44"
+  },
+  "workerdSha256": "b887d31d8839e80798bf3f92c416343c5db7dd9b22d7fe21bcf877f5d411936f",
+  "dataset": {
+    "pendingAccessRequests": 5000,
+    "agentIdentities": 5000,
+    "pageLimit": 25,
+    "expectedPages": 200,
+    "pagePacingMs": 400
+  },
+  "limits": [
+    "Local Native runtime, not hosted Workers resource-limit proof",
+    "Independent20000call diagnostic driver, not runtime recovery bound",
+    "No production or second-laptop execution"
+  ]
+}

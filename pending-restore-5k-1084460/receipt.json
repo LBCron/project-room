@@ -1,0 +1,55 @@
+{
+  "schema": "member2-access-native-old-backup-restore-v1",
+  "requestCount": 5000,
+  "pagePacingMs": 400,
+  "sourceBefore": "00888c52110d36250d3e07629036701b72926d09",
+  "sourceAfter": "1084460ddcf6d22d36aeb6e8deed24e91e6ba927",
+  "treeAfter": "0a360f9afd74f2b0693e5f8b582bee4959594e78",
+  "node": "v24.22.1",
+  "scope": "Actual local Native source and target with KV, strict authorized restore API and cleanup. No production, remote execution, whole-recovery-bound or speedup claim.",
+  "before": {
+    "count": 5000,
+    "fingerprint": "ecef204c0bb74e849730601e30537e47d71ae0cbf43b897ff0ef80dafc8d9f92",
+    "identities": 5000,
+    "index": null,
+    "credentials": "a7b3412d8c12701e31ce89cfb7a49ab3d32a6a0639065845e4006a901cc5d237"
+  },
+  "sourceBytes": 15841135,
+  "sourceSha256": "840c3c8622b15f489a9aa2cba62bbaa9354cee0adc24a682383bd167f88c56f5",
+  "partialReadRefused": true,
+  "exactColdSourceResume": true,
+  "restore": {
+    "steps": 6206,
+    "cleanupSteps": 822,
+    "actualUniqueFrontiers": 5383,
+    "independentDriverBudget": 20000,
+    "verified": true,
+    "auditOk": true,
+    "contentVerification": "full",
+    "cleanupComplete": true
+  },
+  "restoredRowsUnchanged": true,
+  "originalCredentialsPreserved": true,
+  "admissionClear": true,
+  "reads": [
+    {
+      "role": "owner",
+      "rowsRead": 1657,
+      "rowsWritten": 0,
+      "unknown": 0
+    },
+    {
+      "role": "admin",
+      "rowsRead": 946,
+      "rowsWritten": 0,
+      "unknown": 0
+    }
+  ],
+  "queue": {
+    "pages": 200,
+    "unique": 5000,
+    "maxRows": 955,
+    "zeroWrites": true
+  },
+  "restoreSourceKvClean": true
+}

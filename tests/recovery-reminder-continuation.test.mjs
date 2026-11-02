@@ -1,3 +1,4 @@
+import {reportProgressGuard} from './helpers/recovery-report-progress.mjs';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {mkdtempSync,rmSync,writeFileSync} from 'node:fs';
@@ -26,12 +27,13 @@ const next=(result,id)=>({restoreId:result.restoreId,sourceSeal:result.sourceSea
 function setup(t,current=true){const directory=mkdtempSync(join(tmpdir(),'recovery-reminders-'));t.after(()=>rmSync(directory,{recursive:true,force:true}));const source=new RoomStore(':memory:');t.after(()=>source.close());const f=seedRecoveryReminderSource(source,{current});return{...f,source,filename:join(directory,'target.sqlite')};}
 for(const current of [false,true])test('operator independently checks reminder ledger with cold resume and save fault; current='+current,async t=>{
  const f=setup(t,current),text=exportNdjsonText(f.source.db);let store=new RoomStore(f.filename),response=await post(store,text),steps=0,saw=0,faulted=false;
- try{while(response.body.pending){const before=restoreProgress(store.db),input=next(response.body,'reminder_'+steps);if(before.progress?.audit?.stage==='reminders'){saw++;if(!faulted&&before.progress.audit.reminders.stage==='history'){const file=f.filename+'.request';writeFileSync(file,JSON.stringify(input));const child=spawnSync(process.execPath,['tests/fixtures/durable-coverage-operator-child.mjs',f.filename,file,'before-commit'],{encoding:'utf8',timeout:30000,maxBuffer:1024*1024});assert.equal(child.status,77,child.stderr);assert.deepEqual(restoreProgress(store.db),before);faulted=true;}}
-   store.close();store=new RoomStore(f.filename);response=await post(store,input);assert.ok([200,202].includes(response.status),JSON.stringify(response.body));assert.deepEqual(await post(store,input),response);if(response.body.pending)assert.throws(()=>store.headSequence('commons'),error=>error.status===503);assert.ok(++steps<200);
+ const guard=reportProgressGuard(()=>store,assert);
+ try{while(response.body.pending){const before=restoreProgress(store.db),mark=guard.before(before),input=next(response.body,'reminder_'+steps);if(before.progress?.audit?.stage==='reminders'){saw++;if(!faulted&&before.progress.audit.reminders.stage==='history'){const file=f.filename+'.request';writeFileSync(file,JSON.stringify(input));const child=spawnSync(process.execPath,['tests/fixtures/durable-coverage-operator-child.mjs',f.filename,file,'before-commit'],{encoding:'utf8',timeout:30000,maxBuffer:1024*1024});assert.equal(child.status,77,child.stderr);assert.deepEqual(restoreProgress(store.db),before);faulted=true;}}
+   store.close();store=new RoomStore(f.filename);response=await post(store,input);assert.ok([200,202].includes(response.status),JSON.stringify(response.body));assert.deepEqual(await post(store,input),response);if(response.body.pending)assert.throws(()=>store.headSequence('commons'),error=>error.status===503);steps++;guard.after(mark,restoreProgress(store.db));assert.ok(guard.summary().preReportCalls<200,'original pre-report bound remains');
   }
   assert.equal(response.status,200);assert.equal(response.body.verified,true);assert.ok(saw>=4);assert.equal(faulted,true);assert.deepEqual(response.body.subsystemContinuation.privateReminders,{complete:true,receipts:f.receipts,rows:4,groups:4});assert.doesNotThrow(()=>auditRecovery(store));assert.equal(store.db.prepare("SELECT revision FROM private_reminders WHERE work_item_id='gap'").get().revision,3);
  }finally{store.close();}
- t.diagnostic(JSON.stringify({current,receipts:f.receipts,rows:4,steps,reminderCalls:saw,processFaultRetry:true,fullOracleStillRequired:true}));
+ t.diagnostic(JSON.stringify({current,receipts:f.receipts,rows:4,steps,reminderCalls:saw,processFaultRetry:true,phaseCalls:guard.summary(),fullOracleStillRequired:true}));
 });
 for(const fault of ['fingerprint','missing-first','duplicate-revision','missing-reminder','missing-human-binding','inactive-account','future-work-basis'])test('independent reminder phase refuses '+fault+' before full oracle',async t=>{
  const f=setup(t);
@@ -62,13 +64,14 @@ test('large legacy context admits one sealed source atom and reports its actual 
  }
  assert.ok(projectionBytes<quantum);assert.doesNotThrow(()=>auditRecovery(f.source));
  const store=new RoomStore(f.filename);t.after(()=>store.close());let response=await post(store,exportNdjsonText(f.source.db)),steps=0,maximumCharged=0,sourceBound=0;
- while(response.body.pending){const prior=restoreProgress(store.db);if(prior.progress.audit?.stage==='reminders'){
+ const guard=reportProgressGuard(()=>store,assert);
+ while(response.body.pending){const prior=restoreProgress(store.db),mark=guard.before(prior);if(prior.progress.audit?.stage==='reminders'){
    const rooms=prior.seal.tables.find(row=>row.name==='rooms'),reminders=prior.seal.tables.find(row=>row.name==='private_reminders');const work=prior.seal.tables.find(row=>row.name==='work_entities');sourceBound=rooms.maxRowBytes+reminders.maxRowBytes+work.maxRowBytes+12288;
   }
   response=await post(store,next(response.body,'large_reminder_'+steps++));assert.ok([200,202].includes(response.status),JSON.stringify(response.body));
   const after=restoreProgress(store.db);if(prior.progress.audit?.stage==='reminders'&&after.progress?.audit){const charged=after.progress.audit.bytes-prior.progress.audit.bytes;maximumCharged=Math.max(maximumCharged,charged);assert.ok(charged<=sourceBound);}
-  assert.ok(steps<250);
+  guard.after(mark,after);assert.ok(guard.summary().preReportCalls<250,'original pre-report bound remains');
  }
  assert.ok(maximumCharged>quantum);assert.equal(response.status,200);assert.equal(response.body.subsystemContinuation.privateReminders.complete,true);
- t.diagnostic(JSON.stringify({sourcePlatform:'node-sqlite',projectionBytes,posts,maximumChargedBytes:maximumCharged,explicitSealedBound:sourceBound,quantumBytes:quantum,strictQuantum:false,workerLargeRowAcceptanceClaimed:false,fullOracleStillRequired:true}));
+ t.diagnostic(JSON.stringify({sourcePlatform:'node-sqlite',phaseCalls:guard.summary(),projectionBytes,posts,maximumChargedBytes:maximumCharged,explicitSealedBound:sourceBound,quantumBytes:quantum,strictQuantum:false,workerLargeRowAcceptanceClaimed:false,fullOracleStillRequired:true}));
 });

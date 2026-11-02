@@ -16,5 +16,5 @@ test('source size, malformed continuation and missing addressed rows fail closed
 });
 test('all signed SQLite rowids remain addressable without lossy JS integer conversion',()=>{
  const db=new DatabaseSync(':memory:');db.exec('CREATE TABLE input(z)');
- for(const id of ['-9223372036854775808','-9007199254740991','-1','0','9223372036854775807']){db.prepare('INSERT INTO input(rowid,z) VALUES(CAST(? AS INTEGER),?)').run(id,'value '+id);assert.equal(encode(db,id).text,canonical(db.prepare('SELECT * FROM input WHERE rowid=CAST(? AS INTEGER)').get(id)));}
+ for(const id of ['-9223372036854775808','-9007199254740991','-1','0','9223372036854775807']){const insert=db.prepare('INSERT INTO input(rowid,z) VALUES(CAST(? AS INTEGER),?)');insert.setReadBigInts(true);insert.run(id,'value '+id);assert.equal(encode(db,id).text,canonical(db.prepare('SELECT * FROM input WHERE rowid=CAST(? AS INTEGER)').get(id)));}
 });

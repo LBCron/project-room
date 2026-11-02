@@ -52,10 +52,12 @@ function next(receipt, bound) {
     if (!['revision','nextIndex','total','removed','remaining','verifiedGuardCount'].every(key => integer(receipt.cleanup[key]))
       || receipt.cleanup.nextIndex + receipt.cleanup.remaining !== receipt.cleanup.total
       || receipt.cleanup.verifiedGuardCount !== receipt.cleanup.remaining) fail('invalid_cleanup_progress');
+    const keys=['scratchTotal','scratchRemaining','scratchRemoved'],present=keys.filter(key=>Object.hasOwn(receipt.cleanup,key));
+    if(present.length&&(present.length!==3||!keys.every(key=>integer(receipt.cleanup[key]))||receipt.cleanup.scratchRemaining>receipt.cleanup.scratchTotal||receipt.cleanup.scratchRemoved>128))fail('invalid_scratch_progress');
   }
   if (receipt.cleanupComplete === true) {
     sameBinding(binding(receipt), bound);
-    if (receipt.nextCleanup !== null || receipt.cleanup?.remaining !== 0 || receipt.cleanup?.verifiedGuardCount !== 0) fail('missing_zero_proof');
+    if (receipt.nextCleanup !== null || receipt.cleanup?.remaining !== 0 || receipt.cleanup?.verifiedGuardCount !== 0 || receipt.cleanup?.scratchRemaining !== undefined && receipt.cleanup.scratchRemaining !== 0) fail('missing_zero_proof');
     return null;
   }
   const hint = receipt.nextCleanup, body = hint?.body;
@@ -116,12 +118,15 @@ export async function continueRemoteRestore({receiptFile, origin, checkpointFile
       else if(request.cleanup){
         const prior=state.receipt.cleanup;
         if(!integer(receipt.cleanup?.revision)||receipt.cleanup.revision!==request.expectedRevision+1)fail('invalid_revision');
-        if(receipt.cleanup.removed<1||receipt.cleanup.nextIndex!==(prior?.nextIndex??0)+receipt.cleanup.removed
+        if(receipt.cleanup.removed+(receipt.cleanup.scratchRemoved??0)<1||receipt.cleanup.nextIndex!==(prior?.nextIndex??0)+receipt.cleanup.removed
           || prior&&receipt.cleanup.total!==prior.total)fail('no_progress');
+        const scratch=receipt.cleanup.scratchRemaining!==undefined,hadScratch=prior?.scratchRemaining!==undefined;
+        if(prior&&scratch!==hadScratch)fail('invalid_scratch_progress');
+        if(scratch&&(receipt.cleanup.scratchRemaining+receipt.cleanup.scratchRemoved!==(hadScratch?prior.scratchRemaining:receipt.cleanup.scratchTotal)||hadScratch&&receipt.cleanup.scratchTotal!==prior.scratchTotal))fail('invalid_scratch_progress');
       }
       else if(following?.cleanup && following.expectedRevision!==0)fail('invalid_revision');
       if(following&&progress(receipt)===progress(state.receipt))fail('no_progress');
-      if(request.cleanup&&following&&(!integer(receipt.cleanup?.remaining)||!integer(state.receipt.cleanup?.remaining)&&request.expectedRevision!==0||receipt.cleanup.remaining>=(state.receipt.cleanup?.remaining??Infinity)))fail('no_progress');
+      if(request.cleanup&&following&&(!integer(receipt.cleanup?.remaining)||!integer(state.receipt.cleanup?.remaining)&&request.expectedRevision!==0||receipt.cleanup.remaining>=(state.receipt.cleanup?.remaining??Infinity)&&!(receipt.cleanup.scratchRemaining!==undefined&&receipt.cleanup.scratchRemaining<(state.receipt.cleanup?.scratchRemaining??Infinity))))fail('no_progress');
       state={...state,receipt,pending:null};save(path,state);
     }
   } finally { unlock(); }

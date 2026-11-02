@@ -35,7 +35,7 @@ export function captureRecoveryReportSnapshot(db,scratch,state){
   }
   info.sha256=finishReplayHash(whole);h.fields[field]=info;
  }
- const digest=headerHash(h);scratch.put('report','','fingerprint-snapshot','header',h);return digest;
+ const digest=headerHash(h);scratch.put('report','','fingerprint-snapshot','header',h);return {digest,rows:required};
 }
 export function readRecoveryReportSnapshot(db,scratch,digest,state){
  if(!db.isTransaction||!inRestoreContext(db)||!/^[a-f0-9]{64}$/.test(digest??''))fail();verifyRestoreControl(db);

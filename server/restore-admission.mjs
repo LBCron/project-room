@@ -43,7 +43,9 @@ export function verifyRestoreControl(db) {
   if(rows) {
     const actual=db.prepare('SELECT rowid,name,sql FROM sqlite_master WHERE rowid IN ('+rows.map(()=>'?').join(',')+') ORDER BY rowid').all(...rows.map(row=>row.rowid));
     if(actual.length===rows.length && actual.every((row,i)=>row.rowid===rows[i].rowid&&row.name===rows[i].name&&row.sql===rows[i].sql))return;
-    admittedSchemas.delete(db);throw Error('Restore admission schema requires reconciliation');
+    // VACUUM can relocate catalog rows without changing any definition.
+    // A cache miss must revalidate the complete expected schema by name.
+    admittedSchemas.delete(db);
   }
   rows=db.prepare('SELECT rowid,name,sql FROM sqlite_master WHERE name IN ('+expected.map(()=>'?').join(',')+') ORDER BY rowid').all(...expected.map(([name])=>name));
   if(rows.length!==expected.length || expected.some(([name,sql])=>normalize(rows.find(row=>row.name===name)?.sql)!==normalize(sql)))

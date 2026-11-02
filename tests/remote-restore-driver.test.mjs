@@ -99,3 +99,18 @@ test('more than400 progressing receipts complete without a fixed step cap',async
  });
  const result=await f.run();assert.equal(result.code,0,result.stderr);assert.ok(JSON.parse(result.stdout).requests>500);
 });
+function workspace(revision){const scratchRemaining=revision===1?172:revision===2?44:0,complete=revision===3;return{ok:true,verified:true,pending:false,...binding,cleanupComplete:complete,cleanup:{revision,nextIndex:1,total:1,removed:revision===1?1:0,remaining:0,verifiedGuardCount:0,scratchTotal:300,scratchRemaining,scratchRemoved:revision===3?44:128},nextCleanup:complete?null:hint(revision)};}
+test('workspace-only maintenance keeps exact lost-ACK request and requires both independent zero proofs',async t=>{
+ let lost=false;const f=await setup(t,({req,res,input})=>{if(!input.cleanup)return send(res,input.expectedRevision===1?coverage:publication);const receipt=workspace(input.expectedRevision+1);if(input.expectedRevision===1&&!lost){lost=true;req.socket.destroy();return;}send(res,receipt);});
+ assert.equal((await f.run()).code,1);const pending=JSON.parse(readFileSync(f.checkpoint,'utf8')).pending.body;assert.equal(JSON.parse(pending).expectedRevision,1);const count=f.posts.length;const done=await f.run();assert.equal(done.code,0,done.stderr);assert.equal(f.posts[count],pending);const final=JSON.parse(readFileSync(f.checkpoint,'utf8')).receipt;assert.equal(final.cleanup.verifiedGuardCount,0);assert.equal(final.cleanup.scratchRemaining,0);
+});
+for(const defect of ['partial','no-progress','inconsistent','false-zero'])test('workspace driver refuses '+defect+' reply without accepting a new checkpoint',async t=>{
+ const f=await setup(t,({res,input})=>{if(!input.cleanup)return send(res,input.expectedRevision===1?coverage:publication);let receipt=workspace(1);
+  if(defect==='partial')delete receipt.cleanup.scratchTotal;
+  if(defect==='no-progress')Object.assign(receipt.cleanup,{nextIndex:0,remaining:1,verifiedGuardCount:1,removed:0,scratchRemaining:300,scratchRemoved:0});
+  if(defect==='inconsistent')receipt.cleanup.scratchRemaining=170;
+  if(defect==='false-zero'){receipt.cleanupComplete=true;receipt.nextCleanup=null;Object.assign(receipt.cleanup,{scratchTotal:1,scratchRemaining:1,scratchRemoved:0});}
+  send(res,receipt);
+ });
+ const result=await f.run();assert.equal(result.code,1);assert.match(result.stderr,/invalid_scratch_progress|no_progress|missing_zero_proof/);assert.equal(JSON.parse(readFileSync(f.checkpoint,'utf8')).pending.body,f.posts.at(-1));
+});

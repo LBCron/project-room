@@ -1,3 +1,7 @@
+import {prepareClaimOverlap,matchClaimOverlap} from '../src/claim-overlap.js';
+import {conflictingClaim} from './claim-scopes.mjs';
+import {boardStateForWorkItem} from './work-item-state.mjs';
+import {roomWorkClaimConfig} from './work-claims.mjs';
 import {CURRENT_INBOX_DISCOVERY_INDEXES} from './current-inbox-indexes.mjs';
 import {emptyWorkPrivacy,validateWorkPrivacy,applyWorkPrivacyRequest,deriveWorkPrivacy,workRequestPrefix,workRequestKey,workRequestValue} from './current-work-privacy.mjs';
 import {CURRENT_LEGACY_WORK_INDEXES,CURRENT_LEGACY_WORK_GUARDS,assertLegacyWorkReconciled} from './current-legacy-work-gate.mjs';
@@ -100,6 +104,10 @@ export const CURRENT_ROOM_GUARDS = [...guardDefinitions,...RESTORE_CONTROL_GUARD
 CREATE INDEX IF NOT EXISTS current_redaction_message_events ON events(room_id,CASE WHEN json_type(body,'$.data.messageId')='text' AND json_extract(body,'$.data.messageId')<>'' THEN json_extract(body,'$.data.messageId') ELSE id END,sequence);
 CREATE INDEX IF NOT EXISTS current_redaction_code_drops ON room_code_drops(room_id,message_id,id);
 CREATE INDEX IF NOT EXISTS current_room_attachments_message ON room_attachments(room_id,message_id,id);
+CREATE INDEX IF NOT EXISTS current_native_claim_expiry ON current_room_records(room_id,json_extract(payload,'$.work.claim.expiresAtMs'),record_key) WHERE domain='workSummary' AND json_extract(payload,'$.work.claim.status')='active';
+CREATE INDEX IF NOT EXISTS current_native_claim_held ON current_room_records(room_id,json_extract(payload,'$.work.claim.holderId'),json_extract(payload,'$.work.claim.expiresAtMs'),record_key) WHERE domain='workSummary' AND json_extract(payload,'$.work.state')='accepted' AND json_extract(payload,'$.work.claim.status')='active';
+CREATE INDEX IF NOT EXISTS current_native_work_held ON current_room_records(room_id,COALESCE(json_extract(payload,'$.work.claim.holderId'),json_extract(payload,'$.work.accountableMemberId')),record_key) WHERE domain='workSummary' AND json_extract(payload,'$.work.state') IN ('working','blocked');
+CREATE INDEX IF NOT EXISTS current_native_work_proposals ON events(room_id,json_extract(body,'$.data.workItemId'),sequence) WHERE json_extract(body,'$.type')='work.proposed';
 CREATE INDEX IF NOT EXISTS current_work_summary_keys ON current_room_record_proofs(room_id,record_key) WHERE domain='workSummary' AND present=1;
 CREATE INDEX IF NOT EXISTS current_reply_request_keys ON current_room_record_proofs(room_id,record_key) WHERE domain='replyRequests' AND present=1;
 CREATE INDEX IF NOT EXISTS current_messages_public_seq ON messages(room_id,seq DESC,message_id DESC) WHERE to_member_id IS NULL OR to_member_id='';
@@ -419,7 +427,7 @@ export function readCurrentMessage(db,roomId,messageId,b=contextBudgets.get(db)?
   return {row,value:decodeMessageEntity(row)};
 }
 
-const supported = new Set(['room.spend_pricing_set','room.spend_allowance_set','room.archived','room.exported','room.charter_updated','message.deleted','message.edited','work.superseded','ownership.transferred','reply_request.cancelled','work_claim.updated','message.posted','work.proposed','work.accepted','work.started','work.completed','work.handoff_recorded','work.halt_cleared','verification.recorded','owner.decision_recorded']);
+const supported = new Set(['claim.acquired','claim.renewed','claim.released','room.spend_pricing_set','room.spend_allowance_set','room.archived','room.exported','room.charter_updated','message.deleted','message.edited','work.superseded','ownership.transferred','reply_request.cancelled','work_claim.updated','message.posted','work.proposed','work.accepted','work.started','work.completed','work.handoff_recorded','work.halt_cleared','verification.recorded','owner.decision_recorded']);
 const contextBudgets = new WeakMap();
 export function withCurrentServingWriter(db,roomId,operation) {
   if(!isCurrentRoom(db,roomId) && !db.prepare("SELECT 1 FROM current_room_record_proofs WHERE room_id=? AND domain='migrationFence' AND record_key='active' AND present=1").get(roomId))return operation();
@@ -436,6 +444,53 @@ export function currentDmConsentEventContext(store,roomId) {
   const general=readCurrentRecord(db,roomId,'channels','general',b);if(general!==undefined)state.channels.general=general;
   bindCurrentRecordContext(state,{replyRequestCount:head.counts.replyRequests});
   return {room:{sequence:head.sequence,state},current:{head,before:fieldsOf(state),workRefs:new Map(),budget:b,messageRows:new Map()}};
+}
+// A source cap applies AFTER indexed numeric lease expiry. Historical expired
+// reservations cannot exhaust the live set. Missing proof or overload refuses.
+const CURRENT_CLAIM_SOURCE_LIMIT=16;
+function currentClaimAdmission(store,roomId,actorId,item,b) {
+  if(!item)return null;
+  const db=store.db,now=store.now();
+  const rows=db.prepare(`SELECT record_key FROM current_room_records INDEXED BY current_native_claim_expiry
+    WHERE room_id=? AND domain='workSummary' AND json_extract(payload,'$.work.claim.status')='active'
+      AND json_extract(payload,'$.work.claim.expiresAtMs')>? ORDER BY json_extract(payload,'$.work.claim.expiresAtMs'),record_key LIMIT ?`)
+    .all(roomId,now,CURRENT_CLAIM_SOURCE_LIMIT+1);
+  charge(b,rows.reduce((n,row)=>n+Buffer.byteLength(row.record_key)+32,0),rows.length);
+  if(rows.length>CURRENT_CLAIM_SOURCE_LIMIT)refuse('Live claim coordination exceeds the bounded source window; release or complete held work before another reservation');
+  const candidates=[];
+  for(const {record_key:id} of rows) {
+    const work=readCurrentWorkSummaryForViewer(db,roomId,id,actorId,b),expiry=Date.parse(work.claim?.expiresAt);
+    if(work.claim?.status!=='active'||!Number.isFinite(expiry)||work.claim.expiresAtMs!==expiry||expiry<=now)corrupt('live claim index binding differs');
+    const opening=db.prepare("SELECT sequence,length(CAST(body AS BLOB)) bytes FROM events INDEXED BY current_native_work_proposals WHERE room_id=? AND json_extract(body,'$.type')='work.proposed' AND json_extract(body,'$.data.workItemId')=? ORDER BY sequence LIMIT 2").all(roomId,id);
+    charge(b,opening.length*256,opening.length);
+    if(opening.length!==1||opening[0].bytes>MAX_RECORD)refuse('Live claim requires exact bounded original proposal evidence');
+    charge(b,opening[0].bytes);
+    const event=JSON.parse(db.prepare('SELECT body FROM events WHERE room_id=? AND sequence=?').get(roomId,opening[0].sequence).body);
+    if(event.type!=='work.proposed'||event.data?.workItemId!==id||event.actorId!==work.proposedById)corrupt('live claim proposal binding differs');
+    candidates.push({work,sequence:opening[0].sequence});
+  }
+  // JavaScript object enumeration puts canonical uint32 index keys first.
+  const numeric=id=>/^(0|[1-9][0-9]*)$/.test(id)&&Number(id)<4294967295;
+  candidates.sort((a,c)=>numeric(a.work.id)?numeric(c.work.id)?Number(a.work.id)-Number(c.work.id):-1:numeric(c.work.id)?1:a.sequence-c.sequence);
+  const previous=boardStateForWorkItem(item,now);
+  if(previous==='unclaimed') {
+    const size=db.prepare('SELECT length(CAST(config_json AS BLOB)) bytes FROM work_claim_config WHERE room_id=?').get(roomId);
+    if(size?.bytes>MAX_RECORD)refuse('Native member capacity policy exceeds bounded input');charge(b,(size?.bytes??0)+256);
+    const raw=size?JSON.parse(db.prepare('SELECT config_json FROM work_claim_config WHERE room_id=?').get(roomId).config_json):{};
+    const {maxMemberOpenClaims:cap}=roomWorkClaimConfig({workClaims:raw});
+    const fixed=db.prepare(`SELECT count(*) n FROM (SELECT 1 FROM current_room_records INDEXED BY current_native_work_held
+      WHERE room_id=? AND domain='workSummary' AND json_extract(payload,'$.work.state') IN ('working','blocked')
+        AND COALESCE(json_extract(payload,'$.work.claim.holderId'),json_extract(payload,'$.work.accountableMemberId'))=? LIMIT ?)`).get(roomId,actorId,cap).n;
+    const timed=fixed>=cap?0:db.prepare(`SELECT count(*) n FROM (SELECT 1 FROM current_room_records INDEXED BY current_native_claim_held
+      WHERE room_id=? AND domain='workSummary' AND json_extract(payload,'$.work.state')='accepted' AND json_extract(payload,'$.work.claim.status')='active'
+        AND json_extract(payload,'$.work.claim.holderId')=? AND json_extract(payload,'$.work.claim.expiresAtMs')>? LIMIT ?)`).get(roomId,actorId,now,cap-fixed).n;
+    charge(b,512);
+    if(fixed+timed>=cap)throw new ServiceError(409,'too_many_open_claims',`You already hold ${cap} open claims. Release or finish one before claiming another.`);
+  }
+  return {
+    overlaps(workId,repository,paths,at){const query=prepareClaimOverlap(workId,repository,paths,at),found=[];for(const {work} of candidates){const overlap=matchClaimOverlap(query,work);if(overlap)found.push(overlap);if(found.length>=10)break;}return found;},
+    conflict(candidate,at){return conflictingClaim(Object.fromEntries(candidates.map(({work})=>[work.id,work])),candidate,at);}
+  };
 }
 export function currentCommandContext(store,roomId,command,{actorId}={}) {
   const db=store.db,b=contextBudgets.get(db)??budget(),head=readCurrentHead(db,roomId,b);if(!head)return null;
@@ -483,7 +538,7 @@ function commandContextFromHead(store,roomId,command,head,b,{readMessage,readWor
     const source=readMessage?readMessage(id,b):readCurrentMessage(db,roomId,id,b);if(source)messages.set(id,source);return source;
   };
   const wantedMessages=[command.data.messageId??command.id,`${command.data.messageId??command.id}:channel`,command.data.replyToId,
-    command.data.sourceMessageId,command.data.evidenceMessageId,command.data.requestMessageId];
+    command.data.sourceMessageId,command.data.evidenceMessageId,command.data.requestMessageId,command.data.progressMessageId];
   for(const id of wantedMessages)if(typeof id==='string')loadMessage(id);
   let cursor = command.data.replyToId ?? (command.type==='message.edited'?command.data.messageId:command.type==='message.deleted'?messages.get(command.data.messageId)?.value.replyToId:null), childSeq = Number.MAX_SAFE_INTEGER;
   for(let depth=0;cursor;depth++) {
@@ -553,9 +608,10 @@ function commandContextFromHead(store,roomId,command,head,b,{readMessage,readWor
   }
   // Shared reducers see the complete addressed ancestry in original order.
   state.messages=[...messages.values()].sort((a,b)=>a.row.seq-b.row.seq||Buffer.compare(Buffer.from(a.value.id),Buffer.from(b.value.id))).map(source=>source.value);
-  bindCurrentRecordContext(state,{replyRequestCount:head.counts.replyRequests});
+  const claims=command.type==='claim.acquired'?currentClaimAdmission(store,roomId,actorId,state.workItems[workId],b):null;
+  bindCurrentRecordContext(state,{replyRequestCount:head.counts.replyRequests,...(claims?{claimOverlaps:claims.overlaps}:{})});
   const before=fieldsOf({...state,workItems:Object.fromEntries(workRefs)});
-  return {room:{sequence:head.sequence,state},current:{head,before,workRefs,budget:b,messageRows:messages},count:head.counts.messages};
+  return {room:{sequence:head.sequence,state},current:{head,before,workRefs,budget:b,messageRows:messages,...(claims?{claimConflict:claims.conflict}:{})},count:head.counts.messages};
 }
 // Trusted invitation/referral writers use the same protected current facts and
 // transition writer. A name/capacity decision admits the bounded full roster;

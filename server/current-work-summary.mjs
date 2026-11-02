@@ -11,6 +11,7 @@ export function thinWorkForContext(item) {
     decision:'eventId actorId decision completionEventId evidenceVersion',
     handoff:'open eventId at actorId triageMemberId nextAction limitReason haltAll evidenceUrl evidenceVersion'
   }))if(Object.hasOwn(item,key))out[key]=pick(item[key],fields);
+  if(out.claim){const expiresAtMs=Date.parse(out.claim.expiresAt);out.claim.expiresAtMs=Number.isFinite(expiresAtMs)?expiresAtMs:null;}
   return out;
 }
 export const currentWorkSummary=(item,ref)=>({ref,work:thinWorkForContext(item)});

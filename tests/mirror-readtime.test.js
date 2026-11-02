@@ -38,7 +38,7 @@ import {
 } from "../server/public-read-model.mjs";
 import { publicUnpublishSchema } from "../server/legal-store.mjs";
 import { roomDirectorySchema } from "../server/room-directory.mjs";
-import { lotReceiptVisible, recordedReceiptsSetting } from "../server/public-visibility.mjs";
+import { lotReceiptVisible, recordedReceiptsSetting, readModelReceiptsSetting } from "../server/public-visibility.mjs";
 import { roomProofView } from "../server/proof-page.mjs";
 import { publicRoomView, publicSitemapEntries } from "../server/public-rooms.mjs";
 
@@ -228,4 +228,25 @@ test("DETAIL 8: authority off + public_rooms mirror stale-on — proof and room 
   assert.ok(!room.document.receipts.some(receipt => receipt.id === PAGE_RECEIPT),
     "the room page's origin-room receipt leg follows the recorded opt-out");
   assert.equal(sitemapHasProof(ctx.store), false, "the sitemap's proof entry follows the recorded opt-out");
+});
+
+test("readModelReceiptsSetting: the page gate's read-model form of the recorded setting", t => {
+  const ctx = makeLot(t, "rmrs");
+  // Never recorded: absent is private (#3594), not a fallback to any
+  // listing column.
+  assert.deepEqual(readModelReceiptsSetting(ctx.store.db, "commons"),
+    { status: "absent", enabled: null });
+  setSetting(ctx, "rmrs-on", true);
+  assert.deepEqual(readModelReceiptsSetting(ctx.store.db, "commons"),
+    { status: "recorded", enabled: 1 });
+  setSetting(ctx, "rmrs-off", false);
+  assert.deepEqual(readModelReceiptsSetting(ctx.store.db, "commons"),
+    { status: "recorded", enabled: 0 });
+  // A store with no rooms relation at all: the recorded setting cannot
+  // be consulted, so the caller falls back to the listing column.
+  const bare = new DatabaseSync(":memory:");
+  bare.exec(PUBLIC_READ_MODEL_SCHEMA); bare.exec(publicUnpublishSchema); bare.exec(roomDirectorySchema);
+  assert.deepEqual(readModelReceiptsSetting(bare, "commons"),
+    { status: "unavailable", enabled: null });
+  bare.close();
 });

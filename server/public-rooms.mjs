@@ -14,7 +14,7 @@ import { PUBLIC_PAGE_LASTMOD } from "./public-search.mjs";
 import { listRoomTemplates, getRoomTemplate } from "./templates.mjs";
 import { LEGAL_FOOTER_LINKS, reportHref } from "./legal-pages.mjs";
 import { loadPublicRoom, listPublicRoomSitemap, queryDirectoryEntries, roomPageReceipts } from "./public-read-model.mjs";
-import { recordedReceiptsSetting } from "./public-visibility.mjs";
+import { readModelReceiptsSetting } from "./public-visibility.mjs";
 import { excludeHiddenReceipts } from "./receipts-live.mjs";
 
 const SETUP_COPY_SCRIPT = `(() => {
@@ -118,17 +118,21 @@ function visibleRoomReceipts(store, slug, receiptsEnabled) {
 
 // The receipts gate for the room page, its proof link, and the
 // sitemap's proof entry: the owner's recorded public-receipts setting,
-// read from the authoritative record at read time
-// (recordedReceiptsSetting, the same read the cured lot path uses) —
-// never the write-time mirror public_rooms.receipts_enabled, whose
-// drift hid opted-in rooms' receipts and advertised opted-out ones
-// (INV-E DETAIL 8). Where the store carries no rooms table at all (a
-// predating/partial store) the authoritative record cannot exist, so
-// the mirrored column is the only record that can decide, exactly as
-// the lot read falls back to its mirror there. Never-recorded reads
-// as enabled=null and stays private (#3594).
+// read at read time from its read-model copy
+// (readModelReceiptsSetting: room_public_receipts_setting, rewritten
+// in the same transaction as every recorded change) — never the
+// listing column public_rooms.receipts_enabled, whose drift hid
+// opted-in rooms' receipts and advertised opted-out ones (INV-E
+// DETAIL 8). Public routes never read rooms.projection
+// (tests/public-read-model.test.js), so unlike the lot path — not a
+// public HTTP route in that test's set — this gate may not consult
+// the authoritative projection directly. Where the store carries no
+// rooms table at all (a predating/partial store) no recorded setting
+// can exist, so the listing column is the only record that can
+// decide, exactly as the lot read falls back to its mirror there.
+// Never-recorded reads as enabled=null and stays private (#3594).
 function authoritativeReceiptsEnabled(store, room) {
-  const recorded = recordedReceiptsSetting(store.db, room.slug);
+  const recorded = readModelReceiptsSetting(store.db, room.slug);
   return recorded.status === "unavailable" ? room.receiptsEnabled === true : recorded.enabled === 1;
 }
 

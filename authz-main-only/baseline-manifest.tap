@@ -1,0 +1,89 @@
+TAP version 13
+# Subtest: runtime and schema pins are exact and deterministic
+ok 1 - runtime and schema pins are exact and deterministic
+  ---
+  duration_ms: 4.666083
+  type: 'test'
+  ...
+# Subtest: file pins change when bytes change and are sorted
+ok 2 - file pins change when bytes change and are sorted
+  ---
+  duration_ms: 2.241916
+  type: 'test'
+  ...
+# Subtest: CI runtime must satisfy engines.node
+ok 3 - CI runtime must satisfy engines.node
+  ---
+  duration_ms: 1.889542
+  type: 'test'
+  ...
+# Subtest: schema pin refuses a missing version marker
+ok 4 - schema pin refuses a missing version marker
+  ---
+  duration_ms: 1.551458
+  type: 'test'
+  ...
+# Subtest: drift names the changed file, added file and removed file
+ok 5 - drift names the changed file, added file and removed file
+  ---
+  duration_ms: 1.932375
+  type: 'test'
+  ...
+# Subtest: drift refuses malformed manifests without reading sections
+ok 6 - drift refuses malformed manifests without reading sections
+  ---
+  duration_ms: 0.059625
+  type: 'test'
+  ...
+# Subtest: frozen deployment manifest pins the recovery helper and production workflow bytes
+ok 7 - frozen deployment manifest pins the recovery helper and production workflow bytes
+  ---
+  duration_ms: 0.203416
+  type: 'test'
+  ...
+# Subtest: committed candidate manifest has zero drift from the tree
+not ok 8 - committed candidate manifest has zero drift from the tree
+  ---
+  duration_ms: 5.310292
+  type: 'test'
+  location: '/Users/potter/Documents/Codex/2026-10-22/you-x20/work/member2-authz-main-only-1102/tests/candidate-manifest.test.js:89:1'
+  failureType: 'testCodeFailure'
+  error: |-
+    candidate manifest drift (run: node scripts/candidate-manifest.mjs --write): assets:src/app.js, assets:src/client.js, assets:src/events.js, assets:src/needs-attention.js, assets:strings/en.js, assets:strings/en.json
+    + actual - expected
+    
+    + [
+    +   'assets:src/app.js',
+    +   'assets:src/client.js',
+    +   'assets:src/events.js',
+    +   'assets:src/needs-attention.js',
+    +   'assets:strings/en.js',
+    +   'assets:strings/en.json'
+    + ]
+    - []
+    
+  code: 'ERR_ASSERTION'
+  name: 'AssertionError'
+  expected:
+  actual:
+    0: 'assets:src/app.js'
+    1: 'assets:src/client.js'
+    2: 'assets:src/events.js'
+    3: 'assets:src/needs-attention.js'
+    4: 'assets:strings/en.js'
+    5: 'assets:strings/en.json'
+  operator: 'deepStrictEqual'
+  stack: |-
+    TestContext.<anonymous> (file:///Users/potter/Documents/Codex/2026-10-22/you-x20/work/member2-authz-main-only-1102/tests/candidate-manifest.test.js:100:10)
+    async Test.run (node:internal/test_runner/test:1409:7)
+    async Test.processPendingSubtests (node:internal/test_runner/test:974:7)
+  ...
+1..8
+# tests 8
+# suites 0
+# pass 7
+# fail 1
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 54.063042

@@ -1,0 +1,39 @@
+{
+  "source": "2fd8145d497e092d8a84751371311733b6668d70",
+  "tree": "d16990909913b401fa3834cb7fea9ec54146d175",
+  "parent": "00888c52110d36250d3e07629036701b72926d09",
+  "branch": "codex/member2-authz-main-only-1102",
+  "onlyChangedFile": "tests/canonical-work-authz-http.test.mjs",
+  "testSha256": "7b837082f32e926b0a5fc63c6e02b6a4f998730ab070f41a23787278f5b839c2",
+  "exactPublishedHead": {
+    "testRecords": 55,
+    "pass": 55,
+    "fail": 0,
+    "skip": 0
+  },
+  "lint": {
+    "exit": 0,
+    "maxWarnings": 0
+  },
+  "baselineCandidateManifest": {
+    "base": "00888c52110d36250d3e07629036701b72926d09",
+    "testFileAbsentDuringBaseline": true,
+    "pass": 7,
+    "fail": 1,
+    "staleAssetPins": [
+      "src/app.js",
+      "src/client.js",
+      "src/events.js",
+      "src/needs-attention.js",
+      "strings/en.js",
+      "strings/en.json"
+    ]
+  },
+  "files": {
+    "regression.tap": "2642e758f4ad2e93d7faf1510c88b93fdad41dcfa5d6746368433ff496f7a2b6",
+    "regression-exact-head.tap": "4ce9af9d66271d0e17316112a01983f5ed709b28207e6a7535807fb8172544d1",
+    "baseline-manifest.tap": "eb5149fec3142bd2b2d6895fa2e62572da348536eae2d61d53b2802842a39996",
+    "lint.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+  },
+  "limits": "Local Node only; no full suite, Native, merge, deployment or peer-device execution. Main-only test is byte-identical to prior a01 stack regression. Runtime, UI and candidate manifest unchanged."
+}

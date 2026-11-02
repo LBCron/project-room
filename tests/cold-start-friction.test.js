@@ -1,3 +1,4 @@
+import { currentInviteContext } from '../server/current-room-repository.mjs';
 // Cold-start friction: MCP error shapes, room-create defaults, land-queue
 // pr_not_found, and replyToId.
 import test from "node:test";
@@ -119,7 +120,7 @@ test("room create defaults kind, roomId, and displayName and names the bad field
   const created = rooms.create(identity.secret, { title: "Ada Room", purpose: "Ship the first post" });
   assert.match(created.roomId, /^ada-room-[0-9a-f]{4}$/);
   assert.equal(created.duplicate, false);
-  const state = store.room(created.roomId).state;
+  const state = currentInviteContext(store, created.roomId, { memberIds: [identity.identityId] }).room.state;
   assert.equal(state.room.kind, "personal");
   assert.equal(state.members[identity.identityId].displayName, "Ada Agent");
 

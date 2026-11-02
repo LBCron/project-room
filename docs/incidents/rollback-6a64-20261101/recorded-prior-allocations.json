@@ -1,0 +1,92 @@
+{
+  "targetSha": "bbb8b348423f002b3c636207ecc175faa3a2b573",
+  "candidateCodeSchemaVersion": 44,
+  "candidateSchemaSource": {
+    "version": 44,
+    "revision": "bbb8b348423f002b3c636207ecc175faa3a2b573",
+    "path": "server/writer-fence.mjs",
+    "blob": "44100f4a9b0f26a065acd4d679080f4f603ac91b",
+    "definitions": "server/writer-fence.mjs@44100f4a9b0f26a065acd4d679080f4f603ac91b\nserver/abuse-rate-buckets.mjs@1768a5295bebdee28c4ea98f6fb40b9165c87554\nserver/oauth-provider-store.mjs@88959e93c8bdf0c43f0f9167e97e36f0bda5ac3d"
+  },
+  "recordedAt": "2026-11-01T23:46:50.189Z",
+  "prod": {
+    "known": true,
+    "versionId": "65e553f4-f96f-4f7f-a4d4-ac8e18c209a5",
+    "sourceRevision": "6a64ad3039600de2b382a16faead57f33dd304e3",
+    "codeSchemaVersion": 44,
+    "schemaSource": {
+      "version": 44,
+      "revision": "6a64ad3039600de2b382a16faead57f33dd304e3",
+      "path": "server/writer-fence.mjs",
+      "blob": "44100f4a9b0f26a065acd4d679080f4f603ac91b",
+      "definitions": "server/writer-fence.mjs@44100f4a9b0f26a065acd4d679080f4f603ac91b\nserver/abuse-rate-buckets.mjs@1768a5295bebdee28c4ea98f6fb40b9165c87554\nserver/oauth-provider-store.mjs@88959e93c8bdf0c43f0f9167e97e36f0bda5ac3d"
+    },
+    "allocationBefore": {
+      "known": true,
+      "versions": [
+        {
+          "versionId": "65e553f4-f96f-4f7f-a4d4-ac8e18c209a5",
+          "percentage": 100
+        }
+      ],
+      "versionId": "65e553f4-f96f-4f7f-a4d4-ac8e18c209a5"
+    },
+    "allocationAfter": {
+      "known": true,
+      "versions": [
+        {
+          "versionId": "65e553f4-f96f-4f7f-a4d4-ac8e18c209a5",
+          "percentage": 100
+        }
+      ],
+      "versionId": "65e553f4-f96f-4f7f-a4d4-ac8e18c209a5"
+    },
+    "error": null,
+    "automaticRollback": {
+      "eligible": true,
+      "reason": "schema floor and exact writer-fence definition match; row/runtime compatibility is not established by this check"
+    }
+  },
+  "entry": {
+    "known": true,
+    "versionId": "ebd621f5-fc73-43af-bc41-374df1b22e20",
+    "sourceRevision": "6a64ad3039600de2b382a16faead57f33dd304e3",
+    "codeSchemaVersion": 44,
+    "schemaSource": {
+      "version": 44,
+      "revision": "6a64ad3039600de2b382a16faead57f33dd304e3",
+      "path": "server/writer-fence.mjs",
+      "blob": "44100f4a9b0f26a065acd4d679080f4f603ac91b",
+      "definitions": "server/writer-fence.mjs@44100f4a9b0f26a065acd4d679080f4f603ac91b\nserver/abuse-rate-buckets.mjs@1768a5295bebdee28c4ea98f6fb40b9165c87554\nserver/oauth-provider-store.mjs@88959e93c8bdf0c43f0f9167e97e36f0bda5ac3d"
+    },
+    "allocationBefore": {
+      "known": true,
+      "versions": [
+        {
+          "versionId": "ebd621f5-fc73-43af-bc41-374df1b22e20",
+          "percentage": 100
+        }
+      ],
+      "versionId": "ebd621f5-fc73-43af-bc41-374df1b22e20"
+    },
+    "allocationAfter": {
+      "known": true,
+      "versions": [
+        {
+          "versionId": "ebd621f5-fc73-43af-bc41-374df1b22e20",
+          "percentage": 100
+        }
+      ],
+      "versionId": "ebd621f5-fc73-43af-bc41-374df1b22e20"
+    },
+    "error": null,
+    "automaticRollback": {
+      "eligible": true,
+      "reason": "schema floor and exact writer-fence definition match; row/runtime compatibility is not established by this check"
+    }
+  },
+  "run": "https://github.com/Uuriko/project-room/actions/runs/41363708931",
+  "liveSourceRevisionBefore": "6a64ad3039600de2b382a16faead57f33dd304e3",
+  "prodRollbackVersionId": "65e553f4-f96f-4f7f-a4d4-ac8e18c209a5",
+  "entryRollbackVersionId": "ebd621f5-fc73-43af-bc41-374df1b22e20"
+}

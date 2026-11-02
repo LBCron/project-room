@@ -1,0 +1,52 @@
+{
+  "source": "00888c52110d36250d3e07629036701b72926d09",
+  "cases": [
+    {
+      "kind": "unverified-password",
+      "eligiblePasswordReset": true,
+      "matchingAccounts": 1,
+      "secretCanariesAbsent": true,
+      "actualWriteRefused": true,
+      "snapshotBytesUnchanged": true,
+      "cliPass": true
+    },
+    {
+      "kind": "magic-only",
+      "eligiblePasswordReset": false,
+      "matchingAccounts": 1,
+      "secretCanariesAbsent": true,
+      "actualWriteRefused": true,
+      "snapshotBytesUnchanged": true,
+      "cliPass": true
+    },
+    {
+      "kind": "disabled-password-with-magic",
+      "eligiblePasswordReset": false,
+      "matchingAccounts": 1,
+      "secretCanariesAbsent": true,
+      "actualWriteRefused": true,
+      "snapshotBytesUnchanged": true,
+      "cliPass": true
+    },
+    {
+      "kind": "inactive-password",
+      "eligiblePasswordReset": false,
+      "matchingAccounts": 1,
+      "secretCanariesAbsent": true,
+      "actualWriteRefused": true,
+      "snapshotBytesUnchanged": true,
+      "cliPass": true
+    },
+    {
+      "kind": "unknown-address",
+      "eligiblePasswordReset": false,
+      "matchingAccounts": 0,
+      "secretCanariesAbsent": true,
+      "actualWriteRefused": true,
+      "snapshotBytesUnchanged": true,
+      "cliPass": true
+    }
+  ],
+  "invalidInputRefusedWithoutData": true,
+  "scope": "Disposable real SQLite fixtures only; no production account or network access."
+}

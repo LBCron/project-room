@@ -1,0 +1,190 @@
+{
+  "source": "00888c52110d36250d3e07629036701b72926d09",
+  "results": [
+    {
+      "kind": "magic-only",
+      "steps": [
+        {
+          "label": "password-login",
+          "status": 401,
+          "error": "invalid_credentials",
+          "responseStatus": "action_required"
+        },
+        {
+          "label": "request-fresh-reset",
+          "status": 200,
+          "responseStatus": "sent"
+        },
+        {
+          "label": "consume-fresh-reset",
+          "status": 401,
+          "error": "invalid_password_reset",
+          "responseStatus": "action_required"
+        },
+        {
+          "label": "repeat-signup",
+          "status": 202,
+          "responseStatus": "check_email"
+        },
+        {
+          "label": "request-correct-magic-method",
+          "status": 200,
+          "responseStatus": "sent"
+        },
+        {
+          "label": "consume-correct-magic-method",
+          "status": 201
+        }
+      ],
+      "accountPreserved": true,
+      "correctMethodRecoversAccount": true
+    },
+    {
+      "kind": "disabled-password-with-magic",
+      "steps": [
+        {
+          "label": "password-login",
+          "status": 401,
+          "error": "invalid_credentials",
+          "responseStatus": "action_required"
+        },
+        {
+          "label": "request-fresh-reset",
+          "status": 200,
+          "responseStatus": "sent"
+        },
+        {
+          "label": "consume-fresh-reset",
+          "status": 401,
+          "error": "invalid_password_reset",
+          "responseStatus": "action_required"
+        },
+        {
+          "label": "repeat-signup",
+          "status": 202,
+          "responseStatus": "check_email"
+        },
+        {
+          "label": "request-correct-magic-method",
+          "status": 200,
+          "responseStatus": "sent"
+        },
+        {
+          "label": "consume-correct-magic-method",
+          "status": 201
+        }
+      ],
+      "accountPreserved": true,
+      "correctMethodRecoversAccount": true
+    }
+  ],
+  "coldReopens": 2,
+  "localMailIntercepts": 6,
+  "externalNetworkRequests": 0,
+  "nativeSnapshotDiagnostics": [
+    {
+      "kind": "magic-only",
+      "diagnostic": {
+        "schema": "member2-readonly-account-state-v1",
+        "source": "00888c52110d36250d3e07629036701b72926d09",
+        "matchingAccounts": 1,
+        "ambiguousAccountLookup": false,
+        "accounts": [
+          {
+            "label": "candidate-1",
+            "accountPresent": true,
+            "active": true,
+            "passwordResetRequired": false,
+            "emailVerification": "verified",
+            "methods": [
+              {
+                "type": "magic",
+                "enabled": true,
+                "verified": true
+              }
+            ],
+            "enabledPasswordMethodsForAddress": 0,
+            "enabledPasswordVerifierPresent": false,
+            "passwordResetEligible": false,
+            "observations": [
+              "no_enabled_password_for_address"
+            ]
+          }
+        ],
+        "resetChallenge": {
+          "liveCount": 1,
+          "latest": {
+            "targetsExistingAccount": false,
+            "targetsMatchedAccount": false,
+            "targetsEligiblePasswordAccount": false,
+            "attempts": 1,
+            "expiresInMs": 899421
+          }
+        },
+        "queryOnly": true,
+        "limits": [
+          "Local authorized snapshot only; freshness and deployed state are not established.",
+          "Eligibility is not proof of a correct password or valid/latest reset code.",
+          "No identifiers, addresses, credential hashes, verifiers or reset proofs are emitted."
+        ]
+      },
+      "actualWriteRefused": true,
+      "snapshotBytesUnchanged": true
+    },
+    {
+      "kind": "disabled-password-with-magic",
+      "diagnostic": {
+        "schema": "member2-readonly-account-state-v1",
+        "source": "00888c52110d36250d3e07629036701b72926d09",
+        "matchingAccounts": 1,
+        "ambiguousAccountLookup": false,
+        "accounts": [
+          {
+            "label": "candidate-1",
+            "accountPresent": true,
+            "active": true,
+            "passwordResetRequired": false,
+            "emailVerification": "verified",
+            "methods": [
+              {
+                "type": "magic",
+                "enabled": true,
+                "verified": true
+              },
+              {
+                "type": "password",
+                "enabled": false,
+                "verified": false
+              }
+            ],
+            "enabledPasswordMethodsForAddress": 0,
+            "enabledPasswordVerifierPresent": false,
+            "passwordResetEligible": false,
+            "observations": [
+              "no_enabled_password_for_address"
+            ]
+          }
+        ],
+        "resetChallenge": {
+          "liveCount": 1,
+          "latest": {
+            "targetsExistingAccount": false,
+            "targetsMatchedAccount": false,
+            "targetsEligiblePasswordAccount": false,
+            "attempts": 1,
+            "expiresInMs": 899884
+          }
+        },
+        "queryOnly": true,
+        "limits": [
+          "Local authorized snapshot only; freshness and deployed state are not established.",
+          "Eligibility is not proof of a correct password or valid/latest reset code.",
+          "No identifiers, addresses, credential hashes, verifiers or reset proofs are emitted."
+        ]
+      },
+      "actualWriteRefused": true,
+      "snapshotBytesUnchanged": true
+    }
+  ],
+  "scope": "Disposable actual Native fixtures and read-only closed local SQLite snapshots. Matches symptom classes, not deployed account state or production diagnosis."
+}

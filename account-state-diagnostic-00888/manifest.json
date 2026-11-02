@@ -1,0 +1,9 @@
+{
+  "node-qualification.json": "74f86cf234b2564e71e4aeb0de4710099d7b57ba4b461cbfe7832a22c1ba2982",
+  "account_state_diagnostic.mjs": "4b5064832c612f6588e9630e83425b7e798bed8d9086f532efbaa2885b015f83",
+  "source-manifest.json": "7bc6749d42f9cd994fddc59e953fa15f449a8ecfc22fe1abdb70b2c90f397487",
+  "account_method_states_native.mjs": "b676e49d90ac7ada84968916fa34dbc7a58146bbeade4ba3c331a83159078528",
+  "README.md": "413e002acfa89bea1649b0170fc4d567c41ae3ee79f6da785295544f2acf8f35",
+  "account_state_diagnostic.check.mjs": "cee7d4bb35fc20cce02d982a9a9a654b0d8ae94fea976bae285baa677666be80",
+  "native-qualification.json": "16aad3d61c93d1c3960767e2eae916868fd6bbb9a9e3b7426a1451206ab3e1b1"
+}

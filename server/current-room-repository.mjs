@@ -87,6 +87,8 @@ guardDefinitions.push(['current_room_permit_update',`CREATE TRIGGER IF NOT EXIST
   ['current_room_permit_delete',`CREATE TRIGGER IF NOT EXISTS current_room_permit_delete BEFORE DELETE ON current_room_writer_permit BEGIN
     SELECT RAISE(ABORT,'unsupported current room permit'); END`]);
 export const CURRENT_ROOM_GUARDS = [...guardDefinitions,...RESTORE_CONTROL_GUARDS].map(([,sql])=>sql+';').join('\n') + CURRENT_LEGACY_WORK_INDEXES + CURRENT_WORK_CAPACITY_INDEXES + CURRENT_INBOX_DISCOVERY_INDEXES + `
+CREATE INDEX IF NOT EXISTS current_redaction_message_events ON events(room_id,CASE WHEN json_type(body,'$.data.messageId')='text' AND json_extract(body,'$.data.messageId')<>'' THEN json_extract(body,'$.data.messageId') ELSE id END,sequence);
+CREATE INDEX IF NOT EXISTS current_redaction_code_drops ON room_code_drops(room_id,message_id,id);
 CREATE INDEX IF NOT EXISTS current_room_attachments_message ON room_attachments(room_id,message_id,id);
 CREATE INDEX IF NOT EXISTS current_work_summary_keys ON current_room_record_proofs(room_id,record_key) WHERE domain='workSummary' AND present=1;
 CREATE INDEX IF NOT EXISTS current_reply_request_keys ON current_room_record_proofs(room_id,record_key) WHERE domain='replyRequests' AND present=1;
@@ -376,7 +378,7 @@ export function readCurrentMessage(db,roomId,messageId,b=contextBudgets.get(db)?
   return {row,value:decodeMessageEntity(row)};
 }
 
-const supported = new Set(['work.superseded','ownership.transferred','reply_request.cancelled','work_claim.updated','message.posted','work.proposed','work.accepted','work.started','work.completed','work.handoff_recorded','work.halt_cleared','verification.recorded','owner.decision_recorded']);
+const supported = new Set(['message.deleted','work.superseded','ownership.transferred','reply_request.cancelled','work_claim.updated','message.posted','work.proposed','work.accepted','work.started','work.completed','work.handoff_recorded','work.halt_cleared','verification.recorded','owner.decision_recorded']);
 const contextBudgets = new WeakMap();
 export function withCurrentServingWriter(db,roomId,operation) {
   if(!isCurrentRoom(db,roomId) && !db.prepare("SELECT 1 FROM current_room_record_proofs WHERE room_id=? AND domain='migrationFence' AND record_key='active' AND present=1").get(roomId))return operation();
@@ -434,7 +436,7 @@ function commandContextFromHead(store,roomId,command,head,b,{readMessage,readWor
   const wantedMessages=[command.data.messageId??command.id,`${command.data.messageId??command.id}:channel`,command.data.replyToId,
     command.data.sourceMessageId,command.data.evidenceMessageId,command.data.requestMessageId];
   for(const id of wantedMessages)if(typeof id==='string')loadMessage(id);
-  let cursor = command . data . replyToId , childSeq = Number . MAX_SAFE_INTEGER ;
+  let cursor = command.data.replyToId ?? (command.type==='message.deleted'?messages.get(command.data.messageId)?.value.replyToId:null), childSeq = Number.MAX_SAFE_INTEGER;
   for(let depth=0;cursor;depth++) {
     if(depth>=32)refuse('Reply ancestry exceeds bounded context');
     const source=loadMessage(cursor);if(!source)break;
@@ -456,7 +458,7 @@ function commandContextFromHead(store,roomId,command,head,b,{readMessage,readWor
       (state.replyRequests??={})[id]=selectedRequest;
     }
   }
-  const workId=command.data.workItemId??selectedRequest?.workItemId;
+  const workId=command.data.workItemId??selectedRequest?.workItemId??(command.type==='message.deleted'?messages.get(command.data.messageId)?.value.workItemId:null);
   // Supersession compares two existing canonical contracts. Load both exact
   // protected references; the shared reducer retains all ancestry/role rules.
   const workIds = new Set([workId, ...(command.type === 'work.superseded' ? [command.data.supersededByWorkItemId] : [])]);
@@ -576,6 +578,12 @@ export function prepareCurrentWrite(store,{roomId,previous,state,event,sequence,
         changes.push({domain:'threadParticipants',key,value:{threadRootId:root.id,memberId:message.authorId}});counts.threadParticipants++;
       }
     }
+  }
+  if(event.type==='message.redacted')for(const message of state.messages) {
+    const source=current.messageRows.get(message.id);
+    if(!source||isDeepStrictEqual(message,source.value))continue;
+    const row=messageRowForWrite(message,{sequence:source.row.seq,pinned:(state.pins??[]).some(pin=>pin.messageId===message.id),threadMessages:new Map(state.messages.map(m=>[m.id,m]))});
+    changes.push({domain:'messageWitness',key:message.id,value:{sequence:source.row.seq,entityHash:messageProofHash(row)}});
   }
   counts.messages+=state.messages.length-previous.state.messages.length;
   for(const domain of ['workItems','replyRequests','members'])for(const change of changes.filter(c=>c.domain===domain)) {

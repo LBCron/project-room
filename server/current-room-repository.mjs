@@ -427,7 +427,7 @@ export function readCurrentMessage(db,roomId,messageId,b=contextBudgets.get(db)?
   return {row,value:decodeMessageEntity(row)};
 }
 
-const supported = new Set(['capabilities.advertised','bond.propose','bond.accept','bond.decline','bond.revoke','bond.proposed','bond.activated','bond.revoked','dm.posted','claim.acquired','claim.renewed','claim.released','room.spend_pricing_set','room.spend_allowance_set','room.archived','room.exported','room.charter_updated','message.deleted','message.edited','work.superseded','ownership.transferred','reply_request.cancelled','work_claim.updated','message.posted','work.proposed','work.accepted','work.started','work.completed','work.handoff_recorded','work.halt_cleared','verification.recorded','owner.decision_recorded']);
+const supported = new Set(['channel.created','work.public_set','capabilities.advertised','bond.propose','bond.accept','bond.decline','bond.revoke','bond.proposed','bond.activated','bond.revoked','dm.posted','claim.acquired','claim.renewed','claim.released','room.spend_pricing_set','room.spend_allowance_set','room.archived','room.exported','room.charter_updated','message.deleted','message.edited','work.superseded','ownership.transferred','reply_request.cancelled','work_claim.updated','message.posted','work.proposed','work.accepted','work.started','work.completed','work.handoff_recorded','work.halt_cleared','verification.recorded','owner.decision_recorded']);
 const contextBudgets = new WeakMap();
 export function withCurrentServingWriter(db,roomId,operation) {
   if(!isCurrentRoom(db,roomId) && !db.prepare("SELECT 1 FROM current_room_record_proofs WHERE room_id=? AND domain='migrationFence' AND record_key='active' AND present=1").get(roomId))return operation();
@@ -615,6 +615,14 @@ function commandContextFromHead(store,roomId,command,head,b,{readMessage,readWor
   }
   if(selectedRequest?.workItemId&&!workRefs.has(selectedRequest.workItemId))corrupt('selected request work reference missing');
   const channelIds=new Set(['general',command.data.channelId,...[...messages.values()].map(m=>m.value.channelId)]);
+  if(command.type==='channel.created') {
+    // Creation checks both the total channel cap and name uniqueness. Admit
+    // the complete, bounded catalog before the shared reducer can write.
+    const channels=db.prepare("SELECT record_key FROM current_room_record_proofs WHERE room_id=? AND domain='channels' AND present=1 ORDER BY record_key LIMIT 51").all(roomId);
+    if(channels.length>50)refuse('Current channel catalog exceeds its supported capacity');
+    charge(b,channels.reduce((sum,row)=>sum+Buffer.byteLength(row.record_key)+32,0),channels.length);
+    for(const row of channels)channelIds.add(row.record_key);
+  }
   for(const id of channelIds)if(typeof id==='string') {
     const channel=readCurrentRecord(db,roomId,'channels',id,b);if(channel!==undefined)state.channels[id]=channel;
   }

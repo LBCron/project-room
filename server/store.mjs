@@ -7581,10 +7581,11 @@ this.slaBreachAlerts = new SlaBreachAlertJournal(this); // Task 26: durable in-a
       });
     }, {
       // Alias resolution and membership admission require an exact full roster.
-      // This internal consumer reservation leaves the byte ceiling unchanged.
+      // Channel creation similarly checks the fixed 50-channel catalog.
+      // These consumer reservations leave the byte ceiling unchanged.
       maxRecords: command.type === T.MEMBER_ADDED || command.type === T.MEMBER_ACCESS_CHANGED && command.data.active === true
         || command.type === T.MESSAGE_POSTED && typeof command.data.body === "string"
-        && command.data.body.includes("@") ? 1024 : 200
+        && command.data.body.includes("@") ? 1024 : command.type === T.CHANNEL_CREATED ? 512 : 200
     }));
     } catch (error) {
       // The test doubles that replace roomFlood expose only consume(), so a

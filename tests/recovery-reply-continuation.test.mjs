@@ -1,5 +1,8 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
+import {mkdtempSync,rmSync} from 'node:fs';
+import {tmpdir} from 'node:os';
+import {join} from 'node:path';
 import {RoomStore} from '../server/store.mjs';
 import {exportNdjsonText} from '../server/room-export.mjs';
 import {operatorRestoreResponse} from '../server/restore-ndjson.mjs';
@@ -18,12 +21,12 @@ async function setup(t,{checkpoint=false,checkpointMutation=null,withdraw=false,
  if(checkpoint){const state=source.readTransaction(()=>readCurrentRoomForAudit(source,'legacy-room')).state;if(archive)state.messages=source.readTransaction(()=>withCurrentAuditUnits(source,'legacy-room',reader=>source.db.prepare('SELECT message_id FROM messages WHERE room_id=? ORDER BY seq,message_id').all('legacy-room').map(row=>reader.message(row.message_id).value)));checkpointMutation?.(state);source.transaction(()=>source.db.prepare('INSERT INTO projection_checkpoints VALUES(?,?,?)').run('legacy-room',source.headSequence('legacy-room'),JSON.stringify(state)));source.command(_f.key,'legacy-room',{id:'after-checkpoint-context',type:'message.posted',data:{messageId:'tail-context',body:'Additional saved context',replyToId:'source-question',toMemberId:'worker',workItemId:'task'}});}
  if(withdraw)source.command(_f.key,'legacy-room',{id:'withdraw-question',type:'message.deleted',data:{messageId:'source-question',expectedMessageRevision:0}});
  if(checkpointMutation)assert.throws(()=>auditRecovery(source),/reconciliation/);else assert.doesNotThrow(()=>auditRecovery(source));
- const store=new RoomStore(':memory:');t.after(()=>store.close());let response=await post(store,exportNdjsonText(source.db)),calls=0;
+ const directory=mkdtempSync(join(tmpdir(),'recovery-replies-'));t.after(()=>rmSync(directory,{recursive:true,force:true}));const filename=join(directory,'target.sqlite'),store=new RoomStore(filename);t.after(()=>store.close());let response=await post(store,exportNdjsonText(source.db)),calls=0;
  while(restoreProgress(store.db).progress?.audit?.stage!=='replay_events'){
   assert.equal(response.status,202,JSON.stringify(response));response=await post(store,{restoreId:response.body.restoreId,sourceSeal:response.body.sourceSeal,expectedRevision:response.body.revision,requestId:'prepare-text-'+calls++});assert.ok(calls<100);
  }
  const state=restoreProgress(store.db),step=(p,options)=>withRestoreTransaction(store,()=>withRestoreAuditRows(store.db,state.restore_id,scratch=>advanceRecoveryReplies(store,scratch,state.restore_id,'legacy-room',p,state.seal,options)));
- return{source,store,state,step};
+ return{source,store,state,step,filename};
 }
 test('independent request history preserves authority and exact retained message fields',async t=>{
  const f=await setup(t);let p=initialRecoveryReplies(),calls=0;
@@ -65,4 +68,11 @@ test('historical active-member proof is used before accepting a request',async t
  const f=await setup(t);let p=initialRecoveryReplies();while(p.sequence<2)p=f.step(p,{maxUnits:1}).cursor;
  withRestoreTransaction(f.store,()=>withRestoreAuditRows(f.store.db,f.state.restore_id,scratch=>{const member=scratch.get('history','legacy-room','rrMember','owner');assert.equal(member.active,true);member.active=false;scratch.set('history','legacy-room','rrMember','owner',member);}));
  assert.throws(()=>{for(let i=0;i<100&&p.stage!=='complete';i++)p=f.step(p).cursor;},/reconciliation/);
+});
+test('actual operator durably checks reply and help phases before full audit admission',async t=>{
+ const f=await setup(t,{archive:true,checkpoint:true});let store=f.store,response,calls=0,sawReply=false,sawHelp=false;
+ try{while(true){const state=restoreProgress(store.db);sawReply||=state.progress.audit.stage==='reply_requests';sawHelp||=state.progress.audit.stage==='work_help';
+ const input={restoreId:state.restore_id,sourceSeal:state.seal.id,expectedRevision:state.revision,requestId:'replies-full-'+calls};store.close();store=new RoomStore(f.filename);response=await post(store,input);assert.ok([200,202].includes(response.status),JSON.stringify(response));assert.deepEqual(await post(store,input),response);assert.ok(++calls<300);if(response.status===200)break;assert.throws(()=>store.headSequence('legacy-room'),e=>e.status===503);
+ }assert.equal(sawReply,true);assert.equal(sawHelp,true);assert.equal(response.body.verified,true);assert.equal(response.body.reportVersion,1);assert.deepEqual(response.body.subsystemContinuation.replyRequests,{rooms:1,deferred:0,requestsScanned:1,messagesCompared:3});assert.equal(response.body.subsystemContinuation.workHelp.deferred,0);assert.doesNotThrow(()=>auditRecovery(store));
+ }finally{store.close();}
 });

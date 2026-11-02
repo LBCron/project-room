@@ -7,7 +7,7 @@ import {RoomStore} from '../server/store.mjs';
 import {initialRoom} from '../server/bootstrap.mjs';
 import {readCurrentRoomForAudit} from '../server/current-room-repository.mjs';
 import {exportNdjsonText} from '../server/room-export.mjs';
-import {copyRoomRows,exportRoomNdjson,restoreRoomNdjson,mirrorRoomIfEnabled} from '../server/room-shard-copy.mjs';
+import {copyRoomRows,exportRoomNdjson,restoreRoomNdjson,mirrorRoomIfEnabled,compareRoomHomes,roomHomeDigest} from '../server/room-shard-copy.mjs';
 import {tableHome,roomTablesPresent} from '../server/room-shard-tables.mjs';
 const refusal=/Normalized room shard transfer requires receipt-closure qualification/;
 function pair(t,sourceCurrent,targetCurrent=false){const source=new RoomStore(':memory:'),target=new RoomStore(':memory:');t.after(()=>{source.close();target.close();});source.initialize(initialRoom(),sourceCurrent?{representation:'normalized-current-v1'}:undefined);if(targetCurrent)target.initialize(initialRoom(),{representation:'normalized-current-v1'});source.createAccount('directory-owner','synthetic');return{source,target};}
@@ -29,3 +29,7 @@ test('target-local controls have an honest home and are never room-restorable',t
  const{target}=pair(t,false);for(const name of ['current_restore_admission','current_restore_audit_scratch','current_room_writer_permit']){assert.equal(tableHome(name),'local');assert.equal(roomTablesPresent(target.db).has(name),false);}
  for(const name of ['current_room_head','current_room_records','current_room_record_proofs'])assert.equal(tableHome(name),'room');
 });
+
+test('legacy digest cannot falsely certify normalized homes',t=>{const{source}=pair(t,true);const before=snapshot(source);assert.throws(()=>roomHomeDigest(source,'commons'),refusal);assert.throws(()=>compareRoomHomes(source,source,'commons'),refusal);assert.deepEqual(snapshot(source),before);});
+
+test('closed marker without normalized head refuses before target work',t=>{const{source,target}=pair(t,false);source.db.prepare("UPDATE rooms SET projection=? WHERE id='commons'").run('{"normalizedCurrent":{"version":1}}');const before=snapshot(target);let calls=0;target.transaction=()=>{calls++;throw Error('target transaction must not run');};assert.throws(()=>copyRoomRows(source,target,'commons'),refusal);assert.equal(calls,0);assert.deepEqual(snapshot(target),before);});

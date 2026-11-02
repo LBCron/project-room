@@ -69,7 +69,7 @@ export class AgentConnections {
     // account required) — a raw access key must not mint agent credentials.
     // The mutation path additionally requires a signed-in account session —
     // connection sponsorship is account-bound by schema.
-    if (!auth.delegate && (auth.member?.id !== this.store.room(roomId).state.room.ownerId
+    if (!auth.delegate && (auth.member?.id !== this.store.roomAuthority(roomId,{memberId:auth.member.id}).ownerId
       || !auth.member.permissions.includes("manage_members"))) {
       fail(403, "owner_required", "Only the room owner can manage agent connections");
     }
@@ -88,8 +88,8 @@ export class AgentConnections {
     return first && JSON.parse(first.receipt_json).version === 2;
   }
   authority(row) {
-    const room = this.store.roomAuthority(row.room_id);
-    const sponsor = ownMember(room.members, row.sponsor_member_id), member = ownMember(room.members, row.member_id);
+    const room = this.store.roomAuthority(row.room_id,{memberId:row.sponsor_member_id});
+    const sponsor = ownMember(room.members, row.sponsor_member_id), member = ownMember(this.store.roomAuthority(row.room_id,{memberId:row.member_id}).members, row.member_id);
     const account = this.db.prepare("SELECT active,auth_epoch FROM accounts WHERE id=?").get(row.sponsor_account_id);
     const binding = this.db.prepare("SELECT account_id FROM member_accounts WHERE room_id=? AND member_id=?").get(row.room_id, row.sponsor_member_id);
     const friend = this.friendSponsored(row);
@@ -103,7 +103,7 @@ export class AgentConnections {
     return true;
   }
   view(row) {
-    const member = ownMember(this.store.room(row.room_id).state.members, row.member_id);
+    const member = ownMember(this.store.roomAuthority(row.room_id,{memberId:row.member_id}).members, row.member_id);
     const credential = this.db.prepare("SELECT revoked FROM credentials WHERE hash=?").get(row.credential_hash);
     const status = row.status === "disconnected" ? "disconnected" : row.expires_at <= this.store.now() ? "expired"
       : !this.authority(row) ? "access_changed" : credential?.revoked !== 0 ? "revoked" : "key_issued";
@@ -148,7 +148,7 @@ export class AgentConnections {
   list(token, roomId, binding) {
     return this.store.readTransaction(() => {
       const auth = this.sponsor(token, roomId, binding);
-      const owner = auth.delegate || auth.member.id === this.store.room(roomId).state.room.ownerId;
+      const owner = auth.delegate || auth.member.id === this.store.roomAuthority(roomId,{memberId:auth.member.id}).ownerId;
       return { connections: this.db.prepare("SELECT * FROM agent_connections WHERE room_id=? ORDER BY created_at,member_id").all(roomId)
         .filter(row => owner || row.sponsor_account_id === auth.account?.id && row.sponsor_member_id === auth.member.id).map(row => this.view(row)) };
     });

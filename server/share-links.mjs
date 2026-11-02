@@ -1,3 +1,4 @@
+import {currentInviteContext} from './current-room-repository.mjs';
 import {shareLinkAgentPrefix as agentJoinPrefix,assertShareLinkUsage,assertShareLinkJoinEvidence,assertShareLinkRedemption} from './share-link-evidence.mjs';
 import { canInviteCoOwners, museDevelopmentAccess } from "../src/room-administration.js";
 import { createHash, randomBytes, randomUUID } from "node:crypto";
@@ -131,7 +132,7 @@ export class ShareLinks {
     // Ownership implies full authority (mirrors validatePermissions in
     // src/events.js): the room owner administers invitation links on any
     // credential, including an agent identity bearer that has no account.
-    if (this.store.roomAuthority(roomId).ownerId === auth.member?.id) return auth;
+    if (this.store.roomAuthority(roomId,{memberId:auth.member?.id}).ownerId === auth.member?.id) return auth;
     // #643: an owner-delegated administrator (server-stamped
     // member.delegatedAdmin holding manage_members) administers links too —
     // managing invitation links is membership administration, the operation
@@ -142,6 +143,9 @@ export class ShareLinks {
       fail(403, "access_denied", "Only a human room administrator can manage invitation links");
     }
     return auth;
+  }
+  authorityState(roomId,memberIds=[]) {
+    return currentInviteContext(this.store,roomId,{memberIds})?.room.state ?? this.store.room(roomId).state;
   }
   // Cancelled, expired, and full rows stay (link history is retained) and do
   // not consume the 200 live links a room may hold.
@@ -164,8 +168,9 @@ export class ShareLinks {
     return humans + agents;
   }
   authority(row) {
-    if (this.accessOf(row) === "co_owner" && (!museDevelopmentAccess(this.store.room(row.room_id).state) || !canInviteCoOwners(this.store.room(row.room_id).state, row.issuer_member_id))) return false;
-    const members = this.store.room(row.room_id).state.members;
+    const state=this.authorityState(row.room_id,[row.issuer_member_id]);
+    if (this.accessOf(row) === "co_owner" && (!museDevelopmentAccess(state) || !canInviteCoOwners(state, row.issuer_member_id))) return false;
+    const members = state.members;
     // A truthy map lookup treats toString as the issuer and then throws on permissions.includes.
     const member = members && Object.hasOwn(members, row.issuer_member_id) ? members[row.issuer_member_id] : undefined;
     // A personal growth invite belongs to every active member, not only
@@ -174,7 +179,7 @@ export class ShareLinks {
     if (typeof row.request_id === "string" && row.request_id.startsWith(PERSONAL_INVITE_PREFIX)) {
       return member?.active !== false && member?.revision === row.issuer_member_revision;
     }
-    const ownerId = this.store.roomAuthority(row.room_id).ownerId;
+    const ownerId = state.room.ownerId;
     // Agent-issued links carry no account. An explicit owner-granted admin
     // keeps issuance authority only while its grant and revision remain current.
     if (row.issuer_account_id === null) {
@@ -283,6 +288,7 @@ export class ShareLinks {
     }
     return this.store.transaction(() => {
       const auth = this.administrator(token, roomId, binding), tokenHash = hash(linkToken);
+      const state=this.authorityState(roomId,[auth.member.id]);
       // Invitation issuance carries the f520ca69 email-verification gate:
       // sibling issuance paths (agent-invites.create, membership invitation
       // issue) refuse unverified accounts, and share links are invitations
@@ -295,9 +301,9 @@ export class ShareLinks {
       if (auth.account && !emailVerificationUnachievable) this.store.accountLogins.assertEmailVerified(auth.account.id);
       // Creating share links is a membership write: the read-only autonomy
       // tier applies even for delegated-admin agents (issue #996).
-      enforceAutonomyTierForAction({ db: this.store.db, roomId, state: this.store.room(roomId).state, actor: auth.member, action: "share_link_create", fail });
-      if (access === "co_owner" && (!museDevelopmentAccess(this.store.room(roomId).state) || auth.delegate || !canInviteCoOwners(this.store.room(roomId).state, auth.member.id))) fail(403, "link_access_denied", "Muse development co-owner access required");
-      if (access !== "guest" && access !== "co_owner" && !canInviteCoOwners(this.store.room(roomId).state, auth.member.id)) {
+      enforceAutonomyTierForAction({ db: this.store.db, roomId, state: state, actor: auth.member, action: "share_link_create", fail });
+      if (access === "co_owner" && (!museDevelopmentAccess(state) || auth.delegate || !canInviteCoOwners(state, auth.member.id))) fail(403, "link_access_denied", "Muse development co-owner access required");
+      if (access !== "guest" && access !== "co_owner" && !canInviteCoOwners(state, auth.member.id)) {
         fail(403, "link_access_denied", "Only the room creator can make member or co-admin links");
       }
       const fingerprint = hash(JSON.stringify(access === "guest" ? [tokenHash, expiresAt, maxJoins, expectedMemberRevision]

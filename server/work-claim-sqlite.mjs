@@ -91,7 +91,7 @@ const parse = text => {
   return value;
 };
 
-export function createDurableWorkClaimRegistry(db, { now = () => Date.now(), transaction = fn => fn(), onChange = null, beforeSet = null } = {}) {
+export function createDurableWorkClaimRegistry(db, { now = () => Date.now(), transaction = fn => fn(), onChange = null, beforeSet = null, beforeWrite = null } = {}) {
   if (!db || typeof db.prepare !== "function") throw new TypeError("a SQLite database handle is required");
   // Prepare lazily: RoomStore constructs services before its atomic schema migration.
   const statement = sql => ({
@@ -224,6 +224,7 @@ export function createDurableWorkClaimRegistry(db, { now = () => Date.now(), tra
       return item;
     },
     set(roomId, item) {
+      if (typeof beforeWrite === "function") beforeWrite(roomId);
       if (!item || typeof item.id !== "string") throw new TypeError("work claim item needs an id");
       if(typeof beforeSet==='function')beforeSet(roomId,item);
       upsert.run(roomId, item.id, JSON.stringify(encodeRow(WORK_CLAIM_ROW_KIND, capForStorage(roomId, item))), now());
@@ -256,6 +257,7 @@ export function createDurableWorkClaimRegistry(db, { now = () => Date.now(), tra
     },
     has(roomId, id) { return selectOne.get(roomId, id) != null; },
     delete(roomId, id) {
+      if (typeof beforeWrite === "function") beforeWrite(roomId);
       // #1527: readyClaims treats a missing dependency as "not done", so a
       // claim depending on a deleted claim could never return to
       // queue=ready -- stranded, ownerless, invisible. Waive the deleted id
@@ -280,6 +282,7 @@ export function createDurableWorkClaimRegistry(db, { now = () => Date.now(), tra
     },
     configure(roomId, config) {
       if (config !== undefined && config !== null) {
+        if (typeof beforeWrite === "function") beforeWrite(roomId);
         if (typeof config !== "object" || Array.isArray(config)) throw new Error("room work-claim config must be an object");
         upsertConfig.run(roomId, JSON.stringify({ ...rawConfig(roomId), ...config }), now());
       }

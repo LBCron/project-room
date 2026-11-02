@@ -20,9 +20,10 @@ export function advanceRecoveryEngine ( store , restoreId , previous , { maxTabl
  p . lastBatch = { fromStage : p . stage , fromTable : p . tableAfter , atoms : 0 , largeTable : null } ;
  const sealed = new Map ( ( admission . seal ?. tables ?? [ ] ) . map ( entry => [ entry . name , entry ] ) ) ;
  while ( p . lastBatch . atoms < maxTables ) {
- // quick_check uses the precise legacy filter. Per-table foreign_key_check
- // visits ALL tables, preserving the former unscoped foreign_key_check.
- const filter = p . stage === 'quick_check' ? " AND name NOT GLOB 'sqlite_*' AND name NOT GLOB '_cf_*'" : '' ;
+ // Native KV tables are platform-owned: an addressed PRAGMA is forbidden.
+ // Keep the complete Node foreign-key walk and every Native application table.
+ const filter = p . stage === 'quick_check' ? " AND name NOT GLOB 'sqlite_*' AND name NOT GLOB '_cf_*'"
+  : db . storage ? " AND name NOT GLOB '_cf_*'" : '' ;
  const scalar = db . prepare ( "SELECT rowid,length(CAST(name AS BLOB)) bytes FROM sqlite_master WHERE type='table'" + filter + ' AND name>? ORDER BY name LIMIT 1' ) . get ( p . tableAfter ) ;
  if ( ! scalar ) { p . stage = p . stage === 'quick_check' ? 'foreign_key_check' : 'complete' ; p . tableAfter = '' ; if ( p . stage === 'complete' ) return p ; continue ; }
  if ( ! Number . isSafeInteger ( scalar . bytes ) || scalar . bytes < 1 || scalar . bytes > 512 ) fail ( 'invalid table name' ) ;

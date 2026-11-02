@@ -1,0 +1,24 @@
+{
+  "source": "567af3344",
+  "node": {
+    "passed": 48,
+    "failed": 0
+  },
+  "native": {
+    "passed": 1,
+    "failed": 0,
+    "coldJournalPages": 3,
+    "restoreFinalStatus": 200
+  },
+  "scope": "Durable stamped-name census and source-zero historical stop/resume. Not whole-recovery boundedness or production activation.",
+  "logs": [
+    {
+      "file": "recovery-central-name-final2.log.gz",
+      "uncompressedSha256": "0090a9e4556c570bb7f4bde2a5641216996622264bd0803b3af98b8352cbec43"
+    },
+    {
+      "file": "recovery-central-name-native.log.gz",
+      "uncompressedSha256": "a429e479464bb1d3046e6eb1cf71b88a573d1fed1f5f211e8fef260ef302ecc3"
+    }
+  ]
+}

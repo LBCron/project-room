@@ -227,6 +227,7 @@ function validRoomArgs(name, args) {
     const replyOk = args.replyToId === undefined || validId(args.replyToId);
     const workOk = args.workItemId === undefined || validId(args.workItemId);
     return idOk && messageOk && replyOk && workOk
+      && (args.compact === undefined || typeof args.compact === "boolean")
       && typeof args.body === "string" && args.body.trim().length > 0 && args.body.length <= MAX_MESSAGE_BODY_CHARS;
   }
   if (name === "room_list_work") {
@@ -682,7 +683,16 @@ function dispatchRoomToolCall(store, secret, identity, name, args, agentRooms) {
     const messageId = args.messageId ?? id;
     const data = { messageId, body: args.body, ...(args.replyToId === undefined ? {} : { replyToId: args.replyToId }),
       ...(args.workItemId === undefined ? {} : { workItemId: args.workItemId }) };
-    return commandReceipt(store, secret, roomId, { id, type: "message.posted", data }, "posted");
+    const receipt = commandReceipt(store, secret, roomId, { id, type: "message.posted", data }, "posted");
+    if (args.compact !== true) return receipt;
+    return {
+      contractVersion: 1, status: receipt.status, roomId: receipt.event.roomId,
+      requestId: id, messageId: receipt.event.data.messageId, eventId: receipt.event.id,
+      actorId: receipt.event.actorId, sequence: receipt.sequence, duplicate: receipt.duplicate,
+      currentStateVerified: false,
+      ...Object.fromEntries(["replyToId", "workItemId", "toMemberId"].filter(key => receipt.event.data[key] !== undefined).map(key => [key, receipt.event.data[key]])),
+      ...Object.fromEntries(["note", "mentionWarnings"].filter(key => Object.hasOwn(receipt, key)).map(key => [key, receipt[key]]))
+    };
   }
   if (name === "room_list_work") return listRoomWork(store, secret, args);
   if (name === "add_land_item" || name === "list_land_queue" || name === "remove_land_item" || name === "report_tip") {

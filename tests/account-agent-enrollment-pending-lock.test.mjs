@@ -15,7 +15,7 @@ function fixture(unresolved=true){
   const existingSelect={disabled:false,value:'original-choice'},existingButton={disabled:false,textContent:''};
   const fields=[existingSelect,$('#agent-connect-name'),$('#agent-connect-access'),$('#agent-connect-expiry')],rowButton={disabled:false},catalogButton={disabled:false};
   const form={hidden:false,querySelectorAll:()=>fields},list={querySelectorAll:()=>[rowButton]},catalogButtons=()=>[catalogButton];
-  const constrainAccess=()=>{},describeImport=()=>{},describeRoute=()=>{},status=()=>{};
+  const constrainAccess=()=>{},describeImport=()=>{},describeRoute=()=>{},status=()=>{},syncAgentPaths=()=>{},existingFirst=()=>false,separateAgent={open:false};
   const newToken=()=>{prepared++;return 'synthetic-target-only';},digest=async()=> 'f'.repeat(64),submit=async()=>{submitted++;};
   const catalogSelection=()=>({name:'Replacement',access:'chat',route:'other',agentType:'other'}),rosterSelection=()=>null;
   ${render}\n${prepare}\n${catalog}

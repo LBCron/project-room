@@ -18,6 +18,33 @@ export function installAgentConnections({ client, getState }) {
   existingLabel.textContent = uiText('agent.existing.label'); existingSelect.setAttribute('aria-label', uiText('agent.existing.label'));
   existingButton.type = 'button'; existingButton.textContent = uiText('agent.existing.add');
   existingLabel.append(existingSelect); existingBox.append(existingLabel, existingButton); form.prepend(existingBox);
+  const ordinaryFields = $('#agent-separate-fields'), accessFields = $('#agent-connect-access-fields'), managedConnections = $('#agent-manage-connections');
+  const accessHome = document.createComment(''), manageHome = document.createComment('');
+  accessFields.before(accessHome); managedConnections.before(manageHome);
+  const separateAgent = document.createElement('details'), separateSummary = document.createElement('summary');
+  separateAgent.id = 'agent-separate-agent'; separateAgent.className = 'agent-advanced'; separateAgent.hidden = true;
+  separateSummary.textContent = uiText('agent.existing.separate'); separateAgent.append(separateSummary); ordinaryFields.after(separateAgent);
+  separateSummary.addEventListener('click', event => { if (existingPending || pending || busy || setup) event.preventDefault(); });
+  separateAgent.addEventListener('toggle', render);
+  const existingFirst = () => Boolean(existingPending || (!pending && !setup && existingChoices.length));
+  function syncAgentPaths() {
+    const primary = existingFirst(), locked = Boolean(existingPending || pending || busy || setup);
+    const moveFocus = primary && !separateAgent.open && ordinaryFields.contains(document.activeElement);
+    existingBox.hidden = !primary; separateAgent.hidden = !primary;
+    separateSummary.setAttribute('aria-disabled', String(locked)); separateSummary.tabIndex = locked ? -1 : 0;
+    if (primary) {
+      if (ordinaryFields.parentElement !== separateAgent) separateAgent.append(ordinaryFields);
+      if (accessFields.parentElement !== existingBox) existingButton.before(accessFields);
+      if (managedConnections.parentElement !== form) separateAgent.after(managedConnections);
+      if (existingPending) separateAgent.open = false;
+      if (moveFocus && !busy) (existingPending ? existingButton : existingSelect).focus();
+    } else {
+      if (ordinaryFields.parentElement === separateAgent) separateAgent.before(ordinaryFields);
+      if (accessFields.previousSibling !== accessHome) accessHome.after(accessFields);
+      if (managedConnections.previousSibling !== manageHome) manageHome.after(managedConnections);
+      separateAgent.open = false;
+    }
+  }
   const enrollmentKey = () => JSON.stringify(['room-account-agent-enrollment', owner?.account?.id, owner?.account?.authEpoch, owner?.roomId, owner?.member?.id]);
   function saveEnrollment() { try { if (existingPending) sessionStorage.setItem(enrollmentKey(), JSON.stringify(existingPending)); else sessionStorage.removeItem(enrollmentKey()); } catch { /* exact retry remains in this tab */ } }
   async function enrollExisting() {
@@ -162,13 +189,14 @@ export function installAgentConnections({ client, getState }) {
     } finally { copying = false; render(); }
   }
   function render() {
+    syncAgentPaths();
     if (!existingPending) constrainAccess();
     existingSelect.disabled = busy || Boolean(existingPending) || Boolean(pending) || Boolean(setup);
     existingButton.disabled = busy || Boolean(pending) || Boolean(setup);
     existingButton.textContent = uiText(existingPending ? 'agent.existing.retry' : 'agent.existing.add');
     form.hidden = Boolean(setup); $("#agent-setup").hidden = !setup;
     if (setup) describeImport();
-    for (const input of form.querySelectorAll("input,select")) input.disabled = busy || Boolean(pending) || Boolean(existingPending);
+    for (const input of form.querySelectorAll("input,select")) input.disabled = busy || Boolean(pending) || Boolean(existingPending) || (existingFirst() && !separateAgent.open && ordinaryFields.contains(input));
     $("#agent-create").disabled = busy || Boolean(existingPending);
     $("#agent-create").textContent = pending ? "Retry original" : "Create access";
     if ($("#agent-create-later")) $("#agent-create-later").disabled = busy || Boolean(existingPending);
@@ -221,8 +249,7 @@ export function installAgentConnections({ client, getState }) {
         if (!existingPending) { try { const saved = JSON.parse(sessionStorage.getItem(enrollmentKey()) || 'null'); if (saved?.action === 'enroll-existing' && typeof saved.requestId === 'string') existingPending = saved; } catch { /* invalid saved data is not sent automatically */ } }
         existingSelect.replaceChildren();
         for (const choice of existingChoices) { const option = document.createElement('option'); option.value = choice.choiceId; option.textContent = choice.label; existingSelect.append(option); }
-        existingBox.hidden = !existingChoices.length && !existingPending;
-      } else { existingChoices = []; existingBox.hidden = true; }
+      } else { existingChoices = []; }
       list.replaceChildren(); unseatedRows = new Set();
       for (const row of result.connections) {
         const li = document.createElement("li"), name = document.createElement("strong"), text = document.createElement("p");
@@ -330,6 +357,7 @@ export function installAgentConnections({ client, getState }) {
   }
   async function prepare(action, row) {
     if (!owns() || busy || pending || existingPending || setup) return;
+    if (action === "create" && existingFirst() && !separateAgent.open) return;
     busy = true; render();
     const identity = owner, epoch = generation, currentFlow = flow;
     try {
@@ -359,11 +387,11 @@ export function installAgentConnections({ client, getState }) {
     checkExpiry(); conceal(); describeRoute(); render(); dialog.showModal(); void load();
     if (pending) status("Change not confirmed. Retry the original.");
     if (setup) $("#agent-setup-title").focus();
-    else if (!pending) (rosterId ? $("#agent-connect-name") : catalogButtons()[0])?.focus();
+    else if (!pending) (existingFirst() ? existingSelect : rosterId ? $("#agent-connect-name") : catalogButtons()[0])?.focus();
   });
   $("#agent-connect-close").addEventListener("click", () => dialog.close());
   dialog.addEventListener("close", conceal);
-  form.addEventListener("submit", event => { event.preventDefault(); if (pending) void submit(); else void prepare("create"); });
+  form.addEventListener("submit", event => { event.preventDefault(); if (existingFirst() && !separateAgent.open) void enrollExisting(); else if (pending) void submit(); else void prepare("create"); });
   $("#agent-connect-name").addEventListener("input", describeName);
   $("#agent-connect-access")?.addEventListener("change", describeAccess);
   $("#agent-connect-route")?.addEventListener("change", describeRoute);

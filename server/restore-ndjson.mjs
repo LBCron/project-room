@@ -1,3 +1,4 @@
+import {validateRestoreResultMetadata,restoreResultFields} from './restore-result-envelope.mjs';
 import {withCompletedRecoveryReminders} from './recovery-reminder-consumption.mjs';
 import {advanceRecoveryReport} from './recovery-report-stage.mjs';
 import {withRecoveryReportFingerprint} from './recovery-report-scope.mjs';
@@ -209,21 +210,22 @@ const sealId=seal=>sha256Hex(JSON.stringify({...seal,id:undefined}));
 function coverageResponse(state){return{ok:true,verified:false,pending:true,restoreId:state.restore_id,sourceSeal:state.seal.id,revision:state.revision,phase:state.phase,progress:{tableIndex:state.progress.tableIndex,tables:state.seal.tables.length,rows:state.progress.rows,bytes:state.progress.bytes},auditProgress:state.progress.audit?{stage:state.progress.audit.stage,report:state.progress.audit.report?{stage:state.progress.audit.report.stage,tableIndex:state.progress.audit.report.tableIndex,tables:applicationTables.length,sourceRows:state.progress.audit.report.table?.rows??null,sourceColumn:state.progress.audit.report.source?.column??null,sourceOffset:state.progress.audit.report.source?.offset??null,rowPart:state.progress.audit.report.table?.part??null,sort:state.progress.audit.report.table?{stage:state.progress.audit.report.table.stage,width:state.progress.audit.report.table.width,pass:state.progress.audit.report.table.pass,start:state.progress.audit.report.table.start,left:state.progress.audit.report.table.left,right:state.progress.audit.report.table.right,comparePart:state.progress.audit.report.table.comparePart,hashRow:state.progress.audit.report.table.hashRow,hashPart:state.progress.audit.report.table.hashPart}:null}:null,invitations:state.progress.audit.invitations,shareLinks:state.progress.audit.shareLinks,replyRequests:state.progress.audit.replies,workHelp:state.progress.audit.workHelp,charter:state.progress.audit.charter,textResults:state.progress.audit.textResults,reminders:state.progress.audit.reminders,rooms:state.progress.audit.rooms,units:state.progress.audit.units,bytes:state.progress.audit.bytes,engine:state.progress.audit.engine,replay:{rooms:state.progress.audit.replayRooms,deferred:state.progress.audit.replayDeferred,cursor:state.progress.audit.replay}}:null,note:'Coverage is incomplete recovery; the independent full audit still must pass before admission'};}
 function validateCoverageState(db,state){
  const seal=state.seal,p=state.progress;
- if(state.state !== 'pending' || !['coverage' , 'audit_pending'].includes(state.phase) || !seal || Object.keys(seal).sort().join(',') !== 'auditVersion,backedUpAt,events,id,inventory,reportVersion,sanitizePolicy,schemaHash,sourceSchemaVersion,sourceSha256,tables,trailerSha256,version,watermarkSha256,writerFormat' || seal.version !== 1 || seal.auditVersion !== RESTORE_AUDIT_VERSION || seal.reportVersion !== RESTORE_REPORT_VERSION || seal.writerFormat !== CURRENT_WRITER_FORMAT || seal.id !== sealId(seal) || !/^[0-9a-f]{64}$/.test(seal.sourceSha256 ?? '') || !['sourceSha256' , 'watermarkSha256' , 'trailerSha256' , 'schemaHash' , 'id'].every(key => /^[0-9a-f]{64}$/.test(seal[key] ?? '')) || !Number.isSafeInteger(seal.events) || seal.events < 0 || (seal.backedUpAt !== null && (!Number.isSafeInteger(seal.backedUpAt) || seal.backedUpAt < 0)) || seal.sourceSchemaVersion !== 45 || seal.sanitizePolicy !== BACKUP_SANITIZE_POLICY || !Array.isArray(seal.inventory) || !Array.isArray(seal.tables))throw Error('Restore source seal requires reconciliation');
+ if(state.state !== 'pending' || !['coverage' , 'audit_pending'].includes(state.phase) || !seal || Object.keys(seal).sort().join(',') !== 'auditVersion,backedUpAt,events,id,inventory,reportVersion,resultMetadata,sanitizePolicy,schemaHash,sourceSchemaVersion,sourceSha256,tables,trailerSha256,version,watermarkSha256,writerFormat' || seal.version !== 2 || seal.auditVersion !== RESTORE_AUDIT_VERSION || seal.reportVersion !== RESTORE_REPORT_VERSION || seal.writerFormat !== CURRENT_WRITER_FORMAT || seal.id !== sealId(seal) || !/^[0-9a-f]{64}$/.test(seal.sourceSha256 ?? '') || !['sourceSha256' , 'watermarkSha256' , 'trailerSha256' , 'schemaHash' , 'id'].every(key => /^[0-9a-f]{64}$/.test(seal[key] ?? '')) || !Number.isSafeInteger(seal.events) || seal.events < 0 || (seal.backedUpAt !== null && (!Number.isSafeInteger(seal.backedUpAt) || seal.backedUpAt < 0)) || seal.sourceSchemaVersion !== 45 || seal.sanitizePolicy !== BACKUP_SANITIZE_POLICY || !Array.isArray(seal.inventory) || !Array.isArray(seal.tables))throw Error('Restore source seal requires reconciliation');
  if(seal.inventory.some(name=>typeof name!=='string'||!restoreTablesKnown.has(name))||new Set(seal.inventory).size!==seal.inventory.length||JSON.stringify(tableNames(db).filter(name=>!name.startsWith('_cf_')))!==JSON.stringify(seal.inventory))throw Error('Restore source schema inventory differs');
  if(!p||Object.keys(p).sort().join(',')!=='after,audit,bag,bytes,rows,tableIndex'||!Number.isSafeInteger(p.tableIndex)||p.tableIndex<0||p.tableIndex>seal.tables.length||!Number.isSafeInteger(p.after)||!Number.isSafeInteger(p.rows)||p.rows<0||!Number.isSafeInteger(p.bytes)||p.bytes<0)throw Error('Restore coverage cursor requires reconciliation');
  if(state.phase==='coverage'){if(p.audit!==null)throw Error('Audit started before coverage');}else validateRecoveryCensus(p.audit);
  const bagValid=bag=>bag&&Object.keys(bag).sort().join(',')==='rows,sum,xor'&&Number.isSafeInteger(bag.rows)&&bag.rows>=0&&/^[0-9a-f]{64}$/.test(bag.sum)&&/^[0-9a-f]{64}$/.test(bag.xor);
  if(!bagValid(p.bag)||seal.tables.some(entry=>Object.keys(entry).sort().join(',')!=='columns,expected,maxRowBytes,name'||!seal.inventory.includes(entry.name)||!IDENT.test(entry.name)||!Array.isArray(entry.columns)||entry.columns.some(name=>!IDENT.test(name))||!bagValid(entry.expected)||!Number.isSafeInteger(entry.maxRowBytes)||entry.maxRowBytes<0))throw Error('Restore coverage shape requires reconciliation');
+ validateRestoreResultMetadata(seal.resultMetadata,seal);
  const expectedNames = seal.inventory.filter(table => !RESTORE_OPERATIONAL_TABLES.includes(table) && !RESTORE_SKIP_TABLES.has(table) && table !== CLAIM_PERMIT_TABLE && !REPLAY_SKIPPED_TABLES.includes(table)).sort();
  if(JSON.stringify(seal.tables.map(entry=>entry.name))!==JSON.stringify(expectedNames)||new Set(seal.tables.map(entry=>entry.name)).size!==seal.tables.length||(state.phase==='audit_pending'&&p.tableIndex!==seal.tables.length)||(state.phase==='coverage'&&p.tableIndex===seal.tables.length))throw Error('Restore phase inventory requires reconciliation');
  restoreSchemaHash(db,state.restore_id+':'+seal.id+':'+state.phase,{expectedHash:seal.schemaHash,tables:seal.inventory});
 }
-function sealRestoreCoverage(store,{restoreId,sourceSha256,watermark,trailer,tables}){
+function sealRestoreCoverage(store,{restoreId,sourceSha256,watermark,trailer,tables,resultMetadata}){
  const db=store.db,state=restoreProgress(db);if(state.state!=='pending'||state.phase!=='loading'||state.restore_id!==restoreId)throw Error('Restore source seal is stale');
  const inventory=tableNames(db);if(inventory.some(name=>!name.startsWith('_cf_')&&!restoreTablesKnown.has(name)))throw Error('Restore source inventory includes unknown table');
  installRestoreFreeze(db,inventory);
- const seal = {version : 1 , auditVersion : RESTORE_AUDIT_VERSION , reportVersion : RESTORE_REPORT_VERSION , writerFormat : CURRENT_WRITER_FORMAT , sourceSha256 , sourceSchemaVersion : 45 , sanitizePolicy : BACKUP_SANITIZE_POLICY , watermarkSha256 : sha256Hex(JSON.stringify(watermark)) , trailerSha256 : sha256Hex(JSON.stringify(trailer)) , events : watermark.events , backedUpAt : watermark.backedUpAt ?? null , inventory : inventory.filter(name => !name.startsWith('_cf_')) , tables , schemaHash : restoreSchemaHash(db)};seal.id = sealId(seal);
+ const seal = {version : 2 , resultMetadata , auditVersion : RESTORE_AUDIT_VERSION , reportVersion : RESTORE_REPORT_VERSION , writerFormat : CURRENT_WRITER_FORMAT , sourceSha256 , sourceSchemaVersion : 45 , sanitizePolicy : BACKUP_SANITIZE_POLICY , watermarkSha256 : sha256Hex(JSON.stringify(watermark)) , trailerSha256 : sha256Hex(JSON.stringify(trailer)) , events : watermark.events , backedUpAt : watermark.backedUpAt ?? null , inventory : inventory.filter(name => !name.startsWith('_cf_')) , tables , schemaHash : restoreSchemaHash(db)};validateRestoreResultMetadata(resultMetadata,seal);seal.id = sealId(seal);
  const progress={tableIndex:0,after:Number.MIN_SAFE_INTEGER,bag:rowBag().snapshot(),rows:0,bytes:0,audit:null},next={restore_id:restoreId,revision:state.revision+1,phase:'coverage',seal,progress};const result=coverageResponse(next);
  checkpointRestore(db,{restoreId,expectedRevision:state.revision,phase:'coverage',seal,progress,latest:{requestId:'seal_'+sourceSha256,expectedRevision:state.revision,restoreId,sourceSeal:seal.id,result}});
  return result;
@@ -250,7 +252,7 @@ export function continueRestoreCoverage(store,input){
    // Intentionally still the existing full census. Do not describe this phase
    // as bounded until its replay/SQLite/subsystem/report scans are resumable.
    const recovery=withCompletedRecoveryShareLinks(store,input.restoreId,input.sourceSeal,()=>withCompletedRecoveryReminders(store,input.restoreId,input.sourceSeal,()=>withRecoveryReportFingerprint(store,state.restore_id,{assertSealedSource:current=>validateCoverageState(db,current)},()=>auditRecovery(store)))),invitations=store.verifyInvitationAudit();if(JSON.stringify(invitations)!==JSON.stringify(recoveryInvitationSummary(state.progress.audit.invitations)))throw Error('Independent invitation audit differs from full oracle');validateCoverageState(db,state);verifyCurrentRoomSchema(db);
-   const result={ok:true,verified:true,pending:false,reportVersion:recovery.contractVersion,engineChecks:state.progress.audit.engine,subsystemContinuation:{shareLinks:{...state.progress.audit.shareLinks,consumed:state.progress.audit.shareLinks.stage==='complete'},invitations:recoveryInvitationSummary(state.progress.audit.invitations),replyRequests:{rooms:state.progress.audit.replyRooms,deferred:state.progress.audit.replyDeferred,requestsScanned:state.progress.audit.replyRequests,messagesCompared:state.progress.audit.replyMessages},workHelp:{rooms:state.progress.audit.helpRooms,deferred:state.progress.audit.helpDeferred,offersScanned:state.progress.audit.helpOffers,offerChecks:state.progress.audit.helpOfferChecks,helpsScanned:state.progress.audit.helpValues},charters:{rooms:state.progress.audit.charterRooms},textResults:{rooms:state.progress.audit.textRooms,projected:state.progress.audit.textProjected,audited:state.progress.audit.textAudited},privateReminders:{complete:state.progress.audit.reminders?.stage==='complete',receipts:state.progress.audit.reminders?.receipts??0,rows:state.progress.audit.reminders?.rows??0,groups:state.progress.audit.reminders?.groups??0}},replayContinuation:{rooms:state.progress.audit.replayRooms,deferred:state.progress.audit.replayDeferred,originalFullOracleRequired:true},resumed:true,contentVerification:'full',events:state.seal.events,tables:state.seal.tables.length,backedUpAt:state.seal.backedUpAt,recovery,audit:{ok:true},...invitations};
+   const result={ok:true,verified:true,pending:false,reportVersion:recovery.contractVersion,engineChecks:state.progress.audit.engine,subsystemContinuation:{shareLinks:{...state.progress.audit.shareLinks,consumed:state.progress.audit.shareLinks.stage==='complete'},invitations:recoveryInvitationSummary(state.progress.audit.invitations),replyRequests:{rooms:state.progress.audit.replyRooms,deferred:state.progress.audit.replyDeferred,requestsScanned:state.progress.audit.replyRequests,messagesCompared:state.progress.audit.replyMessages},workHelp:{rooms:state.progress.audit.helpRooms,deferred:state.progress.audit.helpDeferred,offersScanned:state.progress.audit.helpOffers,offerChecks:state.progress.audit.helpOfferChecks,helpsScanned:state.progress.audit.helpValues},charters:{rooms:state.progress.audit.charterRooms},textResults:{rooms:state.progress.audit.textRooms,projected:state.progress.audit.textProjected,audited:state.progress.audit.textAudited},privateReminders:{complete:state.progress.audit.reminders?.stage==='complete',receipts:state.progress.audit.reminders?.receipts??0,rows:state.progress.audit.reminders?.rows??0,groups:state.progress.audit.reminders?.groups??0}},replayContinuation:{rooms:state.progress.audit.replayRooms,deferred:state.progress.audit.replayDeferred,originalFullOracleRequired:true},...restoreResultFields(state.seal),events:state.seal.events,backedUpAt:state.seal.backedUpAt?new Date(state.seal.backedUpAt).toISOString():null,note:RESTORE_NOTE,recovery,audit:{ok:true},...invitations};
    const cleanup=initialRestoreCleanup(db,input.restoreId,input.sourceSeal,state.seal.inventory,{reportScratchRows:state.progress.audit.report.scratchRows});result.cleanupComplete=cleanup.complete;result.nextCleanup=restoreCleanupNext(cleanup);
    completeRestore(db,{...input,result,cleanup});invalidateCurrentRoomSchema(db);return result;
   }
@@ -522,6 +524,7 @@ export function createBackupReplaySession(store, { audit = "strict", sourceSchem
   const existing = new Set(tableNames(db));
   const claimPermit = existing.has(CLAIM_PERMIT_TABLE);
   const skippedTables = {};
+  let receivedBytes=0,byteCarry='';
   const eventTuples = [];
   const digests = createTableDigests();
   const counts = new Map();
@@ -738,6 +741,7 @@ export function createBackupReplaySession(store, { audit = "strict", sourceSchem
   }
 
   function writeText(text) {
+    const input=byteCarry+text,last=input.charCodeAt(input.length-1);byteCarry=last>=0xd800&&last<=0xdbff?input.slice(-1):'';receivedBytes+=Buffer.byteLength(byteCarry?input.slice(0,-1):input);
     carry += text;
     const lines = carry.split("\n");
     carry = lines.pop();
@@ -779,7 +783,7 @@ export function createBackupReplaySession(store, { audit = "strict", sourceSchem
     return abortResult;
   }
 
-  function finish({sourceSha256=null}={}) {
+  function finish({sourceSha256=null,transport=null}={}) {
     try {
       if (carry) { writeLine(carry); carry = ""; }
       if (!watermark || watermark.version !== 1 || !Number.isSafeInteger(watermark.events))
@@ -811,7 +815,7 @@ export function createBackupReplaySession(store, { audit = "strict", sourceSchem
         if((counts.get('events')??0)!==watermark.events)throw Error('Export watermark does not match source event count');
         if(claimPermit){db.prepare(`UPDATE ${CLAIM_PERMIT_TABLE} SET enabled=0 WHERE singleton=1`).run();verifyPublicWorkClaimFence(db);}
         verifyCurrentRoomSchema(db);
-        const result=sealRestoreCoverage(store,{restoreId:resumeId,sourceSha256,watermark,trailer,tables:keyed.manifest([...existing])});settled=true;return result;
+        const result=sealRestoreCoverage(store,{restoreId:resumeId,sourceSha256,watermark,trailer,tables:keyed.manifest([...existing]),resultMetadata:{version:1,contentVerification,writeProofs:restoreLegacyWriteProofs(store,watermark,sourceSchemaVersion),tables:counts.size,skippedTables,sanitizedCells:cellTracker().report(),resumed:resume,transport:transport??{kind:'request-body',key:null,bytes:receivedBytes+Buffer.byteLength(byteCarry)}}});settled=true;return result;
       }
       if(resume){requireResumeSource(watermark,trailer,contentVerification);keyed.verify(counts,existing);}
       if (db.prepare("PRAGMA foreign_key_check").all().length) throw new Error("Restored store failed foreign key check");
@@ -974,7 +978,7 @@ async function readRestoreIngress(request,{kv,hashOnly=false,sourceSchemaVersion
 }
 // Existing KV feeding and source validation, shared with the original door.
 // The manifest is not target admission: full target recovery stays mandatory.
-async function replayBackupManifestSource(session,kv,manifest){
+async function replayBackupManifestSource(session,kv,manifest,sourceKey=null){
   const whole=createHash("sha256"),decoder=new TextDecoder();let total=0;
   for(const part of manifest.parts){const bytes=kvBytes(await kv.get(part.key,"arrayBuffer"))??kvBytes(await kv.get(part.key));
     if(!bytes)throw Error("Backup part "+part.key+" is missing");
@@ -982,7 +986,7 @@ async function replayBackupManifestSource(session,kv,manifest){
     whole.update(bytes);total+=bytes.byteLength;session.writeText(decoder.decode(bytes,{stream:true}));
   }
   session.writeText(decoder.decode());if(total!==manifest.bytes||whole.digest("hex")!==manifest.sha256)throw Error("Backup does not match its manifest sha256");
-  return{result:session.finish({sourceSha256:manifest.sha256}),total};
+  return{result:session.finish({sourceSha256:manifest.sha256,transport:{kind:sourceKey===null?'request-body':'kv-backup',key:sourceKey,bytes:total}}),total};
 }
 
 const jsonHeaders = { "Content-Type": "application/json; charset=utf-8", "Cache-Control": "no-store", "X-Content-Type-Options": "nosniff" };
@@ -1160,7 +1164,7 @@ export async function operatorRestoreFromBackupResponse(request, token, store, k
     return jsonResponse(500, { error: { code: "restore_failed", message: "Restore failed before replay" } });
   }
   try{
-    const {result,total}=await replayBackupManifestSource(session,kv,manifest);
+    const {result,total}=await replayBackupManifestSource(session,kv,manifest,key);
     if(result.pending)return jsonResponse(202,result);
     return jsonResponse(200, {
       ok: true,

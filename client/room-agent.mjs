@@ -1604,7 +1604,7 @@ export function workContextMarkdown(result) {
       : "Session display status: " + (result.work.displayStatus ?? result.work.status) + " (presentation only; recorded controls below)",
     resumeMarkdown(result.resume),
     ...(result.dependencies?.length ? [
-      "Prerequisites (Board claim IDs; checked again before claim/start): " + result.dependencies.map(dep => `${dep.id}: ${dep.state}${dep.satisfied ? " (satisfied)" : " (not satisfied)"}`).join(", "),
+      "Prerequisites (checked again before claim/start): " + result.dependencies.map(dep => `${dep.id}: ${dep.state}${dep.satisfied ? " (satisfied)" : " (not satisfied)"}`).join(", "),
       ...(result.dependencies.some(dep => !dep.satisfied) ? ["Prerequisites are not satisfied. Do not claim or start this work yet."] : [])
     ] : []),
     ...(result.replyRequestContext ? [

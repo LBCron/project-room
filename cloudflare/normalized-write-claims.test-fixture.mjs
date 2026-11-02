@@ -24,4 +24,4 @@ export class WriteClaimsRoom extends ProjectRoom {
   finally{console.info=originalInfo;s.db.prepare=originalPrepare;}
  }
 }
-export default{fetch(request,env){const h=new Headers(request.headers);h.set('Host','room.example');h.set('x-room-visitor-ip','192.0.2.1');return env.ROOM.getByName(['large','live'].includes(new URL(request.url).searchParams.get('surface'))?new URL(request.url).searchParams.get('surface'):'small').fetch(new Request(request,{headers:h}));}};
+export default{fetch(request,env){const h=new Headers(request.headers),url=new URL(request.url),surface=url.searchParams.get('surface');url.searchParams.delete('surface');h.set('Host','room.example');h.set('x-room-visitor-ip','192.0.2.1');return env.ROOM.getByName(['large','live'].includes(surface)?surface:'small').fetch(new Request(url,new Request(request,{headers:h})));}};

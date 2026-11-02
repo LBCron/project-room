@@ -1,3 +1,4 @@
+import {textVersion} from '../server/text-results.mjs';
 import test from 'node:test';import assert from 'node:assert/strict';import {build} from 'esbuild';import {Miniflare} from 'miniflare';import {mkdtemp,rm} from 'node:fs/promises';import {tmpdir} from 'node:os';import {join} from 'node:path';import {fileURLToPath} from 'node:url';
 test('production Native claims survive conflicts, lost save, cold retry and100expired claims',{timeout:120000},async()=>{
  const directory=await mkdtemp(join(tmpdir(),'native-write-claims-')),script=(await build({entryPoints:[fileURLToPath(new URL('./normalized-write-claims.test-fixture.mjs',import.meta.url))],bundle:true,write:false,format:'esm',platform:'neutral',external:['node:*','cloudflare:*']})).outputFiles[0].text;
@@ -11,6 +12,10 @@ test('production Native claims survive conflicts, lost save, cold retry and100ex
    let r=await cmd('conflict','claim.acquired',{...data,workItemId:'two'});assert.equal(r.status,409,await r.clone().text());assert.equal((await r.json()).error.code,'claim_conflict');
    r=await cmd('release-one','claim.released',{workItemId:'one',expectedRevision:2});assert.equal(r.status,201,await r.clone().text());
    const take={...data,workItemId:'two'};r=await cmd('acquire-two','claim.acquired',take,{'x-claim-fault':'1'});assert.equal(r.status,500);assert.equal(r.headers.get('x-claim-fault-fired'),'true');await restart();r=await cmd('acquire-two','claim.acquired',take);assert.equal(r.status,201,await r.clone().text());await restart();r=await cmd('acquire-two','claim.acquired',take);assert.equal(r.status,200,await r.clone().text());assert.equal((await r.json()).duplicate,true);
+   r=await cmd('start-two','work.started',{workItemId:'two',expectedRevision:2});assert.equal(r.status,201,await r.clone().text());const body='Exact Native useful result '+surface;
+   r=await cmd('post-result','message.posted',{messageId:'saved-result',workItemId:'two',body});assert.equal(r.status,201,await r.clone().text());const opening=await r.json();
+   r=await cmd('complete-two','work.completed',{workItemId:'two',expectedRevision:3,evidenceKind:'room_text',evidenceMessageId:'saved-result',evidenceMessageEventId:opening.event.id,evidenceVersion:textVersion(body),previousCompletionEventId:null,producerId:'owner',summary:'Saved useful result',nextAction:'Review'});assert.equal(r.status,201,await r.clone().text());
+   const completed=await r.json();await restart();const result=await call(surface,'/api/rooms/claims/work-result?workItemId=two',{headers:{Authorization:'Bearer '+f.key}});assert.equal(result.status,200,await result.clone().text());const saved=await result.json();assert.equal(saved.result.receipt.eventId,completed.event.id);assert.equal(saved.result.text.body,body);
    const verify=await call(surface,'/__verify');assert.equal(verify.status,200,await verify.clone().text());assert.equal((await verify.json()).permit,0);
   }console.log('NATIVE_WRITE_CLAIM_COST '+JSON.stringify({coverage:'adapter-observed physical rows; native permit SQL not included',costs}));}
  finally{await mf.dispose();await rm(directory,{recursive:true,force:true});}

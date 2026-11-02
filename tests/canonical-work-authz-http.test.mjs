@@ -44,9 +44,18 @@ test('canonical work HTTP preserves role authority, attribution and refusal atom
     store.close();
   });
   const owner = store.identities.create('Matrix Owner');
-  const {roomId} = new AgentRooms(store).create(owner.secret, {
-    title: 'Canonical authorization regression', purpose: 'Disposable HTTP role matrix',
-  });
+  // This matrix covers normalized authority, not the product's default format
+  // for newly created rooms. Make the fixture format explicit only at setup.
+  const initialize = store.initialize.bind(store);
+  let roomId;
+  try {
+    store.initialize = (events, options) => initialize(events, {...options, representation: 'normalized-current-v1'});
+    ({roomId} = new AgentRooms(store).create(owner.secret, {
+      title: 'Canonical authorization regression', purpose: 'Disposable HTTP role matrix',
+    }));
+  } finally {
+    store.initialize = initialize;
+  }
   await new Promise(resolve => server.listen(0, '127.0.0.1', resolve));
   const origin = `http://127.0.0.1:${server.address().port}`;
   const keys = {owner: owner.secret}, actors = {owner: owner.identityId};

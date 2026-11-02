@@ -89,7 +89,7 @@
     "src/access-presets.js": "sha256:62f9670c0fae93e7de8e4d7c0ee17540edfd880677601458e9d21400a4f28a2c",
     "src/account-client.js": "sha256:90b9a46335b77501c27bd1370105ae8e07cff161a4d87c800fc4ef8e912fd94d",
     "src/account-settings-ui.js": "sha256:576f241edeeff78273771785998e305790163ff18d4ed1e516bef87b6c1f46f7",
-    "src/agent-connections.js": "sha256:e822660627239a8b4ffc16d659d2d1b78eaa9d6ec94c8a17c892667e0c80473b",
+    "src/agent-connections.js": "sha256:9f88183670ec54f9e82e98298e8a262f43015087ed95bbe3df3f6d32570762e6",
     "src/agent-first-run.js": "sha256:6bb048d6dc9a5b95eb182c5e76ddc2099b5120096b46d9db07e1194ced82cdec",
     "src/agent-invite-ui.js": "sha256:f2d34c3130028e9e8f1f45316a6c32c7dc35b6d3159c20acd80b728f6f65aaaa",
     "src/agent-signin-page.js": "sha256:a8ef16caf98b362a343aa0c1afe02509a82fe1b0b888f2af57f6454b480fb399",

@@ -1,3 +1,4 @@
+import { schemaSqlByName } from "./schema-sql-by-name.mjs";
 import { validId } from "../src/events.js";
 import { messageInHistory } from "./history-visibility.mjs";
 import {isCurrentRoom,withCurrentReadContext,readCurrentHead,readCurrentRecord,readCurrentMessage,CURRENT_REQUEST_OPENING_PREDICATE} from './current-room-repository.mjs';
@@ -55,9 +56,10 @@ export class RequestRuns {
   constructor(store) { this.store = store; }
   verifySchema({ allowAbsent = false } = {}) {
     const normalize = sql => sql?.trim().replace(/;$/, "").replace(/IF NOT EXISTS /g, "").replace(/\s+/g, " ");
-    const expected = requestRunSchema.trim().split(/;\s*(?=CREATE|$)/).filter(Boolean).map(sql => ({ sql,
-      actual: this.store.db.prepare("SELECT sql FROM sqlite_master WHERE name=?")
-        .get(/^CREATE (?:TABLE|TRIGGER) (?:IF NOT EXISTS )?([a-z_]+)/.exec(sql.trim())[1])?.sql }));
+    const definitions = requestRunSchema.trim().split(/;\s*(?=CREATE|$)/).filter(Boolean).map(sql => ({sql,
+      name: /^CREATE (?:TABLE|TRIGGER) (?:IF NOT EXISTS )?([a-z_]+)/.exec(sql.trim())[1]}));
+    const catalog = schemaSqlByName(this.store.db, definitions.map(row => row.name));
+    const expected = definitions.map(row => ({sql: row.sql, actual: catalog.get(row.name)}));
     if (allowAbsent && expected.every(row => row.actual === undefined)) return false;
     if (expected.some(row => normalize(row.sql) !== normalize(row.actual))) throw new Error("Request execution schema requires operator reconciliation");
     return true;

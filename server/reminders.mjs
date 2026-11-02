@@ -1,3 +1,4 @@
+import { schemaSqlByName } from "./schema-sql-by-name.mjs";
 import { createHash } from "node:crypto";
 import { validId } from "../src/events.js";
 import { terminalWork } from "../src/workflow.js";
@@ -29,9 +30,11 @@ export class Reminders {
   constructor(store) { this.store = store; this.db = store.db; }
   verifySchema() {
     const normalize = sql => sql?.trim().replace(/;$/, "").replace(/\s+/g, " ");
-    for (const sql of reminderSchema.trim().split(/;\s*(?=CREATE|$)/).filter(Boolean)) {
-      const name = /^CREATE (?:TABLE|INDEX|TRIGGER) ([a-z_]+)/.exec(sql.trim())[1];
-      const actual = this.db.prepare("SELECT sql FROM sqlite_master WHERE name=?").get(name)?.sql;
+    const definitions = reminderSchema.trim().split(/;\s*(?=CREATE|$)/).filter(Boolean)
+      .map(sql => ({sql, name: /^CREATE (?:TABLE|INDEX|TRIGGER) ([a-z_]+)/.exec(sql.trim())[1]}));
+    const catalog = schemaSqlByName(this.db, definitions.map(row => row.name));
+    for (const {sql, name} of definitions) {
+      const actual = catalog.get(name);
       if (normalize(actual) !== normalize(sql)) throw new Error("Private reminder schema requires operator reconciliation");
     }
   }

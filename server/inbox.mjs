@@ -1,3 +1,4 @@
+import { schemaSqlByName } from "./schema-sql-by-name.mjs";
 import { messageRepository } from "./message-repository.mjs";
 import { gmailImportAuth } from './gmail-import-authority.mjs';
 import { createHash } from "node:crypto";
@@ -1380,14 +1381,14 @@ export class Inbox {
     return this.store.readTransaction(() => {
     const require = condition => { if (!condition) throw new Error("Private inbox requires operator reconciliation"); };
     const normalize = sql => sql?.trim().replace(/;$/, "").replace(/\s+/g, " ");
-    for (const sql of inboxSchema.trim().split(/;\s*(?=CREATE|$)/).filter(Boolean)) {
-      const name = /^CREATE (?:TABLE|TRIGGER) ([a-z_]+)/.exec(sql.trim())[1];
-      require(normalize(this.db.prepare("SELECT sql FROM sqlite_master WHERE name=?").get(name)?.sql) === normalize(sql));
-    }
+    const definitions = inboxSchema.trim().split(/;\s*(?=CREATE|$)/).filter(Boolean)
+      .map(sql => ({sql, name: /^CREATE (?:TABLE|TRIGGER) ([a-z_]+)/.exec(sql.trim())[1]}));
+    const catalog = schemaSqlByName(this.db, [...definitions.map(row => row.name), 'private_inbox_reads']);
+    for (const {sql, name} of definitions) require(normalize(catalog.get(name)) === normalize(sql));
     // The read-marker table is purely additive (a read-only open of a file
     // written before it existed sees no markers): verify its shape and rows
     // only when it is present.
-    const readsSchema = this.db.prepare("SELECT sql FROM sqlite_master WHERE name='private_inbox_reads'").get()?.sql;
+    const readsSchema = catalog.get('private_inbox_reads');
     if (readsSchema !== undefined) require(normalize(readsSchema) === normalize(inboxReadSchema.replace("IF NOT EXISTS ", "")));
     const sources = new Map(), drafts = new Map(), historicalRooms = new Map(), outboxes = new Map(), replyBoxes = new Map(), updateBoxes = new Map(), dispatches = new Map(), replyReads = new Map(), reads = new Map(); let versions = 0;
     for (const row of this.db.prepare("SELECT * FROM private_inbox_commands ORDER BY sequence").all()) {

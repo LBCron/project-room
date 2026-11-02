@@ -1,3 +1,4 @@
+import { schemaSqlByName } from "./schema-sql-by-name.mjs";
 // One append journal, one config block per kind. Schema SQL, hash inputs, id
 // text, and JSON column bytes stay the historical per-kind formats, so a
 // database written by the old modules opens here with no migration.
@@ -32,9 +33,11 @@ const normalizeSql = sql => sql?.trim().replace(/;$/, "").replace(/IF NOT EXISTS
 // Same comparison the channel and Jev journals used: a wholly missing schema
 // may be absent on a read-only open; a partial schema does not match.
 function verifyCreateSchema(db, schema, error, { allowAbsent = false } = {}) {
-  const expected = schema.trim().split(/;\s*(?=CREATE|$)/).filter(Boolean).map(sql => ({
-    sql, actual: db.prepare("SELECT sql FROM sqlite_master WHERE name=?").get(/^CREATE (?:TABLE|INDEX|TRIGGER) (?:IF NOT EXISTS )?([a-z0-9_]+)/.exec(sql.trim())[1])?.sql
+  const definitions = schema.trim().split(/;\s*(?=CREATE|$)/).filter(Boolean).map(sql => ({
+    sql, name: /^CREATE (?:TABLE|INDEX|TRIGGER) (?:IF NOT EXISTS )?([a-z0-9_]+)/.exec(sql.trim())[1]
   }));
+  const catalog = schemaSqlByName(db, definitions.map(row => row.name));
+  const expected = definitions.map(row => ({sql: row.sql, actual: catalog.get(row.name)}));
   if (allowAbsent && expected.every(({ actual }) => actual === undefined)) return false;
   for (const { sql, actual } of expected) if (normalizeSql(actual) !== normalizeSql(sql)) throw new Error(error);
   return true;

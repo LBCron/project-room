@@ -5,7 +5,7 @@ import {repairLegacyMessages} from '../../server/operator-legacy-message-repair.
 import {textVersion} from '../../server/text-results.mjs';
 import {auditRecovery} from '../../server/recovery.mjs';
 import {replayCutoverSchema,captureReplayWitness,advanceReplayWitness,partitionReplayWitness,qualifyReplayHWork,qualifyReplayHMessages,advanceCurrentRoomConversion} from '../../server/replay-cutover.mjs';
-export function seedHistoricalRedactionSource(store,{extraPrefixMessages=0}={}){
+export function seedHistoricalRedactionSource(store,{extraPrefixMessages=0,beforeCapture}={}){
  const es=historicalSequence(),intro=[
   event({roomId:'legacy-room',actorId:'owner',type:'member.added',data:{memberId:'worker',displayName:'Worker',kind:'agent',permissions:[]}}),
   ...['prefix-one','prefix-two','prefix-private',...Array.from({length:extraPrefixMessages},(_,i)=>'prefix-extra-'+i)].map(id=>event({roomId:'legacy-room',actorId:'owner',type:'message.posted',data:{messageId:id,body:'sensitive-'+id+'-original',...(id==='prefix-private'?{toMemberId:'worker'}:{})}})),
@@ -15,6 +15,7 @@ export function seedHistoricalRedactionSource(store,{extraPrefixMessages=0}={}){
  const key=store.issueAccessKey('legacy-room','owner'),workerKey=store.issueAccessKey('legacy-room','worker'),before=store.room('legacy-room').state.workItems.task;
  const body='Saved modern result after historical repair',posted=store.command(key,'legacy-room',{id:'saved-modern-result',type:'message.posted',data:{messageId:'saved-modern-result',body,workItemId:'task'}});
  store.command(key,'legacy-room',{id:'saved-modern-complete',type:'work.completed',data:{workItemId:'task',expectedRevision:before.revision,evidenceKind:'room_text',evidenceMessageId:'saved-modern-result',evidenceMessageEventId:posted.event.id,evidenceVersion:textVersion(body),previousCompletionEventId:null,summary:'Saved complete result',producerId:'owner',nextAction:'Review'}});
+ beforeCapture?.(store,{key,workerKey});
  store.transaction(()=>store.db.prepare('DELETE FROM projection_checkpoints WHERE room_id=?').run('legacy-room'));auditRecovery(store);
  store.db.exec(replayCutoverSchema({durable:!!store.db.storage}));
  const captured=captureReplayWitness(store,{roomId:'legacy-room',requestId:'privacy-H',expectedHead:store.headSequence('legacy-room'),reason:'Historical privacy qualification'}),base={roomId:'legacy-room',generation:captured.generation};

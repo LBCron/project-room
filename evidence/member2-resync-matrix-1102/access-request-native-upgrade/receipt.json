@@ -1,0 +1,80 @@
+{
+  "schema": "member2-access-native-genuine-upgrade-v1",
+  "sourceBefore": "00888c52110d36250d3e07629036701b72926d09",
+  "sourceAfter": "aec29ee1275db508070f4bfbfd902f207469fcd8",
+  "node": "v24.22.1",
+  "coldOpens": [
+    {
+      "cold": 1,
+      "originalCredentialsAccepted": true,
+      "requestsUnchanged": true,
+      "pages": 40,
+      "unique": 1000,
+      "maxRows": 938,
+      "costs": [
+        {
+          "role": "owner",
+          "statements": 92,
+          "rowsRead": 1674,
+          "rowsWritten": 0,
+          "unknown": 0,
+          "bytes": 10083
+        },
+        {
+          "role": "admin",
+          "statements": 100,
+          "rowsRead": 946,
+          "rowsWritten": 0,
+          "unknown": 0,
+          "bytes": 10083
+        }
+      ]
+    },
+    {
+      "cold": 2,
+      "originalCredentialsAccepted": true,
+      "requestsUnchanged": true,
+      "pages": 40,
+      "unique": 1000,
+      "maxRows": 938,
+      "costs": [
+        {
+          "role": "owner",
+          "statements": 90,
+          "rowsRead": 936,
+          "rowsWritten": 0,
+          "unknown": 0,
+          "bytes": 10083
+        },
+        {
+          "role": "admin",
+          "statements": 100,
+          "rowsRead": 946,
+          "rowsWritten": 0,
+          "unknown": 0,
+          "bytes": 10083
+        }
+      ]
+    }
+  ],
+  "limits": "Local actual Native persistence, original producer/runtime and credentials. No restore, production, remote execution or elapsed speedup claim.",
+  "before": {
+    "count": 1000,
+    "allPending": true,
+    "fingerprint": "069dbcd459b2990a8a5c2d4c6f15a3f64df2514fc588b9367c632b07ef8178eb",
+    "credentials": "a18a63392d213dbf66f018001f06f61870fdfdb88f2f4ec56d9d3f5bfd9d008d",
+    "identities": 1000,
+    "index": null
+  },
+  "previousServiceCursorRefused": true,
+  "exitCode": 0,
+  "workerd": "2026-07-30",
+  "workerdSha256": "b887d31d8839e80798bf3f92c416343c5db7dd9b22d7fe21bcf877f5d411936f",
+  "sourceTreesCleanBeforeAfter": true,
+  "notes": [
+    "Genuine persisted database from unchanged before runtime, not synthetic old schema.",
+    "First HTTP read after upgrade1674rows includes deferred initialization; later bounded pagesmax938. No constant cold startup or latency claim.",
+    "Original pending row fingerprint, identities count and persisted original credentials hash match across two cold opens.",
+    "Before schema had no access_requests_pending_page index; after index was automatically present. No out-of-band SQL repair."
+  ]
+}

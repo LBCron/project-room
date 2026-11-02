@@ -76,7 +76,8 @@ export function validateMcpOAuthBinding(store, userId, binding) {
   const agent = ownMember(state.members,memberId);
   if(adopted){
     const approval=approvedAgentAdoption(store,roomId,agent,userId);
-    if(!approval||approval.accountEpoch!==Number(binding.accountEpoch)||approval.identityEpoch!==binding.identityEpoch
+    if(!approval||approval.humanMemberId!==humanMemberId||agent.accountableHumanId!==humanMemberId
+      ||approval.accountEpoch!==Number(binding.accountEpoch)||approval.identityEpoch!==binding.identityEpoch
       ||binding.adoptionId!==agent.sponsorAdoptionId||human?.kind!=='human'||human.active!==true||agent.active!==true)return null;
     return Object.freeze({userId,roomId,identityId,memberId,humanMemberId,principalType:'account-adopted-agent'});
   }

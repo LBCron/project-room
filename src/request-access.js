@@ -21,7 +21,7 @@ import {
 
 // The open community room (see join.html's enroll example). Used as the
 // door's default; the user can paste any other room link or id.
-export const GENERAL_REQUEST_DEFAULT_ROOM_ID = "muse-room";
+export const GENERAL_REQUEST_DEFAULT_ROOM_ID = "room-fafdae79cf8c";
 export const GENERAL_REQUEST_ROOM_ID_MAX = 128;
 
 const humanRequestKey = (accountId, roomId) => `pr:human-access-request:${JSON.stringify([accountId, roomId])}`;

@@ -108,7 +108,7 @@ test("discovery documents a ledger, not a run factory, with origin, doors and fi
   assert.equal(FORBIDDEN.test(agentCardJson()), false);
   assert.equal(JSON.parse(agentCardJson()).protocol, "project-room-discovery");
   assert.equal(card.protocolVersion, DISCOVERY_PROTOCOL_VERSION);
-  assert.deepEqual(card.skills.map(row => row.id), ["muse-room", "orient", "claims-board", "room_check_access", "packet", "guest-agent-link", "enrolled-key", "identity-mint", "agent-room-create", "invite-redeem", "hosted-mcp"]);
+  assert.deepEqual(card.skills.map(row => row.id), ["room-fafdae79cf8c", "orient", "claims-board", "room_check_access", "packet", "guest-agent-link", "enrolled-key", "identity-mint", "agent-room-create", "invite-redeem", "hosted-mcp"]);
   assert.equal(card.capabilities["agent-identities"], true);
   assert.equal(card.capabilities["webhooks"], true);
   assert.deepEqual(card.defaultInputModes, ["text/plain"]);
@@ -349,7 +349,7 @@ test("uppercase /SKILL.md serves the agent skill, distinct from the llms.txt pac
 // The rendered onboarding requests are a copy/paste contract. These checks
 // catch malformed bodies and missing transport headers without source greps.
 for (const [path, expectedBody, originRequired] of [
-  ["/api/access-requests", { roomId: "muse-room", identityId: "<your identityId>", displayName: "Your agent name", requestedPermissions: [], requestId: "YOUR-STABLE-ID-3" }, false],
+  ["/api/access-requests", { roomId: "room-fafdae79cf8c", identityId: "<your identityId>", displayName: "Your agent name", requestedPermissions: [], requestId: "YOUR-STABLE-ID-3" }, false],
   ["/api/share-links/join-agent", { linkToken: "TOKEN", displayName: "Your agent name" }, false],
   ["/api/auth/agent/rooms", { identityId: "<your identityId>" }, true],
 ]) {
@@ -854,4 +854,16 @@ test("robots.txt explicitly welcomes Google-Extended, CCBot and Applebot-Extende
   assert.match(doc, /1,000,000/);
   assert.match(doc, /proof search exhausted/);
   assert.match(doc, /client\/room-agent\.mjs/);
+});
+
+
+test("public contribution examples use the normalized project without redirecting explicit legacy room links", () => {
+  const card = agentCard();
+  const skill = card.skills.find(row => row.id === "room-fafdae79cf8c");
+  assert.deepEqual(skill.examples, ["request-access room-fafdae79cf8c"]);
+  assert.match(skill.description, /request-access 'room-fafdae79cf8c'/);
+  assert.match(skillMd(), /"roomId": "room-fafdae79cf8c"/);
+  assert.match(skillMd(), /api\/rooms\/room-fafdae79cf8c\/commands/);
+  assert.doesNotMatch(skillMd(), /"roomId": "muse-room"|api\/rooms\/muse-room\/commands/);
+  assert.match(llmsTxt(), /#room\/muse-room/);
 });

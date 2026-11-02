@@ -531,8 +531,8 @@ test("actual production workflow captures schemas before uploads and uses guarde
   assert.match(recovery.run, /deploy-recovery\.mjs recover/);
   assert.doesNotMatch(recovery.run, /wrangler rollback/);
   assert.match(recovery.if, /steps\.pre\.outcome == 'success'/);
-  assert.match(steps.find(step => step.name === "Receipt to muse-room").run, /recoveryDescription/);
-  assert.doesNotMatch(steps.find(step => step.name === "Receipt to muse-room").run, /FAILED · rolled back/);
+  assert.match(steps.find(step => step.name === "Receipt to Project Room").run, /recoveryDescription/);
+  assert.doesNotMatch(steps.find(step => step.name === "Receipt to Project Room").run, /FAILED · rolled back/);
   for (const step of steps.filter(step => ["prod", "entry"].includes(step.id))) {
     assert.match(step.run, /--keep-vars --var ROOM_BODIES_AT_REST:1/);
     assert.match(step.run, /--var ROOM_PATROL_ENABLED:0/);

@@ -59,7 +59,7 @@ export function renderMarkdown(markdown, { labelPrefix = "", renderCode = codeBl
       i += 1;
       while (i < lines.length && !lines[i].startsWith("```")) { body.push(lines[i]); i += 1; }
       codeCount += 1;
-      blocks.push(renderCode(body.join("\n"), [labelPrefix, lastHeading || `code example ${codeCount}`].filter(Boolean).join(": ")));
+      blocks.push(renderCode(body.join("\n"), [labelPrefix, lastHeading || `code example ${codeCount}`].filter(Boolean).join(": "), codeCount));
       i += 1;
       continue;
     }
@@ -180,7 +180,7 @@ export function agentPages(dir = join(root, "docs", "agents")) {
     description: "Paste one block into ChatGPT, Claude, Cursor or another agent. It joins your room, says hello, and never needs your key.",
     path: PASTE_PAGE.docsPath,
     body: renderMarkdown(pasteMd, { labelPrefix: "Paste block",
-      renderCode: text => `<label for="agent-paste-prompt">Copy this prompt into your agent</label><textarea id="agent-paste-prompt" class="agent-paste-prompt" readonly rows="16" spellcheck="false">${escape(text)}</textarea>` }),
+      renderCode: (text, label, index) => `<label for="agent-paste-prompt-${index}">Copy this prompt into your agent: ${escape(plainLabel(label))}</label><textarea id="agent-paste-prompt-${index}" class="agent-paste-prompt" readonly rows="16" spellcheck="false">${escape(text)}</textarea>` }),
     steps: sections(pasteMd),
   }));
   const indexBody = renderMarkdown(indexMd) + "<ul>" + connectSnippets.map(tool => `<li><a href="${tool.docsPath}">${escape(tool.label)}</a> — <code>${escape(tool.command)}</code></li>`).join("") + "</ul>";

@@ -20,7 +20,7 @@ test("every <pre> on every agent docs page is a focusable, named region", () => 
     if (file === "docs/agents/paste.html") {
       assert.equal(pres.length, 0, "paste onboarding uses a native selectable field");
       assert.match(html, /<textarea[^>]*readonly[^>]*>/);
-      assert.match(html, /<label for="agent-paste-prompt">/);
+      assert.match(html, /<label for="agent-paste-prompt-1">/);
     }
     else if (file !== "docs/agents/index.html") assert.ok(pres.length >= 2, file + " has command and config blocks");
     assert.match(html, /pre:focus-visible\{outline:/, file + " shows a focus ring on code blocks");

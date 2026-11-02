@@ -28,9 +28,14 @@ export const REDACTED = '[redacted]';
 // are consumed as one match. An unterminated block (pane output truncated
 // mid-key) fails closed: everything from the BEGIN marker to the next
 // double quote or the end of the text is treated as key material.
-const PEM_BLOCK_RE = /-----BEGIN [A-Z0-9 ]*PRIVATE KEY-----[\s\S]*?-----END [A-Z0-9 ]*PRIVATE KEY-----/g;
-const PEM_UNTERMINATED_RE = /-----BEGIN [A-Z0-9 ]*PRIVATE KEY-----[\s\S]*?(?="|$)/g;
-const PEM_MARKER_RE = /-----BEGIN [A-Z0-9 ]*PRIVATE KEY-----/;
+// F1W2-T6b fixup: the label may end in PRIVATE KEY BLOCK as well as
+// PRIVATE KEY (e.g. -----BEGIN PGP PRIVATE KEY BLOCK-----, the R6 recheck's
+// named risk R1: that label variant escaped because the pattern required
+// the dashes immediately after PRIVATE KEY). Non-private-key blocks
+// (CERTIFICATE, PUBLIC KEY, ...) still do not match and are preserved.
+const PEM_BLOCK_RE = /-----BEGIN [A-Z0-9 ]*PRIVATE KEY(?: BLOCK)?-----[\s\S]*?-----END [A-Z0-9 ]*PRIVATE KEY(?: BLOCK)?-----/g;
+const PEM_UNTERMINATED_RE = /-----BEGIN [A-Z0-9 ]*PRIVATE KEY(?: BLOCK)?-----[\s\S]*?(?="|$)/g;
+const PEM_MARKER_RE = /-----BEGIN [A-Z0-9 ]*PRIVATE KEY(?: BLOCK)?-----/;
 
 // A known-prefix token split across a line break: the shaped first line
 // identifies the credential, so the continuation line(s) are part of the

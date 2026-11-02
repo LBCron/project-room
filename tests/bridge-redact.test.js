@@ -48,6 +48,32 @@ test('PEM: looksSecretShaped and redactValue treat a PEM string as secret-bearin
   assert.equal(redactValue({ private_key: pem }).private_key, '[redacted]');
 });
 
+test('PEM block: PGP PRIVATE KEY BLOCK label variant is consumed whole (F1W2-T6b)', () => {
+  const pgp = `before\n-----BEGIN PGP PRIVATE KEY BLOCK-----\nComment: SynthFixtureHeader0123\n\n${KEY_BODY}\n${KEY_BODY2}\n-----END PGP PRIVATE KEY BLOCK-----\nafter`;
+  const out = redactSecretShaped(pgp);
+  assert.ok(!out.includes(KEY_BODY));
+  assert.ok(!out.includes(KEY_BODY2));
+  assert.ok(!out.includes('SynthFixtureHeader0123'));
+  assert.ok(!out.includes('PGP PRIVATE KEY BLOCK'));
+  assert.ok(out.includes('before') && out.includes('after'));
+  assert.equal(looksSecretShaped(pgp), true);
+  assert.equal(redactValue({ field: pgp }).field, '[redacted]');
+});
+
+test('PEM block: other PRIVATE KEY BLOCK label variants; unterminated PGP fails closed (F1W2-T6b)', () => {
+  assert.ok(!redactSecretShaped(`-----BEGIN RSA PRIVATE KEY BLOCK-----\n${KEY_BODY}\n-----END RSA PRIVATE KEY BLOCK-----`).includes(KEY_BODY));
+  assert.ok(!redactSecretShaped(`-----BEGIN PRIVATE KEY BLOCK-----\n${KEY_BODY}\n-----END PRIVATE KEY BLOCK-----\n`).includes(KEY_BODY));
+  assert.ok(!redactSecretShaped(`log\n-----BEGIN PGP PRIVATE KEY BLOCK-----\n${KEY_BODY}\n${KEY_BODY2}`).includes(KEY_BODY));
+});
+
+test('preservation: CERTIFICATE and PUBLIC KEY blocks are byte-identical (F1W2-T6b)', () => {
+  const cert = `-----BEGIN CERTIFICATE-----\n${KEY_BODY}\n${KEY_BODY2}\n-----END CERTIFICATE-----\n`;
+  assert.equal(redactSecretShaped(cert), cert);
+  const pub = `-----BEGIN PUBLIC KEY-----\n${KEY_BODY}\n-----END PUBLIC KEY-----\n`;
+  assert.equal(redactSecretShaped(pub), pub);
+  assert.equal(redactValue({ field: cert }).field, cert);
+});
+
 test('vendor token prefixes: glpat-, pypi-, dckr_pat_ (text and value forms)', () => {
   const specimens = [
     'glpat-SynthGitLabTok0123456789ab',

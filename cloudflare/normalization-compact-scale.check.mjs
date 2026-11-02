@@ -23,6 +23,7 @@ test('default Native compact 50k-event normalization preserves bounded post, edi
   return result;
  };
  try{
+  const optional=await call('/assistant-schema-control?surface=optional');assert.equal(optional.result.controls.length,2);assert.ok(optional.result.controls.every(row=>row.created&&row.corruptRefused&&row.heldRefused));
   const small=await call('/seed?surface=small&fixture=compact');
   assert.equal(small.result.events,1000);assert.equal(small.result.posts,100);
   const smallPlan=await call('/plan?surface=small');
@@ -53,7 +54,7 @@ test('default Native compact 50k-event normalization preserves bounded post, edi
   assert.equal(retry.cost.rowsWritten,2,'cold exact post retry only flips the existing native runtime permit');
   const read=await call('/read');assert.equal(read.result.messages[0].body,'Useful normalized result');
   await call('/edit');const edited=await call('/edit?id=two');assert.equal(edited.result.duplicate,false);const presence=await call('/presence');assert.equal(presence.result.members.length,1);
-  for(const [label,large,small] of [['post',second,smallPost],['edit',edited,smallEdit],['presence',presence,smallPresence]]){assert.equal(large.cost.statements,small.cost.statements,label+' SQL');assert.equal(large.cost.rowsWritten,small.cost.rowsWritten,label+' writes');assert.ok(large.cost.rowsRead<=small.cost.rowsRead+32,label+' reads');assert.ok(large.cost.materializedBytes<=small.cost.materializedBytes+4096,label+' returned');assert.ok(large.cost.carrierWriteBytes<=512,label+' carrier');assert.ok(large.cost.maxProjectionReadBytes<=512,label+' no full projection read');if(label!=='presence')assert.ok(large.cost.carrierWriteBytes>0,label+' carrier instrumentation observed');}
+  for(const [label,large,small] of [['post',second,smallPost],['edit',edited,smallEdit],['presence',presence,smallPresence]]){assert.equal(large.cost.statements,small.cost.statements,label+' SQL');assert.equal(large.cost.rowsWritten,small.cost.rowsWritten,label+' writes');assert.ok(large.cost.rowsRead<=small.cost.rowsRead+32,label+' reads');assert.ok(large.cost.materializedBytes<=small.cost.materializedBytes+4096,label+' returned');assert.ok(large.cost.carrierWriteBytes<=512,label+' carrier');assert.ok(large.cost.maxProjectionReadBytes<=512,label+' no full projection read');if(label!=='presence'){assert.ok(large.cost.carrierWriteBytes>0,label+' carrier instrumentation observed');assert.ok(large.cost.rowsRead<500,label+' no optional-table catalog scan');}}
   await mf.dispose();mf=create();const editRetry=await call('/edit?id=two');assert.equal(editRetry.result.duplicate,true);assert.equal(editRetry.result.sequence,edited.result.sequence);assert.equal(editRetry.cost.rowsWritten,2);const updated=await call('/read');assert.equal(updated.result.messages[0].body,'Updated useful normalized result');await call('/presence');
   const state=await call('/state');assert.ok(state.result.projectionBytes<512);
   assert.equal(state.result.events,50004);assert.equal(state.result.messages,5002);assert.ok(state.result.sqliteDatabaseBytes>state.result.eventBodyBytes);assert.ok(state.result.sqliteDatabaseBytes>smallState.result.sqliteDatabaseBytes);

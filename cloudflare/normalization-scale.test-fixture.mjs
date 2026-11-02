@@ -6,6 +6,7 @@ import {initialRoom} from '../server/bootstrap.mjs';
 import {event} from '../src/events.js';
 import {readConversation} from '../server/conversation-sync.mjs';
 import {operatorNormalization} from '../server/operator-normalization.mjs';
+import {invokeFromPlainPost,invalidateEditedAssistantInput,roomAssistantSchema} from '../server/room-assistant.mjs';
 export class NormalizationScaleRoom extends DurableObject {
  constructor(ctx,env){
   super(ctx,env);this.ctx=ctx;this.active=null;this.pending=null;
@@ -19,7 +20,15 @@ export class NormalizationScaleRoom extends DurableObject {
   const cost=()=>{this.finish();const groups=[...this.active.values()];return {maxProjectionReadBytes:Math.max(0,...groups.map(g=>g.maxProjectionReadBytes)),observedWorkerWallMs:performance.now()-started,...Object.fromEntries(['statements','rowsRead','rowsWritten','materializedBytes','sqlTextBytes','boundParameterBytes','carrierWriteBytes','unknown'].map(k=>[k,groups.reduce((n,g)=>n+g[k],0)])),top:groups.sort((a,b)=>b.rowsRead-a.rowsRead).slice(0,8)};};
   try{
    let result;
-   if(url.pathname==='/seed'){
+   if(url.pathname==='/assistant-schema-control'){
+    const controls=[];for(const table of ['room_assistant_config','room_assistant_runs']){
+      const query=()=>table==='room_assistant_config'?invokeFromPlainPost({db:this.db},'probe',{}, {},{},'probe'):invalidateEditedAssistantInput(this.db,'probe','probe',1);
+      this.ctx.storage.sql.exec('DROP TABLE '+table);let missing;try{this.db.prepare('SELECT * FROM '+table).all();}catch(error){missing=error.message;}if(!missing)throw Error('Expected native missing-table error');query();
+      this.ctx.storage.sql.exec(table==='room_assistant_config'?'CREATE TABLE room_assistant_config(room_id TEXT PRIMARY KEY,value TEXT NOT NULL)':'CREATE TABLE room_assistant_runs(room_id TEXT NOT NULL,run_id TEXT NOT NULL,value TEXT NOT NULL,PRIMARY KEY(room_id,run_id))');query();
+      const held=this.db.prepare('SELECT value FROM '+table+' WHERE room_id=?');this.ctx.storage.sql.exec('DROP TABLE '+table);this.ctx.storage.sql.exec('CREATE TABLE '+table+'(room_id TEXT,wrong TEXT)');let refused=false,heldRefused=false;try{query();}catch(error){refused=error.message.includes('no such column');}try{held.get('probe');}catch(error){heldRefused=error.message.includes('no such column');}if(!refused||!heldRefused)throw Error('Changed assistant schema was accepted');
+      this.ctx.storage.sql.exec('DROP TABLE '+table);for(const sql of roomAssistantSchema.split(';').map(s=>s.trim()).filter(Boolean))this.ctx.storage.sql.exec(sql);controls.push({table,missing,created:true,corruptRefused:refused,heldRefused});
+    }result={controls};
+   }else if(url.pathname==='/seed'){
     const events=initialRoom(),members=url.searchParams.get('roster')==='64'?64:1;
     if(members===64){events.push(event({id:'history-floor-policy',idempotencyKey:'history-floor-policy',roomId:'commons',actorId:'owner',type:'room.history_visibility_set',at:'2026-01-01T00:00:00.000Z',data:{historyVisibility:'since_join'}}));for(let i=1;i<members;i++)events.push(event({id:'member-'+i,idempotencyKey:'member-key-'+i,roomId:'commons',actorId:'owner',type:'member.added',at:'2026-02-01T00:00:00.000Z',data:{memberId:'reader-'+i,displayName:'Synthetic agent '+i,kind:'agent',permissions:[]}}));}
     const small=url.searchParams.get('surface')==='small',compact=url.searchParams.get('fixture')==='compact',posts=small?100:5000,total=small?1000:50000,bodyBytes=compact?64:1250;
@@ -43,4 +52,4 @@ export class NormalizationScaleRoom extends DurableObject {
   finally{this.finish();this.active=null;}
  }
 }
-export default {fetch(request,env){return env.ROOM.getByName(new URL(request.url).searchParams.get('surface')==='small'?'small':'scale').fetch(request);}};
+export default {fetch(request,env){return env.ROOM.getByName(['small','optional'].includes(new URL(request.url).searchParams.get('surface'))?new URL(request.url).searchParams.get('surface'):'scale').fetch(request);}};

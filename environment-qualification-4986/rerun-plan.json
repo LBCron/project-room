@@ -1,0 +1,79 @@
+{
+  "source": "4986df689a1773e4162f7c686667a02f15f18c4c",
+  "files": [
+    "tests/claims-state-machine.property.test.js",
+    "tests/receipt-prose-quality.test.js",
+    "tests/room-board-grammar.test.js",
+    "tests/room-claim-status.test.js",
+    "tests/room-clock-skew.test.js",
+    "tests/room-enforcer-freshness.test.js",
+    "tests/room-first-pr.test.js",
+    "tests/room-overlap-refusal.test.js",
+    "tests/room-prose-claims.test.js",
+    "tests/room-protocol-mutation.test.js",
+    "tests/room-rotation-ledger.test.js",
+    "tests/room-strike-hardening.test.js",
+    "tests/room-submitted-rot.test.js",
+    "tests/room-sweep-evidence.test.js",
+    "tests/room-sweep-terminal.test.js",
+    "tests/runtime-pack-build.test.js"
+  ],
+  "concurrency": 4,
+  "environment": {
+    "scope": "Full local unit qualification prerequisites, not a test result",
+    "tools": [
+      {
+        "name": "node",
+        "executable": "/Users/potter/.cache/codex-runtimes/codex-primary-runtime/dependencies/node/bin/node",
+        "available": true,
+        "version": "v24.22.1",
+        "status": 0,
+        "signal": null
+      },
+      {
+        "name": "python3",
+        "executable": "/Users/potter/.cache/codex-runtimes/codex-primary-runtime/dependencies/python/bin/python3.12",
+        "available": true,
+        "version": "Python 3.12.14",
+        "status": 0,
+        "signal": null
+      },
+      {
+        "name": "git",
+        "executable": "/Users/potter/.cache/codex-runtimes/codex-primary-runtime/dependencies/bin/fallback/git",
+        "available": true,
+        "version": "git version 2.53.0",
+        "status": 0,
+        "signal": null
+      },
+      {
+        "name": "gh",
+        "executable": "/Users/potter/Documents/ChatGPT/project room/local-lab/qualification-tools/gh-2.103.3/gh",
+        "available": true,
+        "version": "gh version 2.103.3 (2026-10-26)",
+        "status": 0,
+        "signal": null
+      },
+      {
+        "name": "jq",
+        "executable": "/usr/bin/jq",
+        "available": true,
+        "version": "jq-1.7.1-apple",
+        "status": 0,
+        "signal": null
+      },
+      {
+        "name": "npm",
+        "executable": "/Users/potter/Documents/ChatGPT/project room/local-lab/qualification-tools/npm-11.6.2/package/bin/npm-cli.js",
+        "available": true,
+        "version": "11.6.2",
+        "status": 0,
+        "signal": null
+      }
+    ],
+    "missing": [],
+    "ready": true,
+    "action": "Environment tools respond; source and tests still require qualification."
+  },
+  "reason": "Only16files with explicit missing-gh/npm failures in corrected-Python JUnit. No source edits or stubs."
+}

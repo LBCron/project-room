@@ -1,0 +1,18 @@
+[
+  "tests/claims-state-machine.property.test.js",
+  "tests/receipt-prose-quality.test.js",
+  "tests/room-board-grammar.test.js",
+  "tests/room-claim-status.test.js",
+  "tests/room-clock-skew.test.js",
+  "tests/room-enforcer-freshness.test.js",
+  "tests/room-first-pr.test.js",
+  "tests/room-overlap-refusal.test.js",
+  "tests/room-prose-claims.test.js",
+  "tests/room-protocol-mutation.test.js",
+  "tests/room-rotation-ledger.test.js",
+  "tests/room-strike-hardening.test.js",
+  "tests/room-submitted-rot.test.js",
+  "tests/room-sweep-evidence.test.js",
+  "tests/room-sweep-terminal.test.js",
+  "tests/runtime-pack-build.test.js"
+]

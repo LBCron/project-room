@@ -1,0 +1,18 @@
+import assert from 'node:assert/strict';
+import {readFileSync,writeFileSync,mkdirSync,mkdtempSync} from 'node:fs';
+import {pathToFileURL,fileURLToPath} from 'node:url';
+import {execFileSync,spawnSync} from 'node:child_process';
+const root=fileURLToPath(new URL('.',import.meta.url));
+const repo='/Users/potter/Documents/Codex/2026-10-22/you-x20/work/member2-body-driver-composed-1102';
+const runtime='/Users/potter/.cache/codex-runtimes/codex-primary-runtime/dependencies';
+process.env.PATH=[runtime+'/node/bin',runtime+'/python/bin',runtime+'/bin/fallback',root+'qualification-tools/bin',process.env.PATH??''].join(':');
+const git=runtime+'/bin/fallback/git',pin='4986df689a1773e4162f7c686667a02f15f18c4c';process.chdir(repo);
+assert.equal(execFileSync(git,['rev-parse','HEAD'],{encoding:'utf8'}).trim(),pin);execFileSync(git,['diff','--exit-code','HEAD','--']);
+const doctor=spawnSync(process.execPath,[root+'qualification_env.mjs'],{encoding:'utf8'});assert.equal(doctor.status,0,doctor.stdout);const environment=JSON.parse(doctor.stdout);
+const files=JSON.parse(readFileSync(root+'environment-rerun-files.json','utf8'));assert.equal(files.length,16);assert.ok(files.every(p=>/^tests\/[a-z0-9.-]+$/.test(p)));
+const out=root+'environment-unit-4986';mkdirSync(out,{recursive:true});process.env.TMPDIR=mkdtempSync('/tmp/member2-unit-env-');process.env.XDG_RUNTIME_DIR=process.env.TMPDIR;
+const meta={source:pin,files,concurrency:4,environment,reason:'Only16files with explicit missing-gh/npm failures in corrected-Python JUnit. No source edits or stubs.'};writeFileSync(out+'/plan.json',JSON.stringify(meta,null,2)+'\n');
+console.log('MEMBER2_ENV_UNIT_START '+JSON.stringify({source:pin,files:files.length,concurrency:4}));
+const {runTestFiles}=await import(pathToFileURL(repo+'/scripts/unit-ci.mjs'));const start=Date.now();const result=runTestFiles(['--test-concurrency=4',...files],{junitPath:out+'/junit.xml'});
+const trackedDiff=execFileSync(git,['diff','--name-only','HEAD','--'],{encoding:'utf8'}).trim().split('\n').filter(Boolean);
+writeFileSync(out+'/receipt.json',JSON.stringify({...meta,...result,elapsedMs:Date.now()-start,trackedDiff},null,2)+'\n');console.log('MEMBER2_ENV_UNIT_TERMINAL '+JSON.stringify({status:result.status,signal:result.signal,failures:result.failures.length,elapsedMs:Date.now()-start,trackedDiff}));process.exitCode=result.status;

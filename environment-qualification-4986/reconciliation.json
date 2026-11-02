@@ -1,0 +1,62 @@
+{
+  "source": "4986df689a1773e4162f7c686667a02f15f18c4c",
+  "initialFailedCases": 116,
+  "pythonRerunFailedCases": 110,
+  "environmentRerun": {
+    "files": 16,
+    "tests": 125,
+    "pass": 125,
+    "fail": 0,
+    "elapsedMs": 16646,
+    "trackedDiff": []
+  },
+  "clearedMissingToolFailures": 102,
+  "remainingOnOriginalCandidate": [
+    {
+      "file": "tests/candidate-manifest.test.js",
+      "name": "committed candidate manifest has zero drift from the tree",
+      "count": 1
+    },
+    {
+      "file": "tests/fleet-incident-evals.test.js",
+      "name": "E4 baselines: i18n baseline and MCP catalog snapshot match the composed tree",
+      "count": 1
+    },
+    {
+      "file": "tests/invite-only-boundary.test.js",
+      "name": "Node unauthenticated endpoint inventory equals its openapi security: [] set",
+      "count": 1
+    },
+    {
+      "file": "tests/mcp-catalog-contract.test.js",
+      "name": "the served MCP catalog matches the reviewed snapshot",
+      "count": 1
+    },
+    {
+      "file": "tests/openapi-served-coverage.test.js",
+      "name": "served /openapi.json matches the routes the server actually serves",
+      "count": 1
+    },
+    {
+      "file": "tests/recovery-audit-sweep.test.js",
+      "name": "the event surface has not grown without this sweep noticing",
+      "count": 1
+    },
+    {
+      "file": "tests/route-publication.test.js",
+      "name": "the public set is enumerated live from the table, not a pinned list",
+      "count": 1
+    },
+    {
+      "file": "tests/runtime-package.test.js",
+      "name": "project preflight composes dependency, coverage and runtime checks",
+      "count": 1
+    }
+  ],
+  "junitSha256": {
+    "full": "22bb22136dd4e2e31b3114b8b3f495662071fdcf9b7fda13a5792fa36858fd55",
+    "pythonRerun": "345c6f5f9f41ab09ee73cccf2a2e9022356d96384a4e066434f802a923ee44c0",
+    "environmentRerun": "82f112e492e13857f71d2a86f4371c7ad15d5e2972082b8f3852d1c31f9296ff"
+  },
+  "limitation": "Historical full run failed. This is case-level reconciliation of targeted observations on unchanged4986; not a fresh full-suite run or green release qualification. Generated-record repair56c1 was qualified separately."
+}

@@ -13,7 +13,7 @@ test('Native sponsorship approval does not scan or rewrite large unrelated token
  const origin='https://room.example',callback='https://claude.ai/api/mcp/auth_callback',resource=origin+'/mcp';
  const client={clientId:'project-room-claude',name:'Claude',redirectUris:[callback],preferredRoomId:'commons',preferredMemberId:'claude'},costs=[];
  try{for(const rows of [0,4096]){
-  const mf=new Miniflare({modules:true,script,compatibilityDate:'2026-07-30',compatibilityFlags:['nodejs_compat'],durableObjectsPersist:join(directory,String(rows)),durableObjects:{ROOM:{className:'AgentAdoptionRoom',useSQLite:true}},bindings:{ROOM_ORIGIN:origin,ROOM_MCP_OAUTH_CLIENTS:JSON.stringify([client])},serviceBindings:{ASSETS:async()=>new Response('Not found',{status:404})}});
+  const mf=new Miniflare({modules:true,script,compatibilityDate:'2026-07-30',compatibilityFlags:['nodejs_compat'],durableObjectsPersist:join(directory,String(rows)),durableObjects:{ROOM:{className:'AgentAdoptionRoom',useSQLite:true}},bindings:{ROOM_ORIGIN:origin,ROOM_MCP_OAUTH_CLIENTS: JSON.stringify([client])},serviceBindings:{ASSETS:async()=>new Response('Not found',{status:404})}});
   const call=(path,options)=>mf.dispatchFetch(origin+path,options),json=async(path,options)=>{const response=await call(path,options);assert.equal(response.status,200,await response.clone().text());return response.json();};
   try{
    const seed=await json('/__seed'),headers={Cookie:`__Host-account_session=${seed.slot}`};

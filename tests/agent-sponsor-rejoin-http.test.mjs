@@ -34,8 +34,12 @@ try{
  try{
   const current=s.authenticateAccountSession(slot.token),q={client_id:clientId,redirect_uri:callback,scope:'chat:read',code_challenge:createHash('sha256').update('v'.repeat(43)).digest('base64url'),code_challenge_method:'S256',resource,csrf_token:current.csrf,decision:'allow',agent_binding:JSON.stringify(crafted)};
   const send=(url,options)=>new Promise((resolve,reject)=>{const req=request(url,{method:options.method,headers:options.headers},res=>{const chunks=[];res.on('data',c=>chunks.push(c));res.on('end',()=>resolve(new Response(Buffer.concat(chunks),{status:res.statusCode,headers:res.headers})));});req.on('error',reject);req.end(options.body);});
+  const codesBefore=s.db.prepare('SELECT count(*) n FROM oauth_provider_codes').get().n;
   const response=await send('http://127.0.0.1:'+server.address().port+'/oauth/authorize',{method:'POST',redirect:'manual',headers:{Host:'room.example',Origin:'https://room.example',Cookie:'__Host-account_session='+slot.token,'Content-Type':'application/x-www-form-urlencoded'},body:new URLSearchParams(q).toString()});
   const location=response.headers.get('location');
+  assert.equal(response.status,302);
+  assert.equal(new URL(location).searchParams.get('error'),'access_denied');
+  assert.equal(s.db.prepare('SELECT count(*) n FROM oauth_provider_codes').get().n,codesBefore,'denial writes no authorization code');
   assert.equal(location ? new URL(location,'https://room.example').searchParams.has('code') : false,false,'a former adoption must not issue a code for a new member');
   assert.equal(rejectedBinding,null,'the provider binding validator independently rejects the substituted recipient');
   assert.equal(s.roomAuthority('commons',{memberId:identity.identityId}).members[identity.identityId].accountableHumanId,'john');

@@ -445,33 +445,53 @@ export function currentDmConsentEventContext(store,roomId) {
   bindCurrentRecordContext(state,{replyRequestCount:head.counts.replyRequests});
   return {room:{sequence:head.sequence,state},current:{head,before:fieldsOf(state),workRefs:new Map(),budget:b,messageRows:new Map()}};
 }
-// A source cap applies AFTER indexed numeric lease expiry. Historical expired
-// reservations cannot exhaust the live set. Missing proof or overload refuses.
-const CURRENT_CLAIM_SOURCE_LIMIT=16;
-function currentClaimAdmission(store,roomId,actorId,item,b) {
+// Keyset pages exclude expired claims in the owned expiry index. Each live
+// summary has a fresh proof budget; only ten warnings and one conflict survive.
+// Total work remains O(live claims) in this transaction, not constant CPU.
+function currentClaimAdmission(store,roomId,actorId,item,command,b) {
   if(!item)return null;
-  const db=store.db,now=store.now();
-  const rows=db.prepare(`SELECT record_key FROM current_room_records INDEXED BY current_native_claim_expiry
-    WHERE room_id=? AND domain='workSummary' AND json_extract(payload,'$.work.claim.status')='active'
-      AND json_extract(payload,'$.work.claim.expiresAtMs')>? ORDER BY json_extract(payload,'$.work.claim.expiresAtMs'),record_key LIMIT ?`)
-    .all(roomId,now,CURRENT_CLAIM_SOURCE_LIMIT+1);
-  charge(b,rows.reduce((n,row)=>n+Buffer.byteLength(row.record_key)+32,0),rows.length);
-  if(rows.length>CURRENT_CLAIM_SOURCE_LIMIT)refuse('Live claim coordination exceeds the bounded source window; release or complete held work before another reservation');
-  const candidates=[];
-  for(const {record_key:id} of rows) {
-    const work=readCurrentWorkSummaryForViewer(db,roomId,id,actorId,b),expiry=Date.parse(work.claim?.expiresAt);
-    if(work.claim?.status!=='active'||!Number.isFinite(expiry)||work.claim.expiresAtMs!==expiry||expiry<=now)corrupt('live claim index binding differs');
-    const opening=db.prepare("SELECT sequence,length(CAST(body AS BLOB)) bytes FROM events INDEXED BY current_native_work_proposals WHERE room_id=? AND json_extract(body,'$.type')='work.proposed' AND json_extract(body,'$.data.workItemId')=? ORDER BY sequence LIMIT 2").all(roomId,id);
-    charge(b,opening.length*256,opening.length);
-    if(opening.length!==1||opening[0].bytes>MAX_RECORD)refuse('Live claim requires exact bounded original proposal evidence');
-    charge(b,opening[0].bytes);
-    const event=JSON.parse(db.prepare('SELECT body FROM events WHERE room_id=? AND sequence=?').get(roomId,opening[0].sequence).body);
-    if(event.type!=='work.proposed'||event.data?.workItemId!==id||event.actorId!==work.proposedById)corrupt('live claim proposal binding differs');
-    candidates.push({work,sequence:opening[0].sequence});
-  }
-  // JavaScript object enumeration puts canonical uint32 index keys first.
+  const db=store.db,now=store.now(),receipts=new Map(),head=readCurrentHead(db,roomId,{...budget(),auditReceipts:receipts});
   const numeric=id=>/^(0|[1-9][0-9]*)$/.test(id)&&Number(id)<4294967295;
-  candidates.sort((a,c)=>numeric(a.work.id)?numeric(c.work.id)?Number(a.work.id)-Number(c.work.id):-1:numeric(c.work.id)?1:a.sequence-c.sequence);
+  const compare=(a,c)=>numeric(a.id)?numeric(c.id)?Number(a.id)-Number(c.id):-1:numeric(c.id)?1:a.sequence-c.sequence;
+  const warningQuery=Array.isArray(command.data.paths)?prepareClaimOverlap(item.id,command.data.repository,command.data.paths,new Date(now).toISOString()):null;
+  const candidate={id:item.id,claim:{...command.data,status:'active',holderId:actorId}},warnings=[];
+  let selectedConflict=null,afterExpiry=now,afterKey=null,done=false;
+  while(!done) {
+    const pageBudget={...budget(),schemaVerified:true,auditReceipts:receipts};
+    const rows=afterKey===null?[]:db.prepare(`SELECT record_key,json_extract(payload,'$.work.claim.expiresAtMs') expiry
+      FROM current_room_records INDEXED BY current_native_claim_expiry
+      WHERE room_id=? AND domain='workSummary' AND json_extract(payload,'$.work.claim.status')='active'
+        AND json_extract(payload,'$.work.claim.expiresAtMs')=? AND record_key>?
+      ORDER BY record_key LIMIT 32`).all(roomId,afterExpiry,afterKey);
+    if(rows.length<32)rows.push(...db.prepare(`SELECT record_key,json_extract(payload,'$.work.claim.expiresAtMs') expiry
+      FROM current_room_records INDEXED BY current_native_claim_expiry
+      WHERE room_id=? AND domain='workSummary' AND json_extract(payload,'$.work.claim.status')='active'
+        AND json_extract(payload,'$.work.claim.expiresAtMs')>?
+      ORDER BY json_extract(payload,'$.work.claim.expiresAtMs'),record_key LIMIT ?`).all(roomId,afterExpiry,32-rows.length));
+    charge(pageBudget,rows.reduce((n,row)=>n+Buffer.byteLength(row.record_key)+64,0),rows.length);
+    for(const {record_key:id,expiry:indexExpiry} of rows) {
+      const unit={...budget(),schemaVerified:true,auditReceipts:receipts};
+      const work=readCurrentWorkSummaryForViewer(db,roomId,id,actorId,unit),expiry=Date.parse(work.claim?.expiresAt);
+      if(work.claim?.status!=='active'||!Number.isFinite(expiry)||work.claim.expiresAtMs!==expiry||indexExpiry!==expiry||expiry<=now)corrupt('live claim index binding differs');
+      const overlap=warningQuery?matchClaimOverlap(warningQuery,work):null;
+      const conflict=warningQuery?conflictingClaim({[id]:work},candidate,now):null;
+      if(overlap||conflict) {
+        const opening=db.prepare("SELECT sequence,length(CAST(body AS BLOB)) bytes FROM events INDEXED BY current_native_work_proposals WHERE room_id=? AND json_extract(body,'$.type')='work.proposed' AND json_extract(body,'$.data.workItemId')=? ORDER BY sequence LIMIT 2").all(roomId,id);
+        charge(unit,opening.length*256,opening.length);
+        if(opening.length!==1||opening[0].bytes>MAX_RECORD)refuse('Live claim requires exact bounded original proposal evidence');
+        charge(unit,opening[0].bytes);
+        const event=JSON.parse(db.prepare('SELECT body FROM events WHERE room_id=? AND sequence=?').get(roomId,opening[0].sequence).body);
+        if(event.type!=='work.proposed'||event.data?.workItemId!==id||event.actorId!==work.proposedById)corrupt('live claim proposal binding differs');
+        const order={id,sequence:opening[0].sequence};
+        if(overlap){warnings.push({...order,overlap});warnings.sort(compare);if(warnings.length>10)warnings.pop();}
+        if(conflict&&(!selectedConflict||compare(order,selectedConflict)<0))selectedConflict={...order,work:conflict};
+      }
+      afterExpiry=indexExpiry;afterKey=id;
+    }
+    done=rows.length<32;
+  }
+  const final=readCurrentHead(db,roomId,{...budget(),auditReceipts:receipts});receipts.clear();
+  if(!final||final.head_sha256!==head.head_sha256)corrupt('claim read head changed during scan');
   const previous=boardStateForWorkItem(item,now);
   if(previous==='unclaimed') {
     const size=db.prepare('SELECT length(CAST(config_json AS BLOB)) bytes FROM work_claim_config WHERE room_id=?').get(roomId);
@@ -488,8 +508,8 @@ function currentClaimAdmission(store,roomId,actorId,item,b) {
     if(fixed+timed>=cap)throw new ServiceError(409,'too_many_open_claims',`You already hold ${cap} open claims. Release or finish one before claiming another.`);
   }
   return {
-    overlaps(workId,repository,paths,at){const query=prepareClaimOverlap(workId,repository,paths,at),found=[];for(const {work} of candidates){const overlap=matchClaimOverlap(query,work);if(overlap)found.push(overlap);if(found.length>=10)break;}return found;},
-    conflict(candidate,at){return conflictingClaim(Object.fromEntries(candidates.map(({work})=>[work.id,work])),candidate,at);}
+    overlaps(){return warnings.map(value=>value.overlap);},
+    conflict(candidate,at){conflictingClaim({},candidate,at);return selectedConflict?.work??null;}
   };
 }
 export function currentCommandContext(store,roomId,command,{actorId}={}) {
@@ -608,7 +628,7 @@ function commandContextFromHead(store,roomId,command,head,b,{readMessage,readWor
   }
   // Shared reducers see the complete addressed ancestry in original order.
   state.messages=[...messages.values()].sort((a,b)=>a.row.seq-b.row.seq||Buffer.compare(Buffer.from(a.value.id),Buffer.from(b.value.id))).map(source=>source.value);
-  const claims=command.type==='claim.acquired'?currentClaimAdmission(store,roomId,actorId,state.workItems[workId],b):null;
+  const claims=command.type==='claim.acquired'?currentClaimAdmission(store,roomId,actorId,state.workItems[workId],command,b):null;
   bindCurrentRecordContext(state,{replyRequestCount:head.counts.replyRequests,...(claims?{claimOverlaps:claims.overlaps}:{})});
   const before=fieldsOf({...state,workItems:Object.fromEntries(workRefs)});
   return {room:{sequence:head.sequence,state},current:{head,before,workRefs,budget:b,messageRows:messages,...(claims?{claimConflict:claims.conflict}:{})},count:head.counts.messages};

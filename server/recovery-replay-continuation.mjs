@@ -1,3 +1,4 @@
+import {initialReplayHash,advanceReplayHash,finishReplayHash} from './replay-sha256.mjs';
 import {initialRecoveryCheckpointSeed,validateRecoveryCheckpointSeed,advanceRecoveryCheckpointSeed} from './recovery-checkpoint-seed.mjs';
 import {validateRecoveryHistoryEntry} from './recovery-history-entry.mjs';
 import {savedHistoricalReplayCheckpoint} from './historical-replay-contract.mjs';
@@ -6,6 +7,7 @@ import {planRecoveryReplayValue,readRecoveryReplayValue,writeRecoveryReplayValue
 // Transitional independent fold over the frozen original source. Unsupported
 // dependency/basis plans remain explicit and the original FULL oracle remains
 // required for every room, including a room whose addressed fold completes.
+const historicalDigest=bytes=>finishReplayHash(advanceReplayHash(initialReplayHash(),bytes));
 export const initialRecoveryReplay=()=>({version:2,checkpoint:null,stage:'basis',sequence:0,counts:{members:0,channels:0,workItems:0,replyRequests:0,messages:0,replyRequestsPresent:false},reason:null});
 export function validateRecoveryReplay(cursor){
  if(!cursor||Object.keys(cursor).sort().join(',')!=='checkpoint,counts,reason,sequence,stage,version'||cursor.version!==2||!['basis','checkpoint','events','complete','deferred'].includes(cursor.stage)||!Number.isSafeInteger(cursor.sequence)||cursor.sequence<0||!cursor.counts||Object.keys(cursor.counts).sort().join(',')!=='channels,members,messages,replyRequests,replyRequestsPresent,workItems'||!['members','channels','messages','workItems','replyRequests'].every(key=>Number.isSafeInteger(cursor.counts[key])&&cursor.counts[key]>=0)||typeof cursor.counts.replyRequestsPresent!=='boolean'||cursor.reason!==null&&(typeof cursor.reason!=='string'||cursor.reason.length>128)||((cursor.stage==='deferred')!==(cursor.reason!==null)))throw Error('Recovery replay cursor requires reconciliation');
@@ -13,7 +15,7 @@ export function validateRecoveryReplay(cursor){
  if(cursor.stage==='checkpoint'&&cursor.checkpoint===null)throw Error('Recovery checkpoint cursor missing');
 }
 export function advanceRecoveryReplay(db,scratch,roomId,previous,seal){
- validateRecoveryReplay(previous);const cursor=structuredClone(previous);let units=0,bytes=0;
+ validateRecoveryReplay(previous);const cursor=structuredClone(previous);let units=0,bytes=0,historical=null;
  const defer=reason=>{cursor.stage='deferred';cursor.reason=reason;return{cursor,units,bytes,done:true};};
  const events=seal?.tables?.find(table=>table.name==='events'),checkpoint=seal?.tables?.find(table=>table.name==='projection_checkpoints');
  if(!events||!Number.isSafeInteger(events.maxRowBytes)||events.maxRowBytes<0)throw Error('Recovery replay source admission differs');
@@ -23,18 +25,20 @@ export function advanceRecoveryReplay(db,scratch,roomId,previous,seal){
   const held=db.prepare('SELECT sequence,length(CAST(projection AS BLOB)) bytes FROM projection_checkpoints WHERE room_id=?').get(roomId);
   if(!held||held.sequence===0){
    // Existing exact64event/256KiB historical proof takes precedence atzero.
-   if(savedHistoricalReplayCheckpoint(db,roomId,head.sequence))return defer('saved_historical_checkpoint_seed_pending');
+   const saved=savedHistoricalReplayCheckpoint(db,roomId,head.sequence);historical=saved;if(saved){const bytes=new TextEncoder().encode(saved.json);cursor.checkpoint=initialRecoveryCheckpointSeed(saved.sequence,bytes.length,{sourceKind:'historical',sourceDigest:historicalDigest(bytes)});cursor.stage='checkpoint';}
   }
-  if(held){if(!Number.isSafeInteger(held.sequence)||held.sequence<0||held.sequence>head.sequence||!Number.isSafeInteger(held.bytes)||held.bytes<2||held.bytes>(checkpoint?.maxRowBytes??0))throw Error('Recovery checkpoint source admission differs');cursor.checkpoint=initialRecoveryCheckpointSeed(held.sequence,held.bytes);cursor.stage='checkpoint';}
+  if(cursor.stage==='checkpoint'){/* Exact saved proof takes precedence over a zero checkpoint. */}
+  else if(held){if(!Number.isSafeInteger(held.sequence)||held.sequence<0||held.sequence>head.sequence||!Number.isSafeInteger(held.bytes)||held.bytes<2||held.bytes>(checkpoint?.maxRowBytes??0))throw Error('Recovery checkpoint source admission differs');cursor.checkpoint=initialRecoveryCheckpointSeed(held.sequence,held.bytes);cursor.stage='checkpoint';}
   else cursor.stage='events';
  }
- if(cursor.stage==='checkpoint'){const result=advanceRecoveryCheckpointSeed(db,scratch,roomId,cursor.checkpoint,maximumValueBytes);cursor.checkpoint=result.cursor;units=result.units;bytes=result.bytes;if(result.cursor.stage==='deferred')return defer(result.cursor.reason);if(result.cursor.stage==='complete'){cursor.sequence=result.cursor.sequence;cursor.counts=result.cursor.counts;cursor.stage='events';}return{cursor,units:result.units,bytes:result.bytes,done:false};}
+ let historicalBytes=null;if(cursor.checkpoint?.sourceKind==='historical'){const saved=historical??savedHistoricalReplayCheckpoint(db,roomId,head.sequence);if(!saved||saved.sequence!==cursor.checkpoint.sequence||typeof saved.json!=='string')throw Error('Saved recovery basis requires reconciliation');historicalBytes=new TextEncoder().encode(saved.json);if(historicalDigest(historicalBytes)!==cursor.checkpoint.sourceDigest)throw Error('Saved recovery basis changed');bytes=256*1024;}
+ if(cursor.stage==='checkpoint'){const result=advanceRecoveryCheckpointSeed(db,scratch,roomId,cursor.checkpoint,maximumValueBytes,historicalBytes);cursor.checkpoint=result.cursor;units=result.units;bytes+=result.bytes;if(result.cursor.stage==='deferred')return defer(result.cursor.reason);if(result.cursor.stage==='complete'){cursor.sequence=result.cursor.sequence;cursor.counts=result.cursor.counts;cursor.stage='events';}return{cursor,units,bytes,done:false};}
  if(['complete','deferred'].includes(cursor.stage))return{cursor,units,bytes,done:true};
  while(units<128){
   const scalar=db.prepare('SELECT rowid,sequence,length(CAST(body AS BLOB)) bytes FROM events WHERE room_id=? AND sequence>? ORDER BY sequence LIMIT 1').get(roomId,cursor.sequence);
   if(!scalar){if(cursor.sequence!==head.sequence)throw Error('Recovery replay tail differs');cursor.stage='complete';return{cursor,units,bytes,done:true};}
   if(!Number.isSafeInteger(scalar.bytes)||scalar.bytes<1||scalar.bytes>events.maxRowBytes)throw Error('Recovery replay event bytes differ');
-  if(scalar.bytes>4*1024*1024)return defer('replay_atom_requires_staging');
+  if(bytes+scalar.bytes>4*1024*1024&&!units)return defer('replay_atom_requires_staging');
   if(units&&bytes+scalar.bytes>4*1024*1024)break;
   const row=db.prepare('SELECT sequence,id,body FROM events WHERE rowid=?').get(scalar.rowid),incoming=validateRecoveryHistoryEntry(row,cursor.sequence+1,roomId);
   let readBytes=0,result;const budget=Symbol('replay_atom_byte_admission');

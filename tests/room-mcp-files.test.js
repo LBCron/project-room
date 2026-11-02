@@ -601,7 +601,7 @@ test('normalized hosted file reads fail closed if a committed message loses its 
  assert.equal(store.db.prepare('SELECT state FROM room_attachments WHERE room_id=? AND id=?').get(created.roomId,'protected-file').state,'committed','bytes remain available for authorized recovery, never relabeled public');
 });
 
-test('normalized hosted file selection and downloads enforce the same since-join history floor',async t=>{
+for(const historyVisibility of ['since_join','all'])test(`normalized hosted file selection and downloads preserve ${historyVisibility} history policy`,async t=>{
  const now=Date.parse('2026-01-06T00:00:00Z'),{origin,store}=await serve(t,{now:()=>now});
  const owner=store.identities.create('Floor file owner'),peer=store.identities.create('Floor file reader'),roomId='floor-files';
  const {event,PERMISSIONS}=await import('../src/events.js');
@@ -609,7 +609,7 @@ test('normalized hosted file selection and downloads enforce the same since-join
  store.initialize([
   entry('room.created',{roomId,ownerId:owner.identityId,title:'History scoped files',purpose:'No older file body disclosure'},'2026-01-01T00:00:00Z'),
   entry('member.added',{memberId:owner.identityId,identityId:owner.identityId,displayName:'Floor file owner',kind:'agent',permissions:[...PERMISSIONS]},'2026-01-01T00:00:00Z'),
-  entry('room.history_visibility_set',{historyVisibility:'since_join'},'2026-01-01T01:00:00Z'),
+  entry('room.history_visibility_set',{historyVisibility},'2026-01-01T01:00:00Z'),
   entry('message.posted',{messageId:'prejoin-message',body:'Old file pointer'},'2026-01-02T00:00:00Z'),
   entry('member.added',{memberId:peer.identityId,identityId:peer.identityId,displayName:'Floor file reader',kind:'agent',permissions:[]},'2026-01-03T00:00:00Z')
  ],{representation:'normalized-current-v1'});
@@ -617,9 +617,16 @@ test('normalized hosted file selection and downloads enforce the same since-join
  for(const identity of[owner,peer])store.db.prepare('INSERT INTO identity_links(room_id,identity_id,member_id,linked_at) VALUES(?,?,?,?)').run(roomId,identity.identityId,identity.identityId,now);
  const data=Buffer.from('PREJOIN_FILE_SENTINEL').toString('base64');assert.equal((await call(origin,'room_put_file',{roomId,id:'prejoin-file',filename:'old.txt',mediaType:'text/plain',data},owner.secret)).value.status,'staged');
  assert.equal((await call(origin,'room_commit_file',{roomId,id:'prejoin-file',messageId:'prejoin-message'},owner.secret)).value.status,'committed');
+ if(historyVisibility==='since_join'){
  const selected=await call(origin,'room_list_files',{roomId,messageIds:['prejoin-message']},peer.secret);assert.equal(selected.value.status,404);assert.equal(selected.value.files,undefined);
  assert.throws(()=>store.roomAttachments.get(peer.secret,roomId,'prejoin-file'),e=>e.status===404&&e.code==='attachment_not_found');
  const http=await fetch(origin+'/api/rooms/'+roomId+'/files/prejoin-file',{headers:{Authorization:`Bearer ${peer.secret}`}});assert.equal(http.status,404);assert.doesNotMatch(await http.text(),/PREJOIN_FILE_SENTINEL/);
  const read=await call(origin,'room_get_file',{roomId,id:'prejoin-file'},peer.secret);assert.equal(read.value.status,404);assert.equal(read.value.attachment,undefined);assert.doesNotMatch(JSON.stringify(read.body),/PREJOIN_FILE_SENTINEL/);const absent=await call(origin,'room_get_file',{roomId,id:'unknown-file'},peer.secret);assert.equal(absent.value.status,read.value.status);assert.equal(absent.value.code,read.value.code);
+ }else{
+  const selected=await call(origin,'room_list_files',{roomId,messageIds:['prejoin-message']},peer.secret);assert.deepEqual(selected.value.files.map(x=>x.id),['prejoin-file']);
+  assert.equal(store.roomAttachments.get(peer.secret,roomId,'prejoin-file').attachment.data,data);
+  const http=await fetch(origin+'/api/rooms/'+roomId+'/files/prejoin-file',{headers:{Authorization:`Bearer ${peer.secret}`}});assert.equal(http.status,200);assert.equal((await http.json()).attachment.data,data);
+  const read=await call(origin,'room_get_file',{roomId,id:'prejoin-file'},peer.secret);assert.equal(read.value.attachment.data,data,'explicit all-history policy remains effective for a nonowner');
+ }
  assert.equal((await call(origin,'room_get_file',{roomId,id:'prejoin-file'},owner.secret)).value.attachment.data,data,'owner keeps established unlimited history');
 });

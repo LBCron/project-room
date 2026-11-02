@@ -1,0 +1,41 @@
+{
+  "source": "3b85c99a919e2d9b225e076dd5cb0b0948075941",
+  "parent": "00888c52110d36250d3e07629036701b72926d09",
+  "tree": "eed1481972631636e1d00e1a0f81e2b0f97a701a",
+  "branch": "codex/member2-canonical-crash-ci-1102",
+  "host": "mac",
+  "node": "v24.22.1",
+  "files": {
+    "tests/canonical-work-process-crash.test.mjs": "af9148d957407b490a7fb8529a92035b7a59cfb4bdfa74d57917ce64d03ad8b9",
+    "tests/fixtures/canonical-work-crash-child.mjs": "7b04be65172bde624c73ad7aa24736b6aeefdd8be34ccd2880e158f982ab1682"
+  },
+  "exactPublishedHead": {
+    "exit": 0,
+    "pass": 5,
+    "fail": 0,
+    "skip": 0,
+    "controlledSigkills": 3,
+    "serverProcessStarts": 4,
+    "operations": [
+      "work.accepted",
+      "claim.acquired",
+      "message.posted"
+    ],
+    "eachColdRestart": {
+      "sameBusinessRowsAndProofs": true,
+      "sameEventReplay": true,
+      "noReplayWrite": true
+    },
+    "changedIntentConflict": true,
+    "revokedCredentialRefusal": true
+  },
+  "lintExit": 0,
+  "lintMaxWarnings": 0,
+  "discovery": {
+    "test": 1,
+    "helper": 0,
+    "total": 1857
+  },
+  "testLogSha256": "6a8f53c85403c43279ab968d78b3761cdfff8b32593a2d810aa4d9bc35e44925",
+  "scope": "Local Node HTTP + file SQLite; actual response loss and process SIGKILL, not power/storage failure, Native, hosted, full-suite, merge/deploy or physical peer-device execution."
+}

@@ -4035,7 +4035,7 @@ this.slaBreachAlerts = new SlaBreachAlertJournal(this); // Task 26: durable in-a
   }
   appendSideTableEvent(roomId, event) {
     if(isCurrentRoom(this.db,roomId)){
-      if(![T.DM_CONSENT_CHANGED,T.REFERRAL_COMPLETED,T.AGENT_INVITE_MINTED].includes(event.type))fail(409,'current_room_context_unavailable','This side-table event has no qualified current writer');
+      if(![T.DM_CONSENT_CHANGED,T.REFERRAL_COMPLETED,T.AGENT_INVITE_MINTED,T.LAND_UPDATED].includes(event.type))fail(409,'current_room_context_unavailable','This side-table event has no qualified current writer');
       return this.transaction(()=>withCurrentReadContext(this.db,roomId,()=>withCurrentServingWriter(this.db,roomId,()=>{
         const context=event.type===T.DM_CONSENT_CHANGED ? currentDmConsentEventContext(this,roomId) : currentInviteContext(this,roomId,{memberIds:[event.actorId,event.data.referrerMemberId,event.data.refereeMemberId]}),room=context.room;
         refuseArchivedWrite(room.state);

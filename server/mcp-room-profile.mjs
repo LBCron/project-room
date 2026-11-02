@@ -509,8 +509,9 @@ async function callLandTool(store, secret, name, args) {
   // add/remove/report are room writes; the read-only tier applies to them
   // exactly as it does to command-backed writes (issue #993).
   if (name !== "list_land_queue") {
+    const authority = store.roomAuthority(args.roomId, { memberId: auth.member.id });
     enforceAutonomyTierForAction({
-      db: store.db, roomId: args.roomId, state: store.room(args.roomId).state, actor: auth.member, action: name,
+      db: store.db, roomId: args.roomId, state: { room: { ownerId: authority.ownerId }, members: authority.members }, actor: auth.member, action: name,
       fail: (status, code, message) => { throw new ServiceError(status, code, message); },
     });
   }

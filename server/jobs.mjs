@@ -806,9 +806,9 @@ export const JOBS = Object.freeze([
     name: "public-work-reseed",
     cadenceMs: MINUTE_MS,
     runtimes: Object.freeze(["worker", "node"]),
-    // #3530: the keeper is due only when the public board's claimable
-    // supply is exactly zero and at least one anchored starter seed has
-    // a fully submitted latest round to advance.
+    // Request a cadence-limited check after an original anchored submission.
+    // This cheap conservative signal is not a zero-supply certificate; the
+    // scheduled runner still requires exact global-zero before replenishing.
     enabled(_env, store) {
       if (!store?.publicWorkClaims) return false;
       return store.publicWorkClaims.starterPoolPending();

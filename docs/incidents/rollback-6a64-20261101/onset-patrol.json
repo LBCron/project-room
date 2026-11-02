@@ -1,0 +1,38 @@
+{
+  "source": "Cloudflare stored invocation UI, production exact DO filter",
+  "queryWindowUtc": [
+    "2026-11-02T00:10:00.000Z",
+    "2026-11-02T00:18:00.000Z"
+  ],
+  "observation": {
+    "invocationId": "091a3407588a45d02d52bf75feb7ef97",
+    "origin": "alarm",
+    "displayedEventTimePacific": "2026-11-01 16:14:30.186 PST",
+    "triggerUtc": "2026-11-02T00:14:16Z",
+    "cpuTimeDisplayed": "77 ms",
+    "wallTimeDisplayed": "14.11 s",
+    "log": "cron jobs failed: patrol"
+  },
+  "nextAlarm": {
+    "displayedEventTimePacific": "2026-11-01 16:15:31.002 PST",
+    "triggerUtc": "2026-11-02T00:15:17Z",
+    "cpuTimeDisplayed": "77 ms",
+    "wallTimeDisplayed": "13.82 s"
+  },
+  "limits": [
+    "First named failing job in inspected onset window; not proof that patrol causes every storage timeout.",
+    "Some neighboring fetch records display impossible negative timing; excluded from measurements.",
+    "2378 previous error records and341 records in broader onset window are not independent storage-operation counts."
+  ],
+  "research": {
+    "workerTimers": "https://developers.cloudflare.com/workers/runtime-apis/performance/",
+    "alarmRetries": "https://developers.cloudflare.com/durable-objects/api/alarms/",
+    "storageBackpressure": "https://developers.cloudflare.com/durable-objects/best-practices/error-handling/"
+  },
+  "sourceFacts": [
+    "Existing runPatrolTick only uses Date.now deadline between room attempts.",
+    "5627 caps8attemptedrooms but still enumeratesallrooms and permits precedinghistory scan perroom.",
+    "5631 keyed lookback retains fullhistory fallback until coverage catches batchStart."
+  ],
+  "next": "Qualify reversible scheduled-patrol opt-out; preserve findings and separate integrity jobs. Use private old backup to measure exact SELECTs and existing patch behavior. No root-cause or recovery claim."
+}

@@ -8173,7 +8173,10 @@ const ready = (async () => {
   // Keep account and terms checks; an uncertain read leaves the target for retry.
   let consentReturn = null;
   try { consentReturn = validatedOAuthReturn(sessionStorage.getItem(oauthReturnKey)); } catch { /* Ordinary navigation remains available. */ }
-  if (new URLSearchParams(location.search).get("oauth") !== "login" && consentReturn) {
+  const returnParams = new URLSearchParams(location.search);
+  const providerReturned = returnParams.get("google") === "signed-in" || returnParams.get("github") === "signed-in";
+  if (returnParams.get("oauth") !== "login" && consentReturn
+    && (validatedDesktopConsent(consentReturn) || providerReturned)) {
     const account = await ensureAccountSession();
     if (account?.authenticated) {
       if (resumeOAuthConsent()) return;

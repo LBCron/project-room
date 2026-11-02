@@ -1,4 +1,4 @@
-// Owns real desktop consent through Google's cross-origin browser return.
+// Reuses the desktop Google fixture transport for existing-agent connector consent.
 // Provider authorization/token/JWKS are synthetic; every Room route and cookie is real.
 import test from 'node:test';
 import assert from 'node:assert/strict';
@@ -9,7 +9,7 @@ import { createServer as httpsServer } from 'node:https';
 import { execFileSync } from 'node:child_process';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { chromium, request } from 'playwright';
+import { chromium } from 'playwright';
 import { createAcceptanceFixture } from './acceptance-fixture.mjs';
 import { googleAuth, clientId, sub } from './helpers/google-oauth-fixture.mjs';
 import { createRoomServer } from '../server/http.mjs';
@@ -122,8 +122,8 @@ for (const dynamic of [false, true]) for (const mode of ['normal', 'terms', 'acc
     const terms = page.locator('#auth-signin-ui [data-signin-form="terms"]');
     try { await terms.waitFor({ state: 'visible', timeout: 3000 }); }
     catch (error) {
-      mkdirSync('test-results', { recursive: true }); await page.screenshot({ path: 'test-results/desktop-google-terms-stalled.png', fullPage: true });
-      console.error('Google return diagnostic', JSON.stringify({ url: page.url(), authenticated: session.authenticated, termsRequired: session.terms.required, returnRetained: await page.evaluate(() => sessionStorage.getItem('project-room:oauth-return:v1')) === returnTarget, visibleAuth: await page.locator('#auth-panel').innerText() }));
+      mkdirSync('test-results', { recursive: true }); await page.screenshot({ path: 'test-results/connector-google-terms-stalled.png', fullPage: true });
+      console.error('Connector Google return diagnostic', JSON.stringify({ url: page.url(), authenticated: session.authenticated, termsRequired: session.terms.required, returnRetained: await page.evaluate(() => sessionStorage.getItem('project-room:oauth-return:v1')) === returnTarget, visibleAuth: await page.locator('#auth-panel').innerText() }));
       throw error;
     }
     assert.equal(await page.evaluate(() => sessionStorage.getItem('project-room:oauth-return:v1')), returnTarget);
@@ -145,8 +145,8 @@ for (const dynamic of [false, true]) for (const mode of ['normal', 'terms', 'acc
     assert.equal((await accepted).status(), 200);
   }
   await page.waitForURL(url => url.pathname === '/oauth/authorize');
-  assert.equal(page.url(), consentUrl.href, 'terms acceptance resumes the original native consent byte-for-byte');
-  if (returningMember) assert.deepEqual(roomReads, [], 'native continuation must precede ordinary Room restoration');
+  assert.equal(page.url(), consentUrl.href, 'terms acceptance resumes the original connector consent byte-for-byte');
+  if (returningMember) assert.deepEqual(roomReads, [], 'connector continuation must precede ordinary Room restoration');
   assert.equal(await page.evaluate(() => sessionStorage.getItem('project-room:oauth-return:v1')), null);
   await page.getByRole('button', { name: 'Allow', exact: true }).waitFor();
   assert.equal(await page.locator('select[name=agent_binding] option').count(), 1);

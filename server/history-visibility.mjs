@@ -58,7 +58,8 @@ export function historyActivationTuple(db,roomId,memberId,headSequence) {
  let activation={active:false,row:null};for(const row of rows)activation=advanceHistoryActivation(activation,row);
  return historyActivationValue(historyJoinPoint(activation.row,headSequence));
 }
-export function historyActivationValue({sequence,at}) {
+export function historyActivationValue({sequence,at,found}) {
+ if(found===false)throw Error('Missing qualified member activation source');
  return {version:2,sequence,at,tieBreak:'source-sequence'};
 }
 function atOrAfterActivation(at,id,floor,sequenceFor) {

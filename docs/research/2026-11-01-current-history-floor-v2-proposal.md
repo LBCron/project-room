@@ -1,6 +1,8 @@
-# Proposed bounded activation floor (not implemented)
+# Bounded activation floor: original proposal and implementation status
 
-Source checkpoint: `0410be7826d5c6552947cb1ac6d263b4c7ffc680`, invitation runtime `7b3a128eb00e1214ee6a6c810430f0d87348c3b6`. Redaction owner has released `normalized-current-v1-native-work-4` at `06af4213d`; do not independently invent a competing token.
+Implementation checkpoint `0876eae5e`: v2 initializer/read/write/full audit, bounded existing-H activation stage, shared native-work-5 fence, existing recovery census comparison implemented. Composed44 Node and3 actual Native checks pass. Original proposal below remains the design record; its future-tense statements describe the pre-implementation contract, not remaining unsupported paths. No deployment or live format activation.
+
+Original source checkpoint: `0410be7826d5c6552947cb1ac6d263b4c7ffc680`, invitation runtime `7b3a128eb00e1214ee6a6c810430f0d87348c3b6`. Redaction owner has released `normalized-current-v1-native-work-4` at `06af4213d`; do not independently invent a competing token.
 
 ## Reproduced defect
 

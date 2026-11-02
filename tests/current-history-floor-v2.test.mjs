@@ -36,3 +36,6 @@ test('missing or corrupt protected activation/message facts refuse rather than e
  }
  assert.equal(readConversation(s,key,'commons',{messageId:'visible'}).messages[0].id,'visible');assert.doesNotThrow(()=>auditRecovery(s));
 });
+
+import {historyActivationValue,historyJoinPoint} from '../server/history-visibility.mjs';
+test('v2 never promotes a missing activation into a finite timestamp sentinel',()=>{assert.throws(()=>historyActivationValue(historyJoinPoint(null,10)),/Missing qualified member activation source/);});

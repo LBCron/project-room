@@ -484,6 +484,7 @@ const client = new RoomClient({
   lazyHistory: true,
   // Live refresh: a peer's consent decision arrives as dm.consent_changed.
   onConsentChange: () => { void refreshDmConsents(); },
+  onBondChange: () => { void refreshFriendBonds(); },
   onOptimistic(command) {
     const data = command?.data;
     const authorId = session?.member?.id;
@@ -7622,15 +7623,15 @@ async function runDmConsentAction(action, peerId, button) {
 async function refreshFriendBonds() {
   if (!state || !session || $("#main").hidden || friendBusy) return;
   if (session.member.kind !== "agent") return;
-  const seq = ++friendSeq, generation = client.generation, room = state;
+  const seq = ++friendSeq, generation = client.generation, roomId = session.roomId;
   try {
     const result = await client.request(client.path("/bonds"));
-    if (seq !== friendSeq || generation !== client.generation || state !== room) return;
+    if (seq !== friendSeq || generation !== client.generation || session?.roomId !== roomId) return;
     friendBonds = Array.isArray(result?.bonds) ? result.bonds : [];
   } catch {
-    if (seq !== friendSeq || generation !== client.generation || state !== room) return;
+    if (seq !== friendSeq || generation !== client.generation || session?.roomId !== roomId) return;
   } finally {
-    if (seq === friendSeq && generation === client.generation && state === room) render();
+    if (seq === friendSeq && generation === client.generation && session?.roomId === roomId) render();
   }
 }
 function friendPeerTarget(peer) {

@@ -1,4 +1,4 @@
-import {currentInviteContext} from './current-room-repository.mjs';
+import {currentInviteContext,isCurrentRoom,readCurrentRecord,withCurrentReadContext} from './current-room-repository.mjs';
 // Multi-room agent identities (round-2 task #101).
 //
 // Today an agent working in N rooms is provisioned N times: N member
@@ -1447,20 +1447,27 @@ export class AgentIdentities {
       WHERE l.identity_id = ?
       ORDER BY l.linked_at DESC
     `).all(identityId);
-    // Filter to active members only, and get room titles from projection
+    // Filter active linked principals using addressed authority. Current titles
+    // live in protected metadata, never in the small rooms.projection carrier.
     return rows.filter(row => {
       try {
-        const member = memberOf(this.store.roomAuthority(row.roomId).members, row.memberId);
-        if (!member || member.active === false) return false;
-        // Get title from room projection
-        const roomRow = this.db.prepare("SELECT projection FROM rooms WHERE id=?").get(row.roomId);
-        if (roomRow) {
-          const proj = JSON.parse(roomRow.projection);
-          row.title = proj?.room?.title || row.roomId;
-        } else {
-          row.title = row.roomId;
-        }
-        return true;
+        return withCurrentReadContext(this.db,row.roomId,()=>{
+          const member = memberOf(this.store.roomAuthority(row.roomId,{memberId:row.memberId}).members, row.memberId);
+          if (!member || member.active === false) return false;
+          if(isCurrentRoom(this.db,row.roomId)) {
+            const room=readCurrentRecord(this.db,row.roomId,'metadata','room');
+            row.title=room?.title||row.roomId;
+            return true;
+          }
+          const roomRow = this.db.prepare("SELECT projection FROM rooms WHERE id=?").get(row.roomId);
+          if (roomRow) {
+            const proj = JSON.parse(roomRow.projection);
+            row.title = proj?.room?.title || row.roomId;
+          } else {
+            row.title = row.roomId;
+          }
+          return true;
+        });
       } catch {
         return false;
       }

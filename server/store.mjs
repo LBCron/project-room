@@ -6048,7 +6048,10 @@ this.slaBreachAlerts = new SlaBreachAlertJournal(this); // Task 26: durable in-a
     if (isCurrentRoom(this.db,roomId)) {
       let after=0;
       for (;;) {
-        const page=this.eventsAfter(token,roomId,after,100,expectedSessionBinding);
+        // Each page authenticates and verifies current message/write proofs.
+        // Keep that shared 200-record budget even when many posts have distinct
+        // receipts; export completion walks the honest source continuation.
+        const page=this.eventsAfter(token,roomId,after,4,expectedSessionBinding);
         yield* page.events;
         if(!page.hasMore)break;
         after=page.next;

@@ -1,3 +1,4 @@
+import {legacyAgentRoom} from './helpers/legacy-agent-room.mjs';
 import {readCurrentRecord, readCurrentMessage, readCurrentRoomForAudit} from '../server/current-room-repository.mjs';
 // Core MCP profile, legal tool names, hidden aliases, and cross-room room_needs_me.
 import test from "node:test";
@@ -404,7 +405,7 @@ test("tools/list focus is explicit, stateless discovery with full-catalog escape
 async function claimLinkFixture(t) {
   const fixture = await serve(t), { origin, store, rooms } = fixture;
   const owner = store.identities.create("Claim room owner"), writer = store.identities.create("Claim writer");
-  const roomId = rooms.create(owner.secret, { roomId: "claim-links", title: "Claim links", purpose: "Append PR from hosted MCP", kind: "personal" }).roomId;
+  const roomId = legacyAgentRoom(store,owner, { roomId: "claim-links", title: "Claim links", purpose: "Append PR from hosted MCP", kind: "personal" }).roomId;
   linkWithProof(store, owner.secret, roomId, writer, { displayName: "Claim writer", permissions: ["accept_work", "complete_work"] });
   setTier(store.db, roomId, writer.identityId, "t2_standard", { updatedBy: owner.identityId, nowMs: Date.now() });
   const client = new RoomAgentClient({ origin, roomId, token: writer.secret });

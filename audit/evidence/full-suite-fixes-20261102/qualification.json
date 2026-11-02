@@ -2,7 +2,8 @@
   "base": "26ae962688fd38e6c26e1fee7836bca60f871aea",
   "sourceCommits": [
     "0a0fee2bf",
-    "d8e0fa517"
+    "d8e0fa517",
+    "4c27e86aa"
   ],
   "nodeVersion": "26.8.2",
   "results": {
@@ -48,10 +49,37 @@
     "lint": {
       "errors": 0,
       "existingWarnings": 1
+    },
+    "baselineFullSuite": {
+      "revision": "26ae962688fd38e6c26e1fee7836bca60f871aea",
+      "testCases": 14674,
+      "failed": 94,
+      "skipped": 34,
+      "exitCode": 1
+    },
+    "messageMigrations": {
+      "pass": 14,
+      "fail": 0
+    },
+    "catalogLocalization": {
+      "pass": 45,
+      "fail": 0,
+      "i18nGrowth": "Existing PR5655 declaration used; baseline and scan scope unchanged."
+    },
+    "restoreSchemaRelocation": {
+      "before": {
+        "pass": 3,
+        "fail": 1
+      },
+      "afterIncludingStorageExhaustionAndCleanup": {
+        "pass": 19,
+        "fail": 0
+      },
+      "lintErrors": 0
     }
   },
   "limitations": [
-    "Full baseline suite remains running and has additional failures; not a full-suite pass.",
+    "Full baseline completed with 94 failures; isolated fixes have only focused qualification, not a full-suite pass.",
     "Not integrated, deployed or live-verified.",
     "Old45 DM test explicitly installs current guard SQL on empty fixture; not a supported data migration.",
     "Corruption fixtures temporarily bypass JSON guards to inject impossible rows; exact guards restored before tested operation."

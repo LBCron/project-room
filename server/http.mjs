@@ -1774,17 +1774,27 @@ export function createRoomServer({ store, origin, assetRoot = new URL("../", imp
           verdict_polling: { url_template: `${origin}/api/rooms/{roomId}/feedback/{feedback_id}`, method: "GET" },
         }, req.method === "HEAD");
       }
-      // Native invitation consent is the default; a Room account is optional.
+      // A returning account can reuse an eligible existing seat. Consent remains
+      // explicit; an invitation choice never changes into an account grant.
+      const hasExistingAccountAgent = () => {
+        if (url.searchParams.has("connection")) return false;
+        try {
+          const token=cookie(req,accountCookieName);
+          const auth=token?store.authenticateAccountSession(token):null;
+          return Boolean(auth?.account?.id && listMcpOAuthAgents(store,auth.account.id,oauthResource,
+            mcpClientPreference(url.searchParams.get("client_id"))??{}).length);
+        } catch { return false; }
+      };
       const invitePage = (view, request) => renderInviteOAuthPage(res, view, request);
       if (url.pathname === "/oauth/authorize" && req.method === "GET" && inviteOAuth
-        && isMcpClient(url.searchParams.get("client_id")) && (url.searchParams.get("connection") === "invite" || !isClaudeClient(url.searchParams.get("client_id"))) && url.searchParams.get("connection") !== "account") {
+        && isMcpClient(url.searchParams.get("client_id")) && (url.searchParams.get("connection") === "invite" || !isClaudeClient(url.searchParams.get("client_id"))) && url.searchParams.get("connection") !== "account" && !hasExistingAccountAgent()) {
         rate(`oauth-invite-start:${remoteAddress}`, 30);
         try {
           const started = inviteOAuth.begin(url.searchParams);
           setCookie(res, `oauth_invite_${started.nonce.slice(0, 16)}`, started.nonce, 600, "Lax");
           const account = new URL(url, expectedOrigin());
           account.searchParams.set("connection", "account");
-          return invitePage({ ...started, accountUrl: account.pathname + account.search }, started.request);
+          return invitePage({ ...started, accountUrl: account.pathname + account.search, invitationChoice:url.searchParams.get("connection")==="invite" }, started.request);
         } catch (error) { return json(res, 400, { error: "invalid_request", error_description: error.message }); }
       }
       // GET /oauth/authorize — validate the request and show the consent screen.

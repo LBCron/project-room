@@ -1,0 +1,55 @@
+{
+  "runtime_sha": "2ebce68b3c556f313476716afdae84f2a2b33e6d",
+  "node": "v24.22.1",
+  "miniflare": "4.20260730.0",
+  "esbuild": "0.28.2",
+  "workerd": "2026-07-30",
+  "workerd_selection": "matching existing local July binary, no October runtime",
+  "existing_native_timeout_ms": 120000,
+  "concurrency": 2,
+  "source_clean_after": true,
+  "jobs": [
+    {
+      "kind": "node",
+      "command": [
+        "node",
+        "--test",
+        "tests/current-empty-format-upgrade.test.mjs"
+      ],
+      "cwd": "repository",
+      "exit_code": 0,
+      "outer_timeout": false,
+      "wall_until_observed_seconds": 1.6405469590099528,
+      "log": "node.log",
+      "log_sha256": "0d612649dc307bd44ce8817623155354eb0f99238af2a5135c177ce3914b3c2a",
+      "log_bytes": 3622,
+      "runner_reported_duration_ms": 1581.151333,
+      "tests_passed": 5
+    },
+    {
+      "kind": "native",
+      "command": [
+        "node",
+        "--test",
+        "current-empty-format-upgrade.check.mjs"
+      ],
+      "cwd": "cloudflare",
+      "exit_code": 0,
+      "outer_timeout": false,
+      "wall_until_observed_seconds": 1.6394411249784753,
+      "log": "native.log",
+      "log_sha256": "afd7df3b5bf90b78cba89e9b34036772fe7dec93c5ee38ce134f3ba71a1de826",
+      "log_bytes": 2368,
+      "runner_reported_duration_ms": 1362.79875,
+      "tests_passed": 1
+    }
+  ],
+  "scope": "Independent exact-pin existing tests; genuine old8e65 Node source and synthetic Native old-definition fixture; no production state or populated5 upgrade",
+  "staging_observation": {
+    "run_id": 41415262669,
+    "head_sha": "2ebce68b3c556f313476716afdae84f2a2b33e6d",
+    "status": "completed",
+    "conclusion": "failure",
+    "scope": "Independent GitHub run read, not a local test outcome or constructor cause diagnosis"
+  }
+}

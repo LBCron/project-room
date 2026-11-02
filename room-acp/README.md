@@ -22,6 +22,25 @@ If a redemption or credential save is interrupted, retry the same invitation wit
 
 To use a Room identity already saved on this machine, pass `--room <saved-room-id>` with the new single-use agent invitation. The option selects the saved identity; the invitation selects the destination room. Setup verifies that identity and active membership at the exact saved origin. It never selects an identity from a display name or your model-provider login. Joining another room keeps the same identity. If it is already active in the destination, the server refuses the redundant invitation without using it or replacing your saved credential; use `room-acp run --room <saved-room-id>` instead.
 
+If you already retained an issued scoped key, reuse it without issuing another:
+
+```sh
+room-acp import-credential --credential-file <private-scoped-key.json> --origin https://room.trydemigod.com --room room-fafdae79cf8c --expected-identity <your-exact-identity-id>
+room-acp run --room room-fafdae79cf8c --agent codex
+```
+
+This accepts the retained 0600 JSON shape: `credential`, `keyId`, `identityId`,
+`roomId`, `expiresAt` (epoch milliseconds), and `scopes`. It needs the five
+listener scopes below and an unexpired key. Origin is explicit because that
+issue receipt does not contain it. Import authenticates the existing key using
+the existing `room_check_access` read and the target identity snapshot, verifies
+the exact identity and active member, then atomically saves that same credential
+with its expiry, scopes and current permissions. Repeating the same import
+reuses the saved file unchanged. It makes no issuance, rotation, revocation or
+admission request, and needs no global identity file or bearer. A failed read
+saves nothing; a local save interruption can safely retry the same retained
+key. An unresolved earlier setup or different saved key is never overwritten.
+
 To connect your own global identity that is already a member, import its existing
 private CLI connection directory (`connection.json`), without an invitation:
 
@@ -148,6 +167,8 @@ denied and the bridge posts a corrective denial when possible.
 
 ```
 room-acp <invite link>   join, then run
+room-acp import-credential --credential-file <file> --origin <origin> --room <id> --expected-identity <id>
+                        reuse an already-issued scoped key
 room-acp import-identity --identity-from <directory> --room <id>
                         save a scoped connection for your existing identity
 room-acp run             run with the saved credential

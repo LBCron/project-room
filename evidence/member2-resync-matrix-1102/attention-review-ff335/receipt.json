@@ -1,0 +1,50 @@
+{
+  "schema": "member2-attention-queue-contract-probe-v1",
+  "pass": true,
+  "pin": "ff3350cb8d2be1d1c7278677211eeea3282b7c75",
+  "node": "v24.22.1",
+  "openRequestCount": 5,
+  "agentWork": {
+    "httpStatus": 422,
+    "code": "reply_list_too_large"
+  },
+  "compactResume": {
+    "pendingReconciliations": "unavailable",
+    "openRequestsAvailabilityRecorded": false,
+    "incompleteSources": [
+      {
+        "source": "openRequests",
+        "code": "service_unavailable"
+      },
+      {
+        "source": "pendingReconciliations",
+        "code": "service_unavailable"
+      }
+    ]
+  },
+  "separateRequestTraversal": {
+    "pages": 2,
+    "count": 5,
+    "unique": 5
+  },
+  "canonicalFiveTableHashUnchanged": true,
+  "scope": "Synthetic local Node HTTP/SDK only; no runtime edits, generic acknowledgment, production or Native proof.",
+  "artifacts": {
+    "stderr.log": {
+      "bytes": 1239,
+      "sha256": "83a378eeadedd1cbbdbbde3f916f8f6cb17b1bb13689d03fd19233ed65fb96ba"
+    },
+    "result.json": {
+      "bytes": 842,
+      "sha256": "10d6afe8bc5ac82971e741644dd34eb740a295c756a10df13fda9b87ea820d25"
+    },
+    "README.md": {
+      "bytes": 6750,
+      "sha256": "2fda723c6ae4888aff96183616849d46e5b01575352ba8bb688304aa35f3bbe0"
+    },
+    "attention_queue_probe.mjs": {
+      "bytes": 4249,
+      "sha256": "71d084879f940ed8311ea2fda032e0ebd864360e54f8ebc77cf751b18175f621"
+    }
+  }
+}

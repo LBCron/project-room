@@ -1,0 +1,32 @@
+{
+  "schema": "member2-attention-queue-contract-probe-v1",
+  "pass": true,
+  "pin": "ff3350cb8d2be1d1c7278677211eeea3282b7c75",
+  "node": "v24.22.1",
+  "openRequestCount": 5,
+  "agentWork": {
+    "httpStatus": 422,
+    "code": "reply_list_too_large"
+  },
+  "compactResume": {
+    "pendingReconciliations": "unavailable",
+    "openRequestsAvailabilityRecorded": false,
+    "incompleteSources": [
+      {
+        "source": "openRequests",
+        "code": "service_unavailable"
+      },
+      {
+        "source": "pendingReconciliations",
+        "code": "service_unavailable"
+      }
+    ]
+  },
+  "separateRequestTraversal": {
+    "pages": 2,
+    "count": 5,
+    "unique": 5
+  },
+  "canonicalFiveTableHashUnchanged": true,
+  "scope": "Synthetic local Node HTTP/SDK only; no runtime edits, generic acknowledgment, production or Native proof."
+}

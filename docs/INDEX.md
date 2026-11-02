@@ -259,3 +259,7 @@ These source-bound design and qualification notes describe the offline schema45 
 - [Portable witness continuation checkpoint](research/2026-11-01-replay-portable-witness.md)
 - [Supported schema admission investigation](research/2026-11-01-replay-schema-admission.md)
 - [Work cursor privacy correction](research/2026-11-01-work-cursor-privacy-correction.md)
+
+[Recovery work-help qualification](research/2026-11-01-recovery-work-help.md) records the protocol15 leaf cure and retained full-oracle limits.
+
+[Storage-timeout investigation](research/storage-timeout-20261101/findings.md) records native size measurement and incident diagnosis.

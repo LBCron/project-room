@@ -1,0 +1,60 @@
+{
+  "source": "00888c52110d36250d3e07629036701b72926d09",
+  "node": "v24.22.1",
+  "steps": [
+    {
+      "label": "signup-missed-initial-verification-mail",
+      "status": 202,
+      "responseStatus": "check_email"
+    },
+    {
+      "label": "wrong-password-control",
+      "status": 401,
+      "error": "invalid_credentials",
+      "responseStatus": "action_required"
+    },
+    {
+      "label": "login-unverified-after-losing-original-session",
+      "status": 200,
+      "authenticated": true
+    },
+    {
+      "label": "resend-existing-endpoint-from-unverified-session",
+      "status": 200,
+      "responseStatus": "resent"
+    },
+    {
+      "label": "repeat-signup-is-nonenumerating-and-does-not-replace-password",
+      "status": 202,
+      "responseStatus": "check_email"
+    },
+    {
+      "label": "request-reset-for-unverified-account",
+      "status": 200,
+      "responseStatus": "sent"
+    },
+    {
+      "label": "consume-fresh-proof-verifies-unverified-account",
+      "status": 200,
+      "responseStatus": "password_reset"
+    },
+    {
+      "label": "reused-proof-control",
+      "status": 401,
+      "error": "invalid_password_reset",
+      "responseStatus": "action_required"
+    },
+    {
+      "label": "replacement-password-login-after-reset",
+      "status": 200,
+      "authenticated": true
+    }
+  ],
+  "accountPreserved": true,
+  "unverifiedPasswordLogin": true,
+  "resendEndpointExists": true,
+  "resetVerifiesEmail": true,
+  "resetReplayRefused": true,
+  "mailDelivery": "in-memory capture only; no network",
+  "scope": "Disposable local Node HTTP lifecycle. Does not clear fo production symptom or prove deployed account state. No production mutation."
+}

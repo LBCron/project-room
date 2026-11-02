@@ -1,0 +1,31 @@
+import assert from 'node:assert/strict';
+import {execFileSync} from 'node:child_process';
+import {pathToFileURL} from 'node:url';
+const [repo]=process.argv.slice(2);assert.equal(process.argv.length,3);
+const pin='00888c52110d36250d3e07629036701b72926d09',git=process.env.LOCAL_LAB_GIT??'git';
+assert.equal(execFileSync(git,['-C',repo,'rev-parse','HEAD'],{encoding:'utf8'}).trim(),pin);execFileSync(git,['-C',repo,'diff','--exit-code','HEAD','--']);
+const load=p=>import(pathToFileURL(repo+'/'+p));
+const [{RoomStore},{initialRoom},{createRoomServer},{createMagicLinkMailer},{verifyPassword}]=await Promise.all([load('server/store.mjs'),load('server/bootstrap.mjs'),load('server/http.mjs'),load('server/magic-links.mjs'),load('src/password-auth.mjs')]);
+const store=new RoomStore(':memory:');store.initialize(initialRoom());const sent=[];
+let mailer;const server=createRoomServer({store,magicLinkMailer:{isConfigured:()=>true,sendMagicLink:p=>mailer.sendMagicLink(p),sendPasswordResetNotice:p=>mailer.sendPasswordResetNotice(p)}});
+await new Promise(r=>server.listen(0,'127.0.0.1',r));const origin='http://127.0.0.1:'+server.address().port;
+mailer=createMagicLinkMailer({baseUrl:origin,send:async payload=>{sent.push(payload);}});
+const email='local-unverified-recovery@example.invalid',password='synthetic-original-password',replacement='synthetic-replacement-password';
+const results=[];
+const open=async()=>{const r=await fetch(origin+'/api/account-session');assert.equal(r.status,200);return{token:/account_session=([^;]+)/.exec(r.headers.get('set-cookie'))[1],view:await r.json()};};
+const post=async(label,path,slot,body,expected)=>{const r=await fetch(origin+path,{method:'POST',headers:{Origin:origin,'Content-Type':'application/json',Cookie:'account_session='+slot.token,'X-CSRF-Token':slot.view.csrf},body:JSON.stringify(body)});const value=await r.json();results.push({label,status:r.status,...(value.error?{error:value.error.code}:{}),...(value.status?{responseStatus:value.status}:{}),...(typeof value.authenticated==='boolean'?{authenticated:value.authenticated}:{})});assert.equal(r.status,expected,label+': '+(value.error?.code??value.status??'unexpected response'));const cookie=/account_session=([^;]+)/.exec(r.headers.get('set-cookie')??'');if(cookie){slot.token=cookie[1];const view=await fetch(origin+'/api/account-session',{headers:{Cookie:'account_session='+slot.token}});slot.view=await view.json();}return value;};
+try{
+ const first=await open();await post('signup-missed-initial-verification-mail','/api/auth/password/signup',first,{email,password,sessionRevision:first.view.sessionRevision},202);
+ const accountId=store.accountLogins.findAccountHoldingEmail(email);assert.ok(accountId);assert.equal(store.accountLogins.emailStatus(accountId),'unverified');assert.equal(sent.at(-1).purpose,'email-verify');
+ const recovered=await open();await post('wrong-password-control','/api/auth/password/login',recovered,{email,password:'synthetic-wrong-password',sessionRevision:recovered.view.sessionRevision},401);
+ const login=await post('login-unverified-after-losing-original-session','/api/auth/password/login',recovered,{email,password,sessionRevision:recovered.view.sessionRevision},200);assert.equal(login.authenticated,true);assert.equal(store.accountLogins.emailStatus(accountId),'unverified');
+ await post('resend-existing-endpoint-from-unverified-session','/api/auth/email/verify/resend',recovered,{},200);assert.equal(sent.at(-1).purpose,'email-verify');
+ const duplicate=await open();await post('repeat-signup-is-nonenumerating-and-does-not-replace-password','/api/auth/password/signup',duplicate,{email,password:'synthetic-different-password',sessionRevision:duplicate.view.sessionRevision},202);assert.equal(sent.at(-1).purpose,'signup-notice');assert.equal(verifyPassword(password,store.accountLogins.readPasswordVerifier(accountId)),true);
+ const reset=await open();await post('request-reset-for-unverified-account','/api/auth/password/reset/request',reset,{email},200);const proof=sent.at(-1);assert.equal(proof.purpose,'password-reset');
+ const payload={email,code:proof.code,newPassword:replacement,sessionRevision:reset.view.sessionRevision};await post('consume-fresh-proof-verifies-unverified-account','/api/auth/password/reset/consume',reset,payload,200);assert.equal(store.accountLogins.emailStatus(accountId),'verified');assert.equal(verifyPassword(replacement,store.accountLogins.readPasswordVerifier(accountId)),true);
+ await post('reused-proof-control','/api/auth/password/reset/consume',reset,payload,401);
+ const final=await open();const signedIn=await post('replacement-password-login-after-reset','/api/auth/password/login',final,{email,password:replacement,sessionRevision:final.view.sessionRevision},200);assert.equal(signedIn.authenticated,true);
+ assert.equal(store.accountLogins.findAccountHoldingEmail(email),accountId);assert.equal(store.accountLogins.listMethods(accountId).filter(m=>m.type==='password').length,1);
+ console.log('UNVERIFIED_ACCOUNT_RECOVERY '+JSON.stringify({source:pin,node:process.version,steps:results,accountPreserved:true,unverifiedPasswordLogin:true,resendEndpointExists:true,resetVerifiesEmail:true,resetReplayRefused:true,mailDelivery:'in-memory capture only; no network',scope:'Disposable local Node HTTP lifecycle. Does not clear fo production symptom or prove deployed account state. No production mutation.'}));
+}finally{server.closeStreams();server.closeAllConnections();await new Promise(r=>server.close(r));store.close();}
+execFileSync(git,['-C',repo,'diff','--exit-code','HEAD','--']);

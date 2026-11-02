@@ -1,0 +1,43 @@
+{
+  "source": "00888c52110d36250d3e07629036701b72926d09",
+  "files": {
+    "server/account-login-methods.mjs": {
+      "sha256": "6309a29b91293f2f2ef7da9a7593175a1f7df8bd4a2a0d021a05e03953cc9107",
+      "gitBlob": "32857293b08315e6fec656a775ee83ada85e58d0"
+    },
+    "server/routes/auth.mjs": {
+      "sha256": "00e3f6be78e5b0e73669f74c35dfa76d2524435530bac2313db5fbd02f7b5f3c",
+      "gitBlob": "88b51ebb2849273a4b10e707ee534e906a438936"
+    },
+    "server/http.mjs": {
+      "sha256": "2088e0bdc4e0f1682f5fb1d1a91252086092154b2f4ca16ee37ba2c536d350d9",
+      "gitBlob": "f342fa47e702268b584ec847ec5528a6d3db4581"
+    },
+    "server/magic-links.mjs": {
+      "sha256": "79528792e5991caf94ec01fd9c92255ee8044149f3238bd9690412b15cb3c80b",
+      "gitBlob": "ac562f486eca3caa507644f434e8d49ebcd63adb"
+    },
+    "server/resend-mailer.mjs": {
+      "sha256": "7fa432f80725698f8c242bdf38b72d5e0a50ad45c1cbd595208445382d21ae92",
+      "gitBlob": "29b9d39f5f257a163391c7b1cf817f0beb3899ad"
+    },
+    "src/password-auth.mjs": {
+      "sha256": "b21498649d6ba1533c4f9a2f266829822f2bf4d051c5152121e6ae7f989f9425",
+      "gitBlob": "ca1c75f335333140718cd0c062aa3a5e084e9338"
+    },
+    "cloudflare/room.mjs": {
+      "sha256": "50079eed473b80eaea61ca639d64167b809c5d06d8e710a660a29fda514d6324",
+      "gitBlob": "4b86c5691c666b7c6680c26ec433f64636472b8d"
+    },
+    "cloudflare/storage.mjs": {
+      "sha256": "8ab552b91c75ef7fb87e9a5c001a242b54739f6f6bf0a21702633b718f657432",
+      "gitBlob": "595e06a0ba3d501521c8cfc860b04088e778839a"
+    }
+  },
+  "workerdSha256": "b887d31d8839e80798bf3f92c416343c5db7dd9b22d7fe21bcf877f5d411936f",
+  "historicalFixtureErrors": [
+    "First Native request lacked correct Host forwarding:403host_denied before signup.",
+    "Adding Origin alone still403host_denied; corrected worker-to-DO Host plus HTTPS __Host-account_session cookie names.",
+    "No runtime guard bypass; final9step Native lifecycle passes."
+  ]
+}

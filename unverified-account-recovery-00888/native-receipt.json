@@ -1,0 +1,59 @@
+{
+  "source": "00888c52110d36250d3e07629036701b72926d09",
+  "node": "v24.22.1",
+  "steps": [
+    {
+      "label": "signup-missed-verification",
+      "status": 202,
+      "responseStatus": "check_email"
+    },
+    {
+      "label": "wrong-password-control",
+      "status": 401,
+      "error": "invalid_credentials",
+      "responseStatus": "action_required"
+    },
+    {
+      "label": "unverified-password-login-after-cold-reopen",
+      "status": 200,
+      "authenticated": true
+    },
+    {
+      "label": "verification-resend-existing-endpoint",
+      "status": 200,
+      "responseStatus": "resent"
+    },
+    {
+      "label": "repeat-signup",
+      "status": 202,
+      "responseStatus": "check_email"
+    },
+    {
+      "label": "request-reset-unverified",
+      "status": 200,
+      "responseStatus": "sent"
+    },
+    {
+      "label": "fresh-reset-proof-after-second-cold-reopen",
+      "status": 200,
+      "responseStatus": "password_reset"
+    },
+    {
+      "label": "reset-replay-control",
+      "status": 401,
+      "error": "invalid_password_reset",
+      "responseStatus": "action_required"
+    },
+    {
+      "label": "replacement-password-login",
+      "status": 200,
+      "authenticated": true
+    }
+  ],
+  "coldReopens": 2,
+  "emailVerifiedAfterReset": true,
+  "passwordMethods": 1,
+  "outboundMailIntercepted": 5,
+  "externalNetworkRequests": 0,
+  "scope": "Actual local Native workerd/SQLite lifecycle, configured-mailer branch with all outbound mail intercepted. Does not clear fo production symptom or establish deployed account state; no production mutations."
+}

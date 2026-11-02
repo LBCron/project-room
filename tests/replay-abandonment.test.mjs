@@ -38,6 +38,12 @@ test('explicit abandonment changes only derived lifecycle and keeps original rec
   assert.throws(() => replay.advanceReplayWitness(f.store, {
     roomId: 'commons', generation: f.captured.generation, expectedBytes: 0, requestId: 'late-step'
   }), /abandoned|control/);
+  assert.throws(() => f.capture('new-generation'), /completed candidate cleanup/);
+  const cleanup = replay.cleanupReplayCapture(f.store, { roomId: 'commons', generation: f.captured.generation,
+    expectedDeleted: 0, requestId: 'remove-unpublished-target' });
+  assert.equal(cleanup.phase, 'target_cleanup');
+  assert.ok(cleanup.targetRowsDeleted > 0);
+  assert.deepEqual(serving(f.store), before);
   const next = f.capture('new-generation');
   assert.notEqual(next.generation, f.captured.generation);
   const duplicate = replay.abandonReplayCapture(f.store, f.input);
@@ -100,6 +106,11 @@ test('cleanup receipt failure restores every already deleted row and progress', 
 test('a valid abandonment receipt from a later generation cannot authorize old cleanup', t => {
   const f = fixture(t), db = f.store.db;
   replay.abandonReplayCapture(f.store, f.input);
+  assert.throws(() => f.capture('later'), /completed candidate cleanup/);
+  const cleanup = replay.cleanupReplayCapture(f.store, { roomId: 'commons', generation: f.captured.generation,
+    expectedDeleted: 0, requestId: 'remove-unpublished-target' });
+  assert.equal(cleanup.phase, 'target_cleanup');
+  assert.equal(cleanup.done, false, 'old derived bytes still exist for the wrong-binding probe');
   const later = f.capture('later');
   replay.abandonReplayCapture(f.store, { ...f.input, generation: later.generation, requestId: 'later-abandon' });
   const pointer = db.prepare(`SELECT payload FROM message_replay_units

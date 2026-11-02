@@ -1,7 +1,8 @@
 import { savedHistoricalReplayCheckpoint, SavedHistoricalReplayError } from './historical-replay-contract.mjs';
 import { assertMessageWrite, recordMessageWrite, servingProofDrift, messageProofMatches, MESSAGE_PROOF_SELECT, MESSAGE_PROOF_FIELDS } from './write-integrity.mjs';
 import { writeMessageReplaySnapshot, discardMessageReplaySnapshot, decodeMessageReplaySnapshot } from './message-replay-snapshot.mjs';
-import { hydrateProjection, storedProjection } from "./projection-at-rest.mjs";
+import { hydrateProjection, storedProjection, NULL_ENVELOPE_KEY } from "./projection-at-rest.mjs";
+import { isMessageEntityRef, hydrateMessageEntities, decodeMessageEntity } from "./message-entity-projection.mjs";
 import { hasMessageAuthority } from './message-authority.mjs';
 import { closeKeepSet } from "./open-questions.mjs";
 export { closeKeepSet };
@@ -12,6 +13,7 @@ export { closeKeepSet };
 // do not double-write. The integrity cron runs that replay.
 import { applyEvent, emptyRoomState, messageChannelId } from "../src/events.js";
 import { isDeepStrictEqual } from "node:util";
+import { createHash } from "node:crypto";
 
 export const MESSAGE_ROW_TYPES = Object.freeze([
   "message.posted",
@@ -1488,8 +1490,20 @@ function nextParityRoom(db, after) {
 }
 
 function parityNumbers(db, roomId) {
-  const raw = JSON.parse(db.prepare('SELECT projection FROM rooms WHERE id=?').get(roomId).projection);
-  const projectionCount = hasMessageAuthority(raw) ? raw.messageAuthority.count : (raw.messages?.length ?? 0);
+  // B6: counts come from columns/aggregates — the projection text is
+  // never fetched or parsed whole to count its messages. The authority
+  // marker (small) is extracted and validated exactly as
+  // hasMessageAuthority validates it; otherwise the messages array is
+  // counted inside SQLite.
+  const markerRow = db.prepare("SELECT json_extract(projection, '$.messageAuthority') AS marker FROM rooms WHERE id=?").get(roomId);
+  let projectionCount;
+  if (markerRow?.marker != null) {
+    const marker = JSON.parse(markerRow.marker);
+    hasMessageAuthority({ messageAuthority: marker });
+    projectionCount = marker.count;
+  } else {
+    projectionCount = db.prepare("SELECT COUNT(*) AS n FROM json_each((SELECT projection FROM rooms WHERE id=?), '$.messages')").get(roomId)?.n ?? 0;
+  }
   const table = db.prepare("SELECT COUNT(*) AS n, COALESCE(MAX(seq), 0) AS lastSeq FROM messages WHERE room_id=?").get(roomId);
   const posted = db.prepare(`SELECT COALESCE(MAX(sequence), 0) AS lastSeq FROM events
     WHERE room_id=? AND json_extract(body, '$.type')=?`).get(roomId, POSTED);
@@ -1533,33 +1547,1038 @@ export function checkMessagesParity(store, { roomId = null } = {}) {
 // The deferred integrity batch's parity step. checkMessagesParity keeps its
 // throwing contract for direct callers; here, one room's "messages parity
 // failed" verdict is isolated instead: the room is reported through
-// `report`, the sweep advances past it, and the rooms queued behind it are
-// still checked in the same visit (healthy rooms are certified until one
-// passes or every caught-up room has been attempted). Anything that is not
-// a per-room parity verdict — schema, storage — still throws. A failed
-// room keeps its cleared certification, so the verdict is unchanged; only
-// the blast radius shrinks.
-export function runMessagesParityCheck(store, { report = () => {} } = {}) {
+// `report`, the sweep advances past it, and the next room is tried in the
+// same visit. Anything that is not a per-room parity verdict — schema,
+// storage — still throws. A failed room keeps its cleared certification,
+// so the verdict is unchanged; only the blast radius shrinks.
+//
+// #5571 part 2: the step is bounded three ways the old loop was not.
+// (a) The deadline the batch already held is threaded into the per-room
+// certification (below), which works in checkpointed chunks instead of
+// one synchronous transaction over the room's full history — a room
+// whose certification exceeds the budget no longer wedges the job,
+// restarting from byte zero on every tick. (b) The sweep stops after
+// PARITY_MAX_FAILURES failed attempts per visit; the sweep cursor
+// already advances past failed rooms durably, so deferred rooms are
+// picked up on later ticks in rotation. (c) A room that is mid-scan when
+// the budget runs out reports inProgress with its progress banked in
+// integrity_parity_checkpoint, not a verdict.
+export function runMessagesParityCheck(store, { report = () => {}, deadline = Infinity, yieldBetween = null } = {}) {
   if (store?.readOnly) throw new Error("Read-only stores do not check message parity");
   const failures = [];
   const attempted = new Set();
-  for (;;) {
+  const stats = { checkpointDiscards: 0, checkpointOversize: 0, fetchOversize: 0 };
+  const handleOutcome = (roomId, outcome) => {
+    if (outcome.status === "certified") {
+      report({ roomId, error: null });
+      return { ...outcome.result, failures, ...stats };
+    }
+    if (outcome.status === "failed") {
+      failures.push({ roomId, error: outcome.error });
+      report({ roomId, error: outcome.error });
+      rememberSweep(store, roomId);
+      return AGAIN;
+    }
+    if (outcome.status === "progress") {
+      return { ok: failures.length === 0, checked: 0, roomId, inProgress: 1, failures, budgetExceeded: 1, ...stats };
+    }
+    // "deferred": the room's head moved mid-scan or a newer attempt owns
+    // its checkpoint. No verdict either way; the sweep cursor stays put
+    // and the room is retried on a later visit.
+    return { ok: failures.length === 0, checked: 0, roomId, deferred: 1, failures, ...stats };
+  };
+  const step = () => {
+    if (failures.length >= PARITY_MAX_FAILURES) {
+      return { ok: failures.length === 0, checked: 0, roomId: null, failures, ...stats };
+    }
+    // The first room of a visit is always attempted, even on a spent
+    // budget: the engine banks the scan's checkpoint row before its own
+    // deadline checks stop it, so a budget-stopped visit always leaves
+    // resumable state behind instead of nothing.
+    if (attempted.size > 0 && Date.now() > deadline) {
+      return { ok: failures.length === 0, checked: 0, roomId: null, failures, budgetExceeded: 1, ...stats };
+    }
     const sweepAfter = store.db.prepare("SELECT sweep_after FROM messages_backfill_cursor WHERE room_id=?").get(SWEEP_ID)?.sweep_after ?? "";
     const roomId = nextParityRoom(store.db, sweepAfter);
-    if (!roomId || attempted.has(roomId)) break;
+    if (!roomId || attempted.has(roomId)) {
+      return { ok: failures.length === 0, checked: 0, roomId: null, failures, ...stats };
+    }
     attempted.add(roomId);
-    try {
-      const certified = checkMessagesParity(store);
-      report({ roomId, error: null });
-      return { ...certified, failures };
-    } catch (error) {
-      if (!String(error?.message ?? error).startsWith("messages parity failed for ")) throw error;
-      failures.push({ roomId, error });
-      report({ roomId, error });
-      rememberSweep(store, roomId);
+    const outcome = certifyRoomBounded(store, roomId, { deadline, yieldBetween, stats });
+    if (outcome instanceof Promise) {
+      return outcome.then(resolved => {
+        const handled = handleOutcome(roomId, resolved);
+        return handled === AGAIN ? driveSteps(step, yieldBetween) : handled;
+      });
+    }
+    return handleOutcome(roomId, outcome);
+  };
+  return driveSteps(step, yieldBetween);
+}
+
+// Step driver for the bounded parity work: run step() synchronously
+// until it produces an outcome instead of AGAIN. Only when a yield hook
+// was provided does the first AGAIN cross into an async continuation
+// that yields between steps — so callers that never ask for a yield
+// (direct calls, the existing tests) stay fully synchronous, and a
+// small room completes synchronously even for callers that do ask.
+const AGAIN = Symbol("parity-again");
+function driveSteps(step, yieldBetween) {
+  for (;;) {
+    const outcome = step();
+    if (outcome !== AGAIN) return outcome;
+    if (!yieldBetween) continue;
+    return (async () => {
+      for (;;) {
+        await yieldBetween();
+        const next = step();
+        if (next !== AGAIN) return next;
+      }
+    })();
+  }
+}
+
+// ---------------------------------------------------------------------------
+// #5571 part 2: bounded, checkpointed parity certification of one room.
+//
+// The phases mirror the stretches the single-transaction certification
+// fused together: counts -> bodies (the body-hash verification split out
+// of hydrateProjection's verifyBodyHashes path) -> hydrate -> events
+// (the POSTED id->sequence map) -> diff (the messages row comparison) ->
+// certify. Between chunks the scan checks its deadline and yields; each
+// chunk commits its cursor advance in its own small write, so a kill
+// loses at most one chunk. Progress lives in integrity_parity_checkpoint;
+// the checkpoint is an optimisation, never an audit input — a corrupt,
+// stale or head-moved checkpoint is discarded and the room restarts,
+// exactly the rule rebuildProjection applies to projection checkpoints.
+// ---------------------------------------------------------------------------
+
+export const INTEGRITY_PARITY_CHECKPOINT_SCHEMA = `
+CREATE TABLE IF NOT EXISTS integrity_parity_checkpoint (
+  room_id TEXT PRIMARY KEY,
+  attempt_seq INTEGER NOT NULL,
+  phase TEXT NOT NULL,
+  head_sequence INTEGER NOT NULL,
+  applied_seq INTEGER NOT NULL,
+  event_cursor INTEGER NOT NULL DEFAULT 0,
+  message_cursor TEXT NOT NULL DEFAULT '',
+  counts_json TEXT,
+  missing_json TEXT NOT NULL DEFAULT '[]',
+  staged_seq_json TEXT,
+  updated_at INTEGER NOT NULL
+)`;
+
+const PARITY_PHASES = ["counts", "bodies", "hydrate", "events", "diff"];
+const PARITY_CHUNK_ROWS = 200;
+const PARITY_CHUNK_BYTES = 256 * 1024;
+// B6 (P1 design §3.3): the byte budgets, one family. VISIT_BYTES caps the
+// text bytes one visit segment may materialize (fetch + parse) across all
+// its fetches; CHECKPOINT_BYTES caps the serialized checkpoint row, all
+// JSON fields together, measured on the serialized bytes at commit.
+export const PARITY_VISIT_BYTES = PARITY_CHUNK_BYTES;
+export const PARITY_CHECKPOINT_BYTES = 256 * 1024;
+const PARITY_SPILL_TRIGGER_BYTES = PARITY_CHECKPOINT_BYTES / 2;
+const PARITY_SEGMENT_ROWS = 1600;
+const PARITY_PROBE_ROWS = 300;
+const PARITY_PAGE_ROWS = 50;
+const PARITY_SPILL_PART_BYTES = 32 * 1024;
+const PARITY_MAX_FAILURES = 3;
+const PARITY_CHECKPOINT_FRESH_MS = 24 * 60 * 60 * 1000;
+
+const parityNow = store => (typeof store?.now === "function" ? store.now() : Date.now());
+const sha256Hex = body => createHash("sha256").update(body, "utf8").digest("hex");
+const byteLen = value => typeof value === "string" ? Buffer.byteLength(value) : 0;
+
+// A parity failure verdict raised inside a commit (the missing-set payload
+// bound): converted to a {status:"failed"} outcome by certifyRoomBounded.
+class ParityFail extends Error {}
+
+function parityHead(db, roomId) {
+  const room = db.prepare("SELECT sequence FROM rooms WHERE id=?").get(roomId);
+  if (!room) return null;
+  const cursor = db.prepare("SELECT applied_seq FROM messages_backfill_cursor WHERE room_id=?").get(roomId);
+  return { sequence: room.sequence, appliedSeq: cursor?.applied_seq ?? 0 };
+}
+
+function readParityCheckpoint(db, roomId) {
+  return db.prepare("SELECT * FROM integrity_parity_checkpoint WHERE room_id=?").get(roomId) ?? null;
+}
+
+// The staged sequence map, when it outgrows CHECKPOINT_BYTES, is banked in
+// range parts in the existing messages_backfill_state table (the same
+// carrier the replay snapshots use — no new table, no schema change). The
+// checkpoint row then carries only a small spill marker: part count, entry
+// count and one digest per part. Parts are append-only after the first
+// flush: events arrive in sequence order, so each commit appends at most
+// the entries staged since the previous commit.
+function stagedSpillKey(roomId, attemptSeq) {
+  return `${roomId}\u0000staged${attemptSeq}`;
+}
+
+function discardStagedSpill(db, roomId, attemptSeq) {
+  if (!Number.isSafeInteger(attemptSeq) || attemptSeq <= 0) return;
+  try { db.prepare("DELETE FROM messages_backfill_state WHERE room_id=?").run(stagedSpillKey(roomId, attemptSeq)); }
+  catch { /* a synthetic db with no snapshot table has nothing spilled */ }
+}
+
+function readSpillPartCount(db, roomId, attemptSeq) {
+  try {
+    const count = Number(db.prepare("SELECT json FROM messages_backfill_state WHERE room_id=? AND part=-1")
+      .get(stagedSpillKey(roomId, attemptSeq))?.json);
+    return Number.isSafeInteger(count) && count >= 1 ? count : null;
+  } catch { return null; }
+}
+
+// Returns null for a row that cannot be trusted (unparseable JSON, unknown
+// phase, wrong-typed fields): the caller discards it and restarts.
+function parseParityCheckpoint(row) {
+  if (!row) return null;
+  try {
+    if (!PARITY_PHASES.includes(row.phase)) return null;
+    if (!Number.isSafeInteger(row.attempt_seq) || !Number.isSafeInteger(row.head_sequence)
+      || !Number.isSafeInteger(row.applied_seq) || !Number.isSafeInteger(row.event_cursor)
+      || typeof row.message_cursor !== "string" || !Number.isSafeInteger(row.updated_at)) return null;
+    const counts = row.counts_json === null ? null : JSON.parse(row.counts_json);
+    if (counts !== null && (typeof counts !== "object" || Array.isArray(counts))) return null;
+    const missing = JSON.parse(row.missing_json);
+    if (!Array.isArray(missing) || missing.some(id => typeof id !== "string")) return null;
+    const staged = row.staged_seq_json === null ? null : JSON.parse(row.staged_seq_json);
+    if (staged !== null && (typeof staged !== "object" || Array.isArray(staged))) return null;
+    let spill = null;
+    if (staged !== null && Object.hasOwn(staged, "$spill")) {
+      if (!Number.isSafeInteger(staged.$spill) || staged.$spill < 1
+        || !Number.isSafeInteger(staged.entries) || staged.entries < 0
+        || !Array.isArray(staged.digests) || staged.digests.length > staged.$spill
+        || staged.digests.some(digest => typeof digest !== "string")
+        || !Number.isSafeInteger(staged.open) || staged.open < -1 || staged.open >= staged.$spill) return null;
+      spill = { parts: staged.$spill, entries: staged.entries, digests: staged.digests, open: staged.open };
+    }
+    return {
+      attemptSeq: row.attempt_seq, phase: row.phase,
+      headSequence: row.head_sequence, appliedSeq: row.applied_seq,
+      eventCursor: row.event_cursor, messageCursor: row.message_cursor,
+      counts, missing, staged: spill ? null : staged, spill, updatedAt: row.updated_at
+    };
+  } catch { return null; }
+}
+
+function deleteParityCheckpoint(db, roomId, attemptSeq = null) {
+  if (attemptSeq === null) db.prepare("DELETE FROM integrity_parity_checkpoint WHERE room_id=?").run(roomId);
+  else db.prepare("DELETE FROM integrity_parity_checkpoint WHERE room_id=? AND attempt_seq=?").run(roomId, attemptSeq);
+}
+
+// Start a genuinely new scan: bump the room's attempt generation, clear
+// the room's earlier certification (a failed or abandoned recheck must
+// not leave it usable — the single-transaction path cleared it at scan
+// start too), and write the phase-0 checkpoint, in one transaction.
+function startParityCheckpoint(store, roomId, head, previousAttemptSeq) {
+  const attemptSeq = previousAttemptSeq + 1;
+  store.transaction(() => {
+    discardStagedSpill(store.db, roomId, previousAttemptSeq);
+    discardStagedSpill(store.db, roomId, attemptSeq);
+    store.db.prepare("UPDATE messages_backfill_cursor SET parity_at_seq=NULL WHERE room_id=?").run(roomId);
+    store.db.prepare(`INSERT INTO integrity_parity_checkpoint
+      (room_id, attempt_seq, phase, head_sequence, applied_seq, event_cursor, message_cursor, counts_json, missing_json, staged_seq_json, updated_at)
+      VALUES (?, ?, 'counts', ?, ?, 0, '', NULL, '[]', NULL, ?)
+      ON CONFLICT(room_id) DO UPDATE SET
+        attempt_seq=excluded.attempt_seq, phase='counts',
+        head_sequence=excluded.head_sequence, applied_seq=excluded.applied_seq,
+        event_cursor=0, message_cursor='', counts_json=NULL, missing_json='[]',
+        staged_seq_json=NULL, updated_at=excluded.updated_at`)
+      .run(roomId, attemptSeq, head.sequence, head.appliedSeq, parityNow(store));
+  });
+  return attemptSeq;
+}
+
+// Per-record equivalent of hydrateProjection's message transforms, applied
+// to one sliced record at a time so hydration never materializes the whole
+// projection: entity refs decode from the messages table, the null-envelope
+// marker expands, and a bodyRef is replaced by its stored body (fetched
+// singly). Returns { message, missing } — missing is true when a referenced
+// body row is absent, exactly hydrateProjection's missing verdict.
+function hydrateParityRecord(db, roomId, record, noteFetch) {
+  if (!record || typeof record !== "object") return { message: record, missing: false };
+  if (isMessageEntityRef(record)) {
+    const hydrated = hydrateMessageEntities(db, roomId, [record]);
+    const row = db.prepare("SELECT message_id, body, record_json, reducer_extras_json FROM messages WHERE room_id=? AND message_id=?")
+      .get(roomId, record.id);
+    if (row) noteFetch(byteLen(row.body) + byteLen(row.record_json) + byteLen(row.reducer_extras_json));
+    return { message: hydrated[0], missing: false };
+  }
+  let message = record;
+  if (message[NULL_ENVELOPE_KEY] === 1) {
+    const out = {};
+    for (const [key, value] of Object.entries(message)) {
+      if (key === NULL_ENVELOPE_KEY && value === 1) {
+        out.workItemId = null; out.replyToId = null; out.toMemberId = null;
+      } else out[key] = value;
+    }
+    message = out;
+  }
+  if (typeof message.bodyRef === "string") {
+    const row = db.prepare("SELECT body FROM projection_bodies WHERE room_id=? AND sha=?").get(roomId, message.bodyRef);
+    noteFetch(byteLen(row?.body));
+    if (typeof row?.body !== "string") return { message, missing: true };
+    const out = {};
+    for (const [key, value] of Object.entries(message)) {
+      if (key === "bodyRef") out.body = row.body;
+      else out[key] = value;
+    }
+    return { message: out, missing: false };
+  }
+  return { message, missing: false };
+}
+
+function certifyRoomBounded(store, roomId, { deadline = Infinity, yieldBetween = null, stats } = {}) {
+  const db = store.db;
+  const head = parityHead(db, roomId);
+  if (!head) return { status: "deferred" };
+  let scan = null;
+  const existing = readParityCheckpoint(db, roomId);
+  const previousAttemptSeq = Number.isSafeInteger(existing?.attempt_seq) ? existing.attempt_seq : 0;
+  if (existing) {
+    const parsed = parseParityCheckpoint(existing);
+    if (!parsed) {
+      stats.checkpointDiscards += 1;
+      deleteParityCheckpoint(db, roomId);
+      discardStagedSpill(db, roomId, previousAttemptSeq);
+    } else if (parsed.headSequence !== head.sequence || parsed.appliedSeq !== head.appliedSeq
+      || parityNow(store) - parsed.updatedAt > PARITY_CHECKPOINT_FRESH_MS) {
+      // Head moved or checkpoint stale: no partial certification is ever
+      // issued for a prefix of a moved head.
+      deleteParityCheckpoint(db, roomId);
+      discardStagedSpill(db, roomId, parsed.attemptSeq);
+    } else if ((parsed.phase === "events" || parsed.phase === "diff") && parsed.staged === null && !parsed.spill) {
+      // A scan past the events phase must carry its staged map (inline, or
+      // as a spill marker whose parts are all present — a NULL here is
+      // foreign or corrupt, not a state this engine writes).
+      deleteParityCheckpoint(db, roomId);
+    } else if (parsed.spill && readSpillPartCount(db, roomId, parsed.attemptSeq) !== parsed.spill.parts) {
+      deleteParityCheckpoint(db, roomId);
+      discardStagedSpill(db, roomId, parsed.attemptSeq);
+    } else {
+      scan = {
+        roomId, attemptSeq: parsed.attemptSeq, phase: parsed.phase,
+        headSequence: parsed.headSequence, appliedSeq: parsed.appliedSeq,
+        eventCursor: parsed.eventCursor, messageCursor: parsed.messageCursor,
+        counts: parsed.counts, missing: parsed.missing,
+        staged: parsed.spill ? new Map() : (parsed.staged === null ? null : new Map(Object.entries(parsed.staged))),
+        spillBanked: parsed.spill ? 0 : (parsed.staged === null ? 0 : Object.keys(parsed.staged).length),
+        openPart: null,
+        spill: parsed.spill, stagedJson: parsed.spill ? existing.staged_seq_json : (existing.staged_seq_json ?? null),
+        stagedDirty: false, oversizeCounted: false,
+        spillLoad: parsed.spill ? { nextPart: 0, parts: parsed.spill.parts, digests: parsed.spill.digests, lastPart: null } : null,
+        authority: null, authorityKnown: false, segBytes: 0, archive: null, diffReady: false
+      };
     }
   }
-  return { ok: failures.length === 0, checked: 0, roomId: null, failures };
+  if (!scan) {
+    const attemptSeq = startParityCheckpoint(store, roomId, head, previousAttemptSeq);
+    scan = {
+      roomId, attemptSeq, phase: "counts",
+      headSequence: head.sequence, appliedSeq: head.appliedSeq,
+      eventCursor: 0, messageCursor: "", counts: null, missing: [],
+      staged: null, spillBanked: 0, openPart: null, spill: null, stagedJson: null,
+      stagedDirty: false, oversizeCounted: false, spillLoad: null,
+      authority: null, authorityKnown: false, segBytes: 0, archive: null, diffReady: false
+    };
+  }
+  // A visit always banks its first examined-row chunk before the
+  // deadline may stop it: the tick's fixed overheads (the incremental
+  // check, the legacy-shape upgrade) can consume the whole budget
+  // before the engine starts, and a stopped visit that banked nothing
+  // would leave the room exactly as wedged as the unbounded scan did.
+  // The exemption is bounded by one segment, and adopted scans start
+  // with work already banked.
+  let bankedWork = scan.eventCursor > 0 || scan.messageCursor !== "";
+  // Per-segment byte counter (B6): reset only at a segment boundary —
+  // each advance() step is one visit segment and one commit at most —
+  // never inside a segment, so sub-pages share the one VISIT_BYTES
+  // budget. A single row larger than the budget is processed alone and
+  // reported through fetchOversize, mirroring checkpointOversize.
+  const noteFetch = bytes => {
+    if (!Number.isSafeInteger(bytes) || bytes < 0) return;
+    scan.segBytes += bytes;
+    if (bytes > PARITY_VISIT_BYTES) stats.fetchOversize = 1;
+  };
+  const noteRows = rows => {
+    for (const row of rows) {
+      for (const value of Object.values(row ?? {})) {
+        if (typeof value === "string") scan.segBytes += Buffer.byteLength(value);
+        else if (typeof value === "number") scan.segBytes += 8;
+      }
+    }
+  };
+  // Serialize the staged map into checkpoint form. While the whole
+  // serialized checkpoint fits CHECKPOINT_BYTES the map stays inline;
+  // past that it spills to range parts (see stagedSpillKey) and the
+  // checkpoint carries only the marker. Measured on the serialized
+  // bytes at commit, never estimated.
+  const stagedCheckpointJson = (countsJson, missingJson) => {
+    if (scan.staged === null) return null;
+    const openCount = () => (scan.openPart && Object.keys(scan.openPart).length ? 1 : 0);
+    const spillMarker = () => JSON.stringify({
+      $spill: scan.spill.digests.length + openCount(),
+      entries: scan.spillBanked,
+      digests: scan.spill.digests,
+      open: openCount() ? scan.spill.digests.length : -1
+    });
+    const spillInsert = db.prepare(`INSERT INTO messages_backfill_state(room_id,part,json) VALUES (?,?,?)
+      ON CONFLICT(room_id,part) DO UPDATE SET json=excluded.json`);
+    const spillKey = stagedSpillKey(roomId, scan.attemptSeq);
+    if (!scan.spill) {
+      const json = JSON.stringify(Object.fromEntries(scan.staged));
+      const total = byteLen(json) + byteLen(countsJson) + byteLen(missingJson) + 256;
+      if (total <= PARITY_SPILL_TRIGGER_BYTES) return json;
+      // First flush: bank the whole map built so far as range parts —
+      // sealed parts of at most PARITY_SPILL_PART_BYTES plus one open
+      // part that keeps accumulating across commits, so the checkpoint
+      // marker (one digest per sealed part) stays small no matter how
+      // many commits the scan still has ahead of it.
+      scan.spill = { digests: [] };
+      scan.openPart = {};
+      let openBytes = 2;
+      for (const [id, sequence] of scan.staged) {
+        const entryBytes = byteLen(id) + String(sequence).length + 8;
+        if (openBytes + entryBytes > PARITY_SPILL_PART_BYTES && Object.keys(scan.openPart).length) {
+          const text = JSON.stringify(scan.openPart);
+          spillInsert.run(spillKey, scan.spill.digests.length, text);
+          scan.spill.digests.push(sha256Hex(text));
+          scan.openPart = {};
+          openBytes = 2;
+        }
+        scan.openPart[id] = sequence;
+        openBytes += entryBytes;
+      }
+      scan.spillBanked = scan.staged.size;
+      if (!scan.oversizeCounted) { scan.oversizeCounted = true; stats.checkpointOversize = 1; }
+    }
+    // Bank the entries staged since the last commit into the open part,
+    // sealing it whenever it reaches the part bound. The open part is
+    // rewritten in place (bounded by the part size); sealed parts are
+    // never rewritten, so spill writes stay linear in the map's size.
+    if (scan.staged.size > scan.spillBanked) {
+      const fresh = [...scan.staged].slice(scan.spillBanked);
+      if (!scan.openPart) scan.openPart = {};
+      for (const [id, sequence] of fresh) {
+        scan.openPart[id] = sequence;
+        scan.spillBanked += 1;
+        const openBytes = byteLen(JSON.stringify(scan.openPart));
+        if (openBytes > PARITY_SPILL_PART_BYTES) {
+          const text = JSON.stringify(scan.openPart);
+          spillInsert.run(spillKey, scan.spill.digests.length, text);
+          scan.spill.digests.push(sha256Hex(text));
+          scan.openPart = {};
+        }
+      }
+    }
+    if (openCount()) {
+      spillInsert.run(spillKey, scan.spill.digests.length, JSON.stringify(scan.openPart));
+    }
+    spillInsert.run(spillKey, -1, String(scan.spill.digests.length + openCount()));
+    return spillMarker();
+  };
+  const commit = () => {
+    const countsJson = scan.counts === null ? null : JSON.stringify(scan.counts);
+    const missingJson = JSON.stringify(scan.missing);
+    // missing_json is bounded by the same payload budget: a room whose
+    // missing set alone exceeds it fails the scan fast with the count
+    // recorded — a failure verdict, not progress state.
+    if (byteLen(missingJson) + byteLen(countsJson) + 256 > PARITY_CHECKPOINT_BYTES) {
+      throw new ParityFail(`messages parity failed for ${roomId}: stored message body missing (${scan.missing.length} missing, checkpoint payload bound)`);
+    }
+    if (scan.spillLoad) {
+      // Mid-load of a spilled map: the checkpoint already carries the
+      // marker for exactly this map; rewriting it verbatim banks the
+      // segment boundary without touching the spill.
+    } else if (scan.stagedDirty || scan.spill) {
+      scan.stagedJson = stagedCheckpointJson(countsJson, missingJson);
+      scan.stagedDirty = false;
+    }
+    const stagedJson = scan.stagedJson;
+    if (byteLen(stagedJson) + byteLen(countsJson) + byteLen(missingJson) + 256 > PARITY_CHECKPOINT_BYTES) {
+      // Unreachable by construction (the spill marker is small); a breach
+      // here is an engine defect, not a room verdict — refuse to write an
+      // over-budget checkpoint row.
+      throw new Error(`parity checkpoint payload bound exceeded for ${roomId}`);
+    }
+    const result = store.db.prepare(`UPDATE integrity_parity_checkpoint SET
+      phase=?, event_cursor=?, message_cursor=?, counts_json=?, missing_json=?, staged_seq_json=?, updated_at=?
+      WHERE room_id=? AND attempt_seq=?`)
+      .run(scan.phase, scan.eventCursor, scan.messageCursor,
+        countsJson, missingJson, stagedJson,
+        parityNow(store), scan.roomId, scan.attemptSeq);
+    const ok = result.changes === 1;
+    if (ok) bankedWork = bankedWork || scan.eventCursor > 0 || scan.messageCursor !== "";
+    return ok;
+  };
+  const fail = error => {
+    deleteParityCheckpoint(db, roomId, scan.attemptSeq);
+    discardStagedSpill(db, roomId, scan.attemptSeq);
+    return { status: "failed", error };
+  };
+  // The projection is never fetched whole in this path (B6): counts come
+  // from aggregates, message records from paged json_each slices over the
+  // messages array, and every slice is fetched under the segment budget.
+  const authorityMarker = () => {
+    // Cached on a separate flag: the marker itself is null for legacy
+    // rooms, and json_extract over the projection costs a full parse —
+    // re-probing it per row would dwarf the scan it serves.
+    if (scan.authorityKnown) return scan.authority;
+    const row = db.prepare("SELECT json_extract(projection,'$.messageAuthority') AS marker FROM rooms WHERE id=?").get(roomId);
+    scan.authority = row?.marker ?? null;
+    scan.authorityKnown = true;
+    return scan.authority;
+  };
+  const messageIndexOf = messageId => {
+    const row = db.prepare(`SELECT key AS idx FROM json_each((SELECT projection FROM rooms WHERE id=?), '$.messages')
+      WHERE json_extract(value,'$.id')=?`).get(roomId, messageId);
+    return Number.isSafeInteger(row?.idx) ? row.idx : -1;
+  };
+  // Single-pass projection record stream, held on the scan for one
+  // call: json_each yields records in array order and segments pull from
+  // the one stream, so a slice never re-parses the array prefix in
+  // SQLite the way a range query per segment would. Rows are counted as
+  // they are pulled; a segment stops pulling once its budget is crossed,
+  // so it materializes at most VISIT_BYTES + one largest row. On a
+  // resumed call the stream first re-pulls the already-examined prefix
+  // in bounded skip segments (msgSkip), counted like any other fetch.
+  const openMessageStream = () => {
+    scan.msgStream = db.prepare(`SELECT key AS idx, value FROM json_each((SELECT projection FROM rooms WHERE id=?), '$.messages')`)
+      .iterate(roomId);
+    scan.msgPending = undefined;
+  };
+  const pullMessage = (parse = true) => {
+    if (scan.msgPending !== undefined) {
+      const row = scan.msgPending;
+      scan.msgPending = undefined;
+      return row;
+    }
+    const next = scan.msgStream.next();
+    if (next.done) return null;
+    noteFetch(byteLen(next.value.value));
+    if (byteLen(next.value.value) > PARITY_VISIT_BYTES / 2) stats.fetchOversize = 1;
+    // Skipped records (a resumed scan's already-examined prefix) are
+    // counted by their fetched bytes and never parsed: parsing them
+    // would make resume cost proportional to the prefix's content work,
+    // not just its size, and a budget-stopped scan would re-pay it on
+    // every tick.
+    if (!parse) return { idx: next.value.idx, record: null };
+    let record = null;
+    try { record = JSON.parse(next.value.value); } catch { /* an unparseable record compares as null, as before */ }
+    return { idx: next.value.idx, record };
+  };
+  // Pull projection records from the diff phase's single-pass stream
+  // into the per-call buffer until the wanted record is resident.
+  // Returns the record, undefined when the stream proves it absent, or
+  // PROJ_DEFER when this segment's byte budget is spent first — the
+  // caller banks and resumes the pull next segment.
+  const PROJ_DEFER = Symbol("proj-defer");
+  const ensureProjRecord = messageId => {
+    if (scan.projBuffer.has(messageId)) return scan.projBuffer.get(messageId);
+    while (!scan.projDone) {
+      const next = scan.projStream.next();
+      if (next.done) { scan.projDone = true; break; }
+      noteFetch(byteLen(next.value.value));
+      if (byteLen(next.value.value) > PARITY_VISIT_BYTES / 2) stats.fetchOversize = 1;
+      let record = null;
+      try { record = JSON.parse(next.value.value); } catch { /* compares as absent */ }
+      if (record && typeof record.id === "string") scan.projBuffer.set(record.id, record);
+      if (record?.id === messageId) return record;
+      if (scan.segBytes >= PARITY_VISIT_BYTES) return PROJ_DEFER;
+    }
+    return scan.projBuffer.get(messageId);
+  };
+  // Lazy thread-ancestry resolver for the diff phase: a Map whose misses
+  // load one record at a time (projection slice, else an archived stub
+  // from the messages table), so thread walks never materialize the room.
+  const makeThreadResolver = () => {
+    const archive = scan.archive ?? { throughSeq: 0, retainedJson: "[]" };
+    const retained = new Set(JSON.parse(archive.retainedJson));
+    const load = id => {
+      let message;
+      if (scan.authority) {
+        const row = db.prepare("SELECT message_id, body, record_json, reducer_extras_json, reply_to_id FROM messages WHERE room_id=? AND message_id=?")
+          .get(roomId, id);
+        if (row) {
+          noteFetch(byteLen(row.body) + byteLen(row.record_json) + byteLen(row.reducer_extras_json));
+          try { message = decodeMessageEntity(row); } catch { message = { id, replyToId: row.reply_to_id }; }
+        }
+      } else {
+        const record = ensureProjRecord(id);
+        if (record !== undefined && record !== PROJ_DEFER) {
+          message = hydrateParityRecord(db, roomId, record, noteFetch).message;
+        }
+      }
+      if (message === undefined && archive.throughSeq) {
+        const stub = db.prepare("SELECT message_id, reply_to_id, seq FROM messages WHERE room_id=? AND message_id=?").get(roomId, id);
+        if (stub) noteRows([stub]);
+        if (stub && stub.seq <= archive.throughSeq && !retained.has(id)) {
+          message = { id: stub.message_id, replyToId: stub.reply_to_id };
+        }
+      }
+      return message;
+    };
+    return new (class extends Map {
+      get(id) {
+        if (!super.has(id)) super.set(id, load(id));
+        return super.get(id);
+      }
+    })();
+  };
+
+  const advance = () => {
+  scan.segBytes = 0;
+  for (;;) {
+    if (bankedWork && Date.now() > deadline) return { status: "progress", phase: scan.phase };
+
+    // A resumed spilled scan reloads its staged map one range part per
+    // segment (each part ≤ PARITY_SPILL_PART_BYTES), verifying the part's
+    // banked digest before its entries are trusted.
+    if (scan.spillLoad) {
+      const { nextPart, parts, digests } = scan.spillLoad;
+      const row = db.prepare("SELECT json FROM messages_backfill_state WHERE room_id=? AND part=?")
+        .get(stagedSpillKey(roomId, scan.attemptSeq), nextPart);
+      if (!row || (nextPart < digests.length && sha256Hex(row.json) !== digests[nextPart])) {
+        stats.checkpointDiscards += 1;
+        deleteParityCheckpoint(db, roomId, scan.attemptSeq);
+        discardStagedSpill(db, roomId, scan.attemptSeq);
+        return { status: "deferred" };
+      }
+      noteFetch(byteLen(row.json));
+      let entries;
+      try { entries = JSON.parse(row.json); } catch { entries = null; }
+      if (!entries || typeof entries !== "object" || Array.isArray(entries)) {
+        stats.checkpointDiscards += 1;
+        deleteParityCheckpoint(db, roomId, scan.attemptSeq);
+        discardStagedSpill(db, roomId, scan.attemptSeq);
+        return { status: "deferred" };
+      }
+      for (const [id, sequence] of Object.entries(entries)) {
+        if (!scan.staged.has(id)) scan.staged.set(id, sequence);
+      }
+      scan.spillLoad.lastPart = entries;
+      if (!commit()) return { status: "deferred" };
+      const wasOpen = scan.spill.open === nextPart;
+      scan.spillLoad = nextPart + 1 < parts
+        ? { nextPart: nextPart + 1, parts, digests, lastPart: entries } : null;
+      if (!scan.spillLoad) {
+        if (scan.staged.size !== scan.spill.entries) {
+          stats.checkpointDiscards += 1;
+          deleteParityCheckpoint(db, roomId, scan.attemptSeq);
+          discardStagedSpill(db, roomId, scan.attemptSeq);
+          return { status: "deferred" };
+        }
+        scan.spillBanked = scan.staged.size;
+        // The formerly open part (the marker's tail part, if any) is
+        // open again: new entries append to it and it seals under the
+        // usual bound as the scan continues. Sealed parts stay sealed.
+        scan.openPart = wasOpen ? entries : null;
+      }
+      return AGAIN;
+    }
+
+    if (scan.phase === "counts") {
+      scan.counts = parityNumbers(db, roomId);
+      authorityMarker();
+      if (scan.counts.projectionCount !== scan.counts.tableCount
+        || scan.counts.projectionLastSeq !== scan.counts.tableLastSeq) {
+        return fail(new Error(`messages parity failed for ${roomId}: projection count ${scan.counts.projectionCount}, table count ${scan.counts.tableCount}, projection last seq ${scan.counts.projectionLastSeq}, table last seq ${scan.counts.tableLastSeq}`));
+      }
+      scan.phase = "bodies";
+      scan.messageCursor = "";
+      if (!commit()) return { status: "deferred" };
+      continue;
+    }
+
+    if (scan.phase === "bodies") {
+      // The hash verification split out of hydrateProjection, over the
+      // single-pass record stream: bodyRef appears only as a top-level
+      // string on inline raw-projection messages, so scanning the stream
+      // verifies exactly the set the fused path verified. Authority
+      // rooms carry no inline array and skip straight through. The
+      // cursor is the last examined message id, as in the diff phase.
+      if (authorityMarker() !== null) {
+        scan.phase = "hydrate";
+        scan.messageCursor = "";
+        scan.eventCursor = 0;
+        if (!commit()) return { status: "deferred" };
+        continue;
+      }
+      if (!scan.msgStream) {
+        let skip = 0;
+        if (scan.messageCursor !== "") {
+          const at = messageIndexOf(scan.messageCursor);
+          if (at < 0) {
+            stats.checkpointDiscards += 1;
+            deleteParityCheckpoint(db, roomId, scan.attemptSeq);
+            discardStagedSpill(db, roomId, scan.attemptSeq);
+            return { status: "deferred" };
+          }
+          skip = at + 1;
+        }
+        openMessageStream();
+        scan.msgSkip = skip;
+      }
+      let processed = 0;
+      for (;;) {
+        if (processed >= PARITY_CHUNK_ROWS) {
+          if (!commit()) return { status: "deferred" };
+          return AGAIN;
+        }
+        const pulled = pullMessage(scan.msgSkip <= 0);
+        if (pulled === null) {
+          scan.msgStream = null;
+          if (scan.missing.length) {
+            return fail(new Error(`messages parity failed for ${roomId}: stored message body missing`));
+          }
+          scan.phase = "hydrate";
+          scan.messageCursor = "";
+          if (!commit()) return { status: "deferred" };
+          break;
+        }
+        if (scan.msgSkip > 0) {
+          scan.msgSkip -= 1;
+          if (scan.segBytes >= PARITY_VISIT_BYTES) {
+            if (!commit()) return { status: "deferred" };
+            return AGAIN;
+          }
+          continue;
+        }
+        const message = pulled.record;
+        processed += 1;
+        if (typeof message?.id === "string") scan.messageCursor = message.id;
+        if (message && typeof message.bodyRef === "string") {
+          const row = db.prepare("SELECT body FROM projection_bodies WHERE room_id=? AND sha=?").get(roomId, message.bodyRef);
+          noteFetch(byteLen(row?.body));
+          if (typeof row?.body !== "string") {
+            if (!scan.missing.includes(message.id)) scan.missing.push(message.id);
+          } else if (sha256Hex(row.body) !== message.bodyRef && !scan.missing.includes(message.id)) {
+            scan.missing.push(message.id);
+          }
+        }
+        if (processed % 50 === 0 && Date.now() > deadline) {
+          if (!commit()) return { status: "deferred" };
+          return AGAIN;
+        }
+        if (scan.segBytes >= PARITY_VISIT_BYTES) {
+          if (!commit()) return { status: "deferred" };
+          return AGAIN;
+        }
+      }
+      continue;
+    }
+
+    if (scan.phase === "hydrate") {
+      // Sliced hydration: each message-index slice is transformed and
+      // checked under the segment budget and discarded at segment end —
+      // no hydrated state is retained across segments, and the diff
+      // phase re-derives the records it compares, slice by slice.
+      if (authorityMarker() !== null) {
+        // Authority hydration reads the messages table itself: validate
+        // the count and decode each row, paged by (seq, message_id)
+        // under the segment budget (event_cursor/message_cursor carry
+        // the paging position; the events phase resets both).
+        const archive0 = archiveMarker(db, roomId);
+        const archiveFilter = archive0.throughSeq ? " AND (seq>? OR message_id IN (SELECT value FROM json_each(?)))" : "";
+        const archiveParams = archive0.throughSeq ? [archive0.throughSeq, archive0.retainedJson] : [];
+        const probed = db.prepare(`SELECT message_id, seq, LENGTH(body) AS blen,
+            LENGTH(record_json) AS rlen, LENGTH(reducer_extras_json) AS elen
+          FROM messages WHERE room_id=?${archiveFilter} AND (seq>? OR (seq=? AND message_id>?))
+          ORDER BY seq, message_id LIMIT ?`)
+          .all(roomId, ...archiveParams, scan.eventCursor, scan.eventCursor, scan.messageCursor, PARITY_PROBE_ROWS);
+        noteRows(probed);
+        if (!probed.length) {
+          const marker = JSON.parse(authorityMarker());
+          if (!hasMessageAuthority({ messageAuthority: marker })) throw new Error("projection_corrupt: invalid message authority");
+          const archive = archiveMarker(db, roomId);
+          const total = db.prepare(`SELECT COUNT(*) AS n FROM messages WHERE room_id=?${archive.throughSeq
+            ? " AND (seq>? OR message_id IN (SELECT value FROM json_each(?)))" : ""}`)
+            .get(roomId, ...(archive.throughSeq ? [archive.throughSeq, archive.retainedJson] : [])).n;
+          if (total !== marker.count) throw new Error("projection_corrupt: canonical message count differs");
+          scan.phase = "events";
+          scan.eventCursor = 0;
+          scan.messageCursor = "";
+          if (scan.staged === null) { scan.staged = new Map(); scan.spillBanked = 0; scan.stagedDirty = true; }
+          if (!commit()) return { status: "deferred" };
+          continue;
+        }
+        let total = 0, take = 0;
+        for (const row of probed) {
+          const cost = (row.blen ?? 0) + (row.rlen ?? 0) + (row.elen ?? 0);
+          if (take > 0 && scan.segBytes + total + cost > PARITY_VISIT_BYTES) break;
+          total += cost; take += 1;
+          if (cost > PARITY_VISIT_BYTES / 2) stats.fetchOversize = 1;
+        }
+        take = Math.min(take, PARITY_CHUNK_ROWS);
+        const last = probed[take - 1];
+        const rows = db.prepare(`SELECT message_id, body, record_json, reducer_extras_json FROM messages
+          WHERE room_id=?${archiveFilter} AND (seq>? OR (seq=? AND message_id>?)) AND (seq<? OR (seq=? AND message_id<=?))
+          ORDER BY seq, message_id`)
+          .all(roomId, ...archiveParams, scan.eventCursor, scan.eventCursor, scan.messageCursor, last.seq, last.seq, last.message_id);
+        for (const row of rows) {
+          noteFetch(byteLen(row.body) + byteLen(row.record_json) + byteLen(row.reducer_extras_json));
+          decodeMessageEntity(row);
+        }
+        scan.eventCursor = last.seq;
+        scan.messageCursor = last.message_id;
+        if (!commit()) return { status: "deferred" };
+        if (take < probed.length || probed.length === PARITY_PROBE_ROWS) return AGAIN;
+        continue;
+      }
+      if (!scan.msgStream) {
+        let skip = 0;
+        if (scan.messageCursor !== "") {
+          const at = messageIndexOf(scan.messageCursor);
+          if (at < 0) {
+            stats.checkpointDiscards += 1;
+            deleteParityCheckpoint(db, roomId, scan.attemptSeq);
+            discardStagedSpill(db, roomId, scan.attemptSeq);
+            return { status: "deferred" };
+          }
+          skip = at + 1;
+        }
+        openMessageStream();
+        scan.msgSkip = skip;
+      }
+      let processed = 0;
+      for (;;) {
+        if (processed >= PARITY_CHUNK_ROWS) {
+          if (!commit()) return { status: "deferred" };
+          return AGAIN;
+        }
+        const pulled = pullMessage(scan.msgSkip <= 0);
+        if (pulled === null) {
+          scan.msgStream = null;
+          if (scan.missing.length) {
+            return fail(new Error(`messages parity failed for ${roomId}: stored message body missing`));
+          }
+          scan.phase = "events";
+          scan.eventCursor = 0;
+          scan.messageCursor = "";
+          if (scan.staged === null) { scan.staged = new Map(); scan.spillBanked = 0; scan.stagedDirty = true; }
+          if (!commit()) return { status: "deferred" };
+          break;
+        }
+        if (scan.msgSkip > 0) {
+          scan.msgSkip -= 1;
+          if (scan.segBytes >= PARITY_VISIT_BYTES) {
+            if (!commit()) return { status: "deferred" };
+            return AGAIN;
+          }
+          continue;
+        }
+        const message = pulled.record;
+        processed += 1;
+        if (typeof message?.id === "string") scan.messageCursor = message.id;
+        if (message) {
+          const hydrated = hydrateParityRecord(db, roomId, message, noteFetch);
+          if (hydrated.missing && typeof message.id === "string" && !scan.missing.includes(message.id)) {
+            scan.missing.push(message.id);
+          }
+        }
+        if (processed % 50 === 0 && Date.now() > deadline) {
+          if (!commit()) return { status: "deferred" };
+          return AGAIN;
+        }
+        if (scan.segBytes >= PARITY_VISIT_BYTES) {
+          if (!commit()) return { status: "deferred" };
+          return AGAIN;
+        }
+      }
+      continue;
+    }
+
+    if (scan.phase === "events") {
+      if (scan.staged === null) { scan.staged = new Map(); scan.spillBanked = 0; scan.stagedDirty = true; }
+      // Paged fetches under one per-segment byte counter: each page is
+      // chosen from a length probe (keys + LENGTH(body) only), the page
+      // size adapts (start 50, halve when a page overshoots the remaining
+      // budget, floor 1), and the segment stops fetching when the budget
+      // would trip — the counter is never reset between pages. One
+      // commit per segment bounds a kill's loss to one segment while
+      // the deadline is still checked between pages.
+      let exhausted = false;
+      let pageSize = PARITY_PAGE_ROWS;
+      let segmentRows = 0;
+      for (;;) {
+        if (segmentRows > 0 && Date.now() > deadline) break;
+        if (segmentRows >= PARITY_SEGMENT_ROWS) break;
+        const limit = Math.min(pageSize, PARITY_SEGMENT_ROWS - segmentRows);
+        const probed = db.prepare(`SELECT sequence, LENGTH(body) AS len FROM events
+          WHERE room_id=? AND json_extract(body, '$.type')=? AND sequence>? AND sequence<=?
+          ORDER BY sequence LIMIT ?`)
+          .all(roomId, POSTED, scan.eventCursor, scan.headSequence, limit);
+        noteRows(probed);
+        if (!probed.length) { exhausted = true; break; }
+        let total = 0, take = 0;
+        for (const row of probed) {
+          const cost = Number.isSafeInteger(row.len) ? row.len : 0;
+          if (take > 0 && scan.segBytes + total + cost > PARITY_VISIT_BYTES) break;
+          total += cost; take += 1;
+          if (cost > PARITY_VISIT_BYTES / 2) stats.fetchOversize = 1;
+        }
+        const lastSeq = probed[take - 1].sequence;
+        const pageStartBytes = scan.segBytes;
+        const rows = db.prepare(`SELECT sequence, body FROM events
+          WHERE room_id=? AND json_extract(body, '$.type')=? AND sequence>? AND sequence<=?
+          ORDER BY sequence`).all(roomId, POSTED, scan.eventCursor, lastSeq);
+        let pageBytes = 0;
+        for (const row of rows) {
+          pageBytes += byteLen(row.body);
+          noteFetch(byteLen(row.body));
+          for (const id of affectedMessageIds(JSON.parse(row.body))) {
+            if (!scan.staged.has(id)) {
+              scan.staged.set(id, row.sequence);
+              scan.stagedDirty = true;
+            }
+          }
+          scan.eventCursor = row.sequence;
+        }
+        segmentRows += rows.length;
+        if (pageSize > 1 && pageBytes > (PARITY_VISIT_BYTES - pageStartBytes) / 2) {
+          pageSize = Math.max(1, Math.floor(pageSize / 2));
+        }
+        if (take < probed.length) break; // byte bound: bank and yield
+        if (probed.length < limit) { exhausted = true; break; }
+        if (scan.segBytes >= PARITY_VISIT_BYTES) break;
+      }
+      if (!commit()) return { status: "deferred" };
+      if (!exhausted) return AGAIN;
+      scan.phase = "diff";
+      scan.messageCursor = "";
+      scan.diffReady = false;
+      if (!commit()) return { status: "deferred" };
+      continue;
+    }
+
+    if (scan.phase === "diff") {
+      if (!scan.diffReady) {
+        scan.archive = archiveMarker(db, roomId);
+        if (!authorityMarker()) {
+          // The diff phase's projection records come from the same
+          // single-pass stream, pulled into a per-call buffer on demand
+          // (ensureProjRecord); the pins set is extracted in one pass.
+          scan.projStream = db.prepare(`SELECT key AS idx, value FROM json_each((SELECT projection FROM rooms WHERE id=?), '$.messages')`)
+            .iterate(roomId);
+          scan.projBuffer = new Map();
+          scan.projDone = false;
+          const pinRows = db.prepare(`SELECT json_extract(value,'$.messageId') AS id
+            FROM json_each((SELECT projection FROM rooms WHERE id=?), '$.pins')`).all(roomId);
+          noteRows(pinRows);
+          scan.pinnedAll = new Set(pinRows.map(row => row.id));
+        }
+        const archivedCount = scan.archive.throughSeq
+          ? db.prepare("SELECT COUNT(*) AS n FROM messages WHERE room_id=? AND seq<=? AND message_id NOT IN (SELECT value FROM json_each(?))")
+            .get(roomId, scan.archive.throughSeq, scan.archive.retainedJson).n
+          : 0;
+        if (archivedCount !== scan.archive.count) {
+          return fail(new Error(`messages parity failed for ${roomId}: archived rows ${archivedCount}, marker count ${scan.archive.count}`));
+        }
+        scan.diffReady = true;
+      }
+      const probed = db.prepare(`SELECT message_id, LENGTH(record_json) AS rlen,
+          LENGTH(body) AS blen, LENGTH(reducer_extras_json) AS elen FROM messages
+        WHERE room_id=? AND (seq>? OR message_id IN (SELECT value FROM json_each(?)))
+          AND seq<=? AND message_id>?
+        ORDER BY message_id LIMIT ?`)
+        .all(roomId, scan.archive.throughSeq, scan.archive.retainedJson, scan.headSequence, scan.messageCursor, PARITY_PROBE_ROWS);
+      noteRows(probed);
+      if (probed.length) {
+        // The projection slice for these rows costs about one record per
+        // row on top of the table row itself; budget both, with slack.
+        let total = 0, take = 0;
+        for (const row of probed) {
+          const cost = 2 * (row.rlen ?? 0) + (row.blen ?? 0) + (row.elen ?? 0) + 256;
+          if (take > 0 && scan.segBytes + total + cost > PARITY_VISIT_BYTES) break;
+          total += cost; take += 1;
+          if (cost > PARITY_VISIT_BYTES / 2) stats.fetchOversize = 1;
+        }
+        take = Math.min(take, PARITY_CHUNK_ROWS);
+        const lastId = probed[take - 1].message_id;
+        const rows = db.prepare(`SELECT * FROM messages
+          WHERE room_id=? AND (seq>? OR message_id IN (SELECT value FROM json_each(?)))
+            AND seq<=? AND message_id>? AND message_id<=?
+          ORDER BY message_id`)
+          .all(roomId, scan.archive.throughSeq, scan.archive.retainedJson, scan.headSequence, scan.messageCursor, lastId);
+        for (const row of rows) {
+          for (const value of Object.values(row)) if (typeof value === "string") scan.segBytes += Buffer.byteLength(value);
+        }
+        // This segment's projection records, pulled from the stream
+        // buffer on demand; authority rooms decode the table rows
+        // themselves instead. If the buffer cannot produce a record
+        // inside this segment's budget, the segment banks and resumes
+        // the pull next segment (the buffer persists on the scan).
+        const byId = new Map();
+        let pullDeferred = false;
+        if (!authorityMarker()) {
+          for (const row of rows) {
+            const record = ensureProjRecord(row.message_id);
+            if (record === PROJ_DEFER) { pullDeferred = true; break; }
+            if (record !== undefined) {
+              byId.set(row.message_id, hydrateParityRecord(db, roomId, record, noteFetch).message);
+            }
+          }
+        }
+        if (pullDeferred) {
+          if (!commit()) return { status: "deferred" };
+          return AGAIN;
+        }
+        const pinned = scan.pinnedAll ?? new Set();
+        const threadMessages = makeThreadResolver();
+        for (const [id, message] of byId) threadMessages.set(id, message);
+        for (const row of rows) {
+          const message = authorityMarker()
+            ? (() => { try { return decodeMessageEntity(row); } catch { return undefined; } })()
+            : byId.get(row.message_id);
+          if (authorityMarker() && message !== undefined) threadMessages.set(row.message_id, message);
+          const differences = messageRowParityFields(row, message, {
+            sequence: scan.staged?.get(message?.id), pinned: pinned.has(message?.id), threadMessages
+          });
+          if (differences.length) {
+            return fail(new Error(`messages parity failed for ${roomId}: current record ${row.message_id} differs (${differences.join(", ")})`));
+          }
+          scan.messageCursor = row.message_id;
+        }
+        if (!commit()) return { status: "deferred" };
+        if (take < probed.length || probed.length === PARITY_PROBE_ROWS) return AGAIN;
+      }
+      // Certify: the closing writes happen exactly once, in one
+      // transaction fenced by the attempt generation and by the head
+      // bound still being current. If either guard fails the transaction
+      // writes nothing — a stale attempt cannot certify, cannot advance
+      // the sweep, and cannot delete a newer attempt's checkpoint.
+      const counts = scan.counts ?? parityNumbers(db, roomId);
+      const certified = store.transaction(() => {
+        const current = readParityCheckpoint(db, roomId);
+        if (!current || current.attempt_seq !== scan.attemptSeq) return false;
+        const headNow = parityHead(db, roomId);
+        if (!headNow || headNow.sequence !== scan.headSequence || headNow.appliedSeq !== scan.appliedSeq) return false;
+        const updated = db.prepare("UPDATE messages_backfill_cursor SET parity_at_seq=? WHERE room_id=? AND applied_seq=?")
+          .run(scan.appliedSeq, roomId, scan.appliedSeq);
+        if (updated.changes !== 1) return false;
+        rememberSweep(store, roomId);
+        deleteParityCheckpoint(db, roomId, scan.attemptSeq);
+        discardStagedSpill(db, roomId, scan.attemptSeq);
+        return true;
+      });
+      if (!certified) return { status: "deferred" };
+      return { status: "certified", result: { ok: true, checked: 1, roomId, ...counts } };
+    }
+
+    // Unknown phase (unreachable: admission validates the phase set).
+    stats.checkpointDiscards += 1;
+    deleteParityCheckpoint(db, roomId, scan.attemptSeq);
+    discardStagedSpill(db, roomId, scan.attemptSeq);
+    return { status: "deferred" };
+  }
+  };
+  try {
+    return driveSteps(advance, yieldBetween);
+  } catch (error) {
+    if (error instanceof ParityFail) return fail(error);
+    throw error;
+  }
 }
 
 // `target` certifies that one room instead of the sweep's next room (the

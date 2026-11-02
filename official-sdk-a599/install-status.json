@@ -1,0 +1,10 @@
+{
+  "status": 0,
+  "signal": null,
+  "error": null,
+  "package": "@modelcontextprotocol/client",
+  "version": "2.4.0",
+  "ignoreScripts": true,
+  "isolatedEmptyConfigs": true,
+  "applicationDependenciesChanged": false
+}

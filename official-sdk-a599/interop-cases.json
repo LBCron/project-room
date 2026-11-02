@@ -1,0 +1,12 @@
+{
+  "source": "a599faa29ff65567e5c080609cb2d000acd33666",
+  "tests": 2,
+  "pass": 2,
+  "fail": 0,
+  "skip": 0,
+  "names": [
+    "official pinned modern client uses invitation OAuth for attributed Room tools",
+    "official SDK 2.4.0 pinned modern client discovers, lists and calls real HTTP"
+  ],
+  "junitSha256": "9ba850f24ef426f6e1fb38c663534f358b1c8b0c74074a770324fdab6ea2410f"
+}

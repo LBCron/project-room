@@ -1,0 +1,11 @@
+{
+  "source": "a599faa29ff65567e5c080609cb2d000acd33666",
+  "files": [
+    "tests/mcp-modern.test.js",
+    "tests/mcp-events-http.test.js"
+  ],
+  "pattern": "official SDK 2\\.4\\.0 pinned modern client|official pinned modern client uses invitation OAuth",
+  "referenceClient": "@modelcontextprotocol/client@2.4.0",
+  "referenceModule": "file:///Users/potter/Documents/ChatGPT/project%20room/local-lab/mcp2-reference/node_modules/@modelcontextprotocol/client/dist/index.mjs",
+  "scope": "Only two previously skipped official-client tests; local HTTP, no app dependencies changed"
+}

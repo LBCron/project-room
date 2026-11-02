@@ -1,0 +1,21 @@
+{
+  "source": "a599faa29ff65567e5c080609cb2d000acd33666",
+  "client": "@modelcontextprotocol/client@2.4.0",
+  "transport": "real SDK modern StreamableHTTP over loopback",
+  "catalogLimitMaximum": 50,
+  "pageSizes": [
+    25,
+    25,
+    1
+  ],
+  "uniqueRequests": 51,
+  "defaultOversizeRefused": "invalid_request",
+  "lowPrivilegeRefusedBeforeCursorDecode": "access_denied",
+  "nonAnchorDenialRetainsContinuation": true,
+  "decidedAnchorCursorRefused": "stale_access_request_cursor",
+  "restartWorks": true,
+  "requesterContentTrustPreserved": true,
+  "requestCount": 11,
+  "allRequestProtocolHeadersCorrect": true,
+  "scope": "Disposable local Node HTTP only. No runtime edits, Native, production or whole-suite qualification."
+}

@@ -1,0 +1,17 @@
+{
+  "source": "a599faa29ff65567e5c080609cb2d000acd33666",
+  "tree": "7be83d03ca225618552523451c262670f1accdda",
+  "filesSha256": {
+    "tests/mcp-modern.test.js": "68fee03df42616d389b5312a60d5b66390aec8358f2c11dbdb907a3c7079704f",
+    "tests/mcp-events-http.test.js": "f10a5a06277431fb386f419ba796de926106d295d1b4f903b1430bbb3dc0aa55",
+    "server/mcp-modern.mjs": "016dbe7cc5727928d06839d184a42e40d62e39bbe80793828a5c17aa6ae9b8b5",
+    "server/mcp-http.mjs": "8ea44ce546b35ce0dfff25d1d2fc29574829db5c70c0fb9ae810d7505aa59303",
+    "server/access-requests.mjs": "00559648c3824079ee701b0356d70cc5f0f8fc9698e016b915f30c4146915d60",
+    "server/mcp-hosted-tools.mjs": "827452aa068e34dc7b35522c22032a030753216a9908e5eb04fe5463ca79d434",
+    "server/http.mjs": "a794a2f016d77f19bbb924cecda292bc172eb1dba9f09c1cb6756b155232cff1"
+  },
+  "fixtureNotes": [
+    "Initial npm command used /dev/null for both user/global configuration and was refused before package work; final uses separate empty private configs.",
+    "Initial SDK paging probe assumed any denied request invalidated continuation. Source contract is current-per-page: earlier non-anchor denial leaves the cursor valid, decided anchor explicitly invalidates it. Final experiment asserts both, with no runtime changes."
+  ]
+}

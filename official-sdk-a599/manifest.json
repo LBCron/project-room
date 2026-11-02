@@ -1,0 +1,14 @@
+{
+  "source-manifest.json": "b0c897c68612ec709443c11ecf3f396fa10c7da5636a8d999837380686bbf803",
+  "install-status.json": "b6309b7614e4934d9035e3a464e3cc4fe926487a2de4445d85798c800d0add0c",
+  "interop-cases.json": "f70f05aa20adcc13538e4d5eb1babf60af0766c3d1ae54997f0d3b94dd53a2e9",
+  "dependency-receipt.json": "cf1aec59eb9a82f21a5257bbeef4998f54afde57b208265ba02f00c2d93e2e6b",
+  "interop-plan.json": "912fce2ae9d9f4b2452f99e290ff272398dd30882e2ff39568fd6137a1f414f0",
+  "reference-package-lock.json": "e6fc36ac2b9046e2a453cbb6500ef89672df1e442ab1282850abaffdf6ee7d36",
+  "reference-package.json": "4a92d28599000de4188b1c52e01a4b7a2f079e0256b7dbc7fdeb72bf79da8355",
+  "README.md": "dbbc22efa1fdc872563293491f2bb06f6277f31305a16b3b0dc1a316dd014b0d",
+  "interop-receipt.json": "61840871d0bf9ff131a35ab3cf540eb263d60bd9158ad87bfee65bbccbd44989",
+  "paging-receipt.json": "62874a641c3b3429aa5f3aad5e706c6a3c92edfefc50b32b39204e86812e1b69",
+  "run_official_mcp_reference.mjs": "602151023eb2ef488e0fb949eb52d4083ba0b8cfca9ba9a69db308ad56a15b83",
+  "official_sdk_access_pages.mjs": "34e2db15e7c44fad59f98f9b4a09697671b59572507efdee346c30c3f3cba042"
+}

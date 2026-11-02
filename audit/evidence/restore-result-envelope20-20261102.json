@@ -69,5 +69,19 @@
       "encoding": "zlib-base64",
       "data": "eJw9kEFygzAMRfc5hZZ0EQYaMPQ0HY9RwIONGUkOzb5H6LIX6XVykrouZPf/1+h9jR7fX4A3pDuYSISLuDsw0g0H0MwoYBkIR8uClDK7gEwI+KGNnDlEMggUF7EeoajKXvVd6/nl9HhifRiiw2MxowmsXwMJGBc4Ev517POddV61mfWIoJ0Lm0vtUPSqbJVqm9eDf/SuhFdnxynxJjQzZ9AWaLbLCPuNm5UpRAGvc6rhKCjqritV07zVXeZ+/oAgC8Mla442WaiyWdNH9vyqrdtToxeDzqXn/Hue7bo+nYQh7HKIpMWG5d0nSn0pq7avlTr9Ai/sjYA="
     }
+  },
+  "largeFixtureBlocker": {
+    "fixture": "restore-from-backup representative backup larger than RESTORE_MAX_BYTES; unchanged4 real1MiB BLOB plus76TEXT attachment cells",
+    "source": "recovery-report-source.mjs advanceRecoveryReportRow blob branch reads one byte per work unit; maximum32units/call",
+    "lowerBoundCallsForBinaryOnly": 131072,
+    "driverBound": 100000,
+    "observedSyntheticProgress": {
+      "revision": 52520,
+      "phase": "full_audit_pending",
+      "reportStage": "source",
+      "table": "room_attachments",
+      "rowid": "2"
+    },
+    "interpretation": "Cannot claim full4 green; finite helper limit predictably insufficient before sort/TEXT. Fixture not weakened; optimization assigned queue. This is continuation granularity cost, separate from metadata correctness."
   }
 }

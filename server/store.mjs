@@ -6557,9 +6557,12 @@ this.slaBreachAlerts = new SlaBreachAlertJournal(this); // Task 26: durable in-a
         const value=selectedWorkContext({state:current.state,workItemId,viewerId:auth.member.id,sequence:current.sequence,now:this.now(),includeSource,includeOffers,sourceObservation,
           floor:this.historyFloor(roomId,auth.member.id,current.sequence),messageRecords:{get:id=>selectedMessageRecord(this,roomId,id,false)},
           replacementAvailable:validId(target)&&target!==workItemId&&Boolean(readWorkItem(this.db,roomId,target))});
-        const claim=this.workClaims.get(roomId,boardClaimId(workItemId)),ids=claim?.dependsOn??item.dependsOn??[];
-        if(ids.length>32)fail(409,'current_room_context_unavailable','Selected dependency list exceeds bounded context');
-        const dependencies=ids.map(id=>{const dep=this.workClaims.get(roomId,id);return{id,state:dep?.state??'missing',satisfied:Boolean(dep&&dep.state==='done'&&!dep.premiseFlag&&!dep.supersededBy)};});
+        const ids=item.dependsOn??[];
+        if(ids.length>16)fail(409,'current_room_context_unavailable','Selected dependency list exceeds bounded context');
+        const dependencies=ids.map(id=>{
+          const dep=readWorkItem(this.db,roomId,id),state=dep?boardStateForWorkItem(dep,this.now()):'missing';
+          return {id,state,satisfied:Boolean(dep?.receipt?.eventId&&dep.receipt.evidenceVersion&&!dep.supersededBy&&state==='done')};
+        });
         return {...value,dependencies,viewerId:auth.member.id,viewerAccountId:auth.account?.id??null,viewerAuthEpoch:auth.account?.authEpoch??null,
           viewerSessionBinding:auth.sessionBinding,viewerSessionRevision:auth.sessionRevision??null};
       }
@@ -7403,22 +7406,30 @@ this.slaBreachAlerts = new SlaBreachAlertJournal(this); // Task 26: durable in-a
           throw error;
         }
       }
-      // Live dependency admission uses the same Board IDs and transaction as
-      // the mirror. Replay never consults mutable Board state.
+      // Native rooms use exact canonical work proofs, not retired Board
+      // mirrors. All reads share this command transaction and its input budget.
+      // Legacy rooms retain the original Board deletion/waiver semantics.
       const dependencyItem = state.workItems?.[incoming.data.workItemId];
       if ([T.WORK_PROPOSED, T.WORK_ACCEPTED, T.CLAIM_ACQUIRED, T.WORK_STARTED].includes(incoming.type)) {
-        const claimId = boardClaimId(incoming.data.workItemId);
-        const current = this.workClaims.get(roomId, claimId);
+        const claimId = boardClaimId(incoming.data.workItemId),native=Boolean(messageContext?.current);
+        const current = native?null:this.workClaims.get(roomId, claimId);
         const deps = incoming.type === T.WORK_PROPOSED ? (dependencyItem?.dependsOn ?? [])
           : current?.dependsOn ?? dependencyItem?.dependsOn ?? [];
         try { normalizeWorkDependencies(deps, claimId); }
         catch (error) { fail(422, "invalid_claim_input", error.message); }
+        const admitted = new Map();
+        const get = id => {
+          if(!native)return this.workClaims.get(roomId,id);
+          if(!admitted.has(id))admitted.set(id,readWorkItem(this.db,roomId,id));
+          return admitted.get(id);
+        };
         assertDependsOnKnown(fail, { dependsOn: deps }, { selfId: claimId,
-          has: id => this.workClaims.has(roomId, id), get: id => this.workClaims.get(roomId, id) });
+          has: id => native?Boolean(get(id)):this.workClaims.has(roomId, id), get });
         if ([T.CLAIM_ACQUIRED, T.WORK_STARTED].includes(incoming.type)) {
           const unmet = deps.filter(id => {
-            const dep = this.workClaims.get(roomId, id);
-            return !dep || dep.state !== "done" || dep.premiseFlag || dep.supersededBy;
+            const dep = get(id);
+            return native ? !dep?.receipt?.eventId||!dep.receipt.evidenceVersion||Boolean(dep.supersededBy)||boardStateForWorkItem(dep,this.now())!=='done'
+              : !dep || dep.state !== "done" || dep.premiseFlag || dep.supersededBy;
           });
           if (unmet.length) fail(409, "work_claim_dependencies_unmet", `Dependencies not done: ${unmet.join(", ")}`);
         }

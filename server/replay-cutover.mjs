@@ -5,6 +5,8 @@ import {currentWorkCapacity} from './current-work-capacity.mjs';
 import {currentWorkSummary} from './current-work-summary.mjs';
 import {advanceCanonicalH} from './replay-canonical-h.mjs';
 import {purgeCurrentCandidateForPrivacy,assertCurrentCandidateEmpty,cleanupCurrentCandidateRecords,stageCurrentCandidateRecords,currentCandidateCommandContext,applyCurrentCandidateEvent,publishCurrentCandidate,readCurrentRecord,admitCurrentCandidateBudget} from './current-room-repository.mjs';
+import {advanceHistoryActivation,historyActivationValue,historyJoinPoint} from './history-visibility.mjs';
+import {validateRecoveryHistoryEntry} from './recovery-history-entry.mjs';
 import {applyEvent,memberHistoryVisibility,validId} from '../src/events.js';
 import {messageRowForWrite} from './messages-store.mjs';
 import {messageProofHash} from './write-integrity.mjs';
@@ -1355,15 +1357,37 @@ export function advanceCurrentRoomConversion(store,input) {
     const codec=get(db,input.roomId,input.generation,'codec'),codecReceipt=auditBinding(db,codec.value.receiptId);budget.bytes+=codec.inputBytes+receiptInputBytes.get(codecReceipt);
     const scan=JSON.parse(codec.value.state);
     if(codecReceipt.codecStateHash!==hash(codec.value.state)||state.codecStateHash!==hash(codec.value.state)||scan.phase!=='done')throw Error('Current conversion codec binding differs');
-    state={currentSteps:0,currentPhase:'metadata',metadataIndex:0,metadataEntry:'',participantCursor:'',candidateHead:state.hArchiveHead??auditBinding(db,header.value.captureReceiptId).targetHead,tailSequence:header.value.head,tailEventId:header.value.eventId,...state};
+    state={currentSteps:0,currentPhase:'history',activationCursor:0,activationMembers:{},metadataIndex:0,metadataEntry:'',participantCursor:'',candidateHead:state.hArchiveHead??auditBinding(db,header.value.captureReceiptId).targetHead,tailSequence:header.value.head,tailEventId:header.value.eventId,...state};
     if(state.currentSteps!==input.expectedSteps)throw Error('Current conversion cursor changed');
     const effects=[];
-    const counts=state.candidateHead?{...state.candidateHead.counts,...(state.currentSteps===0?{messages:state.hMessageCount}:{})}:{roomId:input.roomId,sequence:header.value.head,eventId:header.value.eventId,messages:state.hMessageCount,
+    const counts=state.candidateHead?{...state.candidateHead.counts,...(['history','metadata','participants'].includes(state.currentPhase)?{messages:state.hMessageCount}:{})}:{roomId:input.roomId,sequence:header.value.head,eventId:header.value.eventId,messages:state.hMessageCount,
       workItems:0,workCapacity:0,replyRequests:0,members:0,roundLimitPauses:0,threadParticipants:0,historyFloors:0,historyExclusions:0,metadataRecords:0,metadataProofs:0};
     const stage=(changes,nextCounts=counts)=>{state={...state,candidateHead:stageCurrentCandidateRecords(store,{head:state.candidateHead,changes,counts:nextCounts,inputBudget:budget})};};
     const maps=new Set(['members','channels','workItems','replyRequests','agentHalts','helpOffers','bonds']);
     const omitted=new Set(['messages','messageAuthority','eventLog','seenEvents','seenIdempotencyKeys']);
-    if(state.currentPhase==='metadata') {
+    if(state.currentPhase==='history') {
+      // One bounded source page; numeric time conversion is never delegated to
+      // SQLite's different timestamp parser. Existing immutable semantic receipt
+      // binds the complete activation map and examined source sequence.
+      const sizes=db.prepare('SELECT sequence,length(CAST(body AS BLOB)) bytes FROM events WHERE room_id=? AND sequence>? AND sequence<=? ORDER BY sequence LIMIT 32')
+        .all(input.roomId,state.activationCursor,header.value.head);
+      let cursor=state.activationCursor,members=new Map(Object.entries(state.activationMembers)),examined=0;
+      for(const size of sizes) {
+        if(size.sequence!==cursor+1||!Number.isSafeInteger(size.bytes)||size.bytes<1||size.bytes>131072)throw Error('Activation source admission required');
+        if(budget.bytes+size.bytes+4096>262144){if(!examined)throw Error('Activation source exceeds bounded input');break;}
+        budget.bytes+=size.bytes+4096;
+        const row=db.prepare('SELECT sequence,id,body FROM events WHERE room_id=? AND sequence=?').get(input.roomId,size.sequence),incoming=validateRecoveryHistoryEntry(row,cursor+1,input.roomId);
+        if(['member.added','member.joined_via_invitation','member.access_changed'].includes(incoming.type)&&typeof incoming.data.memberId==='string') {
+          const id=incoming.data.memberId;
+          members.set(id,advanceHistoryActivation(members.get(id)??{active:false,row:null},{sequence:row.sequence,at:incoming.at,type:incoming.type,active:incoming.data.active}));
+          if(members.size>100)throw Error('Activation membership exceeds current room admission');
+        }
+        if(size.sequence===header.value.head&&row.id!==header.value.eventId)throw Error('Activation history anchor changed');
+        cursor=size.sequence;examined++;
+      }
+      if(!sizes.length&&cursor!==header.value.head)throw Error('Activation history is incomplete');
+      state={...state,activationCursor:cursor,activationMembers:Object.fromEntries(members),currentPhase:cursor===header.value.head?'metadata':'history'};
+    } else if(state.currentPhase==='metadata') {
       const key=scan.keys[state.metadataIndex];
       if(key===undefined)state={...state,currentPhase:'participants'};
       else if(omitted.has(key))state={...state,metadataIndex:state.metadataIndex+1};
@@ -1394,12 +1418,11 @@ export function advanceCurrentRoomConversion(store,input) {
               const address=partitioned?JSON.parse(next.key):[key,next.key];if(address[0]!==key||typeof address[1]!=='string')throw Error('Candidate map membership differs');
               const value=partitioned?readWitnessLeafSource(db,header,'metadata-entry',next.key,budget).value:source[address[1]];
               const nextCounts={...counts};if(['workItems','replyRequests','members'].includes(key))nextCounts[key]++;
-              if(key==='members') {
-                const room=readCurrentRecord(db,input.roomId,'metadata','room',budget);
-                if(!room)throw Error('Room metadata must precede member qualification');
-                if(memberHistoryVisibility({room,members:{[address[1]]:value}},address[1])==='since_join')throw Error('Since-join member requires bounded historical floor qualification');
-              }
               const changes=[{domain:key,key:address[1],value}];
+              if(key==='members') {
+                const activation=state.activationMembers[address[1]],join=historyJoinPoint(activation?.row,header.value.head);
+                changes.push({domain:'historyFloors',key:address[1],value:historyActivationValue(join)});nextCounts.historyFloors++;
+              }
               if(key==='workItems') {
                 const item = value ?. _workEntity === 1 ? JSON . parse ( readHReferenceSource ( db , header , 'work' , address [ 1 ] , budget ) . row . body ) : value ;
                 if(item?.suspended_by==='round_limit')nextCounts.roundLimitPauses++;

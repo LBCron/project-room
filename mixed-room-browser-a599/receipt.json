@@ -1,0 +1,126 @@
+{
+  "source": "a599faa29ff65567e5c080609cb2d000acd33666",
+  "node": "v24.22.1",
+  "intervention": "Only initial signup room initializer is fixture-forced legacy; second room uses unchanged normalized product creation",
+  "interventions": [
+    {
+      "requested": "normalized-current-v1",
+      "used": "legacy"
+    },
+    {
+      "requested": "normalized-current-v1",
+      "used": "legacy"
+    }
+  ],
+  "observations": [
+    {
+      "viewport": "desktop",
+      "width": 1280,
+      "signupStatus": 202,
+      "secondRoomCreateStatus": 201,
+      "transitions": [
+        {
+          "step": 0,
+          "representation": "legacy",
+          "assistantConnectVisible": true,
+          "updatesUnavailable": false,
+          "settledUpdatesText": "Updates\nClose\nNeeds me\nMentions\nAll activity\nNothing needs you.\nPage 1 loaded.\n\n0 loaded\n\nCatch up\nNo new updates",
+          "correctRoomInUrl": true,
+          "ownMessageVisible": true,
+          "otherRoomMessageAbsent": true,
+          "screenshot": "desktop-0-updates.png"
+        },
+        {
+          "step": 1,
+          "representation": "normalized-current-v1",
+          "assistantConnectVisible": false,
+          "updatesUnavailable": true,
+          "settledUpdatesText": "Updates\nClose\nNeeds me\nMentions\nAll activity\nDecisions\n0 in scope\nRefresh\n\n0 loaded\n\nUpdates are unavailable. Check Conversations, Work and History for activity.\n\nCatch up\n3 updates",
+          "correctRoomInUrl": true,
+          "ownMessageVisible": true,
+          "otherRoomMessageAbsent": true,
+          "screenshot": "desktop-1-updates.png"
+        },
+        {
+          "step": 2,
+          "representation": "legacy",
+          "assistantConnectVisible": true,
+          "updatesUnavailable": false,
+          "settledUpdatesText": "Updates\nClose\nNeeds me\nMentions\nAll activity\nNothing needs you.\nPage 1 loaded.\n\n0 loaded\n\nCatch up\nNo new updates",
+          "correctRoomInUrl": true,
+          "ownMessageVisible": true,
+          "otherRoomMessageAbsent": true,
+          "screenshot": "desktop-2-updates.png"
+        },
+        {
+          "step": 3,
+          "representation": "normalized-current-v1",
+          "assistantConnectVisible": false,
+          "updatesUnavailable": true,
+          "settledUpdatesText": "Updates\nClose\nNeeds me\nMentions\nAll activity\nDecisions\n0 in scope\nRefresh\n\n0 loaded\n\nUpdates are unavailable. Check Conversations, Work and History for activity.\n\nCatch up\n3 updates",
+          "correctRoomInUrl": true,
+          "ownMessageVisible": true,
+          "otherRoomMessageAbsent": true,
+          "screenshot": "desktop-3-updates.png"
+        }
+      ],
+      "pageErrors": [],
+      "blockedExternalRequests": 0
+    },
+    {
+      "viewport": "phone",
+      "width": 390,
+      "signupStatus": 202,
+      "secondRoomCreateStatus": 201,
+      "transitions": [
+        {
+          "step": 0,
+          "representation": "legacy",
+          "assistantConnectVisible": true,
+          "updatesUnavailable": false,
+          "settledUpdatesText": "Updates\nClose\nNeeds me\nMentions\nAll activity\nNothing needs you.\nPage 1 loaded.\n\n0 loaded\n\nCatch up\nNo new updates",
+          "correctRoomInUrl": true,
+          "ownMessageVisible": true,
+          "otherRoomMessageAbsent": true,
+          "screenshot": "phone-0-updates.png"
+        },
+        {
+          "step": 1,
+          "representation": "normalized-current-v1",
+          "assistantConnectVisible": false,
+          "updatesUnavailable": true,
+          "settledUpdatesText": "Updates\nClose\nNeeds me\nMentions\nAll activity\nDecisions\n0 in scope\nRefresh\n\n0 loaded\n\nUpdates are unavailable. Check Conversations, Work and History for activity.\n\nCatch up\n3 updates",
+          "correctRoomInUrl": true,
+          "ownMessageVisible": true,
+          "otherRoomMessageAbsent": true,
+          "screenshot": "phone-1-updates.png"
+        },
+        {
+          "step": 2,
+          "representation": "legacy",
+          "assistantConnectVisible": true,
+          "updatesUnavailable": false,
+          "settledUpdatesText": "Updates\nClose\nNeeds me\nMentions\nAll activity\nNothing needs you.\nPage 1 loaded.\n\n0 loaded\n\nCatch up\nNo new updates",
+          "correctRoomInUrl": true,
+          "ownMessageVisible": true,
+          "otherRoomMessageAbsent": true,
+          "screenshot": "phone-2-updates.png"
+        },
+        {
+          "step": 3,
+          "representation": "normalized-current-v1",
+          "assistantConnectVisible": false,
+          "updatesUnavailable": true,
+          "settledUpdatesText": "Updates\nClose\nNeeds me\nMentions\nAll activity\nDecisions\n0 in scope\nRefresh\n\n0 loaded\n\nUpdates are unavailable. Check Conversations, Work and History for activity.\n\nCatch up\n3 updates",
+          "correctRoomInUrl": true,
+          "ownMessageVisible": true,
+          "otherRoomMessageAbsent": true,
+          "screenshot": "phone-3-updates.png"
+        }
+      ],
+      "pageErrors": [],
+      "blockedExternalRequests": 0
+    }
+  ],
+  "scope": "Local rendered same-session room switching, account HTTP and disposable synthetic data. No product patch/choice, configured provider/host, cross-account session replacement, Native, hosted, release or peer-device execution proof."
+}

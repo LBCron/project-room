@@ -29,5 +29,11 @@
     "passed": 0,
     "failed": 3,
     "status": "must reconcile current operator entrypoint and preserve independent bounds/freeze assertions"
+  },
+  "cachePolicy20Composed": {
+    "head": "9540b5779",
+    "passed": 20,
+    "failed": 0,
+    "runtime": "Node24.22.1"
   }
 }

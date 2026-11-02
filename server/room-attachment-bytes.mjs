@@ -127,7 +127,7 @@ export class RoomAttachmentBytes {
   expire(roomId, now) {
     return this.store.transaction(() => {
       // Avoid opening an admission receipt when there are no expired bytes.
-      if (!this.db.prepare("SELECT 1 FROM room_attachments WHERE room_id=? AND state='staged' AND expires_at<=? LIMIT 1").get(roomId, now)) return;
+      if (!this.db.prepare("SELECT 1 FROM room_attachments WHERE room_id=? AND state IN ('staged','committed') AND state='staged' AND expires_at<=? LIMIT 1").get(roomId, now)) return;
       return this.write(roomId, () => this.db.prepare(`UPDATE room_attachments SET state='expired', bytes=NULL
       WHERE room_id=? AND state IN ('staged','committed') AND state='staged' AND expires_at<=?`).run(roomId, now));
     });

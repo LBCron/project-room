@@ -47,6 +47,8 @@ test('quota and expiry explicitly constrain live rows without changing attachmen
   store.roomAttachments.stage(key, 'commons', { id: 'first', filename: 'x.txt', mediaType: 'text/plain', data: 'eA==' });
   const quota = queries.find(sql => sql.includes('AS roomBytes'));
   assert.match(quota, /WHERE room_id=\? AND state IN \('staged','committed'\)/);
+  const preflight = queries.find(sql => sql.startsWith('SELECT 1 FROM room_attachments WHERE room_id=?'));
+  assert.match(preflight, /state IN \('staged','committed'\)/);
   const expiry = queries.find(sql => sql.includes("SET state='expired'"));
   assert.match(expiry, /state IN \('staged','committed'\)/);
   const rows = store.db.prepare('SELECT id,state,byte_length,bytes FROM room_attachments ORDER BY id').all();

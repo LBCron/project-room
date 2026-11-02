@@ -111,9 +111,6 @@ CREATE INDEX IF NOT EXISTS current_native_work_held ON current_room_records(room
 CREATE INDEX IF NOT EXISTS current_native_work_proposals ON events(room_id,json_extract(body,'$.data.workItemId'),sequence) WHERE json_extract(body,'$.type')='work.proposed';
 CREATE INDEX IF NOT EXISTS current_work_summary_keys ON current_room_record_proofs(room_id,record_key) WHERE domain='workSummary' AND present=1;
 CREATE INDEX IF NOT EXISTS current_reply_request_keys ON current_room_record_proofs(room_id,record_key) WHERE domain='replyRequests' AND present=1;
-CREATE INDEX IF NOT EXISTS current_messages_thread_public_seq ON messages(room_id,thread_root_id,seq,message_id) WHERE to_member_id IS NULL OR to_member_id='';
-CREATE INDEX IF NOT EXISTS current_messages_thread_incoming_seq ON messages(room_id,thread_root_id,to_member_id,seq,message_id);
-CREATE INDEX IF NOT EXISTS current_messages_thread_outgoing_seq ON messages(room_id,thread_root_id,author_id,seq,message_id) WHERE to_member_id IS NOT NULL AND to_member_id<>'';
 CREATE INDEX IF NOT EXISTS current_messages_public_seq ON messages(room_id,seq DESC,message_id DESC) WHERE to_member_id IS NULL OR to_member_id='';
 CREATE INDEX IF NOT EXISTS current_messages_channel_public_seq ON messages(room_id,channel_id,seq DESC,message_id DESC) WHERE to_member_id IS NULL OR to_member_id='';
 CREATE INDEX IF NOT EXISTS current_messages_incoming_seq ON messages(room_id,to_member_id,seq DESC,message_id DESC);

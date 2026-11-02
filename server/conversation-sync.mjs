@@ -7,7 +7,7 @@ import { ServiceError } from "./service-error.mjs";
 import { validId, DEFAULT_CHANNEL_ID } from "../src/events.js";
 import { markIfOther, withContentTrust, stampThread } from "./content-trust.mjs";
 import { messageInHistory } from "./history-visibility.mjs";
-import { archiveMarker } from "./messages-store.mjs";
+import { archiveMarker, THREAD_VISIBILITY_INDEXES } from "./messages-store.mjs";
 import { identityNamesForRoom, resolveMentionTargetsInText } from "./mention-lifecycle.mjs";
 import { squadMentionTargets } from "./squads.mjs";
 
@@ -308,6 +308,10 @@ export function readCurrentMessageThread(store, token, roomId, messageId, expect
     const selected = readCurrentMessage(store.db, roomId, messageId, b);
     if (!visible(selected?.value)) fail(404, 'message_not_found', 'Message not found');
     const family = selected.row.thread_root_id ?? messageId;
+    const indexes = store.db.prepare("SELECT name,sql FROM sqlite_master WHERE type='index' AND name IN (?,?,?)").all(...THREAD_VISIBILITY_INDEXES.map(index=>index.name));
+    chargeCurrentReadBudget(b,indexes.reduce((n,index)=>n+Buffer.byteLength(index.sql??'')+64,0),indexes.length);
+    if(indexes.length!==3 || indexes.some(index=>THREAD_VISIBILITY_INDEXES.find(expected=>expected.name===index.name)?.sql!==index.sql))
+      fail(409,'current_thread_index_unavailable','Thread visibility indexes require reconciliation');
     // Visibility is an indexed equality/predicate, never a residual over the
     // family stream. Invisible private children cannot consume source work or
     // change whether an otherwise small public thread fits its context limit.

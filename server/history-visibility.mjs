@@ -11,7 +11,7 @@
 // no extra work.
 
 import { randomUUID } from "node:crypto";
-import { EVENT_TYPES as T, historyVisibility, memberHistoryVisibility, isRoomArchived } from "../src/events.js";
+import { EVENT_TYPES as T, historyVisibility, memberHistoryVisibility } from "../src/events.js";
 
 
 // Invite copy for link guests and guest-agent members. Without an owner
@@ -205,10 +205,10 @@ export function visibleSequenceHorizon(db, roomId, viewerId, headSequence, isOwn
 // command path. An archived room records nothing new, so its exports leave
 // no event; they stay owner-only.
 export function requireExportOwner(store, roomId, memberId, fail) {
-  if (memberId !== store.room(roomId).state.room.ownerId) fail(403, "owner_required", "Only the room owner can export the room");
+  if (memberId !== store.roomAuthority(roomId, {memberId}).ownerId) fail(403, "owner_required", "Only the room owner can export the room");
 }
 
 export function recordRoomExport(store, token, roomId, format, expectedSessionBinding = null) {
-  if (isRoomArchived(store.room(roomId).state)) return null;
+  if (store.roomArchivedForExport(roomId)) return null;
   return store.command(token, roomId, { id: randomUUID(), type: T.ROOM_EXPORTED, data: { format } }, expectedSessionBinding);
 }

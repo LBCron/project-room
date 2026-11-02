@@ -1,3 +1,4 @@
+import {isCurrentRoom} from './current-room-repository.mjs';
 import {redactSelectedEventPage} from './current-room-events.mjs';
 import { oauthAuthorizationServerMetadata } from "./oauth-metadata.mjs";
 import { renderInviteOAuthPage } from "./routes/mcp-invite-oauth.mjs";
@@ -4867,8 +4868,12 @@ export function createRoomServer({ store, origin, assetRoot = new URL("../", imp
         requireExportOwner(store, roomId, viewerId, reject);
         const format = url.searchParams.get("format") ?? "jsonl";
         if (!["jsonl", "html"].includes(format) || url.searchParams.getAll("format").length > 1) reject(422, "invalid_format", "format is jsonl (default) or html");
+        // Current event pages already apply addressed privacy and redaction.
+        // Legacy export retains its existing whole-export filtering contract.
+        const currentExport = isCurrentRoom(store.db,roomId);
         if (format === "html") {
-          const rows = redactEventRows([...store.exportEvents(selected.token, roomId, fence)].filter(({ event }) => roomEventVisible(event)), store.redactionMessages(roomId));
+          const source = [...store.exportEvents(selected.token, roomId, fence)];
+          const rows = currentExport ? source : redactEventRows(source.filter(({ event }) => roomEventVisible(event)), store.redactionMessages(roomId));
           const bytes = Buffer.from(renderRoomExportHtml(rows, { roomId }), "utf8");
           recordRoomExport(store, selected.token, roomId, "html", fence); // PRIV-2
           res.writeHead(200, { "Content-Type": "text/html; charset=utf-8", "Content-Length": bytes.length,
@@ -4887,11 +4892,11 @@ export function createRoomServer({ store, origin, assetRoot = new URL("../", imp
         // recover whole-store proofs or historical operator authority.
         const visible = [];
         for (const line of store.exportEvents(selected.token, roomId, fence)) {
-          if (!roomEventVisible(line.event)) continue;
+          if (!currentExport && !roomEventVisible(line.event)) continue;
           visible.push(line);
         }
         let exportSequence = 0;
-        for (const line of redactEventRows(visible, store.redactionMessages(roomId))) {
+        for (const line of currentExport ? visible : redactEventRows(visible, store.redactionMessages(roomId))) {
           exportSequence += 1;
           lines.push(JSON.stringify({ sequence: exportSequence, event: line.event }) + "\n");
         }

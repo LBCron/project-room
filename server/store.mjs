@@ -6113,9 +6113,26 @@ this.slaBreachAlerts = new SlaBreachAlertJournal(this); // Task 26: durable in-a
   // work.completed by the member. Nulls mean "hasn't happened yet".
   // Round-2 #106: JSONL event-log export for audit/portability. Streams
   // {sequence, event} lines; the consumer replays them in order for #107.
+  roomArchivedForExport(roomId) {
+    return this.readTransaction(() => withCurrentReadContext(this.db,roomId,() => {
+      const room = isCurrentRoom(this.db,roomId)
+        ? readCurrentRecord(this.db,roomId,'metadata','room') : this.room(roomId).state.room;
+      return typeof room?.archivedAt === 'string';
+    }));
+  }
   *exportEvents(token, roomId, expectedSessionBinding = null) {
     this.authenticate(token, roomId, expectedSessionBinding);
-    const sequence = this.room(roomId).sequence;
+    if (isCurrentRoom(this.db,roomId)) {
+      let after=0;
+      for (;;) {
+        const page=this.eventsAfter(token,roomId,after,100,expectedSessionBinding);
+        yield* page.events;
+        if(!page.hasMore)break;
+        after=page.next;
+      }
+      return;
+    }
+    const sequence = this.roomAuthority(roomId).sequence;
     const stmt = this.db.prepare("SELECT sequence,body FROM events WHERE room_id=? AND sequence>? ORDER BY sequence LIMIT 1000");
     let after = 0;
     for (;;) {

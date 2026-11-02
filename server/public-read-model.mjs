@@ -515,7 +515,7 @@ function upsertPublicRoom(store, state, auth) {
 
 // Native public pages intentionally do not serve unqualified task/receipt listings.
 // This hook runs after the protected transition, inside the originating writer TX.
-export function syncCurrentRoomPublication(store,{roomId,previous,state,event,changes,current}) {
+export function syncCurrentRoomPublication(store,{roomId,previous,state,event,changes,current,charge}) {
   const on=publicPage(state).enabled===true,was=publicPage(previous).enabled===true;
   if(!on){if(was)store.db.prepare('DELETE FROM public_rooms WHERE slug=?').run(roomId);return;}
   const first=!was,memberChanges=changes.filter(change=>change.domain==='members');
@@ -526,7 +526,8 @@ export function syncCurrentRoomPublication(store,{roomId,previous,state,event,ch
   if(first)members=Object.values(state.members).filter(m=>m&&m.active!==false).map(publicMember);
   else {
     const scalar=store.db.prepare('SELECT length(CAST(members_json AS BLOB)) bytes FROM public_rooms WHERE slug=?').get(roomId);
-    if(!scalar||scalar.bytes>131072)throw Error('current_room_corrupt: public member projection unavailable');
+    if(!scalar||!Number.isSafeInteger(scalar.bytes)||scalar.bytes<2||scalar.bytes>131072)throw Error('current_room_corrupt: public member projection unavailable');
+    charge(scalar.bytes+256);
     const row=store.db.prepare('SELECT members_json FROM public_rooms WHERE slug=?').get(roomId);
     members=JSON.parse(row.members_json);
     if(!Array.isArray(members)||members.length>100||new Set(members.map(m=>m.id)).size!==members.length)throw Error('current_room_corrupt: public member projection differs');
@@ -1286,10 +1287,10 @@ export function listPublicReceiptSitemap(store, limit = 1000) {
 
 export function loadPublicRoom(store, slug) {
   if (!SLUG.test(slug) || isUnpublished(store.db, "room", slug)) return null;
-  const row = store.db.prepare(`SELECT slug, title, purpose, humans, agents, names_json, tasks_json, receipts_enabled, join_mode, join_token, set_at
-    FROM public_rooms WHERE slug=?`).get(slug);
-  if (!row) return null;
   const native=Boolean(store.db.prepare("SELECT 1 FROM current_room_head WHERE room_id=?").get(slug));
+  const row = store.db.prepare(`SELECT slug, title, purpose, humans, agents, names_json, CASE WHEN ? THEN '[]' ELSE tasks_json END AS tasks_json, receipts_enabled, join_mode, join_token, set_at
+    FROM public_rooms WHERE slug=?`).get(native?1:0,slug);
+  if (!row) return null;
   return {
     ...(native?{coverage:{tasks:{available:false},receipts:{available:false}}}:{}),
     slug: row.slug,

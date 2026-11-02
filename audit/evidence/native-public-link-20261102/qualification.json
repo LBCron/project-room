@@ -1,0 +1,30 @@
+{
+  "base": "8c35203dd",
+  "earlySource": "1259ee59579d10fe42645877db138d0b3a638a2c",
+  "node": {
+    "tests": 17,
+    "pass": 17,
+    "skip": 0,
+    "exit": 0
+  },
+  "native": {
+    "pass": 1,
+    "exit": 0,
+    "compatibilityDate": "2026-07-30",
+    "ordinaryPostAdapterCost": {
+      "statements": 111,
+      "rowsRead": 1233,
+      "rowsWritten": 44,
+      "unknown": 0,
+      "returnedSqlTextBytes": 49422,
+      "eventPayloadBytes": 0
+    }
+  },
+  "logs": {
+    "native-public-link-before-1102.log": "b28bfe1b23e41daa47a793c74c5c50f4a52456d6e189daa8bf74acfcc55ae760",
+    "native-public-link-qualified-1102.log": "d3c0ba3191475e79cf92521d19e2436d1465f9bf66b51cacd7de57ab3e071c32",
+    "native-public-link-native-final-1102.log": "b85ee5a0bf2fbee96e0ce1b8538ee60dc4d51bcf9e47aa3da861a3b65189db53",
+    "native-public-link-lint-final-1102.log": "3e2b1602203edfff2e112b8f0f80ba153dbf1f782335762b0dcf4475fff6115f",
+    "native-public-link-secret-final-1102.log": "9df6e7058f2c8495ccbd6744b74c60bd57831a3eeaae161444217fce2808ac6f"
+  }
+}

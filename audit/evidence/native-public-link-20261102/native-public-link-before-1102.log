@@ -1,0 +1,36 @@
+{"event":"room.cold_start","clockSemantics":"runtime-dependent","durationMs":43,"integrity":"eager","phases":{"schema":{"ms":12,"rowsRead":0},"plugin":{"ms":17,"rowsRead":0},"fence":{"ms":10,"rowsRead":0},"verifies":{"ms":2,"rowsRead":0},"checksum":{"ms":0,"rowsRead":0}},"cpuMs":46,"heapBytes":42472016,"rooms":0,"sequences":0,"projectionBytes":0,"events":0}
+{"event":"room.store_initialized","initializationMs":43,"legacyColdStartMs":43,"clockSemantics":"runtime-dependent","cpuMeasured":false}
+[boot-config] ERROR: the agent card is UNSIGNED and no explicit opt-in was recorded at build time — members fetching /.well-known/agent-card.json will see an unsigned card (marked signed:false). To fix: set ROOM_AGENT_CARD_SIGNING_KEY and re-run scripts/sign-agent-card.mjs, or pass --allow-unsigned explicitly to record the choice.
+ROOM_SECURITY_CONTACT is unset; /.well-known/security.txt returns 404
+No magic-link mailer is configured: email-verification gates are relaxed (agent-invite escape hatch); /api/health reports emailVerification: relaxed-no-mailer
+room diagnostic op_O9SesIR- 409 current_room_context_unavailable conflict /api/rooms/:roomId/commands
+✖ native owner public controls publish separate showcase and immediate existing-agent invitation (78.692541ms)
+ℹ tests 1
+ℹ suites 0
+ℹ pass 0
+ℹ fail 1
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 250.506291
+
+✖ failing tests:
+
+test at tests/native-public-link.test.mjs:2:1
+✖ native owner public controls publish separate showcase and immediate existing-agent invitation (78.692541ms)
+  AssertionError [ERR_ASSERTION]: {"error":{"code":"current_room_context_unavailable","message":"This command has no qualified current-record dependency plan"},"status":"action_required","reason":"current_room_context_unavailable","hint":"This capability is unavailable on this server or in this state. Do not retry unchanged; ask the operator if it should be enabled.","next":[{"command":"Ask the operator whether this capability should be enabled; do not retry unchanged."}],"operationId":"op_O9SesIR-","category":"conflict"}
+  
+  409 !== 200
+  
+      at command (file:///Users/johnpotter/src/pr-native-public-link-1102/tests/native-public-link.test.mjs:5:266)
+      at process.processTicksAndRejections (node:internal/process/task_queues:104:5)
+      at async TestContext.<anonymous> (file:///Users/johnpotter/src/pr-native-public-link-1102/tests/native-public-link.test.mjs:6:2)
+      at async Test.run (node:internal/test_runner/test:1409:7)
+      at async startSubtestAfterBootstrap (node:internal/test_runner/harness:387:3) {
+    generatedMessage: false,
+    code: 'ERR_ASSERTION',
+    actual: 409,
+    expected: 200,
+    operator: 'strictEqual',
+    diff: 'simple'
+  }

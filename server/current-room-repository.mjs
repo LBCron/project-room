@@ -904,7 +904,7 @@ export function prepareCurrentWrite(store,{roomId,previous,state,event,sequence,
     syncMessageRows(db,{roomId,sequence,event,state});
     const saved=saveTransition(db,roomId,sequence,event.id,current.head,changes,counts);
     if(saved!==projection)corrupt('prepared carrier differs from committed head');
-    syncCurrentRoomPublication(store,{roomId,previous:previous.state,state,event,changes,current});
+    syncCurrentRoomPublication(store,{roomId,previous:previous.state,state,event,changes,current,charge:bytes=>charge(current.budget,bytes)});
   }};
 }
 

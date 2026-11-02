@@ -7286,6 +7286,8 @@ this.slaBreachAlerts = new SlaBreachAlertJournal(this); // Task 26: durable in-a
         if (incoming.type === T.WORK_COMPLETED && incoming.data.evidenceKind === "room_text") verifyTextCompletion(this.db, room.state, room.state.workItems[incoming.data.workItemId], incoming.data);
       }
       catch (error) {
+        if (incoming.type === T.CLAIM_ACQUIRED && messageContext?.current?.claimConflict
+          && error instanceof ServiceError) throw error;
         if (error?.code === TRUST_OFF_CODE) fail(403, TRUST_OFF_CODE, error.message);
         if (error?.code === CHANNEL_ARCHIVED_CODE) fail(409, CHANNEL_ARCHIVED_CODE, error.message);
         if (error?.code === "display_name_unavailable") fail(422, "display_name_unavailable", error.message);

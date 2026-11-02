@@ -450,7 +450,18 @@ export function currentDmConsentEventContext(store,roomId) {
 // Total work remains O(live claims) in this transaction, not constant CPU.
 function currentClaimAdmission(store,roomId,actorId,item,command,b) {
   if(!item)return null;
-  const db=store.db,now=store.now(),receipts=new Map(),head=readCurrentHead(db,roomId,{...budget(),auditReceipts:receipts});
+  let admitted,atValue;
+  const at=instant=>{
+    if(!store.db.isTransaction)throw Error('Current claim scope expired');
+    const value=typeof instant==='number'?new Date(instant).toISOString():instant;
+    if(admitted&&value!==atValue)corrupt('claim admission instant changed');
+    if(!admitted){atValue=value;admitted=currentClaimAdmissionAt(store,roomId,actorId,item,command,b,value);}
+    return admitted;
+  };
+  return {overlaps(workId,repository,paths,instant){return at(instant).overlaps();},conflict(candidate,instant){return at(instant).conflict(candidate,instant);}};
+}
+function currentClaimAdmissionAt(store,roomId,actorId,item,command,b,instant) {
+  const db=store.db,now=Date.parse(instant),receipts=new Map(),head=readCurrentHead(db,roomId,{...budget(),auditReceipts:receipts});
   const numeric=id=>/^(0|[1-9][0-9]*)$/.test(id)&&Number(id)<4294967295;
   const compare=(a,c)=>numeric(a.id)?numeric(c.id)?Number(a.id)-Number(c.id):-1:numeric(c.id)?1:a.sequence-c.sequence;
   const warningQuery=Array.isArray(command.data.paths)?prepareClaimOverlap(item.id,command.data.repository,command.data.paths,new Date(now).toISOString()):null;

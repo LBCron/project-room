@@ -41,7 +41,14 @@ export function advanceRecoveryCheckpointSeed(db,scratch,roomId,previous,maximum
    let step;try{step=scanRecoveryProjectionChunk(cursor.scan,input.subarray(position),{maximumRecords:1});}catch(error){if(error.message==='unsupported or corrupt replay projection codec')return defer('checkpoint_shape_requires_original_oracle');throw error;}
    const record=step.records[0];
    if(!record){cursor.scan=step.state;position+=step.consumed;continue;}
-   if(['metadata-map','metadata-array'].includes(record.kind)){recoveryProjectionFrame(record,cursor.sourceBytes);cursor.scan=step.state;position+=step.consumed;units++;continue;}
+   if(['metadata-map','metadata-array'].includes(record.kind)){
+    recoveryProjectionFrame(record,cursor.sourceBytes);
+    if(record.kind==='metadata-map'&&['members','channels','workItems','replyRequests','helpOffers','agentHalts','bonds'].includes(record.key)){
+     const plan=planRecoveryReplayValue('object',maximumValueBytes);if(!writeRecoveryReplayValue(scratch,roomId,'shape',record.key,plan))break;bytes+=plan.bytes;
+    }
+    if(record.key==='messagesArchive'&&record.kind==='metadata-map'){const plan=planRecoveryReplayValue(true,maximumValueBytes);if(!writeRecoveryReplayValue(scratch,roomId,'replayControl','checkpointArchivePresent',plan))break;bytes+=plan.bytes;}
+    cursor.scan=step.state;position+=step.consumed;units++;continue;
+   }
    if(bytes+record.length>payloadQuantum){if(units)break;return defer('checkpoint_atom_requires_staging');}
    let value;try{value=decodeRecoveryProjectionSpan(source(db,roomId,cursor,record.offset,record.length,historicalBytes),record,cursor.sourceBytes);}catch(error){if(error instanceof SyntaxError||error.message==='unsupported or corrupt replay projection codec')return defer('checkpoint_shape_requires_original_oracle');throw error;}
    const values=[];let domain,key,newCount=null;
@@ -70,7 +77,7 @@ export function advanceRecoveryCheckpointSeed(db,scratch,roomId,previous,maximum
   const quantum=Symbol('checkpoint_default_input_quantum'),get=(domain,key)=>readRecoveryReplayValue(scratch,roomId,domain,key,maximumValueBytes,{admit(size){if(bytes+size>payloadQuantum)throw quantum;bytes+=size;}});
   let room,general;try{room=get('metadata','room');general=get('channels','general');}catch(error){if(error!==quantum)throw error;return defer('checkpoint_atom_requires_staging');}
   if(room?.id!==roomId)fail();const state={room,channels:general===undefined?{}:{general}};
-  const values=[{domain:'metadata',key:'checkpointPresence',value:cursor.scan.keys}];
+  const values=[{domain:'replayControl',key:'checkpointPresence',value:cursor.scan.keys}];
   if(ensureDefaultChannelState(state)){values.push({domain:'channels',key:'general',value:state.channels.general});if(general===undefined)values.push({domain:'replayOrder',key:JSON.stringify(['channels',cursor.counts.channels]),value:'general'});}
   const plans=values.map(entry=>({...entry,plan:planRecoveryReplayValue(entry.value,maximumValueBytes)}));if(plans.reduce((sum,entry)=>sum+entry.plan.rows,0)>scratch.remaining||bytes+plans.reduce((sum,entry)=>sum+entry.plan.bytes,0)>payloadQuantum)return defer('checkpoint_atom_requires_staging');
   for(const entry of plans)if(!writeRecoveryReplayValue(scratch,roomId,entry.domain,entry.key,entry.plan))fail();

@@ -1,3 +1,5 @@
+import {completedRecoveryProjectionParity} from './recovery-projection-consumption.mjs';
+import {stripRecoveryProjection,verifyRecoveryWorkDefaults,verifyRecoveryGeneralChannel} from './recovery-projection-rules.mjs';
 import {verifyChannelUpdatesForRecovery} from './recovery-channel-updates.mjs';
 import {recoveryReportFingerprint} from './recovery-report-scope.mjs';
 import {verifyShareLinksForRecovery} from './recovery-share-links.mjs';
@@ -76,52 +78,18 @@ export function auditRecovery(store) {
     if (tables.includes("message_replay_units")) auditReplayCutoverRecovery(store.db);
     requireState(required.every(name => tables.includes(name)));
     verifyCurrentRoomSchema(store.db);
+    const projectionParityConsumed=completedRecoveryProjectionParity(store);
     const rooms = new Map();
     const drift = [];
     let eventCount = 0, checkpointCount = 0, checkpointEvents = 0;
     for (const row of store.db.prepare("SELECT id,sequence FROM rooms ORDER BY id").all()) {
       const current=isCurrentRoom(store.db,row.id);
-      const actual = current ? readCurrentRoomForAudit(store,row.id) : store.room(row.id), rebuilt = store.rebuildProjection(row.id);
+      const actual = current ? readCurrentRoomForAudit(store,row.id) : store.room(row.id), rebuilt = projectionParityConsumed?null:store.rebuildProjection(row.id);
+      if(!projectionParityConsumed){
       // The full current census proved the marker and complete retained-ID map.
       // A closed current carrier cannot supply that legacy metadata itself.
       compactReplayLikeArchive(store.db, row.id, rebuilt.state,current?(actual.state.messagesArchive??null):undefined);
-      // Phase 2 channels: old stored projections may lack channels while the
-      // replay backfills them. Messages in old projections also lack channelId
-      // (new code adds it). Compare ignoring channels and message channelIds,
-      // then verify the channel backfill is consistent.
-      const stripChannels = (obj) => {
-        const copy = JSON.parse(JSON.stringify(obj));
-        if (copy.state) {
-          delete copy.state.channels;
-          if (Array.isArray(copy.state.messages)) {
-            for (const message of copy.state.messages) delete message.channelId;
-          }
-        }
-        return copy;
-      };
-      // Work controls: old stored projections may lack the round/tool-call
-      // counters and suspension cause while the replay backfills defaults.
-      // Receipts in old projections also lack result segments (new code adds
-      // null). Compare ignoring those fields, then verify the backfill is
-      // the deterministic default.
-      const stripWorkControls = (obj) => {
-        const copy = JSON.parse(JSON.stringify(obj));
-        const items = copy.state?.workItems;
-        if (items && typeof items === "object") {
-          for (const item of Object.values(items)) {
-            delete item.round_count;
-            delete item.tool_calls;
-            delete item.suspended_by;
-            delete item.receipt?.segments;
-            if (Array.isArray(item.receiptHistory)) {
-              for (const receipt of item.receiptHistory) delete receipt.segments;
-            }
-          }
-        }
-        return copy;
-      };
-      const strippedActual = stripWorkControls(stripChannels(actual));
-      const strippedRebuilt = stripWorkControls(stripChannels(rebuilt));
+      const strippedActual=stripRecoveryProjection(actual),strippedRebuilt=stripRecoveryProjection(rebuilt);
       const roomDrift = canonical(strippedActual) === canonical(strippedRebuilt)
         ? [] : driftFields(strippedActual, strippedRebuilt);
       if (roomDrift.length) {
@@ -138,28 +106,12 @@ export function auditRecovery(store) {
       // (legacy data) the replay must carry the deterministic defaults.
       for (const [id, rebuiltItem] of Object.entries(rebuilt.state?.workItems ?? {})) {
         const actualItem = actual.state?.workItems?.[id];
-        for (const [field, fallback] of [["round_count", 0], ["tool_calls", 0], ["suspended_by", null]]) {
-          if (actualItem && field in actualItem) requireState(rebuiltItem[field] === actualItem[field]);
-          else requireState(rebuiltItem[field] === fallback);
-        }
-        const receipts = [rebuiltItem.receipt, ...(rebuiltItem.receiptHistory ?? [])].filter(Boolean);
-        const actualReceipts = [actualItem?.receipt, ...(actualItem?.receiptHistory ?? [])].filter(Boolean);
-        receipts.forEach((receipt, index) => {
-          if (actualReceipts[index] && "segments" in actualReceipts[index]) {
-            requireState(JSON.stringify(receipt.segments) === JSON.stringify(actualReceipts[index].segments));
-          } else {
-            requireState(receipt.segments === null);
-          }
-        });
+        verifyRecoveryWorkDefaults(actualItem,rebuiltItem);
       }
       // Verify the general channel backfill is consistent (compare essential
       // fields only; createdBy/createdAt may differ between repair and replay
       // for legacy data).
-      const actualGeneral = actual.state.channels?.general, rebuiltGeneral = rebuilt.state.channels?.general;
-      if (actualGeneral || rebuiltGeneral) {
-        requireState(actualGeneral?.id === rebuiltGeneral?.id
-          && actualGeneral?.name === rebuiltGeneral?.name
-          && actualGeneral?.archivedAt === rebuiltGeneral?.archivedAt);
+      verifyRecoveryGeneralChannel(actual.state.channels?.general,rebuilt.state.channels?.general);
       }
       }
       requireState(actual.state.room?.id === row.id);

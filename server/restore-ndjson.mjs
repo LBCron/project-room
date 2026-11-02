@@ -25,12 +25,12 @@ import { verifyCurrentRoomSchema, invalidateCurrentRoomSchema, restoredCurrentFo
 // - A restore resurrects authority exactly as it was at backup time. Anything
 //   revoked between the backup and the loss must be re-applied by the operator
 //   (docs/BACKUP-DR.md); there is no "current" store left to reconcile against.
-import { createHash, timingSafeEqual } from "node:crypto";
+import { createHash, timingSafeEqual, randomUUID } from "node:crypto";
 import { sqlChunks, sqlPlaceholders } from "./sql-binds.mjs";
 import { auditRecovery } from "./recovery.mjs";
 import { verifyRestoredTableCounts, restoreSourceSchemaVersion, restoreLegacyWriteProofs, withRestoreTableRows, ensureNativeAgentRestoreSchema, cellOf, checkStoredBytes, verifyTrailer, assertTrailerShape, createTableDigests, contentVerificationLevel, REPLAY_SKIPPED_TABLES, createSanitizedCellTracker, BACKUP_SANITIZE_POLICY } from "./room-export.mjs";
 import { verifyPublicWorkClaimFence } from "./public-work-claim-fence.mjs";
-import { BACKUP_MANIFEST_VERSION, backupObjectKey, backupPartKey } from "../cloudflare/room-backup.mjs";
+import { BACKUP_MANIFEST_VERSION, backupObjectKey, backupPartKey, writeKvBackup } from "../cloudflare/room-backup.mjs";
 
 const IDENT = /^[a-z_][a-z0-9_]*$/;
 // Parent-first table order, mirroring the exporter's FIRST list in
@@ -264,29 +264,31 @@ export function continueRestoreCoverage(store,input){
  });
 }
 
-export function parseNdjsonExport(ndjson) {
-  if (typeof ndjson !== "string" || !ndjson.trim()) throw new Error("Export is empty");
+// Buffered compatibility and source preflight share ONE parser.
+// Tuple-only mode retains only what existing verifyTrailer needs; the
+// content digests still see every original complete row before any skip.
+function createNdjsonPreparse({retainRows=true}={}) {
   const byTable = new Map();
   const skippedTables = {};
   const digests = createTableDigests();
   let watermark = null;
   let trailer = null;
-  for (const line of ndjson.split("\n")) {
-    if (!line.trim()) continue;
+  const writeLine = line => {
+    if (!line.trim()) return;
     let record;
     try { record = JSON.parse(line); }
     catch { throw new Error("Export line is not JSON"); }
     if (record?.kind === "watermark") {
       if (watermark) throw new Error("Export has more than one watermark");
       watermark = record;
-      continue;
+      return;
     }
     // End-of-stream integrity trailer (server/room-export.mjs exportTrailer).
     if (record?.kind === "trailer") {
       if (trailer) throw new Error("Export has more than one trailer");
       assertTrailerShape(record);
       trailer = record;
-      continue;
+      return;
     }
     if (typeof record?.table !== "string" || !IDENT.test(record.table) || !record.row || typeof record.row !== "object" || Array.isArray(record.row))
       throw new Error("Export line is not a table row");
@@ -300,15 +302,26 @@ export function parseNdjsonExport(ndjson) {
     if (record.table.startsWith("_cf_") || RESTORE_SKIP_TABLES.has(record.table)
       || record.table === CLAIM_PERMIT_TABLE || REPLAY_SKIPPED_TABLES.includes(record.table)) {
       skippedTables[record.table] = (skippedTables[record.table] ?? 0) + 1;
-      continue;
+      return;
     }
+    if (!retainRows && record.table !== "events") return;
     const rows = byTable.get(record.table) ?? [];
-    rows.push(record.row);
+    if (retainRows) rows.push(record.row);
+    else if (record.table === "events") rows.push({room_id:record.row.room_id,sequence:record.row.sequence,id:record.row.id});
     byTable.set(record.table, rows);
-  }
+  };
+  const finish = () => {
   if (!watermark || watermark.version !== 1 || !Number.isSafeInteger(watermark.events))
     throw new Error("Export is missing its watermark");
   return { watermark, byTable, trailer, skippedTables, tableDigests: digests.finish() };
+  };
+  return {writeLine,finish};
+}
+export function parseNdjsonExport(ndjson) {
+  if (typeof ndjson !== "string" || !ndjson.trim()) throw new Error("Export is empty");
+  const parser=createNdjsonPreparse();
+  for(const line of ndjson.split("\n"))parser.writeLine(line);
+  return parser.finish();
 }
 
 function insertOrder(names) {
@@ -907,6 +920,60 @@ async function readRestoreBody(request, limit = RESTORE_MAX_BYTES) {
   return { tooLarge: utf8ByteLengthExceeds(text, limit), text };
 }
 
+// Stage native45 sources ONLY in the existing private KV multipart format.
+// Original preparse/content/trailer checks finish BEFORE any canonical import.
+// Missing KV retains the exact historical buffered64MiB-limited source door.
+const RESTORE_SOURCE_PART_BYTES=1024*1024,RESTORE_SOURCE_TTL_SECONDS=3600;
+async function* decodedRestoreChunks(request,limit,transport){
+  const reader=request.body.getReader(),decoder=new TextDecoder();transport.cancel=()=>reader.cancel();let total=0;
+  try{
+    for(;;){let chunk;try{chunk=await reader.read();}catch(cause){throw Object.assign(new Error("Could not read the restore body",{cause}),{restoreBodyUnreadable:true});}
+      if(chunk.done)break;total+=chunk.value.byteLength;if(total>limit)throw Object.assign(new Error("Restore is too large for a single request"),{restoreBodyTooLarge:true});
+      for(let offset=0;offset<chunk.value.byteLength;offset+=65536)yield decoder.decode(chunk.value.subarray(offset,offset+65536),{stream:true});
+    }
+    yield decoder.decode();
+  }finally{try{await reader.cancel();}catch{/* primary refusal stays */}reader.releaseLock();}
+}
+async function readRestoreIngress(request,{kv,hashOnly=false,sourceSchemaVersion=null,limit=RESTORE_MAX_BYTES}){
+  if(!request.body||typeof request.body.getReader!=="function"||!hashOnly&&(!kv||typeof kv.get!=="function"||typeof kv.put!=="function")){
+    let body;try{body=await readRestoreBody(request,limit);}catch(cause){throw Object.assign(new Error("Could not read the restore body",{cause}),{restoreBodyUnreadable:true});}
+    return{...body,sourceSha256:body.tooLarge?null:sha256Hex(body.text)};
+  }
+  const transport={},chunks=decodedRestoreChunks(request,limit,transport)[Symbol.asyncIterator]();
+  if(hashOnly){const hash=createHash("sha256");for(;;){const part=await chunks.next();if(part.done)break;hash.update(part.value);}return{sourceSha256:hash.digest("hex")};}
+  let prefix="",first;
+  for(;;){const part=await chunks.next();if(part.done)break;prefix+=part.value;
+    const lines=prefix.split("\n");lines.pop();const line=lines.find(value=>value.trim());if(line!==undefined){try{first=JSON.parse(line);}catch{/* compatibility parser owns error */}break;}
+  }
+  if(first?.kind!=="watermark"||first.sourceSchemaVersion!==45){const parts=[prefix];for(;;){const next=await chunks.next();if(next.done)break;parts.push(next.value);}return{text:parts.join("")};}
+  const parser=createNdjsonPreparse({retainRows:false}),encoder=new TextEncoder();let carry="",validationError=null;
+  const accept=text=>{carry+=text;let offset=0,end;while((end=carry.indexOf("\n",offset))!==-1){parser.writeLine(carry.slice(offset,end));offset=end+1;}carry=carry.slice(offset);};
+  async function* validated(){try{
+    accept(prefix);yield encoder.encode(prefix);prefix="";
+    for(;;){const part=await chunks.next();if(part.done)break;accept(part.value);yield encoder.encode(part.value);}
+    if(carry)parser.writeLine(carry);const parsed=parser.finish();restoreSourceSchemaVersion(parsed.watermark,sourceSchemaVersion);
+    requireResumeSource(parsed.watermark,parsed.trailer,contentVerificationLevel(parsed.trailer,parsed.tableDigests));verifyTrailer(parsed.trailer,parsed.byTable);
+  }catch(error){validationError=error;throw error;}finally{await chunks.return?.();}}
+  const key="room-restore-sources/"+randomUUID()+".ndjson",written=[];
+  const cleanup=async()=>{if(typeof kv.delete!=="function")return;await Promise.allSettled(written.map(part=>kv.delete(part)));};
+  const stage={put:async(part,value,options)=>{written.push(part);return kv.put(part,value,options);}};
+  const iterator=validated(),body=new ReadableStream({async pull(controller){try{const next=await iterator.next();if(next.done)controller.close();else controller.enqueue(next.value);}catch(error){controller.error(error);}},cancel(){return iterator.return?.();}});
+  try{const manifest=await writeKvBackup(stage,key,body,{partBytes:RESTORE_SOURCE_PART_BYTES,ttlSeconds:RESTORE_SOURCE_TTL_SECONDS});return{nativeSource:{manifest,cleanup}};}
+  catch(error){try{await transport.cancel?.();await iterator.return?.();}catch{/* preserve source/storage refusal */}await cleanup();throw validationError??error;}
+}
+// Existing KV feeding and source validation, shared with the original door.
+// The manifest is not target admission: full target recovery stays mandatory.
+async function replayBackupManifestSource(session,kv,manifest){
+  const whole=createHash("sha256"),decoder=new TextDecoder();let total=0;
+  for(const part of manifest.parts){const bytes=kvBytes(await kv.get(part.key,"arrayBuffer"))??kvBytes(await kv.get(part.key));
+    if(!bytes)throw Error("Backup part "+part.key+" is missing");
+    if(bytes.byteLength!==part.bytes||createHash("sha256").update(bytes).digest("hex")!==part.sha256)throw Error("Backup part "+part.key+" does not match its manifest entry");
+    whole.update(bytes);total+=bytes.byteLength;session.writeText(decoder.decode(bytes,{stream:true}));
+  }
+  session.writeText(decoder.decode());if(total!==manifest.bytes||whole.digest("hex")!==manifest.sha256)throw Error("Backup does not match its manifest sha256");
+  return{result:session.finish({sourceSha256:manifest.sha256}),total};
+}
+
 const jsonHeaders = { "Content-Type": "application/json; charset=utf-8", "Cache-Control": "no-store", "X-Content-Type-Options": "nosniff" };
 
 function jsonResponse(status, body) {
@@ -921,7 +988,7 @@ function jsonResponse(status, body) {
 // backup whose stored projections have drifted from current-reducer replay:
 // the restore then succeeds with the drift named in the result's audit
 // field instead of refusing (default: strict).
-export async function operatorRestoreResponse(request, token, store) {
+export async function operatorRestoreResponse(request, token, store, kv = null) {
   const url = new URL(request.url);
   if (url.pathname !== "/api/operator/restore") return null;
   const auth = authorizeOperatorRestore(request.headers.get("authorization"), token);
@@ -946,31 +1013,38 @@ export async function operatorRestoreResponse(request, token, store) {
   const declared = Number(request.headers.get("content-length"));
   if (Number.isFinite(declared) && declared > RESTORE_MAX_BYTES)
     return jsonResponse(413, { error: { code: "too_large", message: "Restore is too large for a single request" } });
-  let ndjson;
+  let result, session = null, nativeSource = null;
   try {
-    const body = await readRestoreBody(request);
-    if (body.tooLarge)
+    const active = restoreProgress(store.db), sealed = active.state === "pending" && active.phase !== "loading";
+    const input = await readRestoreIngress(request, {kv:auditParam==="report"&&!resume?null:kv,hashOnly:sealed,sourceSchemaVersion});
+    nativeSource=input.nativeSource??null;
+    if (input.tooLarge) {
+      session?.abort();
       return jsonResponse(413, { error: { code: "too_large", message: "Restore is too large for a single request" } });
-    ndjson = body.text;
-  } catch {
-    return jsonResponse(400, { error: { code: "unreadable_body", message: "Could not read the restore body" } });
-  }
-  let result;
-  try {
-    const active=restoreProgress(store.db);
-    if(active.state==='pending'&&active.phase!=='loading'){
-      if(active.seal?.sourceSha256!==sha256Hex(ndjson))throw Error('Resume source differs from sealed original snapshot');
-      result=withRestoreTransaction(store,()=>{validateCoverageState(store.db,active);return coverageResponse(active);});
-    }else result = replayNdjsonInto(ndjson, store, { audit: auditParam ?? "strict", sourceSchemaVersion, resume, staged:auditParam!=="report" });
+    }
+    if (sealed) {
+      if (active.seal?.sourceSha256 !== input.sourceSha256) throw Error("Resume source differs from sealed original snapshot");
+      result = withRestoreTransaction(store, () => { validateCoverageState(store.db, active); return coverageResponse(active); });
+    } else if(nativeSource){
+      session=createBackupReplaySession(store,{audit:auditParam??"strict",sourceSchemaVersion,resume,staged:auditParam!=="report"});
+      ({result}=await replayBackupManifestSource(session,kv,nativeSource.manifest));
+    }
+    else result = replayNdjsonInto(input.text, store, { audit: auditParam ?? "strict", sourceSchemaVersion, resume, staged: auditParam !== "report" });
   } catch (error) {
+    // Same existing cleanup authority: a new failed load verifies empty before
+    // clearing admission; an explicit resume retains its protected target.
+    try { session?.abort(); } catch { /* admission remains pending if cleanup cannot complete */ }
+    if(error?.restoreBodyTooLarge)return jsonResponse(413,{error:{code:"too_large",message:"Restore is too large for a single request"}});
+    if (error?.restoreBodyUnreadable)
+      return jsonResponse(400, { error: { code: "unreadable_body", message: "Could not read the restore body" } });
     const message = error?.message ?? String(error);
     if (/non-empty/.test(message)) return jsonResponse(409, { error: { code: "restore_refused_nonempty", message: "Restore refuses a store that already holds rooms" } });
     if (/Export (is empty|line is not JSON|is missing its watermark|has more than one watermark|line is not a table row|has more than one trailer|trailer is malformed|BLOB cell|cell is an object|bytes do not match|names a table|row does not match)|sourceSchemaVersion|unrecognized placeholder/.test(message))
       return jsonResponse(422, { error: { code: "invalid_restore", message } });
-    if (/Resume |watermark does not match|torn|foreign key check|table digest does not match|trailer pins|does not pin|projection_corrupt|requires operator reconciliation/.test(message))
+    if (/Resume |watermark does not match|torn|foreign key check|table digest does not match|trailer pins|does not pin|Backup (part|does not match)|projection_corrupt|requires operator reconciliation/.test(message))
       return jsonResponse(422, { error: { code: "restore_verification_failed", message } });
     return jsonResponse(500, { error: { code: "restore_failed", message: "Restore failed during replay" } });
-  }
+  } finally { await nativeSource?.cleanup(); }
   if(result.pending)return jsonResponse(202,result);
   return jsonResponse(200, {
     ok: true,
@@ -1074,23 +1148,8 @@ export async function operatorRestoreFromBackupResponse(request, token, store, k
     if (/^Resume /.test(message)) return jsonResponse(422,{error:{code:"resume_refused",message}});
     return jsonResponse(500, { error: { code: "restore_failed", message: "Restore failed before replay" } });
   }
-  const whole = createHash("sha256");
-  const decoder = new TextDecoder();
-  let total = 0;
-  try {
-    for (const part of manifest.parts) {
-      const bytes = kvBytes(await kv.get(part.key, "arrayBuffer")) ?? kvBytes(await kv.get(part.key));
-      if (!bytes) throw new Error(`Backup part ${part.key} is missing`);
-      if (bytes.byteLength !== part.bytes || createHash("sha256").update(bytes).digest("hex") !== part.sha256)
-        throw new Error(`Backup part ${part.key} does not match its manifest entry`);
-      whole.update(bytes);
-      total += bytes.byteLength;
-      session.writeText(decoder.decode(bytes, { stream: true }));
-    }
-    session.writeText(decoder.decode());
-    if (total !== manifest.bytes || whole.digest("hex") !== manifest.sha256)
-      throw new Error("Backup does not match its manifest sha256");
-    const result = session.finish({sourceSha256:manifest.sha256});
+  try{
+    const {result,total}=await replayBackupManifestSource(session,kv,manifest);
     if(result.pending)return jsonResponse(202,result);
     return jsonResponse(200, {
       ok: true,

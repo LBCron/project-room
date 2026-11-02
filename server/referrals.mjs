@@ -1,3 +1,4 @@
+import { currentInviteContext, isCurrentRoom } from './current-room-repository.mjs';
 // Referral attribution: which member brought which member into the room.
 //
 // A referral is recorded exactly once per join — the PRIMARY KEY on
@@ -64,7 +65,7 @@ export class Referrals {
     }
     if (referrerMemberId === refereeMemberId) fail(422, "invalid_referral", "a member cannot refer themselves");
     if (!REFERRAL_VIA.includes(via)) fail(422, "invalid_referral", "via must be invite or request");
-    const members = this.store.room(roomId).state.members ?? {};
+    const members = (currentInviteContext(this.store, roomId, { memberIds: [referrerMemberId, refereeMemberId] })?.room ?? this.store.room(roomId)).state.members ?? {};
     const referrer = members[referrerMemberId];
     const referee = members[refereeMemberId];
     if (!referrer || referrer.active === false) fail(409, "invalid_referral", "referrer is not an active member");
@@ -82,7 +83,7 @@ export class Referrals {
   }
 
   emitReferralCompleted(roomId, { referrerMemberId, refereeMemberId, via, at }) {
-    const room = this.store.room(roomId);
+    const room = (currentInviteContext(this.store, roomId, { memberIds: [referrerMemberId, refereeMemberId] })?.room ?? this.store.room(roomId));
     if (isRoomArchived(room.state)) return;
     if (room.sequence >= PILOT_LIMITS.eventsPerRoom) fail(409, "pilot_limit", "Bounded pilot capacity reached; no data was changed");
     const incoming = event({
@@ -94,6 +95,7 @@ export class Referrals {
       at: new Date(at).toISOString(),
       data: { referrerMemberId, refereeMemberId, via, completedAt: at },
     });
+    if (isCurrentRoom(this.db, roomId)) { this.store.appendSideTableEvent(roomId, incoming); return; }
     let state;
     try { state = compactState(applyEventWithGrowth(room.state, incoming, growthCollector).state); }
     catch (error) { fail(409, "referral_rejected", error.message); }

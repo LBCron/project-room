@@ -162,24 +162,24 @@ export function installAgentConnections({ client, getState }) {
     } finally { copying = false; render(); }
   }
   function render() {
-    constrainAccess();
+    if (!existingPending) constrainAccess();
     existingSelect.disabled = busy || Boolean(existingPending) || Boolean(pending) || Boolean(setup);
     existingButton.disabled = busy || Boolean(pending) || Boolean(setup);
     existingButton.textContent = uiText(existingPending ? 'agent.existing.retry' : 'agent.existing.add');
     form.hidden = Boolean(setup); $("#agent-setup").hidden = !setup;
     if (setup) describeImport();
-    for (const input of form.querySelectorAll("input,select")) input.disabled = busy || Boolean(pending);
-    $("#agent-create").disabled = busy;
+    for (const input of form.querySelectorAll("input,select")) input.disabled = busy || Boolean(pending) || Boolean(existingPending);
+    $("#agent-create").disabled = busy || Boolean(existingPending);
     $("#agent-create").textContent = pending ? "Retry original" : "Create access";
-    if ($("#agent-create-later")) $("#agent-create-later").disabled = busy;
+    if ($("#agent-create-later")) $("#agent-create-later").disabled = busy || Boolean(existingPending);
     $("#agent-private-copy").disabled = copying || !setup || !owns();
     if ($("#agent-copy-checklist")) $("#agent-copy-checklist").disabled = copying || !setup || !allowed();
-    $("#agent-connect-done").disabled = busy || copying;
+    $("#agent-connect-done").disabled = busy || copying || Boolean(existingPending);
     $("#agent-retry").hidden = !pending || pending.request.action === "create";
-    $("#agent-retry").disabled = busy;
-    for (const button of list.querySelectorAll("button")) button.disabled = busy || Boolean(pending) || Boolean(setup);
+    $("#agent-retry").disabled = busy || Boolean(existingPending);
+    for (const button of list.querySelectorAll("button")) button.disabled = busy || Boolean(pending) || Boolean(existingPending) || Boolean(setup);
     for (const button of catalogButtons()) {
-      button.disabled = busy || Boolean(pending) || Boolean(setup);
+      button.disabled = busy || Boolean(pending) || Boolean(existingPending) || Boolean(setup);
     }
   }
   function reset() {
@@ -263,7 +263,7 @@ export function installAgentConnections({ client, getState }) {
           const button = document.createElement("button"); button.type = "button"; button.className = "button ghost"; button.textContent = label;
           button.setAttribute("aria-label", `${label} for ${row.displayName}`);
           button.addEventListener("click", () => {
-            if (!owns() || busy || pending || setup) return;
+            if (!owns() || busy || pending || existingPending || setup) return;
             const message = action === "rotate" ? "The old key will stop working. Set up the new key afterward. Replace it?"
               : "End Room access? This does not stop the outside AI or erase copies it already has.";
             if (window.confirm(message)) prepare(action, row);
@@ -298,7 +298,7 @@ export function installAgentConnections({ client, getState }) {
       && Object.hasOwn(statuses, connection.status) && typeof result.duplicate === "boolean";
   }
   async function submit() {
-    if (!owns() || !pending || busy) return;
+    if (!owns() || !pending || busy || existingPending) return;
     const operation = pending, currentFlow = flow; busy = true; status("Checking…"); render();
     try {
       const result = await client.request(client.path("/agent-connections"), { method: "POST", data: operation.request });
@@ -329,7 +329,7 @@ export function installAgentConnections({ client, getState }) {
     } finally { if (owns() && flow === currentFlow) { busy = false; render(); } }
   }
   async function prepare(action, row) {
-    if (!owns() || busy || pending || setup) return;
+    if (!owns() || busy || pending || existingPending || setup) return;
     busy = true; render();
     const identity = owner, epoch = generation, currentFlow = flow;
     try {
@@ -369,7 +369,7 @@ export function installAgentConnections({ client, getState }) {
   $("#agent-connect-route")?.addEventListener("change", describeRoute);
   $("#agent-retry").addEventListener("click", () => { void submit(); });
   $("#agent-connect-done").addEventListener("click", () => {
-    if (!busy && !copying) {
+    if (!busy && !copying && !existingPending) {
       forget(); form.reset(); rosterId = null;
       if ($("#agent-roster-hint")) $("#agent-roster-hint").textContent = "";
       if ($("#agent-import-route")) $("#agent-import-route").textContent = "";
@@ -377,7 +377,7 @@ export function installAgentConnections({ client, getState }) {
     }
   });
   function applyCatalogChoice(id) {
-    if (busy || pending || setup) return;
+    if (busy || pending || existingPending || setup) return;
     const row = catalogSelection(id) || rosterSelection(id);
     if (!row) return;
     $("#agent-connect-name").value = row.name;
@@ -398,7 +398,7 @@ export function installAgentConnections({ client, getState }) {
   $("#agent-private-details").addEventListener("toggle", () => {
     $("#agent-private-config").value = $("#agent-private-details").open && owns() && checkExpiry() ? privateSetupText() : "";
   });
-  $("#agent-create-later")?.addEventListener("click", () => { if (!busy && !pending && !setup) $("#agent-create").click(); });
+  $("#agent-create-later")?.addEventListener("click", () => { if (!busy && !pending && !existingPending && !setup) $("#agent-create").click(); });
   $("#agent-copy-checklist")?.addEventListener("click", () => {
     if (!setup || !allowed()) return;
     void copyPlain(reconnectCopy({
@@ -414,5 +414,5 @@ export function installAgentConnections({ client, getState }) {
     catch { if (owns() && setup === current && dialog.open) status("Select and copy the private setup below."); }
     finally { copying = false; render(); }
   });
-  return { sync, reset, hasPending: () => Boolean(pending || setup) };
+  return { sync, reset, hasPending: () => Boolean(pending || existingPending || setup) };
 }

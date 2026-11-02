@@ -229,6 +229,7 @@ export class ProjectRoom extends DurableObject {
     this.jobHealthSnapshot = null;
     this.server = createRoomServer({ store: this.store, origin: env.ROOM_ORIGIN, assetRoot: origin, serviceMode: env.ROOM_SERVICE_MODE ?? 'cloudflare-staging',
       deployment,
+      accountAgentEnrollmentEnabled: env.ROOM_ACCOUNT_AGENT_ENROLLMENT_ENABLED === '1',
       mcpOAuthClients: env.ROOM_MCP_OAUTH_CLIENTS ? JSON.parse(env.ROOM_MCP_OAUTH_CLIENTS) : [],
       mcpEventTransport: env.ROOM_MCP_EVENT_CALLBACK_ORIGINS === undefined ? undefined
         : createWorkersMcpEventTransport(JSON.parse(env.ROOM_MCP_EVENT_CALLBACK_ORIGINS)),

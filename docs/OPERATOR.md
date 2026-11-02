@@ -20,6 +20,32 @@ Send it on each call as `Authorization: Operator <token>`. A room or account coo
 
 `ROOM_OPERATOR_PROTECTED_ROOMS` is an optional comma-separated list of room ids that purge refuses, in addition to `invite-only-pilot`.
 
+## Normalize room storage
+
+`POST /api/operator/normalization/plan` accepts `roomId` and an explicit boolean
+`discardLegacyAssignments`. It reads the exact current head, metadata proof and
+legacy assignment counts and returns a `planHash`. Planning changes no room data.
+
+`POST /api/operator/normalization/execute` accepts the same fields plus `planHash`,
+`requestId` (1–64 letters, digits, underscores or hyphens) and a nonblank `reason`
+of at most 280 UTF-8 bytes. Use the existing `Authorization: Operator` credential.
+The operation materializes the current state once into entity records and replaces
+the whole-room projection with a small carrier. This one-time operation scales with
+current state; it is not a bounded historical replay or a history certificate.
+
+Accounts, member IDs and revisions, permissions, credentials, revocations, OAuth
+grants, connections, original events, canonical messages and tasks remain intact.
+When explicitly selected, `discardLegacyAssignments: true` removes only this room's
+legacy `work_claims`, `work_claim_history` and `collab_assignments`. Review their
+counts in the plan. It does not complete or delete canonical tasks.
+
+Publication and its receipt commit in one transaction. A save failure rolls back.
+After a lost response, resend the exact original execute body and request ID;
+the saved receipt returns with `duplicate: true`. A changed head or assignment
+census requires a fresh plan. Do not roll back to code that cannot read the new
+representation. After activation, check existing-agent access, a saved message and
+task update, exact retry, and cold restart before declaring the room qualified.
+
 ## Purge
 
 Purge is confirm-then-delete. Find and plan do not delete rows. Execute deletes only the ids in a plan that still matches.

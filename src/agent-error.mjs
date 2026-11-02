@@ -587,6 +587,7 @@ const AX_NAMED_RECOVERIES = {
   channel_sync_unsupported: ["This channel sync mode is not supported here. Use a supported sync mode; do not retry this one.", "Use a supported channel sync mode."],
   channel_webhook_backlog: ["The channel has a webhook backlog. Import the pending updates before sending more.", "Import pending updates first, then send."],
   charter_integrity_error: ["The instructions history requires reconciliation before this can proceed. Report the code and full message to the room owner if it persists.", "Reconcile the instructions history; if it persists, report the code and full message to the room owner."],
+  normalization_requires_reconciliation: ["The room head or its metadata proof is unavailable for normalized storage adoption.", "Ask the operator to reconcile the current room head and metadata proof before requesting a new adoption plan."],
   claim_conflict: ["That scope is reserved by another work claim. Coordinate or release that reservation first; no new claim was saved.", "Coordinate with the holding claim or release the reservation, then claim again."],
   collision_lock_expired: ["The draft lock expired. Acquire it again before editing.", "Acquire the draft lock again, then continue editing."],
   collision_lock_held: ["Another member is already drafting on this thread. Wait for them to finish or release the lock.", "Wait for the current drafter to release the lock, then acquire it."],

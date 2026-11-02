@@ -163,6 +163,10 @@ response's own `hint`/`next` when it names something more specific.
 | `already_inactive` | 409 | Membership is already inactive | no | The action already happened — do not retry it. Read the current state to confirm. |
 | `already_member` | 409 | This identity is already linked to this room; present its current identity secret as Bearer to request additional permissions | no | The action already happened — do not retry it. Read the current state to confirm. |
 | `already_owner` | 409 | That identity is the room owner and already holds full authority | no | The action already happened — do not retry it. Read the current state to confirm. |
+| `already_normalized` | 409 | Room already uses normalized serving | no | Read current state. For a lost execute response, resend the exact original request to retrieve its receipt. |
+| `invalid_normalization_request` | 422 | Normalization selection or execute inputs are invalid | fix+resend | Supply the room ID, explicit legacy assignment disposition and, for execute, the reviewed plan hash, request ID and reason. |
+| `normalization_requires_reconciliation` | 409 | Current room head and independent metadata proof are required | no | Have the operator reconcile the source head and proof before adoption. |
+| `normalization_candidate_exists` | 409 | An unpublished normalized candidate already exists | no | Resolve the existing candidate before requesting direct adoption; do not overwrite its records. |
 | `ambiguous_session_cookie` | 401 | Conflicting browser session cookies; clear this site's cookies and sign in again | no | room_check_access. Verify the credential, room link, and Origin header. Do not mint a new identity to fix an access failure. |
 | `approval_invalid` | 422 | Invalid approval input (the message names the field). | fix+resend | Fix the refused fields named in the message; resend. Keep the same command id if the earlier send was uncertain. (Note: collab STATUS_BY_CODE.) |
 | `approval_not_found` | 404 | No such approval proposal. | re-list | Re-list the resource and use a current id. Do not guess ids. (Note: collab STATUS_BY_CODE.) |

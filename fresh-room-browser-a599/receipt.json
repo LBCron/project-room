@@ -1,0 +1,44 @@
+{
+  "source": "a599faa29ff65567e5c080609cb2d000acd33666",
+  "node": "v24.22.1",
+  "browser": "Installed Chromium via Playwright",
+  "observations": [
+    {
+      "viewport": "desktop",
+      "width": 1280,
+      "signupStatus": 202,
+      "actualNormalizedSnapshot": true,
+      "assistantAvailable": false,
+      "assistantSetupVisible": false,
+      "assistantRowVisible": false,
+      "assistantUnavailableExplanationPatternMatchedInSettings": false,
+      "plainRoomAddressedMessageVisible": true,
+      "updatesUnavailableNoticeVisible": true,
+      "pageErrors": [],
+      "blockedExternalRequests": 0,
+      "screenshots": [
+        "desktop-settings.png",
+        "desktop-updates.png"
+      ]
+    },
+    {
+      "viewport": "phone",
+      "width": 390,
+      "signupStatus": 202,
+      "actualNormalizedSnapshot": true,
+      "assistantAvailable": false,
+      "assistantSetupVisible": false,
+      "assistantRowVisible": false,
+      "assistantUnavailableExplanationPatternMatchedInSettings": false,
+      "plainRoomAddressedMessageVisible": true,
+      "updatesUnavailableNoticeVisible": true,
+      "pageErrors": [],
+      "blockedExternalRequests": 0,
+      "screenshots": [
+        "phone-settings.png",
+        "phone-updates.png"
+      ]
+    }
+  ],
+  "scope": "Rendered local default self-host signup without configured mailer/provider, disposable data, outside network blocked. Observes current gap; not a passing assistant-readiness gate, production mail/signup replication, real assistant execution, release or peer-device proof."
+}

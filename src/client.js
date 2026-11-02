@@ -1,6 +1,6 @@
 import { accountSessionError, sameAccountSession } from "./account-client.js";
 export { AccountClient, IDENTITY_MINT_POW_BITS, IDENTITY_MINT_POW_WINDOW_MS, IDENTITY_MINT_POW_ESCALATION_BITS, escalatedIdentityMintPowBits, solveIdentityMintProof, submitIdentityMint } from "./account-client.js";
-import { applyEvent, validId } from "./events.js";
+import { applyEvent, validId, EVENT_TYPES as T } from "./events.js";
 import { uiText } from "./strings.js";
 import { verifyWorkResult } from "./work-packet.js";
 import { validateCharterRead } from "./room-charter.js";
@@ -125,10 +125,10 @@ const FRESH_OPEN_MS = 2000;
 const MAX_REFRESH_COOLDOWN_MS = 300000;
 
 export class RoomClient {
-  constructor({ fetcher = globalThis.fetch.bind(globalThis), events = globalThis.EventSource, accountClient = null, auditView = "full", lazyHistory = false, onSnapshot = () => {}, onStatus = () => {}, onAccessEnded = () => {}, onTyping = () => {}, onConsentChange = () => {}, onOptimistic = null, onSendSettled = null } = {}) {
+  constructor({ fetcher = globalThis.fetch.bind(globalThis), events = globalThis.EventSource, accountClient = null, auditView = "full", lazyHistory = false, onSnapshot = () => {}, onStatus = () => {}, onAccessEnded = () => {}, onTyping = () => {}, onConsentChange = () => {}, onBondChange = () => {}, onOptimistic = null, onSendSettled = null } = {}) {
     if (!["full", "activity"].includes(auditView)) throw new RangeError(uiText("record.invalidView"));
     this.auditView = auditView;
-    Object.assign(this, { fetcher, events, accountClient, onSnapshot, onStatus, onAccessEnded, onTyping, onConsentChange, onOptimistic, onSendSettled });
+    Object.assign(this, { fetcher, events, accountClient, onSnapshot, onStatus, onAccessEnded, onTyping, onConsentChange, onBondChange, onOptimistic, onSendSettled });
     this.getFlights = new Map();
     this.paging = false;
     this.session = null;
@@ -1347,6 +1347,7 @@ export class RoomClient {
       // Consent state is not part of the room projection, so a snapshot render
       // alone cannot refresh it; the panel refetches on a consent change.
       if (receipt?.event?.type === "dm.consent_changed") this.onConsentChange?.();
+      if ([T.BOND_PROPOSED, T.BOND_ACTIVATED, T.BOND_REVOKED].includes(receipt?.event?.type)) this.onBondChange?.();
       refreshStream(receipt);
     });
     stream.addEventListener("typing", message => {

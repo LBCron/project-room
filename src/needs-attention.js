@@ -249,7 +249,7 @@ export function createNeedsAttentionCard(options) {
         // Owners retain their paged rollup; admins receive only the request queue
         // their existing manage_members authority permits, never the owner rollup.
         if (!canReadOwnerRollup()) report = null;
-        report = report ? { ...report, ownerOnly: true, items: [...requests,...report.items.filter(item=>item.kind!=='access_request')].map(item => item.kind === "access_request" ? byId.get(item.id) : item).filter(Boolean) }
+        report = report ? { ...report, ownerOnly: true, items: (report.contractVersion === 2 ? [...requests, ...report.items] : report.items).map(item => item.kind === "access_request" ? byId.get(item.id) : item).filter(Boolean) }
           : { items: requests, itemCount: requests.length, pageOffset: 0, ownerOnly: false };
       }
       if (partial && !report?.items.some(item => item.id === partial.id)) partial = null;

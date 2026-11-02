@@ -1,0 +1,38 @@
+{
+  "source": "037d840ae",
+  "nodePassed": 25,
+  "nativePassed": 1,
+  "preflightPassed": 2,
+  "originalPackageRun": {
+    "passed": 10,
+    "failed": 1,
+    "failure": "stale generated asset hashes; regenerated and affected preflight passed",
+    "packagedNativeSource": "567af3344",
+    "packagedNativePassed": true
+  },
+  "catalogComparison": {
+    "priorPhysicalReads": 71143,
+    "currentPhysicalReads": 49513,
+    "priorReturnedBytes": 924619,
+    "currentReturnedBytes": 925264,
+    "meaning": "lower physical reads, no returned-byte improvement; whole recovery remains unbounded"
+  },
+  "logs": [
+    {
+      "file": "recovery-central-package-native.log.gz",
+      "sha256": "98e15e38508114ad4151232191102d376b149be6b0c4044fee1e119a454643b6"
+    },
+    {
+      "file": "recovery-composed-catalog-node.log.gz",
+      "sha256": "f0e8a7a70198517845b70d17231cc6b82e1e8ab38805e0eb1bc5ac4f6de51a45"
+    },
+    {
+      "file": "recovery-composed-catalog-native.log.gz",
+      "sha256": "4aec5034a9356e7b0b49030725095b6dbaefdcca553df8876d3f9477ce0b1c0b"
+    },
+    {
+      "file": "recovery-composed-preflight.log.gz",
+      "sha256": "c02548d1838e781fb3eaedfaa5cc26c5f0e8904fc45efd0eac4a9e1efadeb68a"
+    }
+  ]
+}

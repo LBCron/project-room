@@ -1,0 +1,13 @@
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import {RoomStore} from '../server/store.mjs';
+import {initialRoom} from '../server/bootstrap.mjs';
+import {readWorkItem} from '../server/work-repository.mjs';
+import {auditRecovery} from '../server/recovery.mjs';
+function fixture(t){let now=Date.now();const s=new RoomStore(':memory:',{now:()=>now});t.after(()=>s.close());s.initialize(initialRoom(),{representation:'normalized-current-v1'});const key=s.issueAccessKey('commons','owner'),send=(type,data,id=crypto.randomUUID())=>s.command(key,'commons',{id,type,data}),item=id=>readWorkItem(s.db,'commons',id);
+ const task=id=>{send('work.proposed',{workItemId:id,title:id,definitionOfDone:'Exact result',accountableMemberId:'owner',mode:'write'});send('work.accepted',{workItemId:id,expectedRevision:0});};
+ const claim=(id,{ref='main',paths=['src/**'],repository='acme/test',expiry=now+60000,request=crypto.randomUUID()}={})=>send('claim.acquired',{workItemId:id,expectedRevision:item(id).revision,repository,ref,paths,expiresAt:new Date(expiry).toISOString()},request);
+ return{s,key,send,item,task,claim,get now(){return now;},advance(ms){now+=ms;}};
+}
+test('native write claim same-ref conflicts, cross-ref warnings and release match full replay',t=>{const f=fixture(t);f.task('z-first');f.task('a-next');f.claim('z-first');const seq=f.s.headSequence('commons');assert.throws(()=>f.claim('a-next'),e=>e.code==='claim_conflict');assert.equal(f.s.headSequence('commons'),seq);f.claim('a-next',{ref:'other'});assert.deepEqual(f.item('a-next').claim.overlaps,[{workItemId:'z-first',holderId:'owner',paths:['src/**']}]);f.send('claim.released',{workItemId:'z-first',expectedRevision:f.item('z-first').revision});f.task('replacement');f.claim('replacement');assert.equal(f.item('replacement').claim.status,'active');assert.doesNotThrow(()=>auditRecovery(f.s));});
+test('native write claim expiry, renewal progress and exact retry preserve revisions',t=>{const f=fixture(t);f.task('one');f.claim('one',{request:'take-one'});const first=f.item('one');f.advance(1000);const progress=f.send('message.posted',{messageId:'progress',body:'Concrete progress',workItemId:'one'});assert.ok(progress.sequence);const data={workItemId:'one',expectedRevision:first.revision,expiresAt:new Date(f.now+120000).toISOString(),progressMessageId:'progress'};const renewal=f.send('claim.renewed',data,'renew-one'),retry=f.send('claim.renewed',data,'renew-one');assert.equal(retry.duplicate,true);assert.equal(retry.sequence,renewal.sequence);f.task('next');assert.throws(()=>f.claim('next'),e=>e.code==='claim_conflict');f.advance(120001);f.claim('next');assert.equal(f.item('next').claim.status,'active');assert.doesNotThrow(()=>auditRecovery(f.s));});

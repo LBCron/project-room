@@ -68,7 +68,7 @@ import { PROJECTION_BODIES_SCHEMA, storedProjection, hydrateProjection } from ".
 import { MESSAGES_SCHEMA, MESSAGES_BACKFILL_CURSOR_SCHEMA, MESSAGES_BACKFILL_BLOCKS_SCHEMA, archivedMessageRow, archiveMarker, archivedMatchingRecords, archivedThreadRecords, archiveRoomMessages, restoreArchivedMessages, runMessagesBackfill, checkMessagesParity as verifyMessagesParity, runMessagesParityCheck, messagesBackfillCaughtUp, resyncRoomMessageRows, syncMessageRows } from "./messages-store.mjs";
 import { hasMessageAuthority, canonicalMessageEditContext, canonicalMessagePostContext } from './message-authority.mjs';
 import { runLegacyMessageShapeUpgrade } from "./legacy-message-shape.mjs";
-import { commitMessageRedaction } from "./message-redaction.mjs";
+import { commitMessageRedaction, prepareCurrentMessageRedaction } from "./message-redaction.mjs";
 import { runPatrolTick, patrolFindings as listPatrolFindings, patrolBlocks as listPatrolBlocks } from "./patrol.mjs";
 import { historyFloor as readHistoryFloor, messageInHistory, rowInHistory, messageVisibleToViewer, visibleSequenceHorizon } from "./history-visibility.mjs"; // PRIV-2
 import { migrateRoomLifecycleV28, verifyRoomLifecycle, refuseArchivedWrite, createAccountRoom, accountRoomEntry, ACCOUNT_ROOM_SELECT, archivedAtOf } from "./room-lifecycle.mjs";
@@ -7357,8 +7357,13 @@ this.slaBreachAlerts = new SlaBreachAlertJournal(this); // Task 26: durable in-a
         if (conflict) fail(409, "claim_conflict", `Scope is reserved by work ${conflict.id}. Coordinate or release that reservation first; no new claim was saved.`);
       }
       const sequence = room.sequence + 1;
+      const currentRedaction=messageContext?.current&&incoming.type===T.MESSAGE_DELETED
+        ?prepareCurrentMessageRedaction(this.db,{roomId,state,actorId:incoming.actorId,at:incoming.at,messageId:incoming.data.messageId}):null;
+      if(currentRedaction)state=currentRedaction.state;
+      const finalSequence=sequence+(currentRedaction?.events.length??0);
+      const persistenceEvent=currentRedaction?.events.at(-1)??incoming;
       const messageWrite = messageContext?.current
-        ? prepareCurrentWrite(this,{roomId,previous:room,state,event:incoming,sequence,current:messageContext.current})
+        ? prepareCurrentWrite(this,{roomId,previous:room,state,event:persistenceEvent,sequence:finalSequence,current:messageContext.current})
         : prepareMessageWrite(this, {roomId,previous:room,state,event:incoming,sequence,messageAuthorityCount:messageContext?.count});
       const { projection } = messageWrite;
       if (Buffer.byteLength(projection) > PILOT_LIMITS.projectionBytes && !cleanup) fail(409, "pilot_limit", "Room projection limit reached; no data was changed. Ask the room owner to have older messages archived to free space.");
@@ -7373,7 +7378,8 @@ this.slaBreachAlerts = new SlaBreachAlertJournal(this); // Task 26: durable in-a
         this.db.prepare("INSERT INTO events VALUES(?,?,?,?)").run(roomId, sequence, incoming.id, JSON.stringify(incoming));
         if (bondEffect?.dm) this.bonds.sealDm(bondEffect.dm, incoming.id);
         this.db.prepare("INSERT INTO commands VALUES(?,?,?,?,?)").run(roomId, auth.member.id, command.id, fingerprint, sequence);
-        this.db.prepare("UPDATE rooms SET sequence=?,projection=?,archived_at=? WHERE id=?").run(sequence, projection, archivedAtOf(state), roomId);
+        if(currentRedaction)currentRedaction.persist(sequence);
+        this.db.prepare("UPDATE rooms SET sequence=?,projection=?,archived_at=? WHERE id=?").run(finalSequence, projection, archivedAtOf(state), roomId);
         if (!messageContext?.current) this._queueProjectionCache(roomId, sequence, state, projection);
         // Board is the claim authority the MCP tools share with /work-claims.
         // Same transaction as the projection event: decision #10's write-path
@@ -7402,7 +7408,7 @@ this.slaBreachAlerts = new SlaBreachAlertJournal(this); // Task 26: durable in-a
         // --- PRIV-1 message redaction ---
         // The returned sequence stays this delete. Later events in the same
         // transaction rewrite the log and advance the room sequence.
-        if (command.type === T.MESSAGE_DELETED && typeof command.data?.messageId === "string") {
+        if (!messageContext?.current && command.type === T.MESSAGE_DELETED && typeof command.data?.messageId === "string") {
           const redacted = commitMessageRedaction(this.db, {
             roomId, state, actorId: incoming.actorId, at: incoming.at, messageId: command.data.messageId, bodiesAtRest: this.bodiesAtRest,
             retainedMessageIds: messageWrite.retainedMessageIds

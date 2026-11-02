@@ -40,7 +40,13 @@ const V = {
   mixedPw2: "SecondMixedPwSynth678",
   prefixedPw: "PrefixedKeyPwSynth123",
   suffixedPw: "SuffixedKeyPwSynth456",
-  urlPw: "Url1nfoSynthPw55"
+  urlPw: "Url1nfoSynthPw55",
+  // Sub-32 vendor tokens (F1W2-T3b fixup, R3 finding R1): total lengths
+  // 26 / 24 / 23 chars — below the 32-char long-run threshold, so these
+  // are scrubbed by the explicit vendor-prefix rule or not at all.
+  gitlabShort: "glpat-" + "Ab1Cd2Ef3Gh4Ij5Kl6Mn",
+  dockerShort: "dckr_pat_" + "Ab1Cd2Ef3Gh4Ij5",
+  pypiShort: "pypi-" + "Ab1Cd2Ef3Gh4Ij5Kl6"
 };
 V.discord = ["MTIzNDU2Nzg5MDEyMzQ1Njc4OTA1", "XyzAbc", V.discordHmac].join(".");
 V.jwt = ["eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9", "eyJzdWIiOiJzeW50aCJ9", V.jwtSig].join(".");
@@ -72,7 +78,10 @@ const SHAPES = [
   { id: "N12b-key-PassWord", text: `PassWord: ${V.mixedPw2}`, obj: { PassWord: V.mixedPw2 }, secrets: [V.mixedPw2] },
   { id: "N13a-key-my_password_value", text: `my_password_value: ${V.prefixedPw}`, obj: { my_password_value: V.prefixedPw }, secrets: [V.prefixedPw] },
   { id: "N13b-key-passwordHash", text: `passwordHash=${V.suffixedPw}`, obj: { passwordHash: V.suffixedPw }, secrets: [V.suffixedPw] },
-  { id: "X1-https-url-userinfo", text: `fetch https://deploy:${V.urlPw}@host.example.invalid/x failed`, obj: { field: `https://deploy:${V.urlPw}@host.example.invalid/x` }, secrets: [V.urlPw] }
+  { id: "X1-https-url-userinfo", text: `fetch https://deploy:${V.urlPw}@host.example.invalid/x failed`, obj: { field: `https://deploy:${V.urlPw}@host.example.invalid/x` }, secrets: [V.urlPw] },
+  { id: "N1s-gitlab-glpat-sub32", text: `ci failed: ${V.gitlabShort} (exit 1)`, obj: { field: V.gitlabShort }, secrets: [V.gitlabShort] },
+  { id: "N3s-docker-dckr_pat-sub32", text: `docker login failed for ${V.dockerShort} retry`, obj: { field: V.dockerShort }, secrets: [V.dockerShort] },
+  { id: "N2s-pypi-sub32", text: `upload failed for ${V.pypiShort} retry`, obj: { field: V.pypiShort }, secrets: [V.pypiShort] }
 ];
 
 const REDACTORS = [["worker redactError", redactError], ["node redactJobError", redactJobError]];
@@ -134,6 +143,19 @@ test("redactErrors flag: nodeJobErrorText collapses flagged jobs to a stable cod
   const other = nodeJobErrorText({ name: "integrity", redactErrors: false }, bare);
   assert.ok(!other.includes(V.mongoPw));
   assert.ok(other.includes("[redacted]"));
+});
+
+test("vendor-prefix rule: benign prefix mentions are not scrubbed", () => {
+  // Ordinary prose/code contexts the vendor rule excludes: the prefix
+  // standing alone, or followed by a short non-token word (<6 token
+  // chars). Both copies must leave every one byte-identical.
+  for (const benign of ["the glpat- prefix marks a gitlab token",
+    "pypi-based tooling is disabled here", "a glpat-like failure mode",
+    "dckr_pat_ is the docker pat prefix", 'const prefix = "pypi-";',
+    "upload to pypi.org failed with a network error"]) {
+    assert.equal(redactError(benign), benign, benign);
+    assert.equal(redactJobError(benign), benign, benign);
+  }
 });
 
 test("failureDetail allowlists agree field-for-field, including the length window", () => {

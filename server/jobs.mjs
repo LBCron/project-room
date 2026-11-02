@@ -62,7 +62,7 @@ export function redactJobError(value) {
     .replace(/(\b[a-zA-Z][a-zA-Z0-9+.-]*:\/\/[^\s/:@]*:)[^\s/@]+(@)/g, "$1[redacted]$2")
     .replace(/([A-Za-z0-9_-]*(?:password|passwd|secret|token|api[-_]?key|private[-_]?key|account[-_]?key|credential)[A-Za-z0-9_-]*)(\s*"?\s*[:=]\s*"?)([^\s"',;}]{8,})/gi, "$1$2[redacted]")
     .replace(/\b(bearer|token|secret|password|authorization)(\s*[:=]?\s*)\S+/gi, "$1$2[redacted]")
-    .replace(/\b(?:pri|ghp|gho|ghs|ghu|github_pat|sk|xox[abpr]|whsec|re)_[A-Za-z0-9_-]{6,}/g, "[redacted]")
+    .replace(/\b(?:(?:pri|ghp|gho|ghs|ghu|github_pat|sk|xox[abpr]|whsec|re)_|glpat-|pypi-|dckr_pat_)[A-Za-z0-9_-]{6,}/g, "[redacted]")
     .replace(/(https?:\/\/[^\s?#]+)[?#]\S*/g, "$1")
     .replace(/[A-Za-z0-9+/_-]{32,}={0,2}/g, "[redacted]")
     .trim();

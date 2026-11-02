@@ -3,6 +3,7 @@
 import {applicationTables} from '../../server/writer-fence.mjs';
 const canonical=v=>Array.isArray(v)?`[${v.map(canonical).join(',')}]`:v&&typeof v==='object'?`{${Object.keys(v).sort().map(k=>`${JSON.stringify(k)}:${canonical(v[k])}`).join(',')}}`:JSON.stringify(v);
 const frontier=r=>JSON.stringify(r?{stage:r.stage,table:r.tableIndex,after:r.rowAfter,source:r.source?{row:r.source.rowid,column:r.source.column,phase:r.source.phase,offset:r.source.offset,blob:r.source.blobIndex,output:r.source.output.length,carry:r.source.carry}:null,sort:r.table}:null);
+export {frontier as recoveryReportFrontier};
 export function reportProgressGuard(store,assert){
  let budget=null,reportCalls=0,preReportCalls=0,publicationCalls=0,sourceUnits=0,sortUnits=0;
  return{before(state){

@@ -1,0 +1,43 @@
+{
+  "runtimeCommit": "349cc802c",
+  "archiveCommit": "fe6f1fbf4f9e7e277ffa755b237eef683a7d5e64",
+  "driverCommit": "441e3da7d",
+  "node": "26.8.2 (not CI Node24)",
+  "recoveryComposed": {
+    "passed": 80,
+    "failed": 0,
+    "skipped": 0
+  },
+  "cleanupFocused": {
+    "passed": 10,
+    "failed": 0,
+    "skipped": 0
+  },
+  "driverCLIHTTP": {
+    "passed": 11,
+    "failed": 0,
+    "skipped": 0
+  },
+  "archiveNative": {
+    "passed": 1,
+    "coverageSteps": 496,
+    "cleanupSteps": 45,
+    "cleanupGuardCount": 0,
+    "exactRetries": true,
+    "coldReopens": true
+  },
+  "initialPackageSuite": {
+    "passed": 8,
+    "failed": 2,
+    "failures": [
+      "new-module test reference not yet integrated",
+      "obsolete test-only 400-step limit; repaired and actual archived Native passed"
+    ]
+  },
+  "limits": [
+    "Full final audit remains mandatory and unbounded",
+    "No live schema45 migration or deployment",
+    "CLI-to-Native composed journey is separately in progress",
+    "Cleanup lowers publication peak but increases cumulative work; see matched Native evidence"
+  ]
+}

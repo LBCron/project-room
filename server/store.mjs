@@ -4134,7 +4134,7 @@ this.slaBreachAlerts = new SlaBreachAlertJournal(this); // Task 26: durable in-a
         if(room.sequence>=PILOT_LIMITS.eventsPerRoom)fail(409,'pilot_limit','Bounded pilot capacity reached; no data was changed');
         let state;try{state=compact(event.type===T.REFERRAL_COMPLETED ? applyEventWithGrowth(room.state,event,growthCollector).state : applyEvent(room.state,event));}catch(error){fail(422,'invalid_side_table_event',error.message);}
         const sequence=room.sequence+1,write=prepareCurrentWrite(this,{roomId,previous:room,state,event,sequence,current:context.current});
-        if(Buffer.byteLength(write.projection)>PILOT_LIMITS.projectionBytes)fail(409,'pilot_limit','Room projection limit reached; no data was changed');
+        if(Buffer.byteLength(write.projection)>PILOT_LIMITS.projectionBytes)fail(409,'pilot_limit','Room projection limit reached; no data was changed. Ask the room owner to review storage capacity before retrying.');
         this.db.prepare('INSERT INTO events VALUES(?,?,?,?)').run(roomId,sequence,event.id,JSON.stringify(event));
         this.db.prepare('UPDATE rooms SET sequence=?,projection=? WHERE id=?').run(sequence,write.projection,roomId);
         write.persistEntities();return sequence;

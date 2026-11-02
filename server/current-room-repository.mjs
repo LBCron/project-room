@@ -25,6 +25,9 @@ import { ServiceError } from './service-error.mjs';
 export const CURRENT_ROOM_TABLES = Object.freeze(['current_room_records','current_room_record_proofs','current_room_head','current_room_writer_permit']);
 export {CURRENT_WRITER_FORMAT} from './current-room-format.mjs';
 const hash = text => createHash('sha256').update(text).digest('hex');
+// The rooms row holds only this fixed-size commitment; entities live in their own records.
+const serializeCurrentCarrier = (revision, headHash) =>
+  JSON.stringify({normalizedCurrent:{version:1,headRevision:revision,headHash}});
 const corrupt = message => { throw Error('current_room_corrupt: ' + message); };
 const refuse = message => { throw new ServiceError(409,'current_room_context_unavailable',message); };
 const MAX_INPUT = 256 * 1024, MAX_RECORD = 128 * 1024;
@@ -222,7 +225,7 @@ export function readCurrentHead(db,roomId,b=contextBudgets.get(db)??budget()) {
   if(saved.roomId!==roomId||saved.headHash!==row.head_sha256)corrupt('head receipt changed');
   const carrier=db.prepare('SELECT sequence,projection FROM rooms WHERE id=?').get(roomId);
   charge(b,512);
-  if(!carrier||carrier.sequence!==row.sequence||carrier.projection!==JSON.stringify({normalizedCurrent:{version:1,headRevision:row.revision,headHash:row.head_sha256}}))
+  if(!carrier||carrier.sequence!==row.sequence||carrier.projection!==serializeCurrentCarrier(row.revision,row.head_sha256))
     corrupt('carrier differs from independent head');
   return {...row,counts:JSON.parse(row.counts_json)};
 }
@@ -285,7 +288,7 @@ function saveTransition(db,roomId,sequence,eventId,oldHead,changes,counts,{publi
   if(publishHead)db.prepare(`INSERT INTO current_room_head VALUES(?,1,?,?,?,?,?,?) ON CONFLICT(room_id) DO UPDATE SET
     sequence=excluded.sequence,event_id=excluded.event_id,revision=excluded.revision,head_sha256=excluded.head_sha256,counts_json=excluded.counts_json,receipt_id=excluded.receipt_id`)
     .run(roomId,sequence,eventId,revision,headHash,head.counts_json,receiptId);
-  return publishHead?JSON.stringify({normalizedCurrent:{version:1,headRevision:revision,headHash}}):
+  return publishHead?serializeCurrentCarrier(revision,headHash):
     {...head,format_version:1,head_sha256:headHash,receipt_id:receiptId,counts:JSON.parse(head.counts_json)};
 }
 export function initializeCurrentRoom(store,state,events) {
@@ -616,7 +619,7 @@ export function prepareCurrentWrite(store,{roomId,previous,state,event,sequence,
   for(const value of Object.values(counts))if(!Number.isSafeInteger(value)||value<0)corrupt('invalid qualified count effect');
   const nextHead={room_id:roomId,sequence,event_id:event.id,revision:current.head.revision+1,counts_json:JSON.stringify(counts)};
   const headHash=hash(JSON.stringify(headValue(nextHead)));
-  const projection=JSON.stringify({normalizedCurrent:{version:1,headRevision:nextHead.revision,headHash}});
+  const projection=serializeCurrentCarrier(nextHead.revision,headHash);
   if(!current.candidate)recordProjectionWrite(db,roomId,projection);
   const receiptBytesUpperBound=Buffer.byteLength(JSON.stringify({version:1,roomId,headHash,records:changes.map(({domain,key,value})=>[domain,key,Number.MAX_SAFE_INTEGER,value===undefined?0:1,'f'.repeat(64)])}));
   return {projection,receiptBytesUpperBound,retainedMessageIds:[],persistEntities(){

@@ -1,0 +1,47 @@
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import {RoomStore} from '../server/store.mjs';
+import {auditRecovery} from '../server/recovery.mjs';
+import {exportNdjsonText} from '../server/room-export.mjs';
+import {replayNdjsonInto} from '../server/restore-ndjson.mjs';
+import {withCurrentRoomWriter} from '../server/current-room-repository.mjs';
+import {seedHistoricalRedactionSource} from './helpers/historical-redaction-source.mjs';
+const relevant=['rooms','events','commands','messages','work_entities','current_room_head','current_room_records','current_room_record_proofs','operator_actions'];
+const snapshot=s=>Object.fromEntries(relevant.map(table=>[table,s.db.prepare('SELECT * FROM '+table).all()]));
+const originals=s=>s.db.prepare("SELECT id,counts_json FROM operator_actions WHERE action IN ('legacy_session_backfill_reconciled','legacy_session_replay_lookup') ORDER BY id").all();
+function fixture(t){const s=new RoomStore(':memory:');t.after(()=>s.close());const f=seedHistoricalRedactionSource(s);s.room=()=>{throw Error('whole room hydration');};return{s,...f};}
+function absent(s){for(const table of relevant)for(const row of s.db.prepare('SELECT * FROM '+table).all())for(const value of Object.values(row))assert.equal(String(value).includes('sensitive-prefix-'),false,'live erased payload in '+table);}
+function tamper(s,operation){
+ const guards=s.db.prepare("SELECT sql FROM sqlite_master WHERE name IN ('operator_actions_append_only_update','operator_actions_append_only_delete') ORDER BY name").all();
+ s.transaction(()=>withCurrentRoomWriter(s.db,'legacy-room',()=>{for(const name of ['operator_actions_append_only_update','operator_actions_append_only_delete'])s.db.exec('DROP TRIGGER '+name);try{operation();}finally{for(const {sql} of guards)s.db.exec(sql);}}));
+}
+function changeProof(s,action,change){tamper(s,()=>{const row=s.db.prepare('SELECT id,counts_json FROM operator_actions WHERE action=?').get(action),value=JSON.parse(row.counts_json);change(value);s.db.prepare('UPDATE operator_actions SET counts_json=? WHERE id=?').run(JSON.stringify(value),row.id);});}
+
+test('real repaired H source permits multiple prefix erasures, exact original receipts and full export/restore oracle',t=>{
+ const f=fixture(t),{s}=f;
+ for(const id of ['prefix-one','prefix-two','prefix-private'])f.erase(id);
+ assert.equal(s.db.prepare("SELECT count(*) n FROM operator_actions WHERE action='historical_replay_privacy_basis'").get().n,1);
+ assert.equal(s.db.prepare("SELECT count(*) n FROM operator_actions WHERE action='historical_replay_erased'").get().n,3);
+ assert.deepEqual(originals(s),f.original);absent(s);assert.doesNotThrow(()=>auditRecovery(s));
+ const before=snapshot(s);assert.equal(f.erase('prefix-one').duplicate,true);assert.deepEqual(snapshot(s),before);
+ const target=new RoomStore(':memory:');t.after(()=>target.close());replayNdjsonInto(exportNdjsonText(s.db),target);target.room=()=>{throw Error('whole room hydration');};
+ assert.deepEqual(originals(target),f.original);assert.doesNotThrow(()=>auditRecovery(target));absent(target);
+ const retry=target.command(f.key,'legacy-room',{id:'erase-prefix-one',type:'message.deleted',data:{messageId:'prefix-one',expectedMessageRevision:1,reason:'Authorized removal'}});assert.equal(retry.duplicate,true);assert.deepEqual(snapshot(target),before);
+});
+for(const stage of ['source','basis','receipt'])test('privacy '+stage+' save fault rolls back original events, canonical proofs and immutable ledgers',t=>{
+ const {s,erase,original}=fixture(t),before=snapshot(s),prepare=s.db.prepare.bind(s.db);let reached=false;
+ s.db.prepare=sql=>{const statement=prepare(sql),run=statement.run.bind(statement);statement.run=(...args)=>{const value=run(...args);if(stage==='source'&&sql==='UPDATE events SET body=? WHERE room_id=? AND sequence=?'||stage==='basis'&&args[2]==='historical_replay_privacy_basis'||stage==='receipt'&&args[2]==='historical_replay_erased'){reached=true;throw Error('historical privacy save interrupted');}return value;};return statement;};
+ try{assert.throws(()=>erase('prefix-one'),/historical privacy save interrupted/);}finally{s.db.prepare=prepare;}
+ assert.equal(reached,true);assert.deepEqual(snapshot(s),before);assert.deepEqual(originals(s),original);assert.doesNotThrow(()=>auditRecovery(s));erase('prefix-one');assert.doesNotThrow(()=>auditRecovery(s));
+});
+for(const [name,mutation] of [
+ ['descriptor alone',s=>tamper(s,()=>s.db.prepare("DELETE FROM operator_actions WHERE action='historical_replay_erased'").run())],
+ ['missing basis',s=>tamper(s,()=>s.db.prepare("DELETE FROM operator_actions WHERE action='historical_replay_privacy_basis'").run())],
+ ['wrong actor',s=>changeProof(s,'historical_replay_erased',value=>{value.actorId='worker';})],
+ ['unrelated command',s=>changeProof(s,'historical_replay_erased',value=>{value.command[0]='saved-modern-result';})],
+ ['edited target hash substitution',s=>changeProof(s,'historical_replay_privacy_basis',value=>{const row=value.rows.find(row=>row[4]==='prefix-one');row[3]='a'.repeat(64);})],
+ ['transition substitution',s=>changeProof(s,'historical_replay_erased',value=>{value.transition[3]++;})],
+ ['resurrected original text',s=>tamper(s,()=>{const row=s.db.prepare("SELECT sequence,body FROM events WHERE room_id='legacy-room' AND json_extract(body,'$.type')='message.posted' AND json_extract(body,'$.data.messageId')='prefix-one'").get(),value=JSON.parse(row.body);value.data.body='sensitive-prefix-one-original';delete value.data.redacted;s.db.prepare('UPDATE events SET body=? WHERE room_id=? AND sequence=?').run(JSON.stringify(value),'legacy-room',row.sequence);})]
+])test('cold independent recovery refuses '+name,t=>{
+ const {s,erase,original}=fixture(t);erase('prefix-one');mutation(s);assert.deepEqual(originals(s),original);assert.throws(()=>auditRecovery(s),/Saved historical replay evidence|Recovery data requires operator reconciliation/);const target=new RoomStore(':memory:');t.after(()=>target.close());assert.throws(()=>replayNdjsonInto(exportNdjsonText(s.db),target),/Saved historical replay evidence|Recovery data requires operator reconciliation/);
+});

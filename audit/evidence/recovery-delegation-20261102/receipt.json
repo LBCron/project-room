@@ -1,0 +1,56 @@
+{
+  "actualNative": true,
+  "calls": 95,
+  "coldJournalPages": 3,
+  "comparison": {
+    "sameReport": true,
+    "original": {
+      "statements": 594,
+      "rowsRead": 77960,
+      "rowsWritten": 2,
+      "bytes": 439059,
+      "unknown": 0,
+      "journalScans": 1,
+      "journalRows": 70,
+      "journalBytes": 22566
+    },
+    "consumed": {
+      "statements": 596,
+      "rowsRead": 71143,
+      "rowsWritten": 2,
+      "bytes": 924723,
+      "unknown": 0,
+      "journalScans": 0,
+      "journalRows": 0,
+      "journalBytes": 0
+    },
+    "cursor": {
+      "version": 1,
+      "stage": "complete",
+      "sequence": 70,
+      "entries": 70,
+      "groups": 1,
+      "grants": 1,
+      "after": "1"
+    }
+  },
+  "wholeRecoveryBounded": false,
+  "fullOracleStillRequired": true,
+  "sourceRevision": "00c72feb6",
+  "nativeQualification": "Local workerd SQLite; not production CPU or live activation proof",
+  "node": {
+    "tests": 57,
+    "passed": 57
+  },
+  "package": {
+    "tests": 2,
+    "passed": 2
+  },
+  "limitations": [
+    "Final audit returned bytes increased from 439059 to 924723; do not claim total-cost improvement.",
+    "Original whole-room replay still needed for stamped member joins; separate lane owns exact cure.",
+    "Other global journal families remain unbounded.",
+    "Scope admission and source freezing must be shared safely before optimization claim.",
+    "No production deployment or muse-room activation."
+  ]
+}

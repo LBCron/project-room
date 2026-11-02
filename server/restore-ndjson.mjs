@@ -183,6 +183,13 @@ function restoreSchemaHash(db,binding=null,{expectedHash=null,tables=null}={}){
    const matches=db.prepare(group.sql).all(...group.args);
    if(matches.length!==group.size||matches.some(row=>row.matches!==1))refuse();
   }
+  // Check legitimately recreated guards in one bounded catalog pass rather
+  // than rescanning the catalog once per name. Exact type/table/SQL remain
+  // mandatory on every use; no schema cookie or cross-request bypass.
+  if(saved.mutable.length){
+   const actual=db.prepare('SELECT type,name,tbl_name,sql FROM sqlite_master WHERE name IN ('+saved.mutable.map(()=>'?').join(',')+')').all(...saved.mutable.map(row=>row.name));
+   if(actual.length!==saved.mutable.length||saved.mutable.some(expected=>{const row=actual.find(value=>value.name===expected.name);return !row||row.type!==expected.type||row.tbl_name!==expected.tbl_name||row.sql!==expected.sql;}))refuse();
+  }
   if(saved.hash!==expectedHash)refuse();
   return saved.hash;
  }
@@ -199,10 +206,8 @@ function restoreSchemaHash(db,binding=null,{expectedHash=null,tables=null}={}){
     FROM expected e LEFT JOIN sqlite_master s ON s.rowid=e.catalog_id`;
    groups.push({sql,args,size:selected.length});
   }
-  for(const row of rows.filter(row=>restoreRecreatedGuards.has(row.name)))groups.push({
-   sql:'SELECT CASE WHEN type=? AND name=? AND tbl_name=? AND octet_length(sql) IS ? AND sql IS ? COLLATE BINARY THEN 1 ELSE 0 END AS matches FROM sqlite_master WHERE name=?',
-   args:[row.type,row.name,row.tbl_name,Buffer.byteLength(row.sql),row.sql,row.name],size:1});
-  restoreCatalogAdmissions.set(db,{binding,hash,count:scalar.count,bytes:scalar.bytes,groups});
+  const mutable=rows.filter(row=>restoreRecreatedGuards.has(row.name));
+  restoreCatalogAdmissions.set(db,{binding,hash,count:scalar.count,bytes:scalar.bytes,groups,mutable});
  }
  return hash;
 }

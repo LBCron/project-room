@@ -65,15 +65,18 @@ export function withRestoreTransaction(store,operation) {
 }
 export function withExactRestoreGuards(db,definitions,operation) {
   if(!db.isTransaction || !scopes.has(db))throw Error('Exact restore guards require a synchronous privileged restore transaction');
-  for(const [name,sql] of definitions) if(normalize(db.prepare('SELECT sql FROM sqlite_master WHERE name=?').get(name)?.sql)!==normalize(sql))
-    throw Error('Restore guard requires reconciliation: '+name);
+  const verify=message=>{
+    const rows=db.prepare('SELECT name,sql FROM sqlite_master WHERE name IN ('+definitions.map(()=>'?').join(',')+')').all(...definitions.map(([name])=>name));
+    if(rows.length!==definitions.length)throw Error(message);
+    for(const [name,sql] of definitions)if(normalize(rows.find(row=>row.name===name)?.sql)!==normalize(sql))throw Error(message+': '+name);
+  };
+  verify('Restore guard requires reconciliation');
   admittedSchemas.delete(db);
   for(const [name] of definitions)db.exec('DROP TRIGGER '+name);
   try { return operation(); }
   finally {
     for(const [,sql] of definitions)db.exec(sql);
-    for(const [name,sql] of definitions)if(normalize(db.prepare('SELECT sql FROM sqlite_master WHERE name=?').get(name)?.sql)!==normalize(sql))
-      throw Error('Restore guard reinstall failed: '+name);
+    verify('Restore guard reinstall failed');
   }
 }
 function setRestoreState(db,state,id,receipt=null) {

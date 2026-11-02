@@ -1,0 +1,16 @@
+{
+  "runtimeSource": "a599faa29ff65567e5c080609cb2d000acd33666",
+  "checkerSha256": "aedc5a0fc8ee040cd3c69e024db1ff85a752a1929a416c761170a0261395cd91",
+  "phoneExecution": {
+    "exit": 1,
+    "reason": "Stale room-access notice remains after opening an authorized room",
+    "staleNoticeStates": 2,
+    "boundaryControls": "403 foreign room and 409 stale session binding; no private markers"
+  },
+  "wrongPinControl": {
+    "exit": 1,
+    "noOutputDirectoryCreated": true
+  },
+  "runtimeSourceChanged": false,
+  "scope": "Portable local reproduction gate only. Expected red on unfixed a599. No owner fix, Native, hosted, fullsuite, release or physical peer-device execution."
+}

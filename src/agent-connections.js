@@ -10,6 +10,41 @@ const statuses = { key_issued: "Access ready · setup not verified", access_chan
 export function installAgentConnections({ client, getState }) {
   const dialog = $("#agent-connect-dialog"), form = $("#agent-connect-form"), list = $("#agent-connect-list");
   let owner = null, generation = null, ownerRevision = null, pending = null, setup = null, setupMeta = null, mcpCredential = null, expiryTimer = null, busy = false, copying = false, listVersion = 0, flow = 0, rosterId = null;
+  // Existing-account enrollment is a separate consent action: no new identity
+  // or setup key is shown, and a lost response retains its exact request.
+  let existingChoices = [], existingProfiles = {}, existingPending = null;
+  const existingBox = document.createElement('fieldset'); existingBox.hidden = true;
+  const existingLabel = document.createElement('label'), existingSelect = document.createElement('select'), existingButton = document.createElement('button');
+  existingLabel.textContent = uiText('agent.existing.label'); existingSelect.setAttribute('aria-label', uiText('agent.existing.label'));
+  existingButton.type = 'button'; existingButton.textContent = uiText('agent.existing.add');
+  existingLabel.append(existingSelect); existingBox.append(existingLabel, existingButton); form.prepend(existingBox);
+  const enrollmentKey = () => JSON.stringify(['room-account-agent-enrollment', owner?.account?.id, owner?.account?.authEpoch, owner?.roomId, owner?.member?.id]);
+  function saveEnrollment() { try { if (existingPending) sessionStorage.setItem(enrollmentKey(), JSON.stringify(existingPending)); else sessionStorage.removeItem(enrollmentKey()); } catch { /* exact retry remains in this tab */ } }
+  async function enrollExisting() {
+    if (!owns() || busy || pending || setup) return;
+    const currentFlow = flow, identity = owner;
+    if (!existingPending) {
+      const choice = existingChoices.find(value => value.choiceId === existingSelect.value); if (!choice) return;
+      const access = $('#agent-connect-access').value;
+      if (!Object.hasOwn(existingProfiles, access)) { status(uiText('agent.existing.profile')); return; }
+      if (!window.confirm(uiText('agent.existing.confirm', { name: choice.displayName, identityId: choice.identityId, roomId: owner.roomId, access, permissions:existingProfiles[access].join(', ') || uiText('agent.existing.readChat') }))) return;
+      existingPending = { action:'enroll-existing', requestId:crypto.randomUUID(), choiceId:choice.choiceId, sourceRoomId:choice.sourceRoomId,
+        sourceMemberId:choice.sourceMemberId, identityId:choice.identityId, memberId:choice.memberId, access, expectedOwnerRevision:member().revision };
+      saveEnrollment();
+    }
+    const request = existingPending; busy = true; render();
+    try {
+      const result = await client.request(client.path('/agent-connections'), {method:'POST',data:request});
+      if (!owns() || owner !== identity || flow !== currentFlow || existingPending !== request) return;
+      if (result?.enrolledExisting !== true || result.identityId !== request.identityId || result.receipt?.roomId !== owner.roomId || result.receipt?.memberId !== request.memberId || result.receipt?.requestId !== request.requestId) throw new Error(uiText('agent.existing.invalidResponse'));
+      existingPending = null; saveEnrollment(); status(uiText('agent.existing.connected')); void load();
+    } catch (error) {
+      if (!owns() || owner !== identity || flow !== currentFlow) return;
+      if (error.status >= 400 && error.status < 500) { existingPending = null; saveEnrollment(); status(error.message); void load(); }
+      else status(uiText('agent.existing.unconfirmed'));
+    } finally { if (owns() && owner === identity && flow === currentFlow) { busy = false; render(); } }
+  }
+  existingButton.addEventListener('click', () => { void enrollExisting(); });
   // Rows rendered before the room state held their member: re-read once it arrives (R29-1).
   let unseatedRows = new Set();
   const member = () => getState()?.members[client.session?.member?.id];
@@ -128,6 +163,9 @@ export function installAgentConnections({ client, getState }) {
   }
   function render() {
     constrainAccess();
+    existingSelect.disabled = busy || Boolean(existingPending) || Boolean(pending) || Boolean(setup);
+    existingButton.disabled = busy || Boolean(pending) || Boolean(setup);
+    existingButton.textContent = uiText(existingPending ? 'agent.existing.retry' : 'agent.existing.add');
     form.hidden = Boolean(setup); $("#agent-setup").hidden = !setup;
     if (setup) describeImport();
     for (const input of form.querySelectorAll("input,select")) input.disabled = busy || Boolean(pending);
@@ -145,7 +183,7 @@ export function installAgentConnections({ client, getState }) {
     }
   }
   function reset() {
-    flow++; listVersion++; owner = null; generation = null; ownerRevision = null; pending = null; forget(); busy = false;
+    flow++; listVersion++; existingChoices = []; existingPending = null; existingBox.hidden = true; owner = null; generation = null; ownerRevision = null; pending = null; forget(); busy = false;
     conceal(); form.reset(); rosterId = null; $("#agent-other-types").open = false;
     if ($("#agent-roster-hint")) $("#agent-roster-hint").textContent = "";
     if ($("#agent-import-route")) $("#agent-import-route").textContent = "";
@@ -173,6 +211,18 @@ export function installAgentConnections({ client, getState }) {
         const current = result.connections.find(row => row.memberId === setup.memberId);
         if (!current || current.status !== "key_issued" || current.generation !== setupMeta.generation) { forget(); status("Agent access changed. Review its connection."); }
       }
+      const enrollment = result.existingAgentEnrollment;
+      if (enrollment?.available === true && Array.isArray(enrollment.choices)) {
+        existingChoices = enrollment.choices;
+        existingProfiles = enrollment.profiles;
+        if (!existingProfiles || Object.entries(existingProfiles).some(([name, permissions]) => !['chat','guest','contribute','review','collaborate'].includes(name) || !Array.isArray(permissions) || permissions.some(permission => typeof permission !== 'string'))) throw new Error(uiText('agent.existing.invalidResponse'));
+        if (existingChoices.some(choice => !choice || typeof choice.choiceId !== 'string' || !/^[a-f0-9]{64}$/.test(choice.choiceId)
+          || ['sourceRoomId','sourceMemberId','identityId','memberId','displayName','label'].some(key => typeof choice[key] !== 'string'))) throw new Error(uiText('agent.existing.invalidResponse'));
+        if (!existingPending) { try { const saved = JSON.parse(sessionStorage.getItem(enrollmentKey()) || 'null'); if (saved?.action === 'enroll-existing' && typeof saved.requestId === 'string') existingPending = saved; } catch { /* invalid saved data is not sent automatically */ } }
+        existingSelect.replaceChildren();
+        for (const choice of existingChoices) { const option = document.createElement('option'); option.value = choice.choiceId; option.textContent = choice.label; existingSelect.append(option); }
+        existingBox.hidden = !existingChoices.length && !existingPending;
+      } else { existingChoices = []; existingBox.hidden = true; }
       list.replaceChildren(); unseatedRows = new Set();
       for (const row of result.connections) {
         const li = document.createElement("li"), name = document.createElement("strong"), text = document.createElement("p");

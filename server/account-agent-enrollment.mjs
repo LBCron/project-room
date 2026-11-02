@@ -4,6 +4,7 @@ import {createHash,randomBytes} from 'node:crypto';
 import {listMcpOAuthAgents,validateMcpOAuthBinding} from './mcp-oauth.mjs';
 import {ServiceError} from './service-error.mjs';
 import {validId,ownMember} from '../src/events.js';
+import {agentAccessProfiles} from './agent-connections.mjs';
 const scopes=new WeakMap();
 const action='account_agent_enrollment_v1';
 const hash=value=>createHash('sha256').update(value).digest('hex');
@@ -57,7 +58,7 @@ export function createAccountAgentEnrollment({store,resource,preferences=[],enab
  return {
   list(token,roomId,binding){return store.readTransaction(()=>{
    const auth=owner(store,token,roomId,binding);
-   return {available:enabled===true,choices:enabled===true?choices(auth,roomId).map(publicChoice):[]};
+   return {available:enabled===true,choices:enabled===true?choices(auth,roomId).map(publicChoice):[],...(enabled===true?{profiles:Object.fromEntries(['chat','guest','contribute','review','collaborate'].map(name=>[name,[...agentAccessProfiles[name]]]))}:{})};
   });},
   apply(token,roomId,input,binding){
    if(enabled!==true)fail(403,'access_denied','Existing agent enrollment is not enabled on this release');

@@ -1831,10 +1831,10 @@ export function createRoomServer({ store, origin, assetRoot = new URL("../", imp
           ? agentSponsorTransferCandidate(store,auth.account.id,preference??{}) : null;
         if(adoption)agentChoices.splice(0,agentChoices.length);
         if (requiredSeat) {
-          const match = agentChoices.find(choice => choice.binding.memberId === requiredSeat.preferredMemberId
+          const requiredAgent = agentChoices.find(choice => choice.binding.memberId === requiredSeat.preferredMemberId
             && choice.binding.roomId === requiredSeat.preferredRoomId);
-          if (!match && !adoption) return json(res, 409, {error: "existing_agent_connection_required", error_description: "The configured existing agent is not currently eligible; no replacement seat was created"});
-          if(match)agentChoices.splice(0, agentChoices.length, match);
+          if (!requiredAgent && !adoption) return json(res, 409, {error: "existing_agent_connection_required", error_description: "The configured existing agent is not currently eligible; no replacement seat was created"});
+          if(requiredAgent)agentChoices.splice(0, agentChoices.length, requiredAgent);
         }
         if (mcpConsent && !agentChoices.length && !adoption)
           return json(res, 409, { error: "agent_connection_required", error_description: "Join the room as yourself, then create your own connected agent before authorizing it" });

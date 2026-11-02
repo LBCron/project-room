@@ -17,7 +17,8 @@ test("the public set is enumerated live from the table, not a pinned list", () =
   const publicRoutes = ROUTES.filter(isPublicRoute);
   // #3674 started with demo and the front door. Main has since added the
   // download page and the public agent page, and this batch adds the door
-  // funnel; agent pairing and invite redemption add their rows. A new public route grows this set and must declare (next test);
+  // funnel; agent pairing, invite redemption and the static receipt specification
+  // add their rows. A new public route grows this set and must declare (next test);
   // a vanished one should make this line be revisited, not silently pass.
   assert.deepEqual(publicRoutes.map(r => r.id).sort(), [
     "agent-invite-availability", "agent-invite-redeem",
@@ -25,6 +26,7 @@ test("the public set is enumerated live from the table, not a pinned list", () =
     "pair-page-get", "pair-phone", "pair-poll", "pair-start-get", "pair-start-post",
     "public-agent-ask", "public-agent-card", "public-agent-page", "public-agent-poll",
     "public-front-door-get", "public-front-door-head", "public.door-funnel",
+    "work-receipt-extension-get", "work-receipt-extension-head",
   ]);
   for (const r of publicRoutes) assert.ok(isPublishable(r, ROUTE_PUBLICATION_NOTE), `${r.id} is public but not publishable under its declaration`);
 });

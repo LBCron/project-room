@@ -57,6 +57,9 @@ const PROBES = {
   "HEAD /demo": [undefined, 200],
   "GET /download": [undefined, 200],
   "HEAD /download": [undefined, 200],
+  // Public static A2A receipt specification: no room data or credential.
+  "GET /extensions/work-receipt/v1": [undefined, 200],
+  "HEAD /extensions/work-receipt/v1": [undefined, 200],
   // Native login starts/callbacks require PKCE query shape. The exchange is
   // publicly reachable but an invented one-time code cannot establish a session.
   "GET /api/auth/desktop/start": [undefined, 422],

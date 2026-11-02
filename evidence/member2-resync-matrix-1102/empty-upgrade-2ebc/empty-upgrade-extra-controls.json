@@ -1,0 +1,26 @@
+{
+  "schema": "member2-empty-upgrade-extra-controls-v1",
+  "node": "v24.22.1",
+  "pins": [
+    "8e65a6e73ae191ffa7fc89c2e88fa382ad2ac000",
+    "2ebce68b3c556f313476716afdae84f2a2b33e6d"
+  ],
+  "fixture": "genuine old RoomStore, disposable in-memory Node SQLite; controlled state mutation with exact original guards restored",
+  "limits": "Not Native, production, completed restore, or populated-format migration evidence",
+  "results": [
+    {
+      "case": "open_writer_permit",
+      "pass": true,
+      "error": "Previous current format has unfinished authority",
+      "upgradeTriggerDrops": 0,
+      "catalogAndDataUnchanged": true
+    },
+    {
+      "case": "leftover_audit_scratch",
+      "pass": true,
+      "error": "Populated previous current format requires explicit recovery",
+      "upgradeTriggerDrops": 0,
+      "catalogAndDataUnchanged": true
+    }
+  ]
+}

@@ -2,8 +2,7 @@ import { withCurrentServingWriter } from './current-room-repository.mjs';
 import {purgeReplayCapturesForPrivacy} from './replay-cutover.mjs';
 import { assertMessageWrite, recordMessageWrite } from './write-integrity.mjs';
 import { readMessageReplaySnapshot, writeMessageReplaySnapshot, discardMessageReplaySnapshot } from './message-replay-snapshot.mjs';
-import {savedHistoricalReplayCheckpoint} from './historical-replay-contract.mjs';
-import {ServiceError} from './service-error.mjs';
+import {prepareHistoricalReplayErasure} from './historical-replay-contract.mjs';
 // PRIV-1: rewrite a message out of the log, the projection, and the messages
 // table in one transaction. Read-time masking stays; this is the write that
 // makes the old text unreadable in storage.
@@ -44,19 +43,11 @@ function receiptCites(state, messageId) {
 // copy, ancestry and its one canonical work contract. Native text evidence is
 // valid only for a message explicitly linked to that same work item. Keep the
 // existing shared reducers and event order, but never open a full room/log.
-export function prepareCurrentMessageRedaction(db,{roomId,state,actorId,at,messageId}) {
+export function prepareCurrentMessageRedaction(db,{roomId,state,actorId,at,messageId,command,deletion}) {
   const sourceId=messageId.endsWith(':channel')?null:messageId;
-  // This bounded, previously proved historical prefix is immutable evidence.
-  // Rewriting its source bytes would invalidate recovery's exact digest. A
-  // modern suffix and a channel-copy-only deletion do not rewrite that basis.
-  // Do not mint a replacement historical certificate as a deletion side effect.
-  const head=sourceId?db.prepare('SELECT sequence FROM rooms WHERE id=?').get(roomId):null;
-  const historical=head?savedHistoricalReplayCheckpoint(db,roomId,head.sequence):null;
   const rows=db.prepare("SELECT sequence,json_extract(body,'$.type') type,length(CAST(json_extract(body,'$.data.body') AS BLOB)) bytes FROM events INDEXED BY current_redaction_message_events WHERE room_id=? AND CASE WHEN json_type(body,'$.data.messageId')='text' AND json_extract(body,'$.data.messageId')<>'' THEN json_extract(body,'$.data.messageId') ELSE id END=? ORDER BY sequence");
   let byteLength=null,alreadyRedacted=false,alreadyWithdrawn=false;
   for(const row of rows.iterate(roomId,messageId)) {
-    if(sourceId&&historical&&row.sequence<=historical.sequence&&[EVENT_TYPES.MESSAGE_POSTED,EVENT_TYPES.MESSAGE_EDITED].includes(row.type))
-      throw new ServiceError(409,'current_redaction_historical_prefix','This message belongs to an immutable historical replay prefix. Erasure needs an explicit historical privacy reconciliation; no data was changed.');
     if ( row.type === EVENT_TYPES.MESSAGE_POSTED && byteLength === null ) byteLength = row.bytes;
     if(row.type===EVENT_TYPES.MESSAGE_REDACTED)alreadyRedacted=true;
     if(row.type===EVENT_TYPES.RECEIPT_EVIDENCE_WITHDRAWN)alreadyWithdrawn=true;
@@ -65,7 +56,10 @@ export function prepareCurrentMessageRedaction(db,{roomId,state,actorId,at,messa
   const append=(type,data)=>{const incoming=event({type,actorId,roomId,at,data});state=compact(applyEvent(state,incoming));events.push(incoming);};
   if(receiptCites(state,messageId)&&!alreadyWithdrawn)append(EVENT_TYPES.RECEIPT_EVIDENCE_WITHDRAWN,{messageId,evidence:'removed',...length});
   if(!alreadyRedacted)append(EVENT_TYPES.MESSAGE_REDACTED,{messageId,...length});
-  return {state,events,persist(sequence){
+  const historical=sourceId?prepareHistoricalReplayErasure(db,{roomId,through:db.prepare('SELECT sequence FROM rooms WHERE id=?').get(roomId).sequence,messageId,actorId,command,deletion,redaction:events.find(entry=>entry.type===EVENT_TYPES.MESSAGE_REDACTED)}):null;
+  let deletionSequence;
+  return {state,events,admit(bytes){historical?.admit(bytes);},finalize(){historical?.finalize(deletionSequence);},persist(sequence){
+    deletionSequence=sequence;
     purgeReplayCapturesForPrivacy(db,roomId);
     if(sourceId) {
       const update=db.prepare('UPDATE events SET body=? WHERE room_id=? AND sequence=?');

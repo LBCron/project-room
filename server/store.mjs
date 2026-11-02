@@ -7358,13 +7358,14 @@ this.slaBreachAlerts = new SlaBreachAlertJournal(this); // Task 26: durable in-a
       }
       const sequence = room.sequence + 1;
       const currentRedaction = messageContext?.current && incoming.type === T.MESSAGE_DELETED
-        ?prepareCurrentMessageRedaction(this.db,{roomId,state,actorId:incoming.actorId,at:incoming.at,messageId:incoming.data.messageId}):null;
+        ?prepareCurrentMessageRedaction(this.db,{roomId,state,actorId:incoming.actorId,at:incoming.at,messageId:incoming.data.messageId,command,deletion:incoming}):null;
       if(currentRedaction)state=currentRedaction.state;
       const finalSequence=sequence+(currentRedaction?.events.length??0);
       const persistenceEvent=currentRedaction?.events.at(-1)??incoming;
       const messageWrite = messageContext?.current
         ? prepareCurrentWrite(this,{roomId,previous:room,state,event:persistenceEvent,sequence:finalSequence,current:messageContext.current})
         : prepareMessageWrite(this, {roomId,previous:room,state,event:incoming,sequence,messageAuthorityCount:messageContext?.count});
+      currentRedaction?.admit(messageWrite.receiptBytesUpperBound);
       const { projection } = messageWrite;
       if (Buffer.byteLength(projection) > PILOT_LIMITS.projectionBytes && !cleanup) fail(409, "pilot_limit", "Room projection limit reached; no data was changed. Ask the room owner to have older messages archived to free space.");
       // R1 delivery-path tracing (RC-2026-09-26-966): delivery.log spans the
@@ -7388,7 +7389,7 @@ this.slaBreachAlerts = new SlaBreachAlertJournal(this); // Task 26: durable in-a
         // lifecycle, not just the five events the frozen mirror translated
         // (decision #34) — and a failed board write (caps, occupied
         // successor) rolls the command back.
-        if (messageContext?.current) messageWrite.persistEntities();
+        if (messageContext?.current) {messageWrite.persistEntities();currentRedaction?.finalize();}
         if (!messageContext?.current && WORK_ITEM_BOARD_SYNC_TYPES.has(incoming.type)) {
           syncWorkItemClaim(this, roomId, auth.member.id, incoming, state);
         }

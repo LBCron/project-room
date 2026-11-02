@@ -1,10 +1,9 @@
+import {recoveryReminderReceipt,recoveryReminderStep,recoveryReminderCurrent} from './recovery-reminder-rules.mjs';
 import {validateRecoveryHistoryEntry} from './recovery-history-entry.mjs';
 import { isCurrentRoom, readCurrentRoomForAudit, verifyCurrentRoomSchema } from './current-room-repository.mjs';
 // Read-only offline audit. It neither repairs data nor proves post-capture authority.
 import { createHash } from "node:crypto";
-import { validId } from "../src/events.js";
 import { auditReplayCutoverRecovery } from "./replay-cutover.mjs";
-import { terminalWork } from "../src/workflow.js";
 import { applicationTables, lazyAdditiveTables, STORE_SCHEMA_VERSION } from "./writer-fence.mjs";
 import { auditTextResults } from "./text-results.mjs";
 import { auditCharters } from "../src/room-charter.js";
@@ -193,15 +192,7 @@ export function auditRecovery(store) {
     const receipts = store.db.prepare("SELECT * FROM private_reminder_commands").all();
     const byWork = new Map();
     for (const row of receipts) {
-      const receipt = JSON.parse(row.response);
-      requireState(receipt && Object.keys(receipt).sort().join(" ") === "dueAt requestId revision state workItemId"
-        && validId(row.member_id) && validId(row.request_id) && receipt.requestId === row.request_id
-        && validId(receipt.workItemId) && integer(receipt.revision) && receipt.revision > 0
-        && integer(receipt.dueAt) && ["active", "cancelled"].includes(receipt.state));
-      const request = { requestId: receipt.requestId, workItemId: receipt.workItemId,
-        expectedRevision: receipt.revision - 1, action: receipt.state === "active" ? "schedule" : "cancel",
-        ...(receipt.state === "active" ? { dueAt: receipt.dueAt } : {}) };
-      requireState(row.fingerprint === digest(request));
+      const receipt = recoveryReminderReceipt(row);
       const key = canonical([row.room_id, row.member_id, receipt.workItemId]);
       const history = byWork.get(key) ?? [];
       requireState(!history.some(item => item.revision === receipt.revision));
@@ -209,26 +200,14 @@ export function auditRecovery(store) {
     }
     for (const history of byWork.values()) {
       history.sort((a, b) => a.revision - b.revision);
-      requireState(history[0].revision === 1 && history[0].state === "active");
-      for (let i = 1; i < history.length; i++) {
-        const prior = history[i - 1], next = history[i], step = next.revision - prior.revision;
-        requireState(step === 1 || (step === 2 && prior.state === "active" && next.state === "active"));
-        if (next.state === "cancelled") requireState(prior.state === "active" && step === 1 && prior.dueAt === next.dueAt);
-      }
+      for (let i = 0; i < history.length; i++) recoveryReminderStep(i ? history[i - 1] : null, history[i]);
     }
     for (const row of reminders) {
       const state = rooms.get(row.room_id), member = state?.members[row.member_id], work = state?.workItems[row.work_item_id];
       const key = canonical([row.room_id, row.member_id, row.work_item_id]);
       const history = byWork.get(key), latest = history?.reduce((a, b) => a.revision > b.revision ? a : b);
-      requireState(member && work && integer(row.revision) && row.revision > 0 && integer(row.due_at)
-        && integer(row.basis_work_revision) && row.basis_work_revision >= 0 && row.basis_work_revision <= work.revision
-        && integer(row.created_at) && integer(row.updated_at) && latest
-        && latest.dueAt === row.due_at && ["active", "cancelled", "resolved"].includes(row.state));
-      if (row.state === "resolved") requireState(latest.state === "active" && row.revision === latest.revision + 1);
-      else requireState(latest.revision === row.revision && latest.state === row.state);
       const account = store.accountForMember(row.room_id, row.member_id);
-      if (member.kind === "human") requireState(account);
-      if (row.state === "active") requireState(member.active && !terminalWork(work) && (member.kind !== "human" || account.active));
+      recoveryReminderCurrent(row, latest, { member, work, account });
       byWork.delete(key);
     }
     requireState(byWork.size === 0);

@@ -64,8 +64,9 @@ export function verifyRoomLifecycle(store) {
 
 // Archive closes every write to the room: commands, history import and the
 // join paths that append membership events. Reads, streams and export stay.
+// Store.command separately admits the active owner privacy exception only.
 export function refuseArchivedWrite(state) {
-  if (isRoomArchived(state)) fail(409, "room_archived", "This room is archived: reading and export stay available, nothing new is recorded");
+  if (isRoomArchived(state)) fail(409, "room_archived", "This room is archived: reading, export and explicit owner erasure stay available; ordinary coordination is closed");
 }
 
 export const archivedAtOf = state => (typeof state?.room?.archivedAt === "string" ? state.room.archivedAt : null);

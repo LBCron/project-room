@@ -17,8 +17,10 @@
         open a second write path.
         Room lifecycle (issue #6 A2): `room.archived` (data: optional
         `reason`, 280 characters) is owner-only and makes the room read
-        only — reads, streams and export continue, every later command
-        answers 409 room_archived. `member.access_changed` targeted at the
+        only — reads, streams and export continue. Ordinary later commands
+        answer 409 room_archived. The current active owner may explicitly
+        erase a message with `message.deleted`; original target and revision
+        checks still apply, and its internal privacy followups are recorded. `member.access_changed` targeted at the
         caller with unchanged permissions and `active: false` is a leave and
         needs no manage_members; the owner cannot leave.
 

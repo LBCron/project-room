@@ -448,7 +448,7 @@ function rebuildRoom(store, roomId) {
 // every message/head/proof transition remains inside the account transaction.
 function archiveCurrentPersonalRoom(store,room) {
   const metadata=withCurrentReadContext(store.db,room.id,()=>readCurrentRecord(store.db,room.id,'metadata','room'));
-  if(isRoomArchived({room:metadata}))fail(409,'current_account_erasure_unavailable','Archived normalized room erasure requires its preserved privacy publication path');
+  const archived=isRoomArchived({room:metadata});
   return withDeletionMemberKey(store,room.id,room.memberId,key=>{
     let removed=0;
     const ids=store.db.prepare('SELECT message_id FROM messages WHERE room_id=? ORDER BY message_id').all(room.id);
@@ -464,7 +464,7 @@ function archiveCurrentPersonalRoom(store,room) {
       fail(409,'current_account_erasure_unavailable','Personal room has a noncanonical historical body requiring privacy reconciliation');
     removed+=withCurrentServingWriter(store.db,room.id,()=>store.db.prepare("UPDATE room_attachments SET state='deleted',bytes=NULL,filename='purged' WHERE room_id=? AND state IN ('staged','committed')").run(room.id).changes);
     for(const table of ['room_code_checks','room_code_drops'])if(tableExists(store.db,table))store.db.prepare('DELETE FROM '+table+' WHERE room_id=?').run(room.id);
-    store.command(key,room.id,{id:'account-delete-archive-'+createHash('sha256').update(room.id).digest('hex').slice(0,32),type:EVENT_TYPES.ROOM_ARCHIVED,data:{reason:'Account deletion'}});
+    if(!archived)store.command(key,room.id,{id:'account-delete-archive-'+createHash('sha256').update(room.id).digest('hex').slice(0,32),type:EVENT_TYPES.ROOM_ARCHIVED,data:{reason:'Account deletion'}});
     return removed;
   });
 }

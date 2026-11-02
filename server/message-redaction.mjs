@@ -9,7 +9,7 @@ import {prepareHistoricalReplayErasure} from './historical-replay-contract.mjs';
 
 import { hasMessageAuthority } from './message-authority.mjs';
 import { storedProjection } from "./projection-at-rest.mjs"; // Phase 1a
-import { applyEvent, event, EVENT_TYPES, isRoomArchived } from "../src/events.js";
+import { applyEvent, event, EVENT_TYPES, isRoomArchived, isArchivedOwnerPrivacyEvent } from "../src/events.js";
 import { syncMessageRows } from "./messages-store.mjs";
 
 const compact = state => ({ ...state, eventLog: [], seenEvents: {}, seenIdempotencyKeys: {} });
@@ -115,7 +115,7 @@ export function readRedactionLog(db, roomId) {
 // caller that writes or rebuilds the projection itself after its last call.
 // retainedMessageIds is an ordinary-delete allowlist from its pre-command
 // carrier. Bulk account deletion deliberately uses the empty default.
-export function commitMessageRedaction(db, { roomId, state, actorId, at, messageId, bodiesAtRest = false, log = null, writeProjection = true, retainedMessageIds = [] }) {
+export function commitMessageRedaction(db, { roomId, state, actorId, at, messageId, bodiesAtRest = false, log = null, writeProjection = true, retainedMessageIds = [], postArchiveOwnerDelete = false }) {
   if (typeof roomId !== "string" || typeof messageId !== "string" || !messageId) {
     return { state, sequence: null, rewritten: 0 };
   }
@@ -163,7 +163,8 @@ export function commitMessageRedaction(db, { roomId, state, actorId, at, message
 
   let next = state;
   let sequence = shared.maxSequence;
-  if (!isRoomArchived(state)) {
+  const ownerAfterArchive=postArchiveOwnerDelete&&isArchivedOwnerPrivacyEvent(state,{type:EVENT_TYPES.MESSAGE_REDACTED,actorId});
+  if (!isRoomArchived(state)||ownerAfterArchive) {
     const insert = db.prepare("INSERT INTO events VALUES(?,?,?,?)");
     const length = Number.isInteger(byteLength) && byteLength > 0 ? { byteLength } : {};
     if (receiptCites(state, messageId) && !alreadyWithdrawn) {
@@ -195,8 +196,8 @@ export function commitMessageRedaction(db, { roomId, state, actorId, at, message
   const ids = messageId.endsWith(":channel") ? [messageId] : [messageId, `${messageId}:channel`];
   try {
     for (const id of ids) assertMessageWrite(db,roomId,id);
-    db.prepare(`UPDATE messages SET body=NULL, reducer_extras_json=NULL, deleted_at=COALESCE(deleted_at, ?) WHERE room_id=? AND message_id IN (${ids.map(() => "?").join(",")})`).run(at, roomId, ...ids);
-    if (isRoomArchived(state)) {
+    db.prepare(`UPDATE messages SET body=NULL, reducer_extras_json=${ownerAfterArchive?'reducer_extras_json':'NULL'}, deleted_at=COALESCE(deleted_at, ?) WHERE room_id=? AND message_id IN (${ids.map(() => "?").join(",")})`).run(at, roomId, ...ids);
+    if (isRoomArchived(state)&&!ownerAfterArchive) {
       db.prepare(`UPDATE messages SET record_json=NULL WHERE room_id=? AND message_id IN (${ids.map(() => "?").join(",")})`).run(roomId, ...ids);
     }
     for (const id of ids) recordMessageWrite(db,roomId,id);
@@ -238,7 +239,7 @@ export function commitMessageRedaction(db, { roomId, state, actorId, at, message
   }
 
   const stored = compact(next);
-  if (!isRoomArchived(state)) {
+  if (!isRoomArchived(state)||ownerAfterArchive) {
     if (writeProjection) db.prepare("UPDATE rooms SET sequence=?, projection=? WHERE id=?").run(sequence, storedProjection(db, roomId, stored, { enabled: bodiesAtRest, retainedMessageIds }), roomId);
     else db.prepare("UPDATE rooms SET sequence=? WHERE id=?").run(sequence, roomId);
   }

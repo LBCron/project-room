@@ -1347,7 +1347,7 @@ function syncRoomLifecycle() {
   badge.textContent = room ? roomKindLabel(roomKind(room)) : ""; badge.hidden = !room;
   const note = $("#room-archived-note");
   note.hidden = !archived;
-  note.textContent = archived ? `Archived ${new Date(room.archivedAt).toLocaleString()}${room.archivedById ? ` by ${displayName(room.archivedById)}` : ""} · read only. Reading and export stay available; nothing new is recorded.` : "";
+  note.textContent = archived ? `Archived ${new Date(room.archivedAt).toLocaleString()}${room.archivedById ? ` by ${displayName(room.archivedById)}` : ""} · read only. Reading, export and explicit owner erasure stay available; ordinary coordination is closed.` : "";
   $("#main").classList.toggle("room-archived", archived); // The composer and New work follow in syncRequestComposer and render.
   const owner = Boolean(viewer) && viewer.kind === "human" && viewer.id === room?.ownerId;
   $("#room-archive-button").hidden = !viewer || archived || !owner;

@@ -345,13 +345,23 @@ export function firstBlockedWakeTarget(state, actorId, targetIds) {
 // personal / organization badge until a real organization model (D1) exists;
 // rooms created before it read as personal. Archive is an owner-only event
 // (room.archived) that turns the room read-only: reads, streams and export
-// continue, and no further event of any type is accepted for that room. A
+// continue. Ordinary coordination stays frozen; only the active current owner
+// may explicitly erase content through the existing privacy events. A
 // member leaves by ending their own access (member.access_changed on
 // themself, permissions unchanged, active false) without needing
 // manage_members; the owner cannot leave.
 export const ROOM_KINDS = Object.freeze(["personal", "organization"]);
 export const roomKind = room => (ROOM_KINDS.includes(room?.kind) ? room.kind : "personal");
 export const isRoomArchived = state => typeof state?.room?.archivedAt === "string";
+// One policy for live admission and deterministic replay. These internal
+// follow-up events remain absent from the public command catalog. Target,
+// revision, membership and evidence checks still belong to their handlers.
+export function isArchivedOwnerPrivacyEvent(state,incoming) {
+  if(!isRoomArchived(state)||!['message.deleted','message.redacted','receipt.evidence_withdrawn'].includes(incoming?.type))return false;
+  const actor=ownMember(state.members,incoming.actorId);
+  return actor?.active===true&&actor.id===state.room.ownerId;
+}
+
 export function isLeaveRequest(state, incoming) {
   const member = Object.hasOwn(state.members, String(incoming.data?.memberId)) && state.members[incoming.data.memberId];
   return Boolean(member) && incoming.actorId === member.id && member.active === true && incoming.data.active === false
@@ -672,7 +682,7 @@ function applyEventWithJournal(current, incoming, journal = null) {
   if (incoming.type !== EVENT_TYPES.ROOM_CREATED) {
     if (!state.room) throw new Error("Room must be created before other events");
     if (incoming.roomId !== state.room.id) throw new Error("Event belongs to a different Room");
-    if (isRoomArchived(state)) throw new Error("Room is archived");
+    if (isRoomArchived(state)&&!isArchivedOwnerPrivacyEvent(state,incoming)) throw new Error("Room is archived");
   }
 
   const handlers = {

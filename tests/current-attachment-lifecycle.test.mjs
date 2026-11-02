@@ -1,6 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {RoomStore} from '../server/store.mjs';
+import {auditRecovery} from '../server/recovery.mjs';
 import {initialRoom} from '../server/bootstrap.mjs';
 import {event} from '../src/events.js';
 import {withCurrentRoomWriter} from '../server/current-room-repository.mjs';
@@ -58,16 +59,19 @@ test('fresh readonly tier still denies normalized file changes',t=>{
  assert.throws(()=>s.roomAttachments.commit(keys.alice,'commons',{id:'held',messageId:'dm'}),e=>e.code==='agent_readonly');
 });
 import {planAccountDeletion,executeAccountDeletion} from '../server/account-deletion.mjs';
-for(const normalized of [false,true])test(`account erasure fails closed on ${normalized?'unsupported normalized room':'attachment storage fault'} without byte loss`,t=>{
+for(const normalized of [false,true])test(`account erasure ${normalized?'clears normalized attachment bytes':'rolls back an attachment storage fault'}`,t=>{
  const s=new RoomStore(':memory:');t.after(()=>s.close());const es=initialRoom();es[0].data.kind='personal';s.initialize(es,normalized?{representation:'normalized-current-v1'}:undefined);
  const key=s.issueAccessKey('commons','owner');s.roomAttachments.stage(key,'commons',{id:'held',filename:'f.txt',mediaType:'text/plain',data:'YQ=='});
  const accountId=s.db.prepare("SELECT account_id FROM member_accounts WHERE room_id='commons' AND member_id='owner'").get().account_id;
+ s.initialize(initialRoom('survivor'),{representation:'normalized-current-v1'});const survivorKey=s.issueAccessKey('survivor','owner'),survivorId=s.accountForMember('survivor','owner').id,survivor=s.account(survivorId),survivorCredentials=s.db.prepare("SELECT * FROM credentials WHERE room_id='survivor'").all();
  const {plan}=planAccountDeletion(s,accountId),before=s.db.prepare('SELECT * FROM accounts WHERE id=?').get(accountId);
  assert.ok(plan.rooms.archive.some(r=>r.id==='commons'));
  const prepare=s.db.prepare.bind(s.db);
  if(!normalized)s.db.prepare=sql=>{if(sql.includes("UPDATE room_attachments SET state='deleted', bytes=NULL, filename='purged'"))throw Error('synthetic attachment storage failure');return prepare(sql);};
- assert.throws(()=>executeAccountDeletion(s,plan),normalized?e=>e.code==='current_room_context_required':/synthetic attachment storage failure/);
- s.db.prepare=prepare;assert.deepEqual(s.db.prepare('SELECT * FROM accounts WHERE id=?').get(accountId),before);
+ if(normalized)executeAccountDeletion(s,plan);else assert.throws(()=>executeAccountDeletion(s,plan),/synthetic attachment storage failure/);
+ s.db.prepare=prepare;assert.deepEqual(s.account(survivorId),survivor);assert.deepEqual(s.db.prepare("SELECT * FROM credentials WHERE room_id='survivor'").all(),survivorCredentials);assert.equal(s.authenticate(survivorKey,'survivor').member.id,'owner');
+ if(normalized){assert.equal(s.account(accountId).active,false);assert.deepEqual({...s.db.prepare("SELECT state,bytes,filename FROM room_attachments WHERE id='held'").get()},{state:'deleted',bytes:null,filename:'purged'});assert.doesNotThrow(()=>auditRecovery(s));return;}
+ assert.deepEqual(s.db.prepare('SELECT * FROM accounts WHERE id=?').get(accountId),before);
  assert.equal(s.db.prepare("SELECT state FROM room_attachments WHERE id='held'").get().state,'staged');
  assert.equal(s.db.prepare("SELECT length(bytes) n FROM room_attachments WHERE id='held'").get().n,1);
 });

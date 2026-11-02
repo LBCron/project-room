@@ -18,6 +18,7 @@ export class RedactionNativeRoom extends ProjectRoom {
     es.push(event({roomId:'commons',actorId:'owner',type:'message.edited',data:{messageId:'private',body:'native-private-current-needle',expectedMessageRevision:0}}));
     s.initialize(es,{representation:'normalized-current-v1'});
     for(const id of ['owner','worker','other'])await this.ctx.storage.put(id,s.issueAccessKey('commons',id));
+    if(u.searchParams.has('archive'))s.command(await this.ctx.storage.get('owner'),'commons',{id:'archive-before-erasure',type:'room.archived',data:{reason:'Synthetic owner privacy qualification'}});
     return Response.json({n,key:await this.ctx.storage.get('owner')});
    }
    if(u.pathname==='/__export')return new Response(exportNdjsonText(db));

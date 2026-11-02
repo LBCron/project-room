@@ -223,18 +223,19 @@ export class AgentConnections {
       }
       let now = this.store.now();
       const before = this.row(roomId, memberId);
-      const isOwner = auth.member.id === this.store.room(roomId).state.room.ownerId;
+      const authority = this.store.roomAuthority(roomId,{memberId});
+      const isOwner = auth.member.id === authority.ownerId;
       const friend = action === "create" ? !isOwner : before && this.friendSponsored(before);
       const ownConnection = before?.sponsor_member_id === auth.member.id && before?.sponsor_account_id === auth.account.id;
       if (action !== "create" && ((!isOwner && (!friend || !ownConnection)) || (friend && action === "rotate" && !ownConnection)))
         fail(403, "sponsor_required", "Only this agent's sponsor can reconnect it");
-      const authoritySequence = this.store.room(roomId).sequence;
-      const permissions = action === "create" ? access[request.access] : ownMember(this.store.room(roomId).state.members, memberId)?.permissions;
+      const authoritySequence = authority.sequence;
+      const permissions = action === "create" ? access[request.access] : ownMember(authority.members, memberId)?.permissions;
       if (action !== "disconnect" && friend && (!permissions || permissions.some(p => !AGENT_INVITE_SAFE_PERMISSIONS.includes(p) || !auth.member.permissions.includes(p))))
         fail(403, "sponsor_scope_exceeded", "An agent can only receive working permissions its human sponsor holds");
       if (expectedOwnerRevision !== auth.member.revision) fail(409, "stale_member_revision", "Your room access changed; refresh first");
       if (action !== "disconnect" && (expiresAt <= now || expiresAt > now + 30 * 86400000 + 3600000)) fail(422, "invalid_expiry", "Choose an expiry within 30 days");
-      const roomMembers = this.store.room(roomId).state.members;
+      const roomMembers = authority.members;
       const existingMember = Object.hasOwn(roomMembers, memberId) ? roomMembers[memberId] : undefined;
       if (action === "create" ? Boolean(before || existingMember)
         : !before || before.status === "disconnected" || before.generation !== expectedGeneration
@@ -254,13 +255,13 @@ export class AgentConnections {
           // RC-2026-09-24-201: stamp the identity on the member record so
           // the room state is self-describing (agent-rooms.mjs already does).
           ...(request.identityId ? { identityId: request.identityId } : {}) } }, binding, { agentConnectionSponsor: friend });
-      if (action === "disconnect" && ownMember(this.store.room(roomId).state.members, memberId)?.active !== false) membership = this.store.command(token, roomId, { id: `agent-${hash(`${auth.account.id}:${requestId}`).slice(0, 40)}`, type: T.MEMBER_ACCESS_CHANGED,
-        data: { memberId, expectedMemberRevision, active: false, permissions: ownMember(this.store.room(roomId).state.members, memberId)?.permissions } }, binding, { agentConnectionSponsor: friend && !isOwner });
+      if (action === "disconnect" && ownMember(authority.members, memberId)?.active !== false) membership = this.store.command(token, roomId, { id: `agent-${hash(`${auth.account.id}:${requestId}`).slice(0, 40)}`, type: T.MEMBER_ACCESS_CHANGED,
+        data: { memberId, expectedMemberRevision, active: false, permissions: ownMember(authority.members, memberId)?.permissions } }, binding, { agentConnectionSponsor: friend && !isOwner });
       // Read AFTER the create/disconnect commands above: downstream state
       // persistence needs the post-command member (revision, permissions) —
       // hoisting this read above the disconnect command was the #3283
       // hosted-CI failure (verifyHistory rejected the stale member_revision).
-      const member = ownMember(this.store.room(roomId).state.members, memberId);
+      const member = ownMember(this.store.roomAuthority(roomId,{memberId}).members, memberId);
       if (membership) now = Date.parse(membership.event.at);
       if (action !== "disconnect" && member.permissions.some(permission => ["manage_members", "decide", "write_external"].includes(permission))) fail(409, "unsupported_agent_scope", "This agent scope needs a separate reviewed connection");
       this.db.prepare("UPDATE credentials SET revoked=1 WHERE room_id=? AND member_id=?").run(roomId, memberId);

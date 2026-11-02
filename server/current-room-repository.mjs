@@ -429,9 +429,12 @@ export function currentCommandContext(store,roomId,command,{actorId}={}) {
   const db=store.db,b=contextBudgets.get(db)??budget(),head=readCurrentHead(db,roomId,b);if(!head)return null;
   // Membership additions and reactivation need the exact admitted roster for
   // capacity/name/authority checks, but no messages or unrelated work bodies.
-  // Deactivation remains unsupported until held-work dependencies are qualified.
+  // Access deactivation changes members only. Held canonical work remains
+  // untouched; credential, connection and reminder retirement stays in Store.
   if(command.type==='member.added'||command.type==='member.access_changed'&&command.data.active===true)
     return currentInviteContext(store,roomId,{memberIds:[actorId,command.data.memberId,command.data.referredBy],census:true});
+  if(command.type==='member.access_changed'&&command.data.active===false)
+    return currentInviteContext(store,roomId,{memberIds:[actorId,command.data.memberId]});
   return commandContextFromHead(store,roomId,command,head,b,{actorId});
 }
 function commandContextFromHead(store,roomId,command,head,b,{readMessage,readWork,actorId}={}) {

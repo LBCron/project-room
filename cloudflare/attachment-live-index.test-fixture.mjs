@@ -16,9 +16,9 @@ export class AttachmentIndexProbe extends DurableObject {
     this.db.prepare = sql => {
       if (sql.startsWith('SELECT hex(CAST(room_id AS BLOB))')) this.keyReads++;
       const statement = prepare(sql);
-      const kind = sql.includes('AS roomBytes') ? 'quota' : sql.includes("SET state='expired'") ? 'expiry' : null;
+      const kind = sql.includes('AS roomBytes') ? 'quota' : sql.startsWith("SELECT 1 FROM room_attachments WHERE room_id=? AND state='staged' AND expires_at<=?") ? 'expiry' : null;
       if (kind) {
-        const method = kind === 'quota' ? 'get' : 'run', original = statement[method].bind(statement);
+        const method = 'get', original = statement[method].bind(statement);
         statement[method] = (...args) => { const before = this.db.rowsRead; const out = original(...args); this.costs[kind] = this.db.rowsRead - before; return out; };
       }
       return statement;
@@ -55,7 +55,7 @@ export class AttachmentIndexProbe extends DurableObject {
       if (path === '/stage') {
         const { id } = await request.json(), key = s.issueAccessKey('commons', 'owner'); this.costs = {};
         const result = s.roomAttachments.stage(key, 'commons', { id, filename: 'f.txt', mediaType: 'text/plain', data: 'eA==' });
-        return Response.json({ result, costs: this.costs });
+        return Response.json({ result, costs: this.costs, expiryPlan: db.prepare("EXPLAIN QUERY PLAN SELECT 1 FROM room_attachments WHERE room_id=? AND state='staged' AND expires_at<=? LIMIT 1").all('commons',s.now()) });
       }
       if (path === '/over-row') {
         s.initialize(initialRoom('q', 'owner'));

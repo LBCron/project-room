@@ -22,6 +22,7 @@ test('real repaired H source permits multiple prefix erasures, exact original re
  for(const id of ['prefix-one','prefix-two','prefix-private'])f.erase(id);
  assert.equal(s.db.prepare("SELECT count(*) n FROM operator_actions WHERE action='historical_replay_privacy_basis'").get().n,1);
  assert.equal(s.db.prepare("SELECT count(*) n FROM operator_actions WHERE action='historical_replay_erased'").get().n,3);
+ for(const row of s.db.prepare("SELECT counts_json FROM operator_actions WHERE action='historical_replay_erased'").all()){const erasure=JSON.parse(row.counts_json),opened=JSON.parse(s.db.prepare('SELECT counts_json FROM operator_actions WHERE id=?').get(erasure.admission[0]).counts_json);assert.equal(opened.format,'normalized-current-v1-native-work-6','real current format admission is independently verified');}
  assert.deepEqual(originals(s),f.original);absent(s);assert.doesNotThrow(()=>auditRecovery(s));
  const before=snapshot(s);assert.equal(f.erase('prefix-one').duplicate,true);assert.deepEqual(snapshot(s),before);
  const target=new RoomStore(':memory:');t.after(()=>target.close());replayNdjsonInto(exportNdjsonText(s.db),target);target.room=()=>{throw Error('whole room hydration');};
@@ -37,6 +38,7 @@ for(const stage of ['source','basis','receipt'])test('privacy '+stage+' save fau
 for(const [name,mutation] of [
  ['descriptor alone',s=>tamper(s,()=>s.db.prepare("DELETE FROM operator_actions WHERE action='historical_replay_erased'").run())],
  ['missing basis',s=>tamper(s,()=>s.db.prepare("DELETE FROM operator_actions WHERE action='historical_replay_privacy_basis'").run())],
+ ['unreviewed writer format99',s=>tamper(s,()=>{const erased=JSON.parse(s.db.prepare("SELECT counts_json FROM operator_actions WHERE action='historical_replay_erased'").get().counts_json),row=s.db.prepare('SELECT counts_json FROM operator_actions WHERE id=?').get(erased.admission[0]),opened=JSON.parse(row.counts_json);opened.format='normalized-current-v1-native-work-99';s.db.prepare('UPDATE operator_actions SET counts_json=? WHERE id=?').run(JSON.stringify(opened),erased.admission[0]);})],
  ['wrong actor',s=>changeProof(s,'historical_replay_erased',value=>{value.actorId='worker';})],
  ['unrelated command',s=>changeProof(s,'historical_replay_erased',value=>{value.command[0]='saved-modern-result';})],
  ['edited target hash substitution',s=>changeProof(s,'historical_replay_privacy_basis',value=>{const row=value.rows.find(row=>row[4]==='prefix-one');row[3]='a'.repeat(64);})],

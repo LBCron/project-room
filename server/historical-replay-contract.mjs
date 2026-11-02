@@ -276,7 +276,10 @@ function validatePrivacyErasure ( db , b , descriptor , value , slot , spent , {
  const receipt = db . prepare ( 'SELECT fingerprint,sequence FROM commands WHERE room_id=? AND actor_id=? AND id=?' ) . get ( b . roomId , value . actorId , value . command [ 0 ] ) ;
  if ( ! receipt || receipt . sequence !== value . deletion [ 0 ] || receipt . fingerprint !== value . command [ 1 ] || receipt . fingerprint !== hash ( commandCanonical ( command ) ) ) unavailable ( ) ;
  const opened = privacyAction ( db , value . admission [ 0 ] , 'current_room_writer_admission' , b . roomId , 4096 , spent ) ;
- if ( ! exactKeys ( opened , [ 'roomId' , 'permitId' , 'headHash' , 'format' ] ) || opened . roomId !== b . roomId || opened . permitId !== value . admission [ 0 ] || opened . headHash !== value . admission [ 1 ] || ! [ 'normalized-current-v1-native-work-5' ] . includes ( opened . format ) ) unavailable ( ) ;
+ if ( ! exactKeys ( opened , [ 'roomId' , 'permitId' , 'headHash' , 'format' ] ) || opened . roomId !== b . roomId || opened . permitId !== value . admission [ 0 ] || opened . headHash !== value . admission [ 1 ] || ! [
+   'normalized-current-v1-native-work-5',
+   'normalized-current-v1-native-work-6'
+  ] . includes ( opened . format ) ) unavailable ( ) ;
  if ( value . admission [ 0 ] !== closingPermitId ) { const closed = privacyAction ( db , value . admission [ 0 ] + '_closed' , 'current_room_writer_closed' , b . roomId , 4096 , spent ) ; if ( ! exactKeys ( closed , [ 'permitId' ] ) || closed . permitId !== value . admission [ 0 ] ) unavailable ( ) ; }
  const transition = privacyAction ( db , value . transition [ 0 ] , 'current_room_transition' , b . roomId , 128 * 1024 , spent ) ;
  const tuple = value . transition [ 4 ] ;

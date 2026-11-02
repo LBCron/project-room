@@ -19,15 +19,19 @@ export class NormalizationScaleRoom extends DurableObject {
   try{
    let result;
    if(url.pathname==='/seed'){
-    const events=initialRoom();const small=url.searchParams.get('surface')==='small',posts=small?100:5000,total=small?1000:50000;
+    const events=initialRoom(),members=url.searchParams.get('roster')==='64'?64:1;
+    if(members===64){events.push(event({id:'history-floor-policy',idempotencyKey:'history-floor-policy',roomId:'commons',actorId:'owner',type:'room.history_visibility_set',at:'2026-01-01T00:00:00.000Z',data:{historyVisibility:'since_join'}}));for(let i=1;i<members;i++)events.push(event({id:'member-'+i,idempotencyKey:'member-key-'+i,roomId:'commons',actorId:'owner',type:'member.added',at:'2026-02-01T00:00:00.000Z',data:{memberId:'reader-'+i,displayName:'Synthetic agent '+i,kind:'agent',permissions:[]}}));}
+    const small=url.searchParams.get('surface')==='small',posts=small?100:5000,total=small?1000:50000;
     for(let i=0;i<posts;i++)events.push(event({id:'post-'+i,idempotencyKey:'post-key-'+i,roomId:'commons',actorId:'owner',type:'message.posted',at:'2026-01-01T00:00:00.000Z',data:{messageId:'m'+i,body:i===0?'Small edit target':'S'.repeat(1250)}}));
-    for(let i=events.length;i<total;i++)events.push(event({id:'edit-'+i,idempotencyKey:'edit-key-'+i,roomId:'commons',actorId:'owner',type:'message.edited',at:'2026-01-02T00:00:00.000Z',data:{messageId:'m0',body:'Small edit '+i,expectedMessageRevision:i-posts-2}}));
+    const editStart=events.length;for(let i=editStart;i<total;i++)events.push(event({id:'edit-'+i,idempotencyKey:'edit-key-'+i,roomId:'commons',actorId:'owner',type:'message.edited',at:'2026-01-02T00:00:00.000Z',data:{messageId:'m0',body:'Small edit '+i,expectedMessageRevision:i-editStart}}));
     phase='legacy initialize '+total+' events';console.log('NORMALIZATION_PHASE '+phase);this.store.initialize(events);
     phase='issue owner key';await this.ctx.storage.put('key',this.store.issueAccessKey('commons','owner'));
-    result={events:total,posts,editedEvents:total-posts-2,...this.db.prepare("SELECT sequence,octet_length(projection) projectionBytes FROM rooms WHERE id='commons'").get(),eventCount:this.db.prepare('SELECT count(*) n FROM events').get().n};
+    if(members===64)await this.ctx.storage.put('reader-key',this.store.issueAccessKey('commons','reader-1'));
+    result={events:total,members,posts,editedEvents:total-editStart,...this.db.prepare("SELECT sequence,octet_length(projection) projectionBytes FROM rooms WHERE id='commons'").get(),eventCount:this.db.prepare('SELECT count(*) n FROM events').get().n};
    }else if(url.pathname==='/plan')result=operatorNormalization(this.store,{roomId:'commons',discardLegacyAssignments:true});
    else if(url.pathname==='/execute'){const input=await request.json();result=operatorNormalization(this.store,input,true);}
    else if(url.pathname==='/post'){const key=await this.ctx.storage.get('key'),id=url.searchParams.get('id');result=this.store.command(key,'commons',{id:'after-'+id,type:'message.posted',data:{messageId:'after-'+id,body:'Useful normalized result'}});}
+   else if(url.pathname==='/privacy-read'){try{readConversation(this.store,await this.ctx.storage.get('reader-key'),'commons',{messageId:'m1',limit:1});throw Error('Pre-join body exposed');}catch(error){if(error.status!==404)throw error;result={hidden:true,status:404};}}
    else if(url.pathname==='/read')result=readConversation(this.store,await this.ctx.storage.get('key'),'commons',{messageId:'after-one',limit:1});
    else if(url.pathname==='/state')result={...this.db.prepare("SELECT sequence,octet_length(projection) projectionBytes FROM rooms WHERE id='commons'").get(),messages:this.db.prepare('SELECT count(*) n FROM messages').get().n,events:this.db.prepare('SELECT count(*) n FROM events').get().n};
    else return new Response('not found',{status:404});

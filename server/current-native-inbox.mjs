@@ -31,7 +31,7 @@ export function readCurrentNativeInbox(store,secret,roomId,{limit=50,after,older
     });
     const continuation=selected.continuation;older={hasMore:!selected.complete,examined:selected.examined,nextRead:continuation?{tool:'room_read_inbox',arguments:{limit,olderCursor:conversationCursorCodec(store).encode({...binding,before:continuation.position,beforeId:continuation.messageId})}}:null};
     page={events,next:head.sequence,hasMore:false};
-  }else page=readCurrentEventWindow(store,roomId,memberId,{after,limit:Math.min(limit,4)});
+  }else page=readCurrentEventWindow(store,roomId,memberId,{after,limit:Math.min(limit,4),types:['message.posted']});
   const directMessages=[],directMentions=[],replies=[],parents=new Map();
   for(const {sequence,event:e}of page.events){if(e.type!=='message.posted'||e.actorId===memberId||e.data.body===null)continue;
    const id=e.data.messageId??e.id,row={sequence,eventId:e.id,messageId:id,replyToId:id,from:e.actorId,body:e.data.body,at:e.at,channel:e.data.channelId??'general',private:Boolean(e.data.toMemberId),...(e.data.toMemberId?{replyToMemberId:e.actorId}:{}),...(e.data.requestKind==='reply'&&e.data.requestPolicyVersion===1?{requestKind:'reply',nextRead:{tool:'room_read_request',arguments:{roomId,requestMessageId:id}}}:{})};

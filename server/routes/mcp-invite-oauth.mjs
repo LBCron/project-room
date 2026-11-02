@@ -2,6 +2,8 @@ import { randomBytes } from "node:crypto";
 import { ServiceError } from "../store.mjs";
 import { inviteOAuthPage, MCP_INVITE_RECOVERY } from "../mcp-invite-oauth.mjs";
 
+const escapeHtml = value => String(value).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
+
 export function renderInviteOAuthPage(res, view, request) {
   res.setHeader("Cache-Control", "no-store");
   // Browser form POSTs need their same-origin Origin for strict CSRF checks.
@@ -29,7 +31,13 @@ async function handleInviteConsent(ctx) {
     }
     const viewed = inviteOAuth.preview(nonce, data.invitation);
     return renderInviteOAuthPage(res, { nonce, ...viewed }, viewed.request);
-  } catch (error) { return json(res, 400, { error: "invitation_connection_failed", error_description: error.message, recovery: MCP_INVITE_RECOVERY }); }
+  } catch (error) {
+    if ((req.headers.accept || "").includes("text/html")) {
+      res.writeHead(400, { "Content-Type": "text/html; charset=utf-8", "Cache-Control": "no-store", "Referrer-Policy": "no-referrer", "Content-Security-Policy": "default-src 'none'; base-uri 'none'; frame-ancestors 'none'; style-src 'unsafe-inline'" });
+      return res.end(`<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Connection needs attention</title><style>body{font-family:system-ui,sans-serif;max-width:30rem;margin:3rem auto;padding:0 1rem;line-height:1.5;color:#1a1a1a}</style></head><body><main><h1>Connection needs attention</h1><p>${escapeHtml(error.message)}</p><p>Use your browser’s Back button to review the invitation, or restart the connection in your agent.</p><p>If you need a new invitation, ask the Room sponsor. A new invitation creates a new agent seat.</p></main></body></html>`);
+    }
+    return json(res, 400, { error: "invitation_connection_failed", error_description: error.message, recovery: MCP_INVITE_RECOVERY });
+  }
 }
 export const MCP_INVITE_OAUTH_ROUTES = [{
   id: "mcp.invite.consent", method: "POST", path: "/oauth/invite", auth: "none",

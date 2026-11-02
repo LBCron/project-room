@@ -53,17 +53,17 @@ export function createMcpInviteOAuth({ store, clients, resource, issuer = new UR
     return { pending, request: JSON.parse(pending.request_json) };
   };
   const codeFrom = text => {
-    if (typeof text !== 'string' || text.length > 2048) throw new Error('Paste a Member agent invitation link or RM code');
+    if (typeof text !== 'string' || text.length > 2048) throw new Error('Paste an agent invitation link or RM code');
     const found = text.trim().match(/(?:^|[\/#=?&])(?:RM-[0-9A-Z]{16})(?=$|[\s&#/?])/i);
     const code = found ? found[0].replace(/^[\/#=?&]/, '') : text.trim();
-    if (!/^RM-[0-9A-Z]{16}$/i.test(code)) throw new Error('Paste a Member agent invitation link or RM code');
+    if (!/^RM-[0-9A-Z]{16}$/i.test(code)) throw new Error('Paste an agent invitation link or RM code');
     return code;
   };
   const preview = (nonce, input) => {
     const { request } = read(nonce);
     const code = codeFrom(input);
     const invitation = store.invites.preview(code);
-    if (invitation.ownerEquivalent) throw new Error('Use a Member invitation; native connection does not accept owner-level invitations');
+    if (invitation.ownerEquivalent && !request.scopes.includes('members:admin')) throw new Error('This connection did not request membership administration (members:admin). Use a connection that requests it, or ask the sponsor for a Member invitation. This invitation has not been used.');
     return { code, invitation, request };
   };
   const approve = (nonce, input, displayName) => store.transaction(() => {
@@ -111,7 +111,7 @@ export function createMcpInviteOAuth({ store, clients, resource, issuer = new UR
 export function inviteOAuthPage({ nonce, request, invitation = null, code = '', accountUrl, invitationChoice = false }) {
   const hidden = `<input type="hidden" name="nonce" value="${escape(nonce)}">`;
   const consent = invitation
-    ? `<p>Room: <strong>${escape(invitation.roomTitle)}</strong></p><p>Invitation sponsor: ${escape(invitation.inviterDisplayName || 'Room member')}</p><p>Room access: ${escape(invitation.profile)}. Requested scopes: ${escape(request.scopes.join(', '))}.</p><p>The sponsor grants access inside this Room. Your ChatGPT tool permissions stay under your control. No Room human account is created or claimed. This Room connection lasts up to 30 days and can be revoked.</p><input type="hidden" name="invitation" value="${escape(code)}"><label>Agent name <input name="display_name" maxlength="80" value="My agent" required></label><button name="decision" value="allow">Connect this agent</button>`
+    ? `<p>Room: <strong>${escape(invitation.roomTitle)}</strong></p><p>Invitation sponsor: ${escape(invitation.inviterDisplayName || 'Room member')}</p><p>Room access: ${escape(invitation.ownerEquivalent ? 'delegated administrator' : invitation.profile)}. Requested scopes: ${escape(request.scopes.join(', '))}.</p>${invitation.ownerEquivalent ? '<p>This grants the agent delegated room permissions and, with membership administration consent, tools to manage access requests and agent invitations. It does not transfer room ownership; owner-only settings remain with the owner.</p>' : ''}<p>The sponsor grants access inside this Room. Your ChatGPT tool permissions stay under your control. No Room human account is created or claimed. This Room connection lasts up to 30 days and can be revoked.</p><input type="hidden" name="invitation" value="${escape(code)}"><label>Agent name <input name="display_name" maxlength="80" value="My agent" required></label><button name="decision" value="allow">Connect this agent</button>`
     : '<label>Agent invitation link or RM code <input name="invitation" maxlength="2048" autocomplete="off" required></label><button name="decision" value="preview">Review invitation</button>';
   const account = accountUrl ? `<section aria-labelledby="reconnect-title"><h2 id="reconnect-title">Already connected before?</h2><p>Use your Room account to choose an existing agent and room.</p><a class="primary" data-account-reconnect href="${escape(accountUrl)}">Reconnect existing agent</a></section>` : '';
   const form = `<form id="invite-connection" method="post" action="/oauth/invite">${hidden}${consent}</form>`;

@@ -33,7 +33,7 @@ import { memoizeBoardList } from "./available-work.mjs";
 import { walkProvenance, ClaimError } from "./work-claims.mjs";
 import { claimThread } from "./claim-thread.mjs";
 import { randomUUID } from "node:crypto";
-import { validId, ownMember, ROOM_KINDS, MAX_MESSAGE_BODY_CHARS } from "../src/events.js";
+import { validId, ownMember, memberCan, ROOM_KINDS, MAX_MESSAGE_BODY_CHARS } from "../src/events.js";
 import { nextWorkStep, workActions } from "../src/workflow.js";
 import { completedResults, currentResult, searchWorkMatches as searchWork } from "../src/work-selectors.js";
 import { sortWorkByCuriosity, viewerHistory } from "../src/curiosity-rank.mjs";
@@ -1045,11 +1045,27 @@ async function handleAuthed(message, { store, secret, identity, mcpUrl, searchPa
     // tools/call path below keeps its own authorization checks as
     // defense in depth.
     const agent = resolveCatalogAgent(store, identity);
+    let membershipAdmin = false, inviteManagement = false, inviteCreation = false;
+    if (oauthPrincipal?.scopes.some(scope => scope === 'members:admin' || scope === 'members:invite')) {
+      const roomId = oauthPrincipal.roomId;
+      const auth = store.authenticate(secret, roomId);
+      const authority = store.roomAuthority(roomId, { memberId: auth.member.id });
+      membershipAdmin = store.delegation.canAdministerMembership(authority, auth, roomId);
+      inviteManagement = memberCan(authority, auth.member.id, 'manage_members');
+      inviteCreation = inviteManagement || memberCan(authority, auth.member.id, 'invite_member');
+    }
+    const visibleNativeAdmin = name => {
+      if (!oauthPrincipal) return true;
+      if (name === 'room_list_access_requests' || name === 'room_decide_access_request') return membershipAdmin;
+      if (name === 'room_list_agent_invites' || name === 'room_revoke_agent_invite') return inviteManagement;
+      if (name === 'room_create_agent_invite') return inviteCreation;
+      return true;
+    };
     return { jsonrpc: "2.0", id: requestId, result: {
       profile: selection.profile,
       ...(selection.focus === undefined ? {} : { focus: selection.focus }),
       tools: listedMcpTools(selection.profile, selection.aliases, agent, selection.focus)
-        .filter(tool => !oauthPrincipal || mcpOAuthToolAllowed(canonicalMcpToolName(tool.name), oauthPrincipal.scopes)),
+        .filter(tool => !oauthPrincipal || mcpOAuthToolAllowed(canonicalMcpToolName(tool.name), oauthPrincipal.scopes) && visibleNativeAdmin(canonicalMcpToolName(tool.name))),
       _meta: {
         discovery: MCP_DISCOVERY_BLOCK,
         ...(selection.focus === undefined ? {} : { focus: {

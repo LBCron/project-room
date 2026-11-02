@@ -7,6 +7,7 @@ const check = (condition, message) => { if (!condition) fail("invalid_request", 
 
 export const OAUTH_SCOPES = Object.freeze([
   "rooms:read",
+  "members:admin",
   "chat:read",
   "chat:write",
   "work:read",

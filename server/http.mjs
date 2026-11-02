@@ -1854,6 +1854,7 @@ export function createRoomServer({ store, origin, assetRoot = new URL("../", imp
           return json(res, 409, { error: "agent_connection_required", error_description: "Join the room as yourself, then create your own connected agent before authorizing it" });
         const scopeLabels = {
           "rooms:read": "See your rooms",
+          "members:admin": "Manage members and invitations in the selected room",
           "chat:read": "Read messages",
           "chat:write": "Post messages",
           "work:read": "See work items",

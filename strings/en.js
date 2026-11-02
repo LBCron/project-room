@@ -1,6 +1,6 @@
 // Generated from strings/en.json by scripts/build-ui-strings.mjs.
 export default {
-  "account.attentionScope": "Open a room for Needs you. Cross-room overview is unavailable.",
+  "account.attentionScope": "Open a room to see what needs you.",
   "agent.existing.separate": "Create a separate agent",
   "request.timedOut": "The request timed out before confirmation. Please try again.",
   "_meta": {

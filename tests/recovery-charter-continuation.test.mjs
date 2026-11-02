@@ -14,6 +14,7 @@ const authorization=['synthetic','text','restore','1101'].join('-');
 async function post(store,body){const response=await operatorRestoreResponse(new Request('https://room.example/api/operator/restore',{method:'POST',headers:{Authorization:'Bearer '+authorization,...(typeof body==='string'?{}:{'content-type':'application/json'})},body:typeof body==='string'?body:JSON.stringify(body)}),authorization,store);return{status:response.status,body:await response.json()};}
 async function setup(t){
  const source=new RoomStore(':memory:');t.after(()=>source.close());const _f=seedHistoricalRedactionSource(source,{beforeCapture:(store,{key})=>store.command(key,'legacy-room',{id:'charter-in-recovery',type:'room.charter_updated',data:{expectedRevision:0,purpose:'Coordinate useful work',outputs:null,boundaries:null,escalation:null}})});
+ source.command(_f.key,'legacy-room',{id:'charter-after-normalized',type:'room.charter_updated',data:{expectedRevision:1,purpose:'Preserve edited normalized instructions',outputs:null,boundaries:null,escalation:null}});
  assert.doesNotThrow(()=>auditRecovery(source));
  const directory=mkdtempSync(join(tmpdir(),'charter-restore-'));t.after(()=>rmSync(directory,{recursive:true,force:true}));const filename=join(directory,'target.sqlite');const store=new RoomStore(filename);t.after(()=>store.close());let response=await post(store,exportNdjsonText(source.db)),calls=0;
  while(restoreProgress(store.db).progress?.audit?.stage!=='replay_events'){
@@ -25,7 +26,7 @@ async function setup(t){
 test('independent charter phase preserves strict source history and checkpoint comparison',async t=>{
  const f=await setup(t);let p=initialRecoveryCharter(),calls=0;
  while(p.stage!=='complete'){const result=f.step(p);p=result.cursor;assert.ok(result.units<=32);assert.ok(++calls<100);}
- assert.equal(p.facts.ownerId,'owner');assert.equal(p.facts.current.purpose,'Coordinate useful work');assert.equal(p.sequence,f.source.headSequence('legacy-room'));
+ assert.equal(p.facts.ownerId,'owner');assert.equal(p.facts.current.purpose,'Preserve edited normalized instructions');assert.equal(p.sequence,f.source.headSequence('legacy-room'));
 });
 for(const mutation of ['owner','charter'])test('independent charter phase rejects substituted '+mutation,async t=>{
  const f=await setup(t);withRestoreTransaction(f.store,()=>withRestoreAuditRows(f.store.db,f.state.restore_id,scratch=>{

@@ -5,7 +5,7 @@ import {exportNdjsonText} from '../server/room-export.mjs';
 import {auditRecovery} from '../server/recovery.mjs';
 export class CharterSource extends CurrentServingRoom{
  async fetch(request){const path=new URL(request.url).pathname;
-  if(path==='/__seed'){seedHistoricalRedactionSource(this.store,{beforeCapture:(store,{key})=>store.command(key,'legacy-room',{id:'source-charter',type:'room.charter_updated',data:{expectedRevision:0,purpose:'Finish useful work with preserved ownership',outputs:null,boundaries:null,escalation:null}})});auditRecovery(this.store);return Response.json(JSON.parse(this.db.prepare("SELECT payload FROM current_room_records WHERE room_id='legacy-room' AND domain='metadata' AND record_key='room'").get().payload).charter);}
+  if(path==='/__seed'){const f=seedHistoricalRedactionSource(this.store,{beforeCapture:(store,{key})=>store.command(key,'legacy-room',{id:'source-charter',type:'room.charter_updated',data:{expectedRevision:0,purpose:'Finish useful work with preserved ownership',outputs:null,boundaries:null,escalation:null}})});this.store.command(f.key,'legacy-room',{id:'normalized-charter',type:'room.charter_updated',data:{expectedRevision:1,purpose:'Preserve edited normalized instructions',outputs:'Save evidence',boundaries:null,escalation:null}});auditRecovery(this.store);return Response.json(JSON.parse(this.db.prepare("SELECT payload FROM current_room_records WHERE room_id='legacy-room' AND domain='metadata' AND record_key='room'").get().payload).charter);}
   if(path==='/__export')return new Response(exportNdjsonText(this.db));return super.fetch(request);
  }
 }

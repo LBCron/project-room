@@ -1,3 +1,4 @@
+import { isCurrentRoom, currentThreadParticipants } from './current-room-repository.mjs';
 import { messageRepository } from "./message-repository.mjs";
 // Personal attention surfaces: activity feed, read horizons, saved messages,
 // thread mutes. Write-time fan-out for mention/reply/thread_reply
@@ -180,7 +181,7 @@ function applyActivityFanOut(store, roomId, state, senderId, command, incoming, 
     const data = command.data ?? {};
     const messageId = data.messageId || incoming.id;
     const body = typeof data.body === "string" ? data.body : "";
-    const identityNames = identityNamesFor(store, roomId);
+    const identityNames = body.includes("@") ? identityNamesFor(store, roomId) : {};
     const recipients = new Map(); // userId -> { type, threadId }
     for (const target of resolveMentionTargetsInText(members, identityNames, body, senderId)) {
       recipients.set(target, { type: "mention", threadId: "" });
@@ -198,7 +199,7 @@ function applyActivityFanOut(store, roomId, state, senderId, command, incoming, 
     if (threadRootId) {
       const muted = new Set(db.prepare(
         "SELECT member_id FROM thread_mutes WHERE room_id=? AND thread_id=?").all(roomId, threadRootId).map(r => r.member_id));
-      for (const participant of threadParticipants(messages, threadRootId)) {
+      for (const participant of (isCurrentRoom(db,roomId) ? currentThreadParticipants(db,roomId,threadRootId) : threadParticipants(messages, threadRootId))) {
         if (participant === senderId || recipients.has(participant) || muted.has(participant)) continue;
         recipients.set(participant, { type: "thread_reply", threadId: threadRootId });
       }

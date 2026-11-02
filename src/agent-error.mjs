@@ -37,6 +37,11 @@ const BOND_DM_DATA_SHAPES = {
 // migrates surface by surface under the tracking issue filed with this PR.
 // ---------------------------------------------------------------------------
 export const ERROR_REGISTRY = {
+  current_room_corrupt: {
+    status: "action_required", hint: uiText("agentError.current_room_corrupt.hint"),
+    next: [{ command: uiText("agentError.current_room_corrupt.recovery") }],
+    catalog: { http: 409, retry: "no", recovery: uiText("agentError.current_room_corrupt.recovery") }
+  },
   attachment_index_budget_exceeded: {
     status: "action_required", hint: uiText("agentError.attachment_index_budget_exceeded.hint"),
     next: [{ command: uiText("agentError.attachment_index_budget_exceeded.recovery") }],
@@ -546,6 +551,17 @@ export function errorRegistryAx(code, { httpStatus = 0, message = "", roomId, wo
 // covered by axFamilyRecovery() below; tests/errors-catalog-drift.test.js
 // fails if a catalogued code loses either kind of coverage.
 const AX_NAMED_RECOVERIES = {
+  // Current-room refusals retain their qualified recovery and existing grants.
+  current_room_context_required: [uiText("agentError.current_room_context_required.hint"), uiText("agentError.current_room_context_required.recovery")],
+  current_directory_integrity: [uiText("agentError.current_directory_integrity.hint"), uiText("agentError.current_directory_integrity.recovery")],
+  current_room_legacy_work_unreconciled: [uiText("agentError.current_room_legacy_work_unreconciled.hint"), uiText("agentError.current_room_legacy_work_unreconciled.recovery")],
+  legacy_work_retired: [uiText("agentError.legacy_work_retired.hint"), uiText("agentError.legacy_work_retired.recovery")],
+  current_redaction_historical_prefix: [uiText("agentError.current_redaction_historical_prefix.hint"), uiText("agentError.current_redaction_historical_prefix.recovery")],
+  independent_legacy_work: [uiText("agentError.independent_legacy_work.hint"), uiText("agentError.independent_legacy_work.recovery")],
+  mirror_retirement_idempotency_conflict: [uiText("agentError.mirror_retirement_idempotency_conflict.hint"), uiText("agentError.mirror_retirement_idempotency_conflict.recovery")],
+  attachment_cursor_reset: [uiText("agentError.attachment_cursor_reset.hint"), uiText("agentError.attachment_cursor_reset.recovery")],
+  thread_context_invalid: [uiText("agentError.thread_context_invalid.hint"), uiText("agentError.thread_context_invalid.recovery")],
+
   aborted: ["The request ended early, so nothing was applied. Resend the request; if it repeats, check for a dropped connection or an oversized payload.", "Resend the request; if it repeats, check for a dropped connection or an oversized payload."],
   access_rejected: ["The access-request state machine rejected that transition — the message names the rule. Read the request's current state; do not retry the same transition.", "Read the access request's current state and follow the rule named in the message."],
   account_state_unchanged: ["The account is already in that state — nothing changed and nothing needs to happen.", "Treat it as done; read the current account state to confirm."],
@@ -566,6 +582,7 @@ const AX_NAMED_RECOVERIES = {
   assistant_source_denied: ["Choose your own visible shared message as the source.", "Pick one of your own visible shared messages."],
   assistant_stop_pending: ["A stop or scope decision must be acknowledged first.", "Acknowledge the pending stop or scope decision first."],
   attachment_conflict: ["That attachment id is already stored for this identity. Use the existing attachment or upload under a new id.", "Use the existing attachment, or upload with a new attachment id."],
+  current_work_selection_required: ["Use the bounded viewer-scoped work snapshot, work list or selected work read; the legacy whole-map projection is unavailable.", "Read bounded current work and follow its continuation; do not hydrate the legacy carrier."],
   attachment_unavailable: ["That attachment is no longer available. Re-upload it or use a current attachment.", "Re-upload the attachment or reference a current one."],
   bad_cursor: ["The cursor is not valid. Use the opaque nextCursor from a previous response, or restart without a cursor.", "Restart the list without a cursor, or pass the nextCursor from a previous response."],
   bad_request: ["The request itself was refused — the message names the problem. Fix it and resend.", "Fix the problem named in the message and resend."],
@@ -576,6 +593,7 @@ const AX_NAMED_RECOVERIES = {
   channel_sync_unsupported: ["This channel sync mode is not supported here. Use a supported sync mode; do not retry this one.", "Use a supported channel sync mode."],
   channel_webhook_backlog: ["The channel has a webhook backlog. Import the pending updates before sending more.", "Import pending updates first, then send."],
   charter_integrity_error: ["The instructions history requires reconciliation before this can proceed. Report the code and full message to the room owner if it persists.", "Reconcile the instructions history; if it persists, report the code and full message to the room owner."],
+  normalization_requires_reconciliation: ["The room head or its metadata proof is unavailable for normalized storage adoption.", "Ask the operator to reconcile the current room head and metadata proof before requesting a new adoption plan."],
   claim_conflict: ["That scope is reserved by another work claim. Coordinate or release that reservation first; no new claim was saved.", "Coordinate with the holding claim or release the reservation, then claim again."],
   collision_lock_expired: ["The draft lock expired. Acquire it again before editing.", "Acquire the draft lock again, then continue editing."],
   collision_lock_held: ["Another member is already drafting on this thread. Wait for them to finish or release the lock.", "Wait for the current drafter to release the lock, then acquire it."],

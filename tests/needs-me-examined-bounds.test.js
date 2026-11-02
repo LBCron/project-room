@@ -1,3 +1,4 @@
+import {seedHistoricalNeedsMeRoom} from './helpers/historical-needs-me-room.mjs';
 // Round 2 of W2-F9-CURE (RES-1538, Codex's exact-SQL falsifier, room
 // seq 25273): at the round-1 cured head the reply and mention scans
 // reported examined rows their SQL RETURNED, while the queries filtered
@@ -23,7 +24,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { RoomStore } from '../server/store.mjs';
-import { AgentRooms } from '../server/agent-rooms.mjs';
 import { collectNeedsMe, REPLY_SCAN_ROW_BUDGET, MENTION_SCAN_ROW_BUDGET, REPLY_SCAN_BYTE_BUDGET } from '../server/needs-me.mjs';
 import { setTier } from '../server/autonomy-tiers.mjs';
 import { linkWithProof } from "./helpers/link-with-proof.mjs";
@@ -33,11 +33,10 @@ function setup(t, roomId) {
   let clock = Date.now();
   store.now = () => (clock += 2100); // stay under the chat flood guard
   t.after(() => store.close());
-  const rooms = new AgentRooms(store);
   const ada = store.identities.create('Ada');
   const bob = store.identities.create('Bob');
   const owner = store.identities.create('OwnerC');
-  rooms.create(owner.secret, { roomId, title: roomId, purpose: 'Examined bounds', kind: 'personal' });
+  seedHistoricalNeedsMeRoom(store,owner, { roomId, title: roomId, purpose: 'Examined bounds', kind: 'personal' });
   linkWithProof(store, owner.secret, roomId, ada, { displayName: 'Ada', permissions: [] });
   linkWithProof(store, owner.secret, roomId, bob, { displayName: 'Bob', permissions: [] });
   setTier(store.db, roomId, bob.identityId, 't2_standard', { updatedBy: 'owner', nowMs: Date.now() });

@@ -53,7 +53,7 @@
         { "tag": "room-shard-v1", "new_sqlite_classes": ["RoomShard"] }
       ],
       "triggers": { "crons": [] },
-      "vars": { "ROOM_ORIGIN": "https://project-room-stage.getdasha.workers.dev", "ROOM_DEPLOYMENT": "staging", "ROOM_GMAIL_ENABLED": "0", "ROOM_GMAIL_PILOT_ONLY": "1", "ROOM_SERVICE_MODE": "cloudflare-staging", "ROOM_SECURITY_CONTACT": "potter@trydemigod.com", "ROOM_PROJECT_MAP_GRAPHIFY": "on", "ROOM_PROJECT_MAP_REPO": "Uuriko/project-room" }
+      "vars": { "ROOM_PATROL_ENABLED": "0", "ROOM_ORIGIN": "https://project-room-stage.getdasha.workers.dev", "ROOM_DEPLOYMENT": "staging", "ROOM_GMAIL_ENABLED": "0", "ROOM_GMAIL_PILOT_ONLY": "1", "ROOM_SERVICE_MODE": "cloudflare-staging", "ROOM_SECURITY_CONTACT": "potter@trydemigod.com", "ROOM_PROJECT_MAP_GRAPHIFY": "on", "ROOM_PROJECT_MAP_REPO": "Uuriko/project-room" }
     }
   }
 }

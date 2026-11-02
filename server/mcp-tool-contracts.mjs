@@ -33,6 +33,7 @@ export const MCP_TOOL_CONTRACTS = Object.freeze({
   room_join: { access: `write, ${ANY} with a share link, invite code, or room pairing; hidden from guest and read-only-tier agents`, cost: WRITE, rest: "POST /api/share-links/join-agent or POST /api/agent-invites/redeem or POST /api/pair" },
   room_merge_members: { access: `write, room owner or a member with manage_members and decide; hidden from guest and read-only-tier agents`, cost: WRITE, rest: "POST /api/rooms/{roomId}/members/merge" },
   room_put_file: { access: `write, ${MEMBER_WRITE}`, cost: "stages at most 1 MiB; others see nothing until room_commit_file", rest: "POST /api/rooms/{roomId}/files" },
+  room_list_files: { access: `read, ${MEMBER}`, cost: "normalized: up to 8 metadata entries for 1–8 selected visible messages per page; legacy list may expire staging; starts no AI", rest: "GET /api/rooms/{roomId}/files?messageId={messageId} (repeat messageId for the same selection; cursor continues it)" },
   room_commit_file: { access: `write, ${MEMBER_WRITE}`, cost: WRITE, rest: "POST /api/rooms/{roomId}/files/{id}/commit" },
   add_land_item: { access: `write, ${MEMBER_WRITE}`, cost: "one write; does not merge or deploy", rest: "POST /api/rooms/{roomId}/add_land_item" },
   list_land_queue: { access: `read, ${MEMBER}`, cost: READ, rest: "GET /api/rooms/{roomId}/list_land_queue" },

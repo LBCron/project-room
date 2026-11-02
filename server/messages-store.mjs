@@ -1,3 +1,5 @@
+import {isCurrentRoom,readCurrentHead,withCurrentReadContext} from './current-room-repository.mjs';
+import {ServiceError} from './service-error.mjs';
 import { savedHistoricalReplayCheckpoint, SavedHistoricalReplayError } from './historical-replay-contract.mjs';
 import { assertMessageWrite, recordMessageWrite, servingProofDrift, messageProofMatches, MESSAGE_PROOF_SELECT, MESSAGE_PROOF_FIELDS } from './write-integrity.mjs';
 import { writeMessageReplaySnapshot, discardMessageReplaySnapshot, decodeMessageReplaySnapshot } from './message-replay-snapshot.mjs';
@@ -548,8 +550,8 @@ export function archivedMessageRow(db, roomId, messageId, marker = archiveMarker
 
 // Ids of the room's archived messages (no longer in the projection), for audits
 // that compare the projection with a full replay.
-export function archivedMessageIds(db, roomId) {
-  const { throughSeq, retainedJson } = archiveMarker(db, roomId);
+export function archivedMessageIds(db, roomId, qualifiedArchive = undefined) {
+  const { throughSeq, retainedJson } = recoveryArchiveMarker(db, roomId, qualifiedArchive);
   if (!throughSeq) return new Set();
   return new Set(db.prepare("SELECT message_id FROM messages WHERE room_id=? AND seq<=? AND message_id NOT IN (SELECT value FROM json_each(?))")
     .all(roomId, throughSeq, retainedJson).map(row => row.message_id));
@@ -1077,8 +1079,16 @@ function loadState(store, room, cursor, budget, admitState) {
 // no per-call NOT IN list is needed: binding one value per room parked in
 // this call broke past 100 (the Worker's Durable Object SQL limit) exactly
 // when many rooms stop replaying at once.
+// Normalized heads belong to the separate current-record integrity audit.
+// Excluding them is maintenance selection, not certification or a grant. A
+// marker without its independent head remains a candidate and must refuse.
+function normalizedMessageSource(db,roomId) {
+  if(!isCurrentRoom(db,roomId))return false;
+  withCurrentReadContext(db,roomId,()=>readCurrentHead(db,roomId));
+  return true;
+}
 function nextRoom(db) {
-  return db.prepare(`SELECT r.id AS id, r.sequence AS sequence
+  const room=db.prepare(`SELECT r.id AS id, r.sequence AS sequence
     FROM rooms r
     LEFT JOIN messages_backfill_cursor c ON c.room_id = r.id
     WHERE (c.room_id IS NULL
@@ -1088,8 +1098,11 @@ function nextRoom(db) {
         WHERE e.room_id = r.id AND e.sequence = c.applied_seq AND e.id = c.applied_event_id
       )))
       AND NOT EXISTS (SELECT 1 FROM messages_backfill_blocks b WHERE b.room_id = r.id AND b.skipped=0)
+      AND NOT EXISTS (SELECT 1 FROM current_room_head h WHERE h.room_id=r.id)
     ORDER BY r.id
     LIMIT 1`).get() ?? null;
+  if(room)normalizedMessageSource(db,room.id);
+  return room;
 }
 
 // True when a room's messages table has replayed to the room's current
@@ -1474,6 +1487,7 @@ function caughtUpSql(after) {
           )
         )
         AND r.id > ?
+        AND NOT EXISTS (SELECT 1 FROM current_room_head h WHERE h.room_id=r.id)
       ORDER BY r.id
       LIMIT 1`,
     after
@@ -1482,9 +1496,11 @@ function caughtUpSql(after) {
 
 function nextParityRoom(db, after) {
   const query = caughtUpSql(after);
-  return db.prepare(query.sql).get(query.after)?.id
+  const roomId=db.prepare(query.sql).get(query.after)?.id
     ?? db.prepare(caughtUpSql("").sql).get("")?.id
     ?? null;
+  if(roomId)normalizedMessageSource(db,roomId);
+  return roomId;
 }
 
 function parityNumbers(db, roomId) {
@@ -1569,6 +1585,7 @@ export function runMessagesParityCheck(store, { report = () => {} } = {}) {
 function certifyMessagesParity(store, target = null) {
   let roomId;
   if (target !== null) {
+    if(normalizedMessageSource(store.db,target))throw new ServiceError(409,'current_room_context_unavailable','Normalized messages require their independent current-record integrity audit, not legacy replay certification');
     if (!messagesBackfillCaughtUp(store.db, target)) return { ok: false, checked: 0, roomId: target, reason: "not_caught_up" };
     roomId = target;
   } else {
@@ -1762,8 +1779,24 @@ export function archiveRoomMessages(store, roomId, { keepNewest = 2000, dryRun =
 // Apply a room's archive marker to a fully replayed state, so a replay can be
 // compared with the compacted stored projection. Messages at or below the
 // marker and not retained leave the state; the marker is rebuilt from the table.
-export function compactReplayLikeArchive(db, roomId, state) {
-  const marker = archiveMarker(db, roomId);
+function recoveryArchiveMarker(db,roomId,qualifiedArchive) {
+  // Normalized recovery supplies its independently censused archive metadata;
+  // its closed rooms carrier deliberately contains no legacy archive marker.
+  // Ordinary legacy callers continue to read the existing carrier marker.
+  let marker;
+  if(qualifiedArchive===undefined)marker=archiveMarker(db,roomId);
+  else if(qualifiedArchive===null)marker={throughSeq:0,count:0,retainedIds:[],retainedJson:'[]'};
+  else {
+    const {throughSeq,count,retainedIds}=qualifiedArchive;
+    if(!Number.isSafeInteger(throughSeq)||throughSeq<1||!Number.isSafeInteger(count)||count<0
+      ||!Array.isArray(retainedIds)||retainedIds.some(id=>typeof id!=='string')||new Set(retainedIds).size!==retainedIds.length)
+      throw Error('projection_corrupt: qualified recovery archive marker differs');
+    marker={throughSeq,count,retainedIds,retainedJson:JSON.stringify(retainedIds)};
+  }
+  return marker;
+}
+export function compactReplayLikeArchive(db, roomId, state, qualifiedArchive = undefined) {
+  const marker=recoveryArchiveMarker(db,roomId,qualifiedArchive);
   const raw = JSON.parse(db.prepare('SELECT projection FROM rooms WHERE id=?').get(roomId).projection);
   const canonical = hasMessageAuthority(raw);
   if (!marker.throughSeq) {
@@ -1862,4 +1895,29 @@ export function archivedMessageCommandContext(store, roomId, room, messageId, { 
   const next = { ...state, messages, messagesArchive: { throughSeq: marker.throughSeq,
     count: Math.max(0, marker.count-restored.length), retainedIds: [...marker.retainedIds,...restoredIds] } };
   return { ...room, state: next };
+}
+
+
+// Explicit operator one-time adoption: reuse proved canonical rows, materialize
+// only missing/stale retained rows through the existing code-owned writer.
+export function materializeCurrentMessageRows(db,roomId,state) {
+  const rows=db.prepare('SELECT * FROM messages WHERE room_id=?').all(roomId),existing=new Map(rows.map(row=>[row.message_id,row]));
+  const byId=new Map([...rows.map(row=>[row.message_id,{id:row.message_id,replyToId:row.reply_to_id}]),...state.messages.map(message=>[message.id,message])]);
+  const pinned=new Set((state.pins??[]).map(pin=>pin.messageId)),sequences=new Map();
+  for(const message of state.messages){
+    const row=existing.get(message.id);
+    if(row&&!messageProofMatches(row))throw Error('projection_corrupt: canonical adoption message proof differs');
+    // Legacy erasure may intentionally clear extras to SQL NULL. Current readers
+    // require the reducer's explicit erased history, so materialize that selected
+    // current value through the existing writer instead of reusing the row.
+    if(row&&typeof row.reducer_extras_json==='string'&&!messageRowParityFields(row,message,{sequence:row.seq,pinned:pinned.has(message.id),threadMessages:byId}).length)continue;
+    let sequence=row?.seq;
+    if(sequence===undefined){
+      sequence=db.prepare(`SELECT sequence FROM events INDEXED BY current_redaction_message_events WHERE room_id=? AND CASE WHEN json_type(body,'$.data.messageId')='text' AND json_extract(body,'$.data.messageId')<>'' THEN json_extract(body,'$.data.messageId') ELSE id END=? AND json_extract(body,'$.type')='message.posted' ORDER BY sequence LIMIT 1`).get(roomId,message.id)?.sequence;
+    }
+    if(!Number.isSafeInteger(sequence)||sequence<1)throw Error('Missing original message posting sequence');
+    sequences.set(message.id,sequence);
+  }
+  writeMessageRows(db,{roomId,state,sequenceById:sequences,messageIndex:byId,exactSequence:true});
+  return db.prepare('SELECT * FROM messages WHERE room_id=? ORDER BY seq,message_id').all(roomId);
 }

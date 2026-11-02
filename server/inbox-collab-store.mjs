@@ -27,6 +27,8 @@
 // and the handoff journal (server/inbox-handoff.mjs) already persists itself
 // through store.handoffs and is reused directly here.
 import { randomUUID } from "node:crypto";
+import {isCurrentRoom} from './current-room-repository.mjs';
+import {ServiceError} from './service-error.mjs';
 import { createAssignmentJournal } from "./inbox-assign.mjs";
 import { createInternalNotes } from "./inbox-internal-notes.mjs";
 import { createCollisionTracker } from "./inbox-collision.mjs";
@@ -406,6 +408,7 @@ export class InboxCollabStore {
   // because the pure journal keys by threadId while the HTTP release route
   // addresses assignments by id. ----
   assignThread(roomId, threadId, assignee, { by, force = false } = {}) {
+    if(isCurrentRoom(this.db,roomId))throw new ServiceError(409,'legacy_work_retired','This room uses native work. Propose canonical work through work.proposed; legacy release and history inspection remain available.');
     const entry = this.#entry(roomId);
     const op = { op: "assign", threadId, assignee, by, force };
     return this.#transact(roomId, entry,

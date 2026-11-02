@@ -1267,6 +1267,17 @@ export class AgentHeartbeats {
   // CADENCE: the cadence in that formula is the server-assigned value for
   // the host's stored hint; hosts that never declared read the assigned
   // default, whose window is the same 180s.
+  // Bounded connection observation. A partial host window can prove an
+  // online host, but cannot prove all hosts offline or unregistered.
+  statusWindow(agentId){
+    checkAgentId(agentId);const at=this.now(),rows=this.db.prepare("SELECT CASE WHEN length(CAST(host_id AS BLOB))<=128 THEN host_id ELSE NULL END hostId,last_seen_at FROM agent_hosts INDEXED BY agent_hosts_seen WHERE agent_id=? ORDER BY last_seen_at DESC LIMIT 9").all(agentId);
+    if(rows.some(row=>row.hostId===null))throw Error('Host observation requires reconciliation');
+    const selected=rows.slice(0,8),more=rows.length>8;
+    const online=selected.some(row=>{const cadence=this.db.prepare('SELECT cadence_seconds FROM agent_push_configs WHERE agent_id=? AND host_id=?').get(agentId,row.hostId)?.cadence_seconds??null;
+      let gone;try{gone=this.db.prepare('SELECT disconnected_at FROM agent_host_disconnects WHERE agent_id=? AND host_id=?').get(agentId,row.hostId)?.disconnected_at;}catch(error){if(!isMissingTable(error))throw error;}
+      return !(Number.isFinite(gone)&&gone>=row.last_seen_at)&&row.last_seen_at<=at&&at-row.last_seen_at<=this.windowFor(assignedCadenceSeconds(cadence));});
+    return{agentId,status:online?'online':more?'unknown':selected.length?'offline':'unregistered',lastSeenAt:selected[0]?.last_seen_at??null,sourceWindow:{complete:!more,shown:selected.length,hasMore:more}};
+  }
   statusOf(agentId) {
     checkAgentId(agentId);
     const at = this.now();

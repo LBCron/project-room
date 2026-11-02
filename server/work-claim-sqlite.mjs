@@ -16,7 +16,7 @@ import { encodeRow, decodeRow } from "./persisted-row.mjs";
 // read and missing fields take these defaults, so rows written by older code
 // (plain JSON, no envelope) still load.
 export const WORK_CLAIM_ROW_KIND = "work-claim";
-const WORK_CLAIM_FIELDS = ["id", "title", "state", "owner", "history", "claimedAt",
+export const WORK_CLAIM_FIELDS = ["id", "title", "state", "owner", "history", "claimedAt",
   "leaseStartAt", "leaseExpiresAt", "deliveryMode", "reviewPolicy", "reviewedBy",
   "attestations", "tags", "files", "fileBlocks", "blobs", "dependsOn", "parentClaimId", "evidenceRefs",
   "premiseFlag", "pullRequest", "pullRequests", "updatedAt",
@@ -91,7 +91,7 @@ const parse = text => {
   return value;
 };
 
-export function createDurableWorkClaimRegistry(db, { now = () => Date.now(), transaction = fn => fn(), onChange = null } = {}) {
+export function createDurableWorkClaimRegistry(db, { now = () => Date.now(), transaction = fn => fn(), onChange = null, beforeSet = null } = {}) {
   if (!db || typeof db.prepare !== "function") throw new TypeError("a SQLite database handle is required");
   // Prepare lazily: RoomStore constructs services before its atomic schema migration.
   const statement = sql => ({
@@ -225,6 +225,7 @@ export function createDurableWorkClaimRegistry(db, { now = () => Date.now(), tra
     },
     set(roomId, item) {
       if (!item || typeof item.id !== "string") throw new TypeError("work claim item needs an id");
+      if(typeof beforeSet==='function')beforeSet(roomId,item);
       upsert.run(roomId, item.id, JSON.stringify(encodeRow(WORK_CLAIM_ROW_KIND, capForStorage(roomId, item))), now());
       if (typeof onChange === "function") onChange(roomId);
       return item;

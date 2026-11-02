@@ -1,3 +1,4 @@
+import {operatorNormalization} from './operator-normalization.mjs';
 import { operatorWakeIndex } from './operator-wake-index.mjs';
 import { operatorAttachmentIndex } from './operator-attachment-index.mjs';
 import { operatorMessageAuthority } from './operator-message-authority.mjs';
@@ -24,6 +25,8 @@ const GET = "GET";
 const ROOM_EXPORT_ROUTE = "/api/operator/rooms/{roomId}/export";
 const ROOM_EXPORT_PATH = /^\/api\/operator\/rooms\/([^/]+)\/export$/;
 const ROUTES = Object.freeze({
+  "/api/operator/normalization/plan": POST,
+  "/api/operator/normalization/execute": POST,
   "/api/operator/wakes/ordered-indexes/plan": POST,
   "/api/operator/wakes/ordered-indexes/execute": POST,
   "/api/operator/attachments/live-index/plan": POST,
@@ -108,6 +111,9 @@ export function createOperatorRoutes({ store, json, reject, body, rate }) {
     if (path === "/api/operator/wakes/ordered-indexes/plan" || path === "/api/operator/wakes/ordered-indexes/execute") {
       json(res, 200, operatorWakeIndex(store, await body(req), path.endsWith('/execute'), requestId));
       return true;
+    }
+    if (path === '/api/operator/normalization/plan' || path === '/api/operator/normalization/execute') {
+      json(res,200,operatorNormalization(store,await body(req),path.endsWith('/execute')));return true;
     }
     if (path === "/api/operator/attachments/live-index/plan" || path === "/api/operator/attachments/live-index/execute") {
       json(res, 200, operatorAttachmentIndex(store, await body(req), path.endsWith('/execute'), requestId));
@@ -195,4 +201,10 @@ export const OPERATOR_WAKE_INDEX_ROUTES = Object.freeze(['plan', 'execute'].map(
     const handled = await ctx.operatorRoutes(ctx.req, ctx.res, { url: ctx.url, remoteAddress: ctx.remoteAddress, requestId: ctx.operationId });
     if (!handled) ctx.reject(404, 'not_found', 'Not found');
   }
+})));
+
+export const OPERATOR_NORMALIZATION_ROUTES=Object.freeze(['plan','execute'].map(phase=>Object.freeze({
+ id:'operator.normalization.'+phase,method:'POST',path:'/api/operator/normalization/'+phase,mount:true,auth:'none',capability:null,scope:'worker',events:[],
+ parity:'exempt:existing operator-token-only explicit one-time materialization',schema:{body:{type:'object'},response:{type:'object'}},
+ async handler(ctx){const handled=await ctx.operatorRoutes(ctx.req,ctx.res,{url:ctx.url,remoteAddress:ctx.remoteAddress,requestId:ctx.operationId});if(!handled)ctx.reject(404,'not_found','Not found');}
 })));

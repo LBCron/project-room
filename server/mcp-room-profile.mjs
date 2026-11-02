@@ -1,3 +1,5 @@
+import {redactSelectedEventPage} from './current-room-events.mjs';
+import './current-room-repository.mjs';
 import { SQL_BIND_CHUNK } from "./sql-binds.mjs";
 import { pageWorkListing, validWorkPage } from "./work-list-page.mjs";
 import { resolveMcpOAuthPrincipal, runMcpOAuthRequest, mcpOAuthToolAllowed, mcpOAuthPrincipalDescriptor, authorizeMcpOAuthDescriptor } from './mcp-oauth.mjs';
@@ -32,8 +34,8 @@ import { walkProvenance, ClaimError } from "./work-claims.mjs";
 import { claimThread } from "./claim-thread.mjs";
 import { randomUUID } from "node:crypto";
 import { validId, ownMember, ROOM_KINDS, MAX_MESSAGE_BODY_CHARS } from "../src/events.js";
-import { nextWorkStep } from "../src/workflow.js";
-import { completedResults, searchWorkMatches as searchWork } from "../src/work-selectors.js";
+import { nextWorkStep, workActions } from "../src/workflow.js";
+import { completedResults, currentResult, searchWorkMatches as searchWork } from "../src/work-selectors.js";
 import { sortWorkByCuriosity, viewerHistory } from "../src/curiosity-rank.mjs";
 import { workHelpContext } from "../src/work-help.js";
 import { HOSTED_ROOM_MCP_TOOLS, HOSTED_MCP_FOLLOW_UPS, ROOM_MCP_SERVER_NAME, ROOM_MCP_SERVER_VERSION, canonicalMcpToolName, PUBLIC_WORK_MCP_TOOLS } from "../src/room-mcp-join.js";
@@ -59,7 +61,6 @@ import {
 import { listedMcpTools, MCP_TOOL_FOCUSES } from "./mcp-discovery.mjs";
 import { ACTION_META_TOOL_NAMES, SEARCH_ACTIONS_TOOL, RUN_ACTION_TOOL, actionMetaToolDefs, isRunnableAction, searchActions, validRunActionArgs, validSearchActionsArgs } from "./mcp-action-search.mjs";
 import { stampAccessRequests, stampAttachmentGet, stampEvents, stampRoomContext, stampWorkListing, withContentTrust } from "./content-trust.mjs";
-import { redactEventPage } from "./redact-read.mjs";
 import { resolveCatalogAgent, catalogCallDenial } from "./capability-visibility.mjs";
 import { listSquads, getSquad, createSquad, updateSquadMembers, disbandSquad } from "./squads.mjs"; // plan-squads: squad roster
 import { runRoomMap } from "./project-map-store.mjs";
@@ -211,7 +212,7 @@ function validRoomArgs(name, args) {
       && (!code || typeof args.inviteCode === "string" && args.inviteCode.length > 0 && args.inviteCode.length <= 80);
   }
   if (name === "room_merge_members") return validId(args.keepMemberId) && validId(args.retireMemberId);
-  if (name === "get_room_context") return args.since_version === undefined || typeof args.since_version === "string" && /^[a-f0-9]{64}$/.test(args.since_version);
+  if (name === "get_room_context") return (args.since_version === undefined || typeof args.since_version === "string" && /^[a-f0-9]{64}$/.test(args.since_version)) && (args.work_after === undefined || validId(args.work_after));
   if (name === "room_read_bootstrap") return true;
   if (name === "room_list_events") {
     return (args.after === undefined || Number.isSafeInteger(args.after) && args.after >= 0)
@@ -250,7 +251,9 @@ function validRoomArgs(name, args) {
       && typeof args.mediaType === "string" && args.mediaType.length > 0 && args.mediaType.length <= 255
       && validAttachmentData(args.data);
   }
-  if (name === "room_list_files") return true;
+  if (name === "room_list_files") return (args.messageIds === undefined || Array.isArray(args.messageIds)
+    && args.messageIds.length >= 1 && args.messageIds.length <= 8 && new Set(args.messageIds).size === args.messageIds.length && args.messageIds.every(validId))
+    && (args.cursor === undefined || args.messageIds !== undefined && typeof args.cursor === "string" && args.cursor.length > 0 && args.cursor.length <= 4096);
   if (name === "room_list_access_requests") return args.status === undefined || typeof args.status === "string" && args.status.length <= 32;
   if (name === "room_decide_access_request") {
     const permsOk = args.permissions === undefined || validPermissionList(args.permissions);
@@ -387,11 +390,16 @@ function workRecord(item, now) {
   };
 }
 
-function listWork(store, secret, args) {
+export function listRoomWork(store, secret, args) {
+  if(!validWorkPage(args)||args.focus!==undefined&&!['all','needs_me','results','help_wanted'].includes(args.focus)
+    ||args.query!==undefined&&(typeof args.query!=='string'||args.query.length>200||!args.query.trim())
+    ||args.sort!==undefined&&args.sort!=='curiosity')throw new ServiceError(422,'invalid_work_page','Choose a work focus, query, and returned continuation');
+  const current=store.currentWorkListing?.(secret,args.roomId,args);
+  if(current)return stampWorkListing(current);
   const focus = args.focus ?? "all";
   const help = focus === "help_wanted";
-  const snapshot = store.snapshot(secret, args.roomId, null, "work", help);
-  const member = snapshot.state.members[snapshot.viewerId];
+  const snapshot = store.snapshot(secret, args.roomId, args.expectedSessionBinding??null, "work", help);
+  const member = ownMember(snapshot.state.members, snapshot.viewerId);
   const now = help ? Date.parse(snapshot.evaluatedAt) : Date.now();
   const items = Object.values(snapshot.state.workItems);
   let candidates = items;
@@ -409,7 +417,16 @@ function listWork(store, secret, args) {
     workItems: Object.fromEntries(candidates.map(item => [item.id, item]))
   }, args.query);
   let work = (matches?.work ?? candidates.map(item => ({ item }))).map(({ item, excerpt }) => ({
-    ...workRecord(item, now),
+    ...(focus === "all" ? workRecord(item, now) : {
+      id: item.id, title: item.title, state: item.state, revision: item.revision,
+      mode: item.mode, next: nextWorkStep(item, now)
+    }),
+    availableRoomActions: workActions(item, member, now).map(([action, label]) => ({ action, label })),
+    ...(help ? { help: workHelpContext(snapshot.state, item.id, member.id, snapshot.evaluatedAt) } : {}),
+    ...(focus === "results" ? { result: currentResult(item),
+      nextResultRead: item.receipt.nativeText ? { tool: "room_read_result",
+        arguments: { workItemId: item.id, completionEventId: item.receipt.eventId } } : null } : {}),
+    nextRead: { tool: "room_read_work", arguments: { workItemId: item.id, ...(help ? { includeOffers: true } : {}) } },
     ...(excerpt === undefined ? {} : { excerpt })
   }));
   let sort = null;
@@ -434,9 +451,14 @@ function listWork(store, secret, args) {
   })) ?? null;
   return stampWorkListing(pageWorkListing({
     roomId: snapshot.roomId, evaluatedThrough: snapshot.sequence, focus,
+    viewerId:snapshot.viewerId,viewerAccountId:snapshot.viewerAccountId??null,viewerAuthEpoch:snapshot.viewerAuthEpoch??null,
+    viewerSessionBinding:snapshot.viewerSessionBinding??null,viewerSessionRevision:snapshot.viewerSessionRevision??null,
     member: member ? { id: member.id, kind: member.kind, permissions: [...member.permissions] } : null,
     charter: snapshot.charter ?? null,
-    ...(matches ? { selection: { query: args.query.trim(), matches: matches.total, shown: work.length } } : {}),
+    scope: { kind: "room", permissions: [...member.permissions], externalExecution: false },
+    ...(matches ? { selection: { query: args.query.trim(), matches: matches.total, shown: work.length } }
+      : help ? { selection: { totalWork: items.length, helpWanted: work.length,
+        guidance: "Explicit current invitations, not assignments, queue eligibility or permission to execute. Follow nextRead to inspect current offer capacity and selection before contributing. No automatic offer or dispatch." } } : {}),
     ...(sort ? { sort } : {}),
     work, ...(focus === "needs_me" ? { replyRequests, replyRequestsEvaluatedThrough: replyListing.evaluatedThrough } : {})
   }, args, secret, "hosted"));
@@ -487,8 +509,9 @@ async function callLandTool(store, secret, name, args) {
   // add/remove/report are room writes; the read-only tier applies to them
   // exactly as it does to command-backed writes (issue #993).
   if (name !== "list_land_queue") {
+    const authority = store.roomAuthority(args.roomId, { memberId: auth.member.id });
     enforceAutonomyTierForAction({
-      db: store.db, roomId: args.roomId, state: store.room(args.roomId).state, actor: auth.member, action: name,
+      db: store.db, roomId: args.roomId, state: { room: { ownerId: authority.ownerId }, members: authority.members }, actor: auth.member, action: name,
       fail: (status, code, message) => { throw new ServiceError(status, code, message); },
     });
   }
@@ -613,7 +636,7 @@ function dispatchRoomToolCall(store, secret, identity, name, args, agentRooms) {
   if (name === "squads_disband") return disbandSquad(store, secret, roomId, args.squadId);
   if (name === "get_room_context") {
     const context = readComposedRoomContext(store, secret, roomId, {
-      sinceVersion: args.since_version === undefined ? null : args.since_version
+      workAfter:args.work_after??"", sinceVersion: args.since_version === undefined ? null : args.since_version
     });
     if (context.not_modified) return context;
     return stampRoomContext(context);
@@ -626,11 +649,11 @@ function dispatchRoomToolCall(store, secret, identity, name, args, agentRooms) {
     // B4 agent read-path: same filters as GET /events — type (comma-separated
     // event types), mentions (a member id, or "me"), compact (drop envelope
     // noise). All optional; omitting them keeps the legacy page.
-    return stampEvents(redactEventPage(store.eventsAfter(secret, roomId, args.after ?? 0, args.limit ?? 50, {
+    return stampEvents(redactSelectedEventPage(store, roomId, store.eventsAfter(secret, roomId, args.after ?? 0, args.limit ?? 50, {
       types: typeof args.type === "string" ? args.type.split(",").map(part => part.trim()).filter(part => part.length > 0) : null,
       mentions: typeof args.mentions === "string" ? args.mentions : null,
       compact: args.compact === true
-    }), store.redactionMessages(roomId)), auth.member.id);
+    })), auth.member.id);
   }
   if (name === "room_work_claim_thread") {
     // #5378: same data as GET /api/rooms/:roomId/work-claims/:claimId/thread.
@@ -661,7 +684,7 @@ function dispatchRoomToolCall(store, secret, identity, name, args, agentRooms) {
       ...(args.workItemId === undefined ? {} : { workItemId: args.workItemId }) };
     return commandReceipt(store, secret, roomId, { id, type: "message.posted", data }, "posted");
   }
-  if (name === "room_list_work") return listWork(store, secret, args);
+  if (name === "room_list_work") return listRoomWork(store, secret, args);
   if (name === "add_land_item" || name === "list_land_queue" || name === "remove_land_item" || name === "report_tip") {
     return callLandTool(store, secret, name, args);
   }
@@ -671,7 +694,10 @@ function dispatchRoomToolCall(store, secret, identity, name, args, agentRooms) {
       id: args.id, filename: args.filename, mediaType: args.mediaType, data: args.data
     });
   }
-  if (name === "room_list_files") return store.roomAttachments.list(secret, roomId);
+  if (name === "room_list_files") return store.roomAttachments.list(secret, roomId, {
+    ...(args.messageIds === undefined ? {} : { messageIds: args.messageIds }),
+    ...(args.cursor === undefined ? {} : { cursor: args.cursor })
+  });
   // Membership administration over MCP: the same store calls as the REST
   // access-requests and agent-invites routes, so UI, REST, and MCP agree.
   if (name === "room_list_access_requests") {
@@ -1217,6 +1243,7 @@ export function createHostedRoomMcp(store, { agentRooms, spendCredential, oauthP
       const principal = grant && resolveMcpOAuthPrincipal(options);
       if (!principal) return rpcError(message, MCP_AUTH_REQUIRED, "OAuth grant no longer grants access to this agent");
       const identity = { identityId: principal.identityId, displayName: ownMember(store.roomAuthority(principal.roomId,{memberId:principal.memberId}).members,principal.memberId).displayName };
+
       return runMcpOAuthRequest(options, () => {
         if (typeof nativeHandler === "function" && typeof message?.method === "string" && message.method.startsWith("events/"))
           return nativeHandler(message, { principal, descriptor: mcpOAuthPrincipalDescriptor(principal),

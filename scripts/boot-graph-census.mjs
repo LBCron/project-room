@@ -37,6 +37,21 @@ async function bundleSet(entry) {
   const result = await build({
     entryPoints: [entry], bundle: true, write: false, format: "esm", platform: "neutral",
     external: ["node:*", "cloudflare:*"], metafile: true, absWorkingDir: repo, logLevel: "silent",
+    // Qualification harnesses select exact source modules through these aliases.
+    // Census their current-source variants; retain every fixture and full graph.
+    plugins: [{
+      name: "qualified-current-sources",
+      setup(bundle) {
+        if (entry === join(cfDir, "current-native-work-worker.test-fixture.mjs"))
+          bundle.onResolve({filter: /^@qualified\/store$/}, () => ({path: join(repo, "server/store.mjs")}));
+        if (entry === join(cfDir, "current-schema-batch-native.test-fixture.mjs"))
+          bundle.onResolve({filter: /^@audit-verifier$/}, () => ({path: join(repo, "server/current-room-repository.mjs")}));
+        if (entry === join(cfDir, "native-inbox-discovery.test-fixture.mjs")) {
+          bundle.onResolve({filter: /^@discovery\/store$/}, () => ({path: join(repo, "server/store.mjs")}));
+          bundle.onResolve({filter: /^@discovery\/repository$/}, () => ({path: join(repo, "server/current-room-repository.mjs")}));
+        }
+      },
+    }],
   });
   return new Set(Object.keys(result.metafile.inputs).filter(inScope));
 }

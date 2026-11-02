@@ -1,9 +1,12 @@
+import { readAccountRoomRow } from './room-lifecycle.mjs';
+import {isCurrentRoom} from './current-room-repository.mjs';
+import {redactSelectedEventPage} from './current-room-events.mjs';
 import { oauthAuthorizationServerMetadata } from "./oauth-metadata.mjs";
 import { renderInviteOAuthPage } from "./routes/mcp-invite-oauth.mjs";
 import { createMcpInviteOAuth, MCP_INVITE_RECOVERY } from "./mcp-invite-oauth.mjs";
 import { createMcpEventsRuntime } from "./mcp-events-runtime.mjs";
 import { mcpOAuthResourceMetadata, listMcpOAuthAgents, validateMcpOAuthBinding } from './mcp-oauth.mjs';
-import { messageRepository } from "./message-repository.mjs";
+import { messageRepository, selectedMessageRecord } from "./message-repository.mjs";
 // JDOT-PUBLIC-CSP-RUM begin: public-page policy
 import { dmEventVisibility, dmConsentEventVisible } from "./dm-event-visibility.mjs";
 import { recordedReceiptsOptOut } from "./public-visibility.mjs";
@@ -46,7 +49,7 @@ import { SOURCE_REVISION, BUILD_ID } from "./version.mjs";
 import { agentErrorBody, errorCategory, mergeErrorDetail, ERROR_COMMAND_TYPE } from "../src/agent-error.mjs";
 import { DiagnosticsLog, supportExportBundle } from "./diagnostics.mjs";
 import { renderRoomExportHtml, EXPORT_HTML_CSP } from "./room-export-html.mjs";
-import { redactEventPage, redactEventRows, redactMessageTree } from "./redact-read.mjs";
+import { redactEventRows, redactMessageTree } from "./redact-read.mjs";
 import { messageInHistory, eventInHistory, requireExportOwner, recordRoomExport } from "./history-visibility.mjs"; // PRIV-2
 import { discoveryDoc, isHealthAliasPath, rewriteRoomApiPrefix, EDGE_DOOR_HOSTS, ROOM_ORIGIN, agentCardSignatureState } from "./agent-discovery.mjs";
 import { validateCriticalConfig } from "./boot-config.mjs";
@@ -1109,10 +1112,9 @@ export function createRoomServer({ store, origin, assetRoot = new URL("../", imp
       const backlog = res.writableLength;
       try {
         const raw = store.eventsAfter(token, roomId, cursor, 100, binding);
-        // An empty page needs no redaction — and redactionMessages() copies
-        // the room's whole message array, so skipping it on idle ticks is
-        // most of the per-tick saving.
-        const batch = raw.events.length ? redactEventPage(raw, store.redactionMessages(roomId)) : raw;
+        // Empty pages need no redaction. Normalized pages retain only their
+        // selected point-read context; legacy pages use the existing lookup.
+        const batch = raw.events.length ? redactSelectedEventPage(store, roomId, raw) : raw;
         if (!batch.events.length) res.write(": connected transport only\n\n");
         let queued = 0, partial = false, lagged = false;
         for (const item of batch.events) {
@@ -1264,6 +1266,13 @@ export function createRoomServer({ store, origin, assetRoot = new URL("../", imp
       if (url.pathname === "/.well-known/security.txt" || url.pathname === "/security.txt" || url.pathname === "/room/.well-known/security.txt") {
         return writeSecurityTxt(req, res);
       }
+      // A partial backup must not reach direct account/public/module routes or
+      // cached auth fallbacks. Readiness has its own 503; minimal static and
+      // liveness responses do not expose restored application state.
+      const restoreIndependentRead=['GET','HEAD'].includes(req.method) &&
+        (assets.has(url.pathname) || LIVENESS_GET_ONLY_PATHS.has(url.pathname)
+          || isHealthAliasPath(url.pathname) || url.pathname==='/api/ready');
+      if(!restoreIndependentRead)store.assertRestoreAdmitted();
       // Jev-harness admission gate, shadow mode (docs/JEV-GATES.md): score
       // the join with the cheap classifier, journal the would-be decision,
       // then proceed unchanged. Shadow mode never enforces — this helper
@@ -1272,7 +1281,9 @@ export function createRoomServer({ store, origin, assetRoot = new URL("../", imp
         try {
           if (typeof roomId !== "string" || !roomId) return;
           const now = store.now();
-          const members = Object.values(store.room(roomId).state.members ?? {});
+          // The scorer needs the complete membership comparison set, not room
+          // content. Native rooms deliberately refuse whole-room hydration.
+          const members = store.readTransaction(() => Object.values(store.roomAuthority(roomId).members ?? {}));
           let resolvedIdentityId = identityId;
           const member = memberId ? members.find(m => m && m.id === memberId) : null;
           if (!resolvedIdentityId && member) resolvedIdentityId = member.identityId ?? null;
@@ -2071,6 +2082,7 @@ export function createRoomServer({ store, origin, assetRoot = new URL("../", imp
           // #3273: this used to also require a rooms row, so a fresh, healthy,
           // empty workspace reported 503 until someone created a room while
           // the Worker reported the same state ready.
+          store.assertRestoreAdmitted();
           store.db.prepare("SELECT 1").get();
           return json(res, 200, { status: "ready" }, req.method === "HEAD");
         } catch { return json(res, 503, { status: "unavailable" }, req.method === "HEAD"); }
@@ -2665,8 +2677,7 @@ export function createRoomServer({ store, origin, assetRoot = new URL("../", imp
           try { store.authenticateAccountSession(token, candidateId, binding); }
           catch (error) { if (error.status !== 403) throw error; continue; }
           if (activeRoom === null) activeRoom = candidateId;
-          const kind = store.db.prepare(
-            "SELECT json_extract(projection,'$.room.kind') AS kind FROM rooms WHERE id=?").get(candidateId)?.kind;
+          const kind = readAccountRoomRow(store, candidateId)?.kind;
           if (kind === "personal" && activePersonal === null) activePersonal = candidateId;
         }
         if (activeRoom) return json(res, 200, { room: { id: activePersonal ?? activeRoom }, created: false });
@@ -3947,7 +3958,7 @@ export function createRoomServer({ store, origin, assetRoot = new URL("../", imp
         if (!writing) {
           if (!["GET", "HEAD"].includes(req.method) || fileId) reject(405, "method_not_allowed", "Method not allowed", { Allow: fileId ? "POST" : "GET" });
           spendCredential("read", auth.credentialHash);
-          return json(res, 200, store.roomAttachments.list(selected.token, roomId), req.method === "HEAD");
+          return json(res, 200, store.roomAttachments.list(selected.token, roomId, {messageIds:url.searchParams.getAll("messageId"),cursor:url.searchParams.get("cursor")}), req.method === "HEAD");
         }
         if (req.method !== "POST") reject(405, "method_not_allowed", "Method not allowed", { Allow: fileId ? "POST" : "GET, POST" });
         protectWrite(req, auth, selected.bearer);
@@ -4332,7 +4343,7 @@ export function createRoomServer({ store, origin, assetRoot = new URL("../", imp
       const peerContext = {
         memberId: viewerId,
         identityId: store.bonds.identityForMember(roomId, viewerId),
-        isOwner: viewerId === store.roomAuthority(roomId).ownerId
+        isOwner: viewerId === store.roomAuthority(roomId, { memberId: viewerId }).ownerId
       };
       const roomEventVisible = event => dmEventVisible(event) && dmConsentEventVisible(event, viewerId, peerContext.isOwner)
         && peerEventVisible(event, peerContext);
@@ -4595,9 +4606,10 @@ export function createRoomServer({ store, origin, assetRoot = new URL("../", imp
           reject(422, "invalid_snapshot_view", "Choose a supported snapshot view");
         }
         if (params.has("view") && (params.getAll("view").length !== 1 || !["work", "orientation"].includes(params.get("view"))
-          || [...params.keys()].some(key => !["view", "auth"].includes(key) || params.getAll(key).length !== 1))) {
+          || [...params.keys()].some(key => !["view", "auth", "work_cursor"].includes(key) || params.getAll(key).length !== 1))) {
           reject(422, "invalid_snapshot_view", "Choose a supported snapshot view");
         }
+        if(params.has("work_cursor")&&!params.has("view"))reject(422,"invalid_snapshot_view","Work cursor requires a work view");
         const helpContext = req.headers["x-project-room-help-context"];
         if (helpContext !== undefined && (helpContext !== "1" || params.get("view") !== "work")) reject(422, "invalid_help_context", "Choose version 1 with the current work view");
         const offerContext = req.headers["x-project-room-offer-context"];
@@ -4611,6 +4623,7 @@ export function createRoomServer({ store, origin, assetRoot = new URL("../", imp
         }
         return json(res, 200, readRoomSnapshot(store, selected.token, roomId, fence, {
           view: snapshotView,
+          workCursor: params.get("work_cursor"),
           helpContext: helpContext === "1",
           offerContext: offerContext === "1",
           auditView: auditHeader ? "activity" : "full",
@@ -4640,7 +4653,7 @@ export function createRoomServer({ store, origin, assetRoot = new URL("../", imp
         if (req.method === "POST") return json(res, 200, store.requestRuns.apply(selected.token, roomId, await body(req), fence));
       }
       if (["reply-requests", "reply-context", "reply-history"].includes(route) && req.method === "GET") {
-        const params = url.searchParams, names = route === "reply-requests" ? ["direction", "status"]
+        const params = url.searchParams, names = route === "reply-requests" ? ["direction", "status", "cursor", "limit"]
           : route === "reply-context" ? ["requestMessageId", "cursor", "limit"] : ["direction", "cursor", "checkpoint", "limit"];
         if ([...params.keys()].some(key => ![...names, "auth"].includes(key) || params.getAll(key).length !== 1)
           || params.has("limit") && !/^[1-9]\d*$/.test(params.get("limit"))) reject(422, "invalid_reply_selection", "Invalid request selection");
@@ -4750,7 +4763,7 @@ export function createRoomServer({ store, origin, assetRoot = new URL("../", imp
         // re-resolve each hit against the projection and drop targeted DMs
         // the viewer is not a party to. Fail closed when a hit cannot be resolved.
         if (result.messages?.length) {
-          const byId = messageRepository(store, roomId);
+          const byId = result.contractVersion===2 ? {get:id=>store.readTransaction(()=>selectedMessageRecord(store,roomId,id))} : messageRepository(store, roomId);
           result.messages = result.messages.filter(hit => {
             const message = byId.get(hit.id);
             return message ? dmMessageVisible(message) : false;
@@ -4859,8 +4872,12 @@ export function createRoomServer({ store, origin, assetRoot = new URL("../", imp
         requireExportOwner(store, roomId, viewerId, reject);
         const format = url.searchParams.get("format") ?? "jsonl";
         if (!["jsonl", "html"].includes(format) || url.searchParams.getAll("format").length > 1) reject(422, "invalid_format", "format is jsonl (default) or html");
+        // Current event pages already apply addressed privacy and redaction.
+        // Legacy export retains its existing whole-export filtering contract.
+        const currentExport = isCurrentRoom(store.db,roomId);
         if (format === "html") {
-          const rows = redactEventRows([...store.exportEvents(selected.token, roomId, fence)].filter(({ event }) => roomEventVisible(event)), store.redactionMessages(roomId));
+          const source = [...store.exportEvents(selected.token, roomId, fence)];
+          const rows = currentExport ? source : redactEventRows(source.filter(({ event }) => roomEventVisible(event)), store.redactionMessages(roomId));
           const bytes = Buffer.from(renderRoomExportHtml(rows, { roomId }), "utf8");
           recordRoomExport(store, selected.token, roomId, "html", fence); // PRIV-2
           res.writeHead(200, { "Content-Type": "text/html; charset=utf-8", "Content-Length": bytes.length,
@@ -4869,20 +4886,21 @@ export function createRoomServer({ store, origin, assetRoot = new URL("../", imp
           return res.end(bytes);
         }
         const lines = [];
-        // R1 (export/import round-trip): the per-viewer filter can drop
+        // Archival event export: the per-viewer filter can drop
         // targeted DMs the viewer cannot see, leaving sequence gaps in the
         // file; importEvents demands dense line.sequence === i + 1, so the
         // export renumbers the visible walk densely. Event bodies carry no
         // sequence (order + event ids are the stable references; import
-        // rewrites dense row keys anyway), so renumbering is replay-safe
-        // and keeps the export self-consistent for reimport.
+        // rewrites dense row keys anyway). Dense rows do not promise a full
+        // restore: import still requires current replay semantics and cannot
+        // recover whole-store proofs or historical operator authority.
         const visible = [];
         for (const line of store.exportEvents(selected.token, roomId, fence)) {
-          if (!roomEventVisible(line.event)) continue;
+          if (!currentExport && !roomEventVisible(line.event)) continue;
           visible.push(line);
         }
         let exportSequence = 0;
-        for (const line of redactEventRows(visible, store.redactionMessages(roomId))) {
+        for (const line of currentExport ? visible : redactEventRows(visible, store.redactionMessages(roomId))) {
           exportSequence += 1;
           lines.push(JSON.stringify({ sequence: exportSequence, event: line.event }) + "\n");
         }
@@ -5173,7 +5191,9 @@ export function createRoomServer({ store, origin, assetRoot = new URL("../", imp
       // muted thread-root ids; POST {threadId, muted} mutes or unmutes
       // (threadId may be any message in the thread; it resolves to the root).
       if (route === "thread-mutes" && req.method === "GET") {
-        return json(res, 200, store.threadMutes.list(selected.token, roomId, fence));
+        const params=url.searchParams,threadIds=params.getAll('threadId');
+        if(threadIds.length>16||[...params.keys()].some(key=>!['threadId','auth'].includes(key)))reject(422,'invalid_thread_mute_selection','Select up to16 thread ids');
+        return json(res, 200, store.threadMutes.list(selected.token, roomId, fence,{threadIds:params.has('threadId')?threadIds:null}));
       }
       if (route === "thread-mutes" && req.method === "POST") {
         const data = await body(req);
@@ -5471,11 +5491,11 @@ export function createRoomServer({ store, origin, assetRoot = new URL("../", imp
       }
       if (route === "context" && req.method === "GET") {
         const params = url.searchParams;
-        if ([...params.keys()].some(key => !["since_version", "auth"].includes(key) || params.getAll(key).length !== 1)) {
-          reject(422, "invalid_context_version", "since_version is the only context query parameter");
+        if ([...params.keys()].some(key => !["since_version", "work_after", "auth"].includes(key) || params.getAll(key).length !== 1)) {
+          reject(422, "invalid_context_version", "Context accepts since_version and work_after");
         }
         const context = readComposedRoomContext(store, selected.token, roomId, {
-          sinceVersion: params.has("since_version") ? params.get("since_version") : null, expectedSessionBinding: fence
+          workAfter:params.get("work_after")??"", sinceVersion: params.has("since_version") ? params.get("since_version") : null, expectedSessionBinding: fence
         });
         return json(res, 200, context);
       }
@@ -5490,6 +5510,17 @@ export function createRoomServer({ store, origin, assetRoot = new URL("../", imp
       }
       if (route === "events" && req.method === "GET") {
         const params = url.searchParams;
+        if(params.has('view')){
+          if(params.get('view')!=='browser'||[...params.keys()].some(key=>!['view','after','limit','eventId','auth'].includes(key)||params.getAll(key).length!==1)||params.has('eventId')&&(params.has('after')||params.has('limit')))
+            reject(422,'invalid_event_selection','Choose one browser event window or addressed event');
+          const eventId=params.get('eventId');let after=Number(params.get('after')??0),limit=Number(params.get('limit')??16);
+          if(!Number.isSafeInteger(after)||after<0||!Number.isInteger(limit)||limit<1||limit>16||eventId!==null&&!validId(eventId))reject(422,'invalid_event_selection','Invalid browser event selection');
+          if(eventId!==null){const row=store.db.prepare('SELECT sequence FROM events WHERE id=? AND room_id=?').get(eventId,roomId);if(!row)reject(404,'event_not_found','Event is unavailable');after=row.sequence-1;limit=1;}
+          const page=redactSelectedEventPage(store,roomId,store.eventsAfter(selected.token,roomId,after,limit,{expectedSessionBinding:fence}));
+          if(eventId!==null&&!page.events.some(row=>row.event.id===eventId))reject(404,'event_not_found','Event is unavailable');
+          return json(res,200,{contractVersion:2,readKind:'event-window',roomId,viewerId:auth.member.id,viewerAccountId:auth.account?.id??null,viewerAuthEpoch:auth.account?.authEpoch??null,viewerSessionBinding:auth.sessionBinding,viewerSessionRevision:auth.sessionRevision??null,
+            selection:{after,limit,eventId},sourceWindow:{after,examinedThrough:page.next,hasMore:page.hasMore},...page});
+        }
         // `afterSequence` is not a cursor. Ignoring it used to restart the
         // page at sequence 0, so an agent that thought it was caught up
         // reread the whole log. Refuse it and name `after`.
@@ -5502,7 +5533,7 @@ export function createRoomServer({ store, origin, assetRoot = new URL("../", imp
             reject(422, "invalid_event_cursor", "tail is used alone, as an integer from 1 to 200");
           }
           const tail = Number(params.get("tail"));
-          return json(res, 200, redactEventPage(readEventTail(store, selected.token, roomId, tail, fence), store.redactionMessages(roomId)));
+          return json(res, 200, redactSelectedEventPage(store, roomId, readEventTail(store, selected.token, roomId, tail, fence)));
         }
         // B4 agent read-path: server-side type/mentions filters + an opt-in
         // compact shape. With none of the new parameters present the
@@ -5527,7 +5558,7 @@ export function createRoomServer({ store, origin, assetRoot = new URL("../", imp
         if (sinceRaw !== null && sinceMs === null) reject(422, "invalid_event_cursor", eventTimestampMessage("since"));
         if (untilRaw !== null && untilMs === null) reject(422, "invalid_event_cursor", eventTimestampMessage("until"));
         if (sinceMs !== null && untilMs !== null && sinceMs > untilMs) reject(422, "invalid_event_cursor", "since is after until");
-        return json(res, 200, redactEventPage(store.eventsAfter(selected.token, roomId,
+        return json(res, 200, redactSelectedEventPage(store, roomId, store.eventsAfter(selected.token, roomId,
           afterRaw === null ? 0 : Number(afterRaw), limitRaw === null ? 100 : Number(limitRaw),
           { actor: params.get("actor"),
             since: sinceMs === null ? null : new Date(sinceMs).toISOString(),
@@ -5535,7 +5566,7 @@ export function createRoomServer({ store, origin, assetRoot = new URL("../", imp
             types: typeParam === null ? null : typeParam.split(",").map(part => part.trim()).filter(part => part.length > 0),
             mentions: params.get("mentions"),
             compact: compactParam === "1" || compactParam === "true",
-            expectedSessionBinding: fence }), store.redactionMessages(roomId)));
+            expectedSessionBinding: fence })));
       }
       if (route === "agent-inbox" && req.method === "GET") {
         // RC-2026-09-18-012: agent-scoped unified inbox. Agent members only
@@ -5548,13 +5579,14 @@ export function createRoomServer({ store, origin, assetRoot = new URL("../", imp
           if (!granted) reject(403, "insufficient_scope", "API key lacks the inbox:read scope");
         }
         const params = url.searchParams;
-        if ([...params.keys()].some(key => !["limit", "after", "auth"].includes(key) || params.getAll(key).length !== 1)
+        if ([...params.keys()].some(key => !["limit", "after", "olderCursor", "auth"].includes(key) || params.getAll(key).length !== 1)
           || params.has("limit") && (!/^[1-9]\d*$/.test(params.get("limit")) || Number(params.get("limit")) > 200)
           || params.has("after") && !/^(0|[1-9]\d*)$/.test(params.get("after")))
           reject(422, "invalid_inbox_selection", "Choose a limit of 1..200 and an after of 0 or more");
         return json(res, 200, store.agentInbox(selected.token, roomId, {
           limit: params.has("limit") ? Number(params.get("limit")) : 50,
-          after: params.has("after") ? Number(params.get("after")) : 0,
+          after: params.has("after") ? Number(params.get("after")) : undefined,
+          ...(params.has("olderCursor")?{olderCursor:params.get("olderCursor")} : {}),
           expectedSessionBinding: fence }));
       }
       if (route === "stream" && req.method === "GET") return stream(req, res, selected.token, roomId, Number(req.headers["last-event-id"] ?? url.searchParams.get("after") ?? 0), auth, operationId);
@@ -5616,7 +5648,7 @@ export function createRoomServer({ store, origin, assetRoot = new URL("../", imp
       // #643: invitation administration admits the room owner by ID on any
       // credential (share-links-style owner-capability exemption, audited);
       // anyone else needs an account browser session, as before.
-      const invitationOwnerActing = auth.member?.id === store.room(roomId).state.room.ownerId;
+      const invitationOwnerActing = auth.member?.id === store.roomAuthority(roomId, {memberId:auth.member?.id}).ownerId;
       if (route === "invitations" && req.method === "GET") {
         // Round-2 #108: invite-link analytics.
         if (!invitationOwnerActing && (selected.mode !== "account" || selected.bearer)) reject(403, "account_session_required", "Invitation administration requires an account browser session");

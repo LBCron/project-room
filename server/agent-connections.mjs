@@ -69,7 +69,7 @@ export class AgentConnections {
     // account required) — a raw access key must not mint agent credentials.
     // The mutation path additionally requires a signed-in account session —
     // connection sponsorship is account-bound by schema.
-    if (!auth.delegate && (auth.member?.id !== this.store.room(roomId).state.room.ownerId
+    if (!auth.delegate && (auth.member?.id !== this.store.roomAuthority(roomId,{memberId:auth.member.id}).ownerId
       || !auth.member.permissions.includes("manage_members"))) {
       fail(403, "owner_required", "Only the room owner can manage agent connections");
     }
@@ -88,8 +88,8 @@ export class AgentConnections {
     return first && JSON.parse(first.receipt_json).version === 2;
   }
   authority(row) {
-    const room = this.store.roomAuthority(row.room_id);
-    const sponsor = ownMember(room.members, row.sponsor_member_id), member = ownMember(room.members, row.member_id);
+    const room = this.store.roomAuthority(row.room_id,{memberId:row.sponsor_member_id});
+    const sponsor = ownMember(room.members, row.sponsor_member_id), member = ownMember(this.store.roomAuthority(row.room_id,{memberId:row.member_id}).members, row.member_id);
     const account = this.db.prepare("SELECT active,auth_epoch FROM accounts WHERE id=?").get(row.sponsor_account_id);
     const binding = this.db.prepare("SELECT account_id FROM member_accounts WHERE room_id=? AND member_id=?").get(row.room_id, row.sponsor_member_id);
     const friend = this.friendSponsored(row);
@@ -103,7 +103,7 @@ export class AgentConnections {
     return true;
   }
   view(row) {
-    const member = ownMember(this.store.room(row.room_id).state.members, row.member_id);
+    const member = ownMember(this.store.roomAuthority(row.room_id,{memberId:row.member_id}).members, row.member_id);
     const credential = this.db.prepare("SELECT revoked FROM credentials WHERE hash=?").get(row.credential_hash);
     const status = row.status === "disconnected" ? "disconnected" : row.expires_at <= this.store.now() ? "expired"
       : !this.authority(row) ? "access_changed" : credential?.revoked !== 0 ? "revoked" : "key_issued";
@@ -148,7 +148,7 @@ export class AgentConnections {
   list(token, roomId, binding) {
     return this.store.readTransaction(() => {
       const auth = this.sponsor(token, roomId, binding);
-      const owner = auth.delegate || auth.member.id === this.store.room(roomId).state.room.ownerId;
+      const owner = auth.delegate || auth.member.id === this.store.roomAuthority(roomId,{memberId:auth.member.id}).ownerId;
       return { connections: this.db.prepare("SELECT * FROM agent_connections WHERE room_id=? ORDER BY created_at,member_id").all(roomId)
         .filter(row => owner || row.sponsor_account_id === auth.account?.id && row.sponsor_member_id === auth.member.id).map(row => this.view(row)) };
     });
@@ -223,18 +223,19 @@ export class AgentConnections {
       }
       let now = this.store.now();
       const before = this.row(roomId, memberId);
-      const isOwner = auth.member.id === this.store.room(roomId).state.room.ownerId;
+      const authority = this.store.roomAuthority(roomId,{memberId});
+      const isOwner = auth.member.id === authority.ownerId;
       const friend = action === "create" ? !isOwner : before && this.friendSponsored(before);
       const ownConnection = before?.sponsor_member_id === auth.member.id && before?.sponsor_account_id === auth.account.id;
       if (action !== "create" && ((!isOwner && (!friend || !ownConnection)) || (friend && action === "rotate" && !ownConnection)))
         fail(403, "sponsor_required", "Only this agent's sponsor can reconnect it");
-      const authoritySequence = this.store.room(roomId).sequence;
-      const permissions = action === "create" ? access[request.access] : ownMember(this.store.room(roomId).state.members, memberId)?.permissions;
+      const authoritySequence = authority.sequence;
+      const permissions = action === "create" ? access[request.access] : ownMember(authority.members, memberId)?.permissions;
       if (action !== "disconnect" && friend && (!permissions || permissions.some(p => !AGENT_INVITE_SAFE_PERMISSIONS.includes(p) || !auth.member.permissions.includes(p))))
         fail(403, "sponsor_scope_exceeded", "An agent can only receive working permissions its human sponsor holds");
       if (expectedOwnerRevision !== auth.member.revision) fail(409, "stale_member_revision", "Your room access changed; refresh first");
       if (action !== "disconnect" && (expiresAt <= now || expiresAt > now + 30 * 86400000 + 3600000)) fail(422, "invalid_expiry", "Choose an expiry within 30 days");
-      const roomMembers = this.store.room(roomId).state.members;
+      const roomMembers = authority.members;
       const existingMember = Object.hasOwn(roomMembers, memberId) ? roomMembers[memberId] : undefined;
       if (action === "create" ? Boolean(before || existingMember)
         : !before || before.status === "disconnected" || before.generation !== expectedGeneration
@@ -254,13 +255,13 @@ export class AgentConnections {
           // RC-2026-09-24-201: stamp the identity on the member record so
           // the room state is self-describing (agent-rooms.mjs already does).
           ...(request.identityId ? { identityId: request.identityId } : {}) } }, binding, { agentConnectionSponsor: friend });
-      if (action === "disconnect" && ownMember(this.store.room(roomId).state.members, memberId)?.active !== false) membership = this.store.command(token, roomId, { id: `agent-${hash(`${auth.account.id}:${requestId}`).slice(0, 40)}`, type: T.MEMBER_ACCESS_CHANGED,
-        data: { memberId, expectedMemberRevision, active: false, permissions: ownMember(this.store.room(roomId).state.members, memberId)?.permissions } }, binding, { agentConnectionSponsor: friend && !isOwner });
+      if (action === "disconnect" && ownMember(authority.members, memberId)?.active !== false) membership = this.store.command(token, roomId, { id: `agent-${hash(`${auth.account.id}:${requestId}`).slice(0, 40)}`, type: T.MEMBER_ACCESS_CHANGED,
+        data: { memberId, expectedMemberRevision, active: false, permissions: ownMember(authority.members, memberId)?.permissions } }, binding, { agentConnectionSponsor: friend && !isOwner });
       // Read AFTER the create/disconnect commands above: downstream state
       // persistence needs the post-command member (revision, permissions) —
       // hoisting this read above the disconnect command was the #3283
       // hosted-CI failure (verifyHistory rejected the stale member_revision).
-      const member = ownMember(this.store.room(roomId).state.members, memberId);
+      const member = ownMember(this.store.roomAuthority(roomId,{memberId}).members, memberId);
       if (membership) now = Date.parse(membership.event.at);
       if (action !== "disconnect" && member.permissions.some(permission => ["manage_members", "decide", "write_external"].includes(permission))) fail(409, "unsupported_agent_scope", "This agent scope needs a separate reviewed connection");
       this.db.prepare("UPDATE credentials SET revoked=1 WHERE room_id=? AND member_id=?").run(roomId, memberId);
@@ -396,7 +397,7 @@ export class AgentConnections {
           || (index === 0 ? request.action !== "create" || state.created_at !== state.updated_at
             : request.action === "create" || previous.status === "disconnected" || request.expectedGeneration !== previous.generation
               || state.created_at !== previous.created_at)) invalid();
-        const room = this.store.room(row.room_id).state, sponsor = ownMember(room.members, state.sponsor_member_id);
+        const authority = this.store.roomAuthority(row.room_id, { memberId: state.sponsor_member_id }), sponsor = ownMember(authority.members, state.sponsor_member_id);
         const account = this.db.prepare("SELECT * FROM accounts WHERE id=?").get(state.sponsor_account_id);
         const binding = this.db.prepare("SELECT account_id FROM member_accounts WHERE room_id=? AND member_id=?").get(row.room_id, state.sponsor_member_id);
         // The member↔account binding is a current-state record, not an
@@ -426,11 +427,11 @@ export class AgentConnections {
           || Object.keys(receipt).sort().join() !== ["version", "action", "requestId", "roomId", "memberId", "generation", "status", "expiresAt", "at", "membershipEventId", "membershipSequence", ...(receipt.version === 2 ? ["authoritySequence"] : []), ...(receipt.identityId !== undefined ? ["identityId"] : []), ...(receipt.unlinkedIdentityId !== undefined ? ["unlinkedIdentityId"] : [])].sort().join()
           || ![state.created_at, state.updated_at, state.expires_at, state.sponsor_auth_epoch, state.sponsor_member_revision, state.member_revision].every(integer)
           || state.status !== (request.action === "disconnect" ? "disconnected" : "issued")
-          || (receipt.version === 1 && !this.ownerIdsAt(row.room_id, room.room.ownerId, { sequence: receipt.membershipSequence, at: receipt.at }, ownershipCache).includes(state.sponsor_member_id))
+          || (receipt.version === 1 && !this.ownerIdsAt(row.room_id, authority.ownerId, { sequence: receipt.membershipSequence, at: receipt.at }, ownershipCache).includes(state.sponsor_member_id))
           || sponsor?.kind !== "human" || sponsor.revision < state.sponsor_member_revision
           || !account || account.auth_epoch < state.sponsor_auth_epoch || !bindingOk) invalid();
         if (receipt.version === 2) {
-          if (!integer(receipt.authoritySequence) || receipt.authoritySequence > this.store.room(row.room_id).sequence) invalid();
+          if (!integer(receipt.authoritySequence) || receipt.authoritySequence > authority.sequence) invalid();
           // Checkpoints can move past this operation after account deletion.
           // The retained event log, not the latest checkpoint, proves past authority.
           const history = this.db.prepare("SELECT body FROM events WHERE room_id=? AND sequence<=? ORDER BY sequence").all(row.room_id, receipt.authoritySequence);
@@ -468,7 +469,7 @@ export class AgentConnections {
         previous = state;
       }
       if (Object.keys(row).some(k => row[k] !== previous[k])) invalid();
-      const member = ownMember(this.store.room(row.room_id).state.members, row.member_id);
+      const member = ownMember(this.store.roomAuthority(row.room_id, { memberId: row.member_id }).members, row.member_id);
       if (!member || member.kind !== "agent" || member.revision < row.member_revision) invalid();
     }
   }

@@ -1,3 +1,4 @@
+import {assertAccountEnrollment} from './account-agent-enrollment.mjs';
 import { createHash } from "node:crypto";
 import { EVENT_TYPES as T, validId, ownMember, AGENT_INVITE_SAFE_PERMISSIONS, replayEvents, emptyRoomState } from "../src/events.js";
 import { ServiceError } from "./service-error.mjs";
@@ -155,7 +156,7 @@ export class AgentConnections {
   }
   validate(details, { historyReplay = false } = {}) {
     if (!details || Array.isArray(details) || typeof details !== "object") fail(422, "invalid_connection", "Invalid connection request");
-    const { action, requestId, memberId, expectedOwnerRevision, expectedGeneration, expectedMemberRevision, displayName, access: preset, keyHash, expiresAt, agentType, identityId, identityLinkCode } = details;
+    const { action, requestId, memberId, expectedOwnerRevision, expectedGeneration, expectedMemberRevision, displayName, access: preset, keyHash, expiresAt, agentType, identityId, identityLinkCode, accountEnrollment } = details;
     const common = ["action", "requestId", "memberId", "expectedOwnerRevision"];
     // RC-2026-09-24-201: optional identityId made enrollment atomic — the
     // membership, credential AND identity link landed in one transaction, so
@@ -173,7 +174,7 @@ export class AgentConnections {
     // other secret in this service).
     const createFields = [...common, "displayName", "access", "keyHash", "expiresAt",
       ...(agentType !== undefined ? ["agentType"] : []),
-      ...(identityId !== undefined ? ["identityId", ...(!historyReplay ? ["identityLinkCode"] : [])] : [])];
+      ...(identityId !== undefined ? ["identityId", ...(accountEnrollment !== undefined ? ["accountEnrollment"] : !historyReplay ? ["identityLinkCode"] : [])] : [])];
     const fields = action === "create" ? createFields
       : [...common, "expectedGeneration", "expectedMemberRevision", ...(action === "rotate" ? ["keyHash", "expiresAt"] : [])];
     const IDENTITY_ID_RE = /^[A-Za-z0-9_-]{1,64}$/;
@@ -190,7 +191,8 @@ export class AgentConnections {
     // invalid_connection) so clients can tell "mint a code" apart from
     // "fix the request shape". apply() verifies and consumes the code;
     // without a valid one it throws the same 422.
-    if (action === "create" && identityId !== undefined && !historyReplay
+    if (action === "create" && accountEnrollment !== undefined && (typeof accountEnrollment !== "string" || !/^account-enroll-[a-f0-9]{64}$/.test(accountEnrollment))) fail(422, "identity_link_proof_required", "Invalid account enrollment evidence");
+    if (action === "create" && identityId !== undefined && accountEnrollment === undefined && !historyReplay
       && (typeof identityLinkCode !== "string" || !LINK_CODE_RE.test(identityLinkCode))) {
       fail(422, "identity_link_proof_required",
         "Present an identity link code minted by the identity holder (POST /api/identities/{identityId}/link-code)");
@@ -221,6 +223,7 @@ export class AgentConnections {
         if (prior.fingerprint !== fingerprint) fail(409, "idempotency_conflict", "This request was used for different settings");
         return { receipt: JSON.parse(prior.receipt_json), connection: this.view(this.row(roomId, prior.member_id)), duplicate: true };
       }
+      if (request.accountEnrollment) assertAccountEnrollment(this.store, roomId, request, {accountId:auth.account.id});
       let now = this.store.now();
       const before = this.row(roomId, memberId);
       const authority = this.store.roomAuthority(roomId,{memberId});
@@ -277,7 +280,8 @@ export class AgentConnections {
       // so a disconnected identity can't keep acting through the bond
       // surface; the removed identity is echoed on the receipt for audit.
       if (action === "create" && request.identityId) {
-        this.store.identities.consumeLinkCode(request.identityId, identityLinkCode,
+        if (request.accountEnrollment) assertAccountEnrollment(this.store, roomId, request, {accountId:auth.account.id});
+        else this.store.identities.consumeLinkCode(request.identityId, identityLinkCode,
           { roomId, sponsorAccountId: auth.account.id });
         const identity = this.store.identities.get(request.identityId);
         if (!identity) fail(404, "identity_not_found", "No such agent identity");
@@ -314,7 +318,7 @@ export class AgentConnections {
       this.db.prepare("INSERT INTO agent_connection_operations VALUES(?,?,?,?,?,?,?,?,?)").run(roomId, memberId, row.generation, auth.account.id, requestId, requestJSON, fingerprint, JSON.stringify(receipt), JSON.stringify(row));
       if (action === "create") seedNewAgentPolicy(this.db, roomId, memberId, now);
       let mcpToken = null;
-      if (action === "create" && request.identityId) {
+      if (action === "create" && request.identityId && !request.accountEnrollment) {
         this.store.accountLogins.assertEmailVerified(auth.account.id);
         mcpToken = this.store.agentPlugin.issueOnboardingMcpToken({
           identityId: request.identityId, roomId,
@@ -383,6 +387,7 @@ export class AgentConnections {
       let previous = null;
       for (const [index, operation] of operations.entries()) {
         const request = JSON.parse(operation.request_json), receipt = JSON.parse(operation.receipt_json), state = JSON.parse(operation.state_json);
+        if(request.accountEnrollment) assertAccountEnrollment(this.store,row.room_id,request,{history:true,accountId:operation.actor_account_id});
         // RC-2026-09-24-210: history rows persist the code-free request
         // (the raw link code is verified, consumed, and never stored), so
         // replay skips the proof requirement — the code was proven when

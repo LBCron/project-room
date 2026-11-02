@@ -277,3 +277,5 @@ These source-bound design and qualification notes describe the offline schema45 
 
 - [Normalized work snapshots and search qualification](research/2026-11-02-current-work-search.md): bounded source contracts, private event redaction, actual browser continuation and explicit unknown totals.
 - [Conversation attention and native digest continuation](research/2026-11-02-current-attention-digest.md): exact reply classification, bounded source admission, actual SDK traversal and explicit unknown totals.
+
+- [Existing account-controlled agent enrollment](ACCOUNT-AGENT-ENROLLMENT.md) — disabled-by-default consent path and readers-first rollback boundary.

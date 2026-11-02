@@ -753,5 +753,14 @@ export default {
   "agentError.current_room_corrupt.recovery": "Stop the read and report the room ID, code and full message to the operator for integrity reconciliation. Do not retry unchanged or treat this as an empty result.",
   "agentSponsor.invalidConsent": "Invalid sponsorship consent",
   "agentSponsor.permissionsNotHeld": "Cannot grant permissions not held",
-  "agentSponsor.requestTitle": "Connect {name} to the requesting human"
+  "agentSponsor.requestTitle": "Connect {name} to the requesting human",
+  "agent.existing.invalidResponse": "Could not verify existing agent access. Refresh the connections.",
+  "agent.existing.readChat": "read and chat only",
+  "agent.existing.label": "Existing agents you control",
+  "agent.existing.add": "Add this existing agent",
+  "agent.existing.retry": "Retry original enrollment",
+  "agent.existing.profile": "Choose Chat, Contribute, Review or Collaborate for this managed connection.",
+  "agent.existing.confirm": "Add {name} ({identityId}) to {roomId} with {access} access ({permissions})? This grants new room access. Its existing identity and other room connections stay unchanged. OAuth connection requires separate consent.",
+  "agent.existing.connected": "Existing agent added. Reconnect through OAuth and select this room.",
+  "agent.existing.unconfirmed": "Enrollment not confirmed. Retry the original request."
 };

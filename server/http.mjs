@@ -1,3 +1,4 @@
+import {createAccountAgentEnrollment} from './account-agent-enrollment.mjs';
 import {currentReturnBriefMessages} from './current-return-brief.mjs';
 import { readAccountRoomRow } from './room-lifecycle.mjs';
 import {isCurrentRoom} from './current-room-repository.mjs';
@@ -397,6 +398,7 @@ export function createRoomServer({ store, origin, assetRoot = new URL("../", imp
   githubToken = undefined,
   mcpEventTransport, mcpEventDnsResolvers, mcpEventExternalScheduler = false,
   mcpOAuthClients = [], // Explicit verified public-client registrations; empty disables native MCP OAuth.
+  accountAgentEnrollmentEnabled = false, // Readers-first rollout: explicit server opt-in only.
   connectorClients = [], // OAuth2 clients for third-party connectors (e.g. [{ clientId, name, redirectUris }])
   serviceMode = trustedLocalProxy ? "invite-only-pilot" : "single-node-pilot", deployment = undefined, production = false, growth = null, push = undefined,
   operatorAccountId = (globalThis.process && globalThis.process.env.ROOM_OPERATOR_ACCOUNT_ID) || "",
@@ -585,6 +587,7 @@ export function createRoomServer({ store, origin, assetRoot = new URL("../", imp
   };
   const oauthResource = mcpOAuthClients.length ? new URL("/mcp", origin).href : null;
   if (oauthResource) mcpOAuthResourceMetadata(oauthResource, origin);
+  const accountAgentEnrollment = createAccountAgentEnrollment({store,resource:oauthResource,preferences:mcpOAuthClients,enabled:accountAgentEnrollmentEnabled===true&&Boolean(oauthResource)});
   const oauthMetadataUrl = oauthResource ? new URL("/.well-known/oauth-protected-resource/mcp", origin).href : null;
   const mcpClientIds = new Set(mcpOAuthClients.map(client => client.clientId));
   const mcpRedirects = new Set(mcpOAuthClients.flatMap(client => client.redirectUris));
@@ -5037,7 +5040,13 @@ export function createRoomServer({ store, origin, assetRoot = new URL("../", imp
           ...(params.has("before") ? { before: Number(params.get("before")) } : {})
         }));
       }
-      if (route === "agent-connections" && req.method === "GET") return json(res, 200, store.agentConnections.list(selected.token, roomId, fence));
+      if (route === "agent-connections" && req.method === "GET") {
+        const result=store.agentConnections.list(selected.token,roomId,fence);
+        const auth=store.authenticate(selected.token,roomId,fence);
+        const canEnroll=accountAgentEnrollmentEnabled===true&&auth.account&&auth.kind==='session'&&!auth.delegate&&auth.member.kind==='human'
+          &&auth.member.id===store.roomAuthority(roomId,{memberId:auth.member.id}).ownerId;
+        return json(res,200,{...result,existingAgentEnrollment:canEnroll?accountAgentEnrollment.list(selected.token,roomId,fence):{available:false,choices:[]}});
+      }
       if (route === "activity" && req.method === "GET") {
         // Attention: personal activity feed (write-time fan-out). Query:
         // before (exclusive event id), limit (1..100), type (one of the four
@@ -5361,7 +5370,10 @@ export function createRoomServer({ store, origin, assetRoot = new URL("../", imp
         return json(res, 200, agentRooms.transfer(selected.token, roomId, data, fence));
       }
       if (route === "agent-connections" && req.method === "POST") {
-        const result = store.agentConnections.apply(selected.token, roomId, await body(req), fence);
+        const data = await body(req);
+        const result = data?.action === 'enroll-existing'
+          ? accountAgentEnrollment.apply(selected.token,roomId,data,fence)
+          : store.agentConnections.apply(selected.token, roomId, data, fence);
         return json(res, result.duplicate ? 200 : 201, result);
       }
       // GX-… guest invites: owner-administered through the same room funnel

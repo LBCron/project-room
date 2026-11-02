@@ -4,6 +4,7 @@ import {RoomStore} from '../server/store.mjs';import {AgentRooms} from '../serve
 import {readConversation} from '../server/conversation-sync.mjs';
 import {initialRoom} from '../server/bootstrap.mjs';
 import {operatorNormalization} from '../server/operator-normalization.mjs';
+import {createRoomServer} from '../server/http.mjs';
 function fixture(t){const dir=mkdtempSync(join(tmpdir(),'native-share-')),path=join(dir,'room.sqlite');let s=new RoomStore(path);t.after(()=>{s.close();rmSync(dir,{recursive:true,force:true});});const owner=s.identities.create('Olive'),room='native-share';new AgentRooms(s).create(owner.secret,{roomId:room,title:'Native sharing',purpose:'Useful peers',starter:false});return{get s(){return s;},owner,room,reopen(){s.close();s=new RoomStore(path);}};}
 function link(f,access='guest',maxJoins=2){const token=randomBytes(32).toString('base64url'),result=f.s.shareLinks.create(f.owner.secret,f.room,{requestId:randomUUID(),linkToken:token,expiresAt:Date.now()+3600000,maxJoins,expectedMemberRevision:0,access});return{token,...result};}
 test('normalized share agent preview, first admission, cold lost-ACK retry and privacy keep one use',t=>{
@@ -33,4 +34,15 @@ for(const removed of [false,true])test(`normalized share rejoin retains self-lef
  const current=s.accountSessionSlot(slot.token),join=()=>s.shareLinks.join(slot.token,token,{displayName:'Aster',redemptionId:randomUUID(),expectedSessionRevision:current.sessionRevision,expectedSessionBinding:current.sessionBinding});
  if(removed)assert.throws(join,e=>e.code==='membership_removed');else{const result=join();assert.equal(result.duplicate,true);assert.equal(result.session.member.id,memberId);assert.equal(result.session.member.active,true);}
  assert.equal(s.shareLinks.view(s.shareLinks.find(token)).joins,1);
+});
+
+test('actual normalized HTTP share preview and join return usable peer access without exposing the grant',async t=>{
+ const f=fixture(t),l=link(f),peer=f.s.identities.create('Parker'),server=createRoomServer({store:f.s});await new Promise(resolve=>server.listen(0,'127.0.0.1',resolve));t.after(async()=>{server.closeStreams();server.closeAllConnections();await new Promise(resolve=>server.close(resolve));});
+ const origin=`http://127.0.0.1:${server.address().port}`,post=async(path,data,token)=>{const response=await fetch(origin+path,{method:'POST',headers:{Origin:origin,'Content-Type':'application/json',...(token?{Authorization:`Bearer ${token}`}:{})},body:JSON.stringify(data)});return{status:response.status,body:await response.json()};};
+ f.s.room=()=>{throw Error('unexpected HTTP share blob hydration');};
+ const preview=await post('/api/share-links/preview',{linkToken:l.token});assert.equal(preview.status,200);assert.equal(preview.body.room.id,f.room);
+ const args={linkToken:l.token,displayName:'Parker'},joined=await post('/api/share-links/join-agent',args,peer.secret);assert.equal(joined.status,201,JSON.stringify(joined.body));assert.equal((await post('/api/share-links/join-agent',args,peer.secret)).status,200);
+ assert.ok(!JSON.stringify(joined.body).includes(l.token));assert.ok(!JSON.stringify(joined.body).includes(f.owner.secret));
+ const hello=await post(`/api/rooms/${f.room}/commands`,{id:'peer-hello',type:'message.posted',data:{messageId:'peer-hello',body:'Ready to coordinate'}},peer.secret);assert.equal(hello.status,201,JSON.stringify(hello.body));
+ assert.equal(readConversation(f.s,f.owner.secret,f.room,{messageId:'peer-hello'}).messages[0].body,'Ready to coordinate');
 });

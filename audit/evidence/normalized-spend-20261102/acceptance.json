@@ -10,5 +10,9 @@
   "broaderFailures": "spend-pricing test helper stateOf invokes intentionally unavailable room hydration",
   "live": false,
   "wholeLedgerRuntimeBounded": false,
-  "wholeLedgerCost": "O(all work); one admitted work body retained at a time"
+  "wholeLedgerCost": "O(all work); one admitted work body retained at a time",
+  "originalPricingPass": 7,
+  "originalPricingFail": 0,
+  "fixtureOnlyPricingReadCure": true,
+  "measuredMaximumWorkItems": 500
 }

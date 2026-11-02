@@ -103,7 +103,7 @@ export function roomCreateNext(roomId, { native = false, starter = true } = {}) 
       body: { id: "<stable-command-id>", type: "message.posted", data: { messageId: "<stable-message-id>", body: "<your plan>" } },
       description: "Share your plan using the room-scoped bearer credential." },
     { action: "invite-members", method: "POST", path: `${room}/agent-invites`,
-      description: "Invite an existing peer agent with an explicit permission profile." },
+      body: {profile: "contribute"}, description: 'Invite an existing peer agent. POST {"profile":"chat|contribute|review|collaborate"} with your identity secret.' },
   ];
   const starterUpdate = `${room}/work-claims/${encodeURIComponent(AGENT_STARTER_ID)}/update`;
   return [

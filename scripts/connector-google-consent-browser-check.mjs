@@ -26,7 +26,9 @@ for (const dynamic of [false, true]) for (const mode of ['normal', 'terms', 'acc
     f.store.db.prepare('UPDATE account_terms SET terms_version=? WHERE account_id=?').run('2026-09-01', `google:${sub}`);
   }
   const owner = f.store.createSession(f.store.issueAccessKey('commons', 'googler'));
-  f.store.agentConnections.apply(owner.token, 'commons', { action: 'create', requestId: 'connector-agent', memberId: 'connected-agent', displayName: 'Existing agent', access: 'collaborate', expectedOwnerRevision: 0, expiresAt: f.store.now() + 3600000, keyHash: createHash('sha256').update('synthetic-fixture-key').digest('hex') }, owner.session.sessionBinding);
+  const identity = f.store.identities.create('Existing Google agent');
+  const { linkCode } = f.store.identities.mintLinkCode(identity.identityId, identity.secret, { roomId: 'commons' });
+  f.store.agentConnections.apply(owner.token, 'commons', { action: 'create', identityId: identity.identityId, identityLinkCode: linkCode, requestId: 'connector-agent', memberId: 'connected-agent', displayName: 'Existing agent', access: 'collaborate', expectedOwnerRevision: 0, expiresAt: f.store.now() + 3600000, keyHash: createHash('sha256').update('synthetic-fixture-key').digest('hex') }, owner.session.sessionBinding);
   const configured = { clientId: 'claude-return-fixture', name: 'Claude return fixture', redirectUris: ['https://claude.ai/api/mcp/auth_callback'] };
   const directory = mkdtempSync(join(tmpdir(), 'connector-google-'));
   execFileSync('openssl', ['req', '-x509', '-newkey', 'rsa:2048', '-nodes', '-keyout', join(directory, 'key.pem'), '-out', join(directory, 'cert.pem'), '-days', '1', '-subj', '/CN=localhost'], { stdio: 'ignore' });
@@ -146,7 +148,8 @@ for (const dynamic of [false, true]) for (const mode of ['normal', 'terms', 'acc
   assert.equal(page.url(), consentUrl.href, 'terms acceptance resumes the original native consent byte-for-byte');
   if (returningMember) assert.deepEqual(roomReads, [], 'native continuation must precede ordinary Room restoration');
   assert.equal(await page.evaluate(() => sessionStorage.getItem('project-room:oauth-return:v1')), null);
-  assert.equal(await page.getByRole('button', { name: 'Allow', exact: true }).count(), 1);
+  await page.getByRole('button', { name: 'Allow', exact: true }).waitFor();
+  assert.equal(await page.locator('select[name=agent_binding] option').count(), 1);
   assert.equal(f.store.db.prepare('SELECT count(*) n FROM oauth_provider_codes').get().n, 0, 'return never auto-approves consent');
   assert.deepEqual(errors, []);
 });

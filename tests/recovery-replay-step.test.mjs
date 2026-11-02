@@ -59,3 +59,8 @@ test('independently folded insertion ordinals preserve source order rather than 
  assert.equal(actual.counts.messages,3);assert.equal(actual.counts.workItems,2);
  const incoming=initialRoom()[0];assert.throws(()=>applyRecoveryReplayStep(()=>undefined,incoming,{members:0,channels:0,workItems:0,replyRequests:0,messages:NaN}),/message count/);
 });
+
+test('complete addressed work lifecycle preserves session usage, historical verification, owner gates and supersession',async()=>{
+ const {recoveryWorkLifecycle}=await import('./helpers/recovery-work-lifecycle.mjs'),{history,state:expected}=recoveryWorkLifecycle(),actual=fold();for(const incoming of history)actual.apply(incoming);
+ assert.deepEqual(withoutJournal(actual.materialize()),withoutJournal(expected));assert.equal(actual.materialize().workItems.main.state,'superseded');assert.equal(actual.materialize().workItems.main.attempts[0].usageCents,4);assert.ok(actual.materialize().workItems.main.verificationHistory.some(entry=>entry.historical===true));assert.ok(actual.maxReads<32);
+});

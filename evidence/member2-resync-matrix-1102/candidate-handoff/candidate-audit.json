@@ -1,0 +1,231 @@
+{
+  "schema": "member2-candidate-evidence-audit-v1",
+  "candidate": "4986df689a1773e4162f7c686667a02f15f18c4c",
+  "candidateTree": "e0b52214ad91d867e7b543465b72ee75a3d6b7eb",
+  "base": "00888c52110d36250d3e07629036701b72926d09",
+  "observedMain": "00888c52110d36250d3e07629036701b72926d09",
+  "mergedIntoObservedMain": false,
+  "linearChain": [
+    "aec29ee1275db508070f4bfbfd902f207469fcd8",
+    "255816cbd7de046e4352b95e05a5a9a606f9f62c",
+    "1785f8e970c8b0be0e5afc233e4a98ac91e5a424",
+    "308a5a910ac6c9febe8ffb708932075b3cf2a1f1",
+    "4986df689a1773e4162f7c686667a02f15f18c4c"
+  ],
+  "changedFiles": [
+    "cloudflare/access-request-pages.check.mjs",
+    "cloudflare/access-request-pages.test-fixture.mjs",
+    "cloudflare/package.json",
+    "cloudflare/recovery-native-kv.check.mjs",
+    "cloudflare/recovery-native-kv.test-fixture.mjs",
+    "cloudflare/restore-body-native.check.mjs",
+    "cloudflare/restore-body-native.test-fixture.mjs",
+    "docs/openapi.yaml",
+    "plugins/project-room/skills/project-room/references/errors-catalog.md",
+    "scripts/access-request-pages-browser-check.mjs",
+    "scripts/browser-ci-durations.json",
+    "server/access-requests.mjs",
+    "server/http.mjs",
+    "server/mcp-hosted-tools.mjs",
+    "server/mcp-room-profile.mjs",
+    "server/openapi/fragments/0081-api-rooms-roomId-access-requests.yaml",
+    "server/owner-attention.mjs",
+    "server/recovery-engine-continuation.mjs",
+    "server/routes/member-permissions.mjs",
+    "skills/project-room/references/errors-catalog.md",
+    "src/agent-error.mjs",
+    "src/needs-attention.js",
+    "strings/en.js",
+    "strings/en.json",
+    "tests/access-request-page.test.mjs",
+    "tests/helpers/access-request-queue-source.mjs",
+    "tests/helpers/recovery-report-progress.mjs",
+    "tests/needs-attention-retry.test.js",
+    "tests/needs-attention-viewer.test.js",
+    "tests/recovery-engine-continuation.test.mjs",
+    "tests/recovery-report-progress.test.mjs"
+  ],
+  "packets": [
+    {
+      "folder": "access-request-pages-aec29-evidence",
+      "evidenceCommit": "dc082e707efe9d04e84a8f4376289ea26a47bc41",
+      "evidenceTree": "58d624c818ae9e34a8239c1c85d43d97453a626a",
+      "files": 13,
+      "bytes": 128629,
+      "allLocalHashesAndGitBlobsMatch": true
+    },
+    {
+      "folder": "access-request-native-upgrade-evidence",
+      "evidenceCommit": "93b6cb30df792ac82ef320121048b0b617356d83",
+      "evidenceTree": "968908f3ac21b82e395f5fa2ecc258224eea28a7",
+      "files": 7,
+      "bytes": 34057,
+      "allLocalHashesAndGitBlobsMatch": true
+    },
+    {
+      "folder": "oauth-route-name-evidence",
+      "evidenceCommit": "c800794239ede5bd5d349b390f64e89e86a6673f",
+      "evidenceTree": "2f18b749b42c0287f0d0b71efedb997bb7d2cba7",
+      "files": 19,
+      "bytes": 185833,
+      "allLocalHashesAndGitBlobsMatch": true
+    },
+    {
+      "folder": "native-restore-kv-evidence",
+      "evidenceCommit": "d497a5fef1a9d1e69e6f643d39f27c7621b5ea93",
+      "evidenceTree": "d30dae8f12cdd1608ae03042fd2d82052db4e8ba",
+      "files": 20,
+      "bytes": 725709,
+      "allLocalHashesAndGitBlobsMatch": true
+    },
+    {
+      "folder": "native-body-driver-evidence",
+      "evidenceCommit": "452b6ba228dfaf598e1b638635ee9d618e90f020",
+      "evidenceTree": "a6cfac1f4b962bd1ace07db6a27242730f115941",
+      "files": 13,
+      "bytes": 359639,
+      "allLocalHashesAndGitBlobsMatch": true
+    }
+  ],
+  "verifiedArtifactFiles": 72,
+  "testSummaries": [
+    {
+      "log": "access-request-pages-aec29-evidence/contract.log",
+      "passed": 210,
+      "failed": 0
+    },
+    {
+      "log": "access-request-pages-aec29-evidence/browser.log",
+      "passed": 4,
+      "failed": 0
+    },
+    {
+      "log": "access-request-pages-aec29-evidence/native.log",
+      "passed": 1,
+      "failed": 0
+    },
+    {
+      "log": "oauth-route-name-evidence/route-tests.log",
+      "passed": 25,
+      "failed": 0
+    },
+    {
+      "log": "oauth-route-name-evidence/consent-tests.log",
+      "passed": 28,
+      "failed": 0
+    },
+    {
+      "log": "native-restore-kv-evidence/native-engine-after.log",
+      "passed": 1,
+      "failed": 0
+    },
+    {
+      "log": "native-restore-kv-evidence/neighbors.log",
+      "passed": 15,
+      "failed": 0
+    },
+    {
+      "log": "native-restore-kv-evidence/composed-check.log",
+      "passed": 15,
+      "failed": 0
+    },
+    {
+      "log": "native-body-driver-evidence/standalone-native.log",
+      "passed": 1,
+      "failed": 0
+    },
+    {
+      "log": "native-body-driver-evidence/composed-native.log",
+      "passed": 1,
+      "failed": 0
+    },
+    {
+      "log": "native-body-driver-evidence/guard-finalization.log",
+      "passed": 5,
+      "failed": 0
+    },
+    {
+      "log": "native-body-driver-evidence/composed-guards.log",
+      "passed": 2,
+      "failed": 0
+    }
+  ],
+  "sourceBindings": [
+    {
+      "packet": "access-request-pages-aec29-evidence",
+      "commit": "aec29ee1275db508070f4bfbfd902f207469fcd8",
+      "tree": "474c5f1b30227f2a76e2691b4b2968400158cc0a",
+      "gitTreeMatches": true
+    },
+    {
+      "packet": "oauth-route-name-evidence",
+      "commit": "936f86fd5a0c65287d4f41a1c1bc20aa1b77f46a",
+      "tree": "c99b38bf20eb75cc5c72d4bfe296a5fd94114d14",
+      "gitTreeMatches": true
+    },
+    {
+      "packet": "oauth-route-name-evidence",
+      "commit": "1785f8e970c8b0be0e5afc233e4a98ac91e5a424",
+      "tree": "2e3cdd110f82c2547adae96f20f3661c6ae87c88",
+      "gitTreeMatches": true
+    },
+    {
+      "packet": "native-restore-kv-evidence",
+      "commit": "dff5d160e39eeef737d4d73edc5c395ee54b66b8",
+      "tree": "efd3382c8ab77e59c9ab5d7ca1352f8065960917",
+      "gitTreeMatches": true
+    },
+    {
+      "packet": "native-restore-kv-evidence",
+      "commit": "308a5a910ac6c9febe8ffb708932075b3cf2a1f1",
+      "tree": "72a4430fbb5f297429493885c45be11391ec82d3",
+      "gitTreeMatches": true
+    },
+    {
+      "packet": "native-restore-kv-evidence",
+      "commit": "349f62dc4bc57f272b3a596303e371d15f86f942",
+      "tree": "72a4430fbb5f297429493885c45be11391ec82d3",
+      "gitTreeMatches": true
+    },
+    {
+      "packet": "native-body-driver-evidence",
+      "commit": "bdee803d4fa2ee3db225f5b6b07b04ab411737a9",
+      "tree": "0439c7755de32f1cc140619011a7bd83777e7b80",
+      "gitTreeMatches": true
+    },
+    {
+      "packet": "native-body-driver-evidence",
+      "commit": "4986df689a1773e4162f7c686667a02f15f18c4c",
+      "tree": "e0b52214ad91d867e7b543465b72ee75a3d6b7eb",
+      "gitTreeMatches": true
+    }
+  ],
+  "productionChangesSinceQueueEvidence": [
+    "server/http.mjs",
+    "server/recovery-engine-continuation.mjs"
+  ],
+  "latestChangeTestOnly": [
+    "cloudflare/package.json",
+    "cloudflare/restore-body-native.check.mjs",
+    "cloudflare/restore-body-native.test-fixture.mjs",
+    "tests/helpers/recovery-report-progress.mjs",
+    "tests/recovery-report-progress.test.mjs"
+  ],
+  "nativeRegistration": {
+    "base": 86,
+    "candidate": 89,
+    "priorEntriesPreserved": true,
+    "duplicates": 0
+  },
+  "coverage": {
+    "queueApiUi": "Original aec29 qualification retained; target API/UI files identical. Two later production fixes are separately identified, not silently retargeted.",
+    "latestRuntimeCi": "Full local CI mode check passed on308a5a9; all five later changes are test-only. Latest full-repository CI was not rerun.",
+    "fullRestore": "Exact production tree308a5a9 and same runtime content in latest candidate;1000requests,coldresume,fullaudit,cleanup and credentials.",
+    "latestNativeBody": "Directly tested latest candidate tree;650messages,1MiB,732steps and negative guard controls."
+  },
+  "limits": [
+    "Read-only consistency audit, not new runtime execution or artifact authenticity proof.",
+    "Saved passing counts overlap; do not sum them as unique test coverage.",
+    "No hosted CI, PR review, peer execution, device utilization or deployment verified here."
+  ]
+}

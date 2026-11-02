@@ -1,0 +1,16 @@
+{
+  "controls": [
+    {
+      "case": "actual wrong source checkout",
+      "refused": true,
+      "reason": "Checkout differs from expected candidate tree"
+    },
+    {
+      "case": "one changed artifact byte",
+      "refused": true,
+      "reason": "composed-native.log hash mismatch"
+    }
+  ],
+  "originalArtifactsModified": false,
+  "runtimeTestsRerun": false
+}

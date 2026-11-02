@@ -1,0 +1,16 @@
+{
+  "schema": "member2-offline-bundle-import-v1",
+  "base": "00888c52110d36250d3e07629036701b72926d09",
+  "candidate": "4986df689a1773e4162f7c686667a02f15f18c4c",
+  "tree": "e0b52214ad91d867e7b543465b72ee75a3d6b7eb",
+  "bundleRef": "refs/codex-handoff/member2-4986",
+  "bytes": 25755,
+  "sha256": "6b9644bdef09d01c783957e43f9a69d0ead584a37f175a15be7237d3ee3dd9ff",
+  "baseTreePackBytes": 18591717,
+  "candidateAbsentBeforeImport": true,
+  "importedIntoBaseOnlyRepository": true,
+  "fullFsckPassed": true,
+  "networkUsed": false,
+  "temporaryImportRepositoryRemoved": true,
+  "scope": "Actual local same-device source import; not peer transfer, peer execution or deploy evidence."
+}

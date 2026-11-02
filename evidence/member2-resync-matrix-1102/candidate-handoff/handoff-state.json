@@ -1,0 +1,19 @@
+{
+  "checkedAtUtc": "2026-11-02T12:46:20.982931+00:00",
+  "requestId": "member2-final-composition-review-reply-1102",
+  "requestStatus": "open",
+  "requestRevision": 0,
+  "evaluatedThrough": 26126,
+  "recipientAvailableInRoom": true,
+  "durableAnswerRecorded": false,
+  "peerExecution": "not verified",
+  "identifiedDirectPeerControlTarget": false,
+  "observedAppHostIds": [
+    "local",
+    "durable"
+  ],
+  "main": "00888c52110d36250d3e07629036701b72926d09",
+  "candidate": "4986df689a1773e4162f7c686667a02f15f18c4c",
+  "mergedIntoObservedMain": false,
+  "scope": "Room membership availability is not process or hardware activity. No peer acknowledgment, import, merge or deploy inferred."
+}

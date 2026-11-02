@@ -130,7 +130,7 @@ export function upgradeUnusedCurrentFormat5(db) {
   if (!permit || !permit.sql.includes('normalized-current-v1-native-work-5')) return false;
   const owned=[...definitions,...RESTORE_CONTROL_DEFINITIONS,...guardDefinitions,...RESTORE_CONTROL_GUARDS];
   const rows=db.prepare('SELECT name,sql FROM sqlite_master WHERE name IN ('+owned.map(()=>'?').join(',')+')').all(...owned.map(([name])=>name));
-  if (rows.length!==owned.length || owned.some(([name,sql])=>normalized(rows.find(row=>row.name===name)?.sql)!==normalized(sql.replaceAll(CURRENT_WRITER_FORMAT,'normalized-current-v1-native-work-5'))))
+  if (rows.length!==owned.length || owned.some(([name,sql])=>normalized(rows.find(row=>row.name===name)?.sql)!==normalized(sql.replaceAll(CURRENT_WRITER_FORMAT,'normalized-current-v1-native-work-5').replaceAll('audit-scratch-21:', 'audit-scratch-20:'))))
     throw Error('Previous current format schema requires reconciliation');
   for (const table of ['current_room_head','current_room_records','current_room_record_proofs','current_restore_audit_scratch'])
     if (db.prepare('SELECT 1 FROM '+table+' LIMIT 1').get()) throw Error('Populated previous current format requires explicit recovery');

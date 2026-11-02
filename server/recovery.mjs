@@ -1,3 +1,4 @@
+import {verifyChannelUpdatesForRecovery} from './recovery-channel-updates.mjs';
 import {recoveryReportFingerprint} from './recovery-report-scope.mjs';
 import {verifyShareLinksForRecovery} from './recovery-share-links.mjs';
 import {verifyRemindersForRecovery} from './recovery-reminder-consumption.mjs';
@@ -188,7 +189,7 @@ export function auditRecovery(store) {
     store.inbox.verify();
     store.email.verify();
     store.delegationJournal.verify();
-    store.channelUpdates.verifySchema(); store.channelUpdates.verify();
+    store.channelUpdates.verifySchema(); verifyChannelUpdatesForRecovery(store);
     store.handoffs.verifySchema(); store.handoffs.verify(); // Task 23: handoff journal integrity.
     const reminderAudit=verifyRemindersForRecovery(store,rooms);
     const fingerprint = recoveryReportFingerprint(store);

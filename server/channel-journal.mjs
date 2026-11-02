@@ -41,6 +41,18 @@ const updateIds = ids => {
   return [...new Set(ids)];
 };
 
+// Shared by the original complete oracle and the sealed recovery continuation.
+// Keep this predicate exact: source snapshots may predate current write caps.
+export function validateChannelUpdateJournalRow(row) {
+  const payload = JSON.parse(row.payload);
+  if (!payload || typeof payload !== "object" || Array.isArray(payload) || payload.update_id !== row.update_id
+    || !channelJournalStatuses.includes(row.status) || row.attempts > channelJournalLimits.maxAttempts
+    || (row.status === "failed") !== (row.attempts >= channelJournalLimits.maxAttempts)
+    || (row.attempts > 0 && row.status !== "imported" && typeof row.last_error !== "string")
+    || row.updated_at < row.received_at) throw new Error("Channel update journal requires operator reconciliation");
+  return row.status;
+}
+
 export class ChannelUpdateJournal {
   constructor(store) { this.store = store; this.db = store.db; }
   // A read-only open of a v27 file written before this journal finds none of
@@ -62,12 +74,7 @@ export class ChannelUpdateJournal {
     return this.store.readTransaction(() => {
       const counts = { pending: 0, imported: 0, failed: 0 };
       for (const row of this.db.prepare("SELECT * FROM pending_channel_updates").all()) {
-        const payload = JSON.parse(row.payload);
-        if (!payload || typeof payload !== "object" || Array.isArray(payload) || payload.update_id !== row.update_id
-          || !channelJournalStatuses.includes(row.status) || row.attempts > channelJournalLimits.maxAttempts
-          || (row.status === "failed") !== (row.attempts >= channelJournalLimits.maxAttempts)
-          || (row.attempts > 0 && row.status !== "imported" && typeof row.last_error !== "string")
-          || row.updated_at < row.received_at) throw new Error("Channel update journal requires operator reconciliation");
+        validateChannelUpdateJournalRow(row);
         counts[row.status]++;
       }
       return counts;

@@ -7,7 +7,7 @@ import { CURRENT_WRITER_FORMAT } from './current-room-format.mjs';
 // to a target, and no ordinary SQL writer may clear an interrupted restore.
 export const RESTORE_CONTROL_TABLE = 'current_restore_admission';
 export const RESTORE_AUDIT_TABLE='current_restore_audit_scratch';
-export const RESTORE_AUDIT_VERSION=20,RESTORE_REPORT_VERSION=1;
+export const RESTORE_AUDIT_VERSION=21,RESTORE_REPORT_VERSION=1;
 export const RESTORE_AUDIT_UNIT_BYTES=131072+2048;
 export const RESTORE_CONTROL_DEFINITIONS = [[RESTORE_CONTROL_TABLE, `CREATE TABLE IF NOT EXISTS current_restore_admission (
   singleton INTEGER PRIMARY KEY CHECK(singleton=1), state TEXT NOT NULL CHECK(state IN ('clear','pending')),
@@ -51,6 +51,29 @@ export function verifyRestoreControl(db) {
   if(rows.length!==expected.length || expected.some(([name,sql])=>normalize(rows.find(row=>row.name===name)?.sql)!==normalize(sql)))
     throw Error('Restore admission schema requires reconciliation');
   admittedSchemas.set(db,rows);
+}
+// The persisted census shape changes at protocol21. Only an exact completed
+// protocol20 target can upgrade; unfinished sources must use their old runtime.
+export function upgradeClearRestoreProtocol20(db) {
+  if (!db.isTransaction) throw Error('Restore protocol transition requires a transaction');
+  if (db.prepare("SELECT sql FROM sqlite_master WHERE name='current_room_permit_update'").get()?.sql?.includes('normalized-current-v1-native-work-5')) return false;
+  const old = sql => sql.replaceAll('audit-scratch-21:', 'audit-scratch-20:');
+  const definitions = [...RESTORE_CONTROL_DEFINITIONS, ...RESTORE_CONTROL_GUARDS];
+  const rows = db.prepare('SELECT name,sql FROM sqlite_master WHERE name IN (' + definitions.map(() => '?').join(',') + ')').all(...definitions.map(([name]) => name));
+  if (!rows.some(row => row.sql?.includes('audit-scratch-20:'))) return false;
+  if (rows.length !== definitions.length || definitions.some(([name,sql]) => normalize(rows.find(row => row.name === name)?.sql) !== normalize(old(sql))))
+    throw Error('Previous restore protocol schema requires reconciliation');
+  const states = db.prepare('SELECT * FROM current_restore_admission').all();
+  if (states.length !== 1 || states[0].singleton !== 1 || states[0].state !== 'clear' || states[0].restore_id !== null || states[0].phase !== 'clear'
+    || states[0].source_seal !== null || states[0].coverage !== null || db.prepare('SELECT 1 FROM current_restore_audit_scratch LIMIT 1').get())
+    throw Error('Pending previous restore protocol requires explicit recovery');
+  const permit = db.prepare('SELECT * FROM current_room_writer_permit').all();
+  if (permit.length !== 1 || permit[0].singleton !== 1 || permit[0].enabled !== 0 || permit[0].room_id !== null || permit[0].receipt_id !== null)
+    throw Error('Previous restore protocol writer is not closed');
+  const latest = states[0].latest_receipt === null ? null : JSON.parse(states[0].latest_receipt);
+  if (latest && latest.cleanup?.complete !== true) throw Error('Previous restore cleanup requires completion');
+  for (const [name,sql] of RESTORE_CONTROL_GUARDS) { db.exec('DROP TRIGGER ' + name); db.exec(sql); }
+  admittedSchemas.delete(db); verifyRestoreControl(db); return true;
 }
 export function assertRestoreAdmitted(db) {
   if(scopes.has(db))return;

@@ -4,7 +4,7 @@ import {readCurrentWorkSnapshot} from './current-work-snapshot.mjs';
 import {readCurrentNativeInbox} from './current-native-inbox.mjs';
 import {ensureDefaultChannelState} from '../src/default-channel-state.js';
 import {readCurrentEventWindow,currentEventRedactionMessages} from './current-room-events.mjs';
-import { assertRestoreAdmitted, restorePending, verifyRestoreControl } from './restore-admission.mjs';
+import { upgradeClearRestoreProtocol20, assertRestoreAdmitted, restorePending, verifyRestoreControl } from './restore-admission.mjs';
 import {readCurrentWorkListing} from './current-work-list.mjs';
 import { CURRENT_ROOM_SCHEMA, CURRENT_ROOM_GUARDS, upgradeUnusedCurrentFormat5, currentInviteContext, initializeCurrentRoom, currentRoomAuthority, isCurrentRoom, currentDmConsentEventContext, currentCommandContext, prepareCurrentWrite, withCurrentServingWriter, readCurrentRecord, readCurrentHistoryFloor, withCurrentReadContext, readCurrentSelectedWorkState, readCurrentOverviewWindow, currentVisibleHorizon, readCurrentPrivateWorkParties, readCurrentHead, currentConversationRows, chargeCurrentReadBudget } from './current-room-repository.mjs';
 import {bindReplayAppend} from './replay-cutover.mjs';
@@ -1653,6 +1653,7 @@ this.slaBreachAlerts = new SlaBreachAlertJournal(this); // Task 26: durable in-a
     if (version > 0 && version < 45 && this.db.prepare("SELECT 1 FROM sqlite_master WHERE name='message_replay_units'").get())
       throw new Error('Optional replay capture requires explicit abandonment/schema reconciliation before current serving format upgrade');
     this.db.exec(WORK_REPOSITORY_SCHEMA);
+    upgradeClearRestoreProtocol20(this.db);
     upgradeUnusedCurrentFormat5(this.db);
     this.db.exec(CURRENT_ROOM_SCHEMA);
     if (version > 0 && version < 26 && (

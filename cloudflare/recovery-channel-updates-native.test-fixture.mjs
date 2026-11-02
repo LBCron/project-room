@@ -7,7 +7,7 @@ import {withCompletedRecoveryChannelUpdates} from '../server/recovery-channel-up
 export class DurableCoverageRoom extends Base {
  async fetch(request) {
   const path=new URL(request.url).pathname;
-  if(path==='/__channel-seed'){try{const result=seedRecoveryChannelUpdatesSource(this.store);auditRecovery(this.store);return Response.json(result);}catch(error){return Response.json({error:error.stack},{status:500});}}
+  if(path==='/__channel-seed'){try{const result=seedRecoveryChannelUpdatesSource(this.store,{rows:Number(new URL(request.url).searchParams.get('rows')??70)});auditRecovery(this.store);return Response.json(result);}catch(error){return Response.json({error:error.stack},{status:500});}}
   if(path==='/__channel-export')return new Response(exportNdjsonText(this.store.db));
   if(path==='/__channel-compare') {
    const measure=operation=>{const records=[],exec=this.ctx.storage.sql.exec.bind(this.ctx.storage.sql),cost={statements:0,rowsRead:0,rowsWritten:0,bytes:0,unknown:0,journalScans:0,journalRows:0,journalBytes:0};

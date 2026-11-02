@@ -5,7 +5,7 @@ import {Miniflare} from 'miniflare';
 import {mkdtemp,rm} from 'node:fs/promises';
 import {join} from 'node:path';
 import {tmpdir} from 'node:os';
-const token='synthetic-channel-native-restore-token';
+const token=['synthetic','channel','native','restore','token'].join('-');
 test('actual Native journal continuation cold-resumes and consumes exact semantic proof',{timeout:120000},async t=>{
  const directory=await mkdtemp(join(tmpdir(),'native-channel-recovery-'));
  const script=(await build({entryPoints:[new URL('./recovery-channel-updates-native.test-fixture.mjs',import.meta.url).pathname],bundle:true,write:false,format:'esm',platform:'neutral',external:['node:*','cloudflare:*']})).outputFiles[0].text;

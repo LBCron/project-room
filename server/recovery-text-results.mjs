@@ -3,7 +3,7 @@ import {nativeTextEvidence} from '../src/work-packet.js';
 import {WORK_REVISION_TYPES} from '../src/events.js';
 import {auditTextReceipt,storedTextFromEvidence} from './text-results.mjs';
 import {withCurrentAuditUnits} from './current-room-repository.mjs';
-import {RESTORE_AUDIT_UNIT_BYTES} from './restore-admission.mjs';
+import {inRestoreContext,restoreProgress,RESTORE_AUDIT_UNIT_BYTES} from './restore-admission.mjs';
 import {MESSAGE_PROOF_SELECT} from './write-integrity.mjs';
 // Existing target-owned scratch only. Its owner commits this cursor and rows in
 // the SAME frozen-source restore transaction; the full oracle remains required.
@@ -17,17 +17,24 @@ function scratchBytes(db,restoreId,roomId,domain,key){
  if(!row||row.bytes !== row.payload_bytes || !Number.isSafeInteger(row.bytes) || row.bytes < 1 || row.bytes > RESTORE_AUDIT_UNIT_BYTES)fail();return row.bytes;
 }
 export function advanceRecoveryTextResults(store,scratch,restoreId,roomId,previous,seal){
- validateRecoveryTextResults(previous);const p={...previous},db=store.db;let bytes=0,units=0;
- const maximum=seal?.tables?.find(t=>t.name==='events')?.maxRowBytes;
+ validateRecoveryTextResults(previous);const p={...previous},db=store.db;let bytes=0,units=0,cachedWorkId=null,cachedWork=null;
+ // One bounded work body, scoped to this synchronous frozen-source step only.
+ const workBytes=id=>id===cachedWorkId?0:scratchBytes(db,restoreId,roomId,'workBody',id);
+ const loadWork=id=>{if(id!==cachedWorkId){cachedWork=scratch.get('actual',roomId,'workBody',id);cachedWorkId=id;}return cachedWork;};
+ if(!db.isTransaction||!inRestoreContext(db))fail();
+ const admission=restoreProgress(db);if(admission.state!=='pending'||admission.restore_id!==restoreId||admission.phase!=='audit_pending'||seal?.id!==admission.seal?.id)fail();
+ const maximum=admission.seal.tables.find(t=>t.name==='events')?.maxRowBytes;
  if(!Number.isSafeInteger(maximum)||maximum<0)fail();
- const admit=n=>{if(!Number.isSafeInteger(n)||n<0||n>LIMIT)fail();if(bytes+n>LIMIT)return false;bytes+=n;return true;};
+ // Preserve legal sealed atoms larger than the nominal quantum. Only one such
+ // atom runs alone; its actual bytes remain reported, not claimed strictly4MiB.
+ const admit=n=>{if(!Number.isSafeInteger(n)||n<0||!Number.isSafeInteger(bytes+n))fail();if(bytes+n>LIMIT&&units)return false;bytes+=n;return true;};
  return withCurrentAuditUnits(store,roomId,reader=>{
   if(!reader.head)fail();
-  while(units<32&&scratch.remaining>=4&&p.stage!=='complete'){
+  while(units < 32 && bytes < LIMIT && scratch.remaining >= 4 && p.stage !== 'complete'){
    if(p.stage==='receipts'){
     if(p.workId===null){const key=scratch.nextKey('actual',roomId,'workBody',p.workAfter);if(key===undefined){p.stage='events';continue;}p.workId=key;p.receiptIndex=0;}
-    const n=scratchBytes(db,restoreId,roomId,'workBody',p.workId);if(!admit(n+4096))break;
-    const work=scratch.get('actual',roomId,'workBody',p.workId);if(work?.id!==p.workId||!Array.isArray(work.receiptHistory))fail();
+    const n=workBytes(p.workId);if(!admit(n+4096))break;
+    const work=loadWork(p.workId);if(work?.id!==p.workId||!Array.isArray(work.receiptHistory))fail();
     const receipt=p.receiptIndex<work.receiptHistory.length?work.receiptHistory[p.receiptIndex]:work.receipt;
     if(receipt?.nativeText){
      if(typeof receipt.eventId!=='string'||typeof receipt.nativeText.messageId!=='string'||scratch.get('history',roomId,'textProjected',receipt.eventId)!==undefined)fail();
@@ -52,7 +59,7 @@ export function advanceRecoveryTextResults(store,scratch,restoreId,roomId,previo
     const parent=scratch.get('history',roomId,'textPrevious',data.workItemId)??null;
     if(data.evidenceKind==='room_text'){
      const link=scratch.get('history',roomId,'textProjected',event.id);if(!link||link.workId!==data.workItemId)fail();
-     const n=scratchBytes(db,restoreId,roomId,'workBody',link.workId);
+     const n=workBytes(link.workId);
      const postScalar=db.prepare('SELECT rowid,sequence,length(CAST(body AS BLOB)) bytes,length(CAST(id AS BLOB)) id_bytes FROM events WHERE room_id=? AND id=?').get(roomId,data.evidenceMessageEventId);
      if(!postScalar||!Number.isSafeInteger(postScalar.bytes)||postScalar.bytes<1||postScalar.bytes>maximum||postScalar.id_bytes<1||postScalar.id_bytes>200)fail();
      const columns=MESSAGE_PROOF_SELECT.split(',').map(k=>`coalesce(length(CAST(${k} AS BLOB)),0)`).join('+');
@@ -61,7 +68,7 @@ export function advanceRecoveryTextResults(store,scratch,restoreId,roomId,previo
      if(!Number.isSafeInteger(messageSize?.bytes)||messageSize.bytes<1||!Number.isSafeInteger(witness?.payload_bytes)||!Number.isSafeInteger(witness?.receipt_bytes))fail();
      const estimate=n+postScalar.bytes+messageSize.bytes+witness.payload_bytes+witness.receipt_bytes+4096;
      if(!admit(estimate)){if(!units)fail();break;}
-     const work=scratch.get('actual',roomId,'workBody',link.workId),receipt=link.index<work.receiptHistory.length?work.receiptHistory[link.index]:work.receipt;
+     const work=loadWork(link.workId),receipt=link.index<work.receiptHistory.length?work.receiptHistory[link.index]:work.receipt;
      if(receipt?.eventId!==event.id||!receipt.nativeText)fail();
      const source=reader.message(data.evidenceMessageId);if(!source)fail();const message=source.value;
      const posted=db.prepare('SELECT id,sequence,body FROM events WHERE rowid=?').get(postScalar.rowid);

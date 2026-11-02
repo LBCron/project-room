@@ -19,18 +19,17 @@ export function storedText(db, state, workItemId, messageId, messageEventId = nu
     : db.prepare("SELECT sequence,id,body FROM events WHERE room_id=? AND json_extract(body,'$.type')='message.posted' AND coalesce(json_extract(body,'$.data.messageId'),id)=?").get(state.room.id, messageId);
   check(row);
   const post = JSON.parse(row.body), message = (messageRecords ?? messageRepository({ db }, state.room.id, state)).get(messageId);
+  validateStoredTextIdentity({roomId:state.room.id,workItemId,messageId,row,message,post});
   let previous = null;
-  if (["packetId", "basisRevision", "allowOlderBasis"].some(key => Object.hasOwn(JSON.parse(row.body).data, key))) {
+  if (["packetId", "basisRevision", "allowOlderBasis"].some(key => Object.hasOwn(post.data, key))) {
     const prior = db.prepare(`SELECT body FROM events WHERE room_id=? AND sequence<? AND json_extract(body,'$.data.workItemId')=? AND (json_extract(body,'$.type')='work.proposed' OR (json_extract(body,'$.type') IN (${WORK_REVISION_TYPES.map(() => "?").join(",")}) AND json_type(body,'$.data.expectedRevision')='integer')) ORDER BY sequence DESC LIMIT 1`).get(state.room.id, row.sequence, workItemId, ...WORK_REVISION_TYPES);
     check(prior); previous = JSON.parse(prior.body);
   }
-  return storedTextFromEvidence({roomId:state.room.id,workItemId,messageId,row,message,previous,
+  return storedTextFromEvidence({roomId:state.room.id,workItemId,messageId,row,message,post,previous,
     citedVersion:message?.deletedAt && post.data.body == null ? citedEvidenceVersion(state,messageId) : null});
 }
 
-// Shared exact leaf: callers supply independently addressed evidence; no scans.
-export function storedTextFromEvidence({roomId,workItemId,messageId,row,message,previous=null,citedVersion=null}) {
-  check(row); const post=JSON.parse(row.body);
+function validateStoredTextIdentity({roomId,workItemId,messageId,row,message,post}) {
   // A withdrawn message is a tombstone. PRIV-1 nulls the log body; older
   // withdrawals still have the string there. Either way the body returned
   // to a reader is null.
@@ -39,6 +38,13 @@ export function storedTextFromEvidence({roomId,workItemId,messageId,row,message,
     && (post.data.messageId || post.id) === messageId && post.data.workItemId === workItemId && message.workItemId === workItemId
     && (withdrawn ? message.body === null : post.data.body === message.body) && post.actorId === message.authorId && post.at === message.createdAt
     && (post.data.replyToId || null) === message.replyToId && (post.data.toMemberId || null) === message.toMemberId);
+  return withdrawn;
+}
+
+// Shared exact leaf: callers supply independently addressed evidence; no scans.
+export function storedTextFromEvidence({roomId,workItemId,messageId,row,message,post=JSON.parse(row.body),previous=null,citedVersion=null}) {
+  check(row);
+  const withdrawn=validateStoredTextIdentity({roomId,workItemId,messageId,row,message,post});
   let proposal = null;
   if (["packetId", "basisRevision", "allowOlderBasis"].some(key => Object.hasOwn(post.data, key))) {
     check(previous);

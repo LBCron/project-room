@@ -546,6 +546,17 @@ export function errorRegistryAx(code, { httpStatus = 0, message = "", roomId, wo
 // covered by axFamilyRecovery() below; tests/errors-catalog-drift.test.js
 // fails if a catalogued code loses either kind of coverage.
 const AX_NAMED_RECOVERIES = {
+  // Current-room refusals retain their qualified recovery and existing grants.
+  current_room_context_required: ["This room requires a bounded read.", "Use the bounded conversation window, explicit peer selection, or addressed current-work/request read named by the operation."],
+  current_directory_integrity: ["Conversation directory integrity check failed.", "Stop this directory read and report the exact error for recovery; do not treat the missing result as an empty conversation."],
+  current_room_legacy_work_unreconciled: ["Active legacy work must be reconciled before conversion.", "Inspect the existing work-claims-read or collab/assignments route named in the error; reconcile holders and recorded outcomes before conversion."],
+  legacy_work_retired: ["This room uses native work.", "Propose native work through work.proposed. Existing legacy close/release and history inspection remain available where authorized; do not resurrect a parallel active board."],
+  current_redaction_historical_prefix: ["This message belongs to an immutable historical replay prefix; no data was changed.", "Preserve the original evidence and request explicit historical privacy reconciliation. Do not report erasure as complete or alter the historical receipt."],
+  independent_legacy_work: ["This legacy record contains independent work or obligations.", "Inspect the existing board record and reconcile its holder, obligations and locks explicitly. Retirement must not drop independent work."],
+  mirror_retirement_idempotency_conflict: ["This retirement request ID already has different reviewed inputs.", "Recover the original request and outcome. Never reuse that ID with different task, plan or reason inputs."],
+  attachment_cursor_reset: ["This cursor no longer matches the file selection or service.", "Refresh the same authorized message selection without its old cursor. Do not edit or transfer cursors between viewers."],
+  thread_context_invalid: ["Selected thread ancestry is cyclic.", "Stop the read and report the inconsistent ancestry for recovery; do not follow the cycle or fabricate a thread root."],
+
   aborted: ["The request ended early, so nothing was applied. Resend the request; if it repeats, check for a dropped connection or an oversized payload.", "Resend the request; if it repeats, check for a dropped connection or an oversized payload."],
   access_rejected: ["The access-request state machine rejected that transition — the message names the rule. Read the request's current state; do not retry the same transition.", "Read the access request's current state and follow the rule named in the message."],
   account_state_unchanged: ["The account is already in that state — nothing changed and nothing needs to happen.", "Treat it as done; read the current account state to confirm."],

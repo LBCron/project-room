@@ -1,3 +1,4 @@
+import {syncCurrentRoomPublication} from './public-read-model.mjs';
 import {verifyRoomAssistantIndexes} from './room-assistant-schema.mjs';
 import {prepareClaimOverlap,matchClaimOverlap} from '../src/claim-overlap.js';
 import {conflictingClaim} from './claim-scopes.mjs';
@@ -561,6 +562,8 @@ function currentClaimAdmissionAt(store,roomId,actorId,item,command,b,instant) {
 }
 export function currentCommandContext(store,roomId,command,{actorId}={}) {
   const db=store.db,b=contextBudgets.get(db)??budget(),head=readCurrentHead(db,roomId,b);if(!head)return null;
+  if(['room.public_page_set','room.join_link_set'].includes(command.type))
+    return currentInviteContext(store,roomId,{memberIds:[actorId],census:command.type==='room.public_page_set'&&command.data.enabled===true});
   // Membership additions and reactivation need the exact admitted roster for
   // capacity/name/authority checks, but no messages or unrelated work bodies.
   // Access deactivation changes members only. Held canonical work remains
@@ -594,7 +597,7 @@ function commandContextFromHead(store,roomId,command,head,b,{readMessage,readWor
     else {if(!maps.has(key)||value!=='object')corrupt('unsupported map shape');state[key]??={};}
   }
   if(!state.room||state.room.id!==roomId)corrupt('missing room singleton');
-  if(state.room.publicPage?.enabled||state.room.publicReceipts?.enabled||state.room.starterSeeded)
+  if(state.room.publicReceipts?.enabled||state.room.starterSeeded)
     refuse('Published/starter room dependencies require qualification');
   const assistantScalar=db.prepare('SELECT length(CAST(value AS BLOB)) bytes FROM room_assistant_config WHERE room_id=?').get(roomId);
   if(assistantScalar&&(!Number.isSafeInteger(assistantScalar.bytes)||assistantScalar.bytes<2||assistantScalar.bytes>4096))refuse('Assistant configuration exceeds bounded context');
@@ -901,6 +904,7 @@ export function prepareCurrentWrite(store,{roomId,previous,state,event,sequence,
     syncMessageRows(db,{roomId,sequence,event,state});
     const saved=saveTransition(db,roomId,sequence,event.id,current.head,changes,counts);
     if(saved!==projection)corrupt('prepared carrier differs from committed head');
+    syncCurrentRoomPublication(store,{roomId,previous:previous.state,state,event,changes,current});
   }};
 }
 

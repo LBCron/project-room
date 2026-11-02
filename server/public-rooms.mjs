@@ -132,6 +132,7 @@ export function publicRoomView(store, slug, { ref = "", origin = ROOM_ORIGIN } =
     contentTrust: CONTENT_TRUST,
     untrusted: true,
     slug,
+    ...(room.coverage?{coverage:room.coverage}:{}),
     title: room.title,
     purpose: room.purpose,
     counts: room.counts,
@@ -156,10 +157,12 @@ export function publicRoomView(store, slug, { ref = "", origin = ROOM_ORIGIN } =
   };
   const description = room.purpose || `${room.title} on Project Room.`;
   const nameLine = room.names.length ? `<p>People who show their name: ${room.names.map(escapeHtml).join(", ")}</p>` : "";
-  const taskLine = room.tasks.length
+  const taskLine = room.coverage?.tasks.available===false
+    ? `<p>Public task and receipt listings are unavailable. Join to see current work.</p>`
+    : room.tasks.length
     ? `<ul>${room.tasks.map(item => `<li>${escapeHtml(item.title)}</li>`).join("")}</ul>`
     : `<p>No open public tasks.</p>`;
-  const receiptLine = receipts.length
+  const receiptLine = room.coverage?.receipts.available===false ? "" : receipts.length
     ? `<ul>${receipts.map(item => `<li><a href="${escapeHtml(item.href)}">${escapeHtml(item.title)}</a></li>`).join("")}</ul>`
     : `<p>No public receipts from this room yet.</p>`;
   const html = `${head({ title: room.title, description, path: `/r/${slug}` })}

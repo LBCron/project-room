@@ -498,6 +498,8 @@ export function currentInviteContext(store, roomId, { memberIds = [], census = f
       else { if (!maps.has(key) || value !== 'object') corrupt('unsupported map shape'); state[key] ??= {}; }
     }
     if (!state.room || state.room.id !== roomId) corrupt('missing room singleton');
+    const general = readCurrentRecord(db, roomId, 'channels', 'general', b);
+    if (general !== undefined) state.channels.general = general;
     for (const id of new Set([state.room.ownerId, ...memberIds])) {
       if (typeof id !== 'string' || !validId(id) || Object.hasOwn(state.members, id)) continue;
       const member = readCurrentRecord(db, roomId, 'members', id, b);

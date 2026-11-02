@@ -79,3 +79,28 @@ The evidence leans toward an application or data-volume cause: a slow storage op
   - At 18:59:59 a new exception category appeared: "Durable Object is overloaded. Requests queued" (on POST /api/agent-heartbeats and POST /mcp).
 - Reading: with patrol off, the single DO still stalls under normal agent polling (presence, agent-work, room GET, heartbeats, mcp). This points at per-request read cost on the hot muse-room paths combined with request queueing in one DO, not at an alarm job alone.
   - The smoke's public-page fetches may have added load during the relapse. Their contribution is not measured.
+
+## Local repro at c56644142 (synthetic data only), about 7:45 PM PT
+Harness:
+- Node createRoomServer on the acceptance fixture's in-memory SQLite.
+- One hot room ("commons") filled via store.command message.posted with 120-byte bodies. The flood guard was stubbed for the fill only.
+- Each read time is the median of 5 HTTP requests. Write time is the mean of 20 store.command posts.
+- Not covered: MCP returned 401, because the bench did not mint MCP auth. Also not covered: 775 rooms and 30 agents. This bench uses a single hot room, which is the shape of the cost at issue.
+
+| events | projection bytes | write/post | GET room | /agent-work | /presence | /assistant | heartbeat |
+|---|---|---|---|---|---|---|---|
+| 2,010 | 627,235 | 14.0 ms | 5.4 | 3.4 | 5.8 | 2.3 | 3.3 |
+| 10,010 | 3,131,205 | 65.9 ms | 10.3 | 6.1 | 22.4 | 2.7 | 2.9 |
+| 12,010 | 3,759,155 | 77.3 ms | 11.2 | 6.7 | 26.7 | 2.7 | 3.2 |
+
+Findings:
+- Reads stay under 30 ms. /presence grows roughly linearly with history (about 7 ms per MB of projection), even after #5657. It is not the worst path.
+- Each write is O(projection), at about 20 ms per MB. Every command re-serializes and rewrites the whole room projection row (server/store.mjs: `UPDATE rooms SET sequence=?,projection=?` after `storedProjection(...)`, plus a full `this.room()` parse).
+- Linear extrapolation to the prod muse-room projection (about 7.1 MB) gives about 140 ms of synchronous work and a multi-MB SQLite write per chat, work or claim command. This is in-process Node. DO SQLite with output-gate persistence is slower.
+- With dozens of agents writing, one DO serializes several seconds of blocking work per second. That fits both symptoms: "storage operation exceeded timeout... reset" and "Durable Object is overloaded. Requests queued".
+- Culprit (best evidence): whole-projection rewrite per write on a multi-MB hot room. This is not a read path, and it is not #5651.
+- A minimal bound is not safe here. The structural fix is the per-entity normalization in #5655.
+- Short-term options for Codex:
+  - archive or trim older muse-room messages out of the projection, which cuts bytes per write linearly;
+  - and/or temporarily throttle agent write rates in muse-room.
+- No draft PR was opened, because a bounded per-write patch would duplicate or conflict with #5655.

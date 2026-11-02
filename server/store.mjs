@@ -1449,6 +1449,13 @@ export class RoomStore {
     this.workClaims = createDurableWorkClaimRegistry(this.db, {
       transaction: fn => this.transaction(fn),
       onChange: roomId => noteWorkClaimChange(this, roomId),
+      beforeWrite: roomId => {
+        // Retirement is SQL-visible: refuse before registry decoding, spill,
+        // callbacks or legacy projection hydration. Namespace-only registries
+        // without a Room remain independent (e.g. the public task board).
+        if (this.db.prepare("SELECT archived_at FROM rooms WHERE id=?").get(roomId)?.archived_at != null)
+          fail(409, "room_archived", "This room is archived; its work registry is read only");
+      },
       beforeSet:(roomId,item)=>{if(!['done','closed'].includes(item.state)&&isCurrentRoom(this.db,roomId))fail(409,'legacy_work_retired','This room uses native work. Propose canonical work through work.proposed; legacy close and history inspection remain available.');},
     });
     this.nextActions = new NextActions(this); // RC-2026-09-25-911: ranked next-actions (private dismissals/suppressions).

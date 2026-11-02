@@ -37,6 +37,11 @@ const BOND_DM_DATA_SHAPES = {
 // migrates surface by surface under the tracking issue filed with this PR.
 // ---------------------------------------------------------------------------
 export const ERROR_REGISTRY = {
+  current_room_corrupt: {
+    status: "action_required", hint: uiText("agentError.current_room_corrupt.hint"),
+    next: [{ command: uiText("agentError.current_room_corrupt.recovery") }],
+    catalog: { http: 409, retry: "no", recovery: uiText("agentError.current_room_corrupt.recovery") }
+  },
   attachment_index_budget_exceeded: {
     status: "action_required", hint: uiText("agentError.attachment_index_budget_exceeded.hint"),
     next: [{ command: uiText("agentError.attachment_index_budget_exceeded.recovery") }],

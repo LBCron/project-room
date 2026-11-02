@@ -747,5 +747,7 @@ export default {
   "currentRoom.invalidClaimOverlaps": "Invalid scoped claim overlaps",
   "currentRoom.staleWorkRevision": "Stale Work Item revision",
   "currentRoom.memberAccessUnavailable": "Member access unavailable",
-  "currentRoom.recordLoading": "Loading…"
+  "currentRoom.recordLoading": "Loading…",
+  "agentError.current_room_corrupt.hint": "Selected peer data failed its integrity check.",
+  "agentError.current_room_corrupt.recovery": "Stop the read and report the room ID, code and full message to the operator for integrity reconciliation. Do not retry unchanged or treat this as an empty result."
 };

@@ -8,6 +8,7 @@ import { RoomStore } from "../server/store.mjs";
 import { createRoomServer } from "../server/http.mjs";
 import { AgentRooms } from "../server/agent-rooms.mjs";
 import { PAIR_POLL_INTERVAL_MS } from "../server/pairing.mjs";
+import { auditRecovery } from "../server/recovery.mjs";
 
 function boot(t) {
   const directory = mkdtempSync(join(tmpdir(), "room-mcp-pair-"));
@@ -78,4 +79,5 @@ test("room_join pairs, a stranger is not_member, and the owner can merge", async
   assert.equal(merged.isError, false, JSON.stringify(merged.body));
   assert.equal(merged.value.retired, true);
   assert.equal(store.roomAuthority(room.roomId, { memberId: redeemed.memberId }).members[redeemed.memberId].active, false);
+  assert.doesNotThrow(() => auditRecovery(store));
 });

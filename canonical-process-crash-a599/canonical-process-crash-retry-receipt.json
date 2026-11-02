@@ -1,0 +1,49 @@
+{
+  "source": "a599faa29ff65567e5c080609cb2d000acd33666",
+  "node": "v24.22.1",
+  "cells": [
+    {
+      "operation": "work.accepted",
+      "callerLostNetworkReply": true,
+      "workerExitSignal": "SIGKILL",
+      "committedEventSurvivesColdProcess": true,
+      "exactRetryReturnsSameEvent": true,
+      "exactRetryAddsNoWrite": true
+    },
+    {
+      "operation": "claim.acquired",
+      "callerLostNetworkReply": true,
+      "workerExitSignal": "SIGKILL",
+      "committedEventSurvivesColdProcess": true,
+      "exactRetryReturnsSameEvent": true,
+      "exactRetryAddsNoWrite": true
+    },
+    {
+      "operation": "message.posted",
+      "callerLostNetworkReply": true,
+      "workerExitSignal": "SIGKILL",
+      "committedEventSurvivesColdProcess": true,
+      "exactRetryReturnsSameEvent": true,
+      "exactRetryAddsNoWrite": true
+    }
+  ],
+  "actualSigkillCount": 3,
+  "serverProcessStarts": 4,
+  "changedIntentRefused": true,
+  "revokedCredentialCannotReplayReceipt": true,
+  "refusalsAddNoWrite": true,
+  "finalRecoveryAudit": true,
+  "tables": [
+    "rooms",
+    "operator_actions",
+    "work_claim_config",
+    "events",
+    "commands",
+    "work_entities",
+    "work_claims",
+    "current_room_records",
+    "current_room_record_proofs",
+    "current_room_head"
+  ],
+  "scope": "Actual local Node HTTP+file SQLite with a test proxy withholding entire committed responses before SIGKILL. Not a power/storage failure, Native runtime, hosted deployment or peer-device execution qualification."
+}

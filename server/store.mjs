@@ -5793,7 +5793,10 @@ this.slaBreachAlerts = new SlaBreachAlertJournal(this); // Task 26: durable in-a
   presence(token, roomId, watcherMemberIds, expectedSessionBinding = null) {
     if(isCurrentRoom(this.db,roomId))return this.readTransaction(()=>withCurrentReadContext(this.db,roomId,()=>{
       this.authenticate(token,roomId,expectedSessionBinding);
-      return{members:this.currentPresenceMembers(roomId,watcherMemberIds),coverage:{membership:'complete-current-roster',connection:'observed',execution:'not-evaluated',heldWork:'not-evaluated',queuedWakes:'not-evaluated'},next:[{action:'inspect-work',description:'Connection observations do not establish execution; inspect the selected work item.'}]};
+      const members=this.currentPresenceMembers(roomId,watcherMemberIds);
+      const connectedIds=members.filter(member=>member.watching||member.state==='listening').map(member=>member.memberId);
+      const next=connectedIds.length?presenceNext(roomId,connectedIds):[{action:'watch-presence',description:'No live connection observed. Watch presence for connection updates; execution and held work have not been evaluated.'}];
+      return{members,coverage:{membership:'complete-current-roster',connection:'observed',execution:'not-evaluated',heldWork:'not-evaluated',queuedWakes:'not-evaluated'},next};
     },{maxRecords:512}));
     return this.readTransaction(() => {
       this.authenticate(token, roomId, expectedSessionBinding);

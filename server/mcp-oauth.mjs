@@ -1,3 +1,4 @@
+import{isCurrentRoom,withCurrentReadContext,readCurrentRecord}from'./current-room-repository.mjs';
 import { approvedAgentAdoption } from './agent-sponsor-transfer.mjs';
 // OAuth resource and principal validation. This module does not mint agent
 // identities or grant room membership. Wire it only after an explicit human
@@ -171,6 +172,11 @@ export function listMcpOAuthAgents(store, userId, resource, {preferredRoomId,pre
       if(preferredRoomId === human.room_id && preferredMemberId) {
         const authority=store.roomAuthority(human.room_id,{memberId:preferredMemberId});
         state={room:{id:human.room_id,ownerId:authority.ownerId},members:authority.members};
+      } else if(typeof store.roomAuthority==='function' && isCurrentRoom(store.db,human.room_id)) {
+        state=store.readTransaction(()=>withCurrentReadContext(store.db,human.room_id,()=>({
+          room:readCurrentRecord(store.db,human.room_id,'metadata','room'),
+          members:store.roomAuthority(human.room_id).members
+        })));
       } else state = store.room(human.room_id).state;
     } catch { continue; }
     for (const member of Object.values(state.members ?? {})) {

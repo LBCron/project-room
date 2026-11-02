@@ -463,7 +463,7 @@ export function readCurrentMessage(db,roomId,messageId,b=contextBudgets.get(db)?
   return {row,value:decodeMessageEntity(row)};
 }
 
-const supported = new Set(['member.sponsor_transferred','channel.created','work.public_set','capabilities.advertised','bond.propose','bond.accept','bond.decline','bond.revoke','bond.proposed','bond.activated','bond.revoked','dm.posted','claim.acquired','claim.renewed','claim.released','room.spend_pricing_set','room.spend_allowance_set','room.archived','room.exported','room.charter_updated','message.deleted','message.edited','work.superseded','ownership.transferred','reply_request.cancelled','work_claim.updated','message.posted','work.proposed','work.accepted','work.started','work.completed','work.handoff_recorded','work.halt_cleared','verification.recorded','owner.decision_recorded']);
+const supported = new Set(['message.pinned','message.unpinned','member.sponsor_transferred','channel.created','work.public_set','capabilities.advertised','bond.propose','bond.accept','bond.decline','bond.revoke','bond.proposed','bond.activated','bond.revoked','dm.posted','claim.acquired','claim.renewed','claim.released','room.spend_pricing_set','room.spend_allowance_set','room.archived','room.exported','room.charter_updated','message.deleted','message.edited','work.superseded','ownership.transferred','reply_request.cancelled','work_claim.updated','message.posted','work.proposed','work.accepted','work.started','work.completed','work.handoff_recorded','work.halt_cleared','verification.recorded','owner.decision_recorded']);
 const contextBudgets = new WeakMap();
 export function withCurrentServingWriter(db,roomId,operation) {
   if(!isCurrentRoom(db,roomId) && !db.prepare("SELECT 1 FROM current_room_record_proofs WHERE room_id=? AND domain='migrationFence' AND record_key='active' AND present=1").get(roomId))return operation();
@@ -611,7 +611,7 @@ function commandContextFromHead(store,roomId,command,head,b,{readMessage,readWor
   const wantedMessages=[command.data.messageId??command.id,`${command.data.messageId??command.id}:channel`,command.data.replyToId,
     command.data.sourceMessageId,command.data.evidenceMessageId,command.data.requestMessageId,command.data.progressMessageId];
   for(const id of wantedMessages)if(typeof id==='string')loadMessage(id);
-  let cursor = command.data.replyToId ?? (command.type==='message.edited'?command.data.messageId:command.type==='message.deleted'?messages.get(command.data.messageId)?.value.replyToId:null), childSeq = Number.MAX_SAFE_INTEGER;
+  let cursor = command.data.replyToId ?? (['message.edited','message.pinned','message.unpinned'].includes(command.type)?command.data.messageId:command.type==='message.deleted'?messages.get(command.data.messageId)?.value.replyToId:null), childSeq = Number.MAX_SAFE_INTEGER;
   for(let depth=0;cursor;depth++) {
     if(depth>=32)refuse('Reply ancestry exceeds bounded context');
     const source=loadMessage(cursor);if(!source)break;
@@ -845,9 +845,11 @@ export function prepareCurrentWrite(store,{roomId,previous,state,event,sequence,
       }
     }
   }
-  if(['message.redacted','message.edited','member.merged'].includes(event.type))for(const message of state.messages) {
+  if(['message.redacted','message.edited','message.pinned','message.unpinned','member.merged'].includes(event.type))for(const message of state.messages) {
     const source=current.messageRows.get(message.id);
-    if(!source||isDeepStrictEqual(message,source.value))continue;
+    const pinChanged=source&&['message.pinned','message.unpinned'].includes(event.type)&&message.id===event.data.messageId
+      &&(state.pins??[]).some(pin=>pin.messageId===message.id)!==(source.row.pinned===1);
+    if(!source||(isDeepStrictEqual(message,source.value)&&!pinChanged))continue;
     const row=messageRowForWrite(message,{sequence:source.row.seq,pinned:event.type==='member.merged'?source.row.pinned===1:(state.pins??[]).some(pin=>pin.messageId===message.id),threadMessages:new Map(state.messages.map(m=>[m.id,m]))});
     changes.push({domain:'messageWitness',key:message.id,value:{sequence:source.row.seq,entityHash:messageProofHash(row)}});
   }

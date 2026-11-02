@@ -1,3 +1,4 @@
+import {currentReturnBriefMessages} from './current-return-brief.mjs';
 import { readAccountRoomRow } from './room-lifecycle.mjs';
 import {isCurrentRoom} from './current-room-repository.mjs';
 import { agentSponsorTransferCandidate } from './agent-sponsor-transfer.mjs';
@@ -1773,17 +1774,27 @@ export function createRoomServer({ store, origin, assetRoot = new URL("../", imp
           verdict_polling: { url_template: `${origin}/api/rooms/{roomId}/feedback/{feedback_id}`, method: "GET" },
         }, req.method === "HEAD");
       }
-      // Native invitation consent is the default; a Room account is optional.
+      // A returning account can reuse an eligible existing seat. Consent remains
+      // explicit; an invitation choice never changes into an account grant.
+      const hasExistingAccountAgent = () => {
+        if (url.searchParams.has("connection")) return false;
+        try {
+          const token=cookie(req,accountCookieName);
+          const auth=token?store.authenticateAccountSession(token):null;
+          return Boolean(auth?.account?.id && listMcpOAuthAgents(store,auth.account.id,oauthResource,
+            mcpClientPreference(url.searchParams.get("client_id"))??{}).length);
+        } catch { return false; }
+      };
       const invitePage = (view, request) => renderInviteOAuthPage(res, view, request);
       if (url.pathname === "/oauth/authorize" && req.method === "GET" && inviteOAuth
-        && isMcpClient(url.searchParams.get("client_id")) && (url.searchParams.get("connection") === "invite" || !isClaudeClient(url.searchParams.get("client_id"))) && url.searchParams.get("connection") !== "account") {
+        && isMcpClient(url.searchParams.get("client_id")) && (url.searchParams.get("connection") === "invite" || !isClaudeClient(url.searchParams.get("client_id"))) && url.searchParams.get("connection") !== "account" && !hasExistingAccountAgent()) {
         rate(`oauth-invite-start:${remoteAddress}`, 30);
         try {
           const started = inviteOAuth.begin(url.searchParams);
           setCookie(res, `oauth_invite_${started.nonce.slice(0, 16)}`, started.nonce, 600, "Lax");
           const account = new URL(url, expectedOrigin());
           account.searchParams.set("connection", "account");
-          return invitePage({ ...started, accountUrl: account.pathname + account.search }, started.request);
+          return invitePage({ ...started, accountUrl: account.pathname + account.search, invitationChoice:url.searchParams.get("connection")==="invite" }, started.request);
         } catch (error) { return json(res, 400, { error: "invalid_request", error_description: error.message }); }
       }
       // GET /oauth/authorize — validate the request and show the consent screen.
@@ -4802,6 +4813,7 @@ export function createRoomServer({ store, origin, assetRoot = new URL("../", imp
         // count recomputed) — otherwise the pin would leak the DM's body,
         // existence, and count. Fail closed when a pin cannot be resolved.
         const stripHiddenPinTargets = value => {
+          if (value.contractVersion === 2) return value; // already selected, proved and privacy-filtered
           const byId = messageRepository(store, roomId);
           const pins = (value.pins ?? []).filter(pin => {
             const message = byId.get(pin.messageId);
@@ -4809,7 +4821,11 @@ export function createRoomServer({ store, origin, assetRoot = new URL("../", imp
           });
           return { ...value, pins, count: pins.length };
         };
-        if (req.method === "GET") return json(res, 200, stripHiddenPinTargets(listPins(store, selected.token, roomId, fence)));
+        const pinSelection = () => {
+          if ([...url.searchParams.keys()].some(key => !['cursor','auth'].includes(key) || url.searchParams.getAll(key).length !== 1)) reject(422,'invalid_cursor','Choose one optional pin cursor');
+          return {cursor:url.searchParams.get('cursor')};
+        };
+        if (req.method === "GET") return json(res, 200, stripHiddenPinTargets(listPins(store, selected.token, roomId, fence, pinSelection())));
         if (req.method === "POST") {
           const result = setPin(store, selected.token, roomId, await body(req), fence);
           return json(res, result.changed ? 201 : 200, stripHiddenPinTargets(result)); // 201 when an event was appended, 200 when the room was already in that state or the requestId replayed
@@ -5652,7 +5668,7 @@ export function createRoomServer({ store, origin, assetRoot = new URL("../", imp
       if (route === "return-brief" && req.method === "GET") {
         const horizon = url.searchParams.get("horizon"), after = url.searchParams.get("after"), cursor = url.searchParams.get("cursor"), limit = url.searchParams.get("limit");
         const brief = store.returnBrief(selected.token, roomId, { horizon: horizon === null ? null : Number(horizon), after: after === null ? null : Number(after), cursor: cursor === null ? null : Number(cursor), limit: limit === null ? undefined : Number(limit), expectedSessionBinding: fence });
-        if (brief?.history) brief.history.items = redactEventRows(brief.history.items, store.redactionMessages(roomId));
+        if (brief?.history) brief.history.items = redactEventRows(brief.history.items, brief.contractVersion===2?currentReturnBriefMessages(roomId,brief):store.redactionMessages(roomId));
         return json(res, 200, brief);
       }
       if (route === "cursor" && req.method === "POST") {

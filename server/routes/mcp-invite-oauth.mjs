@@ -7,7 +7,7 @@ export function renderInviteOAuthPage(res, view, request) {
   // Browser form POSTs need their same-origin Origin for strict CSRF checks.
   // no-referrer makes Chromium send Origin:null; external referrers stay hidden.
   res.setHeader("Referrer-Policy", "same-origin");
-  res.setHeader("Content-Security-Policy", `default-src 'none'; base-uri 'none'; frame-ancestors 'none'; form-action 'self' ${new URL(request.redirectUri).origin}`);
+  res.setHeader("Content-Security-Policy", `default-src 'none'; base-uri 'none'; frame-ancestors 'none'; style-src 'unsafe-inline'; form-action 'self' ${new URL(request.redirectUri).origin}`);
   res.writeHead(200, { "Content-Type": "text/html; charset=utf-8" });
   return res.end(inviteOAuthPage(view));
 }

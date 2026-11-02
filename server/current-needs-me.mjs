@@ -11,9 +11,9 @@ const keys='kind roomId memberId credential head mode minimum after older workCu
 export function readCurrentNeedsMePage(store,secret,roomId,options={}){
  return store.readTransaction(()=>readPage(store,secret,roomId,options));
 }
-function readPage(store,secret,roomId,{cursor,after,freshWindow=500,expectedMode}={}){
+function readPage(store,secret,roomId,{cursor,after,freshWindow=500,expectedMode,expectedSessionBinding=null}={}){
  const binding=store.readTransaction(()=>withCurrentReadContext(store.db,roomId,()=>{
-  const auth=store.authenticate(secret,roomId),head=readCurrentHead(store.db,roomId);
+  const auth=store.authenticate(secret,roomId,expectedSessionBinding),head=readCurrentHead(store.db,roomId);
   return{kind:'needs_me_native_v1',roomId,memberId:auth.member.id,credential:createHash('sha256').update(secret).digest('hex'),head:head.head_sha256,sequence:head.sequence};
  }));
  let state;
@@ -32,7 +32,7 @@ function readPage(store,secret,roomId,{cursor,after,freshWindow=500,expectedMode
  if(expectedMode!==undefined&&state.mode!==expectedMode||cursor!==undefined&&state.mode==='catch_up'&&after!==undefined&&state.minimum!==Math.min(after,binding.sequence))fail();
  const items=[];let examined=0,conversationComplete=state.conversationDone,workComplete=state.workDone,visibleThrough=0;
  if(!state.conversationDone){
-  const inbox=readCurrentNativeInbox(store,secret,roomId,state.mode==='recent'?{limit:4,...(state.older?{olderCursor:state.older}:{})}:{limit:4,after:state.after});
+  const inbox=readCurrentNativeInbox(store,secret,roomId,state.mode==='recent'?{limit:4,expectedSessionBinding,...(state.older?{olderCursor:state.older}:{})}:{limit:4,after:state.after,expectedSessionBinding});
   for(const [kind,rows]of [['mention',inbox.directMentions],['dm',inbox.directMessages],['reply',inbox.replies]])for(const row of rows){
    if(row.requestKind==='reply'||row.sequence<=state.minimum||kind==='reply'&&[...inbox.directMentions,...inbox.directMessages].some(other=>other.messageId===row.messageId))continue;
    items.push({kind,roomId,seq:row.sequence,id:row.messageId,...(kind==='dm'?{channel:'room'}:{}),...(kind==='reply'?{replyToId:row.inReplyTo}:{}),summary:clip(row.body),next:{tool:'room_reply',arguments:{roomId,requestId:`needs-me-${roomId}-${row.messageId}`,replyToId:row.messageId,...(row.replyToMemberId?{toMemberId:row.replyToMemberId}:{})}}});
@@ -48,7 +48,7 @@ function readPage(store,secret,roomId,{cursor,after,freshWindow=500,expectedMode
   conversationComplete=state.conversationDone;
  }
  if(!state.workDone){
-  const page=store.currentWorkListing(secret,roomId,{focus:'needs_me',limit:1,...(state.workCursor?{cursor:state.workCursor}:{})});
+  const page=store.currentWorkListing(secret,roomId,{focus:'needs_me',limit:1,expectedSessionBinding,...(state.workCursor?{cursor:state.workCursor}:{})});
   for(const item of page.work)items.push({kind:'work',roomId,seq:item.revision,id:item.id,summary:clip(item.title),next:{...item.nextRead,arguments:{roomId,...item.nextRead.arguments}}});
   for(const request of page.replyRequests??[]){
    const seq=store.readTransaction(()=>withCurrentReadContext(store.db,roomId,b=>{

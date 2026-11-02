@@ -62,6 +62,8 @@ export function mountUpdates({ client, host, getContext, onOpenWork, onOpenMessa
     button.setAttribute("aria-selected", filter.id === "needs" ? "true" : "false");
     tabs.append(button);
   }
+  const nativeAttention=()=>client.sectionAvailability?.('updates')?.replacement==='needs-me';
+  dialog.querySelector('#updates-title').tabIndex=-1;
   let filter = "needs";
   let items = [];
   let actionable = 0;
@@ -104,7 +106,7 @@ export function mountUpdates({ client, host, getContext, onOpenWork, onOpenMessa
     dialog.scrollTop = saved.scrollTop; list.scrollTop = saved.listScrollTop;
     const row = [...list.children].find(node => node.dataset.updateId === saved.itemId);
     const target = row?.querySelector(`[data-update-action="${saved.action}"]`)
-      ?? tabs.querySelector(`[data-update-filter="${filter}"]`);
+      ?? (nativeAttention()?dialog.querySelector('#updates-title'):tabs.querySelector(`[data-update-filter="${filter}"]`));
     target?.focus({ preventScroll: true });
     if (!row) {
       target?.scrollIntoView({ block: "nearest", behavior: "instant" });
@@ -117,19 +119,20 @@ export function mountUpdates({ client, host, getContext, onOpenWork, onOpenMessa
   }
 
   function paintBadge() {
+    const label=nativeAttention()?'Needs me':'Updates';entry.firstChild.nodeValue=label+' ';dialog.querySelector('#updates-title').textContent=label;tabs.hidden=nativeAttention();
     badge.textContent = badgeIncomplete ? "?" : actionable ? `${actionable}${badgeMore ? "+" : ""}` : "";
     badge.hidden = !badgeIncomplete && actionable === 0;
-    entry.setAttribute("aria-label", badgeIncomplete ? "Updates, some sources are unavailable"
-      : actionable ? `Updates, ${badgeMore ? "at least " : ""}${actionable} loaded updates need you${badgeMore ? ", more available" : ""}` : "Updates");
+    entry.setAttribute("aria-label", badgeIncomplete ? `${label}, some sources are unavailable`
+      : actionable ? `${label}, ${badgeMore ? "at least " : ""}${actionable} loaded updates need you${badgeMore ? ", more available" : ""}` : label);
   }
   function paintPaging() {
     const pageCopy = loadedPages ? `Page ${loadedPages} loaded. ` : "";
     if (pageAnnouncement.textContent !== pageCopy) pageAnnouncement.textContent = pageCopy;
     const summaryCopy = `${items.length} loaded${hasMore ? " · More available" : ""}`;
-    const partialCopy = incomplete ? "Some update sources are unavailable. This list may be incomplete." : "";
+    const partialCopy = nativeAttention()?'Recent conversation + current work. Other sources are not included. Reading does not resolve work.':incomplete ? "Some update sources are unavailable. This list may be incomplete." : "";
     if (summary.textContent !== summaryCopy) summary.textContent = summaryCopy;
     if (partial.textContent !== partialCopy) partial.textContent = partialCopy;
-    loadMore.hidden = !hasMore && !incomplete;
+    loadMore.hidden = nativeAttention()?!hasMore:!hasMore && !incomplete;
     loadMore.disabled = loading;
     loadMore.textContent = hasMore && cursor ? "Load more" : "Refresh updates";
     list.setAttribute("aria-busy", loading ? "true" : "false");
@@ -147,7 +150,7 @@ export function mountUpdates({ client, host, getContext, onOpenWork, onOpenMessa
     }
   }
   function paint() {
-    decisions.hidden = filter === "mentions";
+    decisions.hidden = nativeAttention() || filter === "mentions";
     for (const button of tabs.querySelectorAll("[role=tab]")) {
       const on = button.dataset.updateFilter === filter;
       button.setAttribute("aria-selected", on ? "true" : "false");
@@ -166,7 +169,7 @@ export function mountUpdates({ client, host, getContext, onOpenWork, onOpenMessa
     if (!rows.length && !items.some(item => attention && item.kind === "access_request")) {
       const empty = document.createElement("li");
       empty.className = "empty-note";
-      empty.textContent = incomplete ? "No matching updates are loaded yet. Some sources are unavailable."
+      empty.textContent = nativeAttention()?(hasMore?'No attention in the loaded pages yet. Continue to check this window.':'No attention found in the checked sources.'):incomplete ? "No matching updates are loaded yet. Some sources are unavailable."
         : hasMore ? "No matching updates in the loaded pages yet."
           : filter === "needs" ? "Nothing needs you." : "Nothing in this filter.";
       list.append(empty); paintPaging();
@@ -185,6 +188,7 @@ export function mountUpdates({ client, host, getContext, onOpenWork, onOpenMessa
       const actions = document.createElement("div");
       actions.className = "updates-actions";
       for (const [name, label] of Object.entries(ACTION_LABELS)) {
+        if(nativeAttention()&&name!=='open')continue;
         // Owner decisions are below this list; do not offer an Open action
         // unless this row has a supported work or conversation destination.
         if (name === "open" && !item.sourceRef?.workItemId && !item.sourceRef?.messageId && operations.get(item.id)?.action !== "open") continue;
@@ -201,8 +205,21 @@ export function mountUpdates({ client, host, getContext, onOpenWork, onOpenMessa
     }
     paintOperations(); paintPaging();
   }
+  async function loadNative({append=false,budget=1,notice=""}={}){
+    const owned=currentContext();if(!owned||append&&(loading||!hasMore||!cursor))return false;const mine=++ticket,current=()=>mine===ticket&&owns(owned);loading=true;paintOperations();paintPaging();status.textContent='Loading attention…';
+    try{const merged=new Map((append?items:[]).map(item=>[item.id,item])),seen=append?new Set(visitedCursors):new Set();let after=append?cursor:null,more=false,pages=append?loadedPages:0;
+      for(let step=0;step<(append?1:Math.max(1,budget));step++){
+        const page=await client.roomRead('/needs-me'+(after?'?cursor='+encodeURIComponent(after):''));if(!page||!current())return false;
+        if(page.contractVersion!==2||!Array.isArray(page.items)||typeof page.complete!=='boolean'||page.coverage?.mode!=='native_bounded'||page.complete!==(page.cursor===null))throw Error('Could not verify this attention page.');
+        for(const source of page.items){if(!source||typeof source.id!=='string'||typeof source.kind!=='string'||typeof source.summary!=='string')throw Error('Could not verify this attention item.');const item={id:source.kind+':'+source.id,roomId:source.roomId,kind:source.kind,title:source.summary,state:'open',sourceRef:source.kind==='work'?{workItemId:source.id}:{messageId:source.id}};merged.set(item.id,item);}
+        pages++;more=!page.complete;const following=page.cursor;if(more&&(typeof following!=='string'||!following||seen.has(following)))throw Error('Attention page did not advance. Refresh to continue.');after=following;if(!more)break;seen.add(after);
+      }
+      items=[...merged.values()];cursor=after;hasMore=more;loadedPages=pages;visitedCursors=seen;incomplete=true;filter='needs';actionable=items.length;badgeMore=hasMore;badgeIncomplete=false;loading=false;paintBadge();paint();status.textContent=notice;return true;
+    }catch(error){if(!current())return false;if(error?.code==='stale_needs_me_cursor'&&(append||budget>1))return loadNative({notice:'Attention changed. Showing a fresh window; continue from here.'});status.textContent=error?.message||'Could not load attention. Retry when connected.';return false;}finally{if(current()){loading=false;paintOperations();paintPaging();}}
+  }
   async function load(next = filter, { append = false, budget = next === filter ? Math.max(1, loadedPages) : 1, notice = "" } = {}) {
-    if(client.sectionAvailability?.('updates')?.available===false){status.textContent=uiText("currentRoom.updatesUnavailable");badge.textContent='';loadMore.hidden=true;return;}
+    if(nativeAttention())return loadNative({append,budget,notice});
+    if(client.sectionAvailability?.('updates')?.available===false&&!nativeAttention()){status.textContent=uiText("currentRoom.updatesUnavailable");badge.textContent='';loadMore.hidden=true;return;}
     const owned = currentContext();
     if (!owned || (append && (loading || !hasMore || !cursor))) return false;
     const mine = ++ticket;
@@ -267,6 +284,10 @@ export function mountUpdates({ client, host, getContext, onOpenWork, onOpenMessa
     }
   }
   async function mark(item, action) {
+    if(nativeAttention()){
+      if(action!=='open')return;const origin=capture(item.id,action),opened=item.sourceRef?.workItemId&&onOpenWork?onOpenWork(item.sourceRef.workItemId,origin):item.sourceRef?.messageId&&onOpenMessage?onOpenMessage(item.sourceRef.messageId,origin):false;
+      if(opened===false){status.textContent='That source is no longer available in this room.';return;}cancelPending();dialog.close();return;
+    }
     const owned = currentContext();
     if (!owned) return;
     let operation = operations.get(item.id);
@@ -347,10 +368,11 @@ export function mountUpdates({ client, host, getContext, onOpenWork, onOpenMessa
   }
   function open(next = "needs") {
     if (!currentContext()) return;
+    if(nativeAttention())next="needs";
     cancelPending();
     if (!dialog.open) dialog.showModal();
     const tab = tabs.querySelector(`[data-update-filter="${next}"]`);
-    tab?.focus();
+    if(nativeAttention())dialog.querySelector('#updates-title').focus();else tab?.focus();
     void load(next);
   }
   loadMore.addEventListener("click", async event => {
@@ -372,7 +394,7 @@ export function mountUpdates({ client, host, getContext, onOpenWork, onOpenMessa
       const firstNewAction = [...list.children].filter(row => added.has(row.dataset.updateId))
         .map(row => row.querySelector("[data-update-action]:enabled")).find(Boolean);
       const continuation = !loadMore.hidden && !loadMore.disabled ? loadMore : null;
-      (firstNewAction ?? continuation ?? tabs.querySelector('[aria-selected="true"]'))?.focus();
+      (firstNewAction ?? continuation ?? (nativeAttention()?dialog.querySelector('#updates-title'):tabs.querySelector('[aria-selected="true"]')))?.focus();
     } finally {
       document.removeEventListener("focusin", movedFocus);
       document.removeEventListener("pointerdown", movedPointer);
@@ -409,7 +431,7 @@ export function mountUpdates({ client, host, getContext, onOpenWork, onOpenMessa
   });
   // Coalesce room events without replacing a pending action or stealing focus.
   function sync(force = false) {
-    if(client.sectionAvailability?.('updates')?.available===false){clearTimeout(refreshTimer);refreshTimer=null;badge.textContent='';return;}
+    if(client.sectionAvailability?.('updates')?.available===false&&!nativeAttention()){clearTimeout(refreshTimer);refreshTimer=null;badge.textContent='';return;}
     const value = context();
     if (!value) { reset(); return; }
     const signature = `${value}:${client.sequence}`;
@@ -433,7 +455,7 @@ export function mountUpdates({ client, host, getContext, onOpenWork, onOpenMessa
         dialog.scrollTop = scroll;
         if (saved) {
           const replacement = [...list.children].find(node => node.dataset.updateId === saved.itemId);
-          (replacement?.querySelector(`[data-update-action="${saved.action}"]`) ?? tabs.querySelector('[aria-selected="true"]'))?.focus({ preventScroll: true });
+          (replacement?.querySelector(`[data-update-action="${saved.action}"]`) ?? (nativeAttention()?dialog.querySelector('#updates-title'):tabs.querySelector('[aria-selected="true"]')))?.focus({ preventScroll: true });
         }
       } finally { document.removeEventListener("focusin", moving); }
     }, 200);
@@ -446,5 +468,5 @@ export function mountUpdates({ client, host, getContext, onOpenWork, onOpenMessa
       .observe(main, { attributes: true, attributeFilter: ["hidden"] });
   }
   paintBadge();
-  return { open, restore, reset, sync, cancelPending, close() { cancelPending(); if (dialog.open) dialog.close(); }, openAction(id) { const next = PALETTE[id]; if (!next) return false; open(next); return true; } };
+  return { open, restore, reset, sync, cancelPending, close() { cancelPending(); if (dialog.open) dialog.close(); }, openAction(id) { if(nativeAttention()&&['catch-up','activity'].includes(id))return false;const next = PALETTE[id]; if (!next) return false; open(next); return true; } };
 }

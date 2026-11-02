@@ -160,6 +160,7 @@ function ackedWakes(store, roomId, memberId, flags) {
 }
 
 function projectRoom(store, roomId, memberId, identityId, { needsMeOnly = false } = {}) {
+  if(isCurrentRoom(store.db,roomId))throw new ServiceError(409,'current_updates_aggregate_unavailable',`Use GET /api/rooms/${encodeURIComponent(roomId)}/needs-me for bounded native attention; reading does not resolve work`,{Link:`</api/rooms/${encodeURIComponent(roomId)}/needs-me>; rel="alternate"`});
   const flags = { mentions: false, peerDms: false, claims: false, invites: false, accessRequests: false, wakes: false };
   const room = store.room(roomId);
   const state = room.state;

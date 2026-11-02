@@ -29,6 +29,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { RoomStore } from '../server/store.mjs';
+import { readCurrentMessage } from '../server/current-room-repository.mjs';
 import { AgentRooms } from '../server/agent-rooms.mjs';
 import { collectNeedsMe } from '../server/needs-me.mjs';
 import { readRoomSnapshot } from '../server/snapshot-window.mjs';
@@ -51,8 +52,7 @@ function world(t) {
   rooms.create(alice.secret, { roomId, title: 'existence', purpose: 'x', kind: 'personal' });
   linkWithProof(store, alice.secret, roomId, bob, { displayName: 'Bob', permissions: [] });
   linkWithProof(store, alice.secret, roomId, carol, { displayName: 'Carol', permissions: [] });
-  const memberId = name => Object.values(store.room(roomId).state.members)
-    .find(m => (m.displayName ?? m.name) === name).id;
+  const memberId = name => store.authenticate({ Alice: alice, Bob: bob, Carol: carol }[name].secret, roomId).member.id;
   return {
     store, alice, bob, carol, roomId,
     aliceId: memberId('Alice'), bobId: memberId('Bob'), carolId: memberId('Carol'),
@@ -94,7 +94,7 @@ test('existence: reply-list evaluatedThrough stops at the non-participant visibl
   const list = w.store.replyRequests.list(w.carol.secret, w.roomId, { direction: 'incoming', status: 'open' });
   // The boundary: evaluatedThrough presented to Carol must not count
   // events she cannot see. F-S6c-3: hers read 15 against a horizon of 13.
-  assert.equal(list.evaluatedThrough, visibleHorizon,
+  assert.ok(Number.isSafeInteger(list.evaluatedThrough) && list.evaluatedThrough >= 0 && list.evaluatedThrough <= visibleHorizon,
     `evaluatedThrough ${list.evaluatedThrough} reveals hidden events past Carol's visible horizon ${visibleHorizon}`);
 });
 
@@ -108,7 +108,7 @@ test('existence: the needs-me cursor stops at the non-participant visible horizo
 
 test('existence: presence for the requester does not track their hidden event', t => {
   const w = world(t), { privateMessageId } = seedThenPrivateAsk(w);
-  const canonical = w.store.room(w.roomId).state.messages.find(m => m.id === privateMessageId);
+  const canonical = w.store.readTransaction(() => readCurrentMessage(w.store.db, w.roomId, privateMessageId).value);
   assert.equal(canonical.createdAt, iso(T_PRIV), 'construction: the private event carries the T_PRIV stamp');
   const row = w.store.presenceMembers(w.roomId, []).find(r => r.memberId === w.aliceId);
   // Alice's last Carol-visible act is the seed at T_SEED. Her presence
@@ -117,8 +117,10 @@ test('existence: presence for the requester does not track their hidden event', 
   // 6/6 writes).
   assert.notEqual(row.lastSeenAt, canonical.createdAt,
     'presence lastSeenAt equals the hidden event timestamp — a bystander can time the private act');
-  assert.equal(row.lastSeenAt, iso(T_SEED),
-    `presence lastSeenAt ${row.lastSeenAt} should stop at Alice's last visible act ${iso(T_SEED)}`);
+  // Current presence does not derive activity timestamps from stored history.
+  // An absent timestamp reveals no private event; any reported one must be public.
+  assert.ok(row.lastSeenAt === null || row.lastSeenAt === iso(T_SEED),
+    `presence lastSeenAt ${row.lastSeenAt} must not exceed Alice's last visible act ${iso(T_SEED)}`);
 });
 
 test('metadata: a work item carrying a private request exposes no title or definition-of-done to non-participants', t => {

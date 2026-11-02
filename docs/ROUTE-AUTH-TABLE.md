@@ -120,6 +120,7 @@ bounded reader as JSON bodies (8 MB instead of 16 KB): an oversized
 sending fails the request with `400 aborted` instead of holding it until the
 server request timeout.
 
+| `POST /oauth/register` | none (public client metadata only) | Native MCP OAuth must be configured; exact configured callbacks only, at most 5 URIs, public PKCE client with no token-endpoint secret. Rate-limited before reading the body; 1024-entry client registry cap. No membership, sponsorship, identity or token grant; consent and current authority remain separate. |
 | `POST /oauth/invite` | invitation capability, exact Origin and short-lived HttpOnly nonce cookie | Configured native OAuth clients only; preview or accept bounded agent access without a Room human account. Consent returns a PKCE-bound code to the registered client; no raw identity credential. |
 | `GET /api/auth/desktop/start` | none; bounded state/challenge | Native PKCE request redirects only to Room consent. |
 | `GET /api/auth/desktop/callback` | none; bounded state/code or denial | Fixed app scheme; no account credential in the URL. |

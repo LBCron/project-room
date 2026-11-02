@@ -1,5 +1,5 @@
 import {initialRoom} from '../server/bootstrap.mjs';
-import {event} from '../src/events.js';
+import {event,emptyRoomState,replayEvents} from '../src/events.js';
 import {CurrentServingRoom} from './current-room-serving.test-fixture.mjs';
 import {createBackupReplaySession} from '../server/restore-ndjson.mjs';
 import {exportNdjsonText} from '../server/room-export.mjs';
@@ -14,6 +14,7 @@ export class DurableCoverageRoom extends CurrentServingRoom {
    events.push(event({id:'reader-joined',roomId:'commons',actorId:'owner',type:'member.added',at:'2026-02-01T00:00:00Z',data:{memberId:'reader',displayName:'Reader',kind:'agent',permissions:[]}}));
    this.store.initialize(events,{representation:'normalized-current-v1'});await this.ctx.storage.put('owner-key',this.store.issueAccessKey('commons','owner'));await this.ctx.storage.put('reader-key',this.store.issueAccessKey('commons','reader'));return Response.json({count:1000,legalHistoryTimestampBytes:at.length});
   }
+  if(path==='/__checkpoint'){const sequence=this.store.headSequence('commons'),events=this.db.prepare('SELECT body FROM events WHERE room_id=? ORDER BY sequence').all('commons').map(row=>JSON.parse(row.body)),state=replayEvents(emptyRoomState(),events);this.store.transaction(()=>this.db.prepare('INSERT INTO projection_checkpoints(room_id,sequence,projection) VALUES(?,?,?)').run('commons',sequence,JSON.stringify(state)));auditRecovery(this.store);return Response.json({sequence,messages:state.messages.length,requests:Object.keys(state.replyRequests??{}).length});}
   if(path==='/__export'){auditRecovery(this.store);return new Response(exportNdjsonText(this.db));}
   if(path==='/__work'){const key=await this.ctx.storage.get('owner-key'),proposal={id:'native-restored-work-proposal',type:'work.proposed',data:{workItemId:'native-restored-work',title:'Preserve useful native work',definitionOfDone:'Exact task and retry survive recovery',accountableMemberId:'owner'}},proposed=this.store.command(key,'commons',proposal),accepted=this.store.command(key,'commons',{id:'native-restored-work-accept',type:'work.accepted',data:{workItemId:'native-restored-work',expectedRevision:0}});setTier(this.db,'commons','reader','t2_standard',{updatedBy:'owner',nowMs:Date.now()});const privateRequest=this.store.command(key,'commons',{id:'native-private-ask',type:'message.posted',data:{messageId:'native-private-question',toMemberId:'reader',requestKind:'reply',workItemId:'native-restored-work',body:'Preserve this synthetic private question'}});return Response.json({proposal,proposed,accepted,privateRequest,capacity:this.db.prepare("SELECT payload FROM current_room_records WHERE room_id='commons' AND domain='workCapacity' AND record_key='native-restored-work'").get()});}
   if(path==='/__key')return Response.json({key:await this.ctx.storage.get('owner-key')});

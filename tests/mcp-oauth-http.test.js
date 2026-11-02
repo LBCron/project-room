@@ -7,6 +7,9 @@ import { createRoomServer } from '../server/http.mjs';
 import { mcpOAuthIdentityEpoch } from '../server/mcp-oauth.mjs';
 import { setTier } from '../server/autonomy-tiers.mjs';
 import { request } from 'node:http';
+import {mkdtempSync,rmSync} from 'node:fs';
+import {tmpdir} from 'node:os';
+import {join} from 'node:path';
 const fetch = (url, options = {}) => new Promise((resolve, reject) => {
   const req = request(url, { method: options.method || 'GET', headers: { Host: 'room.example', ...options.headers } }, res => {
     const chunks = [];
@@ -21,8 +24,9 @@ const origin = 'https://room.example';
 const resource = origin + '/mcp';
 const verifier = 'v'.repeat(43);
 const challenge = createHash('sha256').update(verifier).digest('base64url');
-async function setup(t) {
-  const store = new RoomStore(':memory:');
+async function setup(t, {legacyOwned=false, client=CLIENT, database=':memory:', clock} = {}) {
+  let store = new RoomStore(database);
+  if(clock)store.now=clock;
   store.initialize(initialRoom());
   const ownerKey = store.issueAccessKey('commons', 'owner');
   const ownerSession = store.createSession(ownerKey);
@@ -32,24 +36,29 @@ async function setup(t) {
   const session = store.loginAccountSession(slot.token, accountKey, 0);
   const identity = store.identities.create('Friend Dot');
   const { linkCode } = store.identities.mintLinkCode(identity.identityId, identity.secret, { roomId: 'commons' });
+  if (legacyOwned) {
+    store.command(ownerKey,'commons',{id:'existing-owned-seat',type:'member.added',data:{memberId:'friend-dot',displayName:'Friend Dot',kind:'agent',identityId:identity.identityId,permissions:['steer','accept_work','complete_work','verify'],accountableHumanId:'owner'}});
+    store.identities.link(ownerKey,'commons',{identityId:identity.identityId,memberId:'friend-dot',permissions:['steer','accept_work','complete_work','verify'],identityLinkCode:linkCode});
+  } else {
   store.agentConnections.apply(ownerSession.token, 'commons', { action: 'create', requestId: randomUUID(), memberId: 'friend-dot', displayName: 'Friend Dot', access: 'collaborate',
     expectedOwnerRevision: 0, expiresAt: store.now() + 3600000, keyHash: createHash('sha256').update(randomUUID()).digest('hex'), identityId: identity.identityId, identityLinkCode: linkCode }, ownerSession.session.sessionBinding);
+  }
   setTier(store.db, 'commons', 'friend-dot', 't2_standard', { updatedBy: 'owner', nowMs: Date.now() });
-  const binding = { resource, roomId: 'commons', memberId: 'friend-dot', identityId: identity.identityId, humanMemberId: 'owner', identityEpoch: mcpOAuthIdentityEpoch(store, identity.identityId) };
-  const server = createRoomServer({ store, origin, mcpOAuthClients: [CLIENT] });
+  const binding = { resource, roomId: 'commons', memberId: 'friend-dot', identityId: identity.identityId, humanMemberId: 'owner', identityEpoch: mcpOAuthIdentityEpoch(store, identity.identityId), ...(legacyOwned ? {principalType:'account-owned-agent',accountEpoch:String(store.db.prepare('SELECT auth_epoch FROM accounts WHERE id=?').get(accountId).auth_epoch)} : {}) };
+  let server = createRoomServer({ store, origin, mcpOAuthClients: [client] });
   await new Promise(resolve => server.listen(0, '127.0.0.1', resolve));
   t.after(async () => { server.closeStreams(); server.closeAllConnections(); await new Promise(resolve => server.close(resolve)); store.close(); });
-  const base = `http://127.0.0.1:${server.address().port}`;
+  let base = `http://127.0.0.1:${server.address().port}`;
   const consent = (changes = {}) => fetch(base + '/oauth/authorize', { method: 'POST', redirect: 'manual',
     headers: { 'Content-Type': 'application/json', Cookie: `__Host-account_session=${slot.token}`, Origin: origin, 'X-CSRF-Token': session.csrf },
-    body: JSON.stringify({ decision: 'allow', client_id: CLIENT.clientId, redirect_uri: CLIENT.redirectUris[0], scope: 'rooms:read chat:read chat:write work:read work:write',
+    body: JSON.stringify({ decision: 'allow', client_id: client.clientId, redirect_uri: client.redirectUris[0], scope: 'rooms:read chat:read chat:write work:read work:write',
       code_challenge: challenge, code_challenge_method: 'S256', resource, agent_binding: JSON.stringify(binding), ...changes }) });
   const exchange = body => fetch(base + '/oauth/token', { method: 'POST', headers: { 'Content-Type': 'application/x-www-form-urlencoded' }, body: new URLSearchParams(body) });
   const authorized = await consent();
   assert.equal(authorized.status, 302, await authorized.text());
   const code = new URL(authorized.headers.get('location')).searchParams.get('code');
   assert.ok(code, authorized.headers.get('location'));
-  const exchanged = await exchange({ grant_type: 'authorization_code', code, client_id: CLIENT.clientId, redirect_uri: CLIENT.redirectUris[0], code_verifier: verifier, resource });
+  const exchanged = await exchange({ grant_type: 'authorization_code', code, client_id: client.clientId, redirect_uri: client.redirectUris[0], code_verifier: verifier, resource });
   assert.equal(exchanged.status, 200);
   const tokens = await exchanged.json();
   const rpc = async (method, params = {}, token = tokens.access_token) => {
@@ -57,7 +66,12 @@ async function setup(t) {
       body: JSON.stringify({ jsonrpc: '2.0', id: 'test', method, params }) });
     return { response, body: await response.json() };
   };
-  return { store, ownerKey, identity, binding, base, consent, exchange, tokens, rpc, cookie: `__Host-account_session=${slot.token}` };
+  const restart = async () => {
+    server.closeStreams();server.closeAllConnections();await new Promise(resolve=>server.close(resolve));store.close();
+    store=new RoomStore(database);if(clock)store.now=clock;
+    server=createRoomServer({store,origin,mcpOAuthClients:[client]});await new Promise(resolve=>server.listen(0,'127.0.0.1',resolve));base=`http://127.0.0.1:${server.address().port}`;
+  };
+  return { get store(){return store;}, restart, ownerKey, identity, binding, accountId, get base(){return base;}, consent, exchange, tokens, rpc, cookie: `__Host-account_session=${slot.token}` };
 }
 test('native OAuth connects an agent, reads and posts as that agent, never authenticates REST', async t => {
   const f = await setup(t);
@@ -188,7 +202,7 @@ test('native text schemas accept complete prose under substring and whole-string
   const f = await setup(t);
   const listed = await f.rpc('tools/list');
   const tools = listed.body.result.tools;
-  assert.equal(tools.length, 22, 'audit every advertised native tool');
+  assert.equal(tools.length, 25, 'audit every advertised native tool, including acquire/release/renew');
   const fields = [];
   const inspect = (schema, path) => {
     if (typeof schema?.pattern === 'string') {
@@ -271,8 +285,8 @@ test('anonymous discovery offers existing access check and challenges without cr
   });
   const before = counts();
   const initialized = await f.rpc('initialize', { protocolVersion: '2025-11-25', capabilities: {}, clientInfo: { name: 'lazy-auth-host', version: '1' } }, null);
-  assert.equal(initialized.response.status, 200);
-  assert.equal(initialized.response.headers.get('www-authenticate'), null);
+  assert.equal(initialized.response.status, 401);
+  assert.match(initialized.response.headers.get('www-authenticate'), /resource_metadata=/);
   const authedBefore = await f.rpc('tools/list');
   const listed = await f.rpc('tools/list', {}, null);
   assert.equal(listed.response.status, 200);
@@ -355,3 +369,118 @@ for (const problem of ['unknown', 'revoked', 'wrong-client', 'missing-token', 'm
     }, before);
   });
 }
+
+const CLAUDE = {clientId:'project-room-claude',name:'Project Room in Claude',redirectUris:['https://claude.ai/api/mcp/auth_callback'],preferredRoomId:'commons',preferredMemberId:'friend-dot'};
+test('Claude DCR, existing owned seat consent and grant survive provider restart without a connection key',async t=>{
+ const directory=mkdtempSync(join(tmpdir(),'claude-owned-oauth-'));t.after(()=>rmSync(directory,{recursive:true,force:true}));let now=Date.now();
+ const f=await setup(t,{legacyOwned:true,client:CLAUDE,database:join(directory,'room.sqlite'),clock:()=>now});
+ assert.equal(f.store.agentConnections.row('commons','friend-dot'),undefined);
+ const before={members:Object.keys(f.store.room('commons').state.members),identities:f.store.db.prepare('SELECT count(*) n FROM agent_identities').get().n};
+ const metadata=await (await fetch(f.base+'/.well-known/oauth-authorization-server')).json();assert.equal(metadata.registration_endpoint,origin+'/oauth/register');
+ const registration=await fetch(f.base+'/oauth/register',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({client_name:'Claude',redirect_uris:CLAUDE.redirectUris,grant_types:['authorization_code','refresh_token'],response_types:['code'],token_endpoint_auth_method:'none'})});
+ assert.equal(registration.status,201);const registered=await registration.json();assert.match(registered.client_id,/^mcp_dcr_/);
+ const screen=await fetch(f.base+'/oauth/authorize?'+new URLSearchParams({client_id:registered.client_id,redirect_uri:CLAUDE.redirectUris[0],scope:'rooms:read chat:read chat:write work:read work:write',state:'claude-state',code_challenge:challenge,code_challenge_method:'S256',resource}),{headers:{Cookie:f.cookie}});
+ assert.equal(screen.status,200);assert.match(await screen.text(),/account-owned-agent/);
+ const consent=await f.consent({client_id:registered.client_id});assert.equal(consent.status,302);const code=new URL(consent.headers.get('location')).searchParams.get('code');assert.ok(code);
+ const exchange=await f.exchange({grant_type:'authorization_code',code,client_id:registered.client_id,redirect_uri:CLAUDE.redirectUris[0],code_verifier:verifier,resource});assert.equal(exchange.status,200);const pair=await exchange.json();assert.ok(pair.refresh_token);
+ const access=await f.rpc('tools/call',{name:'room_check_access',arguments:{}},pair.access_token);assert.equal(access.response.status,200);assert.equal(access.body.result.structuredContent.memberId,'friend-dot');
+ const tools=await f.rpc('tools/list',{},pair.access_token);for(const name of ['room_read_inbox','room_read_board','room_post_message','room_acquire_claim','room_release_claim'])assert.ok(tools.body.result.tools.some(tool=>tool.name===name),name);
+ assert.deepEqual(Object.keys(f.store.room('commons').state.members),before.members);assert.equal(f.store.db.prepare('SELECT count(*) n FROM agent_identities').get().n,before.identities);
+ const wrong=await f.exchange({grant_type:'refresh_token',refresh_token:pair.refresh_token,client_id:registered.client_id,resource:'https://evil.example/mcp'});assert.equal(wrong.status,400);
+ const otherOwner=await f.consent({agent_binding:JSON.stringify({...f.binding,humanMemberId:'stranger'})});assert.match(new URL(otherOwner.headers.get('location')).search,/access_denied/);
+
+ f.store.command(f.ownerKey,'commons',{id:'owned-task-propose',type:'work.proposed',data:{workItemId:'owned-task',title:'Deliver one scoped change',definitionOfDone:'Save one reviewed useful result',accountableMemberId:'friend-dot',mode:'write',independentVerificationRequired:false,ownerDecisionRequired:false}});
+ const action=async(name,args)=>{const r=await f.rpc('tools/call',{name,arguments:args},pair.access_token);assert.equal(r.response.status,200);assert.equal(r.body.error,undefined,JSON.stringify(r.body));assert.notEqual(r.body.result?.isError,true,JSON.stringify(r.body));return r;};
+ await action('room_accept_work',{workItemId:'owned-task'});
+ await action('room_acquire_claim',{roomId:'commons',workItemId:'owned-task',repository:'Uuriko/project-room',ref:'codex/owned-task',paths:['example.txt'],expiresAt:new Date(now+3600000).toISOString()});
+ assert.equal(f.store.room('commons').state.workItems['owned-task'].claim.holderId,'friend-dot');
+ await action('room_release_claim',{roomId:'commons',workItemId:'owned-task'});
+ assert.equal(f.store.room('commons').state.workItems['owned-task'].claim.status,'released');
+ await action('room_post_message',{body:'Useful work from the existing Claude seat'});
+ assert.equal(f.store.room('commons').state.messages.find(m=>m.body==='Useful work from the existing Claude seat').authorId,'friend-dot');
+ let nextPair=pair;
+ for(let round=0;round<3;round++) {
+  now+=29*86400000;await f.restart();
+  assert.equal((await f.rpc('tools/list',{},nextPair.access_token)).response.status,401,'expired access challenges');
+  const refreshed=await f.exchange({grant_type:'refresh_token',refresh_token:nextPair.refresh_token,client_id:registered.client_id,resource});assert.equal(refreshed.status,200);nextPair=await refreshed.json();
+  const check=await f.rpc('tools/call',{name:'room_check_access',arguments:{}},nextPair.access_token);assert.equal(check.body.result.structuredContent.memberId,'friend-dot');
+ }
+ assert.equal(f.store.agentConnections.row('commons','friend-dot'),undefined);
+ assert.deepEqual(Object.keys(f.store.room('commons').state.members),before.members);
+
+ const bad=await fetch(f.base+'/oauth/register',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({redirect_uris:['https://claude.ai.attacker.invalid/api/mcp/auth_callback']})});assert.equal(bad.status,400);
+
+});
+
+test('interrupted refresh saves roll back; successful refresh reuse still revokes its family over HTTP',async t=>{
+ const f=await setup(t,{legacyOwned:true,client:CLAUDE});
+ const counts=()=>Object.fromEntries(['oauth_provider_access_tokens','oauth_provider_refresh_tokens'].map(table=>[table,f.store.db.prepare(`SELECT count(*) n FROM ${table}`).get().n]));
+ const before=counts(),prepare=f.store.db.prepare.bind(f.store.db);let fired=false;
+ f.store.db.prepare=sql=>{
+  const stmt=prepare(sql);
+  if(!fired&&/^\s*INSERT INTO oauth_provider_refresh_tokens/.test(sql)){
+   const run=stmt.run.bind(stmt);stmt.run=(...args)=>{if(!fired){fired=true;throw Error('synthetic interrupted refresh save');}return run(...args);};
+  }
+  return stmt;
+ };
+ const input={grant_type:'refresh_token',refresh_token:f.tokens.refresh_token,client_id:CLAUDE.clientId,resource};
+ try{assert.equal((await f.exchange(input)).status,500);}finally{f.store.db.prepare=prepare;}
+ assert.equal(fired,true);assert.deepEqual(counts(),before);
+ const refreshed=await f.exchange(input);assert.equal(refreshed.status,200);const next=await refreshed.json();
+ assert.equal((await f.rpc('tools/list',{},next.access_token)).response.status,200);
+ assert.equal((await f.exchange(input)).status,400);
+ assert.equal((await f.rpc('tools/list',{},next.access_token)).response.status,401,'replay revocation is committed, not rolled back with protocol refusal');
+});
+
+test('owned-seat consent is fenced by owner transfer, membership removal and identity rotation',async t=>{
+ for(const change of ['owner','member','identity','accountEpoch']){
+  const f=await setup(t,{legacyOwned:true,client:CLAUDE});
+  if(change==='owner'){
+   f.store.command(f.ownerKey,'commons',{id:'successor',type:'member.added',data:{memberId:'successor',displayName:'Successor',kind:'human',permissions:[]}});
+   f.store.command(f.ownerKey,'commons',{id:'transfer',type:'ownership.transferred',data:{toMemberId:'successor'}});
+  }else if(change==='member'){
+   const member=f.store.room('commons').state.members['friend-dot'];
+   f.store.command(f.ownerKey,'commons',{id:'remove',type:'member.access_changed',data:{memberId:member.id,expectedMemberRevision:member.revision,active:false,permissions:member.permissions}});
+  }else if(change==='accountEpoch')f.store.db.prepare('UPDATE accounts SET auth_epoch=auth_epoch+1 WHERE id=?').run(f.accountId);
+  else f.store.identities.rotate(f.identity.identityId,f.identity.secret);
+  assert.equal((await f.rpc('tools/list')).response.status,401,change);
+  assert.equal((await f.exchange({grant_type:'refresh_token',refresh_token:f.tokens.refresh_token,client_id:CLAUDE.clientId,resource})).status,400,change);
+ }
+});
+
+test('in-flight consent cannot issue a code after browser account-slot logout',async t=>{
+ const f=await setup(t,{legacyOwned:true,client:CLAUDE});
+ const slotToken=f.cookie.split('=')[1],auth=f.store.authenticateAccountSession(slotToken),before=f.store.db.prepare('SELECT count(*) n FROM oauth_provider_codes').get().n;
+ const payload=JSON.stringify({decision:'allow',client_id:CLAUDE.clientId,redirect_uri:CLAUDE.redirectUris[0],scope:'rooms:read chat:read',state:'late',code_challenge:challenge,code_challenge_method:'S256',resource,agent_binding:JSON.stringify(f.binding)});
+ let entered;const authenticated=new Promise(resolve=>entered=resolve),original=f.store.authenticateAccountSession.bind(f.store);
+ f.store.authenticateAccountSession=(...args)=>{const value=original(...args);entered();return value;};
+ let req;const response=new Promise((resolve,reject)=>{req=request(f.base+'/oauth/authorize',{method:'POST',headers:{Host:'room.example',Origin:origin,Cookie:f.cookie,'X-CSRF-Token':auth.csrf,'Content-Type':'application/json','Content-Length':Buffer.byteLength(payload)}},res=>{let text='';res.on('data',chunk=>text+=chunk);res.on('end',()=>resolve({status:res.statusCode,text}));});req.on('error',reject);req.write(payload.slice(0,1));});
+ await authenticated;f.store.logoutAccountSession(slotToken,f.store.accountSessionSlot(slotToken).sessionRevision);req.end(payload.slice(1));
+ const denied=await response;assert.equal(denied.status,401,denied.text);assert.equal(f.store.db.prepare('SELECT count(*) n FROM oauth_provider_codes').get().n,before);
+ f.store.authenticateAccountSession=original;
+});
+
+test('Claude defaults to existing-account consent while explicit invitation and public discovery remain available',async t=>{
+ const f=await setup(t,{legacyOwned:true,client:CLAUDE});
+ const args={client_id:CLAUDE.clientId,redirect_uri:CLAUDE.redirectUris[0],scope:'rooms:read chat:read',state:'claude',code_challenge:challenge,code_challenge_method:'S256',resource};
+ const account=await fetch(f.base+'/oauth/authorize?'+new URLSearchParams(args));assert.equal(account.status,302);assert.match(account.headers.get('location'),/oauth=login/);
+ const invitation=await fetch(f.base+'/oauth/authorize?'+new URLSearchParams({...args,connection:'invite'}));assert.equal(invitation.status,200);
+ const init={jsonrpc:'2.0',id:1,method:'initialize',params:{protocolVersion:'2025-11-25',capabilities:{},clientInfo:{name:'Claude discovery',version:'1'}}};
+ const discovery=await fetch(f.base+'/mcp?auth=discovery',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(init)});assert.equal(discovery.status,200);assert.ok((await discovery.json()).result.capabilities.tools);
+});
+
+test('Claude consent POST refuses another valid owned seat and never issues a code', async t => {
+ const f=await setup(t,{legacyOwned:true,client:CLAUDE});
+ const identity=f.store.identities.create('Other owned agent');
+ const {linkCode}=f.store.identities.mintLinkCode(identity.identityId,identity.secret,{roomId:'commons'});
+ f.store.command(f.ownerKey,'commons',{id:'other-owned-seat',type:'member.added',data:{memberId:'other-agent',displayName:'Other owned agent',kind:'agent',identityId:identity.identityId,permissions:[],accountableHumanId:'owner'}});
+ f.store.identities.link(f.ownerKey,'commons',{identityId:identity.identityId,memberId:'other-agent',permissions:[],identityLinkCode:linkCode});
+ const binding={...f.binding,memberId:'other-agent',identityId:identity.identityId,identityEpoch:mcpOAuthIdentityEpoch(f.store,identity.identityId)};
+ const before=f.store.db.prepare('SELECT count(*) n FROM oauth_provider_codes').get().n;
+ const denied=await f.consent({agent_binding:JSON.stringify(binding)});
+ const redirect=new URL(denied.headers.get('location'));
+ assert.equal(redirect.searchParams.get('error'),'access_denied');
+ assert.equal(redirect.searchParams.has('code'),false);
+ assert.equal(f.store.db.prepare('SELECT count(*) n FROM oauth_provider_codes').get().n,before);
+ const allowed=await f.consent();assert.ok(new URL(allowed.headers.get('location')).searchParams.get('code'));
+});

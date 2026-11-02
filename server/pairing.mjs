@@ -305,8 +305,7 @@ export class Pairing {
       id: randomUUID(), type: T.MEMBER_ACCESS_CHANGED,
       data: {
         memberId: member.id, expectedMemberRevision: member.revision,
-        permissions: [...member.permissions], active: true,
-        authorityPolicyVersion: MEMBERSHIP_AUTHORITY_POLICY_VERSION
+        permissions: [...member.permissions], active: true
       }
     }, binding);
     return ownMember(this.#room(roomId, [member.id]).state.members, member.id);

@@ -7,7 +7,9 @@ import {RoomStore} from '../server/store.mjs';
 import {AgentRooms} from '../server/agent-rooms.mjs';
 import {auditRecovery} from '../server/recovery.mjs';
 import {textVersion} from '../server/text-results.mjs';
-import {PAIR_POLL_INTERVAL_MS} from '../server/pairing.mjs';
+import {PAIR_POLL_INTERVAL_MS,pairProofBytes} from '../server/pairing.mjs';
+import {generateKeyPair} from '../server/agent-card-signing.mjs';
+import {createPrivateKey,sign} from 'node:crypto';
 
 function fixture(t) {
  const directory=mkdtempSync(join(tmpdir(),'native-pair-')),filename=join(directory,'room.sqlite');
@@ -124,4 +126,52 @@ test('native merge refuses retained native text evidence without changing saved 
  assert.deepEqual(JSON.parse(cold.db.prepare('SELECT body FROM work_entities WHERE room_id=? AND work_id=?').get('native-pair','saved').body).receipt,receipt);
  assert.equal(cold.db.prepare('SELECT body FROM messages WHERE room_id=? AND message_id=?').get('native-pair','saved-text').body,body);
  assert.doesNotThrow(()=>auditRecovery(cold));
+});
+test('native merge refuses historical native text evidence behind a newer different-producer receipt without changing saved result or authority',t=>{
+ const f=fixture(t),s=f.store;
+ const ids=[];
+ for(const name of ['Kit Arden','Cleo Park']){const id=s.identities.create(name),p=s.pairing.start({roomId:'native-pair',displayName:name,holdFor:id.identityId});s.pairing.decide(f.owner.secret,'native-pair',{pairId:p.pairId,decision:'approve',profile:'contribute'});ids.push(id);}
+ const kept={id:ids[0]},retired={id:ids[1]};
+ const send=(secret,type,data)=>s.command(secret,'native-pair',{id:crypto.randomUUID(),type,data});
+ send(f.owner.secret,'work.proposed',{workItemId:'saved',title:'Saved result',definitionOfDone:'Saved',accountableMemberId:retired.id.identityId,verifierMemberId:f.owner.identityId,mode:'read'});
+ for(const [type,revision] of [['work.accepted',0],['work.started',1]])send(retired.id.secret,type,{workItemId:'saved',expectedRevision:revision});
+ const body='Original exact saved result',posted=send(retired.id.secret,'message.posted',{messageId:'saved-text',body,workItemId:'saved'});
+ send(retired.id.secret,'work.completed',{workItemId:'saved',expectedRevision:2,evidenceKind:'room_text',evidenceMessageId:'saved-text',evidenceMessageEventId:posted.event.id,evidenceVersion:textVersion(body),previousCompletionEventId:null,producerId:retired.id.identityId,summary:'Saved',nextAction:'Review'});
+ const receipt=JSON.parse(s.db.prepare('SELECT body FROM work_entities WHERE room_id=? AND work_id=?').get('native-pair','saved').body).receipt;
+ send(f.owner.secret,'verification.recorded',{workItemId:'saved',expectedRevision:3,result:'fail',completionEventId:receipt.eventId,evidenceVersion:receipt.evidenceVersion,summary:'Revise'});
+ send(retired.id.secret,'work.started',{workItemId:'saved',expectedRevision:4,resolvedBlocker:'Revised result prepared'});
+ const nextBody='New text by the unaffected owner',nextPost=send(f.owner.secret,'message.posted',{messageId:'new-saved-text',body:nextBody,workItemId:'saved'});
+ send(retired.id.secret,'work.completed',{workItemId:'saved',expectedRevision:5,evidenceKind:'room_text',evidenceMessageId:'new-saved-text',evidenceMessageEventId:nextPost.event.id,evidenceVersion:textVersion(nextBody),previousCompletionEventId:receipt.eventId,producerId:f.owner.identityId,summary:'New result',nextAction:'Review'});
+ const historical=JSON.parse(s.db.prepare('SELECT body FROM work_entities WHERE room_id=? AND work_id=?').get('native-pair','saved').body);
+ assert.equal(historical.receipt.nativeText.messageId,'new-saved-text');assert.deepEqual(historical.receiptHistory,[receipt]);
+ const before=durableRows(s);
+ assert.throws(()=>s.pairing.merge(f.owner.secret,'native-pair',{keepMemberId:kept.id.identityId,retireMemberId:retired.id.identityId}),e=>e.code==='current_room_context_unavailable'&&/saved native text/.test(e.message));
+ assert.deepEqual(durableRows(s),before);
+ const cold=f.cold();assert.equal(cold.authenticate(retired.id.secret,'native-pair').member.id,retired.id.identityId);
+ assert.deepEqual(JSON.parse(cold.db.prepare('SELECT body FROM work_entities WHERE room_id=? AND work_id=?').get('native-pair','saved').body).receiptHistory,[receipt]);
+ assert.equal(cold.db.prepare('SELECT body FROM messages WHERE room_id=? AND message_id=?').get('native-pair','saved-text').body,body);
+ assert.doesNotThrow(()=>auditRecovery(cold));
+});
+
+
+
+test('native proved-key reconnect preserves member and grants; inactive proof requires explicit approval',t=>{
+ const f=fixture(t),s=f.store,keys=generateKeyPair(),name='Kit Arden';
+ const pending=s.pairing.start({roomId:'native-pair',displayName:name,publicKey:keys.publicKey});
+ const approved=s.pairing.decide(f.owner.secret,'native-pair',{pairId:pending.pairId,decision:'approve',profile:'contribute'});
+ const key=createPrivateKey({key:Buffer.concat([Buffer.from('302e020100300506032b657004220420','hex'),Buffer.from(keys.privateKey,'base64')]),format:'der',type:'pkcs8'});
+ const keyProof=sign(null,pairProofBytes('native-pair',name,keys.publicKey),key).toString('base64');
+ const before=s.roomAuthority('native-pair',{memberId:approved.memberId}).members[approved.memberId];
+ const reconnect=f.cold().pairing.start({roomId:'native-pair',displayName:name,publicKey:keys.publicKey,keyProof});
+ assert.equal(reconnect.connection.memberId,approved.memberId);assert.equal(reconnect.reconnected,true);
+ const member=f.store.roomAuthority('native-pair',{memberId:approved.memberId}).members[approved.memberId];
+ f.store.command(f.owner.secret,'native-pair',{id:'revoke',type:'member.access_changed',data:{memberId:member.id,expectedMemberRevision:member.revision,permissions:member.permissions,active:false}});
+ assert.throws(()=>f.store.authenticate(reconnect.connection.token,'native-pair'),e=>e.status===403||e.status===401);
+ const blocked=f.cold().pairing.start({roomId:'native-pair',displayName:name,publicKey:keys.publicKey,keyProof});
+ assert.equal(blocked.connection,undefined);assert.ok(blocked.pairId);
+ const restored=f.store.pairing.decide(f.owner.secret,'native-pair',{pairId:blocked.pairId,decision:'approve',profile:'chat',reconnect:true});
+ assert.equal(restored.memberId,approved.memberId);
+ assert.deepEqual(f.store.roomAuthority('native-pair',{memberId:member.id}).members[member.id].permissions,before.permissions,'profile must not silently replace existing grants on reconnect');
+ assert.equal(f.store.db.prepare('SELECT count(*) n FROM identity_links WHERE room_id=?').get('native-pair').n,2);
+ assert.doesNotThrow(()=>auditRecovery(f.store));
 });

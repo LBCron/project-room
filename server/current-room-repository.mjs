@@ -703,7 +703,7 @@ export function currentPairingMergeContext(store, roomId, {actorId,keptMemberId,
   return store.readTransaction(() => withCurrentReadContext(store.db,roomId,b=>{
     const context=currentInviteContext(store,roomId,{memberIds:[actorId,keptMemberId,retiredMemberId]});
     if(!context)return null;
-    const db=store.db,{state}=context.room,{head}=context.current,refs=new Map(),messages=new Map();
+    const db=store.db,{state}=context.room,{head}=context.current,refs=new Map(),messages=new Map(),nativeEvidence=new Set();
     const keys=db.prepare("SELECT record_key FROM current_room_record_proofs WHERE room_id=? AND domain='workSummary' AND present=1 ORDER BY record_key LIMIT 33").all(roomId);
     if(keys.length>32)refuse('Member merge exceeds bounded complete work census');
     if(keys.length!==head.counts.workItems)corrupt('merge work census differs');
@@ -711,10 +711,13 @@ export function currentPairingMergeContext(store, roomId, {actorId,keptMemberId,
     for(const {record_key:id} of keys) {
       const summary=readCurrentRecord(db,roomId,'workSummary',id,b);
       if(!summary||summary.work?.id!==id)corrupt('merge summary identity differs');
-      if(![summary.work.accountableMemberId,summary.work.verifierMemberId,summary.work.claim?.holderId].includes(retiredMemberId))continue;
       const item=readCurrentWorkFromVerifiedHead(db,roomId,id,b);
       const ref=readCurrentRecord(db,roomId,'workItems',id,b);
       if(!item||!isDeepStrictEqual(summary,currentWorkSummary(item,ref)))corrupt('merge summary differs from work');
+      // Historical producers and post envelope bindings are immutable. The
+      // legacy merge reducer cannot rewrite their cited canonical authors.
+      for(const receipt of [...(item.receiptHistory??[]),item.receipt])if(receipt?.nativeText)nativeEvidence.add(receipt.nativeText.messageId);
+      if(![item.accountableMemberId,item.verifierMemberId,item.claim?.holderId].includes(retiredMemberId))continue;
       state.workItems[id]=item;refs.set(id,ref);
     }
     const touched=new Set();
@@ -725,6 +728,7 @@ export function currentPairingMergeContext(store, roomId, {actorId,keptMemberId,
       for(const row of rows)touched.add(row.message_id);
     }
     if(touched.size>32)refuse('Member merge exceeds bounded affected messages');
+    if([...touched].some(id=>nativeEvidence.has(id)))refuse('Member merge would change saved native text evidence; reconnect the existing seat instead');
     const load=id=>{if(!messages.has(id)){const source=readCurrentMessage(db,roomId,id,b);if(!source)corrupt('merge message missing');messages.set(id,source);}return messages.get(id);};
     for(const id of touched) {
       let source=load(id),depth=0;
@@ -735,6 +739,13 @@ export function currentPairingMergeContext(store, roomId, {actorId,keptMemberId,
       }
     }
     state.messages=[...messages.values()].map(source=>source.value);
+    // Bound complete side-row namespaces before the legacy atomic UPDATEs.
+    // Multiple explicitly merged identities may alias one surviving member.
+    for(const [table,key] of [['identity_links','identity_id'],['agent_member_keys','public_key']]) {
+      const rows=db.prepare(`SELECT length(CAST(${key} AS BLOB))+length(CAST(member_id AS BLOB)) AS bytes FROM ${table} WHERE room_id=? ORDER BY ${key} LIMIT 101`).all(roomId);
+      if(rows.length>100)refuse('Member merge exceeds bounded identity/key aliases');
+      for(const row of rows){if(row.bytes>MAX_RECORD)refuse('Merge alias exceeds bounded input');charge(b,row.bytes+64);}
+    }
     const legacy=db.prepare('SELECT claim_id,length(CAST(item_json AS BLOB)) AS bytes FROM work_claims WHERE room_id=? LIMIT 33').all(roomId);
     if(legacy.length>32)refuse('Member merge exceeds bounded historical claim rows');
     const legacyClaims=[];
@@ -822,6 +833,7 @@ export function prepareCurrentWrite(store,{roomId,previous,state,event,sequence,
     if(!proof)counts.metadataProofs++;
   }
   for(const value of Object.values(counts))if(!Number.isSafeInteger(value)||value<0)corrupt('invalid qualified count effect');
+  if(current.merge&&changes.length>128)refuse('Member merge exceeds bounded metadata transition');
   const nextHead={room_id:roomId,sequence,event_id:event.id,revision:current.head.revision+1,counts_json:JSON.stringify(counts)};
   const headHash=hash(JSON.stringify(headValue(nextHead)));
   const projection=serializeCurrentCarrier(nextHead.revision,headHash);

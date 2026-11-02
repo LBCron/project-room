@@ -93,3 +93,56 @@ export async function importIdentity({ identityFrom, roomId, agent = null, env =
     return loadConnection({ roomId }, env);
   } finally { try { destination?.close(); } finally { journal.close(); } }
 }
+
+// Reuse a known issued key: only authenticated reads and local atomic save.
+export async function importCredential({ credentialFile, roomId, expectedIdentity, origin, agent = null, env = process.env, fetchImpl = fetch }) {
+  if (typeof credentialFile !== 'string' || !credentialFile || !id(roomId) || !id(expectedIdentity) || typeof origin !== 'string')
+    throw Error('Use import-credential --credential-file <private JSON file> --room <exact room ID> --expected-identity <identity ID> --origin <service origin>');
+  const apiBase = normalizeBase(origin);
+  let fd, supplied;
+  try {
+    fd = openSync(credentialFile, constants.O_RDONLY | constants.O_NOFOLLOW | constants.O_NONBLOCK);
+    const stat = fstatSync(fd); privateStat(stat);
+    if (stat.size > 8192) throw Error('invalid');
+    supplied = JSON.parse(readFileSync(fd, 'utf8'));
+    registerSecret(supplied?.credential);
+  } catch { throw Error('Select the existing private scoped-key JSON file; no remote write or key issuance was attempted'); }
+  finally { if (fd !== undefined) closeSync(fd); }
+  const scopes = [`mcp:room:${roomId}`, 'rooms:read', 'rooms:write', 'heartbeats:report', 'heartbeats:read'];
+  if (supplied?.identityId !== expectedIdentity || supplied.roomId !== roomId
+    || typeof supplied.credential !== 'string' || !/^rak_[A-Za-z0-9_-]+$/.test(supplied.credential)
+    || typeof supplied.keyId !== 'string' || !/^rak_[A-Za-z0-9_-]+$/.test(supplied.keyId)
+    || !Number.isSafeInteger(supplied.expiresAt) || supplied.expiresAt <= Date.now()
+    || !Array.isArray(supplied.scopes) || JSON.stringify([...supplied.scopes].sort()) !== JSON.stringify([...scopes].sort())
+    || supplied.origin !== undefined && supplied.origin !== apiBase)
+    throw Error('Scoped-key metadata does not match the selected identity, room, origin, expiry or five listener scopes; nothing was saved');
+  const room = new RoomClient({ apiBase, roomId, credential: supplied.credential, fetchImpl });
+  const checked = await room.request('/mcp', { body: { jsonrpc: '2.0', id: 'room-acp-import-check', method: 'tools/call',
+    params: { name: 'room_check_access', arguments: { roomId } } } });
+  const identity = checked?.result?.structuredContent;
+  if (checked?.error || checked?.result?.isError || identity?.status !== 'credential_accepted' || identity?.scope !== 'room'
+    || identity.identityId !== expectedIdentity || identity.roomId !== roomId || !id(identity.memberId) || identity.kind !== 'agent')
+    throw Error('Authenticated scoped credential does not match the selected identity and room; nothing was saved');
+  const memberId = identity.memberId;
+  const access = await new RoomClient({ apiBase, roomId, memberId, credential: supplied.credential, fetchImpl }).checkConnection();
+  const member = access.state.members[memberId];
+  const destination = openJoinJournal(configDir(env), 'room-' + digest(roomId.replace(/[^A-Za-z0-9._-]/g, '_')));
+  try {
+    const owner = destination.read();
+    if (owner && (owner.version !== 1 || typeof owner.apiBase !== 'string' || typeof owner.roomId !== 'string'
+      || owner.operationKey !== null && typeof owner.operationKey !== 'string')) throw Error('Saved destination ownership is invalid');
+    if (owner?.operationKey) throw Error('An earlier setup for this room has an unresolved outcome; reconcile it before importing a known key');
+    const existing = listConnections(env).filter(entry => typeof entry.roomId === 'string' && entry.roomId.replace(/[^A-Za-z0-9._-]/g, '_') === roomId.replace(/[^A-Za-z0-9._-]/g, '_'));
+    if (existing.length) {
+      if (existing.length !== 1 || existing[0].apiBase !== apiBase || existing[0].roomId !== roomId || existing[0].memberId !== memberId
+        || existing[0].identityId !== expectedIdentity || existing[0].credential !== supplied.credential)
+        throw Error('Another connection is already saved for this room; no connection was replaced');
+      return existing[0];
+    }
+    const connection = { version: 1, apiBase, roomId, memberId, identityId: expectedIdentity, credential: supplied.credential,
+      credentialExpiresAt: supplied.expiresAt, keyId: supplied.keyId, scopes: [...supplied.scopes], permissions: [...member.permissions],
+      displayName: memberId, hostId: defaultHostId(), agent, permissionApproverId: null, joinedAt: new Date().toISOString() };
+    saveConnection(connection, env);
+    return connection;
+  } finally { destination.close(); }
+}

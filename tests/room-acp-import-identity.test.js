@@ -4,7 +4,7 @@ import assert from 'node:assert/strict';
 import { readFileSync, readdirSync, mkdirSync, rmSync, statSync, writeFileSync, chmodSync } from 'node:fs';
 import { join as pathJoin } from 'node:path';
 import { join } from '../room-acp/src/join.mjs';
-import { importIdentity } from '../room-acp/src/import-identity.mjs';
+import { importIdentity, importCredential } from '../room-acp/src/import-identity.mjs';
 import { main } from '../room-acp/src/cli.mjs';
 import { loadConnection } from '../room-acp/src/credentials.mjs';
 import { RoomClient } from '../room-acp/src/room.mjs';
@@ -140,4 +140,62 @@ test('imported saved connection runs the actual ACP bridge and replies as the or
     await waitFor(() => bridge.stats.posted > 0);
     assert.ok(f.messages().some(message => message.authorId === f.enrolled.memberId && message.body.includes('verify the imported identity')));
   } finally { bridge.stop(); await done; }
+});
+
+
+async function knownKey(t) {
+  const f = await setup(t);
+  const scopes = ['mcp:room:commons', 'rooms:read', 'rooms:write', 'heartbeats:report', 'heartbeats:read'];
+  const issued = f.f.store.agentPlugin.issueApiKey({ identityId: f.enrolled.identityId, scopes, expiresAt: Date.now() + 3600000 });
+  const value = { credential: 'rak_' + issued.secret, keyId: issued.keyId, identityId: issued.identityId, roomId: 'commons', expiresAt: issued.expiresAt, scopes };
+  const credentialFile = pathJoin(f.home, 'known-scoped.json');
+  writeFileSync(credentialFile, JSON.stringify(value), { mode: 0o600 });
+  return { ...f, value, credentialFile, request: { credentialFile, roomId: 'commons', expectedIdentity: f.enrolled.identityId, origin: f.origin, env: f.env } };
+}
+
+test('imports the actual retained scoped-key shape with authenticated identity, zero issuance and retry-safe save', async t => {
+  const f = await knownKey(t), before = f.keys().length, bytes = readFileSync(f.credentialFile), requests = [], lines = [];
+  const fetchImpl = (url, options) => { requests.push({ url, method: options.method, body: options.body ? JSON.parse(options.body) : null }); return fetch(url, options); };
+  const args = ['import-credential', '--credential-file', f.credentialFile, '--room', 'commons', '--expected-identity', f.enrolled.identityId, '--origin', f.origin];
+  assert.equal(await main(args, { env: f.env, fetchImpl, print: line => lines.push(line) }), 0, lines.join('\n'));
+  const saved = loadConnection({}, f.env);
+  assert.equal(saved.credential, f.value.credential); assert.equal(saved.identityId, f.enrolled.identityId);
+  assert.equal(saved.memberId, f.enrolled.memberId); assert.equal(saved.apiBase, f.origin);
+  assert.equal(saved.credentialExpiresAt, f.value.expiresAt); assert.deepEqual(saved.scopes, f.value.scopes);
+  assert.deepEqual(readFileSync(f.credentialFile), bytes);
+  const savedBytes = readFileSync(pathJoin(f.env.ROOM_ACP_HOME, 'commons.json'));
+  await importCredential({ ...f.request, fetchImpl });
+  assert.deepEqual(readFileSync(pathJoin(f.env.ROOM_ACP_HOME, 'commons.json')), savedBytes);
+  assert.equal(f.keys().length, before);
+  assert.ok(requests.every(r => r.method === 'GET' || r.url.endsWith('/mcp') && r.body.method === 'tools/call' && r.body.params.name === 'room_check_access'));
+  assert.ok(!lines.join('\n').includes(f.value.credential));
+  assert.ok(!savedBytes.toString().includes(f.enrolled.identitySecret));
+  const client = new RoomClient(saved); await client.checkConnection(); await client.heartbeat({ hostId: saved.hostId }); await client.poll({ hostId: saved.hostId, waitMs: 0 });
+});
+
+test('known scoped import refuses mismatched metadata, expired keys, unknown reads and other authenticated identities without saving', async t => {
+  const f = await knownKey(t), before = f.keys().length;
+  for (const change of [{ identityId: 'wrong-identity' }, { roomId: 'second' }, { expiresAt: Date.now() - 1 }, { scopes: ['rooms:*'] }, { credential: f.enrolled.identitySecret }]) {
+    writeFileSync(f.credentialFile, JSON.stringify({ ...f.value, ...change }));
+    await assert.rejects(importCredential(f.request), /metadata/); assert.equal(loadConnection({}, f.env), null);
+  }
+  writeFileSync(f.credentialFile, JSON.stringify(f.value));
+  await assert.rejects(importCredential({ ...f.request, fetchImpl: async () => { throw Error('synthetic unavailable read'); } }));
+  assert.equal(loadConnection({}, f.env), null); assert.equal(f.keys().length, before);
+  const other = await join({ link: f.invite().link, displayName: 'Other authenticated identity', env: { ...f.env, ROOM_ACP_HOME: pathJoin(f.home, 'other-host') } });
+  const key = f.f.store.agentPlugin.issueApiKey({ identityId: other.identityId, scopes: f.value.scopes, expiresAt: f.value.expiresAt });
+  writeFileSync(f.credentialFile, JSON.stringify({ ...f.value, credential: 'rak_' + key.secret, keyId: key.keyId }));
+  await assert.rejects(importCredential(f.request), /Authenticated scoped credential/);
+  assert.equal(loadConnection({}, f.env), null);
+});
+
+test('known-key final save interruption is safe to retry and cannot replace another saved credential', async t => {
+  const f = await knownKey(t), before = f.keys().length, target = pathJoin(f.env.ROOM_ACP_HOME, 'commons.json');
+  mkdirSync(f.env.ROOM_ACP_HOME, { mode: 0o700 }); mkdirSync(target);
+  await assert.rejects(importCredential(f.request)); rmSync(target, { recursive: true });
+  await importCredential(f.request); assert.equal(f.keys().length, before);
+  const bytes = readFileSync(target);
+  writeFileSync(f.credentialFile, JSON.stringify({ ...f.value, credential: f.enrolled.credential }));
+  await assert.rejects(importCredential(f.request), /Another connection/);
+  assert.deepEqual(readFileSync(target), bytes); assert.equal(f.keys().length, before);
 });

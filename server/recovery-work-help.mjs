@@ -4,7 +4,7 @@ import {WORK_HELP_UPDATED,helpFromEvent,workHelpContext} from '../src/work-help.
 import {HELP_OFFER_OPENED,HELP_OFFER_UPDATED,MAX_HELP_OFFERS,validateHelpOfferRecord,helpOfferIdentity,helpOfferIsCurrent,helpOfferAvailabilityFromCounts,helpOfferContextFromSelection,helpOfferFromQualifiedFacts} from '../src/help-offers.js';
 import {advanceWorkHelpMembers,advanceWorkHelpWork,workHelpAuditWorkFacts,workHelpAuditMemberFacts,workHelpAuditValue,workHelpAuditHelp} from './work-help.mjs';
 import {inRestoreContext,restoreProgress,RESTORE_AUDIT_UNIT_BYTES} from './restore-admission.mjs';
-import {initialRecoveryProjectionScan,scanRecoveryProjectionChunk,decodeRecoveryProjectionSpan,REPLAY_CODEC_INPUT_BYTES} from './replay-projection-codec.mjs';
+import {initialRecoveryProjectionScan,scanRecoveryProjectionChunk,decodeRecoveryProjectionSpan,recoveryProjectionFrame,REPLAY_CODEC_INPUT_BYTES} from './replay-projection-codec.mjs';
 const QUANTUM=4*1024*1024,offerTypes=new Set([HELP_OFFER_OPENED,HELP_OFFER_UPDATED]);
 const fail=()=>{throw Error('Recovery work-help history requires reconciliation');};
 const own=(v,k)=>v!=null&&Object.hasOwn(v,k);
@@ -54,8 +54,8 @@ export function advanceRecoveryWorkHelp(store,scratch,restoreId,roomId,previous,
  try{
   while(units < maxUnits && bytes < QUANTUM && scratch.remaining >= 8 && !['complete','deferred'].includes(p.stage)){
    if(p.stage==='basis'){
-    const checkpoint=db.prepare('SELECT sequence,length(CAST(projection AS BLOB)) bytes,json_valid(projection) valid FROM projection_checkpoints WHERE room_id=?').get(roomId);
-    if(checkpoint){if(!Number.isSafeInteger(checkpoint.sequence)||checkpoint.sequence<0||checkpoint.sequence>head.sequence||!Number.isSafeInteger(checkpoint.bytes)||checkpoint.bytes<2||checkpoint.bytes>checkpointMax||checkpoint.valid!==1)fail();p.checkpoint={sequence:checkpoint.sequence,bytes:checkpoint.bytes};p.scan=initialRecoveryProjectionScan(checkpoint.bytes);p.stage='checkpoint';}
+    const checkpoint=db.prepare('SELECT sequence,length(CAST(projection AS BLOB)) bytes FROM projection_checkpoints WHERE room_id=?').get(roomId);
+    if(checkpoint){if(!Number.isSafeInteger(checkpoint.sequence)||checkpoint.sequence<0||checkpoint.sequence>head.sequence||!Number.isSafeInteger(checkpoint.bytes)||checkpoint.bytes<2||checkpoint.bytes>checkpointMax)fail();p.checkpoint={sequence:checkpoint.sequence,bytes:checkpoint.bytes};p.scan=initialRecoveryProjectionScan(checkpoint.bytes);p.stage='checkpoint';}
     else{p.checkpointChecked=true;p.stage='discover';}units++;continue;
    }
    if(p.stage==='checkpoint'){
@@ -64,14 +64,22 @@ export function advanceRecoveryWorkHelp(store,scratch,restoreId,roomId,previous,
     let step;try{step=scanRecoveryProjectionChunk(p.scan,input,{maximumRecords:1});}catch(error){if(error.message==='unsupported or corrupt replay projection codec'){p.stage='deferred';p.scan=null;p.reason='checkpoint_shape_requires_original_oracle';break;}throw error;}
     const record=step.records[0];
     if(record){
-     let domain=null,key=null,value;
+     let domain=null,key=null,value,decoded;
+     if(['metadata-map','metadata-array'].includes(record.kind)){
+      try{recoveryProjectionFrame(record,cp.bytes);}catch(error){if(error.message!=='unsupported or corrupt replay projection codec')throw error;p.stage='deferred';p.scan=null;p.reason='checkpoint_shape_requires_original_oracle';break;}
+     }else{
+      // Validate even discarded leaves with the ORIGINAL codec decoder. Never
+      // ask SQLite to parse/materialize the entire checkpoint in one json_valid.
+      admit(record.length);const input=raw(db.prepare('SELECT substr(CAST(projection AS BLOB),?,?) bytes FROM projection_checkpoints WHERE room_id=?').get(record.offset+1,record.length,roomId).bytes);
+      try{decoded=decodeRecoveryProjectionSpan(input,record,cp.bytes);}catch(error){if(error instanceof SyntaxError)fail();if(error.message!=='unsupported or corrupt replay projection codec')throw error;p.stage='deferred';p.scan=null;p.reason='checkpoint_shape_requires_original_oracle';break;}
+     }
      if(record.kind==='metadata-entry'&&['workItems','members','helpOffers'].includes(record.key)){
-      admit(record.length);const input=raw(db.prepare('SELECT substr(CAST(projection AS BLOB),?,?) bytes FROM projection_checkpoints WHERE room_id=?').get(record.offset+1,record.length,roomId).bytes);value=decodeRecoveryProjectionSpan(input,record,cp.bytes);key=record.entryKey;
+      value=decoded;key=record.entryKey;
       if(record.key==='workItems'){const help=workHelpAuditHelp(value);if(help!==undefined){domain='helpCpWork';value={...workHelpAuditWorkFacts(value),helpWanted:help};}}
       else if(record.key==='members'){domain='helpCpMember';value=workHelpAuditMemberFacts(value);}
       else domain='helpCpOffer';
      }else if(record.kind==='metadata'&&record.key==='room'){
-      admit(record.length);const input=raw(db.prepare('SELECT substr(CAST(projection AS BLOB),?,?) bytes FROM projection_checkpoints WHERE room_id=?').get(record.offset+1,record.length,roomId).bytes);const room=decodeRecoveryProjectionSpan(input,record,cp.bytes);domain='helpCpMetadata';key='room';value={id:room?.id,ownerId:room?.ownerId};
+      domain='helpCpMetadata';key='room';value={id:decoded?.id,ownerId:decoded?.ownerId};
      }else if(record.kind==='metadata'&&['workItems','members','helpOffers'].includes(record.key)){
       p.stage='deferred';p.scan=null;p.reason='checkpoint_map_shape_requires_original_oracle';break;
      }

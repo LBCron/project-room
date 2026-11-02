@@ -1,0 +1,23 @@
+import test from 'node:test';import assert from 'node:assert/strict';
+import {mkdtempSync,rmSync} from 'node:fs';import {tmpdir} from 'node:os';import {join} from 'node:path';
+import {RoomStore} from '../server/store.mjs';import {createRoomServer} from '../server/http.mjs';
+import {withCurrentReadContext} from '../server/current-room-repository.mjs';import {seedScopedInbox} from './helpers/scoped-inbox-source.mjs';
+async function fixture(t){const directory=mkdtempSync(join(tmpdir(),'scoped-inbox-')),filename=join(directory,'room.sqlite');let s=new RoomStore(filename);const saved=seedScopedInbox(s);let server,origin;const open=async()=>{s.room=()=>{throw Error('whole-room hydration');};server=createRoomServer({store:s});await new Promise(r=>server.listen(0,'127.0.0.1',r));origin='http://127.0.0.1:'+server.address().port;},close=async()=>{server.closeStreams();server.closeAllConnections();await new Promise(r=>server.close(r));s.close();};await open();t.after(async()=>{await close();rmSync(directory,{recursive:true,force:true});});return{get s(){return s;},saved,read:async(limit,after=saved.after,token=saved.token)=>{const response=await fetch(`${origin}/api/rooms/commons/agent-inbox?limit=${limit}&after=${after}`,{headers:{authorization:'Bearer '+token}});return{status:response.status,value:await response.json()};},reopen:async()=>{await close();s=new RoomStore(filename);await open();}};}
+function ids(page){return Object.fromEntries(['directMessages','directMentions','replies','replyRequests','nativeWork'].map(key=>[key,(page[key]??[]).map(row=>row.messageId??row.id)]));}
+test('actual five-scope API-key HTTP inbox traverses overlapping obligations without leaks/duplicates and survives cold reopen',async t=>{
+ const f=await fixture(t);for(const limit of [1,5,30]){const r=await f.read(limit);assert.equal(r.status,200,JSON.stringify(r.value));}
+ const acp=f.s.agentPlugin.issueApiKey({identityId:f.saved.identityId,scopes:['mcp:room:commons','rooms:read','rooms:write','heartbeats:report','heartbeats:read'],expiresAt:f.s.now()+3600000});assert.equal((await f.read(5,42,'rak_'+acp.secret)).value.error.code,'insufficient_scope');
+ const expected={directMessages:['dm','overlap'],directMentions:['mention','dm','reply','overlap'],replies:['reply','overlap'],replyRequests:['dm'],nativeWork:['waiting']};
+ const first=(await f.read(5)).value;assert.deepEqual(ids(first),expected);assert.ok(first.cursor.hasMore);assert.equal(first.coverage.globalAttentionComplete,false);
+ assert.equal(JSON.stringify(first).includes('PRIVATE-OTHER-PAIR'),false);const after=first.cursor.after,last=await f.read(5,after);assert.equal(last.status,200);assert.equal(last.value.cursor.hasMore,false);assert.deepEqual(last.value.directMessages,[]);assert.deepEqual(last.value.directMentions,[]);assert.deepEqual(last.value.replies,[]);assert.equal(JSON.stringify(last.value).includes('PRIVATE-OTHER-PAIR'),false);
+ const before=f.s.db.prepare('SELECT * FROM operator_actions ORDER BY id').all();await f.read(5);assert.deepEqual(f.s.db.prepare('SELECT * FROM operator_actions ORDER BY id').all(),before);
+ await f.reopen();assert.deepEqual(ids((await f.read(5)).value),expected);
+ f.s.agentPlugin.revokeApiKey({identityId:f.saved.identityId,keyId:f.saved.keyId});assert.notEqual((await f.read(5)).status,200);
+});
+test('fixed inbox reservation admits legitimate record work while the same byte cap still refuses excessive selected context',async t=>{
+ const f=await fixture(t),measure=maxRecords=>f.s.readTransaction(()=>withCurrentReadContext(f.s.db,'commons',b=>{let error;try{f.s.agentInbox(f.saved.token,'commons',{after:42,limit:5});}catch(e){error=e.code;}return{error,records:b.records,bytes:b.bytes};},{maxRecords}));
+ const old=measure(200),current=measure(512);assert.equal(old.error,'current_room_context_unavailable');assert.equal(current.error,undefined);assert.ok(current.records>200&&current.records<=512);assert.ok(current.bytes<262144);t.diagnostic('SCOPED_INBOX_RESERVATION '+JSON.stringify({old,current}));
+ const key=f.s.issueAccessKey('commons','worker');for(let i=0;i<4;i++)f.s.command(key,'commons',{id:'large-own-'+i,type:'message.posted',data:{messageId:'large-own-'+i,body:'X'.repeat(35000)}});
+ const owner=f.saved.owner,after=f.s.headSequence('commons');for(let i=0;i<4;i++)f.s.command(owner,'commons',{id:'large-reply-'+i,type:'message.posted',data:{messageId:'large-reply-'+i,body:'Useful reply',replyToId:'large-own-'+i}});
+ const large=await f.read(5,after);assert.equal(large.status,409);assert.equal(large.value.error.code,'current_room_context_unavailable');
+});

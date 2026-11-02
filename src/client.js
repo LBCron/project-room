@@ -901,7 +901,7 @@ export class RoomClient {
       if (!this.ownsResponse(result, session)) { this.endAccess(); throw new Error("Room identity changed"); }
       const page = result?.page;
       if(result.contractVersion===2){
-        const invalid=()=>{throw Error('Request context could not be confirmed. Refresh context');};
+        const invalid=()=>{throw Error(uiText("currentRoom.requestContextUnconfirmed"));};
         const anchor=JSON.stringify([result.request?.revision,result.request?.contextEventId,result.current?.contextSequence]);
         if(result.selection?.requestMessageId!==requestMessageId||result.request?.id!==requestMessageId||!page||page.cursor!==cursor||page.limit!==50||!Array.isArray(page.items)||page.items.length>8||typeof page.hasMore!=='boolean'||result.sourceWindow?.complete!==!page.hasMore||horizon!==null&&anchor!==horizon)invalid();
         horizon=anchor;for(const item of page.items){if(item.requestMessageId!==requestMessageId||!Number.isSafeInteger(item.sequence)||item.sequence<=last)invalid();last=item.sequence;}
@@ -918,7 +918,7 @@ export class RoomClient {
         || page.cursor !== cursor || page.afterSequence !== last || horizon !== null && anchor !== horizon
         || page.items.some(item => item.requestMessageId !== requestMessageId
           || !Number.isSafeInteger(item.sequence) || item.sequence <= last || item.sequence > page.horizonSequence))
-        throw new Error("Request context could not be confirmed. Refresh context");
+        throw new Error(uiText("currentRoom.requestContextUnconfirmed"));
       horizon = anchor;
       for (const item of page.items) {
         if (item.sequence <= last) throw new Error("Request context is out of order");

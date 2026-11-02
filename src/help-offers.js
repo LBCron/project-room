@@ -1,3 +1,4 @@
+import { uiText } from "./strings.js";
 // Shared by live commands and retained-history auditing under writer14.
 // Selection coordinates a contribution; it is never an execution or payment grant.
 import { validateHelp, workHelpContext } from "./work-help.js";
@@ -173,8 +174,8 @@ export function helpOfferFromEvent(state,incoming) {
   const d=validateHelpOfferData(incoming.type,incoming.data),rows=records(state);
   // Preserve original item/actor checks before availability/context work.
   const item=own(state.workItems,d.workItemId)&&state.workItems[d.workItemId];
-  check(item&&item.id===d.workItemId&&item.revision===d.expectedRevision,"Stale Work Item revision");
-  const actor=participant(state,incoming.actorId);check(actor?.active===true,"Member access unavailable");
+  check(item&&item.id===d.workItemId&&item.revision===d.expectedRevision,uiText("currentRoom.staleWorkRevision"));
+  const actor=participant(state,incoming.actorId);check(actor?.active===true,uiText("currentRoom.memberAccessUnavailable"));
   return helpOfferFromQualifiedFacts(state,incoming,{prior:rows.find(row=>row.id===d.offerId)??null,
     availability:()=>helpOfferAvailability(state,item.id,actor.id,incoming.at),
     context:prior=>helpOfferContext(state,prior.id,actor.id,incoming.at)});
@@ -186,8 +187,8 @@ export function helpOfferFromQualifiedFacts(state,incoming,{prior,availability,c
     && id(incoming.roomId) && incoming.roomId === state.room.id);
   const d = validateHelpOfferData(incoming.type, incoming.data);
   const item = own(state.workItems, d.workItemId) && state.workItems[d.workItemId];
-  check(item && item.id === d.workItemId && item.revision === d.expectedRevision, "Stale Work Item revision");
-  const actor = participant(state, incoming.actorId); check(actor?.active === true, "Member access unavailable");
+  check(item && item.id === d.workItemId && item.revision === d.expectedRevision, uiText("currentRoom.staleWorkRevision"));
+  const actor = participant(state, incoming.actorId); check(actor?.active === true, uiText("currentRoom.memberAccessUnavailable"));
   if (incoming.type === HELP_OFFER_OPENED) {
     check(!prior, "Offer identity already exists");
     const available = availability();

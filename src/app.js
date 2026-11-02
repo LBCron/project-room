@@ -2298,7 +2298,7 @@ function renderRecordPanel() {
     return;
   }
   recordLoadFailed = false;
-  const coverage=nativeEventsWindow?`<li class="rb-empty">${esc(uiText(nativeEventsWindow.complete?"currentRoom.recordComplete":"currentRoom.recordPartial"))}${nativeEventsWindow.hasOlder?` <button type="button" data-record-older ${recordPageReading?'disabled':''}>${recordPageReading?"Loading…":esc(uiText("currentRoom.recordOlder"))}</button>`:''}</li>`:'';
+  const coverage=nativeEventsWindow?`<li class="rb-empty">${esc(uiText(nativeEventsWindow.complete?"currentRoom.recordComplete":"currentRoom.recordPartial"))}${nativeEventsWindow.hasOlder?` <button type="button" data-record-older ${recordPageReading?'disabled':''}>${esc(uiText(recordPageReading?"currentRoom.recordLoading":"currentRoom.recordOlder"))}</button>`:''}</li>`:'';
   renderContent("#event-list", coverage+[...state.eventLog].reverse().map(e => `<li id="${recordDomId("event", e.id)}" tabindex="-1" data-event-record-id="${esc(e.id)}" data-focus-key="event:${esc(e.id)}"><span>${esc(humanize(e.type))}</span><strong>${esc(memberLabel(e.actorId))}</strong><time datetime="${esc(e.at)}">${esc(time(e.at))}</time><code>${esc(e.id)}</code></li>`).join(""));
 
   // Decision register (backlog F2): the register is read from the event feed.

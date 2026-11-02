@@ -1,3 +1,4 @@
+import { uiText } from "./strings.js";
 // Internal reducer dependency channel. Never persisted or carried in state,
 // client commands, events, grants or a synthetic map member. The store binds
 // counts independently qualified by its current-format head receipt. Recovery
@@ -18,17 +19,17 @@ export const currentRecordReplyCount = state => contexts.get(state)?.replyReques
 
 export function currentRecordReplyOwner(state,messageId) {
  const value=contexts.get(state)?.replyOwner?.(messageId);
- if(value!==undefined&&value!==null&&(typeof value!=='string'||!value))throw Error('Invalid scoped reply owner');
+ if(value!==undefined&&value!==null&&(typeof value!=='string'||!value))throw Error(uiText("currentRoom.invalidReplyOwner"));
  return value;
 }
 export function currentRecordReplyRootChannel(state,messageId) {
  const value=contexts.get(state)?.replyRootChannel?.(messageId);
- if(value!==undefined&&(typeof value!=='string'||!value))throw Error('Invalid scoped reply root channel');
+ if(value!==undefined&&(typeof value!=='string'||!value))throw Error(uiText("currentRoom.invalidReplyChannel"));
  return value;
 }
 
 export function currentRecordClaimOverlaps(state, workItemId, repository, paths, at) {
  const value=contexts.get(state)?.claimOverlaps?.(workItemId,repository,paths,at);
- if(value!==undefined&&(!Array.isArray(value)||value.length>10||value.some(item=>!item||typeof item.workItemId!=='string'||typeof item.holderId!=='string'||!Array.isArray(item.paths)||item.paths.length<1||item.paths.length>16||item.paths.some(path=>typeof path!=='string'))))throw Error('Invalid scoped claim overlaps');
+ if(value!==undefined&&(!Array.isArray(value)||value.length>10||value.some(item=>!item||typeof item.workItemId!=='string'||typeof item.holderId!=='string'||!Array.isArray(item.paths)||item.paths.length<1||item.paths.length>16||item.paths.some(path=>typeof path!=='string'))))throw Error(uiText("currentRoom.invalidClaimOverlaps"));
  return value;
 }

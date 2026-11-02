@@ -7357,7 +7357,7 @@ this.slaBreachAlerts = new SlaBreachAlertJournal(this); // Task 26: durable in-a
         if (conflict) fail(409, "claim_conflict", `Scope is reserved by work ${conflict.id}. Coordinate or release that reservation first; no new claim was saved.`);
       }
       const sequence = room.sequence + 1;
-      const currentRedaction=messageContext?.current&&incoming.type===T.MESSAGE_DELETED
+      const currentRedaction = messageContext?.current && incoming.type === T.MESSAGE_DELETED
         ?prepareCurrentMessageRedaction(this.db,{roomId,state,actorId:incoming.actorId,at:incoming.at,messageId:incoming.data.messageId}):null;
       if(currentRedaction)state=currentRedaction.state;
       const finalSequence=sequence+(currentRedaction?.events.length??0);

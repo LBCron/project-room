@@ -2,6 +2,8 @@ import { withCurrentServingWriter } from './current-room-repository.mjs';
 import {purgeReplayCapturesForPrivacy} from './replay-cutover.mjs';
 import { assertMessageWrite, recordMessageWrite } from './write-integrity.mjs';
 import { readMessageReplaySnapshot, writeMessageReplaySnapshot, discardMessageReplaySnapshot } from './message-replay-snapshot.mjs';
+import {savedHistoricalReplayCheckpoint} from './historical-replay-contract.mjs';
+import {ServiceError} from './service-error.mjs';
 // PRIV-1: rewrite a message out of the log, the projection, and the messages
 // table in one transaction. Read-time masking stays; this is the write that
 // makes the old text unreadable in storage.
@@ -44,10 +46,18 @@ function receiptCites(state, messageId) {
 // existing shared reducers and event order, but never open a full room/log.
 export function prepareCurrentMessageRedaction(db,{roomId,state,actorId,at,messageId}) {
   const sourceId=messageId.endsWith(':channel')?null:messageId;
-  const rows=db.prepare("SELECT sequence,json_extract(body,'$.type') type,length(CAST(json_extract(body,'$.data.body') AS BLOB)) bytes FROM events INDEXED BY current_redaction_message_events WHERE room_id=? AND coalesce(json_extract(body,'$.data.messageId'),id)=? ORDER BY sequence");
+  // This bounded, previously proved historical prefix is immutable evidence.
+  // Rewriting its source bytes would invalidate recovery's exact digest. A
+  // modern suffix and a channel-copy-only deletion do not rewrite that basis.
+  // Do not mint a replacement historical certificate as a deletion side effect.
+  const head=sourceId?db.prepare('SELECT sequence FROM rooms WHERE id=?').get(roomId):null;
+  const historical=head?savedHistoricalReplayCheckpoint(db,roomId,head.sequence):null;
+  const rows=db.prepare("SELECT sequence,json_extract(body,'$.type') type,length(CAST(json_extract(body,'$.data.body') AS BLOB)) bytes FROM events INDEXED BY current_redaction_message_events WHERE room_id=? AND CASE WHEN json_type(body,'$.data.messageId')='text' AND json_extract(body,'$.data.messageId')<>'' THEN json_extract(body,'$.data.messageId') ELSE id END=? ORDER BY sequence");
   let byteLength=null,alreadyRedacted=false,alreadyWithdrawn=false;
   for(const row of rows.iterate(roomId,messageId)) {
-    if(row.type===EVENT_TYPES.MESSAGE_POSTED&&byteLength===null)byteLength=row.bytes;
+    if(sourceId&&historical&&row.sequence<=historical.sequence&&[EVENT_TYPES.MESSAGE_POSTED,EVENT_TYPES.MESSAGE_EDITED].includes(row.type))
+      throw new ServiceError(409,'current_redaction_historical_prefix','This message belongs to an immutable historical replay prefix. Erasure needs an explicit historical privacy reconciliation; no data was changed.');
+    if ( row.type === EVENT_TYPES.MESSAGE_POSTED && byteLength === null ) byteLength = row.bytes;
     if(row.type===EVENT_TYPES.MESSAGE_REDACTED)alreadyRedacted=true;
     if(row.type===EVENT_TYPES.RECEIPT_EVIDENCE_WITHDRAWN)alreadyWithdrawn=true;
   }
@@ -59,7 +69,7 @@ export function prepareCurrentMessageRedaction(db,{roomId,state,actorId,at,messa
     purgeReplayCapturesForPrivacy(db,roomId);
     if(sourceId) {
       const update=db.prepare('UPDATE events SET body=? WHERE room_id=? AND sequence=?');
-      const source=db.prepare("SELECT sequence,body FROM events INDEXED BY current_redaction_message_events WHERE room_id=? AND coalesce(json_extract(body,'$.data.messageId'),id)=? ORDER BY sequence");
+      const source=db.prepare("SELECT sequence,body FROM events INDEXED BY current_redaction_message_events WHERE room_id=? AND CASE WHEN json_type(body,'$.data.messageId')='text' AND json_extract(body,'$.data.messageId')<>'' THEN json_extract(body,'$.data.messageId') ELSE id END=? ORDER BY sequence");
       for(const row of source.iterate(roomId,sourceId)) {
         const entry=parseEvent(row.body);if(!eventTargetsMessage(entry,sourceId))continue;
         if(Object.hasOwn(entry.data,'body'))entry.data.body=null;

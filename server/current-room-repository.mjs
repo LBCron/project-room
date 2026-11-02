@@ -87,7 +87,7 @@ guardDefinitions.push(['current_room_permit_update',`CREATE TRIGGER IF NOT EXIST
   ['current_room_permit_delete',`CREATE TRIGGER IF NOT EXISTS current_room_permit_delete BEFORE DELETE ON current_room_writer_permit BEGIN
     SELECT RAISE(ABORT,'unsupported current room permit'); END`]);
 export const CURRENT_ROOM_GUARDS = [...guardDefinitions,...RESTORE_CONTROL_GUARDS].map(([,sql])=>sql+';').join('\n') + CURRENT_LEGACY_WORK_INDEXES + CURRENT_WORK_CAPACITY_INDEXES + CURRENT_INBOX_DISCOVERY_INDEXES + `
-CREATE INDEX IF NOT EXISTS current_redaction_message_events ON events(room_id,coalesce(json_extract(body,'$.data.messageId'),id),sequence);
+CREATE INDEX IF NOT EXISTS current_redaction_message_events ON events(room_id,CASE WHEN json_type(body,'$.data.messageId')='text' AND json_extract(body,'$.data.messageId')<>'' THEN json_extract(body,'$.data.messageId') ELSE id END,sequence);
 CREATE INDEX IF NOT EXISTS current_redaction_code_drops ON room_code_drops(room_id,message_id,id);
 CREATE INDEX IF NOT EXISTS current_room_attachments_message ON room_attachments(room_id,message_id,id);
 CREATE INDEX IF NOT EXISTS current_work_summary_keys ON current_room_record_proofs(room_id,record_key) WHERE domain='workSummary' AND present=1;

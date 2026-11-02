@@ -11,7 +11,7 @@ const keys='kind roomId memberId credential head mode minimum after older workCu
 export function readCurrentNeedsMePage(store,secret,roomId,options={}){
  return store.readTransaction(()=>readPage(store,secret,roomId,options));
 }
-function readPage(store,secret,roomId,{cursor,after,freshWindow=500}={}){
+function readPage(store,secret,roomId,{cursor,after,freshWindow=500,expectedMode}={}){
  const binding=store.readTransaction(()=>withCurrentReadContext(store.db,roomId,()=>{
   const auth=store.authenticate(secret,roomId),head=readCurrentHead(store.db,roomId);
   return{kind:'needs_me_native_v1',roomId,memberId:auth.member.id,credential:createHash('sha256').update(secret).digest('hex'),head:head.head_sha256,sequence:head.sequence};
@@ -29,6 +29,7 @@ function readPage(store,secret,roomId,{cursor,after,freshWindow=500}={}){
   const recent=after===undefined;
   state={kind:binding.kind,roomId,memberId:binding.memberId,credential:binding.credential,head:binding.head,mode:recent?'recent':'catch_up',minimum:recent?Math.max(0,binding.sequence-freshWindow):Math.min(after,binding.sequence),after:Math.min(after??0,binding.sequence),older:null,workCursor:null,conversationDone:false,workDone:false};
  }
+ if(expectedMode!==undefined&&state.mode!==expectedMode||cursor!==undefined&&state.mode==='catch_up'&&after!==undefined&&state.minimum!==Math.min(after,binding.sequence))fail();
  const items=[];let examined=0,conversationComplete=state.conversationDone,workComplete=state.workDone,visibleThrough=0;
  if(!state.conversationDone){
   const inbox=readCurrentNativeInbox(store,secret,roomId,state.mode==='recent'?{limit:4,...(state.older?{olderCursor:state.older}:{})}:{limit:4,after:state.after});

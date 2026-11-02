@@ -1098,9 +1098,11 @@ export class RoomAgentClient {
   }
   // One bounded summary read after the existing connection preflight. `next`
   // is the observed head, not an acknowledgement or a complete event page.
-  async roomDigest({ since = 0, signal } = {}) {
+  async roomDigest({ since = 0, cursor, signal } = {}) {
     if (!Number.isSafeInteger(since) || since < 0) throw new RoomClientError(0, "invalid_cursor", "since must be a nonnegative safe sequence number");
-    const value = await this.#request(`/digest?since=${since}`, undefined, signal);
+    if(cursor!==undefined&&(typeof cursor!=='string'||!cursor||Buffer.byteLength(cursor)>12288))throw new RoomClientError(0,'invalid_cursor','Use the returned opaque digest cursor');
+    const query=new URLSearchParams({since:String(since)});if(cursor!==undefined)query.set('cursor',cursor);
+    const value = await this.#request(`/digest?${query}`, undefined, signal);
     if (!validRoomDigest(value, { roomId: this.#roomId, memberId: this.#memberId, since })) {
       throw new RoomClientError(200, "invalid_response", "Room digest does not match its identity, coverage or bounded summary contract");
     }

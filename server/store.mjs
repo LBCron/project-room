@@ -95,7 +95,7 @@ import { validSourceObservation } from "../src/work-packet.js";
 import { PUBLIC_READ_MODEL_SCHEMA, ensurePublicReceiptVerificationColumn, ensurePublicReceiptAgentIdsColumn, noteWorkClaimChange, syncRoomPublication } from "./public-read-model.mjs";
 import { NextActions, nextActionsSchema } from "./next-actions.mjs"; // RC-2026-09-25-911: ranked per-agent next actions.
 import { updatesSchema, projectRoomUpdates } from "./updates.mjs"; // Updates marks: private read/done/clear, additive.
-import { buildRoomDigest } from "./room-digest.mjs"; // C-06 room digest composition.
+import { buildRoomDigest, readCurrentRoomDigest } from "./room-digest.mjs"; // C-06 room digest composition.
 import { roomAttentionSlice } from "./needs-me.mjs"; // C-06: per-room needs-me slice for the digest.
 import { DurableTelegramLiveStatus, telegramLiveStatusSchema } from "./channel-live-status.mjs";
 import { QuarantineThreadSplits, quarantineThreadSplitSchema } from "./quarantine-thread-splits.mjs";
@@ -6363,10 +6363,15 @@ this.slaBreachAlerts = new SlaBreachAlertJournal(this); // Task 26: durable in-a
   // the current projection body through messageVisibleToViewer, so deleted,
   // edited, DM, and pre-join text follows the same rules as every other
   // summary read. Bodies themselves are never reproduced (see room-digest.mjs).
-  roomDigest(token, roomId, { since = 0, expectedSessionBinding = null } = {}) {
+  roomDigest(token, roomId, { since = 0, cursor, expectedSessionBinding = null } = {}) {
     return this.readTransaction(() => {
       const auth = this.authenticate(token, roomId, expectedSessionBinding);
       if (!Number.isSafeInteger(since) || since < 0) fail(422, "invalid_cursor", "since must be a sequence number");
+      if(isCurrentRoom(this.db,roomId)){
+        if(since>this.headSequence(roomId))fail(409,'cursor_ahead','Cursor exceeds room history; fetch a fresh snapshot');
+        return readCurrentRoomDigest(this,token,roomId,auth.member.id,{since,cursor});
+      }
+      if(cursor!==undefined)fail(422,'invalid_cursor','Opaque digest continuation requires a normalized room');
       const room = this.room(roomId);
       const through = room.sequence;
       if (since > through) fail(409, "cursor_ahead", "Cursor exceeds room history; fetch a fresh snapshot");

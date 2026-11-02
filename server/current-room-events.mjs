@@ -10,6 +10,7 @@ import {effectiveMentionState} from './mention-lifecycle.mjs';
 import {ServiceError} from './service-error.mjs';
 
 export const CURRENT_EVENT_WINDOW=16;
+export const CURRENT_EVENT_SOURCE_BYTES=64*1024;
 const contexts=new WeakMap();
 const fail=(status,code,message)=>{throw new ServiceError(status,code,message);};
 const unavailable=()=>fail(409,'current_room_context_unavailable','Event source exceeds bounded input or is malformed; cursor was not advanced');
@@ -43,8 +44,17 @@ export function readCurrentEventWindow(store,roomId,viewerId,{after=0,limit=100,
   const identityId=store.bonds.identityForMember(roomId,viewerId);
   // The primary key (room_id,sequence) bounds physical candidates. No JSON
   // predicate occurs before LIMIT. Scalar lengths admit payloads before fetch.
-  const selected=db.prepare('SELECT sequence,length(CAST(id AS BLOB)) AS idBytes,length(CAST(body AS BLOB)) AS bodyBytes FROM events WHERE room_id=? AND sequence>? AND sequence<=? ORDER BY sequence LIMIT ?').all(roomId,after,head.sequence,Math.min(limit,CURRENT_EVENT_WINDOW));
-  for(const row of selected){if(!Number.isSafeInteger(row.sequence)||row.idBytes>512||row.bodyBytes>131072||row.bodyBytes<2)unavailable();chargeCurrentReadBudget(b,row.idBytes+row.bodyBytes+32);}
+  const candidates=db.prepare('SELECT sequence,length(CAST(id AS BLOB)) AS idBytes,length(CAST(body AS BLOB)) AS bodyBytes FROM events WHERE room_id=? AND sequence>? AND sequence<=? ORDER BY sequence LIMIT ?').all(roomId,after,head.sequence,Math.min(limit,CURRENT_EVENT_WINDOW));
+  const selected=[];let sourceBytes=0;
+  for(const row of candidates){
+   if(!Number.isSafeInteger(row.sequence)||row.idBytes>512||row.bodyBytes>131072||row.bodyBytes<2)unavailable();
+   const bytes=row.idBytes+row.bodyBytes+32;
+   // Preserve progress for one admitted legal atom. Subsequent payloads stay
+   // behind a byte prefix so current-body/proof reads retain their shared
+   // input budget; the cursor never advances over the excluded candidate.
+   if(selected.length&&sourceBytes+bytes>CURRENT_EVENT_SOURCE_BYTES)break;
+   chargeCurrentReadBudget(b,bytes);sourceBytes+=bytes;selected.push(row);
+  }
   const rows=selected.map(row=>{
    const source=db.prepare('SELECT id,body FROM events WHERE room_id=? AND sequence=?').get(roomId,row.sequence);let e;
    try{e=JSON.parse(source.body);}catch{unavailable();}

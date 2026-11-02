@@ -31,8 +31,8 @@ for(const removed of [false,true])test(`normalized share rejoin retains self-lef
  const slot=s.createAccountSessionSlot(),first=s.shareLinks.join(slot.token,token,{displayName:'Aster',redemptionId:randomUUID(),expectedSessionRevision:0,expectedSessionBinding:slot.session.sessionBinding}),memberId=first.session.member.id;
  s.command(removed?owner:slot.token,'commons',{id:'end-membership',type:'member.access_changed',data:{memberId,expectedMemberRevision:0,permissions:[],active:false}},removed?null:first.session.sessionBinding);
  const plan=operatorNormalization(s,{roomId:'commons',discardLegacyAssignments:true});operatorNormalization(s,{roomId:'commons',discardLegacyAssignments:true,planHash:plan.planHash,requestId:'adopt-left',reason:'Synthetic preserved rejoin policy'},true);s.room=()=>{throw Error('unexpected rejoin blob hydration');};
- const current=s.accountSessionSlot(slot.token),join=()=>s.shareLinks.join(slot.token,token,{displayName:'Aster',redemptionId:randomUUID(),expectedSessionRevision:current.sessionRevision,expectedSessionBinding:current.sessionBinding});
- if(removed)assert.throws(join,e=>e.code==='membership_removed');else{const result=join();assert.equal(result.duplicate,true);assert.equal(result.session.member.id,memberId);assert.equal(result.session.member.active,true);}
+ const current=s.accountSessionSlot(slot.token),rejoin=()=>s.shareLinks.join(slot.token,token,{displayName:'Aster',redemptionId:randomUUID(),expectedSessionRevision:current.sessionRevision,expectedSessionBinding:current.sessionBinding});
+ if(removed)assert.throws(rejoin,e=>e.code==='membership_removed');else{const result=rejoin();assert.equal(result.duplicate,true);assert.equal(result.session.member.id,memberId);assert.equal(result.session.member.active,true);}
  assert.equal(s.shareLinks.view(s.shareLinks.find(token)).joins,1);
 });
 

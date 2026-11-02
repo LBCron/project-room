@@ -121,6 +121,31 @@ CREATE INDEX IF NOT EXISTS current_messages_incoming_seq_live ON messages(room_i
 CREATE INDEX IF NOT EXISTS current_messages_outgoing_seq_live ON messages(room_id,author_id,seq DESC,message_id DESC) WHERE (to_member_id IS NOT NULL AND to_member_id<>'') AND deleted_at IS NULL;
 CREATE INDEX IF NOT EXISTS current_messages_pair_seq_live ON messages(room_id,author_id,to_member_id,seq DESC,message_id DESC) WHERE deleted_at IS NULL;
 `;
+// The pre-release format5 runtime was deployed before any normalized adoption.
+// Upgrade only that exact, unused namespace. Populated native state and pending
+// restore require their own explicit recovery; legacy rooms/auth are untouched.
+export function upgradeUnusedCurrentFormat5(db) {
+  if (!db.isTransaction) throw Error('Current format transition requires a transaction');
+  const permit=db.prepare("SELECT sql FROM sqlite_master WHERE name='current_room_permit_update'").get();
+  if (!permit || !permit.sql.includes('normalized-current-v1-native-work-5')) return false;
+  const owned=[...definitions,...RESTORE_CONTROL_DEFINITIONS,...guardDefinitions,...RESTORE_CONTROL_GUARDS];
+  const rows=db.prepare('SELECT name,sql FROM sqlite_master WHERE name IN ('+owned.map(()=>'?').join(',')+')').all(...owned.map(([name])=>name));
+  if (rows.length!==owned.length || owned.some(([name,sql])=>normalized(rows.find(row=>row.name===name)?.sql)!==normalized(sql.replaceAll(CURRENT_WRITER_FORMAT,'normalized-current-v1-native-work-5'))))
+    throw Error('Previous current format schema requires reconciliation');
+  for (const table of ['current_room_head','current_room_records','current_room_record_proofs','current_restore_audit_scratch'])
+    if (db.prepare('SELECT 1 FROM '+table+' LIMIT 1').get()) throw Error('Populated previous current format requires explicit recovery');
+  const gate=db.prepare('SELECT * FROM current_room_writer_permit').all();
+  const restore=db.prepare('SELECT * FROM current_restore_admission').all();
+  if (gate.length!==1 || gate[0].singleton!==1 || gate[0].enabled!==0 || gate[0].room_id!==null || gate[0].receipt_id!==null
+    || restore.length!==1 || restore[0].singleton!==1 || restore[0].state!=='clear' || restore[0].restore_id!==null || restore[0].phase!=='clear'
+    || restore[0].revision!==0 || restore[0].source_seal!==null || restore[0].coverage!==null)
+    throw Error('Previous current format has unfinished authority');
+  for (const [name,sql] of [...guardDefinitions,...RESTORE_CONTROL_GUARDS].filter(([,sql])=>sql.includes(CURRENT_WRITER_FORMAT))) {
+    db.exec('DROP TRIGGER '+name);db.exec(sql);
+  }
+  verifyCurrentRoomSchema(db);
+  return true;
+}
 export function verifyCurrentRoomSchema(db) {
   // Cache lookup locations only. Every invocation checks the complete ORIGINAL
   // audit-owned set, exact names/cardinality/normalized SQL, and closed permit.

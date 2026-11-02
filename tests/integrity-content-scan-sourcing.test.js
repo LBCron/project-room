@@ -171,3 +171,54 @@ test("incremental legs drive the durable scan: progress banks per spent call, th
   assert.equal(store.integrityChecksum().text, advanced);
   assert.deepEqual(store.integrityFailures(), [], "no failure is recorded for a clean resumed proof");
 });
+
+// Recheck regression pins (B5 recheck #2 defect): the remembered state
+// the TICK banks is not a completed durable scan, and for a migrated
+// room the (sequence, projection metadata digest) bound does not cover
+// the canonical payload bytes the hash was computed over. Sourcing that
+// state anyway composed a stale hash over a payload-only tamper — the
+// checksum stayed invariant and the tamper went undetected (the three
+// integrity-reconciliation pins that pass at B4 and failed at the first
+// B5 head). Sourcing now requires a completed scan at the bound that
+// agrees with the remembered hash.
+test("tick-banked state without a completed scan sources nothing: a payload-only tamper of a migrated room moves the checksum", async t => {
+  const { store } = fixtureStore(t, { messages: 10 });
+  const tick = () => store.verifyRoomIntegrity({ yieldBetween: async () => {} });
+  await tick();
+  const settled = await tick();
+  assert.equal(settled.matched, 1, "fixture: the tick-banked baseline is settled");
+  const before = store.integrityChecksum().text;
+  // Equal-length, in-place canonical payload rewrite: body and its
+  // record_json copy move together; the sequence, the projection and
+  // every bound input stand still.
+  store.db.prepare("UPDATE messages SET body=?, record_json=json_set(record_json,'$.body',?) WHERE room_id='commons' AND message_id='m-00001'")
+    .run("y".repeat(200), "y".repeat(200));
+  assert.notEqual(store.integrityChecksum().text, before,
+    "no completed scan stands at the bound, so the checksum rescans and the tamper moves it");
+  const result = await tick();
+  assert.equal(result.verified, 0);
+  assert.ok(store.integrityFailures().some(f => f.recordId === "commons" && f.step === "projection_content"),
+    "the tick records the payload drift it detected");
+});
+
+test("a completed banked verdict for a migrated room is not re-issued after a payload-only rewrite at an unchanged bound", async t => {
+  const { store } = fixtureStore(t, { messages: 60 });
+  const done = await store.driveRoomContentScan("commons");
+  assert.equal(done.done, 1);
+  assert.equal(done.drift, false);
+  const original = store.db.prepare("SELECT body, record_json FROM messages WHERE room_id='commons' AND message_id='m-00001'").get();
+  store.db.prepare("UPDATE messages SET body=?, record_json=json_set(record_json,'$.body',?) WHERE room_id='commons' AND message_id='m-00001'")
+    .run("y".repeat(200), "y".repeat(200));
+  const rescanned = await store.driveRoomContentScan("commons");
+  assert.equal(rescanned.done, 1);
+  assert.equal(rescanned.drift, true, "the drive rescanned and caught the payload drift instead of issuing the banked clean verdict");
+  assert.notEqual(rescanned.hash, done.hash, "the rescanned hash follows the tampered payload bytes");
+  // Repair the payload at the same unchanged bound: the banked drift
+  // verdict must not poison the repaired room either.
+  store.db.prepare("UPDATE messages SET body=?, record_json=? WHERE room_id='commons' AND message_id='m-00001'")
+    .run(original.body, original.record_json);
+  const repaired = await store.driveRoomContentScan("commons");
+  assert.equal(repaired.done, 1);
+  assert.equal(repaired.drift, false, "the repaired room rescans clean instead of inheriting the banked drift verdict");
+  assert.equal(repaired.hash, done.hash, "the repaired room's hash returns to the banked truth");
+});

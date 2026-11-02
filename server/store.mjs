@@ -469,6 +469,30 @@ const fail = (status, code, message) => { throw new ServiceError(status, code, m
 export const PILOT_LIMITS = Object.freeze({ eventsPerRoom: 1_000_000, membersPerRoom: 100, workItemsPerRoom: 500, projectionBytes: 5 * 1024 * 1024 });
 // Inactive members retain their history, but do not occupy an admission seat.
 export const activeMemberCount = members => Object.values(members ?? {}).filter(member => member?.active !== false).length;
+// P1 B5 recheck fix: true when the room's content hash folds in canonical
+// payload bytes that live OUTSIDE the projection — authority-migrated
+// message rows (the projection carries the messageAuthority marker, not
+// the payloads) and canonical work-entity rows (the projection carries a
+// _workEntity reference, not the body). For such a room the scan bound
+// (room sequence + projection metadata digest) does NOT determine the
+// content hash: an in-place payload rewrite at an unchanged sequence and
+// an unchanged projection moves the true hash and moves neither bound
+// input. Banked state banked at that bound therefore cannot certify the
+// CURRENT payload bytes, and every verdict surface below declines it for
+// these rooms and takes the fresh scan instead. Unparseable projections
+// and invalid authority markers decline too (the scan itself refuses
+// them); rooms whose hash is fully determined by the projection keep
+// every banked optimisation.
+function projectionCarriesCanonicalPayloads(projection) {
+  let state;
+  try { state = JSON.parse(projection); } catch { return true; }
+  if (!state || typeof state !== "object") return true;
+  try { if (hasMessageAuthority(state)) return true; } catch { return true; }
+  const workItems = state.workItems;
+  if (workItems && typeof workItems === "object"
+    && Object.values(workItems).some(record => record?._workEntity === 1)) return true;
+  return false;
+}
 const hash = text => createHash("sha256").update(text).digest("hex");
 const key = () => randomBytes(32).toString("base64url");
 // RC-2026-09-18-012: presented agent API-key credentials ("rak_"+secret).
@@ -2924,8 +2948,15 @@ this.slaBreachAlerts = new SlaBreachAlertJournal(this); // Task 26: durable in-a
       const update = this.db.prepare("UPDATE integrity_room_state SET projection_hash=? WHERE room_id=?");
       for (const row of this.db.prepare("SELECT id, sequence, projection FROM rooms").all()) {
         const remembered = prior.get(row.id);
+        // Recheck fix: the keep is a currency test on (sequence,
+        // metadata digest) alone, so it inherits the bound's blind
+        // spot — for a room carrying canonical payloads that test
+        // cannot see a payload-only rewrite, and keeping the hash
+        // would re-bank a stale proof as the fresh baseline. Those
+        // rooms are rescanned here, as every unkept room already is.
         const keep = currentDefinition && remembered?.hash && remembered.sequence === row.sequence
-          && remembered.metadata_hash === projectionDigest(row.projection) ? remembered.hash : null;
+          && remembered.metadata_hash === projectionDigest(row.projection)
+          && !projectionCarriesCanonicalPayloads(row.projection) ? remembered.hash : null;
         update.run(keep ?? projectionContentHash(this.db, row.id, row.sequence, row.projection), row.id);
       }
       this.db.prepare("DELETE FROM integrity_room_state WHERE room_id NOT IN (SELECT id FROM rooms)").run();
@@ -2995,6 +3026,19 @@ this.slaBreachAlerts = new SlaBreachAlertJournal(this); // Task 26: durable in-a
   // untransitioned v2 window the remembered hashes are v2-definition
   // and are never sourced into the v3 composition. Anything else —
   // missing, hashless, stale, wrong definition — sources nothing.
+  //
+  // Recheck fix: the completed-scan agreement is REQUIRED, not a
+  // cross-check that only fires when a scan row happens to stand. The
+  // remembered row alone is not a completed durable scan: the tick's
+  // own banking (rememberIntegrityRoomState) writes it for every room
+  // without any durable scan standing at the bound, and for a room
+  // carrying canonical payloads (projectionCarriesCanonicalPayloads)
+  // the (sequence, digest) bound does not cover the payload bytes the
+  // hash was computed over — a payload-only rewrite at an unchanged
+  // bound left the remembered hash "current" and the composed checksum
+  // invariant while the true hash moved (the reconciliation pins that
+  // pass at B4). With no completed scan at the bound the room is
+  // scanned fresh here, exactly as a disagreeing scan already forced.
   bankedContentHash(roomId, sequence, projection) {
     if (parseIntegritySnapshot(this.readIntegritySnapshot())?.format === "v2") return null;
     const digest = projectionDigest(projection);
@@ -3005,7 +3049,7 @@ this.slaBreachAlerts = new SlaBreachAlertJournal(this); // Task 26: durable in-a
     } catch { return null; }
     if (!state?.hash || state.sequence !== sequence || state.metadata_hash !== digest) return null;
     const banked = this.bankedContentScan(roomId, sequence, projection);
-    if (banked && banked.resultHash !== state.hash) return null;
+    if (!banked || banked.resultHash !== state.hash) return null;
     return state.hash;
   }
 
@@ -3054,7 +3098,21 @@ this.slaBreachAlerts = new SlaBreachAlertJournal(this); // Task 26: durable in-a
     if (attemptSeq !== null && parsed.attemptSeq !== attemptSeq) {
       return { casRejected: 1, reason: "stale_attempt", roomId, attemptSeq: parsed.attemptSeq, scanDiscards: parsed.scanDiscards };
     }
-    if (parsed.phase === "done") {
+    // Recheck fix: a COMPLETED banked verdict is a sourcing act, and
+    // for a room carrying canonical payloads its bound (sequence +
+    // projection metadata digest) does not cover the payload bytes the
+    // verdict was computed over — a payload-only rewrite, or a payload
+    // repair, at an unchanged bound leaves the banked verdict standing
+    // while the true verdict moves (a banked drift verdict poisoned
+    // every later drive of a repaired room; a banked clean verdict
+    // would certify a tampered one). Such a room is rescanned fresh:
+    // the completed row is not resumed and its verdict is not issued;
+    // the fresh scan's commits overwrite the row under the same
+    // attempt CAS. Partial rows are scan mechanics, not verdicts, and
+    // resume exactly as before for every room.
+    const staleBankedVerdict = parsed.phase === "done"
+      && projectionCarriesCanonicalPayloads(room.projection);
+    if (parsed.phase === "done" && !staleBankedVerdict) {
       // A completed scan's verdict, banked durably: issued from the
       // COMPLETE scan the row records, never from a partial one.
       return { done: 1, roomId, drift: Boolean(parsed.drift), hash: parsed.resultHash,
@@ -3064,7 +3122,7 @@ this.slaBreachAlerts = new SlaBreachAlertJournal(this); // Task 26: durable in-a
     const scanner = createServingContentScanner(this.db, roomId, boundSeq, room.projection, {
       verify: true, hashContent: true,
       ...(chunkRows !== undefined ? { chunkRows } : {}), ...(chunkBytes !== undefined ? { chunkBytes } : {}),
-      resume: { phase: parsed.phase, range_cursor: parsed.rangeCursor, rangeDigests: parsed.rangeDigests,
+      resume: staleBankedVerdict ? null : { phase: parsed.phase, range_cursor: parsed.rangeCursor, rangeDigests: parsed.rangeDigests,
         scanned_count: parsed.scannedCount, visible_count: parsed.visibleCount, drift: parsed.drift },
     });
     await scanner.drive({ deadline, yieldBetween });
@@ -3208,8 +3266,12 @@ this.slaBreachAlerts = new SlaBreachAlertJournal(this); // Task 26: durable in-a
       // the current hash definition — a v2 baseline is always recomputed
       // under its own definition) answers the baseline comparison
       // without a fresh scan; anything else recomputes as before.
+      // Recheck fix: for a room carrying canonical payloads the bound
+      // does not cover the payload bytes, so the banked comparison is
+      // declined and the baseline is recomputed fresh, as at B4.
       const snapshotFormat = parseIntegritySnapshot(this.readIntegritySnapshot())?.format;
       const banked = snapshotFormat === "v2" || stored?.metadata_hash !== projectionDigest(current.projection)
+        || projectionCarriesCanonicalPayloads(current.projection)
         ? null : this.bankedContentScan(row.recordId, current.sequence, current.projection);
       const sameBaseline=stored?.hash && stored.sequence===current.sequence
         && (banked ? banked.resultHash===stored.hash
@@ -3248,7 +3310,11 @@ this.slaBreachAlerts = new SlaBreachAlertJournal(this); // Task 26: durable in-a
           // a fresh scan. Under a v2 baseline the banked v3 hash must
           // never substitute for the v2 definition, so the banked row is
           // consulted only when the baseline definition is current.
-          const banked = snapshotFormat === "v2" ? null : this.bankedContentScan(row.id, row.sequence, row.projection);
+          // Recheck fix: for a room carrying canonical payloads the
+          // bound does not cover the payload bytes, so the banked
+          // verdict is declined and both legs recompute fresh, as at B4.
+          const banked = snapshotFormat === "v2" || projectionCarriesCanonicalPayloads(row.projection)
+            ? null : this.bankedContentScan(row.id, row.sequence, row.projection);
           if (banked) return banked.drift
             || Boolean(stored.get(row.id)?.hash && stored.get(row.id).sequence === row.sequence
               && banked.resultHash !== stored.get(row.id).hash);

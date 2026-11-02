@@ -1,0 +1,540 @@
+{"event":"room.cold_start","clockSemantics":"runtime-dependent","durationMs":56,"integrity":"eager","phases":{"schema":{"ms":13,"rowsRead":0},"plugin":{"ms":24,"rowsRead":0},"fence":{"ms":11,"rowsRead":0},"verifies":{"ms":2,"rowsRead":0},"checksum":{"ms":0,"rowsRead":0}},"cpuMs":57,"heapBytes":29837232,"rooms":0,"sequences":0,"projectionBytes":0,"events":0}
+{"event":"room.store_initialized","initializationMs":57,"legacyColdStartMs":56,"clockSemantics":"runtime-dependent","cpuMeasured":false}
+{"event":"room.cold_start","clockSemantics":"runtime-dependent","durationMs":54,"integrity":"eager","phases":{"schema":{"ms":11,"rowsRead":0},"plugin":{"ms":20,"rowsRead":0},"fence":{"ms":17,"rowsRead":0},"verifies":{"ms":1,"rowsRead":0},"checksum":{"ms":0,"rowsRead":0}},"cpuMs":52,"heapBytes":36049048,"rooms":0,"sequences":0,"projectionBytes":0,"events":0}
+{"event":"room.store_initialized","initializationMs":54,"legacyColdStartMs":54,"clockSemantics":"runtime-dependent","cpuMeasured":false}
+{"event":"room.cold_start","clockSemantics":"runtime-dependent","durationMs":65,"integrity":"eager","phases":{"schema":{"ms":11,"rowsRead":0},"plugin":{"ms":30,"rowsRead":0},"fence":{"ms":16,"rowsRead":0},"verifies":{"ms":3,"rowsRead":0},"checksum":{"ms":0,"rowsRead":0}},"cpuMs":61,"heapBytes":29466624,"rooms":0,"sequences":0,"projectionBytes":0,"events":0}
+{"event":"room.store_initialized","initializationMs":65,"legacyColdStartMs":65,"clockSemantics":"runtime-dependent","cpuMeasured":false}
+✔ an identity that does not exist never allocates a rate-limit bucket (68.598375ms)
+✔ a real identity is still bounded at its documented budget (72.365792ms)
+✔ the bucket map is bounded and evicts the least recently used (83.882708ms)
+✔ eviction is by recency of use, not of creation (0.108542ms)
+✔ an evicted identity gets a fresh budget rather than a refusal (0.069042ms)
+{"event":"room.cold_start","clockSemantics":"runtime-dependent","durationMs":85,"integrity":"eager","phases":{"schema":{"ms":26,"rowsRead":0},"plugin":{"ms":30,"rowsRead":0},"fence":{"ms":25,"rowsRead":0},"verifies":{"ms":2,"rowsRead":0},"checksum":{"ms":0,"rowsRead":0}},"cpuMs":79,"heapBytes":43595784,"rooms":0,"sequences":0,"projectionBytes":0,"events":0}
+{"event":"room.store_initialized","initializationMs":86,"legacyColdStartMs":85,"clockSemantics":"runtime-dependent","cpuMeasured":false}
+{"event":"room.cold_start","clockSemantics":"runtime-dependent","durationMs":67,"integrity":"eager","phases":{"schema":{"ms":13,"rowsRead":0},"plugin":{"ms":32,"rowsRead":0},"fence":{"ms":20,"rowsRead":0},"verifies":{"ms":2,"rowsRead":0},"checksum":{"ms":0,"rowsRead":0}},"cpuMs":64,"heapBytes":44846216,"rooms":0,"sequences":0,"projectionBytes":0,"events":0}
+{"event":"room.store_initialized","initializationMs":68,"legacyColdStartMs":67,"clockSemantics":"runtime-dependent","cpuMeasured":false}
+{"event":"room.cold_start","clockSemantics":"runtime-dependent","durationMs":35,"integrity":"eager","phases":{"schema":{"ms":9,"rowsRead":0},"plugin":{"ms":16,"rowsRead":0},"fence":{"ms":9,"rowsRead":0},"verifies":{"ms":1,"rowsRead":0},"checksum":{"ms":0,"rowsRead":0}},"cpuMs":36,"heapBytes":113635704,"rooms":0,"sequences":0,"projectionBytes":0,"events":0}
+{"event":"room.store_initialized","initializationMs":35,"legacyColdStartMs":35,"clockSemantics":"runtime-dependent","cpuMeasured":false}
+{"event":"room.cold_start","clockSemantics":"runtime-dependent","durationMs":34,"integrity":"eager","phases":{"schema":{"ms":8,"rowsRead":0},"plugin":{"ms":16,"rowsRead":0},"fence":{"ms":8,"rowsRead":0},"verifies":{"ms":1,"rowsRead":0},"checksum":{"ms":0,"rowsRead":0}},"cpuMs":34,"heapBytes":138841664,"rooms":0,"sequences":0,"projectionBytes":0,"events":0}
+{"event":"room.store_initialized","initializationMs":34,"legacyColdStartMs":34,"clockSemantics":"runtime-dependent","cpuMeasured":false}
+{"event":"room.cold_start","clockSemantics":"runtime-dependent","durationMs":34,"integrity":"eager","phases":{"schema":{"ms":9,"rowsRead":0},"plugin":{"ms":16,"rowsRead":0},"fence":{"ms":8,"rowsRead":0},"verifies":{"ms":1,"rowsRead":0},"checksum":{"ms":0,"rowsRead":0}},"cpuMs":34,"heapBytes":148615704,"rooms":0,"sequences":0,"projectionBytes":0,"events":0}
+{"event":"room.store_initialized","initializationMs":34,"legacyColdStartMs":34,"clockSemantics":"runtime-dependent","cpuMeasured":false}
+{"event":"room.cold_start","clockSemantics":"runtime-dependent","durationMs":41,"integrity":"eager","phases":{"schema":{"ms":8,"rowsRead":0},"plugin":{"ms":19,"rowsRead":0},"fence":{"ms":10,"rowsRead":0},"verifies":{"ms":1,"rowsRead":0},"checksum":{"ms":0,"rowsRead":0}},"cpuMs":40,"heapBytes":160772000,"rooms":0,"sequences":0,"projectionBytes":0,"events":0}
+{"event":"room.store_initialized","initializationMs":41,"legacyColdStartMs":41,"clockSemantics":"runtime-dependent","cpuMeasured":false}
+{"event":"room.cold_start","clockSemantics":"runtime-dependent","durationMs":9,"integrity":"eager","phases":{"schema":{"ms":2,"rowsRead":0},"plugin":{"ms":2,"rowsRead":0},"fence":{"ms":2,"rowsRead":0},"verifies":{"ms":1,"rowsRead":0},"checksum":{"ms":0,"rowsRead":0}},"cpuMs":10,"heapBytes":190127512,"rooms":1,"sequences":8,"projectionBytes":130,"events":8}
+{"event":"room.store_initialized","initializationMs":9,"legacyColdStartMs":9,"clockSemantics":"runtime-dependent","cpuMeasured":false}
+{"event":"room.cold_start","clockSemantics":"runtime-dependent","durationMs":34,"integrity":"eager","phases":{"schema":{"ms":8,"rowsRead":0},"plugin":{"ms":16,"rowsRead":0},"fence":{"ms":8,"rowsRead":0},"verifies":{"ms":1,"rowsRead":0},"checksum":{"ms":0,"rowsRead":0}},"cpuMs":34,"heapBytes":138655496,"rooms":0,"sequences":0,"projectionBytes":0,"events":0}
+{"event":"room.store_initialized","initializationMs":34,"legacyColdStartMs":34,"clockSemantics":"runtime-dependent","cpuMeasured":false}
+[boot-config] ERROR: the agent card is UNSIGNED and no explicit opt-in was recorded at build time — members fetching /.well-known/agent-card.json will see an unsigned card (marked signed:false). To fix: set ROOM_AGENT_CARD_SIGNING_KEY and re-run scripts/sign-agent-card.mjs, or pass --allow-unsigned explicitly to record the choice.
+ROOM_SECURITY_CONTACT is unset; /.well-known/security.txt returns 404
+No magic-link mailer is configured: email-verification gates are relaxed (agent-invite escape hatch); /api/health reports emailVerification: relaxed-no-mailer
+✔ stable equal-time keyset reaches every pending request without whole-room hydration or writes (387.209459ms)
+✔ expired backlog is filtered without a room-wide expiration write (2673.774792ms)
+✔ source changes, decided anchors, tampering and changed selection explicitly invalidate continuation (152.420958ms)
+✔ membership authority is rechecked before revealing any queue page (142.240917ms)
+✔ a cursor cannot cross current authorized credentials or survive credential revocation (148.600625ms)
+✔ cold service explicitly refuses old continuation while a fresh traversal remains available (75.543625ms)
+room diagnostic op_rwIno5UH 422 invalid_request input /api/rooms/:roomId/access-requests
+{"event":"room.cold_start","clockSemantics":"runtime-dependent","durationMs":35,"integrity":"eager","phases":{"schema":{"ms":9,"rowsRead":0},"plugin":{"ms":16,"rowsRead":0},"fence":{"ms":9,"rowsRead":0},"verifies":{"ms":1,"rowsRead":0},"checksum":{"ms":0,"rowsRead":0}},"cpuMs":46,"heapBytes":57593288,"rooms":0,"sequences":0,"projectionBytes":0,"events":0}
+{"event":"room.store_initialized","initializationMs":35,"legacyColdStartMs":35,"clockSemantics":"runtime-dependent","cpuMeasured":false}
+✔ HTTP refuses an unselected partial queue and exposes complete bounded traversal explicitly (107.328ms)
+✔ hosted MCP retains bounded continuation, content trust and exact authorization (101.375167ms)
+{"event":"room.cold_start","clockSemantics":"runtime-dependent","durationMs":64,"integrity":"eager","phases":{"schema":{"ms":13,"rowsRead":0},"plugin":{"ms":26,"rowsRead":0},"fence":{"ms":18,"rowsRead":0},"verifies":{"ms":2,"rowsRead":0},"checksum":{"ms":0,"rowsRead":0}},"cpuMs":64,"heapBytes":43927576,"rooms":0,"sequences":0,"projectionBytes":0,"events":0}
+{"event":"room.store_initialized","initializationMs":65,"legacyColdStartMs":64,"clockSemantics":"runtime-dependent","cpuMeasured":false}
+[boot-config] ERROR: the agent card is UNSIGNED and no explicit opt-in was recorded at build time — members fetching /.well-known/agent-card.json will see an unsigned card (marked signed:false). To fix: set ROOM_AGENT_CARD_SIGNING_KEY and re-run scripts/sign-agent-card.mjs, or pass --allow-unsigned explicitly to record the choice.
+ROOM_SECURITY_CONTACT is unset; /.well-known/security.txt returns 404
+No magic-link mailer is configured: email-verification gates are relaxed (agent-invite escape hatch); /api/health reports emailVerification: relaxed-no-mailer
+✔ access-request poll returns status-aware next hints (142.846875ms)
+{"event":"room.cold_start","clockSemantics":"runtime-dependent","durationMs":91,"integrity":"eager","phases":{"schema":{"ms":22,"rowsRead":0},"plugin":{"ms":30,"rowsRead":0},"fence":{"ms":24,"rowsRead":0},"verifies":{"ms":4,"rowsRead":0},"checksum":{"ms":0,"rowsRead":0}},"cpuMs":87,"heapBytes":40166824,"rooms":0,"sequences":0,"projectionBytes":0,"events":0}
+{"event":"room.store_initialized","initializationMs":92,"legacyColdStartMs":91,"clockSemantics":"runtime-dependent","cpuMeasured":false}
+{"event":"room.cold_start","clockSemantics":"runtime-dependent","durationMs":13,"integrity":"eager","phases":{"schema":{"ms":3,"rowsRead":0},"plugin":{"ms":2,"rowsRead":0},"fence":{"ms":6,"rowsRead":0},"verifies":{"ms":1,"rowsRead":0},"checksum":{"ms":0,"rowsRead":0}},"cpuMs":21,"heapBytes":43221792,"rooms":1,"sequences":4,"projectionBytes":946,"events":4}
+{"event":"room.store_initialized","initializationMs":14,"legacyColdStartMs":13,"clockSemantics":"runtime-dependent","cpuMeasured":false}
+{"event":"room.cold_start","clockSemantics":"runtime-dependent","durationMs":19,"integrity":"eager","phases":{"schema":{"ms":5,"rowsRead":0},"plugin":{"ms":3,"rowsRead":0},"fence":{"ms":6,"rowsRead":0},"verifies":{"ms":1,"rowsRead":0},"checksum":{"ms":0,"rowsRead":0}},"cpuMs":20,"heapBytes":52394440,"rooms":1,"sequences":6,"projectionBytes":1271,"events":6}
+{"event":"room.store_initialized","initializationMs":19,"legacyColdStartMs":19,"clockSemantics":"runtime-dependent","cpuMeasured":false}
+{"event":"room.cold_start","clockSemantics":"runtime-dependent","durationMs":70,"integrity":"eager","phases":{"schema":{"ms":22,"rowsRead":0},"plugin":{"ms":21,"rowsRead":0},"fence":{"ms":16,"rowsRead":0},"verifies":{"ms":2,"rowsRead":0},"checksum":{"ms":0,"rowsRead":0}},"cpuMs":57,"heapBytes":57969520,"rooms":0,"sequences":0,"projectionBytes":0,"events":0}
+{"event":"room.store_initialized","initializationMs":71,"legacyColdStartMs":70,"clockSemantics":"runtime-dependent","cpuMeasured":false}
+{"event":"room.cold_start","clockSemantics":"runtime-dependent","durationMs":49,"integrity":"eager","phases":{"schema":{"ms":9,"rowsRead":0},"plugin":{"ms":19,"rowsRead":0},"fence":{"ms":16,"rowsRead":0},"verifies":{"ms":1,"rowsRead":0},"checksum":{"ms":0,"rowsRead":0}},"cpuMs":48,"heapBytes":64227320,"rooms":0,"sequences":0,"projectionBytes":0,"events":0}
+{"event":"room.store_initialized","initializationMs":50,"legacyColdStartMs":49,"clockSemantics":"runtime-dependent","cpuMeasured":false}
+{"event":"room.cold_start","clockSemantics":"runtime-dependent","durationMs":53,"integrity":"eager","phases":{"schema":{"ms":9,"rowsRead":0},"plugin":{"ms":21,"rowsRead":0},"fence":{"ms":15,"rowsRead":0},"verifies":{"ms":1,"rowsRead":0},"checksum":{"ms":0,"rowsRead":0}},"cpuMs":49,"heapBytes":71023344,"rooms":0,"sequences":0,"projectionBytes":0,"events":0}
+{"event":"room.store_initialized","initializationMs":53,"legacyColdStartMs":53,"clockSemantics":"runtime-dependent","cpuMeasured":false}
+{"event":"room.cold_start","clockSemantics":"runtime-dependent","durationMs":64,"integrity":"eager","phases":{"schema":{"ms":10,"rowsRead":0},"plugin":{"ms":28,"rowsRead":0},"fence":{"ms":22,"rowsRead":0},"verifies":{"ms":1,"rowsRead":0},"checksum":{"ms":0,"rowsRead":0}},"cpuMs":70,"heapBytes":56576104,"rooms":0,"sequences":0,"projectionBytes":0,"events":0}
+{"event":"room.store_initialized","initializationMs":65,"legacyColdStartMs":64,"clockSemantics":"runtime-dependent","cpuMeasured":false}
+{"event":"room.cold_start","clockSemantics":"runtime-dependent","durationMs":72,"integrity":"eager","phases":{"schema":{"ms":19,"rowsRead":0},"plugin":{"ms":33,"rowsRead":0},"fence":{"ms":15,"rowsRead":0},"verifies":{"ms":1,"rowsRead":0},"checksum":{"ms":0,"rowsRead":0}},"cpuMs":60,"heapBytes":63372648,"rooms":0,"sequences":0,"projectionBytes":0,"events":0}
+{"event":"room.store_initialized","initializationMs":73,"legacyColdStartMs":72,"clockSemantics":"runtime-dependent","cpuMeasured":false}
+{"event":"room.cold_start","clockSemantics":"runtime-dependent","durationMs":74,"integrity":"eager","phases":{"schema":{"ms":15,"rowsRead":0},"plugin":{"ms":34,"rowsRead":0},"fence":{"ms":16,"rowsRead":0},"verifies":{"ms":3,"rowsRead":0},"checksum":{"ms":0,"rowsRead":0}},"cpuMs":64,"heapBytes":69933904,"rooms":0,"sequences":0,"projectionBytes":0,"events":0}
+{"event":"room.store_initialized","initializationMs":74,"legacyColdStartMs":74,"clockSemantics":"runtime-dependent","cpuMeasured":false}
+{"event":"room.cold_start","clockSemantics":"runtime-dependent","durationMs":76,"integrity":"eager","phases":{"schema":{"ms":35,"rowsRead":0},"plugin":{"ms":26,"rowsRead":0},"fence":{"ms":10,"rowsRead":0},"verifies":{"ms":2,"rowsRead":0},"checksum":{"ms":0,"rowsRead":0}},"cpuMs":59,"heapBytes":76334560,"rooms":0,"sequences":0,"projectionBytes":0,"events":0}
+{"event":"room.store_initialized","initializationMs":77,"legacyColdStartMs":76,"clockSemantics":"runtime-dependent","cpuMeasured":false}
+{"event":"room.cold_start","clockSemantics":"runtime-dependent","durationMs":65,"integrity":"eager","phases":{"schema":{"ms":11,"rowsRead":0},"plugin":{"ms":20,"rowsRead":0},"fence":{"ms":28,"rowsRead":0},"verifies":{"ms":2,"rowsRead":0},"checksum":{"ms":0,"rowsRead":0}},"cpuMs":67,"heapBytes":65818640,"rooms":0,"sequences":0,"projectionBytes":0,"events":0}
+{"event":"room.store_initialized","initializationMs":65,"legacyColdStartMs":65,"clockSemantics":"runtime-dependent","cpuMeasured":false}
+{"event":"room.cold_start","clockSemantics":"runtime-dependent","durationMs":56,"integrity":"eager","phases":{"schema":{"ms":9,"rowsRead":0},"plugin":{"ms":28,"rowsRead":0},"fence":{"ms":14,"rowsRead":0},"verifies":{"ms":1,"rowsRead":0},"checksum":{"ms":0,"rowsRead":0}},"cpuMs":51,"heapBytes":72003864,"rooms":0,"sequences":0,"projectionBytes":0,"events":0}
+{"event":"room.store_initialized","initializationMs":57,"legacyColdStartMs":56,"clockSemantics":"runtime-dependent","cpuMeasured":false}
+{"event":"room.cold_start","clockSemantics":"runtime-dependent","durationMs":63,"integrity":"eager","phases":{"schema":{"ms":13,"rowsRead":0},"plugin":{"ms":22,"rowsRead":0},"fence":{"ms":23,"rowsRead":0},"verifies":{"ms":2,"rowsRead":0},"checksum":{"ms":0,"rowsRead":0}},"cpuMs":55,"heapBytes":78495984,"rooms":0,"sequences":0,"projectionBytes":0,"events":0}
+{"event":"room.store_initialized","initializationMs":63,"legacyColdStartMs":63,"clockSemantics":"runtime-dependent","cpuMeasured":false}
+{"event":"room.cold_start","clockSemantics":"runtime-dependent","durationMs":74,"integrity":"eager","phases":{"schema":{"ms":16,"rowsRead":0},"plugin":{"ms":25,"rowsRead":0},"fence":{"ms":23,"rowsRead":0},"verifies":{"ms":5,"rowsRead":0},"checksum":{"ms":0,"rowsRead":0}},"cpuMs":59,"heapBytes":84195624,"rooms":0,"sequences":0,"projectionBytes":0,"events":0}
+{"event":"room.store_initialized","initializationMs":75,"legacyColdStartMs":74,"clockSemantics":"runtime-dependent","cpuMeasured":false}
+{"event":"room.cold_start","clockSemantics":"runtime-dependent","durationMs":59,"integrity":"eager","phases":{"schema":{"ms":9,"rowsRead":0},"plugin":{"ms":20,"rowsRead":0},"fence":{"ms":22,"rowsRead":0},"verifies":{"ms":3,"rowsRead":0},"checksum":{"ms":0,"rowsRead":0}},"cpuMs":55,"heapBytes":89737328,"rooms":0,"sequences":0,"projectionBytes":0,"events":0}
+{"event":"room.store_initialized","initializationMs":60,"legacyColdStartMs":59,"clockSemantics":"runtime-dependent","cpuMeasured":false}
+[boot-config] ERROR: the agent card is UNSIGNED and no explicit opt-in was recorded at build time — members fetching /.well-known/agent-card.json will see an unsigned card (marked signed:false). To fix: set ROOM_AGENT_CARD_SIGNING_KEY and re-run scripts/sign-agent-card.mjs, or pass --allow-unsigned explicitly to record the choice.
+ROOM_SECURITY_CONTACT is unset; /.well-known/security.txt returns 404
+No magic-link mailer is configured: email-verification gates are relaxed (agent-invite escape hatch); /api/health reports emailVerification: relaxed-no-mailer
+✔ member requests a reviewed, additive upgrade without rejoining or renaming (156.670667ms)
+✔ an admission auto-approve rule never upgrades an existing member (82.443958ms)
+✔ upgrade retries do not duplicate or change the request or reapply a reviewed grant (61.595833ms)
+✔ a no-op membership request still returns already_member (62.893291ms)
+✔ unprivileged and admission-only reviewers cannot approve an upgrade (81.101625ms)
+▶ changed or withdrawn membership invalidates a pending upgrade
+  ✔ permissions (90.587333ms)
+  ✔ inactive (86.839709ms)
+  ✔ unlinked (89.941625ms)
+  ✔ revoked (79.612042ms)
+  ✔ relinked (74.088667ms)
+✔ changed or withdrawn membership invalidates a pending upgrade (421.615458ms)
+▶ inactive or revoked memberships cannot file upgrades
+  ✔ inactive (73.552ms)
+  ✔ revoked (85.990792ms)
+✔ inactive or revoked memberships cannot file upgrades (159.730833ms)
+{"event":"room.cold_start","clockSemantics":"runtime-dependent","durationMs":73,"integrity":"eager","phases":{"schema":{"ms":19,"rowsRead":0},"plugin":{"ms":35,"rowsRead":0},"fence":{"ms":13,"rowsRead":0},"verifies":{"ms":2,"rowsRead":0},"checksum":{"ms":0,"rowsRead":0}},"cpuMs":78,"heapBytes":48640960,"rooms":0,"sequences":0,"projectionBytes":0,"events":0}
+{"event":"room.store_initialized","initializationMs":73,"legacyColdStartMs":73,"clockSemantics":"runtime-dependent","cpuMeasured":false}
+{"event":"room.cold_start","clockSemantics":"runtime-dependent","durationMs":68,"integrity":"eager","phases":{"schema":{"ms":13,"rowsRead":0},"plugin":{"ms":34,"rowsRead":0},"fence":{"ms":15,"rowsRead":0},"verifies":{"ms":2,"rowsRead":0},"checksum":{"ms":0,"rowsRead":0}},"cpuMs":66,"heapBytes":54587864,"rooms":0,"sequences":0,"projectionBytes":0,"events":0}
+{"event":"room.store_initialized","initializationMs":68,"legacyColdStartMs":68,"clockSemantics":"runtime-dependent","cpuMeasured":false}
+{"event":"room.cold_start","clockSemantics":"runtime-dependent","durationMs":60,"integrity":"eager","phases":{"schema":{"ms":16,"rowsRead":0},"plugin":{"ms":24,"rowsRead":0},"fence":{"ms":15,"rowsRead":0},"verifies":{"ms":1,"rowsRead":0},"checksum":{"ms":0,"rowsRead":0}},"cpuMs":58,"heapBytes":60839816,"rooms":0,"sequences":0,"projectionBytes":0,"events":0}
+{"event":"room.store_initialized","initializationMs":61,"legacyColdStartMs":60,"clockSemantics":"runtime-dependent","cpuMeasured":false}
+{"event":"room.cold_start","clockSemantics":"runtime-dependent","durationMs":65,"integrity":"eager","phases":{"schema":{"ms":14,"rowsRead":0},"plugin":{"ms":32,"rowsRead":0},"fence":{"ms":13,"rowsRead":0},"verifies":{"ms":1,"rowsRead":0},"checksum":{"ms":0,"rowsRead":0}},"cpuMs":63,"heapBytes":67263424,"rooms":0,"sequences":0,"projectionBytes":0,"events":0}
+{"event":"room.store_initialized","initializationMs":65,"legacyColdStartMs":65,"clockSemantics":"runtime-dependent","cpuMeasured":false}
+{"event":"room.cold_start","clockSemantics":"runtime-dependent","durationMs":64,"integrity":"eager","phases":{"schema":{"ms":12,"rowsRead":0},"plugin":{"ms":30,"rowsRead":0},"fence":{"ms":13,"rowsRead":0},"verifies":{"ms":2,"rowsRead":0},"checksum":{"ms":0,"rowsRead":0}},"cpuMs":64,"heapBytes":73559776,"rooms":0,"sequences":0,"projectionBytes":0,"events":0}
+{"event":"room.store_initialized","initializationMs":65,"legacyColdStartMs":64,"clockSemantics":"runtime-dependent","cpuMeasured":false}
+✔ HTTP upgrades, status and fresh admission require current identity-holder proof (126.922458ms)
+✔ invalid upgrade credentials do not exhaust the holder's request quota (83.921042ms)
+✔ history replacement cannot turn a pending upgrade into fresh admission (87.213209ms)
+✔ upgrade pending state obeys cap, cancellation and expiry (76.623041ms)
+✔ lapsed upgrade pendings are expired on create and do not consume the cap (#3745) (79.253666ms)
+✔ the pre-upgrade writer rejects pending upgrades even with explicit grants (109.916292ms)
+{"event":"room.cold_start","clockSemantics":"runtime-dependent","durationMs":94,"integrity":"eager","phases":{"schema":{"ms":20,"rowsRead":0},"plugin":{"ms":35,"rowsRead":0},"fence":{"ms":27,"rowsRead":0},"verifies":{"ms":4,"rowsRead":0},"checksum":{"ms":0,"rowsRead":0}},"cpuMs":89,"heapBytes":29239184,"rooms":0,"sequences":0,"projectionBytes":0,"events":0}
+{"event":"room.store_initialized","initializationMs":95,"legacyColdStartMs":94,"clockSemantics":"runtime-dependent","cpuMeasured":false}
+{"event":"room.cold_start","clockSemantics":"runtime-dependent","durationMs":71,"integrity":"eager","phases":{"schema":{"ms":9,"rowsRead":0},"plugin":{"ms":29,"rowsRead":0},"fence":{"ms":15,"rowsRead":0},"verifies":{"ms":9,"rowsRead":0},"checksum":{"ms":0,"rowsRead":0}},"cpuMs":61,"heapBytes":35753704,"rooms":0,"sequences":0,"projectionBytes":0,"events":0}
+{"event":"room.store_initialized","initializationMs":71,"legacyColdStartMs":71,"clockSemantics":"runtime-dependent","cpuMeasured":false}
+{"event":"room.cold_start","clockSemantics":"runtime-dependent","durationMs":87,"integrity":"eager","phases":{"schema":{"ms":12,"rowsRead":0},"plugin":{"ms":41,"rowsRead":0},"fence":{"ms":29,"rowsRead":0},"verifies":{"ms":2,"rowsRead":0},"checksum":{"ms":0,"rowsRead":0}},"cpuMs":87,"heapBytes":26414104,"rooms":0,"sequences":0,"projectionBytes":0,"events":0}
+{"event":"room.store_initialized","initializationMs":87,"legacyColdStartMs":87,"clockSemantics":"runtime-dependent","cpuMeasured":false}
+✔ decide: a non-admin member (accept_work only) cannot deny a request (118.594375ms)
+✔ decide: a non-admin member (accept_work only) cannot approve a request (80.135417ms)
+✔ list: a non-admin member holding steer cannot list requests (96.660209ms)
+{"event":"room.cold_start","clockSemantics":"runtime-dependent","durationMs":63,"integrity":"eager","phases":{"schema":{"ms":12,"rowsRead":0},"plugin":{"ms":26,"rowsRead":0},"fence":{"ms":14,"rowsRead":0},"verifies":{"ms":5,"rowsRead":0},"checksum":{"ms":0,"rowsRead":0}},"cpuMs":62,"heapBytes":30257024,"rooms":0,"sequences":0,"projectionBytes":0,"events":0}
+{"event":"room.store_initialized","initializationMs":64,"legacyColdStartMs":63,"clockSemantics":"runtime-dependent","cpuMeasured":false}
+{"event":"room.cold_start","clockSemantics":"runtime-dependent","durationMs":62,"integrity":"eager","phases":{"schema":{"ms":9,"rowsRead":0},"plugin":{"ms":23,"rowsRead":0},"fence":{"ms":20,"rowsRead":0},"verifies":{"ms":3,"rowsRead":0},"checksum":{"ms":0,"rowsRead":0}},"cpuMs":61,"heapBytes":36441920,"rooms":0,"sequences":0,"projectionBytes":0,"events":0}
+{"event":"room.store_initialized","initializationMs":62,"legacyColdStartMs":62,"clockSemantics":"runtime-dependent","cpuMeasured":false}
+{"event":"room.cold_start","clockSemantics":"runtime-dependent","durationMs":70,"integrity":"eager","phases":{"schema":{"ms":9,"rowsRead":0},"plugin":{"ms":24,"rowsRead":0},"fence":{"ms":28,"rowsRead":0},"verifies":{"ms":2,"rowsRead":0},"checksum":{"ms":0,"rowsRead":0}},"cpuMs":60,"heapBytes":29296200,"rooms":0,"sequences":0,"projectionBytes":0,"events":0}
+{"event":"room.store_initialized","initializationMs":71,"legacyColdStartMs":70,"clockSemantics":"runtime-dependent","cpuMeasured":false}
+{"event":"room.cold_start","clockSemantics":"runtime-dependent","durationMs":71,"integrity":"eager","phases":{"schema":{"ms":18,"rowsRead":0},"plugin":{"ms":29,"rowsRead":0},"fence":{"ms":18,"rowsRead":0},"verifies":{"ms":1,"rowsRead":0},"checksum":{"ms":0,"rowsRead":0}},"cpuMs":57,"heapBytes":34911640,"rooms":0,"sequences":0,"projectionBytes":0,"events":0}
+{"event":"room.store_initialized","initializationMs":71,"legacyColdStartMs":71,"clockSemantics":"runtime-dependent","cpuMeasured":false}
+{"event":"room.cold_start","clockSemantics":"runtime-dependent","durationMs":69,"integrity":"eager","phases":{"schema":{"ms":17,"rowsRead":0},"plugin":{"ms":22,"rowsRead":0},"fence":{"ms":25,"rowsRead":0},"verifies":{"ms":2,"rowsRead":0},"checksum":{"ms":0,"rowsRead":0}},"cpuMs":63,"heapBytes":40634832,"rooms":0,"sequences":0,"projectionBytes":0,"events":0}
+{"event":"room.store_initialized","initializationMs":69,"legacyColdStartMs":69,"clockSemantics":"runtime-dependent","cpuMeasured":false}
+{"event":"room.cold_start","clockSemantics":"runtime-dependent","durationMs":67,"integrity":"eager","phases":{"schema":{"ms":10,"rowsRead":0},"plugin":{"ms":32,"rowsRead":0},"fence":{"ms":16,"rowsRead":0},"verifies":{"ms":2,"rowsRead":0},"checksum":{"ms":0,"rowsRead":0}},"cpuMs":62,"heapBytes":30594144,"rooms":0,"sequences":0,"projectionBytes":0,"events":0}
+{"event":"room.store_initialized","initializationMs":68,"legacyColdStartMs":67,"clockSemantics":"runtime-dependent","cpuMeasured":false}
+{"event":"room.cold_start","clockSemantics":"runtime-dependent","durationMs":63,"integrity":"eager","phases":{"schema":{"ms":17,"rowsRead":0},"plugin":{"ms":28,"rowsRead":0},"fence":{"ms":14,"rowsRead":0},"verifies":{"ms":1,"rowsRead":0},"checksum":{"ms":0,"rowsRead":0}},"cpuMs":59,"heapBytes":36034176,"rooms":0,"sequences":0,"projectionBytes":0,"events":0}
+{"event":"room.store_initialized","initializationMs":63,"legacyColdStartMs":63,"clockSemantics":"runtime-dependent","cpuMeasured":false}
+{"event":"room.cold_start","clockSemantics":"runtime-dependent","durationMs":63,"integrity":"eager","phases":{"schema":{"ms":11,"rowsRead":0},"plugin":{"ms":27,"rowsRead":0},"fence":{"ms":19,"rowsRead":0},"verifies":{"ms":3,"rowsRead":0},"checksum":{"ms":0,"rowsRead":0}},"cpuMs":53,"heapBytes":41968944,"rooms":0,"sequences":0,"projectionBytes":0,"events":0}
+{"event":"room.store_initialized","initializationMs":63,"legacyColdStartMs":63,"clockSemantics":"runtime-dependent","cpuMeasured":false}
+{"event":"room.cold_start","clockSemantics":"runtime-dependent","durationMs":70,"integrity":"eager","phases":{"schema":{"ms":9,"rowsRead":0},"plugin":{"ms":33,"rowsRead":0},"fence":{"ms":17,"rowsRead":0},"verifies":{"ms":4,"rowsRead":0},"checksum":{"ms":0,"rowsRead":0}},"cpuMs":62,"heapBytes":32223968,"rooms":0,"sequences":0,"projectionBytes":0,"events":0}
+{"event":"room.store_initialized","initializationMs":71,"legacyColdStartMs":70,"clockSemantics":"runtime-dependent","cpuMeasured":false}
+{"event":"room.cold_start","clockSemantics":"runtime-dependent","durationMs":69,"integrity":"eager","phases":{"schema":{"ms":9,"rowsRead":0},"plugin":{"ms":33,"rowsRead":0},"fence":{"ms":20,"rowsRead":0},"verifies":{"ms":1,"rowsRead":0},"checksum":{"ms":0,"rowsRead":0}},"cpuMs":55,"heapBytes":38456872,"rooms":0,"sequences":0,"projectionBytes":0,"events":0}
+{"event":"room.store_initialized","initializationMs":69,"legacyColdStartMs":69,"clockSemantics":"runtime-dependent","cpuMeasured":false}
+{"event":"room.cold_start","clockSemantics":"runtime-dependent","durationMs":65,"integrity":"eager","phases":{"schema":{"ms":14,"rowsRead":0},"plugin":{"ms":32,"rowsRead":0},"fence":{"ms":11,"rowsRead":0},"verifies":{"ms":2,"rowsRead":0},"checksum":{"ms":0,"rowsRead":0}},"cpuMs":61,"heapBytes":44873224,"rooms":0,"sequences":0,"projectionBytes":0,"events":0}
+{"event":"room.store_initialized","initializationMs":65,"legacyColdStartMs":65,"clockSemantics":"runtime-dependent","cpuMeasured":false}
+{"event":"room.cold_start","clockSemantics":"runtime-dependent","durationMs":54,"integrity":"eager","phases":{"schema":{"ms":9,"rowsRead":0},"plugin":{"ms":29,"rowsRead":0},"fence":{"ms":11,"rowsRead":0},"verifies":{"ms":1,"rowsRead":0},"checksum":{"ms":0,"rowsRead":0}},"cpuMs":50,"heapBytes":35061456,"rooms":0,"sequences":0,"projectionBytes":0,"events":0}
+{"event":"room.store_initialized","initializationMs":54,"legacyColdStartMs":54,"clockSemantics":"runtime-dependent","cpuMeasured":false}
+{"event":"room.cold_start","clockSemantics":"runtime-dependent","durationMs":71,"integrity":"eager","phases":{"schema":{"ms":9,"rowsRead":0},"plugin":{"ms":40,"rowsRead":0},"fence":{"ms":16,"rowsRead":0},"verifies":{"ms":2,"rowsRead":0},"checksum":{"ms":0,"rowsRead":0}},"cpuMs":60,"heapBytes":40711224,"rooms":0,"sequences":0,"projectionBytes":0,"events":0}
+{"event":"room.store_initialized","initializationMs":71,"legacyColdStartMs":71,"clockSemantics":"runtime-dependent","cpuMeasured":false}
+{"event":"room.cold_start","clockSemantics":"runtime-dependent","durationMs":61,"integrity":"eager","phases":{"schema":{"ms":9,"rowsRead":0},"plugin":{"ms":26,"rowsRead":0},"fence":{"ms":19,"rowsRead":0},"verifies":{"ms":2,"rowsRead":0},"checksum":{"ms":0,"rowsRead":0}},"cpuMs":59,"heapBytes":30260576,"rooms":0,"sequences":0,"projectionBytes":0,"events":0}
+{"event":"room.store_initialized","initializationMs":62,"legacyColdStartMs":61,"clockSemantics":"runtime-dependent","cpuMeasured":false}
+{"event":"room.cold_start","clockSemantics":"runtime-dependent","durationMs":78,"integrity":"eager","phases":{"schema":{"ms":13,"rowsRead":0},"plugin":{"ms":39,"rowsRead":0},"fence":{"ms":17,"rowsRead":0},"verifies":{"ms":2,"rowsRead":0},"checksum":{"ms":0,"rowsRead":0}},"cpuMs":63,"heapBytes":36052128,"rooms":0,"sequences":0,"projectionBytes":0,"events":0}
+{"event":"room.store_initialized","initializationMs":78,"legacyColdStartMs":78,"clockSemantics":"runtime-dependent","cpuMeasured":false}
+{"event":"room.cold_start","clockSemantics":"runtime-dependent","durationMs":71,"integrity":"eager","phases":{"schema":{"ms":11,"rowsRead":0},"plugin":{"ms":36,"rowsRead":0},"fence":{"ms":18,"rowsRead":0},"verifies":{"ms":1,"rowsRead":0},"checksum":{"ms":0,"rowsRead":0}},"cpuMs":65,"heapBytes":41683648,"rooms":0,"sequences":0,"projectionBytes":0,"events":0}
+{"event":"room.store_initialized","initializationMs":71,"legacyColdStartMs":71,"clockSemantics":"runtime-dependent","cpuMeasured":false}
+{"event":"room.cold_start","clockSemantics":"runtime-dependent","durationMs":67,"integrity":"eager","phases":{"schema":{"ms":16,"rowsRead":0},"plugin":{"ms":29,"rowsRead":0},"fence":{"ms":18,"rowsRead":0},"verifies":{"ms":1,"rowsRead":0},"checksum":{"ms":0,"rowsRead":0}},"cpuMs":66,"heapBytes":30998496,"rooms":0,"sequences":0,"projectionBytes":0,"events":0}
+{"event":"room.store_initialized","initializationMs":67,"legacyColdStartMs":67,"clockSemantics":"runtime-dependent","cpuMeasured":false}
+{"event":"room.cold_start","clockSemantics":"runtime-dependent","durationMs":64,"integrity":"eager","phases":{"schema":{"ms":10,"rowsRead":0},"plugin":{"ms":30,"rowsRead":0},"fence":{"ms":15,"rowsRead":0},"verifies":{"ms":3,"rowsRead":0},"checksum":{"ms":0,"rowsRead":0}},"cpuMs":61,"heapBytes":36467688,"rooms":0,"sequences":0,"projectionBytes":0,"events":0}
+{"event":"room.store_initialized","initializationMs":65,"legacyColdStartMs":64,"clockSemantics":"runtime-dependent","cpuMeasured":false}
+{"event":"room.cold_start","clockSemantics":"runtime-dependent","durationMs":70,"integrity":"eager","phases":{"schema":{"ms":10,"rowsRead":0},"plugin":{"ms":32,"rowsRead":0},"fence":{"ms":21,"rowsRead":0},"verifies":{"ms":1,"rowsRead":0},"checksum":{"ms":0,"rowsRead":0}},"cpuMs":68,"heapBytes":41901216,"rooms":0,"sequences":0,"projectionBytes":0,"events":0}
+{"event":"room.store_initialized","initializationMs":70,"legacyColdStartMs":70,"clockSemantics":"runtime-dependent","cpuMeasured":false}
+{"event":"room.cold_start","clockSemantics":"runtime-dependent","durationMs":67,"integrity":"eager","phases":{"schema":{"ms":15,"rowsRead":0},"plugin":{"ms":33,"rowsRead":0},"fence":{"ms":12,"rowsRead":0},"verifies":{"ms":2,"rowsRead":0},"checksum":{"ms":0,"rowsRead":0}},"cpuMs":65,"heapBytes":47194048,"rooms":0,"sequences":0,"projectionBytes":0,"events":0}
+{"event":"room.store_initialized","initializationMs":67,"legacyColdStartMs":67,"clockSemantics":"runtime-dependent","cpuMeasured":false}
+{"event":"room.cold_start","clockSemantics":"runtime-dependent","durationMs":64,"integrity":"eager","phases":{"schema":{"ms":11,"rowsRead":0},"plugin":{"ms":31,"rowsRead":0},"fence":{"ms":16,"rowsRead":0},"verifies":{"ms":2,"rowsRead":0},"checksum":{"ms":0,"rowsRead":0}},"cpuMs":63,"heapBytes":36164776,"rooms":0,"sequences":0,"projectionBytes":0,"events":0}
+{"event":"room.store_initialized","initializationMs":64,"legacyColdStartMs":64,"clockSemantics":"runtime-dependent","cpuMeasured":false}
+{"event":"room.cold_start","clockSemantics":"runtime-dependent","durationMs":57,"integrity":"eager","phases":{"schema":{"ms":13,"rowsRead":0},"plugin":{"ms":24,"rowsRead":0},"fence":{"ms":15,"rowsRead":0},"verifies":{"ms":2,"rowsRead":0},"checksum":{"ms":0,"rowsRead":0}},"cpuMs":56,"heapBytes":41692256,"rooms":0,"sequences":0,"projectionBytes":0,"events":0}
+{"event":"room.store_initialized","initializationMs":57,"legacyColdStartMs":57,"clockSemantics":"runtime-dependent","cpuMeasured":false}
+{"event":"room.cold_start","clockSemantics":"runtime-dependent","durationMs":45,"integrity":"eager","phases":{"schema":{"ms":10,"rowsRead":0},"plugin":{"ms":20,"rowsRead":0},"fence":{"ms":11,"rowsRead":0},"verifies":{"ms":1,"rowsRead":0},"checksum":{"ms":0,"rowsRead":0}},"cpuMs":44,"heapBytes":47095240,"rooms":0,"sequences":0,"projectionBytes":0,"events":0}
+{"event":"room.store_initialized","initializationMs":45,"legacyColdStartMs":45,"clockSemantics":"runtime-dependent","cpuMeasured":false}
+{"event":"room.cold_start","clockSemantics":"runtime-dependent","durationMs":54,"integrity":"eager","phases":{"schema":{"ms":13,"rowsRead":0},"plugin":{"ms":24,"rowsRead":0},"fence":{"ms":13,"rowsRead":0},"verifies":{"ms":1,"rowsRead":0},"checksum":{"ms":0,"rowsRead":0}},"cpuMs":54,"heapBytes":36011264,"rooms":0,"sequences":0,"projectionBytes":0,"events":0}
+{"event":"room.store_initialized","initializationMs":54,"legacyColdStartMs":54,"clockSemantics":"runtime-dependent","cpuMeasured":false}
+{"event":"room.cold_start","clockSemantics":"runtime-dependent","durationMs":43,"integrity":"eager","phases":{"schema":{"ms":9,"rowsRead":0},"plugin":{"ms":20,"rowsRead":0},"fence":{"ms":10,"rowsRead":0},"verifies":{"ms":1,"rowsRead":0},"checksum":{"ms":0,"rowsRead":0}},"cpuMs":43,"heapBytes":41233264,"rooms":0,"sequences":0,"projectionBytes":0,"events":0}
+{"event":"room.store_initialized","initializationMs":43,"legacyColdStartMs":43,"clockSemantics":"runtime-dependent","cpuMeasured":false}
+{"event":"room.cold_start","clockSemantics":"runtime-dependent","durationMs":43,"integrity":"eager","phases":{"schema":{"ms":9,"rowsRead":0},"plugin":{"ms":20,"rowsRead":0},"fence":{"ms":10,"rowsRead":0},"verifies":{"ms":1,"rowsRead":0},"checksum":{"ms":0,"rowsRead":0}},"cpuMs":43,"heapBytes":46870088,"rooms":0,"sequences":0,"projectionBytes":0,"events":0}
+{"event":"room.store_initialized","initializationMs":43,"legacyColdStartMs":43,"clockSemantics":"runtime-dependent","cpuMeasured":false}
+{"event":"room.cold_start","clockSemantics":"runtime-dependent","durationMs":51,"integrity":"eager","phases":{"schema":{"ms":10,"rowsRead":0},"plugin":{"ms":26,"rowsRead":0},"fence":{"ms":11,"rowsRead":0},"verifies":{"ms":1,"rowsRead":0},"checksum":{"ms":0,"rowsRead":0}},"cpuMs":49,"heapBytes":36148320,"rooms":0,"sequences":0,"projectionBytes":0,"events":0}
+{"event":"room.store_initialized","initializationMs":51,"legacyColdStartMs":51,"clockSemantics":"runtime-dependent","cpuMeasured":false}
+{"event":"room.cold_start","clockSemantics":"runtime-dependent","durationMs":44,"integrity":"eager","phases":{"schema":{"ms":10,"rowsRead":0},"plugin":{"ms":20,"rowsRead":0},"fence":{"ms":10,"rowsRead":0},"verifies":{"ms":1,"rowsRead":0},"checksum":{"ms":0,"rowsRead":0}},"cpuMs":44,"heapBytes":41485992,"rooms":0,"sequences":0,"projectionBytes":0,"events":0}
+{"event":"room.store_initialized","initializationMs":44,"legacyColdStartMs":44,"clockSemantics":"runtime-dependent","cpuMeasured":false}
+{"event":"room.cold_start","clockSemantics":"runtime-dependent","durationMs":45,"integrity":"eager","phases":{"schema":{"ms":10,"rowsRead":0},"plugin":{"ms":21,"rowsRead":0},"fence":{"ms":10,"rowsRead":0},"verifies":{"ms":1,"rowsRead":0},"checksum":{"ms":0,"rowsRead":0}},"cpuMs":44,"heapBytes":47125560,"rooms":0,"sequences":0,"projectionBytes":0,"events":0}
+{"event":"room.store_initialized","initializationMs":45,"legacyColdStartMs":45,"clockSemantics":"runtime-dependent","cpuMeasured":false}
+{"event":"room.cold_start","clockSemantics":"runtime-dependent","durationMs":45,"integrity":"eager","phases":{"schema":{"ms":10,"rowsRead":0},"plugin":{"ms":20,"rowsRead":0},"fence":{"ms":11,"rowsRead":0},"verifies":{"ms":1,"rowsRead":0},"checksum":{"ms":0,"rowsRead":0}},"cpuMs":45,"heapBytes":36598600,"rooms":0,"sequences":0,"projectionBytes":0,"events":0}
+{"event":"room.store_initialized","initializationMs":45,"legacyColdStartMs":45,"clockSemantics":"runtime-dependent","cpuMeasured":false}
+{"event":"room.cold_start","clockSemantics":"runtime-dependent","durationMs":44,"integrity":"eager","phases":{"schema":{"ms":9,"rowsRead":0},"plugin":{"ms":20,"rowsRead":0},"fence":{"ms":9,"rowsRead":0},"verifies":{"ms":1,"rowsRead":0},"checksum":{"ms":0,"rowsRead":0}},"cpuMs":45,"heapBytes":42034672,"rooms":0,"sequences":0,"projectionBytes":0,"events":0}
+{"event":"room.store_initialized","initializationMs":44,"legacyColdStartMs":44,"clockSemantics":"runtime-dependent","cpuMeasured":false}
+{"event":"room.cold_start","clockSemantics":"runtime-dependent","durationMs":42,"integrity":"eager","phases":{"schema":{"ms":9,"rowsRead":0},"plugin":{"ms":20,"rowsRead":0},"fence":{"ms":10,"rowsRead":0},"verifies":{"ms":1,"rowsRead":0},"checksum":{"ms":0,"rowsRead":0}},"cpuMs":59,"heapBytes":30730336,"rooms":0,"sequences":0,"projectionBytes":0,"events":0}
+{"event":"room.store_initialized","initializationMs":43,"legacyColdStartMs":42,"clockSemantics":"runtime-dependent","cpuMeasured":false}
+{"event":"room.cold_start","clockSemantics":"runtime-dependent","durationMs":40,"integrity":"eager","phases":{"schema":{"ms":9,"rowsRead":0},"plugin":{"ms":18,"rowsRead":0},"fence":{"ms":9,"rowsRead":0},"verifies":{"ms":1,"rowsRead":0},"checksum":{"ms":0,"rowsRead":0}},"cpuMs":39,"heapBytes":36105712,"rooms":0,"sequences":0,"projectionBytes":0,"events":0}
+{"event":"room.store_initialized","initializationMs":40,"legacyColdStartMs":40,"clockSemantics":"runtime-dependent","cpuMeasured":false}
+✔ identity can request access with its secret; idempotent on requestId (79.900792ms)
+✔ idempotent retry does not double-apply: one row, one timeline event (69.328584ms)
+✔ idempotent retry returns the original request body (81.334167ms)
+✔ requestId collision across identities is rejected (80.182791ms)
+✔ requestId reused in a different room is rejected, not replayed (76.304583ms)
+✔ unknown identity or room is a bare 404 (74.089ms)
+✔ already-linked identity cannot request (73.966833ms)
+✔ pending cap per identity per room (77.29575ms)
+✔ lapsed pendings are expired on create and do not consume the cap (#3745) (86.893ms)
+✔ only live pendings count toward the cap when lapsed and live rows mix (#3745) (85.760958ms)
+✔ a create expires only the caller's rows, never another identity's (#3745) (80.967875ms)
+✔ identity can check its own request; others get 404 (62.770292ms)
+✔ owner lists pending; approve links the identity (81.367416ms)
+✔ owner can narrow permissions on approve; deny records a reason (71.351125ms)
+✔ deny flow (86.095208ms)
+✔ non-owner cannot list or decide (80.513917ms)
+✔ expired requests are not decidable (79.597042ms)
+✔ unknown permission names fail fast with a self-teaching 422 (RC-2026-09-18-022) (76.150833ms)
+✔ note:null is accepted like an omitted note (RC-2026-09-18-025) (77.73725ms)
+✔ decide deny with note:null is accepted like an omitted note (RC-2026-09-18-025) (76.383917ms)
+✔ auto-approve: subset of the configured rule is approved and linked inline (72.327083ms)
+✔ auto-approve: audit fields on the request row (66.351916ms)
+✔ auto-approve: superset of the rule stays pending with a reason (54.620834ms)
+✔ auto-approve: empty request and no rule stay pending without a note (61.104125ms)
+✔ auto-approve: config rejects elevated permissions (manage_members, decide, manage_claims, write_external, invite_member) (51.3045ms)
+✔ auto-approve: non-owner cannot read or write the rule (50.940084ms)
+✔ auto-approve: empty permission list disables the rule (58.711417ms)
+✔ auto-approve: verified-only rooms never auto-approve the unverified (53.252792ms)
+✔ auto-approve: rule suspends when its author loses membership administration (53.846334ms)
+✔ auto-approve: idempotent retry on an approved request returns the approval (52.765792ms)
+✔ auto-approve: deceptive display names never auto-admit (51.475584ms)
+✔ pending responses carry service-level poll-status guidance (48.788625ms)
+✔ pending guidance fires alongside a pendingNote when a rule is configured but does not match (46.257042ms)
+{"event":"room.cold_start","clockSemantics":"runtime-dependent","durationMs":90,"integrity":"eager","phases":{"schema":{"ms":22,"rowsRead":0},"plugin":{"ms":33,"rowsRead":0},"fence":{"ms":15,"rowsRead":0},"verifies":{"ms":13,"rowsRead":0},"checksum":{"ms":0,"rowsRead":0}},"cpuMs":84,"heapBytes":36116600,"rooms":0,"sequences":0,"projectionBytes":0,"events":0}
+{"event":"room.store_initialized","initializationMs":91,"legacyColdStartMs":90,"clockSemantics":"runtime-dependent","cpuMeasured":false}
+[boot-config] ERROR: the agent card is UNSIGNED and no explicit opt-in was recorded at build time — members fetching /.well-known/agent-card.json will see an unsigned card (marked signed:false). To fix: set ROOM_AGENT_CARD_SIGNING_KEY and re-run scripts/sign-agent-card.mjs, or pass --allow-unsigned explicitly to record the choice.
+ROOM_SECURITY_CONTACT is unset; /.well-known/security.txt returns 404
+No magic-link mailer is configured: email-verification gates are relaxed (agent-invite escape hatch); /api/health reports emailVerification: relaxed-no-mailer
+{"event":"room.cold_start","clockSemantics":"runtime-dependent","durationMs":77,"integrity":"eager","phases":{"schema":{"ms":22,"rowsRead":0},"plugin":{"ms":29,"rowsRead":0},"fence":{"ms":19,"rowsRead":0},"verifies":{"ms":2,"rowsRead":0},"checksum":{"ms":0,"rowsRead":0}},"cpuMs":86,"heapBytes":44840304,"rooms":0,"sequences":0,"projectionBytes":0,"events":0}
+{"event":"room.store_initialized","initializationMs":78,"legacyColdStartMs":77,"clockSemantics":"runtime-dependent","cpuMeasured":false}
+✔ access-requests next[] names watch-requests when none are pending (183.0965ms)
+{"event":"room.cold_start","clockSemantics":"runtime-dependent","durationMs":60,"integrity":"eager","phases":{"schema":{"ms":12,"rowsRead":0},"plugin":{"ms":26,"rowsRead":0},"fence":{"ms":17,"rowsRead":0},"verifies":{"ms":1,"rowsRead":0},"checksum":{"ms":0,"rowsRead":0}},"cpuMs":58,"heapBytes":52653640,"rooms":0,"sequences":0,"projectionBytes":0,"events":0}
+{"event":"room.store_initialized","initializationMs":61,"legacyColdStartMs":60,"clockSemantics":"runtime-dependent","cpuMeasured":false}
+✔ access-requests next[] teaches decide-request for a pending request (125.920166ms)
+{"event":"room.cold_start","clockSemantics":"runtime-dependent","durationMs":70,"integrity":"eager","phases":{"schema":{"ms":21,"rowsRead":0},"plugin":{"ms":27,"rowsRead":0},"fence":{"ms":14,"rowsRead":0},"verifies":{"ms":2,"rowsRead":0},"checksum":{"ms":0,"rowsRead":0}},"cpuMs":60,"heapBytes":54187648,"rooms":0,"sequences":0,"projectionBytes":0,"events":0}
+{"event":"room.store_initialized","initializationMs":71,"legacyColdStartMs":70,"clockSemantics":"runtime-dependent","cpuMeasured":false}
+✔ access-requests accepts the identity's own Authorization header (E2) (104.906958ms)
+{"event":"room.cold_start","clockSemantics":"runtime-dependent","durationMs":59,"integrity":"eager","phases":{"schema":{"ms":9,"rowsRead":0},"plugin":{"ms":28,"rowsRead":0},"fence":{"ms":12,"rowsRead":0},"verifies":{"ms":1,"rowsRead":0},"checksum":{"ms":0,"rowsRead":0}},"cpuMs":52,"heapBytes":53212264,"rooms":0,"sequences":0,"projectionBytes":0,"events":0}
+{"event":"room.store_initialized","initializationMs":59,"legacyColdStartMs":59,"clockSemantics":"runtime-dependent","cpuMeasured":false}
+✔ access-requests 422 names the missing field (RC-2026-09-28-3410) (105.104375ms)
+{"event":"room.cold_start","clockSemantics":"runtime-dependent","durationMs":67,"integrity":"eager","phases":{"schema":{"ms":9,"rowsRead":0},"plugin":{"ms":31,"rowsRead":0},"fence":{"ms":21,"rowsRead":0},"verifies":{"ms":2,"rowsRead":0},"checksum":{"ms":0,"rowsRead":0}},"cpuMs":58,"heapBytes":50792288,"rooms":0,"sequences":0,"projectionBytes":0,"events":0}
+{"event":"room.store_initialized","initializationMs":67,"legacyColdStartMs":67,"clockSemantics":"runtime-dependent","cpuMeasured":false}
+✔ access-requests 422 names the unexpected field (RC-2026-09-28-3410) (101.180458ms)
+{"event":"room.cold_start","clockSemantics":"runtime-dependent","durationMs":49,"integrity":"eager","phases":{"schema":{"ms":9,"rowsRead":0},"plugin":{"ms":22,"rowsRead":0},"fence":{"ms":12,"rowsRead":0},"verifies":{"ms":2,"rowsRead":0},"checksum":{"ms":0,"rowsRead":0}},"cpuMs":48,"heapBytes":50816256,"rooms":0,"sequences":0,"projectionBytes":0,"events":0}
+{"event":"room.store_initialized","initializationMs":50,"legacyColdStartMs":49,"clockSemantics":"runtime-dependent","cpuMeasured":false}
+✔ access-requests 422 names the invalid field (RC-2026-09-28-3410) (102.372709ms)
+{"event":"room.cold_start","clockSemantics":"runtime-dependent","durationMs":76,"integrity":"eager","phases":{"schema":{"ms":26,"rowsRead":0},"plugin":{"ms":35,"rowsRead":0},"fence":{"ms":10,"rowsRead":0},"verifies":{"ms":1,"rowsRead":0},"checksum":{"ms":0,"rowsRead":0}},"cpuMs":65,"heapBytes":66724776,"rooms":0,"sequences":0,"projectionBytes":0,"events":0}
+{"event":"room.store_initialized","initializationMs":76,"legacyColdStartMs":76,"clockSemantics":"runtime-dependent","cpuMeasured":false}
+✔ access-requests accepts the 4-required-field shape: note and requestId optional (RC-2026-09-28-3410) (82.131292ms)
+✔ access-requests still accepts the legacy 6- and 7-field shapes (RC-2026-09-28-3410) (114.122792ms)
+{"event":"room.cold_start","clockSemantics":"runtime-dependent","durationMs":95,"integrity":"eager","phases":{"schema":{"ms":25,"rowsRead":0},"plugin":{"ms":37,"rowsRead":0},"fence":{"ms":24,"rowsRead":0},"verifies":{"ms":4,"rowsRead":0},"checksum":{"ms":0,"rowsRead":0}},"cpuMs":84,"heapBytes":40527408,"rooms":0,"sequences":0,"projectionBytes":0,"events":0}
+{"event":"room.store_initialized","initializationMs":95,"legacyColdStartMs":95,"clockSemantics":"runtime-dependent","cpuMeasured":false}
+[boot-config] ERROR: the agent card is UNSIGNED and no explicit opt-in was recorded at build time — members fetching /.well-known/agent-card.json will see an unsigned card (marked signed:false). To fix: set ROOM_AGENT_CARD_SIGNING_KEY and re-run scripts/sign-agent-card.mjs, or pass --allow-unsigned explicitly to record the choice.
+ROOM_SECURITY_CONTACT is unset; /.well-known/security.txt returns 404
+No magic-link mailer is configured: email-verification gates are relaxed (agent-invite escape hatch); /api/health reports emailVerification: relaxed-no-mailer
+✔ Claude DCR browser consent requests approval, then connects the exact seat as nonowner human (284.048333ms)
+{"event":"room.cold_start","clockSemantics":"runtime-dependent","durationMs":85,"integrity":"eager","phases":{"schema":{"ms":22,"rowsRead":0},"plugin":{"ms":36,"rowsRead":0},"fence":{"ms":15,"rowsRead":0},"verifies":{"ms":3,"rowsRead":0},"checksum":{"ms":0,"rowsRead":0}},"cpuMs":76,"heapBytes":29956528,"rooms":0,"sequences":0,"projectionBytes":0,"events":0}
+{"event":"room.store_initialized","initializationMs":86,"legacyColdStartMs":85,"clockSemantics":"runtime-dependent","cpuMeasured":false}
+{"event":"room.cold_start","clockSemantics":"runtime-dependent","durationMs":67,"integrity":"eager","phases":{"schema":{"ms":12,"rowsRead":0},"plugin":{"ms":35,"rowsRead":0},"fence":{"ms":18,"rowsRead":0},"verifies":{"ms":2,"rowsRead":0},"checksum":{"ms":0,"rowsRead":0}},"cpuMs":65,"heapBytes":37940064,"rooms":0,"sequences":0,"projectionBytes":0,"events":0}
+{"event":"room.store_initialized","initializationMs":67,"legacyColdStartMs":67,"clockSemantics":"runtime-dependent","cpuMeasured":false}
+{"event":"room.cold_start","clockSemantics":"runtime-dependent","durationMs":80,"integrity":"eager","phases":{"schema":{"ms":25,"rowsRead":0},"plugin":{"ms":38,"rowsRead":0},"fence":{"ms":15,"rowsRead":0},"verifies":{"ms":2,"rowsRead":0},"checksum":{"ms":0,"rowsRead":0}},"cpuMs":67,"heapBytes":30187584,"rooms":0,"sequences":0,"projectionBytes":0,"events":0}
+{"event":"room.store_initialized","initializationMs":81,"legacyColdStartMs":80,"clockSemantics":"runtime-dependent","cpuMeasured":false}
+{"event":"room.cold_start","clockSemantics":"runtime-dependent","durationMs":65,"integrity":"eager","phases":{"schema":{"ms":29,"rowsRead":0},"plugin":{"ms":24,"rowsRead":0},"fence":{"ms":11,"rowsRead":0},"verifies":{"ms":1,"rowsRead":0},"checksum":{"ms":0,"rowsRead":0}},"cpuMs":57,"heapBytes":36437224,"rooms":0,"sequences":0,"projectionBytes":0,"events":0}
+{"event":"room.store_initialized","initializationMs":66,"legacyColdStartMs":65,"clockSemantics":"runtime-dependent","cpuMeasured":false}
+{"event":"room.cold_start","clockSemantics":"runtime-dependent","durationMs":63,"integrity":"eager","phases":{"schema":{"ms":12,"rowsRead":0},"plugin":{"ms":37,"rowsRead":0},"fence":{"ms":12,"rowsRead":0},"verifies":{"ms":2,"rowsRead":0},"checksum":{"ms":0,"rowsRead":0}},"cpuMs":57,"heapBytes":42825720,"rooms":0,"sequences":0,"projectionBytes":0,"events":0}
+{"event":"room.store_initialized","initializationMs":64,"legacyColdStartMs":63,"clockSemantics":"runtime-dependent","cpuMeasured":false}
+{"event":"room.cold_start","clockSemantics":"runtime-dependent","durationMs":65,"integrity":"eager","phases":{"schema":{"ms":18,"rowsRead":0},"plugin":{"ms":26,"rowsRead":0},"fence":{"ms":18,"rowsRead":0},"verifies":{"ms":2,"rowsRead":0},"checksum":{"ms":0,"rowsRead":0}},"cpuMs":74,"heapBytes":30275296,"rooms":0,"sequences":0,"projectionBytes":0,"events":0}
+{"event":"room.store_initialized","initializationMs":65,"legacyColdStartMs":65,"clockSemantics":"runtime-dependent","cpuMeasured":false}
+{"event":"room.cold_start","clockSemantics":"runtime-dependent","durationMs":71,"integrity":"eager","phases":{"schema":{"ms":14,"rowsRead":0},"plugin":{"ms":40,"rowsRead":0},"fence":{"ms":15,"rowsRead":0},"verifies":{"ms":1,"rowsRead":0},"checksum":{"ms":0,"rowsRead":0}},"cpuMs":59,"heapBytes":36805352,"rooms":0,"sequences":0,"projectionBytes":0,"events":0}
+{"event":"room.store_initialized","initializationMs":72,"legacyColdStartMs":71,"clockSemantics":"runtime-dependent","cpuMeasured":false}
+{"event":"room.cold_start","clockSemantics":"runtime-dependent","durationMs":86,"integrity":"eager","phases":{"schema":{"ms":23,"rowsRead":0},"plugin":{"ms":42,"rowsRead":0},"fence":{"ms":19,"rowsRead":0},"verifies":{"ms":2,"rowsRead":0},"checksum":{"ms":0,"rowsRead":0}},"cpuMs":64,"heapBytes":26757568,"rooms":0,"sequences":0,"projectionBytes":0,"events":0}
+{"event":"room.store_initialized","initializationMs":86,"legacyColdStartMs":86,"clockSemantics":"runtime-dependent","cpuMeasured":false}
+{"event":"room.cold_start","clockSemantics":"runtime-dependent","durationMs":92,"integrity":"eager","phases":{"schema":{"ms":23,"rowsRead":0},"plugin":{"ms":48,"rowsRead":0},"fence":{"ms":19,"rowsRead":0},"verifies":{"ms":2,"rowsRead":0},"checksum":{"ms":0,"rowsRead":0}},"cpuMs":66,"heapBytes":33397584,"rooms":0,"sequences":0,"projectionBytes":0,"events":0}
+{"event":"room.store_initialized","initializationMs":93,"legacyColdStartMs":92,"clockSemantics":"runtime-dependent","cpuMeasured":false}
+{"event":"room.cold_start","clockSemantics":"runtime-dependent","durationMs":75,"integrity":"eager","phases":{"schema":{"ms":16,"rowsRead":0},"plugin":{"ms":34,"rowsRead":0},"fence":{"ms":23,"rowsRead":0},"verifies":{"ms":2,"rowsRead":0},"checksum":{"ms":0,"rowsRead":0}},"cpuMs":71,"heapBytes":39720528,"rooms":0,"sequences":0,"projectionBytes":0,"events":0}
+{"event":"room.store_initialized","initializationMs":75,"legacyColdStartMs":75,"clockSemantics":"runtime-dependent","cpuMeasured":false}
+{"event":"room.cold_start","clockSemantics":"runtime-dependent","durationMs":75,"integrity":"eager","phases":{"schema":{"ms":21,"rowsRead":0},"plugin":{"ms":32,"rowsRead":0},"fence":{"ms":20,"rowsRead":0},"verifies":{"ms":2,"rowsRead":0},"checksum":{"ms":0,"rowsRead":0}},"cpuMs":69,"heapBytes":31331616,"rooms":0,"sequences":0,"projectionBytes":0,"events":0}
+{"event":"room.store_initialized","initializationMs":76,"legacyColdStartMs":75,"clockSemantics":"runtime-dependent","cpuMeasured":false}
+{"event":"room.cold_start","clockSemantics":"runtime-dependent","durationMs":68,"integrity":"eager","phases":{"schema":{"ms":17,"rowsRead":0},"plugin":{"ms":34,"rowsRead":0},"fence":{"ms":15,"rowsRead":0},"verifies":{"ms":2,"rowsRead":0},"checksum":{"ms":0,"rowsRead":0}},"cpuMs":64,"heapBytes":37557464,"rooms":0,"sequences":0,"projectionBytes":0,"events":0}
+{"event":"room.store_initialized","initializationMs":69,"legacyColdStartMs":68,"clockSemantics":"runtime-dependent","cpuMeasured":false}
+{"event":"room.cold_start","clockSemantics":"runtime-dependent","durationMs":71,"integrity":"eager","phases":{"schema":{"ms":18,"rowsRead":0},"plugin":{"ms":40,"rowsRead":0},"fence":{"ms":11,"rowsRead":0},"verifies":{"ms":2,"rowsRead":0},"checksum":{"ms":0,"rowsRead":0}},"cpuMs":58,"heapBytes":44527936,"rooms":0,"sequences":0,"projectionBytes":0,"events":0}
+{"event":"room.store_initialized","initializationMs":71,"legacyColdStartMs":71,"clockSemantics":"runtime-dependent","cpuMeasured":false}
+{"event":"room.cold_start","clockSemantics":"runtime-dependent","durationMs":63,"integrity":"eager","phases":{"schema":{"ms":15,"rowsRead":0},"plugin":{"ms":30,"rowsRead":0},"fence":{"ms":15,"rowsRead":0},"verifies":{"ms":2,"rowsRead":0},"checksum":{"ms":0,"rowsRead":0}},"cpuMs":59,"heapBytes":33381264,"rooms":0,"sequences":0,"projectionBytes":0,"events":0}
+{"event":"room.store_initialized","initializationMs":64,"legacyColdStartMs":63,"clockSemantics":"runtime-dependent","cpuMeasured":false}
+{"event":"room.cold_start","clockSemantics":"runtime-dependent","durationMs":66,"integrity":"eager","phases":{"schema":{"ms":20,"rowsRead":0},"plugin":{"ms":27,"rowsRead":0},"fence":{"ms":17,"rowsRead":0},"verifies":{"ms":2,"rowsRead":0},"checksum":{"ms":0,"rowsRead":0}},"cpuMs":67,"heapBytes":45773744,"rooms":0,"sequences":0,"projectionBytes":0,"events":0}
+{"event":"room.store_initialized","initializationMs":66,"legacyColdStartMs":66,"clockSemantics":"runtime-dependent","cpuMeasured":false}
+{"event":"room.cold_start","clockSemantics":"runtime-dependent","durationMs":51,"integrity":"eager","phases":{"schema":{"ms":12,"rowsRead":0},"plugin":{"ms":22,"rowsRead":0},"fence":{"ms":12,"rowsRead":0},"verifies":{"ms":2,"rowsRead":0},"checksum":{"ms":0,"rowsRead":0}},"cpuMs":47,"heapBytes":35792088,"rooms":0,"sequences":0,"projectionBytes":0,"events":0}
+{"event":"room.store_initialized","initializationMs":51,"legacyColdStartMs":51,"clockSemantics":"runtime-dependent","cpuMeasured":false}
+✔ recipient asks, owner approves the existing seat, OAuth refresh preserves identity and permissions (134.341208ms)
+✔ direct owner commands cannot fabricate recipient consent (79.121125ms)
+✔ approval refuses changed account epoch without adopting (87.60975ms)
+✔ approval refuses changed identity epoch without adopting (75.632042ms)
+✔ approval refuses changed recipient revision without adopting (72.312167ms)
+✔ approval refuses changed agent revision without adopting (73.986834ms)
+✔ approval refuses changed owner without adopting (79.306084ms)
+✔ approval refuses changed account link without adopting (99.091042ms)
+✔ unrelated account, nonadministrator and expired request cannot adopt (103.0555ms)
+✔ interrupted approval rolls back membership and decision; original request retries exactly (85.918167ms)
+✔ approved adoption requires retained recipient and decision evidence, not a name or edited request row (97.476458ms)
+✔ selected old account grant is durably fenced without denying another seat (95.254042ms)
+✔ normalized current room with agent owner adopts the same existing seat and passes independent recovery (112.763792ms)
+✔ old managed connection history stays intact while its scoped key and binding are fenced (89.050375ms)
+✔ administrator needs both decision authority and all existing agent permissions (76.817542ms)
+✔ ordinary replies to adoption requests are not mistaken for permission-decision receipts (62.302834ms)
+✔ package.json test:browser runs the disk-derived suite (3.09775ms)
+✔ an explicit node --test list is kept and any other script is refused (0.343416ms)
+✔ the formerly orphaned suites are wired into the derived list (0.848042ms)
+✔ known-failing suites stay excluded until their issues close (0.762875ms)
+✔ derivation: a new check file joins the suite unless explicitly excluded (1.504583ms)
+✔ problems name a suite missing from package.json and a stale exclusion (1.657292ms)
+✔ durations cover every derived suite (the shard balance gate reads them) (1.37875ms)
+✔ catalog exists and is linked from the skill (0.712167ms)
+✔ every server-emitted code is in the catalog (46.793125ms)
+✔ ServiceError codes constructed before throwing are extracted (#2897) (36.996958ms)
+✔ variable-passed codes resolve to live definitions and are catalogued (1.305375ms)
+✔ pinned doc statements: retry semantics match the catalog (3.342125ms)
+✔ pinned doc statements: family recovery rules are present (0.556916ms)
+✔ no JSON-RPC numeric code section is empty (0.456708ms)
+✔ every catalogued server-emittable code has an AX recovery (#3055) (6.903833ms)
+✔ registry-migrated codes: shipped envelope equals the registry resolution (E4-REG) (0.70075ms)
+✔ catalog rows for registry-migrated codes match the registry declaration (E4-REG) (23.845958ms)
+✔ flagship #3055 codes name their catalogued recovery, not 'no known recovery' (0.229166ms)
+{"event":"room.cold_start","clockSemantics":"runtime-dependent","durationMs":74,"integrity":"eager","phases":{"schema":{"ms":15,"rowsRead":0},"plugin":{"ms":35,"rowsRead":0},"fence":{"ms":14,"rowsRead":0},"verifies":{"ms":3,"rowsRead":0},"checksum":{"ms":0,"rowsRead":0}},"cpuMs":70,"heapBytes":44777368,"rooms":0,"sequences":0,"projectionBytes":0,"events":0}
+{"event":"room.store_initialized","initializationMs":74,"legacyColdStartMs":74,"clockSemantics":"runtime-dependent","cpuMeasured":false}
+[boot-config] ERROR: the agent card is UNSIGNED and no explicit opt-in was recorded at build time — members fetching /.well-known/agent-card.json will see an unsigned card (marked signed:false). To fix: set ROOM_AGENT_CARD_SIGNING_KEY and re-run scripts/sign-agent-card.mjs, or pass --allow-unsigned explicitly to record the choice.
+ROOM_SECURITY_CONTACT is unset; /.well-known/security.txt returns 404
+No magic-link mailer is configured: email-verification gates are relaxed (agent-invite escape hatch); /api/health reports emailVerification: relaxed-no-mailer
+core tools/list JSON-RPC bytes=15916 result bytes=15880
+{"event":"room.cold_start","clockSemantics":"runtime-dependent","durationMs":67,"integrity":"eager","phases":{"schema":{"ms":16,"rowsRead":0},"plugin":{"ms":29,"rowsRead":0},"fence":{"ms":17,"rowsRead":0},"verifies":{"ms":2,"rowsRead":0},"checksum":{"ms":0,"rowsRead":0}},"cpuMs":62,"heapBytes":41824128,"rooms":0,"sequences":0,"projectionBytes":0,"events":0}
+{"event":"room.store_initialized","initializationMs":67,"legacyColdStartMs":67,"clockSemantics":"runtime-dependent","cpuMeasured":false}
+✔ default tools/list is the short core profile and every listed name is legal (267.040459ms)
+{"event":"room.cold_start","clockSemantics":"runtime-dependent","durationMs":59,"integrity":"eager","phases":{"schema":{"ms":9,"rowsRead":0},"plugin":{"ms":35,"rowsRead":0},"fence":{"ms":10,"rowsRead":0},"verifies":{"ms":1,"rowsRead":0},"checksum":{"ms":0,"rowsRead":0}},"cpuMs":56,"heapBytes":58052920,"rooms":0,"sequences":0,"projectionBytes":0,"events":0}
+{"event":"room.store_initialized","initializationMs":59,"legacyColdStartMs":59,"clockSemantics":"runtime-dependent","cpuMeasured":false}
+✔ room_needs_me and GET /api/needs-me list what changed across rooms (148.683625ms)
+{"event":"room.cold_start","clockSemantics":"runtime-dependent","durationMs":59,"integrity":"eager","phases":{"schema":{"ms":10,"rowsRead":0},"plugin":{"ms":30,"rowsRead":0},"fence":{"ms":10,"rowsRead":0},"verifies":{"ms":4,"rowsRead":0},"checksum":{"ms":0,"rowsRead":0}},"cpuMs":55,"heapBytes":63081472,"rooms":0,"sequences":0,"projectionBytes":0,"events":0}
+{"event":"room.store_initialized","initializationMs":59,"legacyColdStartMs":59,"clockSemantics":"runtime-dependent","cpuMeasured":false}
+✔ a fresh default-profile client can discover, answer and verify a formal request using only advertised tools (149.07275ms)
+{"event":"room.cold_start","clockSemantics":"runtime-dependent","durationMs":64,"integrity":"eager","phases":{"schema":{"ms":16,"rowsRead":0},"plugin":{"ms":25,"rowsRead":0},"fence":{"ms":16,"rowsRead":0},"verifies":{"ms":2,"rowsRead":0},"checksum":{"ms":0,"rowsRead":0}},"cpuMs":64,"heapBytes":71889352,"rooms":0,"sequences":0,"projectionBytes":0,"events":0}
+{"event":"room.store_initialized","initializationMs":65,"legacyColdStartMs":64,"clockSemantics":"runtime-dependent","cpuMeasured":false}
+✔ tools/list focus is explicit, stateless discovery with full-catalog escape and unchanged authorization (123.173583ms)
+room diagnostic op__LoTY_ax 404 work_claim_not_found not_found /api/rooms/:roomId/work-claims/hosted-pr/claim
+{"event":"room.cold_start","clockSemantics":"runtime-dependent","durationMs":64,"integrity":"eager","phases":{"schema":{"ms":15,"rowsRead":0},"plugin":{"ms":26,"rowsRead":0},"fence":{"ms":17,"rowsRead":0},"verifies":{"ms":1,"rowsRead":0},"checksum":{"ms":0,"rowsRead":0}},"cpuMs":61,"heapBytes":59276040,"rooms":0,"sequences":0,"projectionBytes":0,"events":0}
+{"event":"room.store_initialized","initializationMs":64,"legacyColdStartMs":64,"clockSemantics":"runtime-dependent","cpuMeasured":false}
+✔ hosted claim PR tool preserves API-key scope and current-owner authorization (132.586ms)
+room diagnostic op_xjzwV5C8 404 work_claim_not_found not_found /api/rooms/:roomId/work-claims/hosted-pr/claim
+{"event":"room.cold_start","clockSemantics":"runtime-dependent","durationMs":69,"integrity":"eager","phases":{"schema":{"ms":19,"rowsRead":0},"plugin":{"ms":27,"rowsRead":0},"fence":{"ms":15,"rowsRead":0},"verifies":{"ms":2,"rowsRead":0},"checksum":{"ms":0,"rowsRead":0}},"cpuMs":68,"heapBytes":57836664,"rooms":0,"sequences":0,"projectionBytes":0,"events":0}
+{"event":"room.store_initialized","initializationMs":69,"legacyColdStartMs":69,"clockSemantics":"runtime-dependent","cpuMeasured":false}
+✔ hosted claim PR calls honor target-room tier, write profile and membership rechecked at mutation time (116.837875ms)
+{"event":"room.cold_start","clockSemantics":"runtime-dependent","durationMs":60,"integrity":"eager","phases":{"schema":{"ms":11,"rowsRead":0},"plugin":{"ms":32,"rowsRead":0},"fence":{"ms":12,"rowsRead":0},"verifies":{"ms":1,"rowsRead":0},"checksum":{"ms":0,"rowsRead":0}},"cpuMs":57,"heapBytes":66853208,"rooms":0,"sequences":0,"projectionBytes":0,"events":0}
+{"event":"room.store_initialized","initializationMs":61,"legacyColdStartMs":60,"clockSemantics":"runtime-dependent","cpuMeasured":false}
+✔ a room-pinned API key defaults roomId and scopes room_needs_me (125.66375ms)
+{"event":"room.cold_start","clockSemantics":"runtime-dependent","durationMs":46,"integrity":"eager","phases":{"schema":{"ms":10,"rowsRead":0},"plugin":{"ms":22,"rowsRead":0},"fence":{"ms":10,"rowsRead":0},"verifies":{"ms":1,"rowsRead":0},"checksum":{"ms":0,"rowsRead":0}},"cpuMs":54,"heapBytes":69189224,"rooms":0,"sequences":0,"projectionBytes":0,"events":0}
+{"event":"room.store_initialized","initializationMs":47,"legacyColdStartMs":46,"clockSemantics":"runtime-dependent","cpuMeasured":false}
+✔ hosted work writes derive requestId and use the current revision when omitted (98.755291ms)
+{"event":"room.cold_start","clockSemantics":"runtime-dependent","durationMs":49,"integrity":"eager","phases":{"schema":{"ms":10,"rowsRead":0},"plugin":{"ms":22,"rowsRead":0},"fence":{"ms":13,"rowsRead":0},"verifies":{"ms":1,"rowsRead":0},"checksum":{"ms":0,"rowsRead":0}},"cpuMs":49,"heapBytes":71104208,"rooms":0,"sequences":0,"projectionBytes":0,"events":0}
+{"event":"room.store_initialized","initializationMs":50,"legacyColdStartMs":49,"clockSemantics":"runtime-dependent","cpuMeasured":false}
+✔ every lean tool is callable with required business fields after a fresh join (155.887583ms)
+✔ native needs-me follows empty continuation pages across rooms without private text or lost work (274.555458ms)
+✔ every 'Same … as' route claim resolves to a documented OpenAPI operation (5.927542ms)
+✔ known drift entries still describe reality (0.292958ms)
+✔ MCP tool request shapes agree with their OpenAPI operations (8.082667ms)
+✔ registry surface sanity: the compared tools are the documented MCP catalog (0.0635ms)
+{"event":"room.cold_start","clockSemantics":"runtime-dependent","durationMs":90,"integrity":"eager","phases":{"schema":{"ms":22,"rowsRead":0},"plugin":{"ms":36,"rowsRead":0},"fence":{"ms":22,"rowsRead":0},"verifies":{"ms":6,"rowsRead":0},"checksum":{"ms":0,"rowsRead":0}},"cpuMs":85,"heapBytes":36163032,"rooms":0,"sequences":0,"projectionBytes":0,"events":0}
+{"event":"room.store_initialized","initializationMs":92,"legacyColdStartMs":90,"clockSemantics":"runtime-dependent","cpuMeasured":false}
+[boot-config] ERROR: the agent card is UNSIGNED and no explicit opt-in was recorded at build time — members fetching /.well-known/agent-card.json will see an unsigned card (marked signed:false). To fix: set ROOM_AGENT_CARD_SIGNING_KEY and re-run scripts/sign-agent-card.mjs, or pass --allow-unsigned explicitly to record the choice.
+ROOM_SECURITY_CONTACT is unset; /.well-known/security.txt returns 404
+No magic-link mailer is configured: email-verification gates are relaxed (agent-invite escape hatch); /api/health reports emailVerification: relaxed-no-mailer
+room diagnostic op__e5ohsVA 409 already_decided conflict /api/rooms/:roomId/access-requests/:item/decide
+room diagnostic op_UOoJik01 409 nothing_to_request conflict /api/rooms/:roomId/members/me/permission-requests
+{"event":"room.cold_start","clockSemantics":"runtime-dependent","durationMs":71,"integrity":"eager","phases":{"schema":{"ms":17,"rowsRead":0},"plugin":{"ms":30,"rowsRead":0},"fence":{"ms":21,"rowsRead":0},"verifies":{"ms":2,"rowsRead":0},"checksum":{"ms":0,"rowsRead":0}},"cpuMs":66,"heapBytes":52701408,"rooms":0,"sequences":0,"projectionBytes":0,"events":0}
+{"event":"room.store_initialized","initializationMs":71,"legacyColdStartMs":71,"clockSemantics":"runtime-dependent","cpuMeasured":false}
+✔ agent requests permissions and receives an audited approval (210.852167ms)
+room diagnostic op_KSufwJcN 409 already_decided conflict /api/rooms/:roomId/access-requests/:item/decide
+room diagnostic op_vxOq7hKA 409 nothing_to_request conflict /api/rooms/:roomId/members/me/permission-requests
+{"event":"room.cold_start","clockSemantics":"runtime-dependent","durationMs":73,"integrity":"eager","phases":{"schema":{"ms":20,"rowsRead":0},"plugin":{"ms":34,"rowsRead":0},"fence":{"ms":14,"rowsRead":0},"verifies":{"ms":4,"rowsRead":0},"checksum":{"ms":0,"rowsRead":0}},"cpuMs":68,"heapBytes":52467616,"rooms":0,"sequences":0,"projectionBytes":0,"events":0}
+{"event":"room.store_initialized","initializationMs":73,"legacyColdStartMs":73,"clockSemantics":"runtime-dependent","cpuMeasured":false}
+✔ human requests permissions and receives an audited approval (131.218417ms)
+room diagnostic op_buH1fmu3 422 invalid_request input /api/rooms/:roomId/access-requests/partial/decide
+{"event":"room.cold_start","clockSemantics":"runtime-dependent","durationMs":67,"integrity":"eager","phases":{"schema":{"ms":13,"rowsRead":0},"plugin":{"ms":37,"rowsRead":0},"fence":{"ms":16,"rowsRead":0},"verifies":{"ms":1,"rowsRead":0},"checksum":{"ms":0,"rowsRead":0}},"cpuMs":65,"heapBytes":47996248,"rooms":0,"sequences":0,"projectionBytes":0,"events":0}
+{"event":"room.store_initialized","initializationMs":68,"legacyColdStartMs":67,"clockSemantics":"runtime-dependent","cpuMeasured":false}
+✔ partial approval and decline preserve current permissions (104.639083ms)
+room diagnostic op_UZtFviJx 403 access_denied access /api/rooms/:roomId/access-requests/:item/decide
+{"event":"room.cold_start","clockSemantics":"runtime-dependent","durationMs":73,"integrity":"eager","phases":{"schema":{"ms":24,"rowsRead":0},"plugin":{"ms":35,"rowsRead":0},"fence":{"ms":12,"rowsRead":0},"verifies":{"ms":1,"rowsRead":0},"checksum":{"ms":0,"rowsRead":0}},"cpuMs":63,"heapBytes":55266392,"rooms":0,"sequences":0,"projectionBytes":0,"events":0}
+{"event":"room.store_initialized","initializationMs":73,"legacyColdStartMs":73,"clockSemantics":"runtime-dependent","cpuMeasured":false}
+✔ an administrator receives the request but cannot grant a permission they lack (81.947667ms)
+room diagnostic op_naWgfRZU 429 rate_limited rate_limited /api/rooms/:roomId/members/me/permission-requests
+{"event":"room.cold_start","clockSemantics":"runtime-dependent","durationMs":70,"integrity":"eager","phases":{"schema":{"ms":16,"rowsRead":0},"plugin":{"ms":32,"rowsRead":0},"fence":{"ms":20,"rowsRead":0},"verifies":{"ms":2,"rowsRead":0},"checksum":{"ms":0,"rowsRead":0}},"cpuMs":69,"heapBytes":63691248,"rooms":0,"sequences":0,"projectionBytes":0,"events":0}
+{"event":"room.store_initialized","initializationMs":70,"legacyColdStartMs":70,"clockSemantics":"runtime-dependent","cpuMeasured":false}
+✔ member requests retain their rate limit, and retries do not spend it (95.380834ms)
+{"event":"room.cold_start","clockSemantics":"runtime-dependent","durationMs":67,"integrity":"eager","phases":{"schema":{"ms":17,"rowsRead":0},"plugin":{"ms":33,"rowsRead":0},"fence":{"ms":14,"rowsRead":0},"verifies":{"ms":2,"rowsRead":0},"checksum":{"ms":0,"rowsRead":0}},"cpuMs":65,"heapBytes":70656344,"rooms":0,"sequences":0,"projectionBytes":0,"events":0}
+{"event":"room.store_initialized","initializationMs":68,"legacyColdStartMs":67,"clockSemantics":"runtime-dependent","cpuMeasured":false}
+✔ ordinary admission with identity proof still returns a join request (79.702167ms)
+{"event":"room.cold_start","clockSemantics":"runtime-dependent","durationMs":67,"integrity":"eager","phases":{"schema":{"ms":16,"rowsRead":0},"plugin":{"ms":32,"rowsRead":0},"fence":{"ms":17,"rowsRead":0},"verifies":{"ms":2,"rowsRead":0},"checksum":{"ms":0,"rowsRead":0}},"cpuMs":66,"heapBytes":53095600,"rooms":0,"sequences":0,"projectionBytes":0,"events":0}
+{"event":"room.store_initialized","initializationMs":68,"legacyColdStartMs":67,"clockSemantics":"runtime-dependent","cpuMeasured":false}
+✔ decision notifications use current message text and respect deletion (89.589042ms)
+{"event":"room.cold_start","clockSemantics":"runtime-dependent","durationMs":58,"integrity":"eager","phases":{"schema":{"ms":13,"rowsRead":0},"plugin":{"ms":31,"rowsRead":0},"fence":{"ms":13,"rowsRead":0},"verifies":{"ms":1,"rowsRead":0},"checksum":{"ms":0,"rowsRead":0}},"cpuMs":62,"heapBytes":60435896,"rooms":0,"sequences":0,"projectionBytes":0,"events":0}
+{"event":"room.store_initialized","initializationMs":59,"legacyColdStartMs":58,"clockSemantics":"runtime-dependent","cpuMeasured":false}
+✔ private decision notes stay in the request record, not public outcome receipts (81.354042ms)
+{"event":"room.cold_start","clockSemantics":"runtime-dependent","durationMs":62,"integrity":"eager","phases":{"schema":{"ms":11,"rowsRead":0},"plugin":{"ms":34,"rowsRead":0},"fence":{"ms":15,"rowsRead":0},"verifies":{"ms":2,"rowsRead":0},"checksum":{"ms":0,"rowsRead":0}},"cpuMs":65,"heapBytes":67379104,"rooms":0,"sequences":0,"projectionBytes":0,"events":0}
+{"event":"room.store_initialized","initializationMs":63,"legacyColdStartMs":62,"clockSemantics":"runtime-dependent","cpuMeasured":false}
+✔ RT handler rows preserve the GET queue and share quota across both POST aliases (73.357333ms)
+room diagnostic op_LnScWqiC 409 request_conflict conflict /api/rooms/:roomId/members/me/permission-requests
+room diagnostic op__YDL95d5 409 request_conflict conflict /api/rooms/:roomId/members/me/permission-requests
+{"event":"room.cold_start","clockSemantics":"runtime-dependent","durationMs":49,"integrity":"eager","phases":{"schema":{"ms":13,"rowsRead":0},"plugin":{"ms":22,"rowsRead":0},"fence":{"ms":13,"rowsRead":0},"verifies":{"ms":1,"rowsRead":0},"checksum":{"ms":0,"rowsRead":0}},"cpuMs":49,"heapBytes":74369368,"rooms":0,"sequences":0,"projectionBytes":0,"events":0}
+{"event":"room.store_initialized","initializationMs":49,"legacyColdStartMs":49,"clockSemantics":"runtime-dependent","cpuMeasured":false}
+✔ replaying a requestId with different permissions or note conflicts instead of returning the old request (78.03675ms)
+room diagnostic op_Ey7ay0uU 403 access_denied access /api/rooms/:roomId/access-requests/:item/decide
+{"event":"room.cold_start","clockSemantics":"runtime-dependent","durationMs":47,"integrity":"eager","phases":{"schema":{"ms":16,"rowsRead":0},"plugin":{"ms":19,"rowsRead":0},"fence":{"ms":11,"rowsRead":0},"verifies":{"ms":1,"rowsRead":0},"checksum":{"ms":0,"rowsRead":0}},"cpuMs":46,"heapBytes":55375136,"rooms":0,"sequences":0,"projectionBytes":0,"events":0}
+{"event":"room.store_initialized","initializationMs":47,"legacyColdStartMs":47,"clockSemantics":"runtime-dependent","cpuMeasured":false}
+✔ a member without membership administration cannot decide a permission upgrade (HTTP) (59.347833ms)
+✔ lapsed member pendings are expired on create and do not consume the cap (#3745) (54.072875ms)
+✔ failed refresh unhides the section so the error and Refresh button are visible (1.642708ms)
+✔ failed refresh schedules an automatic retry (0.594958ms)
+✔ manual refresh supersedes a scheduled retry (no double fetch) (0.273042ms)
+✔ explicit null provider fails closed despite a stale privileged session member (1.206875ms)
+✔ explicit undefined provider fails closed despite a stale privileged session member (0.215334ms)
+✔ explicit null state fails closed despite a stale privileged session member (0.225833ms)
+✔ explicit undefined state fails closed despite a stale privileged session member (0.268917ms)
+✔ explicit missing current member fails closed despite a stale privileged session member (0.3045ms)
+✔ explicit mismatched room fails closed despite a stale privileged session member (0.220708ms)
+✔ current active admin renders the queue without calling the owner-only reader (0.968291ms)
+✔ revoked authority clears the card and suppresses late rollup success (0.394167ms)
+✔ revoked authority clears the card and suppresses late rollup failure (0.313584ms)
+✔ revoked authority clears the card and suppresses late queue success (0.274667ms)
+✔ revoked authority clears the card and suppresses late queue failure (0.238625ms)
+✔ inactive authority clears the card and suppresses late rollup success (0.198666ms)
+✔ inactive authority clears the card and suppresses late rollup failure (0.781625ms)
+✔ inactive authority clears the card and suppresses late queue success (0.141625ms)
+✔ inactive authority clears the card and suppresses late queue failure (0.178875ms)
+✔ state removed authority clears the card and suppresses late rollup success (0.196916ms)
+✔ state removed authority clears the card and suppresses late rollup failure (0.135208ms)
+✔ state removed authority clears the card and suppresses late queue success (0.204042ms)
+✔ state removed authority clears the card and suppresses late queue failure (0.190958ms)
+✔ sync immediately clears a populated card while a revoked reviewer waits for a queue read (0.251958ms)
+✔ room sync preserves a manually selected page until the reader follows its stale continuation (0.334125ms)
+✔ ownership transfer clears a selected owner page while preserving the active admin queue (0.484ms)
+✔ ownership transfer suppresses an in-flight owner rollup response even while admin authority remains (0.331667ms)
+✔ ownership transfer suppresses an in-flight owner queue response even while admin authority remains (1.848833ms)
+✔ attention starts independent reads together and waits for both (rollup first) (0.417166ms)
+✔ attention starts independent reads together and waits for both (queue first) (0.169875ms)
+✔ concurrent attention handles both rejected reads (rollup fails first) (4.642209ms)
+✔ concurrent attention handles both rejected reads (queue fails first) (1.064042ms)
+✔ updates during an attention read coalesce into one trailing read (1.385959ms)
+✔ coalesced attention changes retain bounded retry after a failed read (0.272166ms)
+✔ revocation discards a queued attention refresh (0.296084ms)
+{"event":"room.cold_start","clockSemantics":"runtime-dependent","durationMs":87,"integrity":"eager","phases":{"schema":{"ms":19,"rowsRead":0},"plugin":{"ms":39,"rowsRead":0},"fence":{"ms":21,"rowsRead":0},"verifies":{"ms":4,"rowsRead":0},"checksum":{"ms":0,"rowsRead":0}},"cpuMs":83,"heapBytes":45551560,"rooms":0,"sequences":0,"projectionBytes":0,"events":0}
+{"event":"room.store_initialized","initializationMs":89,"legacyColdStartMs":87,"clockSemantics":"runtime-dependent","cpuMeasured":false}
+[boot-config] ERROR: the agent card is UNSIGNED and no explicit opt-in was recorded at build time — members fetching /.well-known/agent-card.json will see an unsigned card (marked signed:false). To fix: set ROOM_AGENT_CARD_SIGNING_KEY and re-run scripts/sign-agent-card.mjs, or pass --allow-unsigned explicitly to record the choice.
+ROOM_SECURITY_CONTACT is unset; /.well-known/security.txt returns 404
+No magic-link mailer is configured: email-verification gates are relaxed (agent-invite escape hatch); /api/health reports emailVerification: relaxed-no-mailer
+✔ agent administrator reads only the rollup their identity allows (2.507209ms)
+✔ agent owner reads only the rollup their identity allows (0.588834ms)
+✔ human administrator reads only the rollup their identity allows (0.131ms)
+✔ human owner reads only the rollup their identity allows (0.731333ms)
+✔ losing human-owner eligibility clears cached rollup before the authorized queue settles (0.620958ms)
+✔ revoked administration clears the card without any request or session bootstrap (0.397958ms)
+✔ late previous-owner response cannot replace a switched agent queue (0.337875ms)
+room diagnostic op_qJiCaZyc 403 owner_required access /api/rooms/:roomId/needs-attention
+✔ real agent browser session keeps owner-only 403 while the card reads its permitted queue only (165.835125ms)
+✔ existing-agent sponsorship card preserves the typed approve and deny contract (legacy) (0.76ms)
+✔ existing-agent sponsorship card preserves the typed approve and deny contract (native) (0.660958ms)
+{"event":"room.cold_start","clockSemantics":"runtime-dependent","durationMs":74,"integrity":"eager","phases":{"schema":{"ms":17,"rowsRead":0},"plugin":{"ms":29,"rowsRead":0},"fence":{"ms":19,"rowsRead":0},"verifies":{"ms":2,"rowsRead":0},"checksum":{"ms":0,"rowsRead":0}},"cpuMs":75,"heapBytes":30303744,"rooms":0,"sequences":0,"projectionBytes":0,"events":0}
+{"event":"room.store_initialized","initializationMs":75,"legacyColdStartMs":74,"clockSemantics":"runtime-dependent","cpuMeasured":false}
+{"event":"room.cold_start","clockSemantics":"runtime-dependent","durationMs":16,"integrity":"eager","phases":{"schema":{"ms":3,"rowsRead":0},"plugin":{"ms":5,"rowsRead":0},"fence":{"ms":5,"rowsRead":0},"verifies":{"ms":1,"rowsRead":0},"checksum":{"ms":0,"rowsRead":0}},"cpuMs":18,"heapBytes":39295656,"rooms":1,"sequences":6,"projectionBytes":130,"events":6}
+{"event":"room.store_initialized","initializationMs":16,"legacyColdStartMs":16,"clockSemantics":"runtime-dependent","cpuMeasured":false}
+✔ normalized access requests retain pending review, exact retry, standing-rule scope and cold admission (151.425125ms)
+{"event":"room.cold_start","clockSemantics":"runtime-dependent","durationMs":77,"integrity":"eager","phases":{"schema":{"ms":19,"rowsRead":0},"plugin":{"ms":31,"rowsRead":0},"fence":{"ms":16,"rowsRead":0},"verifies":{"ms":3,"rowsRead":0},"checksum":{"ms":0,"rowsRead":0}},"cpuMs":78,"heapBytes":43492944,"rooms":0,"sequences":0,"projectionBytes":0,"events":0}
+{"event":"room.store_initialized","initializationMs":78,"legacyColdStartMs":77,"clockSemantics":"runtime-dependent","cpuMeasured":false}
+[boot-config] ERROR: the agent card is UNSIGNED and no explicit opt-in was recorded at build time — members fetching /.well-known/agent-card.json will see an unsigned card (marked signed:false). To fix: set ROOM_AGENT_CARD_SIGNING_KEY and re-run scripts/sign-agent-card.mjs, or pass --allow-unsigned explicitly to record the choice.
+ROOM_SECURITY_CONTACT is unset; /.well-known/security.txt returns 404
+No magic-link mailer is configured: email-verification gates are relaxed (agent-invite escape hatch); /api/health reports emailVerification: relaxed-no-mailer
+{"event":"room.cold_start","clockSemantics":"runtime-dependent","durationMs":68,"integrity":"eager","phases":{"schema":{"ms":19,"rowsRead":0},"plugin":{"ms":28,"rowsRead":0},"fence":{"ms":15,"rowsRead":0},"verifies":{"ms":1,"rowsRead":0},"checksum":{"ms":0,"rowsRead":0}},"cpuMs":88,"heapBytes":42654168,"rooms":0,"sequences":0,"projectionBytes":0,"events":0}
+{"event":"room.store_initialized","initializationMs":69,"legacyColdStartMs":68,"clockSemantics":"runtime-dependent","cpuMeasured":false}
+✔ badge count equals the overview Decisions total for the same account fixture (150.017916ms)
+✔ badge count is the Decisions total, not the capped items length (0.271125ms)
+{"event":"room.cold_start","clockSemantics":"runtime-dependent","durationMs":73,"integrity":"eager","phases":{"schema":{"ms":16,"rowsRead":0},"plugin":{"ms":30,"rowsRead":0},"fence":{"ms":20,"rowsRead":0},"verifies":{"ms":2,"rowsRead":0},"checksum":{"ms":0,"rowsRead":0}},"cpuMs":70,"heapBytes":50735504,"rooms":0,"sequences":0,"projectionBytes":0,"events":0}
+{"event":"room.store_initialized","initializationMs":73,"legacyColdStartMs":73,"clockSemantics":"runtime-dependent","cpuMeasured":false}
+✔ per-room lines deep-link to the right rooms with their counts (96.354709ms)
+✔ per-room lines escape room names (0.1555ms)
+✔ zero-state: an account with nothing waiting renders no badge and no lines (88.737208ms)
+✔ cockpit render paints the badge and per-room lines from the overview document (0.649917ms)
+✔ a zero ledger stays off a quiet account home and does not claim Needs you (0.326042ms)
+✔ reported spend opens the ledger without the Needs you heading (0.287167ms)
+✔ cockpit render at zero hides the badge and renders no per-room lines (0.130125ms)
+{"event":"room.cold_start","clockSemantics":"runtime-dependent","durationMs":80,"integrity":"eager","phases":{"schema":{"ms":24,"rowsRead":0},"plugin":{"ms":35,"rowsRead":0},"fence":{"ms":12,"rowsRead":0},"verifies":{"ms":3,"rowsRead":0},"checksum":{"ms":0,"rowsRead":0}},"cpuMs":74,"heapBytes":29253496,"rooms":0,"sequences":0,"projectionBytes":0,"events":0}
+{"event":"room.store_initialized","initializationMs":80,"legacyColdStartMs":80,"clockSemantics":"runtime-dependent","cpuMeasured":false}
+{"event":"room.cold_start","clockSemantics":"runtime-dependent","durationMs":72,"integrity":"eager","phases":{"schema":{"ms":10,"rowsRead":0},"plugin":{"ms":35,"rowsRead":0},"fence":{"ms":20,"rowsRead":0},"verifies":{"ms":2,"rowsRead":0},"checksum":{"ms":0,"rowsRead":0}},"cpuMs":70,"heapBytes":35792128,"rooms":0,"sequences":0,"projectionBytes":0,"events":0}
+{"event":"room.store_initialized","initializationMs":72,"legacyColdStartMs":72,"clockSemantics":"runtime-dependent","cpuMeasured":false}
+{"event":"room.cold_start","clockSemantics":"runtime-dependent","durationMs":74,"integrity":"eager","phases":{"schema":{"ms":18,"rowsRead":0},"plugin":{"ms":28,"rowsRead":0},"fence":{"ms":23,"rowsRead":0},"verifies":{"ms":1,"rowsRead":0},"checksum":{"ms":0,"rowsRead":0}},"cpuMs":85,"heapBytes":24356656,"rooms":0,"sequences":0,"projectionBytes":0,"events":0}
+{"event":"room.store_initialized","initializationMs":75,"legacyColdStartMs":74,"clockSemantics":"runtime-dependent","cpuMeasured":false}
+{"event":"room.cold_start","clockSemantics":"runtime-dependent","durationMs":64,"integrity":"eager","phases":{"schema":{"ms":17,"rowsRead":0},"plugin":{"ms":26,"rowsRead":0},"fence":{"ms":15,"rowsRead":0},"verifies":{"ms":3,"rowsRead":0},"checksum":{"ms":0,"rowsRead":0}},"cpuMs":63,"heapBytes":30477504,"rooms":0,"sequences":0,"projectionBytes":0,"events":0}
+{"event":"room.store_initialized","initializationMs":65,"legacyColdStartMs":64,"clockSemantics":"runtime-dependent","cpuMeasured":false}
+{"event":"room.cold_start","clockSemantics":"runtime-dependent","durationMs":62,"integrity":"eager","phases":{"schema":{"ms":12,"rowsRead":0},"plugin":{"ms":30,"rowsRead":0},"fence":{"ms":17,"rowsRead":0},"verifies":{"ms":1,"rowsRead":0},"checksum":{"ms":0,"rowsRead":0}},"cpuMs":62,"heapBytes":36410192,"rooms":0,"sequences":0,"projectionBytes":0,"events":0}
+{"event":"room.store_initialized","initializationMs":63,"legacyColdStartMs":62,"clockSemantics":"runtime-dependent","cpuMeasured":false}
+{"event":"room.cold_start","clockSemantics":"runtime-dependent","durationMs":63,"integrity":"eager","phases":{"schema":{"ms":17,"rowsRead":0},"plugin":{"ms":27,"rowsRead":0},"fence":{"ms":14,"rowsRead":0},"verifies":{"ms":2,"rowsRead":0},"checksum":{"ms":0,"rowsRead":0}},"cpuMs":63,"heapBytes":26069432,"rooms":0,"sequences":0,"projectionBytes":0,"events":0}
+{"event":"room.store_initialized","initializationMs":64,"legacyColdStartMs":63,"clockSemantics":"runtime-dependent","cpuMeasured":false}
+✔ a delivered claim awaiting the owner's review surfaces as board_review (97.467708ms)
+✔ claims not yet delivered do not surface (82.347583ms)
+✔ under a reviewed policy the owner's own delivered claim is not their review (83.875792ms)
+✔ a self-attested delivered claim owned by the owner awaits their verification (74.872ms)
+✔ a claim naming another reviewer does not surface to the owner; naming the owner does (71.74ms)
+✔ once the owner approves, the same item asks for their verification, then clears at done (73.498125ms)
+{"event":"room.cold_start","clockSemantics":"runtime-dependent","durationMs":78,"integrity":"eager","phases":{"schema":{"ms":20,"rowsRead":0},"plugin":{"ms":33,"rowsRead":0},"fence":{"ms":16,"rowsRead":0},"verifies":{"ms":3,"rowsRead":0},"checksum":{"ms":0,"rowsRead":0}},"cpuMs":79,"heapBytes":29286360,"rooms":0,"sequences":0,"projectionBytes":0,"events":0}
+{"event":"room.store_initialized","initializationMs":79,"legacyColdStartMs":78,"clockSemantics":"runtime-dependent","cpuMeasured":false}
+{"event":"room.cold_start","clockSemantics":"runtime-dependent","durationMs":62,"integrity":"eager","phases":{"schema":{"ms":10,"rowsRead":0},"plugin":{"ms":30,"rowsRead":0},"fence":{"ms":16,"rowsRead":0},"verifies":{"ms":3,"rowsRead":0},"checksum":{"ms":0,"rowsRead":0}},"cpuMs":60,"heapBytes":35974960,"rooms":0,"sequences":0,"projectionBytes":0,"events":0}
+{"event":"room.store_initialized","initializationMs":62,"legacyColdStartMs":62,"clockSemantics":"runtime-dependent","cpuMeasured":false}
+{"event":"room.cold_start","clockSemantics":"runtime-dependent","durationMs":58,"integrity":"eager","phases":{"schema":{"ms":11,"rowsRead":0},"plugin":{"ms":28,"rowsRead":0},"fence":{"ms":14,"rowsRead":0},"verifies":{"ms":1,"rowsRead":0},"checksum":{"ms":0,"rowsRead":0}},"cpuMs":74,"heapBytes":29690328,"rooms":0,"sequences":0,"projectionBytes":0,"events":0}
+{"event":"room.store_initialized","initializationMs":58,"legacyColdStartMs":58,"clockSemantics":"runtime-dependent","cpuMeasured":false}
+{"event":"room.cold_start","clockSemantics":"runtime-dependent","durationMs":67,"integrity":"eager","phases":{"schema":{"ms":18,"rowsRead":0},"plugin":{"ms":25,"rowsRead":0},"fence":{"ms":16,"rowsRead":0},"verifies":{"ms":2,"rowsRead":0},"checksum":{"ms":0,"rowsRead":0}},"cpuMs":66,"heapBytes":33004688,"rooms":0,"sequences":0,"projectionBytes":0,"events":0}
+{"event":"room.store_initialized","initializationMs":67,"legacyColdStartMs":67,"clockSemantics":"runtime-dependent","cpuMeasured":false}
+{"event":"room.cold_start","clockSemantics":"runtime-dependent","durationMs":59,"integrity":"eager","phases":{"schema":{"ms":14,"rowsRead":0},"plugin":{"ms":29,"rowsRead":0},"fence":{"ms":12,"rowsRead":0},"verifies":{"ms":1,"rowsRead":0},"checksum":{"ms":0,"rowsRead":0}},"cpuMs":58,"heapBytes":44697016,"rooms":0,"sequences":0,"projectionBytes":0,"events":0}
+{"event":"room.store_initialized","initializationMs":59,"legacyColdStartMs":59,"clockSemantics":"runtime-dependent","cpuMeasured":false}
+{"event":"room.cold_start","clockSemantics":"runtime-dependent","durationMs":51,"integrity":"eager","phases":{"schema":{"ms":12,"rowsRead":0},"plugin":{"ms":22,"rowsRead":0},"fence":{"ms":11,"rowsRead":0},"verifies":{"ms":1,"rowsRead":0},"checksum":{"ms":0,"rowsRead":0}},"cpuMs":51,"heapBytes":35589176,"rooms":0,"sequences":0,"projectionBytes":0,"events":0}
+{"event":"room.store_initialized","initializationMs":52,"legacyColdStartMs":51,"clockSemantics":"runtime-dependent","cpuMeasured":false}
+{"event":"room.cold_start","clockSemantics":"runtime-dependent","durationMs":44,"integrity":"eager","phases":{"schema":{"ms":10,"rowsRead":0},"plugin":{"ms":19,"rowsRead":0},"fence":{"ms":10,"rowsRead":0},"verifies":{"ms":1,"rowsRead":0},"checksum":{"ms":0,"rowsRead":0}},"cpuMs":44,"heapBytes":43271440,"rooms":0,"sequences":0,"projectionBytes":0,"events":0}
+{"event":"room.store_initialized","initializationMs":44,"legacyColdStartMs":44,"clockSemantics":"runtime-dependent","cpuMeasured":false}
+{"event":"room.cold_start","clockSemantics":"runtime-dependent","durationMs":55,"integrity":"eager","phases":{"schema":{"ms":15,"rowsRead":0},"plugin":{"ms":25,"rowsRead":0},"fence":{"ms":11,"rowsRead":0},"verifies":{"ms":1,"rowsRead":0},"checksum":{"ms":0,"rowsRead":0}},"cpuMs":59,"heapBytes":36200368,"rooms":0,"sequences":0,"projectionBytes":0,"events":0}
+{"event":"room.store_initialized","initializationMs":55,"legacyColdStartMs":55,"clockSemantics":"runtime-dependent","cpuMeasured":false}
+{"event":"room.cold_start","clockSemantics":"runtime-dependent","durationMs":45,"integrity":"eager","phases":{"schema":{"ms":10,"rowsRead":0},"plugin":{"ms":21,"rowsRead":0},"fence":{"ms":10,"rowsRead":0},"verifies":{"ms":1,"rowsRead":0},"checksum":{"ms":0,"rowsRead":0}},"cpuMs":47,"heapBytes":43374032,"rooms":0,"sequences":0,"projectionBytes":0,"events":0}
+{"event":"room.store_initialized","initializationMs":45,"legacyColdStartMs":45,"clockSemantics":"runtime-dependent","cpuMeasured":false}
+{"event":"room.cold_start","clockSemantics":"runtime-dependent","durationMs":43,"integrity":"eager","phases":{"schema":{"ms":9,"rowsRead":0},"plugin":{"ms":19,"rowsRead":0},"fence":{"ms":10,"rowsRead":0},"verifies":{"ms":2,"rowsRead":0},"checksum":{"ms":0,"rowsRead":0}},"cpuMs":45,"heapBytes":35093320,"rooms":0,"sequences":0,"projectionBytes":0,"events":0}
+{"event":"room.store_initialized","initializationMs":44,"legacyColdStartMs":43,"clockSemantics":"runtime-dependent","cpuMeasured":false}
+{"event":"room.cold_start","clockSemantics":"runtime-dependent","durationMs":42,"integrity":"eager","phases":{"schema":{"ms":10,"rowsRead":0},"plugin":{"ms":19,"rowsRead":0},"fence":{"ms":9,"rowsRead":0},"verifies":{"ms":1,"rowsRead":0},"checksum":{"ms":0,"rowsRead":0}},"cpuMs":42,"heapBytes":41671360,"rooms":0,"sequences":0,"projectionBytes":0,"events":0}
+{"event":"room.store_initialized","initializationMs":42,"legacyColdStartMs":42,"clockSemantics":"runtime-dependent","cpuMeasured":false}
+✔ empty room: zero items and owner-only gate (100.62525ms)
+✔ pending access request carries inline approve/deny actions (76.200417ms)
+✔ deny action refuses through the same contract (75.477958ms)
+✔ work awaiting verification and owner decision surfaces with review links (102.781583ms)
+✔ spend headroom below 20% and over-allowance surface (77.826792ms)
+✔ claim lease expiring within 24h surfaces; distant leases stay quiet (67.422459ms)
+✔ an action stays visible when informational claim leases fill the cap (159.92625ms)
+✔ report carries the viewer echo the browser client requires (no session kill) (66.773792ms)
+✔ attention pages reach every request and reset stale continuations (110.726833ms)
+✔ expired claim lease is an action; non-owner with manage_members is refused (56.562583ms)
+✔ exactly at the cap keeps insertion order; past the cap actions move first (141.909ms)
+ℹ tests 210
+ℹ suites 0
+ℹ pass 210
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 4056.130958

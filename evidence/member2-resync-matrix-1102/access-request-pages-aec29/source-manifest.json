@@ -1,0 +1,107 @@
+[
+  {
+    "path": "cloudflare/access-request-pages.check.mjs",
+    "bytes": 3457,
+    "sha256": "2d904809a9a81f71d176c66bb0c905f39167431e335451e5e09afcf2137f0793"
+  },
+  {
+    "path": "cloudflare/access-request-pages.test-fixture.mjs",
+    "bytes": 2551,
+    "sha256": "57acb249d1740472abf319d2a310a84b119b712e2b6cd8f04c037dfdf8a1f9b0"
+  },
+  {
+    "path": "cloudflare/package.json",
+    "bytes": 3024,
+    "sha256": "cc367b82ec881f2e6613da944e8b8050c585f4b8f6253523e691f1b9d7dce2db"
+  },
+  {
+    "path": "docs/openapi.yaml",
+    "bytes": 936435,
+    "sha256": "5cbc59b49108ce385cf5406e077dd67f106006e0a39c2a94ca45d4403631a785"
+  },
+  {
+    "path": "scripts/access-request-pages-browser-check.mjs",
+    "bytes": 8021,
+    "sha256": "dbcf560b3cd16663fedf9fd0128ff1195f62a58dfe8ff4eec05336e38d1dd4c8"
+  },
+  {
+    "path": "scripts/browser-ci-durations.json",
+    "bytes": 14220,
+    "sha256": "26537c1c06d20880f9da029c8f3b35ae256a2848d190673b1b886478347bae9e"
+  },
+  {
+    "path": "server/access-requests.mjs",
+    "bytes": 63595,
+    "sha256": "00559648c3824079ee701b0356d70cc5f0f8fc9698e016b915f30c4146915d60"
+  },
+  {
+    "path": "server/mcp-hosted-tools.mjs",
+    "bytes": 41251,
+    "sha256": "827452aa068e34dc7b35522c22032a030753216a9908e5eb04fe5463ca79d434"
+  },
+  {
+    "path": "server/mcp-room-profile.mjs",
+    "bytes": 80499,
+    "sha256": "abc472bfc4e16550c90ed150c57a9c525d0de489e5254f754337d109ce258832"
+  },
+  {
+    "path": "server/openapi/fragments/0081-api-rooms-roomId-access-requests.yaml",
+    "bytes": 6559,
+    "sha256": "b6875f4af25ea82aea16e11d325ba10598cdf1135d1e162e42a01cf728f6d56a"
+  },
+  {
+    "path": "server/owner-attention.mjs",
+    "bytes": 16462,
+    "sha256": "c1655893d1684092b6fcc79fa50543c999331c30cfbb8e5a18661d6c7b097ba2"
+  },
+  {
+    "path": "server/routes/member-permissions.mjs",
+    "bytes": 9635,
+    "sha256": "323fd689b37c69358e2a15f3c535a75079904f19ab43fba51e6c21e129094d9f"
+  },
+  {
+    "path": "skills/project-room/references/errors-catalog.md",
+    "bytes": 247056,
+    "sha256": "826a12a3028023f99cc9375fd7710b2e8f656b8ff48a31c1e9a6f0a889ec3c05"
+  },
+  {
+    "path": "src/agent-error.mjs",
+    "bytes": 114989,
+    "sha256": "04c3e2019d68a32bd49af4d1361204c89253ef4f348611b4ae810f1105a41991"
+  },
+  {
+    "path": "src/needs-attention.js",
+    "bytes": 30770,
+    "sha256": "4ac8e4109ddda2c13872bcd62b744d6622c5dfea76d2ed1ddc0e066880a04273"
+  },
+  {
+    "path": "strings/en.js",
+    "bytes": 76130,
+    "sha256": "891ba978de13ba8de9a31ee0347b6255d8d6d408ac82adcb55d57a57ebc78bb5"
+  },
+  {
+    "path": "strings/en.json",
+    "bytes": 76047,
+    "sha256": "daf99cab79737dc00935ca3cef5bd1eb697339a336ff8c10fb8a416cb4af068f"
+  },
+  {
+    "path": "tests/access-request-page.test.mjs",
+    "bytes": 8874,
+    "sha256": "66acbca4c00d05bb976d2f2a32b956d0d80c5d2072ffc644b166da28a8d1e8b3"
+  },
+  {
+    "path": "tests/helpers/access-request-queue-source.mjs",
+    "bytes": 1267,
+    "sha256": "dff8b8f958d9c8e9e534d52634dd8034716beddf5b654ba276112c0e53e648c8"
+  },
+  {
+    "path": "tests/needs-attention-retry.test.js",
+    "bytes": 27930,
+    "sha256": "4397921729906746350f6fcc57facc2b93de4048669f5e4b4bbd2eeb1ec70118"
+  },
+  {
+    "path": "tests/needs-attention-viewer.test.js",
+    "bytes": 8331,
+    "sha256": "0e059027a001d630dfcc833bc90fe55df843e0eecaab71172c6bc5802757211b"
+  }
+]

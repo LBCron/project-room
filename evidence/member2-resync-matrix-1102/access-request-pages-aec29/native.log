@@ -1,0 +1,84 @@
+{"event":"room.cold_start","clockSemantics":"io-bound","durationMs":52,"integrity":"deferred","phases":{"schema":{"ms":12,"rowsRead":8389},"plugin":{"ms":22,"rowsRead":41044},"fence":{"ms":14,"rowsRead":47331},"verifies":{"ms":2,"rowsRead":21721},"checksum":{"ms":0,"rowsRead":0}},"rooms":0,"sequences":0,"projectionBytes":0,"events":0}
+{"event":"room.store_initialized","initializationMs":52,"legacyColdStartMs":52,"clockSemantics":"io-bound","cpuMeasured":false}
+[boot-config] ERROR: the agent card is UNSIGNED and no explicit opt-in was recorded at build time — members fetching /.well-known/agent-card.json will see an unsigned card (marked signed:false). To fix: set ROOM_AGENT_CARD_SIGNING_KEY and re-run scripts/sign-agent-card.mjs, or pass --allow-unsigned explicitly to record the choice.
+No magic-link mailer is configured: email-verification gates are relaxed (agent-invite escape hatch); /api/health reports emailVerification: relaxed-no-mailer
+{"event":"room.do_initialized","clockSemantics":"io-bound","cpuMeasured":false,"initializationMs":57,"storeInitializationMs":52}
+{"event":"room.cold_start","phase":"first_request","clockSemantics":"io-bound","cpuMeasured":false,"constructMs":52,"firstRequestMs":7,"storeInitializationMs":52,"durableObjectInitializationMs":57,"rooms":0,"sequences":0,"projectionBytes":0,"phases":{"schema":{"ms":12,"rowsRead":8389},"plugin":{"ms":22,"rowsRead":41044},"fence":{"ms":14,"rowsRead":47331},"verifies":{"ms":2,"rowsRead":21721},"checksum":{"ms":0,"rowsRead":0}}}
+{"event":"room.do_request","clockSemantics":"io-bound","cpuMeasured":false,"method":"GET","path":"/api/rooms/access-scale/access-requests","status":200,"appMs":7}
+{"event":"room.do_request","clockSemantics":"io-bound","cpuMeasured":false,"method":"GET","path":"/api/rooms/access-scale/access-requests","status":200,"appMs":2}
+{"event":"room.do_request","clockSemantics":"io-bound","cpuMeasured":false,"method":"GET","path":"/api/rooms/access-scale/access-requests","status":200,"appMs":2}
+{"event":"room.do_request","clockSemantics":"io-bound","cpuMeasured":false,"method":"GET","path":"/api/rooms/access-scale/access-requests","status":200,"appMs":2}
+{"event":"room.do_request","clockSemantics":"io-bound","cpuMeasured":false,"method":"GET","path":"/api/rooms/access-scale/access-requests","status":200,"appMs":2}
+{"event":"room.cold_start","clockSemantics":"io-bound","durationMs":94,"integrity":"deferred","phases":{"schema":{"ms":14,"rowsRead":8389},"plugin":{"ms":42,"rowsRead":41044},"fence":{"ms":32,"rowsRead":47331},"verifies":{"ms":3,"rowsRead":21721},"checksum":{"ms":0,"rowsRead":0}},"rooms":0,"sequences":0,"projectionBytes":0,"events":0}
+{"event":"room.store_initialized","initializationMs":95,"legacyColdStartMs":94,"clockSemantics":"io-bound","cpuMeasured":false}
+[boot-config] ERROR: the agent card is UNSIGNED and no explicit opt-in was recorded at build time — members fetching /.well-known/agent-card.json will see an unsigned card (marked signed:false). To fix: set ROOM_AGENT_CARD_SIGNING_KEY and re-run scripts/sign-agent-card.mjs, or pass --allow-unsigned explicitly to record the choice.
+No magic-link mailer is configured: email-verification gates are relaxed (agent-invite escape hatch); /api/health reports emailVerification: relaxed-no-mailer
+{"event":"room.do_initialized","clockSemantics":"io-bound","cpuMeasured":false,"initializationMs":98,"storeInitializationMs":95}
+{"event":"room.cold_start","phase":"first_request","clockSemantics":"io-bound","cpuMeasured":false,"constructMs":94,"firstRequestMs":7,"storeInitializationMs":95,"durableObjectInitializationMs":98,"rooms":0,"sequences":0,"projectionBytes":0,"phases":{"schema":{"ms":14,"rowsRead":8389},"plugin":{"ms":42,"rowsRead":41044},"fence":{"ms":32,"rowsRead":47331},"verifies":{"ms":3,"rowsRead":21721},"checksum":{"ms":0,"rowsRead":0}}}
+{"event":"room.do_request","clockSemantics":"io-bound","cpuMeasured":false,"method":"GET","path":"/api/rooms/access-scale/access-requests","status":200,"appMs":7}
+{"event":"room.do_request","clockSemantics":"io-bound","cpuMeasured":false,"method":"GET","path":"/api/rooms/access-scale/access-requests","status":200,"appMs":2}
+{"event":"room.do_request","clockSemantics":"io-bound","cpuMeasured":false,"method":"GET","path":"/api/rooms/access-scale/access-requests","status":200,"appMs":2}
+{"event":"room.do_request","clockSemantics":"io-bound","cpuMeasured":false,"method":"GET","path":"/api/rooms/access-scale/access-requests","status":200,"appMs":2}
+room diagnostic op_UlJqQLjW 422 invalid_request input /api/rooms/:roomId/access-requests
+{"event":"room.do_request","clockSemantics":"io-bound","cpuMeasured":false,"method":"GET","path":"/api/rooms/access-scale/access-requests","status":422,"appMs":2}
+{"event":"room.do_request","clockSemantics":"io-bound","cpuMeasured":false,"method":"GET","path":"/api/rooms/access-scale/access-requests","status":200,"appMs":2}
+{"event":"room.do_request","clockSemantics":"io-bound","cpuMeasured":false,"method":"GET","path":"/api/rooms/access-scale/access-requests","status":200,"appMs":2}
+{"event":"room.do_request","clockSemantics":"io-bound","cpuMeasured":false,"method":"GET","path":"/api/rooms/access-scale/access-requests","status":200,"appMs":2}
+{"event":"room.do_request","clockSemantics":"io-bound","cpuMeasured":false,"method":"GET","path":"/api/rooms/access-scale/access-requests","status":200,"appMs":2}
+{"event":"room.do_request","clockSemantics":"io-bound","cpuMeasured":false,"method":"GET","path":"/api/rooms/access-scale/access-requests","status":200,"appMs":2}
+{"event":"room.do_request","clockSemantics":"io-bound","cpuMeasured":false,"method":"GET","path":"/api/rooms/access-scale/access-requests","status":200,"appMs":2}
+{"event":"room.do_request","clockSemantics":"io-bound","cpuMeasured":false,"method":"GET","path":"/api/rooms/access-scale/access-requests","status":200,"appMs":2}
+{"event":"room.do_request","clockSemantics":"io-bound","cpuMeasured":false,"method":"GET","path":"/api/rooms/access-scale/access-requests","status":200,"appMs":1}
+{"event":"room.do_request","clockSemantics":"io-bound","cpuMeasured":false,"method":"GET","path":"/api/rooms/access-scale/access-requests","status":200,"appMs":2}
+{"event":"room.do_request","clockSemantics":"io-bound","cpuMeasured":false,"method":"GET","path":"/api/rooms/access-scale/access-requests","status":200,"appMs":2}
+{"event":"room.do_request","clockSemantics":"io-bound","cpuMeasured":false,"method":"GET","path":"/api/rooms/access-scale/access-requests","status":200,"appMs":2}
+{"event":"room.do_request","clockSemantics":"io-bound","cpuMeasured":false,"method":"GET","path":"/api/rooms/access-scale/access-requests","status":200,"appMs":2}
+{"event":"room.do_request","clockSemantics":"io-bound","cpuMeasured":false,"method":"GET","path":"/api/rooms/access-scale/access-requests","status":200,"appMs":2}
+{"event":"room.do_request","clockSemantics":"io-bound","cpuMeasured":false,"method":"GET","path":"/api/rooms/access-scale/access-requests","status":200,"appMs":2}
+{"event":"room.do_request","clockSemantics":"io-bound","cpuMeasured":false,"method":"GET","path":"/api/rooms/access-scale/access-requests","status":200,"appMs":2}
+{"event":"room.do_request","clockSemantics":"io-bound","cpuMeasured":false,"method":"GET","path":"/api/rooms/access-scale/access-requests","status":200,"appMs":1}
+{"event":"room.do_request","clockSemantics":"io-bound","cpuMeasured":false,"method":"GET","path":"/api/rooms/access-scale/access-requests","status":200,"appMs":2}
+{"event":"room.do_request","clockSemantics":"io-bound","cpuMeasured":false,"method":"GET","path":"/api/rooms/access-scale/access-requests","status":200,"appMs":1}
+{"event":"room.do_request","clockSemantics":"io-bound","cpuMeasured":false,"method":"GET","path":"/api/rooms/access-scale/access-requests","status":200,"appMs":1}
+{"event":"room.do_request","clockSemantics":"io-bound","cpuMeasured":false,"method":"GET","path":"/api/rooms/access-scale/access-requests","status":200,"appMs":2}
+{"event":"room.do_request","clockSemantics":"io-bound","cpuMeasured":false,"method":"GET","path":"/api/rooms/access-scale/access-requests","status":200,"appMs":1}
+{"event":"room.do_request","clockSemantics":"io-bound","cpuMeasured":false,"method":"GET","path":"/api/rooms/access-scale/access-requests","status":200,"appMs":2}
+{"event":"room.do_request","clockSemantics":"io-bound","cpuMeasured":false,"method":"GET","path":"/api/rooms/access-scale/access-requests","status":200,"appMs":2}
+{"event":"room.do_request","clockSemantics":"io-bound","cpuMeasured":false,"method":"GET","path":"/api/rooms/access-scale/access-requests","status":200,"appMs":1}
+{"event":"room.do_request","clockSemantics":"io-bound","cpuMeasured":false,"method":"GET","path":"/api/rooms/access-scale/access-requests","status":200,"appMs":2}
+{"event":"room.do_request","clockSemantics":"io-bound","cpuMeasured":false,"method":"GET","path":"/api/rooms/access-scale/access-requests","status":200,"appMs":1}
+{"event":"room.do_request","clockSemantics":"io-bound","cpuMeasured":false,"method":"GET","path":"/api/rooms/access-scale/access-requests","status":200,"appMs":2}
+{"event":"room.do_request","clockSemantics":"io-bound","cpuMeasured":false,"method":"GET","path":"/api/rooms/access-scale/access-requests","status":200,"appMs":2}
+{"event":"room.do_request","clockSemantics":"io-bound","cpuMeasured":false,"method":"GET","path":"/api/rooms/access-scale/access-requests","status":200,"appMs":2}
+{"event":"room.do_request","clockSemantics":"io-bound","cpuMeasured":false,"method":"GET","path":"/api/rooms/access-scale/access-requests","status":200,"appMs":1}
+{"event":"room.do_request","clockSemantics":"io-bound","cpuMeasured":false,"method":"GET","path":"/api/rooms/access-scale/access-requests","status":200,"appMs":2}
+{"event":"room.do_request","clockSemantics":"io-bound","cpuMeasured":false,"method":"GET","path":"/api/rooms/access-scale/access-requests","status":200,"appMs":2}
+{"event":"room.do_request","clockSemantics":"io-bound","cpuMeasured":false,"method":"GET","path":"/api/rooms/access-scale/access-requests","status":200,"appMs":2}
+{"event":"room.do_request","clockSemantics":"io-bound","cpuMeasured":false,"method":"GET","path":"/api/rooms/access-scale/access-requests","status":200,"appMs":2}
+{"event":"room.do_request","clockSemantics":"io-bound","cpuMeasured":false,"method":"GET","path":"/api/rooms/access-scale/access-requests","status":200,"appMs":2}
+{"event":"room.do_request","clockSemantics":"io-bound","cpuMeasured":false,"method":"GET","path":"/api/rooms/access-scale/access-requests","status":200,"appMs":2}
+{"event":"room.do_request","clockSemantics":"io-bound","cpuMeasured":false,"method":"GET","path":"/api/rooms/access-scale/access-requests","status":200,"appMs":2}
+{"event":"room.do_request","clockSemantics":"io-bound","cpuMeasured":false,"method":"GET","path":"/api/rooms/access-scale/access-requests","status":200,"appMs":1}
+{"event":"room.do_request","clockSemantics":"io-bound","cpuMeasured":false,"method":"GET","path":"/api/rooms/access-scale/access-requests","status":200,"appMs":2}
+{"event":"room.do_request","clockSemantics":"io-bound","cpuMeasured":false,"method":"GET","path":"/api/rooms/access-scale/access-requests","status":200,"appMs":1}
+{"event":"room.do_request","clockSemantics":"io-bound","cpuMeasured":false,"method":"GET","path":"/api/rooms/access-scale/access-requests","status":200,"appMs":2}
+{"event":"room.cold_start","clockSemantics":"io-bound","durationMs":3,"integrity":"deferred","phases":{"schema":{"ms":0,"rowsRead":886},"fence":{"ms":0,"rowsRead":0},"plugin":{"ms":1,"rowsRead":5},"verifies":{"ms":0,"rowsRead":2},"checksum":{"ms":0,"rowsRead":0}},"rooms":1,"sequences":1003,"projectionBytes":133}
+{"event":"room.store_initialized","initializationMs":3,"legacyColdStartMs":3,"clockSemantics":"io-bound","cpuMeasured":false}
+[boot-config] ERROR: the agent card is UNSIGNED and no explicit opt-in was recorded at build time — members fetching /.well-known/agent-card.json will see an unsigned card (marked signed:false). To fix: set ROOM_AGENT_CARD_SIGNING_KEY and re-run scripts/sign-agent-card.mjs, or pass --allow-unsigned explicitly to record the choice.
+No magic-link mailer is configured: email-verification gates are relaxed (agent-invite escape hatch); /api/health reports emailVerification: relaxed-no-mailer
+{"event":"room.do_initialized","clockSemantics":"io-bound","cpuMeasured":false,"initializationMs":7,"storeInitializationMs":3}
+room diagnostic op_EKl8uf-0 409 stale_access_request_cursor conflict /api/rooms/:roomId/access-requests
+{"event":"room.cold_start","phase":"first_request","clockSemantics":"io-bound","cpuMeasured":false,"constructMs":3,"firstRequestMs":9,"storeInitializationMs":3,"durableObjectInitializationMs":7,"rooms":1,"sequences":1003,"projectionBytes":133,"phases":{"schema":{"ms":0,"rowsRead":886},"fence":{"ms":0,"rowsRead":0},"plugin":{"ms":1,"rowsRead":5},"verifies":{"ms":0,"rowsRead":2},"checksum":{"ms":0,"rowsRead":0}}}
+{"event":"room.do_request","clockSemantics":"io-bound","cpuMeasured":false,"method":"GET","path":"/api/rooms/access-scale/access-requests","status":409,"appMs":9}
+{"event":"room.do_request","clockSemantics":"io-bound","cpuMeasured":false,"method":"GET","path":"/api/rooms/access-scale/access-requests","status":200,"appMs":3}
+{"event":"room.do_request","clockSemantics":"io-bound","cpuMeasured":false,"method":"GET","path":"/api/rooms/access-scale/access-requests","status":200,"appMs":2}
+ACCESS_REQUEST_PAGE_COST [{"count":25,"role":"owner","cost":{"statements":90,"rowsRead":935,"rowsWritten":0,"unknown":0},"bytes":9572},{"count":25,"role":"admin","cost":{"statements":100,"rowsRead":945,"rowsWritten":0,"unknown":0},"bytes":9572},{"count":25,"pages":1,"unique":25,"firstRows":935,"lastRows":935,"maxRows":935},{"count":1000,"role":"owner","cost":{"statements":90,"rowsRead":936,"rowsWritten":0,"unknown":0},"bytes":10083},{"count":1000,"role":"admin","cost":{"statements":100,"rowsRead":946,"rowsWritten":0,"unknown":0},"bytes":10083},{"count":1000,"pages":40,"unique":1000,"firstRows":936,"lastRows":937,"maxRows":938},{"expired":1000,"live":27,"firstPage":25,"cost":{"statements":92,"rowsRead":953,"rowsWritten":0,"unknown":0}}]
+✔ Native pending pages bound first and late equal-time reads, expiry and cold continuation (3944.518292ms)
+ℹ tests 1
+ℹ suites 0
+ℹ pass 1
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 4077.843

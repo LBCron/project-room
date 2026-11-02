@@ -1,0 +1,14 @@
+✔ six CLI shards execute each canonical test once and aggregate only complete current success (1035.76475ms)
+✔ single-shard re-run: latest attempt per shard wins, untouched shards keep earlier receipts (991.781542ms)
+✔ canonical suite partition is complete and deterministic with bounded timing estimates (21.164167ms)
+✔ browser shard plan is balanced on measured runtimes: full timing coverage, no shard over 30% (7.700625ms)
+✔ an affected plan may leave a shard empty when its receipt lists the same files (9.479708ms)
+✔ affected CLI persists omitted coverage before an empty shard returns (28.24175ms)
+ℹ tests 6
+ℹ suites 0
+ℹ pass 6
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 2129.630959

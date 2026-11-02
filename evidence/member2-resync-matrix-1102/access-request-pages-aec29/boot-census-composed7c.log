@@ -1,0 +1,10 @@
+boot-graph census (cloudflare): production=525 fixture-union=539 production-only=0 fixture-only=14 allowlisted=14 residual=0
+✔ boot-graph census (cloudflare): the production Worker bundle adds no module the fixture bundles do not already drive (6744.589ms)
+ℹ tests 1
+ℹ suites 0
+ℹ pass 1
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 6781.458375

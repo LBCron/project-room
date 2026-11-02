@@ -1,0 +1,26 @@
+OpenAPI route gate:
+  legacy route is not in the RT-0 baseline (the allowlist only shrinks): GET /api/rooms/{}/activity-read
+  legacy route is not listed in routes: GET /api/rooms/{}/activity-read
+  legacy route is not in the RT-0 baseline (the allowlist only shrinks): GET /api/rooms/{}/activity-read-all
+  legacy route is not listed in routes: GET /api/rooms/{}/activity-read-all
+  legacy route is not in the RT-0 baseline (the allowlist only shrinks): GET /api/rooms/{}/commands
+  legacy route is not listed in routes: GET /api/rooms/{}/commands
+  legacy route is not in the RT-0 baseline (the allowlist only shrinks): GET /api/rooms/{}/cursor
+  legacy route is not listed in routes: GET /api/rooms/{}/cursor
+  legacy route is not in the RT-0 baseline (the allowlist only shrinks): GET /api/rooms/{}/guest-invites
+  legacy route is not listed in routes: GET /api/rooms/{}/guest-invites
+  legacy route is not in the RT-0 baseline (the allowlist only shrinks): GET /api/rooms/{}/guest-invites-disconnect
+  legacy route is not listed in routes: GET /api/rooms/{}/guest-invites-disconnect
+  legacy route is not in the RT-0 baseline (the allowlist only shrinks): GET /api/rooms/{}/guest-invites-list
+  legacy route is not listed in routes: GET /api/rooms/{}/guest-invites-list
+  legacy route is not in the RT-0 baseline (the allowlist only shrinks): GET /api/rooms/{}/guest-invites-revoke
+  legacy route is not listed in routes: GET /api/rooms/{}/guest-invites-revoke
+  legacy route is not in the RT-0 baseline (the allowlist only shrinks): GET /api/rooms/{}/guest-invites-revoke-all
+  legacy route is not listed in routes: GET /api/rooms/{}/guest-invites-revoke-all
+  legacy route is not in the RT-0 baseline (the allowlist only shrinks): GET /api/rooms/{}/guest-invites-upgrade
+  legacy route is not listed in routes: GET /api/rooms/{}/guest-invites-upgrade
+  legacy route is not listed in routes: GET /api/rooms/{}/human-push
+  legacy route is not in the RT-0 baseline (the allowlist only shrinks): GET /api/rooms/{}/import
+  legacy route is not listed in routes: GET /api/rooms/{}/import
+  legacy route is not in the RT-0 baseline (the allowlist only shrinks): GET /api/rooms/{}/share-links-cancel
+  legacy route is not listed in routes: GET /api/rooms/{}/share-links-cancel

@@ -1,0 +1,22 @@
+[
+  {
+    "name": "i18n",
+    "exit": 0
+  },
+  {
+    "name": "strings",
+    "exit": 0
+  },
+  {
+    "name": "schema",
+    "exit": 0
+  },
+  {
+    "name": "secrets",
+    "exit": 0
+  },
+  {
+    "name": "deps",
+    "exit": 0
+  }
+]

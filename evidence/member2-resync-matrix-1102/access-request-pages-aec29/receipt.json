@@ -1,0 +1,106 @@
+{
+  "source": "aec29ee1275db508070f4bfbfd902f207469fcd8",
+  "tree": "474c5f1b30227f2a76e2691b4b2968400158cc0a",
+  "parent": "00888c52110d36250d3e07629036701b72926d09",
+  "branch": "codex/member2-access-request-pages-1102",
+  "trackedClean": true,
+  "fetchedTreeEqualsLocal": true,
+  "node": "24.22.1",
+  "workerd": "2026-07-30",
+  "workerdSha256": "b887d31d8839e80798bf3f92c416343c5db7dd9b22d7fe21bcf877f5d411936f",
+  "playwright": "1.62.1",
+  "chromiumCacheBuild": 1234,
+  "tests": {
+    "contract": 210,
+    "browser": 4,
+    "native": 1,
+    "browserWiring": 6
+  },
+  "nativePhysicalCosts": [
+    {
+      "count": 25,
+      "role": "owner",
+      "cost": {
+        "statements": 90,
+        "rowsRead": 935,
+        "rowsWritten": 0,
+        "unknown": 0
+      },
+      "bytes": 9572
+    },
+    {
+      "count": 25,
+      "role": "admin",
+      "cost": {
+        "statements": 100,
+        "rowsRead": 945,
+        "rowsWritten": 0,
+        "unknown": 0
+      },
+      "bytes": 9572
+    },
+    {
+      "count": 25,
+      "pages": 1,
+      "unique": 25,
+      "firstRows": 935,
+      "lastRows": 935,
+      "maxRows": 935
+    },
+    {
+      "count": 1000,
+      "role": "owner",
+      "cost": {
+        "statements": 90,
+        "rowsRead": 936,
+        "rowsWritten": 0,
+        "unknown": 0
+      },
+      "bytes": 10083
+    },
+    {
+      "count": 1000,
+      "role": "admin",
+      "cost": {
+        "statements": 100,
+        "rowsRead": 946,
+        "rowsWritten": 0,
+        "unknown": 0
+      },
+      "bytes": 10083
+    },
+    {
+      "count": 1000,
+      "pages": 40,
+      "unique": 1000,
+      "firstRows": 936,
+      "lastRows": 937,
+      "maxRows": 938
+    },
+    {
+      "expired": 1000,
+      "live": 27,
+      "firstPage": 25,
+      "cost": {
+        "statements": 92,
+        "rowsRead": 953,
+        "rowsWritten": 0,
+        "unknown": 0
+      }
+    }
+  ],
+  "baselineEvidence": "7487f1a6bcc858d95584615bcf827230e72ff65d",
+  "openapiGate": {
+    "passed": false,
+    "unchangedBase": "60b739df44b00bba2515f98a81ec2fca1093b17f",
+    "identicalUnrelatedLegacyRouteFindings": 25
+  },
+  "limits": [
+    "Local disposable fixtures only; no production change or two-device utilization measurement.",
+    "Native costs are warm HTTP statement row counters, not cold startup cost, disk bytes or elapsed speedup.",
+    "Browser exhaustive pages are paced400ms to respect unchanged quotas.",
+    "Pages are current-per-page observations with explicit reset; not frozen snapshots or acknowledgments.",
+    "Boot census was run on preceding7c7574db composition; final additions affect MCP forwarding, recovery docs and CI metadata.",
+    "ESLint exits0 with one existing new-harness prefer-const warning; no lint error."
+  ]
+}

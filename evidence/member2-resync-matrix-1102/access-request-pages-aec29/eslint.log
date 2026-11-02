@@ -1,0 +1,6 @@
+
+/Users/potter/Documents/Codex/2026-10-22/you-x20/work/member2-access-pages-impl-1102/scripts/access-request-pages-browser-check.mjs
+  10:92  warning  'browser' is never reassigned. Use 'const' instead  prefer-const
+
+✖ 1 problem (0 errors, 1 warning)
+

@@ -1,0 +1,62 @@
+[
+  {
+    "path": "README.md",
+    "bytes": 3049,
+    "sha256": "6610c629eeb498980c5992269cee939b9bff835798111283b62562a4074a8c44"
+  },
+  {
+    "path": "boot-census-composed7c.log",
+    "bytes": 375,
+    "sha256": "aa29da887a51e63a3bf8e04d51c94f75bff49016c987fc2492fb57ae3892ac57"
+  },
+  {
+    "path": "browser-wiring.log",
+    "bytes": 733,
+    "sha256": "ce319f59d40eac9388250653f16512c59e266a4494b918f5e0a71ca142f8969e"
+  },
+  {
+    "path": "browser.log",
+    "bytes": 3332,
+    "sha256": "ad4a37a260e198003a3e7703aee4f0fea60f9d43e0eb95d24477753bd29df4c8"
+  },
+  {
+    "path": "checks.json",
+    "bytes": 226,
+    "sha256": "3563526090464d4a53548cad47cb42ae9e3173c07d96ca229cad6e6aa729b3d1"
+  },
+  {
+    "path": "contract.log",
+    "bytes": 93890,
+    "sha256": "c4e9567a7f0f2b08f9fa0f4ae33991e25915feb3d9095a1ace1fc6f650c3d10b"
+  },
+  {
+    "path": "eslint.log",
+    "bytes": 254,
+    "sha256": "8ee4a690a620e91f9f95f6fe8651bdd6a3d9ccd55ffe00efab42f62d3601790f"
+  },
+  {
+    "path": "native.log",
+    "bytes": 14473,
+    "sha256": "ea6a0037593f021ebfdcc940bf74a119fece9268c270187147c04fd9642cad70"
+  },
+  {
+    "path": "openapi-base60.log",
+    "bytes": 2277,
+    "sha256": "0e038866faa01380be998e4dd156addebf88759a1c4be1b2ca8b2352835d0180"
+  },
+  {
+    "path": "openapi-composed.log",
+    "bytes": 2277,
+    "sha256": "0e038866faa01380be998e4dd156addebf88759a1c4be1b2ca8b2352835d0180"
+  },
+  {
+    "path": "receipt.json",
+    "bytes": 2738,
+    "sha256": "9107204ba717faca8fcbb02c12d6b790582b5253a1f8352b239aa5b2acfc2036"
+  },
+  {
+    "path": "source-manifest.json",
+    "bytes": 3327,
+    "sha256": "da2f5f677dc118d8adaee6ddfa7c4c6794c32d020dae2cee7616fe50fed38eb1"
+  }
+]

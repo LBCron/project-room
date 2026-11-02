@@ -815,7 +815,7 @@
       }
     },
     "room_list_access_requests": {
-      "inputSchema": "67eb8123bcf5978d",
+      "inputSchema": "ce1a58ad02b66cf8",
       "annotations": {
         "readOnlyHint": true,
         "destructiveHint": false,

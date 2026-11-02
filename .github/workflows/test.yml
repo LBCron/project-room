@@ -93,6 +93,9 @@ jobs:
         run: npm ci # `npm run check` now includes the lint gate, which needs the eslint devDependency.
       - if: needs.changes.outputs.docs_only != 'true'
         run: npm run check
+      - name: Normalized post scaling at 1k and 50k events
+        if: needs.changes.outputs.docs_only != 'true'
+        run: node scripts/benchmark-current-posts.mjs --check
   # Fo follow-up (Q003): the .refresh-requested marker is a branch-local
   # refresh signal for the visual regression baselines. If it ever reaches
   # main, every visual run silently re-baselines instead of comparing and

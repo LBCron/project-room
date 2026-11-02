@@ -7600,9 +7600,10 @@ this.slaBreachAlerts = new SlaBreachAlertJournal(this); // Task 26: durable in-a
         ...((Array.isArray(mentionWarnings) && mentionWarnings.length > 0) ? { mentionWarnings } : {}) };
       });
     }, {
-      // Alias resolution is the sole qualified command needing a full roster.
+      // Alias resolution and membership admission require an exact full roster.
       // This internal consumer reservation leaves the byte ceiling unchanged.
-      maxRecords: command.type === T.MESSAGE_POSTED && typeof command.data.body === "string"
+      maxRecords: command.type === T.MEMBER_ADDED || command.type === T.MEMBER_ACCESS_CHANGED && command.data.active === true
+        || command.type === T.MESSAGE_POSTED && typeof command.data.body === "string"
         && command.data.body.includes("@") ? 1024 : 200
     }));
     } catch (error) {

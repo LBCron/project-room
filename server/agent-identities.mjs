@@ -1,3 +1,4 @@
+import {currentInviteContext} from './current-room-repository.mjs';
 // Multi-room agent identities (round-2 task #101).
 //
 // Today an agent working in N rooms is provisioned N times: N member
@@ -759,7 +760,7 @@ export class AgentIdentities {
   // accepted from the identity-links route whitelist.
   link(token, roomId, { identityId, memberId, displayName, permissions, referredBy, identityLinkCode, settleAccessRequests = true, decidedRequestId = null }, expectedSessionBinding = null) {
     const auth = this.store.authenticate(token, roomId, expectedSessionBinding);
-    const authority = this.store.roomAuthority(roomId);
+    const authority = this.store.roomAuthority(roomId, { memberId: auth.member.id });
     if (!this.store.delegation.canAdministerMembership(authority, auth, roomId)) fail(403, "access_denied", "Membership administration required: room owner, a member with manage_members, or a membership administration grant");
     if (typeof identityId !== "string" || !IDENTITY_ID_PATTERN.test(identityId)) fail(422, "invalid_identity", "identityId is not a valid agent identity");
     const identity = this.get(identityId);
@@ -800,7 +801,8 @@ export class AgentIdentities {
       // identity_conflict ("Member id is already taken"). memberOf reads own
       // properties only; a name that exists solely on the prototype is a
       // reserved name and is refused with a clean 422 here.
-      const roomMembers = this.store.roomAuthority(roomId).members ?? {};
+      const roomMembers = (currentInviteContext(this.store, roomId, { census: true })?.room.state.members
+        ?? this.store.roomAuthority(roomId).members) ?? {};
       if (!Object.hasOwn(roomMembers, resolvedMemberId) && resolvedMemberId in roomMembers)
         fail(422, "invalid_identity", "memberId is a reserved name");
       const roomMember = memberOf(roomMembers, resolvedMemberId);
@@ -837,7 +839,7 @@ export class AgentIdentities {
       // deceptive alternate spellings, mixed scripts, and invisible characters
       // before that command. Same-identity relinks keep the path above.
       const canonical = value => value.trim().replace(/\p{White_Space}+/gu, " ").toLowerCase();
-      const activeNames = Object.values(this.store.room(roomId).state.members)
+      const activeNames = Object.values(roomMembers)
         .filter(member => member.active !== false && member.id !== resolvedMemberId
           && canonical(member.displayName) !== canonical(memberName))
         .map(member => ({ memberId: member.id, displayName: member.displayName }));

@@ -19,8 +19,10 @@ export function validateRecoveryDelegation(c) {
 function authority(store,id,sealId) {
   const db=store.db;if(!db.isTransaction||!inRestoreContext(db))fail();
   const s=restoreProgress(db),a=s.progress?.audit;
-  if(s.state!=='pending'||s.phase!=='audit_pending'||s.restore_id!==id||s.seal?.id!==sealId
-    ||s.seal.auditVersion!==RESTORE_AUDIT_VERSION||a?.version!==RESTORE_AUDIT_VERSION)fail();
+  if (s.state !== 'pending' || s.phase !== 'audit_pending'
+    || s.restore_id !== id || s.seal?.id !== sealId
+    || s.seal.auditVersion !== RESTORE_AUDIT_VERSION
+    || a?.version !== RESTORE_AUDIT_VERSION) fail();
   return s;
 }
 function entry(seal,table) {

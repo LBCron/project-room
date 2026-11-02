@@ -1,0 +1,16 @@
+✔ runtime and schema pins are exact and deterministic (5.474708ms)
+✔ file pins change when bytes change and are sorted (1.77875ms)
+✔ CI runtime must satisfy engines.node (1.922541ms)
+✔ schema pin refuses a missing version marker (1.580333ms)
+✔ drift names the changed file, added file and removed file (1.606875ms)
+✔ drift refuses malformed manifests without reading sections (0.053958ms)
+✔ frozen deployment manifest pins the recovery helper and production workflow bytes (0.191125ms)
+✔ committed candidate manifest has zero drift from the tree (4.897292ms)
+ℹ tests 8
+ℹ suites 0
+ℹ pass 8
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 52.921583

@@ -1,0 +1,32 @@
+{
+  "source": "c1c1c0ae1ed7ba99a218cc3275e72dfdf7e0c6ec",
+  "tree": "8847da57546e8b97d19a7306baf20d9539a9f3fe",
+  "parent": "a599faa29ff65567e5c080609cb2d000acd33666",
+  "changedFiles": [
+    "tests/canonical-work-authz-http.test.mjs"
+  ],
+  "testFileSha256": "23cd0c929bf77bebe347eef339ab2bd87bde791230e09f7b69962112ef8ca5b6",
+  "runtimeFilesChanged": false,
+  "newRegression": {
+    "tests": 55,
+    "pass": 55,
+    "fail": 0,
+    "skipped": 0
+  },
+  "namedRoleActionCells": 54,
+  "candidateManifest": {
+    "tests": 8,
+    "pass": 8,
+    "fail": 0,
+    "skipped": 0
+  },
+  "eslint": {
+    "errors": 0,
+    "warnings": 0,
+    "maxWarnings": 0
+  },
+  "diffCheckPassed": true,
+  "sourceTreeFetchedAndFileByteEqual": true,
+  "cleanIsolatedCheckout": true,
+  "scope": "Test-only addition; exact-head focused qualification, not a new runtime fix, full suite, merge/deploy or physical peer execution proof."
+}

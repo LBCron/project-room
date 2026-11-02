@@ -1,0 +1,113 @@
+{"event":"room.cold_start","clockSemantics":"runtime-dependent","durationMs":40,"integrity":"eager","phases":{"schema":{"ms":10,"rowsRead":0},"plugin":{"ms":16,"rowsRead":0},"fence":{"ms":10,"rowsRead":0},"verifies":{"ms":2,"rowsRead":0},"checksum":{"ms":0,"rowsRead":0}},"cpuMs":43,"heapBytes":40281376,"rooms":0,"sequences":0,"projectionBytes":0,"events":0}
+{"event":"room.store_initialized","initializationMs":41,"legacyColdStartMs":40,"clockSemantics":"runtime-dependent","cpuMeasured":false}
+[boot-config] ERROR: the agent card is UNSIGNED and no explicit opt-in was recorded at build time — members fetching /.well-known/agent-card.json will see an unsigned card (marked signed:false). To fix: set ROOM_AGENT_CARD_SIGNING_KEY and re-run scripts/sign-agent-card.mjs, or pass --allow-unsigned explicitly to record the choice.
+ROOM_SECURITY_CONTACT is unset; /.well-known/security.txt returns 404
+No magic-link mailer is configured: email-verification gates are relaxed (agent-invite escape hatch); /api/health reports emailVerification: relaxed-no-mailer
+▶ canonical work HTTP preserves role authority, attribution and refusal atomicity
+  ✔ propose: owner (4.368958ms)
+  ✔ propose: collaborator (3.896542ms)
+room diagnostic op_GJBfp385 422 command_rejected conflict /api/rooms/:roomId/commands
+  ✔ propose: contributor (4.18625ms)
+room diagnostic op_2PeCWqQ5 422 command_rejected conflict /api/rooms/:roomId/commands
+  ✔ propose: reviewer (4.450708ms)
+room diagnostic op_Q6K91XpK 422 command_rejected conflict /api/rooms/:roomId/commands
+  ✔ propose: chat (4.158334ms)
+room diagnostic op_kINdj2ma 422 command_rejected conflict /api/rooms/:roomId/commands
+  ✔ propose: guest (4.074208ms)
+room diagnostic op_pSpvb-ba 403 no_access access /api/rooms/:roomId/commands
+  ✔ propose: outsider (1.516292ms)
+room diagnostic op_CeaQnAhH 401 unauthenticated access /api/rooms/:roomId/commands
+  ✔ propose: anonymous (1.440208ms)
+room diagnostic op_0HRaN0hn 401 unauthenticated access /api/rooms/:roomId/commands
+  ✔ propose: revoked (1.360333ms)
+  ✔ accept-own: owner (5.223041ms)
+  ✔ accept-own: collaborator (4.94275ms)
+  ✔ accept-own: contributor (6.360333ms)
+room diagnostic op_7KexzyEH 422 command_rejected conflict /api/rooms/:roomId/commands
+  ✔ accept-own: reviewer (5.779417ms)
+room diagnostic op_R2fWy8w3 422 command_rejected conflict /api/rooms/:roomId/commands
+  ✔ accept-own: chat (5.685708ms)
+room diagnostic op_vl-vOPgs 422 command_rejected conflict /api/rooms/:roomId/commands
+  ✔ accept-own: guest (5.671709ms)
+room diagnostic op_FNk1S_Jm 403 no_access access /api/rooms/:roomId/commands
+  ✔ accept-own: outsider (2.954833ms)
+room diagnostic op_yRBB4sJE 401 unauthenticated access /api/rooms/:roomId/commands
+  ✔ accept-own: anonymous (3.014666ms)
+room diagnostic op_KJW3y6Rc 401 unauthenticated access /api/rooms/:roomId/commands
+  ✔ accept-own: revoked (3.312042ms)
+room diagnostic op_RZgvNJ5I 422 command_rejected conflict /api/rooms/:roomId/commands
+  ✔ acquire-contributor: owner (8.564125ms)
+room diagnostic op_Vn1kniS6 422 command_rejected conflict /api/rooms/:roomId/commands
+  ✔ acquire-contributor: collaborator (7.470542ms)
+  ✔ acquire-contributor: contributor (7.583833ms)
+room diagnostic op_V28box7z 422 command_rejected conflict /api/rooms/:roomId/commands
+  ✔ acquire-contributor: reviewer (8.069583ms)
+room diagnostic op_kBBgSWJr 403 work_claims_not_permitted access /api/rooms/:roomId/commands
+  ✔ acquire-contributor: chat (7.27925ms)
+room diagnostic op_V7xvcE1w 403 work_claims_not_permitted access /api/rooms/:roomId/commands
+  ✔ acquire-contributor: guest (7.446041ms)
+room diagnostic op_4YXEvhMV 403 no_access access /api/rooms/:roomId/commands
+  ✔ acquire-contributor: outsider (4.707458ms)
+room diagnostic op_GL-y2pWs 401 unauthenticated access /api/rooms/:roomId/commands
+  ✔ acquire-contributor: anonymous (4.569333ms)
+room diagnostic op_pI21vAqu 401 unauthenticated access /api/rooms/:roomId/commands
+  ✔ acquire-contributor: revoked (4.621ms)
+room diagnostic op_c-bj6YfD 422 command_rejected conflict /api/rooms/:roomId/commands
+  ✔ renew-contributor: owner (11.271833ms)
+room diagnostic op_5bHnr3TR 422 command_rejected conflict /api/rooms/:roomId/commands
+  ✔ renew-contributor: collaborator (9.966208ms)
+  ✔ renew-contributor: contributor (9.770917ms)
+room diagnostic op_dSeNt4Fe 422 command_rejected conflict /api/rooms/:roomId/commands
+  ✔ renew-contributor: reviewer (10.063667ms)
+room diagnostic op_zcSaAcM2 403 work_claims_not_permitted access /api/rooms/:roomId/commands
+  ✔ renew-contributor: chat (10.218542ms)
+room diagnostic op_jd1s9Vz_ 403 work_claims_not_permitted access /api/rooms/:roomId/commands
+  ✔ renew-contributor: guest (11.398709ms)
+room diagnostic op_KU1h1qEP 403 no_access access /api/rooms/:roomId/commands
+  ✔ renew-contributor: outsider (7.313209ms)
+room diagnostic op_JTTpJx5t 401 unauthenticated access /api/rooms/:roomId/commands
+  ✔ renew-contributor: anonymous (7.413667ms)
+room diagnostic op_EyJ9HGEP 401 unauthenticated access /api/rooms/:roomId/commands
+  ✔ renew-contributor: revoked (7.393042ms)
+  ✔ release-contributor: owner (11.481125ms)
+room diagnostic op_eMrGFWbU 422 command_rejected conflict /api/rooms/:roomId/commands
+  ✔ release-contributor: collaborator (10.54075ms)
+  ✔ release-contributor: contributor (10.349334ms)
+room diagnostic op_WitpXakY 422 command_rejected conflict /api/rooms/:roomId/commands
+  ✔ release-contributor: reviewer (10.514166ms)
+room diagnostic op_IL33LBlR 403 work_claims_not_permitted access /api/rooms/:roomId/commands
+  ✔ release-contributor: chat (10.79225ms)
+room diagnostic op_ZftadsYg 403 work_claims_not_permitted access /api/rooms/:roomId/commands
+  ✔ release-contributor: guest (12.240041ms)
+room diagnostic op_fKp_BsQh 403 no_access access /api/rooms/:roomId/commands
+  ✔ release-contributor: outsider (8.119125ms)
+room diagnostic op_5dzY8BfY 401 unauthenticated access /api/rooms/:roomId/commands
+  ✔ release-contributor: anonymous (8.312583ms)
+room diagnostic op_K-zaO4iV 401 unauthenticated access /api/rooms/:roomId/commands
+  ✔ release-contributor: revoked (9.767166ms)
+  ✔ configure: owner (5.250291ms)
+room diagnostic op_BcD076Bu 403 work_claims_not_permitted access /api/rooms/:roomId/work-claims/config
+  ✔ configure: collaborator (5.682208ms)
+room diagnostic op_ETeKq_8z 403 work_claims_not_permitted access /api/rooms/:roomId/work-claims/config
+  ✔ configure: contributor (5.528417ms)
+room diagnostic op_D1W9FiEf 403 work_claims_not_permitted access /api/rooms/:roomId/work-claims/config
+  ✔ configure: reviewer (6.208292ms)
+room diagnostic op_FQT-ddJS 403 work_claims_not_permitted access /api/rooms/:roomId/work-claims/config
+  ✔ configure: chat (5.440458ms)
+room diagnostic op_uwiDMZj9 403 work_claims_not_permitted access /api/rooms/:roomId/work-claims/config
+  ✔ configure: guest (5.431292ms)
+room diagnostic op_fWa3q833 403 no_access access /api/rooms/:roomId/work-claims/config
+  ✔ configure: outsider (2.642583ms)
+room diagnostic op_cChYXbx3 401 unauthenticated access /api/rooms/:roomId/work-claims/config
+  ✔ configure: anonymous (2.606625ms)
+room diagnostic op_vF3FPcGU 401 unauthenticated access /api/rooms/:roomId/work-claims/config
+  ✔ configure: revoked (2.546166ms)
+✔ canonical work HTTP preserves role authority, attribution and refusal atomicity (709.827667ms)
+ℹ tests 55
+ℹ suites 0
+ℹ pass 55
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 860.984125

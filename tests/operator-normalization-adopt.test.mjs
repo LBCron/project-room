@@ -4,6 +4,7 @@ import {mkdtempSync,rmSync} from 'node:fs';import {tmpdir} from 'node:os';import
 import {RoomStore} from '../server/store.mjs';import {initialRoom} from '../server/bootstrap.mjs';
 import {operatorNormalization} from '../server/operator-normalization.mjs';
 import {auditRecovery} from '../server/recovery.mjs';
+import {readCurrentMessage} from '../server/current-room-repository.mjs';
 function fixture(t){const dir=mkdtempSync(join(tmpdir(),'operator-direct-adopt-')),path=join(dir,'room.sqlite');let store=new RoomStore(path);store.initialize(initialRoom());const key=store.issueAccessKey('commons','owner');t.after(()=>{store.close();rmSync(dir,{recursive:true,force:true});});return {get store(){return store;},key,reopen(){store.close();store=new RoomStore(path);}};}
 function adopt(store,discardLegacyAssignments=true){const plan=operatorNormalization(store,{roomId:'commons',discardLegacyAssignments});const input={roomId:'commons',discardLegacyAssignments,planHash:plan.planHash,requestId:'adopt-current-state',reason:'Synthetic explicit one-time adoption qualification'};return {input,result:operatorNormalization(store,input,true)};}
 test('one-time operator adoption preserves current content and authority; cold post/work/retry uses small carrier',t=>{
@@ -33,4 +34,15 @@ test('adopted archived canonical room passes unchanged independent full recovery
  // Existing public archive path, without manufacturing a target proof.
  s.archiveMessages('commons',{keepNewest:2,dryRun:false});
  adopt(s);assert.equal(auditRecovery(s).rooms,1);
+});
+
+for(const archived of [false,true])test(`adoption materializes erased reducer extras without restoring deleted text (archived=${archived})`,t=>{
+ const f=fixture(t),s=f.store;
+ s.command(f.key,'commons',{id:'deleted-post',type:'message.posted',data:{messageId:'deleted-post',body:'Private text to erase'}});
+ s.command(f.key,'commons',{id:'deleted-edit',type:'message.edited',data:{messageId:'deleted-post',body:'Another erased version',expectedMessageRevision:0}});
+ s.command(f.key,'commons',{id:'deleted-delete',type:'message.deleted',data:{messageId:'deleted-post',expectedMessageRevision:1}});
+ assert.equal(s.db.prepare("SELECT reducer_extras_json FROM messages WHERE message_id='deleted-post'").get().reducer_extras_json,null);
+ if(archived){s.command(f.key,'commons',{id:'later',type:'message.posted',data:{messageId:'later',body:'Retained'}});while(!s.backfillMessages({limit:200}).done){}s.checkMessagesParity({roomId:'commons'});s.archiveMessages('commons',{keepNewest:1,dryRun:false});}
+ adopt(s);f.reopen();const message=f.store.readTransaction(()=>readCurrentMessage(f.store.db,'commons','deleted-post').value);
+ assert.equal(message.body,null);assert.deepEqual(message.editHistory,[]);assert.equal(message.deletedBy,'owner');assert.equal(auditRecovery(f.store).rooms,1);
 });

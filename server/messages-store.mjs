@@ -1890,7 +1890,10 @@ export function materializeCurrentMessageRows(db,roomId,state) {
   for(const message of state.messages){
     const row=existing.get(message.id);
     if(row&&!messageProofMatches(row))throw Error('projection_corrupt: canonical adoption message proof differs');
-    if(row&&!messageRowParityFields(row,message,{sequence:row.seq,pinned:pinned.has(message.id),threadMessages:byId}).length)continue;
+    // Legacy erasure may intentionally clear extras to SQL NULL. Current readers
+    // require the reducer's explicit erased history, so materialize that selected
+    // current value through the existing writer instead of reusing the row.
+    if(row&&typeof row.reducer_extras_json==='string'&&!messageRowParityFields(row,message,{sequence:row.seq,pinned:pinned.has(message.id),threadMessages:byId}).length)continue;
     let sequence=row?.seq;
     if(sequence===undefined){
       sequence=db.prepare(`SELECT sequence FROM events INDEXED BY current_redaction_message_events WHERE room_id=? AND CASE WHEN json_type(body,'$.data.messageId')='text' AND json_extract(body,'$.data.messageId')<>'' THEN json_extract(body,'$.data.messageId') ELSE id END=? AND json_extract(body,'$.type')='message.posted' ORDER BY sequence LIMIT 1`).get(roomId,message.id)?.sequence;

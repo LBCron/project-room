@@ -39,8 +39,9 @@ export function installGuideCommandHook(store) {
   const proto = store && Object.getPrototypeOf(store);
   if (!proto || typeof proto.command !== "function" || proto.__roomGuideHook) return;
   const original = proto.command;
-  proto.command = function(token, roomId, command, binding) {
-    const result = original.call(this, token, roomId, command, binding);
+  proto.command = function(...args) {
+    const roomId = args[1];
+    const result = original.apply(this, args);
     if (typeof roomId === "string" && !currentGuideRoom(this,roomId)) {
       noteGuideRoom(this, roomId);
       try {

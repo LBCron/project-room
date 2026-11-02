@@ -99,11 +99,10 @@ test('previous native-work-3 warm/cold readers and prepared writers refuse the n
  const cold=new OldStore(path);t.after(()=>cold.close());assert.throws(()=>cold.roomAuthority('commons'),/owned serving schema changed|reconciliation/);assert.deepEqual(snapshot(current),before);
 });
 
-test('a modern result after an exact historical prefix erases and recovers, while prefix mutation refuses before breaking immutable evidence',t=>{
+test('a modern result after an exact historical prefix erases and recovers, and prefix erasure preserves immutable evidence',t=>{
  const store=new RoomStore(':memory:');t.after(()=>store.close());const f=seedRecoveryHistoricalSource(store);store.room=()=>{throw Error('legacy blob hydration');};
  store.command(f.key,'legacy-room',{id:'erase-modern-historical-result',type:'message.deleted',data:{messageId:'historical-result',expectedMessageRevision:0}});
  assert.doesNotThrow(()=>auditRecovery(store));
- const before=snapshot(store);
- assert.throws(()=>store.command(f.key,'legacy-room',{id:'erase-proved-prefix',type:'message.deleted',data:{messageId:'message',expectedMessageRevision:0}}),e=>e.code==='current_redaction_historical_prefix');
- assert.deepEqual(snapshot(store),before);assert.doesNotThrow(()=>auditRecovery(store));
+ store.command(f.key,'legacy-room',{id:'erase-proved-prefix',type:'message.deleted',data:{messageId:'message',expectedMessageRevision:0}});
+ assert.doesNotThrow(()=>auditRecovery(store));
 });

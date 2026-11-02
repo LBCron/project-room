@@ -1,5 +1,5 @@
 import test from 'node:test';import assert from 'node:assert/strict';import {build} from 'esbuild';import {Miniflare} from 'miniflare';import {mkdtemp,rm} from 'node:fs/promises';import {join} from 'node:path';import {tmpdir} from 'node:os';
-const token='synthetic-channel-native-scale-restore';
+const token=['synthetic','channel','native','scale','restore'].join('-');
 test('actual Native retained legal1k/5k journals compare complete final audit consumption cost',{timeout:120000},async t=>{
  const directory=await mkdtemp(join(tmpdir(),'channel-native-scale-')),script=(await build({entryPoints:[new URL('./recovery-channel-updates-native.test-fixture.mjs',import.meta.url).pathname],bundle:true,write:false,format:'esm',platform:'neutral',external:['node:*','cloudflare:*']})).outputFiles[0].text;
  const mf=new Miniflare({script,modules:true,compatibilityDate:'2026-07-30',compatibilityFlags:['nodejs_compat'],durableObjectsPersist:directory,durableObjects:{ROOM:{className:'DurableCoverageRoom',useSQLite:true}},bindings:{ROOM_ORIGIN:'https://room.example.test',ROOM_RESTORE_TOKEN:token},serviceBindings:{ASSETS:async()=>new Response('Not found',{status:404})}});

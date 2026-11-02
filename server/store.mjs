@@ -1591,6 +1591,11 @@ this.slaBreachAlerts = new SlaBreachAlertJournal(this); // Task 26: durable in-a
       this.db.close();
       throw new Error(version > STORE_SCHEMA_VERSION ? "Database schema is newer than this service" : "Database schema version is unsupported");
     }
+    // In-memory protocol registration performs no SQL or migration. A store
+    // opened while restore is pending can later publish and serve writes on
+    // this same connection, so it needs the ordinary proof hooks already set.
+    if(!readOnly)configureWriteIntegrity(this.db,(id,row,proof)=>Boolean(proof?.projection_hash && proof.sequence===row.sequence
+      && projectionContentHash(this.db,id,row.sequence,row.projection)===proof.projection_hash));
     if(version===STORE_SCHEMA_VERSION && this.db.prepare("SELECT 1 FROM sqlite_master WHERE type='table' AND name='current_restore_admission'").get()
       && restorePending(this.db)) {
       this.storagePlatform.configure(this.db,readOnly);
@@ -1665,8 +1670,6 @@ this.slaBreachAlerts = new SlaBreachAlertJournal(this); // Task 26: durable in-a
     // Those scans are the integrity job's work. An older schema still migrates
     // and repairs here; that path runs once per upgrade, not on every wake.
     const deferIntegrity = this.integrityMode === "deferred" && version === STORE_SCHEMA_VERSION;
-    configureWriteIntegrity(this.db,(id,row,proof)=>Boolean(proof?.projection_hash && proof.sequence===row.sequence
-      && projectionContentHash(this.db,id,row.sequence,row.projection)===proof.projection_hash));
     try { this.transaction(() => {
     // Reread under the write lock: another startup may have upgraded while we waited.
     if (this.storagePlatform.version(this.db) !== version) throw new Error("Database changed during startup; retry with the current service");

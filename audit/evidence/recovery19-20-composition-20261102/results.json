@@ -1,0 +1,17 @@
+{
+  "runtime": "/Users/johnpotter/.local/bin/node v24.22.1",
+  "protocol19": {
+    "head": "df2255a35",
+    "tests": 83,
+    "passed": 83,
+    "failed": 0,
+    "previousFailures": 4
+  },
+  "protocol20Focused": {
+    "head": "ca5d909bd",
+    "tests": 11,
+    "passed": 11,
+    "failed": 0
+  },
+  "notQualified": "Protocol20 actual Native source with skipped lazy tables fails metadata validation. Correction pending; focused green is not full native acceptance. No production deployment."
+}

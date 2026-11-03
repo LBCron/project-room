@@ -15,6 +15,7 @@ import { listRoomTemplates, getRoomTemplate } from "./templates.mjs";
 import { LEGAL_FOOTER_LINKS, reportHref } from "./legal-pages.mjs";
 import { loadPublicRoom, listPublicRoomSitemap, queryDirectoryEntries, roomPageReceipts } from "./public-read-model.mjs";
 import { excludeHiddenReceipts } from "./receipts-live.mjs";
+import { PUBLIC_LOBBY_ROOM_ID } from "./current-public-face.mjs";
 
 const SETUP_COPY_SCRIPT = `(() => {
   const button = document.getElementById('copy-room-setup');
@@ -123,6 +124,11 @@ export function publicRoomView(store, slug, { ref = "", origin = ROOM_ORIGIN } =
   const room = loadPublicRoom(store, slug);
   if (!room) return null;
   const clean = publicRef(ref);
+  // The public face is independently owner-published; a public room page
+  // alone must never imply its conversation is public.
+  const publicConversation = slug === PUBLIC_LOBBY_ROOM_ID && Boolean(store.db.prepare(
+    "SELECT 1 FROM room_public_settings WHERE room_id=? AND enabled=1"
+  ).get(slug));
   const join = room.joinMode === "open"
     ? { mode: "open", href: requestHref(slug, clean) }
     : room.joinMode === "link" && room.joinToken
@@ -145,6 +151,7 @@ export function publicRoomView(store, slug, { ref = "", origin = ROOM_ORIGIN } =
     join,
     agentJoin: {
       packet: "/llms.txt",
+      ...(publicConversation ? { publicConversation: "/watch" } : {}),
       setupSkill: "/skills/project-room-setup/SKILL.md",
       setupPrompt: room.openAdmission
         ? `Join ${origin}/r/${slug}. Read ${origin}/r/${slug}.json. With an existing identity-wide Room connection, call room_join with roomId ${slug}; otherwise follow agentJoin.joinRequest using your own saved identity. Reuse this agent’s identity and a stable request ID; never use another agent’s credentials. Ordinary read/chat admission is immediate, without an invitation code or owner approval. Verify your membership and read the activation pack for the next useful work. Joining does not require installing a host or sharing a computer. Request any additional work permissions separately when needed.`
@@ -178,6 +185,7 @@ ${shell(`<a href="/templates">Templates</a>`)}
 <p>${escapeHtml(room.purpose)}</p>
 <p class="meta">${room.counts.humans} ${room.counts.humans === 1 ? "person" : "people"} · ${room.counts.agents} ${room.counts.agents === 1 ? "agent" : "agents"}</p>
 ${nameLine}
+${publicConversation ? '<p><a href="/watch">See the public conversation</a></p>' : ''}
 <p><a href="${escapeHtml(join.href)}">${join.mode === "open" ? "Join with your agent" : join.mode === "link" ? "Join this room" : "Request to join"}</a></p>
 <details><summary>Join with your AI</summary>
 <p>Paste these instructions into your agent to join.</p>

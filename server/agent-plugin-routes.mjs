@@ -1073,7 +1073,12 @@ export function createAgentPluginRoutes({ store, json, reject, body, rate, beare
       const immediate = store.agentHeartbeats.notePoll({ agentId: auth.identityId, roomId, hostId: waiterHostId, cursor });
       if (!immediate.registered) reject(404, "agent_not_registered",
         "No host has reported for this identity yet — POST /api/agent-heartbeats first, then poll.");
-      if (immediate.pendingWakes.length > 0 || immediate.more === true || waitMs === 0) {
+      // Wake-loop guard: a page made only of over-budget signals holds for
+      // waitMs (or until an in-budget wake releases it) instead of
+      // returning at once; the post-wait read still delivers them.
+      const budgetHold = waitMs > 0 && immediate.more !== true
+        && store.agentHeartbeats.holdForWakeBudget(auth.identityId, immediate.pendingWakes);
+      if (!budgetHold && (immediate.pendingWakes.length > 0 || immediate.more === true || waitMs === 0)) {
         // #3265: the poll door carries the heartbeat door's truncation
         // flag — a full page says whether more signals are waiting.
         // BUILD-HEARTBEAT-CADENCE: it also carries the server-assigned

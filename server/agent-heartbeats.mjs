@@ -335,6 +335,11 @@ export class AgentHeartbeats {
     this.staleAfterMs = staleAfterMs;
     // Wake-loop guard (server/agent-wake-bucket.mjs).
     this.wakeBucket = new WakeBucket(() => this.now());
+    // Signal ids queued while the bucket was empty (agentId -> Set). A poll
+    // whose whole pending page is throttled holds for its waitMs once
+    // instead of returning at once, so over-budget turns are actually
+    // capped, not only the instant release (Root review on #5745).
+    this._throttledSignals = new Map();
     // Push delivery transport (RC-2026-09-24-203). Production leaves both
     // null: postDelivery then uses the real fetch and real DNS. Tests inject
     // mocks via setPushTransport so the push path never touches the network.
@@ -1084,7 +1089,13 @@ export class AgentHeartbeats {
     let throttled = false;
     if (applied.changes > 0 && !(roomId && this.pausedRoomsOf(agentId).some(p => p.roomId === roomId))) {
       if (this.wakeBucket.take(agentId, roomId)) this._releaseWakeWaiter(agentId, roomId);
-      else throttled = true;
+      else {
+        throttled = true;
+        let ids = this._throttledSignals.get(agentId);
+        if (!ids) { ids = new Set(); this._throttledSignals.set(agentId, ids); }
+        ids.add(row.signal_id);
+        if (ids.size > 1000) ids.delete(ids.values().next().value);
+      }
     }
     return Object.freeze({ enqueued: applied.changes > 0, ...(throttled ? { throttled: true } : {}), signal: signalView(row) });
   }
@@ -1223,6 +1234,17 @@ export class AgentHeartbeats {
       // Older database without the push table: no hint is stored.
     }
     return assignedCadenceSeconds(stored);
+  }
+
+  // True when every pending signal was queued over budget: the poll should
+  // hold once. Holding clears the marks, so a signal is held at most once
+  // and is always delivered by the post-wait read.
+  holdForWakeBudget(agentId, pendingWakes) {
+    const ids = this._throttledSignals.get(agentId);
+    if (!ids || pendingWakes.length === 0 || !pendingWakes.every(s => ids.has(s.signalId))) return false;
+    for (const s of pendingWakes) ids.delete(s.signalId);
+    if (ids.size === 0) this._throttledSignals.delete(agentId);
+    return true;
   }
 
   // RC-2026-09-28-3602: register one in-process waiter per HOST for the

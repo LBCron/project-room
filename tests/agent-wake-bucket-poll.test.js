@@ -99,3 +99,40 @@ test("ping-pong: replies that keep mentioning the agent are throttled once the b
   assert.equal(throttledAt, wakeBucketLimits.capacity + 1, "first capacity turns wake instantly, the next is throttled");
   t.diagnostic(`ping-pong throttled at turn ${throttledAt}; signal still delivered on the same poll`);
 });
+
+// Root review on #5745: a wake queued BEFORE the next poll, while the bucket
+// is empty, used to return at once, so turns were not capped. Now a page of
+// only over-budget signals holds for waitMs once, then delivers them.
+test("over budget, queued before the poll: the poll still holds, so model turns are capped", async t => {
+  const f = await serve(t);
+  for (let i = 0; i < wakeBucketLimits.capacity; i += 1) f.enqueue(`q-${i}`);
+  await f.ack((await f.poll(0)).pendingWakes.map(w => w.signalId));
+  assert.equal(f.enqueue("q-over").throttled, true);
+  const WAIT = 800;
+  const { value, ms } = await timed(f.poll(WAIT));
+  assert.ok(ms >= WAIT - 100, `held, not immediate (${Math.round(ms)} ms of ${WAIT})`);
+  assert.deepEqual(value.pendingWakes.map(w => w.messageId), ["q-over"], "delivered after the hold");
+  // Held at most once: a re-poll before ack returns at once.
+  const again = await timed(f.poll(WAIT));
+  assert.ok(again.ms < 300, `second poll not held again (${Math.round(again.ms)} ms)`);
+  assert.deepEqual(again.value.pendingWakes.map(w => w.messageId), ["q-over"]);
+  // waitMs=0 never holds.
+  assert.equal(f.enqueue("q-over-2").throttled, true);
+  const zero = await timed(f.poll(0));
+  assert.ok(zero.ms < 300);
+  t.diagnostic(`turn cap: over-budget turn waited ${Math.round(ms)} ms at waitMs=${WAIT}; sustained rate bounded by refill ${wakeBucketLimits.refillPerMinute}/min or one turn per waitMs`);
+});
+
+test("pingpong with pre-queued wakes: turns past the burst each cost a full waitMs", async t => {
+  const f = await serve(t);
+  const WAIT = 300, turns = wakeBucketLimits.capacity + 4;
+  const start = performance.now(); let slow = 0;
+  for (let i = 0; i < turns; i += 1) {
+    f.enqueue(`pq-${i}`); // reply lands before the agent polls again
+    const { value, ms } = await timed(f.poll(WAIT));
+    await f.ack(value.pendingWakes.map(w => w.signalId));
+    if (ms >= WAIT - 50) slow += 1;
+  }
+  assert.equal(slow, turns - wakeBucketLimits.capacity, "every turn past capacity is held");
+  t.diagnostic(`${turns} turns in ${Math.round(performance.now() - start)} ms; ${slow} held turns`);
+});

@@ -305,7 +305,7 @@ export function readCurrentMessageThread(store, token, roomId, messageId, expect
     const floor = readCurrentHistoryFloor(store.db, roomId, auth.member.id);
     const visible = message => message && messageInHistory(message, floor)
       && (!message.toMemberId || message.authorId === auth.member.id || message.toMemberId === auth.member.id);
-    if (!currentMessageMayBeVisible(store.db, roomId, messageId, auth.member.id, b)) fail(404, 'message_not_found', 'Message not found');
+    if (!currentMessageMayBeVisible(store.db, roomId, messageId, auth.member.id, b, floor)) fail(404, 'message_not_found', 'Message not found');
     const selected = readCurrentMessage(store.db, roomId, messageId, b);
     if (!visible(selected?.value)) fail(404, 'message_not_found', 'Message not found');
     const family = selected.row.thread_root_id ?? messageId;

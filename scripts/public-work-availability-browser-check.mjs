@@ -76,7 +76,13 @@ for (const width of [390, 1280]) {
       const page = await browser.newPage({ viewport: { width, height: 900 } });
       const errors = [];
       page.on('pageerror', error => errors.push(error.message));
-      await page.goto(`${origin}/offers?offer=${id}`);
+      await page.goto(state === 'available' ? `${origin}/offers` : `${origin}/offers?offer=${id}`);
+      if (state === 'available') {
+        const card = page.locator(`[data-offer="${id}"]`);
+        await card.waitFor({ state: 'visible' });
+        await card.focus();
+        await page.keyboard.press('Enter');
+      }
       const status = page.locator('#contribution-status p[role="status"]');
       await status.waitFor({ state: 'visible' });
       assert.equal(await status.innerText(), label);

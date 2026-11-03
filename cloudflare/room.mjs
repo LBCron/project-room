@@ -857,6 +857,14 @@ export default {
     // invite redeem hit the same handlers as origin (www /api/* is Webflow).
     if (isEdgeDoorUrl(request.url)) {
       const inbound = new URL(request.url);
+      // These public lobby pages must navigate on the canonical host: relative
+      // links on getdasha otherwise leave /room and enter the unrelated site.
+      const lobbyPage=inbound.pathname==='/room/watch'
+        ||inbound.pathname==='/room/docs/agents/paste'&&inbound.searchParams.get('room')==='project-room-lobby';
+      if(request.method==='GET'&&lobbyPage){
+        const canonical=new URL(inbound.pathname.slice('/room'.length)+inbound.search,roomOrigin(env).origin);
+        return finish(new Response(null,{status:302,headers:{Location:canonical.href,'Cache-Control':'no-store'}}),'worker');
+      }
       const pathname = rewriteRoomApiPrefix(inbound.pathname);
       const target = new URL(pathname + inbound.search, roomOrigin(env).origin);
       // OAuth state is bound to a host-only account cookie. Start on the

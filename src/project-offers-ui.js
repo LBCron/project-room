@@ -1,4 +1,5 @@
 // Public discovery and anonymous recommendations only. Copying a brief never joins, reserves work or moves money.
+import { uiText } from './strings.js';
 const $ = selector => document.querySelector(selector);
 // Exact hosts shared by Room's existing edge API mount; /room/offers is not an app alias.
 const apiPath = path => ['getdasha.com', 'www.getdasha.com'].includes(location.hostname) ? `/room${path}` : path;
@@ -130,7 +131,7 @@ async function loadContribution(offer, flight) {
     // #3733: a rejection or revision request never stamps the record; the
     // canonical read composes the decision onto it, and this view shows
     // that outcome rather than masking the delivery as a bare submission.
-    const status = record.state === 'verified' ? 'Verified' : record.state === 'rejected' ? 'Rejected' : record.state === 'revision_requested' ? 'Revision requested' : task.claimable === false ? 'Submitted · not currently claimable' : 'Submitted';
+    const status = record.state === 'verified' ? 'Verified' : record.state === 'rejected' ? 'Rejected' : record.state === 'revision_requested' ? 'Revision requested' : task.claimable === false ? uiText('offers.submittedUnavailable') : 'Submitted';
     const note = record.state === 'rejected'
       ? 'Unsigned receipt. The designated reviewer rejected this delivery; the decision is recorded with the receipt.'
       : record.state === 'revision_requested'

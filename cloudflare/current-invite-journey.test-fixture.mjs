@@ -29,7 +29,7 @@ export class InviteJourneyRoom extends DurableObject {
     let first,second;try{first=s.referrals.invitation(f.ownerKey,'commons');second=s.referrals.invitation(f.ownerKey,'commons');}finally{s.room=room;this.db.prepare=prepare;}
     const digest=createHash('sha256').update(first.invite?.token??'').digest('hex'),previous=await this.ctx.storage.get('selected-invitation-digest');
     await this.ctx.storage.put('selected-invitation-digest',digest);
-    return Response.json({available:Boolean(first.invite?.token),sameRetry:first.invite?.token===second.invite?.token,sameAfterCold:previous===undefined||previous===digest,noBoard:Object.hasOwn(first,'referrals')===false,noMessageScan:!queries.some(sql=>/\bFROM\s+messages\b/i.test(sql)),cost:cost()});
+    return Response.json({available:Boolean(first.invite?.token),sameRetry:Object.is(first.invite?.token,second.invite?.token),sameAfterCold:previous===undefined||previous===digest,noBoard:Object.hasOwn(first,'referrals')===false,noMessageScan:!queries.some(sql=>/\bFROM\s+messages\b/i.test(sql)),cost:cost()});
    }
    const options={displayName:'Friend existing agent',identitySecret:f.peer.secret,requestId:'native-existing-join'};
    const inventory=()=>Object.fromEntries(['agent_identities','identity_links','events','commands','operator_actions','agent_invite_redeem_receipts','agent_connections'].map(t=>[t,this.db.prepare('SELECT count(*) n FROM '+t).get().n]));

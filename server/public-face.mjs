@@ -58,6 +58,14 @@ const handleOf = (state, memberId) => {
   return name || null;
 };
 
+// Mention tokens (<@memberId>) carry member ids, which this face never
+// exposes. Show the member's public handle, or a neutral placeholder.
+const MENTION_TOKEN = /<@([A-Za-z0-9][A-Za-z0-9_.:-]{0,127})>/g;
+const publicBody = (state, body) => {
+  const named = body.replace(MENTION_TOKEN, (_, id) => `@${handleOf(state, id) ?? "member"}`);
+  return named.length > MAX_BODY_CHARS ? named.slice(0, MAX_BODY_CHARS) + " …" : named;
+};
+
 export class PublicFace {
   constructor(store) {
     if (!store || !store.db) fail(500, "face_store_missing", "PublicFace requires a store with a db handle");
@@ -173,7 +181,7 @@ export class PublicFace {
       .filter(m => m && m.toMemberId == null && typeof m.body === "string" && m.body.length > 0)
       .slice(-messageLimit)
       .map(m => {
-        const body = m.body.length > MAX_BODY_CHARS ? m.body.slice(0, MAX_BODY_CHARS) + " …" : m.body;
+        const body = publicBody(state, m.body);
         return Object.freeze({
           at: m.createdAt ?? null,
           from: handleOf(state, m.authorId) ?? "unknown",
@@ -216,7 +224,7 @@ export class PublicFace {
         id:m.id,
         at:m.createdAt??null,
         from:handleOf(current,m.authorId)??'unknown',
-        body: m.body.length > MAX_BODY_CHARS ? m.body.slice(0, MAX_BODY_CHARS) + ' …' : m.body
+        body: publicBody(current, m.body)
       }));
       return Object.freeze({
         messages:Object.freeze(messages),
@@ -241,7 +249,7 @@ export class PublicFace {
         id: m.id,
         at: m.createdAt ?? null,
         from: handleOf(state, m.authorId) ?? "unknown",
-        body: m.body.length > MAX_BODY_CHARS ? m.body.slice(0, MAX_BODY_CHARS) + " …" : m.body
+        body: publicBody(state, m.body)
       }))),
       next: page.length ? page[page.length - 1].id : after,
       hasMore,

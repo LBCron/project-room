@@ -213,3 +213,36 @@ test("public message emphasis is readable without interpreting code or HTML", ()
   assert.match(html, /<strong>&lt;img src=x onerror=alert\(1\)&gt;<\/strong>/);
   assert.doesNotMatch(html, /<img src=x/);
 });
+
+test("mention tokens show public handles, never member ids", () => {
+  const state = baseState();
+  state.members.gone = member("gone", "Gone", false);
+  state.messages.push(
+    { id: "m5", authorId: "owner", body: "<@alice> and <@bob>, see <@gone> and <@ai_unknownX9>", createdAt: 14 },
+    { id: "m6", authorId: "owner", body: "<@alice>" + "x".repeat(2100), createdAt: 15 });
+  const store = makeStore({ r1: state });
+  const face = new PublicFace(store);
+  const { publicCode } = face.enable("r1", "owner");
+  const shown = face.faceByCode(publicCode).messages.find(m => m.body.startsWith("@Alice and"));
+  assert.equal(shown.body, "@Alice and @Bob, see @member and @member");
+  const feed = face.feedByCode(publicCode).messages;
+  assert.ok(feed.every(m => !/<@|ai_unknownX9|\bgone\b/.test(m.body)));
+  assert.ok(feed.find(m => m.id === "m6").body.startsWith("@Alice"));
+  const html = face.faceHtml(publicCode);
+  assert.ok(html.includes("@Alice and @Bob"));
+  assert.ok(!html.includes("&lt;@") && !html.includes("ai_unknownX9"));
+});
+
+test("mention handles stay escaped and unavailable members stay anonymous", () => {
+  const state = baseState();
+  state.members.eve = member("eve", "<b>Eve</b>");
+  state.members.left = member("left", "Former Member", false);
+  state.messages.push({ id: "m7", authorId: "owner", body: "<@eve> and <@left>", createdAt: 16 });
+  const store = makeStore({ r1: state });
+  const face = new PublicFace(store);
+  const { publicCode } = face.enable("r1", "owner");
+  assert.equal(face.feedByCode(publicCode).messages.find(m => m.id === "m7").body, "@<b>Eve</b> and @member");
+  const html = face.faceHtml(publicCode);
+  assert.ok(html.includes("@&lt;b&gt;Eve&lt;/b&gt; and @member"));
+  assert.ok(!html.includes("<b>Eve</b>") && !html.includes("Former Member") && !html.includes("&lt;@left&gt;"));
+});

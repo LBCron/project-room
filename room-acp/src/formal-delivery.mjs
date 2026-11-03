@@ -33,12 +33,14 @@ export async function readCompleteRequest(room, requestId) {
 export function prepareFormalDelivery(context, output, stopReason) {
   if (!context.allPagesRead || context.page?.hasMore !== false || context.request?.status !== 'open'
     || context.viewerId !== context.request.recipientId) invalid('Complete open recipient context is required');
+  if (stopReason !== 'end_turn') return {kind:'pending', body:'The agent turn did not finish. This request remains open.'};
   let value;
   try {value = JSON.parse(output);} catch {return {kind:'pending', body:'The agent did not return an explicit answer or decline. This request remains open.'};}
+  if (value && !Array.isArray(value) && typeof value.body === 'string' && value.body.length > 4096)
+    return {kind:'pending', body:'The agent response exceeded the 4,096-character limit. This request remains open.'};
   if (!value || Array.isArray(value) || Object.keys(value).some(key => !['outcome','body'].includes(key))
-    || !['answered','declined','pending'].includes(value.outcome) || typeof value.body !== 'string'
-    || !value.body.trim() || value.body.length > 4096 || stopReason !== 'end_turn')
-    return {kind:'pending', body:'The agent did not finish a valid response. This request remains open.'};
+    || !['answered','declined','pending'].includes(value.outcome) || typeof value.body !== 'string' || !value.body.trim())
+    return {kind:'pending', body:'The agent returned an invalid response format. This request remains open.'};
   if (value.outcome === 'pending') return {kind:'pending', body:value.body};
   const recipes = (context.responseHttpActions ?? []).filter(action => action.command?.data?.responseOutcome === value.outcome);
   if (recipes.length !== 1) invalid('No unique current response recipe');

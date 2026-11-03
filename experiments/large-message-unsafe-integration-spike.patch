@@ -1,0 +1,19 @@
+# UNSAFE RESEARCH SPIKE: not for production or direct application.
+# Demonstrates integration only. Lacks scoped authorization, complete budget/CPU/response accounting, and uses an unjustified 2 MiB experimental limit.
+# Use with full-stream-proof-research.mjs and the research-only Worker acceptance test on this branch.
+--- a/server/current-room-repository.mjs
++++ b/server/current-room-repository.mjs
+@@ -1,3 +1,4 @@
++import {fullStreamProofResearch} from './full-stream-proof-research.mjs';
+ import {syncCurrentRoomPublication} from './public-read-model.mjs';
+ import {verifyRoomAssistantIndexes} from './room-assistant-schema.mjs';
+ import {prepareClaimOverlap,matchClaimOverlap} from '../src/claim-overlap.js';
+@@ -458,7 +459,7 @@
+   if(!scalar){if(witness!==undefined)corrupt('witnessed canonical message missing');return undefined;}
+   if(!witness)corrupt('canonical message lacks independent membership witness');
+   const bytes=Object.values(scalar).reduce((sum,value)=>sum+(value??0),0);
+-  if(bytes>MAX_RECORD)refuse('Message dependency exceeds bounded input');charge(b,bytes+512);
++  if(bytes>MAX_RECORD){ const remaining=2*1024*1024-(b.experimentalLargeBytes??0); const result=fullStreamProofResearch(db,roomId,messageId,{maxBytes:remaining}); b.experimentalLargeBytes=(b.experimentalLargeBytes??0)+result.sourceBytes; charge(b,512); return result; }charge(b,bytes+512);
+   const row=db.prepare(`SELECT ${MESSAGE_PROOF_SELECT},entity_hash FROM messages WHERE room_id=? AND message_id=?`).get(roomId,messageId);
+   if(!messageProofMatches(row)||witness.sequence!==row.seq||witness.entityHash!==row.entity_hash)corrupt('message field proof changed');
+   return {row,value:decodeMessageEntity(row)};

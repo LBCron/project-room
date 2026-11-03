@@ -28,13 +28,17 @@ for (const width of [1280,390]) test('normalized join approvals remain visible a
  const errors=[];page.on('pageerror',e=>errors.push(e.message));
  await page.goto('http://127.0.0.1:'+server.address().port+'/?room=join-native');
  await signInFixture(page,owner);
+ await page.waitForFunction(()=>document.querySelector('#updates-count')?.textContent==='1');
+ assert.equal(await page.locator('#updates-count').isVisible(),true,'pending join contributes to badge before opening');
  await page.locator('#topbar-updates').click();
  await page.locator('#updates-dialog[open]').waitFor();
  const row=page.locator('[data-access-request-id="join-native-peer"]');
  await row.waitFor({state:'attached'});
  assert.equal(await row.isVisible(),true,'loaded pending requests must not be hidden behind native attention');
+ assert.match(await page.locator('.updates-list').innerText(),/No conversation or work/);
  await row.getByRole('button',{name:'Approve — Grok peer asks to join',exact:true}).click();
  await page.waitForFunction(()=>!document.querySelector('[data-access-request-id="join-native-peer"]'));
+ await page.waitForFunction(()=>document.querySelector('#updates-count')?.hidden===true);
  const admitted=store.authenticate(peer.secret,'join-native');
  assert.equal(admitted.member.id,peer.identityId,'the existing identity must be reused');
  assert.deepEqual(admitted.member.permissions,['accept_work','complete_work']);

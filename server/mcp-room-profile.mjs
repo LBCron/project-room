@@ -1,5 +1,5 @@
 import {redactSelectedEventPage} from './current-room-events.mjs';
-import './current-room-repository.mjs';
+import { currentInviteContext } from './current-room-repository.mjs';
 import { SQL_BIND_CHUNK } from "./sql-binds.mjs";
 import { pageWorkListing, validWorkPage } from "./work-list-page.mjs";
 import { resolveMcpOAuthPrincipal, runMcpOAuthRequest, mcpOAuthToolAllowed, mcpOAuthPrincipalDescriptor, authorizeMcpOAuthDescriptor } from './mcp-oauth.mjs';
@@ -32,8 +32,8 @@ import { readComposedRoomContext } from "./orient.mjs";
 import { memoizeBoardList } from "./available-work.mjs";
 import { walkProvenance, ClaimError } from "./work-claims.mjs";
 import { claimThread } from "./claim-thread.mjs";
-import { randomUUID } from "node:crypto";
-import { validId, ownMember, ROOM_KINDS, MAX_MESSAGE_BODY_CHARS } from "../src/events.js";
+import { randomUUID, createHash } from "node:crypto";
+import { validId, ownMember, publicPage, joinLink, isRoomArchived, ROOM_KINDS, MAX_MESSAGE_BODY_CHARS } from "../src/events.js";
 import { nextWorkStep, workActions } from "../src/workflow.js";
 import { completedResults, currentResult, searchWorkMatches as searchWork } from "../src/work-selectors.js";
 import { sortWorkByCuriosity, viewerHistory } from "../src/curiosity-rank.mjs";
@@ -563,6 +563,34 @@ function dispatchRoomToolCall(store, secret, identity, name, args, agentRooms) {
     if (args.linkToken !== undefined) return store.shareLinks.joinAgent(secret, args.linkToken, displayName);
     if (args.inviteCode !== undefined) return store.invites.redeem(args.inviteCode, { displayName, identitySecret: secret });
     if (args.pairId !== undefined) return store.pairing.pollHeld(args.pairId, identity.identityId);
+    // Only the existing global identity may use ordinary public admission.
+    // Explicit reconnect proofs and scoped credentials retain their pairing path.
+    if (isIdentitySecret(secret) && args.publicKey === undefined && args.keyProof === undefined) {
+      const admission = store.transaction(() => {
+        const linked = store.db.prepare("SELECT member_id AS memberId FROM identity_links WHERE room_id=? AND identity_id=?")
+          .get(args.roomId, identity.identityId);
+        const context = currentInviteContext(store, args.roomId, { memberIds: [identity.identityId, linked?.memberId] });
+        const state = context ? context.room.state : store.room(args.roomId).state;
+        if (publicPage(state).enabled !== true || joinLink(state).enabled !== true || isRoomArchived(state)) return null;
+        if (linked) {
+          const member = ownMember(state.members, linked.memberId);
+          if (member?.active !== true || member.identityId !== identity.identityId)
+            throw new ServiceError(409, "stale_membership", "Current active membership required; ask a room owner to review access");
+          return { status: "approved", roomId: args.roomId, memberId: member.id, alreadyMember: true,
+            grantedPermissions: [...member.permissions], next: [{ action: "activation-pack", method: "GET",
+              path: `/api/rooms/${encodeURIComponent(args.roomId)}/activation-pack` }] };
+        }
+        const requestId = `mcp_public_${createHash("sha256").update(JSON.stringify([args.roomId, identity.identityId])).digest("hex").slice(0, 48)}`;
+        return new AccessRequests(store).request(args.roomId, {
+          identityId: identity.identityId, displayName, requestedPermissions: [], requestId
+        }, secret);
+      });
+      if (admission) return {
+        ...admission,
+        next: admission.next?.map(step => step.action === "activation-pack"
+          ? { ...step, tool: "room_activation_pack", arguments: { roomId: args.roomId } } : step)
+      };
+    }
     const started = store.pairing.start({
       roomId: args.roomId, displayName,
       publicKey: args.publicKey ?? null, keyProof: args.keyProof ?? null,

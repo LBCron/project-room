@@ -118,12 +118,20 @@ export function mountUpdates({ client, host, getContext, onOpenWork, onOpenMessa
     return true;
   }
 
+  function pendingAccessCount() {
+    if (!nativeAttention() || !attention || attention.hidden || decisions.hidden || !owns(owner)) return 0;
+    const represented = new Set(items.filter(item => item.kind === "access_request").map(item => item.sourceRef?.requestId ?? item.id.replace(/^access_request:/, "")));
+    return new Set([...attention.querySelectorAll("[data-access-request-id]")]
+      .filter(row => !row.hidden).map(row => row.dataset.accessRequestId)
+      .filter(id => id && !represented.has(id))).size;
+  }
   function paintBadge() {
+    const count = actionable + pendingAccessCount();
     const label=nativeAttention()?'Needs me':'Updates';entry.firstChild.nodeValue=label+' ';dialog.querySelector('#updates-title').textContent=label;tabs.hidden=nativeAttention();
-    badge.textContent = badgeIncomplete ? "?" : actionable ? `${actionable}${badgeMore ? "+" : ""}` : "";
-    badge.hidden = !badgeIncomplete && actionable === 0;
+    badge.textContent = badgeIncomplete ? "?" : count ? `${count}${badgeMore ? "+" : ""}` : "";
+    badge.hidden = !badgeIncomplete && count === 0;
     entry.setAttribute("aria-label", badgeIncomplete ? `${label}, some sources are unavailable`
-      : actionable ? `${label}, ${badgeMore ? "at least " : ""}${actionable} loaded updates need you${badgeMore ? ", more available" : ""}` : label);
+      : count ? `${label}, ${badgeMore ? "at least " : ""}${count} loaded updates need you${badgeMore ? ", more available" : ""}` : label);
   }
   function paintPaging() {
     const pageCopy = loadedPages ? `Page ${loadedPages} loaded. ` : "";
@@ -169,7 +177,7 @@ export function mountUpdates({ client, host, getContext, onOpenWork, onOpenMessa
     if (!rows.length && !items.some(item => attention && item.kind === "access_request")) {
       const empty = document.createElement("li");
       empty.className = "empty-note";
-      empty.textContent = nativeAttention()?(hasMore?'No attention in the loaded pages yet. Continue to check this window.':'No attention found in the checked sources.'):incomplete ? "No matching updates are loaded yet. Some sources are unavailable."
+      empty.textContent = nativeAttention()?(hasMore?'No conversation or work items in the loaded pages yet. Continue to check this window.':'No conversation or work items found in the checked sources.'):incomplete ? "No matching updates are loaded yet. Some sources are unavailable."
         : hasMore ? "No matching updates in the loaded pages yet."
           : filter === "needs" ? "Nothing needs you." : "Nothing in this filter.";
       list.append(empty); paintPaging();
@@ -467,6 +475,11 @@ export function mountUpdates({ client, host, getContext, onOpenWork, onOpenMessa
     new MutationObserver(() => { if (main.hidden) reset(); else void load(filter); })
       .observe(main, { attributes: true, attributeFilter: ["hidden"] });
   }
+  if (attention) new MutationObserver(() => {
+    // This existing card loads its authorized queue independently. Repaint only
+    // its own derived badge/copy; never fetch or count the owner work rollup twice.
+    if (nativeAttention() && owns(owner)) { paintBadge(); paint(); }
+  }).observe(attention, { childList: true, subtree: true, attributes: true, attributeFilter: ["hidden", "data-access-request-id"] });
   paintBadge();
   return { open, restore, reset, sync, cancelPending, close() { cancelPending(); if (dialog.open) dialog.close(); }, openAction(id) { if(nativeAttention()&&['catch-up','activity'].includes(id))return false;const next = PALETTE[id]; if (!next) return false; open(next); return true; } };
 }

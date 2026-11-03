@@ -1,3 +1,4 @@
+import {ServiceError} from './service-error.mjs';
 import { hydrateWorkItems } from "./work-repository.mjs";
 // Public pages read these tables and nothing from rooms.projection.
 // Rows are written when an owner opts in, updated in the same transaction
@@ -513,6 +514,48 @@ function upsertPublicRoom(store, state, auth) {
     typeof setAt === "string" ? setAt : null, updatedAt);
 }
 
+// Native public pages intentionally do not serve unqualified task/receipt listings.
+// This hook runs after the protected transition, inside the originating writer TX.
+export function syncCurrentRoomPublication(store,{roomId,previous,state,event,changes,current,charge}) {
+  const on=publicPage(state).enabled===true,was=publicPage(previous).enabled===true;
+  if(!on){if(was)store.db.prepare('DELETE FROM public_rooms WHERE slug=?').run(roomId);return;}
+  const first=!was,memberChanges=changes.filter(change=>change.domain==='members');
+  const roomChanged=changes.some(change=>change.domain==='metadata'&&change.key==='room');
+  if(!first&&!memberChanges.length&&!roomChanged)return;
+  const publicMember=m=>({id:m.id,kind:m.kind,name:publicName(m).enabled===true?cleanName(m.displayName):null});
+  let members;
+  if(first)members=Object.values(state.members).filter(m=>m&&m.active!==false).map(publicMember);
+  else {
+    const scalar=store.db.prepare('SELECT length(CAST(members_json AS BLOB)) bytes FROM public_rooms WHERE slug=?').get(roomId);
+    if(!scalar||!Number.isSafeInteger(scalar.bytes)||scalar.bytes<2||scalar.bytes>131072)throw Error('current_room_corrupt: public member projection unavailable');
+    charge(scalar.bytes+256);
+    const row=store.db.prepare('SELECT members_json FROM public_rooms WHERE slug=?').get(roomId);
+    members=JSON.parse(row.members_json);
+    if(!Array.isArray(members)||members.length>100||members.some(m=>!m||!['human','agent'].includes(m.kind))
+      ||new Set(members.map(m=>m.id)).size!==members.length)
+      throw new ServiceError(409,'current_room_context_unavailable','Public member projection needs an explicit public-page off/on rebuild before membership changes');
+    for(const change of memberChanges){
+      const before=current.before.get(JSON.stringify(['members',change.key]));
+      const at=members.findIndex(m=>m.id===change.key);
+      if((before?.active!==false&&before!==undefined)!==(at>=0))throw Error('current_room_corrupt: public member projection membership differs');
+      if(at>=0)members.splice(at,1);
+      if(change.value&&change.value.active!==false)members.push(publicMember(change.value));
+    }
+  }
+  // The existing projection stores only opted-in display names and aggregate counts.
+  const projected=members;
+  if(projected.length>100)throw Error('current_room_corrupt: public roster exceeds admission');
+  const agents=projected.filter(m=>m.kind==='agent').length;
+  const join={mode:joinLink(state).enabled===true?'open':'request',token:null,ownerId:state.room.ownerId};
+  const at=event.at;
+  store.db.prepare(`INSERT INTO public_rooms(slug,title,purpose,humans,agents,names_json,tasks_json,members_json,receipts_enabled,join_mode,join_token,owner_member_id,set_at,updated_at)
+    VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?) ON CONFLICT(slug) DO UPDATE SET title=excluded.title,purpose=excluded.purpose,
+    humans=excluded.humans,agents=excluded.agents,names_json=excluded.names_json,members_json=excluded.members_json,
+    join_mode=excluded.join_mode,join_token=excluded.join_token,owner_member_id=excluded.owner_member_id,set_at=excluded.set_at,updated_at=excluded.updated_at`)
+    .run(roomId,state.room.title??roomId,state.room.purpose??'',projected.length-agents,agents,JSON.stringify(projected.filter(m=>m.name).map(m=>m.name)),
+      '[]',JSON.stringify(projected),0,join.mode,join.token,join.ownerId,state.room.publicPage.setAt??null,at);
+}
+
 export function refreshLinkedDirectory(store, roomId) {
   const links = store.db.prepare("SELECT DISTINCT identity_id AS identityId FROM identity_links WHERE room_id=?").all(roomId);
   for (const link of links) refreshDirectoryIdentity(store, link.identityId);
@@ -563,6 +606,9 @@ export function refreshDirectoryForReceipt(store, receiptId) {
 // Same transaction as the event write when the caller is already inside one.
 export function syncRoomPublication(store, { roomId, state, previous = null, auth = null } = {}) {
   if (!roomId || !state?.room) return;
+  // Normalized publication is maintained from protected transition deltas,
+  // never the intentionally sparse command context.
+  if (store.db.prepare("SELECT 1 FROM current_room_head WHERE room_id=?").get(roomId)) return;
   const pageOn = publicPage(state).enabled === true;
   const pageWas = publicPage(previous).enabled === true;
   const receiptsOn = publicReceipts(state).enabled === true;
@@ -1244,18 +1290,20 @@ export function listPublicReceiptSitemap(store, limit = 1000) {
 
 export function loadPublicRoom(store, slug) {
   if (!SLUG.test(slug) || isUnpublished(store.db, "room", slug)) return null;
-  const row = store.db.prepare(`SELECT slug, title, purpose, humans, agents, names_json, tasks_json, receipts_enabled, join_mode, join_token, set_at
-    FROM public_rooms WHERE slug=?`).get(slug);
+  const native=Boolean(store.db.prepare("SELECT 1 FROM current_room_head WHERE room_id=?").get(slug));
+  const row = store.db.prepare(`SELECT slug, title, purpose, humans, agents, names_json, CASE WHEN ? THEN '[]' ELSE tasks_json END AS tasks_json, receipts_enabled, join_mode, join_token, set_at
+    FROM public_rooms WHERE slug=?`).get(native?1:0,slug);
   if (!row) return null;
   return {
+    ...(native?{openAdmission:row.join_mode==='open',coverage:{tasks:{available:false},receipts:{available:false}}}:{}),
     slug: row.slug,
     title: row.title,
     purpose: row.purpose,
     counts: { humans: row.humans, agents: row.agents },
     names: parseJson(row.names_json, []),
-    tasks: parseJson(row.tasks_json, []),
-    receiptsEnabled: row.receipts_enabled === 1,
-    joinMode: row.join_mode === "link" && row.join_token ? "link" : "request",
+    tasks: native?[]:parseJson(row.tasks_json, []),
+    receiptsEnabled: !native&&row.receipts_enabled === 1,
+    joinMode: native&&row.join_mode === "open" ? "open" : row.join_mode === "link" && row.join_token ? "link" : "request",
     joinToken: row.join_mode === "link" ? row.join_token : null,
     setAt: row.set_at,
   };

@@ -32,3 +32,11 @@ for (const available of [true, false]) test(`copy prompt ${available ? 'succeeds
   if (available) { assert.equal(copied, field.value); assert.match(status.textContent, /^Copied/); }
   else { assert.ok(focused && selected); assert.match(status.textContent, /^Copy the selected/); }
 });
+
+test('agent directory lists each local setup guide once', async () => {
+  const { connectSnippets } = await import('../server/connect-snippets.mjs');
+  const html = agentPages().get('docs/agents/index.html');
+  for (const tool of connectSnippets) {
+    assert.equal(html.split(`href="${tool.docsPath}"`).length - 1, 1, tool.docsPath);
+  }
+});

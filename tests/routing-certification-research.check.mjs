@@ -29,3 +29,17 @@ test('same-sequence certification and receipts survive export and restore',t=>{
  const snapshot=store=>Object.fromEntries(['rooms','events','current_room_head','current_room_records','current_room_record_proofs','operator_actions','integrity_room_state'].map(table=>[table,store.db.prepare('SELECT * FROM '+table).all()]));const before=snapshot(s);replayNdjsonInto(exportNdjsonText(s.db),target);assert.deepEqual(snapshot(target),before);assert.equal(target.headSequence('commons'),seq);assert.doesNotThrow(()=>auditRecovery(target));
  const receipt=target.command(key,'commons',{id:'restored-reply',type:'message.posted',data:{messageId:'restored-reply',replyToId:'legacy-large',body:'hello'}});assert.equal(receipt.duplicate,false);assert.doesNotThrow(()=>auditRecovery(target));
 });
+test('certification composes with subsequent edits and lost-ack retries',t=>{
+ const s=new RoomStore(':memory:');t.after(()=>s.close());const events=initialRoom();events.push(event({roomId:'commons',actorId:'owner',type:'message.posted',data:{messageId:'legacy-large',body:'界'.repeat(65536)}}));s.initialize(events,{representation:'normalized-current-v1'});const key=s.issueAccessKey('commons','owner');
+ const before=s.command(key,'commons',{id:'unrelated',type:'message.posted',data:{messageId:'unrelated',body:'other work'}});assert.equal(before.duplicate,false);const seq=s.headSequence('commons');
+ assert.equal(certifyOneMessageRoutingResearch(s,'commons','legacy-large').sequence,seq);assert.equal(s.headSequence('commons'),seq);
+ const edit={id:'edit-legacy',type:'message.edited',data:{messageId:'legacy-large',body:'revised',expectedMessageRevision:0}};const first=s.command(key,'commons',edit),again=s.command(key,'commons',edit);assert.equal(first.duplicate,false);assert.equal(again.duplicate,true);assert.equal(again.sequence,first.sequence);
+ const value=JSON.parse(s.db.prepare("SELECT payload FROM current_room_records WHERE room_id='commons' AND domain='messageWitness' AND record_key='legacy-large'").get().payload);assert.equal(value.version,2);assert.doesNotThrow(()=>auditRecovery(s));
+ const reply=s.command(key,'commons',{id:'reply-edited',type:'message.posted',data:{messageId:'reply-edited',replyToId:'legacy-large',body:'reply'}});assert.equal(reply.duplicate,false);assert.doesNotThrow(()=>auditRecovery(s));
+});
+test('certification observes a second connection’s preceding write',t=>{
+ const dir=mkdtempSync(join(tmpdir(),'routing-interleave-')),path=join(dir,'room.db'),a=new RoomStore(path);let b;t.after(()=>{a.close();b?.close();rmSync(dir,{recursive:true,force:true})});
+ const events=initialRoom();events.push(event({roomId:'commons',actorId:'owner',type:'message.posted',data:{messageId:'legacy-large',body:'界'.repeat(65536)}}));a.initialize(events,{representation:'normalized-current-v1'});const key=a.issueAccessKey('commons','owner');b=new RoomStore(path);
+ a.command(key,'commons',{id:'other-before',type:'message.posted',data:{messageId:'other-before',body:'before'}});const seq=a.headSequence('commons');const result=certifyOneMessageRoutingResearch(b,'commons','legacy-large');assert.equal(result.sequence,seq);assert.equal(a.headSequence('commons'),seq);
+ const post=a.command(key,'commons',{id:'other-after',type:'message.posted',data:{messageId:'other-after',body:'after',replyToId:'legacy-large'}});assert.equal(post.duplicate,false);assert.doesNotThrow(()=>auditRecovery(a));assert.doesNotThrow(()=>auditRecovery(b));
+});

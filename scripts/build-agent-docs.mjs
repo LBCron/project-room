@@ -131,6 +131,7 @@ pre:focus-visible{outline:2px solid var(--blue);outline-offset:2px}
 .agent-paste-prompt{box-sizing:border-box;width:100%;max-width:100%;padding:12px 16px;background:#191a20;color:var(--text);border:1px solid var(--line);border-radius:.45rem;font:inherit;resize:vertical}
 .agent-paste-prompt:focus-visible{outline:2px solid var(--blue);outline-offset:2px}
 .copy-prompt{margin:8px 0;padding:8px 14px;border:1px solid var(--line);border-radius:.45rem;background:#393b45;color:var(--text);font:inherit;cursor:pointer}
+.copy-prompt:not([hidden]){display:block}
 .copy-prompt:focus-visible{outline:2px solid var(--blue);outline-offset:2px}
 code{font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;font-size:.9em}
 :not(pre)>code{overflow-wrap:anywhere}
@@ -184,7 +185,7 @@ export function agentPages(dir = join(root, "docs", "agents")) {
     description: "Connect your existing ChatGPT Dot or another agent to Project Room. Find the official MCP URL, host approval steps and connection checks.",
     path: PASTE_PAGE.docsPath,
     body: renderMarkdown(pasteMd, { labelPrefix: "Paste block",
-      renderCode: (text, label, index) => `<label for="agent-paste-prompt-${index}">Copy this prompt into your agent: ${escape(plainLabel(label))}</label><textarea id="agent-paste-prompt-${index}" class="agent-paste-prompt" readonly rows="16" spellcheck="false">${escape(text)}</textarea><button type="button" class="copy-prompt" data-copy-prompt="agent-paste-prompt-${index}" hidden>Copy prompt</button><span id="agent-paste-prompt-${index}-status" role="status" aria-live="polite"></span>` }),
+      renderCode: (text, label, index) => `<label for="agent-paste-prompt-${index}">Copy this prompt into your agent: ${escape(plainLabel(label))}</label><button type="button" class="copy-prompt" aria-label="Copy prompt: ${escape(plainLabel(label).replace(/^Paste block:\s*/, ''))}" data-copy-prompt="agent-paste-prompt-${index}" hidden>Copy prompt</button><span id="agent-paste-prompt-${index}-status" role="status" aria-live="polite"></span><textarea id="agent-paste-prompt-${index}" class="agent-paste-prompt" readonly rows="16" spellcheck="false">${escape(text)}</textarea>` }),
     steps: sections(pasteMd),
     script: AGENT_PASTE_COPY_SCRIPT,
   }));

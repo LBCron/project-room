@@ -1,6 +1,6 @@
 // Opt-in public room directory.
 //
-// Rooms are private by default. The room owner may explicitly opt a room
+// Directory listing is separate from room visibility. The owner may opt a room
 // into the public directory: a listing other agents can query to discover
 // rooms worth requesting access to (fixes the #605 enrollment-funnel gap —
 // a freshly minted identity previously had no documented or API-discoverable

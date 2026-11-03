@@ -70,7 +70,7 @@ export function ensureAgentRoomRequestIdColumn(db) {
     ON agent_room_ownership(identity_id, request_id) WHERE request_id IS NOT NULL`);
 }
 
-const CREATE_FIELDS = Object.freeze(["roomId", "title", "purpose", "kind", "displayName", "starter", "requestId"]);
+const CREATE_FIELDS = Object.freeze(["roomId", "title", "purpose", "kind", "displayName", "starter", "requestId", "visibility"]);
 const AGENT_STARTER_ID = "starter";
 const AGENT_STARTER_TITLE = "Post your plan, then close this task";
 
@@ -295,6 +295,7 @@ export class AgentRooms {
     if (Object.hasOwn(request, "starter") && typeof request.starter !== "boolean") {
       fail(422, "invalid_room_request", "starter must be true or false");
     }
+    if (Object.hasOwn(request, "visibility") && !["open", "private"].includes(request.visibility)) fail(422, "invalid_room_request", "visibility must be open or private");
     const wantStarter = request.starter !== false;
     if (!Object.hasOwn(request, "title")) fail(422, "invalid_room_request", "Missing title");
     if (!text(request.title, 120)) fail(422, "invalid_room_request", "title must be 1 to 120 characters");
@@ -338,6 +339,7 @@ export class AgentRooms {
             && state.room.kind === kind && ownMember(state.members, memberId)?.displayName === displayName
             && hadStarter(prior.room_id) === wantStarter;
           if (!same) fail(409, "request_conflict", "requestId was already used for a different room");
+          if (request.visibility === "private" && state.room.publicPage?.enabled === true) fail(409, "request_conflict", "This saved room is public. Open its owner settings to make it private; creation retry did not change visibility.");
           return this.#duplicateCreateResponse(prior.room_id, memberId, identity.identityId);
         }
       }
@@ -348,6 +350,7 @@ export class AgentRooms {
           && state.room.kind === kind && ownMember(state.members, memberId)?.displayName === displayName
           && hadStarter(roomId) === wantStarter;
         if (!same) fail(409, "room_exists", "That room id is already in use");
+        if (request.visibility === "private" && state.room.publicPage?.enabled === true) fail(409, "room_exists", "This saved room is public. Open its owner settings to make it private; creation retry did not change visibility.");
         return this.#duplicateCreateResponse(roomId, memberId, identity.identityId);
       }
       // The creation budget is spent here, past the idempotency short-circuit,
@@ -384,6 +387,10 @@ export class AgentRooms {
       if (fundedByGrowth) {
         this.store.db.prepare("UPDATE agent_room_ownership SET funded_by=? WHERE identity_id=? AND room_id=?")
           .run(GROWTH_FUNDING, identity.identityId, roomId);
+      }
+      if (request.visibility !== "private") {
+        this.store.command(secret, roomId, {id:"creation-public-page",type:T.ROOM_PUBLIC_PAGE_SET,data:{enabled:true}});
+        this.store.command(secret, roomId, {id:"creation-open-join",type:T.ROOM_JOIN_LINK_SET,data:{enabled:true}});
       }
       const starter = wantStarter ? ensureAgentStarter(this.store, roomId, memberId, secret) : null;
       return { roomId, ownerMemberId: memberId, identityId: identity.identityId, duplicate: false, starter,

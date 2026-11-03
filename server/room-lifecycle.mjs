@@ -96,7 +96,7 @@ const text = (value, max, multiline = false) => typeof value === "string" && val
 // bound to the account like any other human membership. The client-chosen
 // roomId is the idempotency key: the same request returns the same room with
 // duplicate: true; a different room under that id is 409 room_exists.
-const STARTER_FIELDS = Object.freeze(["intent", "start", "templateSlug"]);
+const STARTER_FIELDS = Object.freeze(["intent", "start", "templateSlug", "visibility"]);
 
 export function createAccountRoom(store, token, binding, request) {
   if (!request || typeof request !== "object" || Array.isArray(request)
@@ -104,6 +104,7 @@ export function createAccountRoom(store, token, binding, request) {
     || Object.keys(request).some(field => !CREATE_FIELDS.includes(field) && !STARTER_FIELDS.includes(field))) {
     fail(422, "invalid_room_request", "Supply roomId, title, purpose, kind and displayName");
   }
+  if (Object.hasOwn(request, "visibility") && !["open", "private"].includes(request.visibility)) fail(422, "invalid_room_request", "visibility must be open or private");
   const { roomId, kind } = request;
   // #3013: a reserved prototype name (validId's denylist) is not a charset
   // or length failure — name the real cause so API consumers are not told
@@ -149,6 +150,7 @@ export function createAccountRoom(store, token, binding, request) {
       const same = state && state.room.ownerId === bound.member_id && state.room.title === title && state.room.purpose === purpose
         && roomKind(state.room) === kind && ownMember(state.members, bound.member_id)?.displayName === displayName;
       if (!same) fail(409, "room_exists", "That room id is already in use");
+      if (request.visibility === "private" && state.room.publicPage?.enabled === true) fail(409, "room_exists", "This saved room is public. Open its owner settings to make it private; creation retry did not change visibility.");
       if (wantsStarter) seedStarterForNewAccount(store, accountId, { intent, templateSlug, roomId, ownerMemberId: bound.member_id, start, token, binding });
       return view(bound.member_id, true);
     }
@@ -188,6 +190,10 @@ export function createAccountRoom(store, token, binding, request) {
       event({ type: T.MEMBER_ADDED, actorId: ownerId, roomId, at, data: { memberId: ownerId, displayName, kind: "human", permissions: [...PERMISSIONS] } })
     ], {representation:'normalized-current-v1'});
     store.ensureHumanAccountBinding(roomId, ownerId, accountId, foundedWithGrowth ? GROWTH_ROOM_ORIGIN : "account-room-create");
+    if (request.visibility !== "private") {
+      store.command(token, roomId, {id:"creation-public-page",type:T.ROOM_PUBLIC_PAGE_SET,data:{enabled:true}}, binding);
+      store.command(token, roomId, {id:"creation-open-join",type:T.ROOM_JOIN_LINK_SET,data:{enabled:true}}, binding);
+    }
     if (wantsStarter) seedStarterForNewAccount(store, accountId, { intent, templateSlug, roomId, ownerMemberId: ownerId, start, token, binding });
     return view(ownerId, false);
   });

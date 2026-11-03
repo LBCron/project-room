@@ -1,7 +1,7 @@
 import { messageRepository } from "./message-repository.mjs";
 // Public read-only face for rooms.
 //
-// Rooms are private by default. The room owner may explicitly opt a room
+// This legacy public-face listing is opt-in. The room owner may opt a room
 // into a public, no-login, read-only face: a sanitized snapshot (title,
 // purpose, member handles, recent non-DM messages) served as HTML at
 // /p/{code} and JSON at /api/public/rooms/{code} (+ paginated

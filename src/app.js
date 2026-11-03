@@ -1394,6 +1394,7 @@ $("#account-room-form").addEventListener("submit", async event => {
   if (!owned?.authenticated || form.dataset.busy === "true" || invitationIsCommitting() || signoutLoading) return;
   const title = $("#account-room-title").value.trim(), purpose = $("#account-room-purpose").value.trim(), displayName = $("#account-room-name").value.trim();
   const kind = $("#account-room-kind").value;
+  const visibility = $("#account-room-private").checked ? "private" : "open";
   if (!title || !purpose || !displayName) { setFormStatus(status, "Room name, purpose and your name are required.", true); return; }
   // One id per attempt: a retry after a lost response finds the same room instead of creating a twin.
   const roomId = form.dataset.roomId || (form.dataset.roomId = "room-" + crypto.randomUUID().replaceAll("-", "").slice(0, 12));
@@ -1405,8 +1406,8 @@ $("#account-room-form").addEventListener("submit", async event => {
   try {
     const session = accountClient.currentSession("creating a room", { authenticated: true });
     const result = template
-      ? await accountClient.request("/api/account-rooms/from-template", { method: "POST", data: { roomId, template, title, purpose, kind, displayName, ...(ref ? { ref } : {}) }, session })
-      : await accountClient.request("/api/account-rooms", { method: "POST", data: { roomId, title, purpose, kind, displayName }, session });
+      ? await accountClient.createRoomFromTemplate({ roomId, template, title, purpose, kind, displayName, visibility, ...(ref ? { ref } : {}) }, { session })
+      : await accountClient.createRoom({ roomId, title, purpose, kind, displayName, visibility }, { session });
     if (accountClient.session !== owned) return;
     delete form.dataset.roomId; form.reset(); setFormStatus(status, ""); $("#account-room-create").open = false;
     await openAccountRoom(result.room.id);
@@ -6231,11 +6232,9 @@ async function startRoomFromTemplate(slug) {
   }
   const ref = receiptReferrer();
   const session = accountClient.currentSession("creating a room", { authenticated: true });
-  const result = await accountClient.request("/api/account-rooms/from-template", {
-    method: "POST",
-    data: { roomId, template: slug, title: template.title, purpose: template.purpose, kind: "personal", displayName: "Owner", ...(ref ? { ref } : {}) },
-    session,
-  });
+  const result = await accountClient.createRoomFromTemplate({
+    roomId, template: slug, title: template.title, purpose: template.purpose, kind: "personal", displayName: "Owner", visibility: "open", ...(ref ? { ref } : {})
+  }, { session });
   if (accountClient.session !== owned) return;
   await openAccountRoom(result.room.id);
   clearTemplateRoom();

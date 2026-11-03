@@ -131,7 +131,7 @@ export function getRoomTemplate(slug) {
   return bySlug.get(slug) ?? null;
 }
 
-const FIELDS = Object.freeze(["roomId", "template", "title", "purpose", "kind", "displayName", "ref"]);
+const FIELDS = Object.freeze(["roomId", "template", "title", "purpose", "kind", "displayName", "ref", "visibility"]);
 
 function cleanRef(value) {
   if (value == null) return null;
@@ -159,6 +159,7 @@ export function applyRoomTemplate(store, token, binding, request) {
     purpose: request.purpose,
     kind: request.kind,
     displayName: request.displayName,
+    ...(Object.hasOwn(request,"visibility") ? {visibility:request.visibility} : {}),
   });
   const roomId = created.room.id;
   const send = (id, type, data) => store.command(token, roomId, { id, type, data }, binding);

@@ -1,7 +1,7 @@
 import test from 'node:test';import assert from 'node:assert/strict';
 import {RoomStore} from '../server/store.mjs';import {AgentRooms} from '../server/agent-rooms.mjs';import {AccessRequests} from '../server/access-requests.mjs';
 test('kindless historical public projection refuses admission atomically until explicit republish',()=>{
- const s=new RoomStore(':memory:');try{const owner=s.identities.create('Public founder'),peer=s.identities.create('Public collaborator');new AgentRooms(s).create(owner.secret,{roomId:'public-kind',title:'Public kind',purpose:'Useful work',starter:false});
+ const s=new RoomStore(':memory:');try{const owner=s.identities.create('Public founder'),peer=s.identities.create('Public collaborator');new AgentRooms(s).create(owner.secret,{roomId:'public-kind',title:'Public kind',purpose:'Useful work',starter:false,visibility:'private'});
  const send=(id,type,enabled)=>s.command(owner.secret,'public-kind',{id,type,data:{enabled}});send('publish','room.public_page_set',true);send('open','room.join_link_set',true);
  // Historical legacy public read-model rows stored only id/name, not kind.
  const row=s.db.prepare('SELECT members_json FROM public_rooms WHERE slug=?').get('public-kind');const legacy=JSON.parse(row.members_json).map(({id,name})=>({id,name}));s.db.prepare('UPDATE public_rooms SET members_json=? WHERE slug=?').run(JSON.stringify(legacy),'public-kind');

@@ -10,7 +10,7 @@ import {readConversation} from '../server/conversation-sync.mjs';
 function fixture(t) {
   const dir=mkdtempSync(join(tmpdir(),'public-pending-retry-')),path=join(dir,'db');let store=new RoomStore(path);
   const owner=store.identities.create('Founder'),peer=store.identities.create('Collaborator');
-  new AgentRooms(store).create(owner.secret,{roomId:'retry-room',title:'Project',purpose:'Useful work',starter:false});
+  new AgentRooms(store).create(owner.secret,{roomId:'retry-room',title:'Project',purpose:'Useful work',starter:false,visibility:'private'});
   let serial=0;
   const send=(type,data,id=type+'-'+(++serial))=>store.command(owner.secret,'retry-room',{id,type,data});
   send('message.posted',{messageId:'private-before',body:'PRIVATE BEFORE JOIN'});

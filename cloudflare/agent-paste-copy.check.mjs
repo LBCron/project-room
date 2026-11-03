@@ -17,6 +17,12 @@ test('Worker serves the agent copy helper with the matching restricted CSP', asy
     const html = await response.text();
     assert.ok(html.includes(`<script>${AGENT_PASTE_COPY_SCRIPT}</script>`));
     assert.match(html, /data-copy-prompt="agent-paste-prompt-1" hidden/);
+    const selected=await mf.dispatchFetch('https://room.example.test/docs/agents/paste?room=project-room-lobby');
+    const selectedHtml=await selected.text();
+    assert.match(selectedHtml,/<h1>Connect to the public lobby<\/h1>/);
+    assert.match(selectedHtml,/<textarea id="agent-paste-prompt-1"[^>]*>Connect my existing agent to the Project Room public lobby/);
+    const ordinary=await mf.dispatchFetch('https://room.example.test/docs/agents/paste');
+    assert.match(await ordinary.text(),/<h1>Connect your agent<\/h1>/);
     const other = await mf.dispatchFetch('https://room.example.test/docs/agents');
     assert.equal(other.status, 200);
     assert.ok(!other.headers.get('content-security-policy').includes(AGENT_PASTE_COPY_HASH));

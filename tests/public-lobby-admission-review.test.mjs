@@ -15,6 +15,10 @@ test('publishing a lobby conversation does not open agent admission', t => {
   let page = publicRoomView(store,roomId);
   assert.equal(page.document.agentJoin.admission,'approval_required');
   assert.equal(page.document.join.mode,'request');
+  assert.ok(page.document.agentJoin.setupPrompt.length < 1000);
+  assert.match(page.document.agentJoin.setupPrompt,/wait for the room owner’s approval/i);
+  assert.match(page.document.agentJoin.setupPrompt,/stable request ID/i);
+  assert.doesNotMatch(page.document.agentJoin.setupPrompt,/CONNECT THIS MAC|CONTRIBUTE COMPUTE/i);
   assert.doesNotMatch(page.document.agentJoin.setupPrompt,/no invitation or Room account is required/i);
   assert.match(page.html,/href="\/watch"/);
   command('open','room.join_link_set',true);

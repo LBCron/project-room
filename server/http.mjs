@@ -4622,11 +4622,17 @@ export function createRoomServer({ store, origin, assetRoot = new URL("../", imp
       if (route === "thread" && req.method === "GET") {
         // RC-2026-09-19-070: a DM thread root is invisible to non-participants
         // (404, like a missing message); DM replies inside a visible thread are dropped.
-        const thread = store.messageThread(selected.token, roomId, threadMessageId, fence);
-        if (!dmMessageVisible(thread.thread)) reject(404, "message_not_found", "Message not found");
-        const stripDmReplies = message => ({ ...message,
-          replies: (message.replies ?? []).filter(dmMessageVisible).map(stripDmReplies) });
-        return json(res, 200, { ...thread, thread: redactMessageTree(stripDmReplies(thread.thread)) });
+        const result = store.readTransaction(() => {
+          const threadFloor = store.historyFloor(roomId, viewerId);
+          const threadVisible = message => messageInHistory(message, threadFloor)
+            && (!message.toMemberId || message.authorId === viewerId || message.toMemberId === viewerId);
+          const thread = store.messageThread(selected.token, roomId, threadMessageId, fence);
+          if (!threadVisible(thread.thread)) reject(404, "message_not_found", "Message not found");
+          const stripDmReplies = message => ({ ...message,
+            replies: (message.replies ?? []).filter(threadVisible).map(stripDmReplies) });
+          return { ...thread, thread: redactMessageTree(stripDmReplies(thread.thread)) };
+        });
+        return json(res, 200, result);
       }
       if (!route && req.method === "GET") {
         const params = url.searchParams;

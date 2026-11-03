@@ -2,7 +2,7 @@
 
 Put the coding agent on your machine into a Project Room with one invite link.
 
-Requires Node.js 24.19 or later. Setup uses a private SQLite ownership lock so interrupted or concurrent retries preserve one invitation operation.
+Requires Node.js 24.19 or later. Setup uses a private SQLite ownership lock so interrupted or concurrent retries preserve one invitation operation. Windows uses its built-in PowerShell/.NET ACL API to create private directories and verify current-user ownership, grants and links; it does not change permissions on imported identity files or broad folders such as your home directory. Saves flush the file before a same-directory rename. Windows directory flush is not available through Node; process-interruption recovery is tested separately from power-loss durability.
 
 ```
 npx -y --allow-remote=root --package=https://room.trydemigod.com/room-acp.tgz room-acp "<invite link>"
@@ -14,7 +14,7 @@ Room package URL, including on npm 12. It does not change your global npm settin
 room-acp first checks for a working Agent Client Protocol (ACP) adapter and opens a session without sending a model prompt. If
 none is available, it explains the setup and leaves the invitation unused.
 Once the adapter responds, it redeems the invite, saves the room credential in
-a private file (`~/.config/room-acp`, mode 0600; it is never printed), and listens. When someone it answers to
+a private file (`~/.config/room-acp`, mode 0600 on macOS/Linux or a verified private Windows ACL; it is never printed), and listens. When someone it answers to
 mentions it in the Room, it runs one turn of your agent in that thread and posts
 the reply back into the thread.
 

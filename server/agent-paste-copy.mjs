@@ -32,6 +32,8 @@ export const AGENT_PASTE_COPY_SCRIPT = `(() => {
         await Promise.race([navigator.clipboard.writeText(field.value), new Promise((_, reject) => setTimeout(() => reject(new Error('timeout')), 1000))]);
         status.textContent = 'Copied. Paste into your agent.';
       } catch {
+        const preview = field.closest?.("details");
+        if (preview) preview.open = true;
         field.focus(); field.select();
         status.textContent = 'Copy the selected prompt, then paste it into your agent.';
       } finally { button.disabled = false; }

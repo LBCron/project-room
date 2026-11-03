@@ -1,4 +1,3 @@
-import { isCurrentRoom } from './current-room-repository.mjs';
 import {redactSelectedEventPage} from './current-room-events.mjs';
 import { resolveNamedReviewers, hasCurrentReview } from "./work-claims.mjs";
 import { RoomAssistant } from "./room-assistant.mjs";
@@ -262,7 +261,6 @@ async function dispatchHostedStdioTool(store, secret, name, args) {
   if (name === "room_list_outside_agents") return { value: new OutsideAgents(store).list(secret, roomId), isError: false };
   if (name === "room_introduce_outside_agent") return { value: new OutsideAgents(store).record(secret, roomId, rest), isError: false };
   if (isHelpTool(name)) {
-    if (isCurrentRoom(store.db, roomId)) throw new ServiceError(409, "current_help_context_unavailable", "Help invitations and offers are unavailable in normalized Rooms");
     const expectedRevision = await currentWorkRevision(store, secret, roomId, name, rest, helpUsesExpectedRevision, identity, buildHelpCommand(name, rest, identity));
     const command = buildHelpCommand(name, rest, identity, { expectedRevision });
     return recorded(store, secret, roomId, identity, command, receipt => recordedHelpAction(name, command, receipt));

@@ -485,3 +485,23 @@ test('active public guest refresh keeps the same seat beyond thirty days', async
   }
   assert.equal(f.store.db.prepare('SELECT count(*) n FROM oauth_invite_grants').get().n,1);
 });
+
+test('independent review: public OAuth stays room-scoped and respects guest history', async t => {
+ const f=await setup(t),room='project-room-lobby';
+ f.store.initialize(initialRoom(room),{representation:'normalized-current-v1'});const owner=f.store.issueAccessKey(room,'owner');
+ f.store.command(owner,room,{id:'review-publish',type:'room.public_page_set',data:{enabled:true}});
+ f.store.command(owner,room,{id:'review-open',type:'room.join_link_set',data:{enabled:true}});
+ f.store.publicFace.enable(room,'owner');
+ f.store.command(owner,room,{id:'review-before',type:'message.posted',data:{messageId:'review-before',body:'private pre-join review sentinel'}});
+ const initial=await f.start(),html=await initial.text(),nonce=html.match(/name="nonce" value="([^"]+)"/)[1],cookie=initial.headers.get('set-cookie').split(';')[0];
+ const allowed=await fetch(f.base+'/oauth/invite',{method:'POST',headers:{Cookie:cookie,Origin:origin,'Content-Type':'application/x-www-form-urlencoded'},body:new URLSearchParams({nonce,decision:'allow_public',display_name:'Independent Review Guest'})});
+ assert.equal(allowed.status,302,await allowed.clone().text());const code=new URL(allowed.headers.get('location')).searchParams.get('code');const exchange=await f.exchange({grant_type:'authorization_code',code});assert.equal(exchange.status,200);const token=(await exchange.json()).access_token;
+ f.store.command(owner,room,{id:'review-after',type:'message.posted',data:{messageId:'review-after',body:'visible after join sentinel'}});
+ const messages=await f.rpc(token,'room_read_messages',{after:0});assert.equal(messages.status,200);assert.doesNotMatch(JSON.stringify(messages.body),/private pre-join review sentinel/);assert.match(JSON.stringify(messages.body),/visible after join sentinel/);
+ const cross=await f.rpc(token,'room_check_access',{roomId:'commons'});assert.ok(cross.status===401||cross.body.error||cross.body.result?.isError);
+ const invite=await f.rpc(token,'room_create_agent_invite',{});assert.ok(invite.body.error||invite.body.result?.isError);
+ f.store.command(owner,room,{id:'independent-current-task',type:'work.proposed',data:{workItemId:'independent-current-task',title:'Review one public setup step',definitionOfDone:'One specific improvement',accountableMemberId:'owner',mode:'read'}});
+ const all=await f.rpc(token,'room_list_work',{focus:'all'});assert.equal(all.status,200,JSON.stringify(all.body));assert.ok(!all.body.error&&!all.body.result?.isError,JSON.stringify(all.body));assert.ok(all.body.result.structuredContent.work.some(w=>w.id==='independent-current-task'),JSON.stringify(all.body));
+ const detail=await f.rpc(token,'room_read_work',{workItemId:'independent-current-task'});assert.equal(detail.status,200,JSON.stringify(detail.body));assert.ok(!detail.body.error&&!detail.body.result?.isError,JSON.stringify(detail.body));assert.match(JSON.stringify(detail.body),/Review one public setup step/);
+ const accept=await f.rpc(token,'room_accept_work',{workItemId:'independent-current-task'});assert.ok(accept.status!==200||accept.body.error||accept.body.result?.isError,JSON.stringify(accept.body));
+});

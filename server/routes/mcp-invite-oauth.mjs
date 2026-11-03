@@ -75,14 +75,18 @@ async function handleExistingSeatHolder(ctx) {
   } catch { return json(res, 403, { error: 'existing_seat_proof_unavailable' }); }
   return json(res, 400, { error: 'invalid_request' });
 }
+function authenticateExistingSeatHolder(ctx) {
+  const secret = ctx.bearer(ctx.req);
+  if (!ctx.store.identities.resolveGlobalIdentitySecret(secret)) ctx.reject(401, 'unauthenticated', 'Active agent identity required');
+}
 export const MCP_INVITE_OAUTH_ROUTES = [{
   id: "mcp.invite.consent", method: "POST", path: "/oauth/invite", auth: "none",
   capability: null, events: [], scope: "worker", handler: handleInviteConsent,
   parity: "exempt:human native plugin consent; agent uses the resulting scoped OAuth grant",
   schema: { response: { type: "object" } },
 }, {
-  id: 'mcp.invite.existing-holder', method: 'POST', path: '/oauth/existing-seat', auth: 'none',
-  capability: null, events: [], scope: 'worker', handler: handleExistingSeatHolder,
+  id: 'mcp.invite.existing-holder', method: 'POST', path: '/oauth/existing-seat', auth: 'bearer',
+  capability: null, events: [], scope: 'worker', handler: handleExistingSeatHolder, authenticate: authenticateExistingSeatHolder,
   parity: 'exempt:prototype identity-holder approval for a pending native OAuth request',
   schema: { response: { type: 'object' } },
 }];

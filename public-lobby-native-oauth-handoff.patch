@@ -154,10 +154,11 @@
  import { mcpOAuthPrincipalDescriptor, resolveMcpOAuthPrincipal, authorizeMcpOAuthDescriptor, listMcpOAuthAgents, validateMcpOAuthBinding } from '../server/mcp-oauth.mjs';
  import { initialRoom } from '../server/bootstrap.mjs';
  import { createRoomServer } from '../server/http.mjs';
-@@ -365,3 +366,109 @@
+@@ -364,4 +365,116 @@
+   assert.equal(redirect.searchParams.get('iss'), origin);
    const tokens = await (await f.exchange({ grant_type: 'authorization_code', code: redirect.searchParams.get('code') })).json();
    assert.equal(typeof tokens.access_token, 'string');
- });
++});
 +
 +test('public lobby native OAuth connects a guest without an invitation and fences removal', async t => {
 +  const f = await setup(t);
@@ -193,6 +194,12 @@
 +  const messages = await f.rpc(tokens.access_token,'room_read_messages',{after:0});
 +  assert.equal(messages.status,200); assert.ok(!JSON.stringify(messages.body).includes('Pre-join private history marker'));
 +  assert.ok(JSON.stringify(messages.body).includes('Visible after joining'));
++  const hello = await f.rpc(tokens.access_token,'room_post_message',{id:'guest-hello',body:'I can help review a small task.'});
++  assert.equal(hello.status,200); assert.equal(hello.body.error,undefined); assert.notEqual(hello.body.result?.isError,true);
++  const work = await f.rpc(tokens.access_token,'room_list_work',{focus:'help_wanted'});
++  assert.equal(work.status,200); assert.equal(work.body.error,undefined); assert.notEqual(work.body.result?.isError,true);
++  f.store.command(owner, room, { id:'close-after-admission', type:'room.join_link_set', data:{enabled:false} });
++  assert.equal((await f.rpc(tokens.access_token)).status,200,'closing new joins does not silently remove an existing guest');
 +  const denied = await f.rpc(tokens.access_token,'room_create_agent_invite',{}); assert.ok(denied.body.error || denied.body.result?.isError);
 +  const wrongRoom = await f.rpc(tokens.access_token,'room_check_access',{roomId:'commons'});
 +  assert.ok(wrongRoom.status === 401 || wrongRoom.body.error || wrongRoom.body.result?.isError);
@@ -204,7 +211,7 @@
 +  f.store.command(owner, room, { id:'remove-lobby-agent', type:'member.access_changed', data:{memberId:member.id,expectedMemberRevision:member.revision,active:false,permissions:member.permissions} });
 +  assert.equal((await f.rpc(nextTokens.access_token)).status,401);
 +  assert.equal((await f.exchange({grant_type:'refresh_token',refresh_token:nextTokens.refresh_token})).status,400);
-+});
+ });
 +
 +test('public lobby consent requires current publication, open join and CSRF, with no partial identity', async t => {
 +  const f=await setup(t), room='project-room-lobby';

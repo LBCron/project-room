@@ -7,7 +7,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { Bridge, MAX_POLL_PAGES } from '../room-acp/src/bridge.mjs';
-import { RoomClient } from '../room-acp/src/room.mjs';
+import { RoomClient, RoomError } from '../room-acp/src/room.mjs';
 
 function fixture(pollImpl) {
   const bridge = new Bridge({
@@ -42,6 +42,19 @@ test('continuation rechecks the lease and preserves its cursor when ownership is
   const {bridge}=fixture(async()=>{calls++;return {pendingWakes:[],more:true,nextCursor:'next'};});
   let leases=0;bridge.lease=async()=>++leases===1;
   await bridge.pollOnce();assert.equal(calls,1);assert.equal(bridge.wakeCursor,'next');
+});
+
+test('a rate-limited continuation preserves its cursor and retry hint', async () => {
+  const seen=[];let throttled=false;
+  const {bridge}=fixture(async ({cursor})=>{
+    seen.push(cursor);
+    if(!cursor)return {pendingWakes:[],more:true,nextCursor:'page-2'};
+    if(!throttled){throttled=true;throw new RoomError(429,'rate_limited','slow down',1234);}
+    return {pendingWakes:[sig('later')],more:false};
+  });
+  await assert.rejects(bridge.pollOnce(),error=>error.status===429&&error.retryAfterMs===1234);
+  assert.equal(bridge.wakeCursor,'page-2');
+  await bridge.pollOnce();assert.deepEqual(seen,[null,'page-2','page-2']);assert.equal(bridge.wakeCursor,null);
 });
 
 test('pollOnce follows nextCursor until the wake queue is drained', async () => {

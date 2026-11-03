@@ -52,3 +52,16 @@ test('legacy decisions do not confirm another pair’s private message ID',t=>{
  assert.deepEqual(reject(unprivileged,'private-dm','no-private'),reject(unprivileged,'missing','no-missing'));
  assert.ok(s.command(observer,'commons',{id:'public-decision',type:'decision.recorded',data:{sourceMessageId:'public',statement:'Adopt this'}}).event);
 });
+
+test('a retry after reactivation returns the original reply receipt',t=>{
+ const s=new RoomStore(':memory:');t.after(()=>s.close());const es=initialRoom();
+ for(const [type,data] of [['room.history_visibility_set',{historyVisibility:'since_join'}],['member.added',{memberId:'late',displayName:'Late',kind:'agent',permissions:[]}],['message.posted',{messageId:'visible-at-first',body:'Visible'}]])es.push(event({roomId:'commons',actorId:'owner',type,data}));
+ s.initialize(es,{representation:'normalized-current-v1'});const owner=s.issueAccessKey('commons','owner'),late=s.issueAccessKey('commons','late');let now=Date.now()+5000;s.now=()=>now;
+ const command={id:'retry-reply',type:'message.posted',data:{messageId:'retry-reply',body:'Answer',replyToId:'visible-at-first'}};
+ const first=s.command(late,'commons',command);now+=5000;
+ s.command(owner,'commons',{id:'disable',type:'member.access_changed',data:{memberId:'late',expectedMemberRevision:0,active:false,permissions:[]}});now+=5000;
+ s.command(owner,'commons',{id:'reenable',type:'member.access_changed',data:{memberId:'late',expectedMemberRevision:1,active:true,permissions:[]}});now+=5000;
+ const renewed=s.issueAccessKey('commons','late');
+ const retry=s.command(renewed,'commons',command);assert.equal(retry.duplicate,true);assert.equal(retry.sequence,first.sequence);
+ assert.throws(()=>s.command(renewed,'commons',{id:'new-reply',type:'message.posted',data:{messageId:'new-reply',body:'New',replyToId:'visible-at-first'}}),e=>e.status===422);
+});

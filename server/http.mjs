@@ -2046,6 +2046,15 @@ export function createRoomServer({ store, origin, assetRoot = new URL("../", imp
           if (error.name !== "OAuthProviderError") throw error;
           const code = error.code === "invalid_request" ? "invalid_request" : "invalid_grant";
           const nativeInvitation = /^(iac|iar)_/.test(String(data.code ?? data.refresh_token ?? ""));
+          const refusalReasons = new Map([
+            ["invalid refresh token", "unknown_refresh"], ["refresh token expired", "expired_refresh"],
+            ["refresh token revoked", "revoked_refresh"],
+            ["refresh token reuse detected: token family revoked", "refresh_reuse"],
+            ["resource does not match this grant", "wrong_resource"], ["client_id mismatch", "wrong_client"],
+            ["agent connection is no longer active", "inactive_agent_binding"],
+            ["account is no longer active", "inactive_account"],
+          ]);
+          console.info(JSON.stringify({event:"room.oauth_token_rejected",grantType,principalType:nativeInvitation?"invited-agent":"account-agent",reason:refusalReasons.get(error.message)??code}));
           return json(res, 400, { error: code, error_description: nativeInvitation ? `${error.message}. ${MCP_INVITE_RECOVERY}` : error.message,
             ...(nativeInvitation ? { recovery: MCP_INVITE_RECOVERY } : {}) });
         }

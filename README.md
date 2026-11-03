@@ -79,8 +79,8 @@ HTTPS, and backups.
 
 ## Project status
 
-Live app: https://room.trydemigod.com. Schema 45. The normalized active-workspace
-cutover shipped in [#5708](https://github.com/Uuriko/project-room/pull/5708);
+Live app: https://room.trydemigod.com. Schema 45.
+The normalized active-workspace cutover shipped in [#5708](https://github.com/Uuriko/project-room/pull/5708);
 check `/api/version` for the current deployed revision.
 
 What works today, what is in progress, and what is only designed (kept in

@@ -131,3 +131,50 @@ test('actual Worker MCP outside contribution persists across disposal through bo
     assert.deepEqual(await state(), acceptedState, 'revoked retries must not add request journals or alter accepted submission');
   } finally { await worker.dispose(); await rm(persistence, { recursive: true, force: true }); }
 });
+
+test('actual Worker public lobby OAuth admits without invitation, persists guest grant and refreshes after restart', {timeout:60000},async()=>{
+  const source=`
+import entry,{ProjectRoom} from './room.mjs';
+import {initialRoom} from '../server/bootstrap.mjs';
+export class LobbyOAuthRoom extends ProjectRoom {
+ async fetch(request){
+  if(new URL(request.url).pathname==='/__fixture/lobby'){
+   this.store.initialize(initialRoom('project-room-lobby'),{representation:'normalized-current-v1'});
+   const owner=this.store.issueAccessKey('project-room-lobby','owner');
+   for(const [type,id] of [['room.public_page_set','publish'],['room.join_link_set','open']])this.store.command(owner,'project-room-lobby',{id,type,data:{enabled:true}});
+   this.store.publicFace.enable('project-room-lobby','owner');
+   return Response.json({ready:true});
+  }
+  this.store.room=()=>{throw Error('full room hydration forbidden');};
+  return super.fetch(request);
+ }
+}
+export default entry;`;
+  const bundle=await build({stdin:{contents:source,resolveDir:fileURLToPath(new URL('.',import.meta.url)),sourcefile:'lobby-oauth-fixture.mjs'},bundle:true,write:false,format:'esm',platform:'neutral',external:['node:*','cloudflare:*']});
+  const persistence=await mkdtemp(join(tmpdir(),'lobby-oauth-worker-')),origin='https://room.example.test',resource=origin+'/mcp';
+  const client={clientId:'worker-lobby-client',name:'Worker lobby client',redirectUris:['https://client.example/callback']};
+  const config={modules:true,script:bundle.outputFiles[0].text,compatibilityDate:'2026-07-30',compatibilityFlags:['nodejs_compat'],durableObjects:{ROOM:{className:'LobbyOAuthRoom',useSQLite:true}},durableObjectsPersist:persistence,bindings:{ROOM_ORIGIN:origin,ROOM_MCP_OAUTH_CLIENTS: JSON.stringify([client])}};
+  let worker=new Miniflare(config);
+  const post=(path,body,headers={})=>worker.dispatchFetch(origin+path,{method:'POST',headers:{Origin:origin,'Content-Type':'application/x-www-form-urlencoded',...headers},body:new URLSearchParams(body).toString(),redirect:'manual'});
+  const verifier='w'.repeat(43);
+  try{
+    assert.equal((await worker.dispatchFetch(origin+'/__fixture/lobby')).status,200);
+    const start=await worker.dispatchFetch(origin+'/oauth/authorize?'+new URLSearchParams({client_id:client.clientId,redirect_uri:client.redirectUris[0],scope:'rooms:read chat:read chat:write work:read',state:'worker-lobby-state',code_challenge:createHash('sha256').update(verifier).digest('base64url'),code_challenge_method:'S256',resource}));
+    assert.equal(start.status,200);const html=await start.text();assert.match(html,/Connect to the lobby/);
+    const nonce=html.match(/name="nonce" value="([^"]+)"/)[1],cookie=start.headers.get('set-cookie').split(';')[0];
+    const confirmed=await post('/oauth/invite',{nonce,decision:'allow_public',display_name:'Worker lobby guest'},{Cookie:cookie});
+    assert.equal(confirmed.status,302,await confirmed.clone().text());
+    const code=new URL(confirmed.headers.get('location')).searchParams.get('code');
+    const exchanged=await post('/oauth/token',{grant_type:'authorization_code',client_id:client.clientId,redirect_uri:client.redirectUris[0],code_verifier:verifier,code,resource});
+    assert.equal(exchanged.status,200,await exchanged.clone().text());let tokens=await exchanged.json();
+    const access=async token=>{
+      const response=await worker.dispatchFetch(resource,{method:'POST',headers:{Origin:origin,'Content-Type':'application/json',Authorization:'Bearer '+token},body:JSON.stringify({jsonrpc:'2.0',id:'worker-lobby',method:'tools/call',params:{name:'room_check_access',arguments:{}}})});
+      assert.equal(response.status,200,await response.clone().text());const body=await response.json();assert.equal(body.error,undefined,JSON.stringify(body));assert.notEqual(body.result?.isError,true,JSON.stringify(body));return body.result.structuredContent;
+    };
+    const first=await access(tokens.access_token);assert.equal(first.roomId,'project-room-lobby');
+    await worker.dispose();worker=new Miniflare(config);
+    const refreshed=await post('/oauth/token',{grant_type:'refresh_token',client_id:client.clientId,refresh_token:tokens.refresh_token,resource});
+    assert.equal(refreshed.status,200,await refreshed.clone().text());tokens=await refreshed.json();
+    const again=await access(tokens.access_token);assert.equal(again.memberId,first.memberId);
+  }finally{await worker.dispose();await rm(persistence,{recursive:true,force:true});}
+});

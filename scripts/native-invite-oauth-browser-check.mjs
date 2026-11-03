@@ -134,3 +134,61 @@ test('native invitation HTTPS browser: review Back, lost-response retry and revo
   assert.equal(store.db.prepare('SELECT count(*) n FROM oauth_invite_grants').get().n, 1);
   assert.equal(store.db.prepare('SELECT count(*) n FROM accounts').get().n, accounts);
 });
+
+test('native public lobby HTTPS browser: no invitation, mobile consent, real WebCrypto and same-seat retry', { timeout: 60000 }, async t => {
+  const directory=mkdtempSync(join(tmpdir(),'room-lobby-browser-'));
+  t.after(()=>rmSync(directory,{recursive:true,force:true}));
+  execFileSync('openssl',['req','-x509','-newkey','rsa:2048','-nodes','-keyout',join(directory,'key.pem'),'-out',join(directory,'cert.pem'),'-days','1','-subj','/CN=localhost'],{stdio:'ignore'});
+  let backend;
+  const proxy=createServer({key:readFileSync(join(directory,'key.pem')),cert:readFileSync(join(directory,'cert.pem'))},(req,res)=>{
+    if(req.url.startsWith('/native-test-callback')){res.writeHead(200,{'Content-Type':'text/html'});res.end('<h1>Connected</h1>');return;}
+    const upstream=request({hostname:'127.0.0.1',port:backend.address().port,path:req.url,method:req.method,headers:req.headers},response=>{res.writeHead(response.statusCode,response.headers);response.pipe(res);});
+    upstream.on('error',()=>{res.writeHead(502);res.end();});req.pipe(upstream);
+  });
+  await new Promise(resolve=>proxy.listen(0,'127.0.0.1',resolve));
+  t.after(async()=>{proxy.closeAllConnections();await new Promise(resolve=>proxy.close(resolve));});
+  const origin=`https://127.0.0.1:${proxy.address().port}`,resource=origin+'/mcp';
+  const client={clientId:'lobby-browser',name:'Lobby browser agent',redirectUris:[origin+'/native-test-callback']};
+  const store=new RoomStore(':memory:');store.initialize(initialRoom('project-room-lobby'),{representation:'normalized-current-v1'});t.after(()=>store.close());
+  const owner=store.issueAccessKey('project-room-lobby','owner');
+  for(const [type,id] of [['room.public_page_set','publish'],['room.join_link_set','open']])store.command(owner,'project-room-lobby',{id,type,data:{enabled:true}});
+  store.publicFace.enable('project-room-lobby','owner');
+  store.identities.proofFreePerAddress=0;store.identities.powBits=8;
+  const accounts=store.db.prepare('SELECT count(*) n FROM accounts').get().n;
+  backend=createRoomServer(defaultServerArgs({store,origin,env:{ROOM_MCP_OAUTH_CLIENTS: JSON.stringify([client])}}));
+  await new Promise(resolve=>backend.listen(0,'127.0.0.1',resolve));
+  t.after(async()=>{backend.closeStreams();backend.closeAllConnections();await new Promise(resolve=>backend.close(resolve));});
+  const browser=await chromium.launch({headless:true});t.after(()=>browser.close());
+  const context=await browser.newContext({ignoreHTTPSErrors:true,viewport:{width:390,height:844}});
+  const page=await context.newPage();page.setDefaultTimeout(15000);
+  const verifier='p'.repeat(43);
+  const start=origin+'/oauth/authorize?'+new URLSearchParams({client_id:client.clientId,redirect_uri:client.redirectUris[0],scope:'rooms:read chat:read chat:write work:read work:write',state:'public-lobby-state',code_challenge:createHash('sha256').update(verifier).digest('base64url'),code_challenge_method:'S256',resource});
+  await page.goto(start);
+  assert.equal(await page.getByRole('button',{name:'Connect to the lobby',exact:true}).isVisible(),true);
+  assert.match(await page.locator('main').innerText(),/Lobby messages are public/);
+  assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth),true,'mobile consent fits without horizontal scrolling');
+  const publicForm=page.locator('form').filter({has:page.getByRole('button',{name:'Connect to the lobby',exact:true})});
+  const nonce=await publicForm.locator('[name=nonce]').inputValue();
+  await publicForm.getByLabel('Agent name').fill('Browser lobby guest');
+  await publicForm.getByLabel('Agent name').press('Tab');
+  assert.equal(await page.getByRole('button',{name:'Connect to the lobby',exact:true}).evaluate(button=>button===document.activeElement),true);
+  await page.keyboard.press('Enter');
+  await page.waitForURL(origin+'/native-test-callback?**');
+  const callback=new URL(page.url()),code=callback.searchParams.get('code');
+  assert.equal(callback.searchParams.get('state'),'public-lobby-state');
+  assert.match(code,/^iac_/);
+  const grant=store.db.prepare('SELECT * FROM oauth_invite_grants').get();
+  assert.equal(grant.room_id,'project-room-lobby');
+  assert.equal(store.db.prepare('SELECT count(*) n FROM accounts').get().n,accounts);
+  const replay=await context.request.post(origin+'/oauth/invite',{headers:{Origin:origin},form:{nonce,decision:'allow_public',display_name:'Browser lobby guest'},maxRedirects:0});
+  assert.equal(replay.status(),302);assert.equal(replay.headers().location,callback.href);
+  assert.equal(store.db.prepare('SELECT count(*) n FROM oauth_invite_grants').get().n,1);
+  const tokenResponse=await context.request.post(origin+'/oauth/token',{form:{grant_type:'authorization_code',client_id:client.clientId,redirect_uri:client.redirectUris[0],code_verifier:verifier,code,resource}});
+  assert.equal(tokenResponse.status(),200,await tokenResponse.text());const tokens=await tokenResponse.json();
+  const rpc=async(name,args)=>{
+    const response=await context.request.post(resource,{headers:{Authorization:`Bearer ${tokens.access_token}`},data:{jsonrpc:'2.0',id:'lobby-browser',method:'tools/call',params:{name,arguments:args}}});
+    assert.equal(response.status(),200,await response.text());const body=await response.json();assert.equal(body.error,undefined,JSON.stringify(body));assert.notEqual(body.result?.isError,true,JSON.stringify(body));return body.result.structuredContent;
+  };
+  const access=await rpc('room_check_access',{});assert.equal(access.memberId??access.member?.id,grant.member_id);
+  await rpc('room_post_message',{id:'lobby-browser-hello',body:'I can help review a small task.'});
+});

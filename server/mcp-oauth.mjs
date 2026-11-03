@@ -1,3 +1,4 @@
+import { PUBLIC_LOBBY_ROOM_ID } from './current-public-face.mjs';
 import{isCurrentRoom,withCurrentReadContext,readCurrentRecord}from'./current-room-repository.mjs';
 import { approvedAgentAdoption } from './agent-sponsor-transfer.mjs';
 // OAuth resource and principal validation. This module does not mint agent
@@ -10,6 +11,8 @@ import { ownMember } from '../src/events.js';
 import { PILOT_LIMITS } from './store.mjs';
 import { hasMessageAuthority } from './message-authority.mjs';
 import { assertProjectionWrite } from './write-integrity.mjs';
+
+export const PUBLIC_LOBBY_GRANT = 'public-lobby-guest-v1';
 
 export { mcpOAuthResourceMetadata } from "./oauth-metadata.mjs";
 
@@ -233,18 +236,25 @@ export function validateMcpInviteOAuthBinding(store, grantId, binding) {
   if (!binding || Object.keys(binding).length !== fields.length || binding.principalType !== 'invited-agent'
     || fields.some(key => typeof binding[key] !== 'string' || !binding[key]) || binding.invitationGrantId !== grantId) return null;
   const grant = store.db.prepare('SELECT * FROM oauth_invite_grants WHERE id=?').get(grantId);
-  if (!grant || grant.revoked_at !== null || grant.expires_at <= store.now()
+  // Zero expiry is reserved for self-joined public guests. Their membership
+  // persists, while access/refresh families retain expiry and revocation.
+  const durablePublic = grant?.invite_hash === PUBLIC_LOBBY_GRANT && grant.room_id === PUBLIC_LOBBY_ROOM_ID && grant.expires_at === 0;
+  if (!grant || grant.revoked_at !== null || (!durablePublic && grant.expires_at <= store.now())
     || grant.room_id !== binding.roomId || grant.identity_id !== binding.identityId || grant.member_id !== binding.memberId
     || grant.identity_epoch !== binding.identityEpoch) return null;
-  const invite = store.db.prepare('SELECT redeemed_identity_id,revoked_at FROM agent_invite_codes WHERE code_hash=?').get(grant.invite_hash);
-  if (!invite || invite.revoked_at !== null || invite.redeemed_identity_id !== binding.identityId) return null;
+  if (grant.invite_hash === PUBLIC_LOBBY_GRANT) {
+    if (grant.room_id !== PUBLIC_LOBBY_ROOM_ID) return null;
+  } else {
+    const invite = store.db.prepare('SELECT redeemed_identity_id,revoked_at FROM agent_invite_codes WHERE code_hash=?').get(grant.invite_hash);
+    if (!invite || invite.revoked_at !== null || invite.redeemed_identity_id !== binding.identityId) return null;
+  }
   let member;
   try { member = store.identities.resolveIdentityLink(binding.identityId, binding.roomId)?.member; } catch { return null; }
   if (!member || member.id !== binding.memberId || member.kind !== 'agent' || member.active !== true
     || invitationEpoch(mcpOAuthIdentityEpoch(store,binding.identityId),member)!==binding.identityEpoch) return null;
   return Object.freeze({ principalType: 'invited-agent', invitationGrantId: grantId, roomId: binding.roomId,
     identityId: binding.identityId, memberId: binding.memberId, sponsorMemberId: grant.sponsor_member_id,
-    controllerVerification: 'invitation-capability' });
+    controllerVerification: grant.invite_hash === PUBLIC_LOBBY_GRANT ? 'public-consent' : 'invitation-capability' });
 }
 
 export function mcpOAuthPrincipalDescriptor(principal) {

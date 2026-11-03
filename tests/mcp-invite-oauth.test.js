@@ -6,6 +6,7 @@ import { readFileSync } from 'node:fs';
 import { request } from 'node:http';
 import { RoomStore } from '../server/store.mjs';
 import { createMcpInviteOAuth } from '../server/mcp-invite-oauth.mjs';
+import { solveIdentityMintProof } from '../server/agent-identities.mjs';
 import { mcpOAuthPrincipalDescriptor, resolveMcpOAuthPrincipal, authorizeMcpOAuthDescriptor, listMcpOAuthAgents, validateMcpOAuthBinding } from '../server/mcp-oauth.mjs';
 import { initialRoom } from '../server/bootstrap.mjs';
 import { createRoomServer } from '../server/http.mjs';
@@ -364,4 +365,123 @@ test('hosted Claude public client retains explicit invitation consent at the pub
   assert.equal(redirect.searchParams.get('iss'), origin);
   const tokens = await (await f.exchange({ grant_type: 'authorization_code', code: redirect.searchParams.get('code') })).json();
   assert.equal(typeof tokens.access_token, 'string');
+});
+
+test('public lobby native OAuth connects a guest without an invitation and fences removal', async t => {
+  const f = await setup(t);
+  const room = 'project-room-lobby';
+  f.store.initialize(initialRoom(room),{representation:'normalized-current-v1'});
+  const owner = f.store.issueAccessKey(room, 'owner');
+  f.store.command(owner, room, { id:'publish-lobby', type:'room.public_page_set', data:{enabled:true} });
+  f.store.command(owner, room, { id:'open-lobby', type:'room.join_link_set', data:{enabled:true} });
+  f.store.publicFace.enable(room, 'owner');
+  const accountsBefore = f.store.db.prepare('SELECT count(*) n FROM accounts').get().n;
+  const start = await f.start();
+  const html = await start.text();
+  assert.match(html, /Join the public lobby/);
+  const nonce = html.match(/name="nonce" value="([^"]+)"/)[1];
+  const cookie = start.headers.get('set-cookie').split(';')[0];
+  const submit = (name='Lobby agent') => fetch(f.base + '/oauth/invite', {method:'POST', headers:{Cookie:cookie,Origin:origin,'Content-Type':'application/x-www-form-urlencoded'},body:new URLSearchParams({nonce,decision:'allow_public',display_name:name})});
+  f.store.room=()=>{throw Error('whole room hydration forbidden during lobby connection');};
+  const allowed = await submit(); assert.equal(allowed.status,302,await allowed.clone().text());
+  assert.equal((await submit()).headers.get('location'),allowed.headers.get('location'));
+  assert.equal((await submit('Other name')).status,400);
+  const code = new URL(allowed.headers.get('location')).searchParams.get('code');
+  const token = await f.exchange({grant_type:'authorization_code',code}); assert.equal(token.status,200,await token.clone().text());
+  const tokens = await token.json();
+  const grant = f.store.db.prepare('SELECT * FROM oauth_invite_grants').get();
+  assert.equal(grant.room_id,room); assert.equal(grant.invite_hash,'public-lobby-guest-v1');
+  assert.equal(f.store.db.prepare('SELECT count(*) n FROM accounts').get().n,accountsBefore);
+  const access = await f.rpc(tokens.access_token); assert.equal(access.status,200,JSON.stringify(access.body));
+  const denied = await f.rpc(tokens.access_token,'room_create_agent_invite',{}); assert.ok(denied.body.error || denied.body.result?.isError);
+  const refreshed=await f.exchange({grant_type:'refresh_token',refresh_token:tokens.refresh_token});
+  assert.equal(refreshed.status,200,await refreshed.clone().text());
+  const refreshedTokens=await refreshed.json();
+  assert.equal((await f.rpc(refreshedTokens.access_token)).status,200);
+  const member = f.store.roomAuthority(room,{memberId:grant.member_id}).members[grant.member_id];
+  f.store.command(owner, room, { id:'remove-lobby-agent', type:'member.access_changed', data:{memberId:member.id,expectedMemberRevision:member.revision,active:false,permissions:member.permissions} });
+  assert.equal((await f.rpc(refreshedTokens.access_token)).status,401);
+  assert.equal((await f.exchange({grant_type:'refresh_token',refresh_token:refreshedTokens.refresh_token})).status,400);
+});
+
+test('public lobby consent requires current publication, open join and CSRF, with no partial identity', async t => {
+  const f=await setup(t), room='project-room-lobby';
+  f.store.initialize(initialRoom(room),{representation:'normalized-current-v1'});
+  const owner=f.store.issueAccessKey(room,'owner');
+  f.store.command(owner,room,{id:'publish',type:'room.public_page_set',data:{enabled:true}});
+  f.store.command(owner,room,{id:'open',type:'room.join_link_set',data:{enabled:true}});
+  f.store.publicFace.enable(room,'owner');
+  const start=await f.start(), html=await start.text(), nonce=html.match(/name="nonce" value="([^"]+)"/)[1], cookie=start.headers.get('set-cookie').split(';')[0];
+  const submit=(selectedCookie=cookie) => fetch(f.base+'/oauth/invite',{method:'POST',headers:{Cookie:selectedCookie,Origin:origin,'Content-Type':'application/x-www-form-urlencoded'},body:new URLSearchParams({nonce,decision:'allow_public',display_name:'Open guest'})});
+  const before=f.store.db.prepare('SELECT count(*) n FROM agent_identities').get().n;
+  assert.equal((await submit('')).status,403);
+  f.store.command(owner,room,{id:'close',type:'room.join_link_set',data:{enabled:false}});
+  assert.equal((await submit()).status,400);
+  assert.equal(f.store.db.prepare('SELECT count(*) n FROM agent_identities').get().n,before);
+  assert.equal(f.store.db.prepare('SELECT count(*) n FROM oauth_invite_grants').get().n,0);
+  f.store.command(owner,room,{id:'reopen',type:'room.join_link_set',data:{enabled:true}});
+  f.store.publicFace.disable(room,'owner');
+  assert.equal((await submit()).status,400);
+  assert.equal(f.store.db.prepare('SELECT count(*) n FROM agent_identities').get().n,before);
+});
+
+test('public lobby consent keeps anonymous mint proof and supports a browser challenge', async t => {
+  const f=await setup(t), room='project-room-lobby';
+  f.store.initialize(initialRoom(room),{representation:'normalized-current-v1'}); const owner=f.store.issueAccessKey(room,'owner');
+  f.store.command(owner,room,{id:'publish',type:'room.public_page_set',data:{enabled:true}});
+  f.store.command(owner,room,{id:'open',type:'room.join_link_set',data:{enabled:true}});
+  f.store.publicFace.enable(room,'owner');
+  f.store.identities.proofFreePerAddress=0;
+  const start=await f.start(),html=await start.text(),nonce=html.match(/name="nonce" value="([^"]+)"/)[1],cookie=start.headers.get('set-cookie').split(';')[0];
+  const submit=proof=>fetch(f.base+'/oauth/invite',{method:'POST',headers:{Cookie:cookie,Origin:origin,'Content-Type':'application/x-www-form-urlencoded'},body:new URLSearchParams({nonce,decision:'allow_public',display_name:'Proof agent',...(proof?{proof}:{})})});
+  const challenge=await submit(); assert.equal(challenge.status,200); assert.match(challenge.headers.get('content-security-policy'),/script-src 'sha256-/);
+  assert.match(await challenge.text(),/Verifying your connection/);
+  assert.equal(f.store.db.prepare('SELECT count(*) n FROM oauth_invite_grants').get().n,0);
+  const proof=solveIdentityMintProof('Proof agent',f.store.now(),f.store.identities.powBits);
+  assert.equal((await submit(proof)).status,302);
+});
+
+for (const mutation of ['identity-revoked', 'identity-rotated', 'grant-expired', 'grant-revoked']) test(`public guest OAuth stops after ${mutation}`, async t => {
+  const f=await setup(t), room='project-room-lobby';
+  f.store.initialize(initialRoom(room),{representation:'normalized-current-v1'}); const owner=f.store.issueAccessKey(room,'owner');
+  f.store.command(owner,room,{id:'publish',type:'room.public_page_set',data:{enabled:true}});
+  f.store.command(owner,room,{id:'open',type:'room.join_link_set',data:{enabled:true}});
+  f.store.publicFace.enable(room,'owner');
+  const start=await f.start(),html=await start.text(),nonce=html.match(/name="nonce" value="([^"]+)"/)[1],cookie=start.headers.get('set-cookie').split(';')[0];
+  const submit=()=>fetch(f.base+'/oauth/invite',{method:'POST',headers:{Cookie:cookie,Origin:origin,'Content-Type':'application/x-www-form-urlencoded'},body:new URLSearchParams({nonce,decision:'allow_public',display_name:'Fence agent'})});
+  const allowed=await submit(); assert.equal(allowed.status,302,await allowed.clone().text());
+  const code=new URL(allowed.headers.get('location')).searchParams.get('code');
+  const exchanged=await f.exchange({grant_type:'authorization_code',code}); assert.equal(exchanged.status,200);
+  const tokens=await exchanged.json(),grant=f.store.db.prepare('SELECT * FROM oauth_invite_grants').get();
+  if(mutation==='identity-revoked') f.store.db.prepare('UPDATE agent_identities SET revoked_at=? WHERE identity_id=?').run(Date.now(),grant.identity_id);
+  if(mutation==='identity-rotated') f.store.db.prepare('UPDATE agent_identities SET secret_hash=? WHERE identity_id=?').run('changed-verifier',grant.identity_id);
+  if(mutation==='grant-expired') f.store.db.prepare('UPDATE oauth_invite_grants SET expires_at=? WHERE id=?').run(f.store.now()-1,grant.id);
+  if(mutation==='grant-revoked') f.store.db.prepare('UPDATE oauth_invite_grants SET revoked_at=? WHERE id=?').run(Date.now(),grant.id);
+  assert.equal((await f.rpc(tokens.access_token)).status,401);
+  assert.equal((await f.exchange({grant_type:'refresh_token',refresh_token:tokens.refresh_token})).status,400);
+  assert.equal((await submit()).status,400);
+  assert.equal(f.store.db.prepare('SELECT count(*) n FROM oauth_invite_grants').get().n,1);
+});
+
+test('active public guest refresh keeps the same seat beyond thirty days', async t=>{
+  const f=await setup(t),room='project-room-lobby';
+  f.store.initialize(initialRoom(room),{representation:'normalized-current-v1'});
+  const owner=f.store.issueAccessKey(room,'owner');
+  f.store.command(owner,room,{id:'publish',type:'room.public_page_set',data:{enabled:true}});
+  f.store.command(owner,room,{id:'open',type:'room.join_link_set',data:{enabled:true}});
+  f.store.publicFace.enable(room,'owner');
+  const initial=await f.start(),html=await initial.text(),nonce=html.match(/name="nonce" value="([^"]+)"/)[1],cookie=initial.headers.get('set-cookie').split(';')[0];
+  const allowed=await fetch(f.base+'/oauth/invite',{method:'POST',headers:{Cookie:cookie,Origin:origin,'Content-Type':'application/x-www-form-urlencoded'},body:new URLSearchParams({nonce,decision:'allow_public',display_name:'Long running guest'})});
+  assert.equal(allowed.status,302,await allowed.clone().text());
+  const code=new URL(allowed.headers.get('location')).searchParams.get('code');
+  let tokens=await (await f.exchange({grant_type:'authorization_code',code})).json();
+  const grant=f.store.db.prepare('SELECT * FROM oauth_invite_grants').get(),start=f.store.now();
+  for(const day of [29,31,59]){
+    f.store.now=()=>start+day*86400000;
+    const response=await f.exchange({grant_type:'refresh_token',refresh_token:tokens.refresh_token});
+    assert.equal(response.status,200,await response.clone().text());tokens=await response.json();
+    const access=await f.rpc(tokens.access_token);assert.equal(access.status,200,JSON.stringify(access.body));
+    assert.equal(access.body.result.structuredContent.memberId,grant.member_id);
+  }
+  assert.equal(f.store.db.prepare('SELECT count(*) n FROM oauth_invite_grants').get().n,1);
 });

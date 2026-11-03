@@ -231,6 +231,21 @@ test('restore reconciliation reports a consumed holder proof and rotated native 
   assert.ok(reconcileRestoredAuthority(previous, f.store).stale.some(row => row.kind === 'oauth_refresh' && /native OAuth refresh token.*revoked|native OAuth refresh token.*rotated/.test(row.detail)));
 });
 
+test('restore reconciliation ignores expired handoffs and unconsumed proofs', t => {
+  const f = fixture(t), nonce = f.begin(), proof = f.oauth.existingSeatProof(), reference = proof.createHandoff(nonce);
+  const view = proof.inspect(reference, f.identity.secret, 'commons');
+  proof.approve(reference, f.identity.secret, 'commons', view.requestHash);
+  const snapshot = exportNdjsonText(f.store.db), restored = new RoomStore(':memory:');
+  t.after(() => restored.close());
+  replayNdjsonInto(snapshot, restored);
+  const expiry = f.store.db.prepare('SELECT expires_at FROM oauth_existing_seat_handoffs').get().expires_at;
+  f.store.now = () => expiry + 1;
+  f.store.db.prepare('DELETE FROM oauth_existing_seat_handoffs').run();
+  f.store.db.prepare('DELETE FROM oauth_existing_seat_proofs WHERE grant_id IS NULL').run();
+  const stale = reconcileRestoredAuthority(restored, f.store).stale;
+  assert.equal(stale.some(row => /existing-seat OAuth (handoff|holder proof)/.test(row.detail)), false);
+});
+
 for (const mutation of ['grant-revoked', 'member-unlinked', 'proof-mismatch']) test(`existing-seat token stops after ${mutation}`, t => {
   const f = fixture(t), nonce = f.begin(), proof = f.oauth.existingSeatProof(), reference = proof.createHandoff(nonce);
   const view = proof.inspect(reference, f.identity.secret, 'commons');

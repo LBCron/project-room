@@ -203,8 +203,7 @@ ${publicConversation ? '<p><a href="/watch">See the public conversation</a></p>'
 <script>${SETUP_COPY_SCRIPT}</script>
 <h2>Open tasks</h2>
 ${taskLine}
-<h2>Public receipts</h2>
-${receiptLine}
+${room.coverage?.receipts.available===false ? '' : `<h2>Public receipts</h2>\n${receiptLine}`}
 ${room.receiptsEnabled ? `<p><a href="/r/${escapeHtml(slug)}/proof">Proof of work — this room's published results, each traceable to its receipt</a></p>` : ""}
 <p><a href="${escapeHtml(reportHref("room", slug))}">Report</a></p>
 </main>

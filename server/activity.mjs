@@ -448,7 +448,7 @@ export function getReadHorizon(store, token, roomId, params = {}, expectedSessio
       .get(roomId, member.id, key);
     let lastReadMessageId = row?.last_read_message_id ?? null;
     if (lastReadMessageId !== null) {
-      if (isCurrentRoom(store.db,roomId) && !currentMessageMayBeVisible(store.db,roomId,lastReadMessageId,member.id)) lastReadMessageId = null;
+      if (isCurrentRoom(store.db,roomId) && !currentMessageMayBeVisible(store.db,roomId,lastReadMessageId,member.id,undefined,store.historyFloor(roomId,member.id))) lastReadMessageId = null;
     }
     if (lastReadMessageId !== null) {
       const message = isCurrentRoom(store.db, roomId)
@@ -477,7 +477,7 @@ export function setReadHorizon(store, token, roomId, data, expectedSessionBindin
     const auth = authed(store, token, roomId, expectedSessionBinding);
     const member = auth.member;
     if (lastReadMessageId !== null) {
-      if (isCurrentRoom(store.db,roomId) && !currentMessageMayBeVisible(store.db,roomId,lastReadMessageId,member.id)) fail(404, 'message_not_found', 'No such message in this room');
+      if (isCurrentRoom(store.db,roomId) && !currentMessageMayBeVisible(store.db,roomId,lastReadMessageId,member.id,undefined,store.historyFloor(roomId,member.id))) fail(404, 'message_not_found', 'No such message in this room');
       const message = isCurrentRoom(store.db, roomId)
         ? readCurrentMessage(store.db, roomId, lastReadMessageId)?.value
         : messageOrArchived(store, roomId, lastReadMessageId);

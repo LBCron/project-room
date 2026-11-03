@@ -467,7 +467,7 @@ optional.push("src/direct-conversation-window.js");
 // The hosted build creates this archive; exact-source recovery packages omit it.
 optional.push("room-acp.tgz");
 optional.push("server/claim-thread.mjs"); // Shared claimer thread receipt in the hosted MCP profile.
-optional.push("server/current-pins.mjs", "server/current-room-events.mjs", "server/current-return-brief.mjs"); // Bounded protected current readers.
+optional.push("server/current-event-envelope.mjs", "server/current-pins.mjs", "server/current-room-events.mjs", "server/current-return-brief.mjs"); // Bounded protected current readers.
 
 // Existing offline schema45 serving/restore modules; inclusion grants no format activation.
 optional.push("server/current-legacy-work-gate.mjs", "server/current-room-archive.mjs", "server/current-room-repository.mjs", "server/current-room-format.mjs",

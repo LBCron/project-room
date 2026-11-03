@@ -221,6 +221,7 @@ function charge(b,n,rows=1) {
   if(b.bytes>MAX_INPUT||b.records>(b.maxRecords??200))refuse('Current record context exceeds bounded input; use a smaller addressed request');
 }
 export const chargeCurrentReadBudget=(b,bytes,records=1)=>charge(b,bytes,records);
+export const remainingCurrentReadBytes=b=>Math.max(0,MAX_INPUT-(b?.bytes??0));
 function receipt(db,id,b) {
   if(b.receipts.has(id))return b.receipts.get(id);
   // Audit units retain independent input accounting while reusing at most four

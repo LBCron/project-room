@@ -67,13 +67,14 @@ export function assertMessageCommandReferences(store, roomId, state, command, ac
     [T.MESSAGE_UNPINNED]: ['messageId', 'Unpin must reference a message in this Room'],
     [T.MESSAGE_EDITED]: ['messageId', 'Message not found'],
     [T.MESSAGE_DELETED]: ['messageId', 'Message not found'],
+    [T.WORK_PROPOSED]: ['sourceMessageId', 'Source message must exist in this Room'],
   };
   const historyRef = historyRefs[command.type], targetId = historyRef && command.data?.[historyRef[0]];
   if (typeof targetId === 'string') {
     const floor = store.historyFloor(roomId, actorId);
     if (floor) {
       const target = (state.messages ?? []).find(message => message.id === targetId);
-      if ((target && !messageInHistory(target, floor)) || (!target && command.type === T.MESSAGE_UNPINNED))
+      if ((target && !messageInHistory(target, floor)) || (!target && [T.MESSAGE_UNPINNED, T.WORK_PROPOSED].includes(command.type)))
         fail(422, 'command_rejected', historyRef[1]);
     }
   }

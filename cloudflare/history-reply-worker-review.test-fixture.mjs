@@ -9,7 +9,7 @@ export class ThreadHistoryRoom extends CurrentEventsRoom {
    add('room.history_visibility_set',{historyVisibility:'since_join'},'2026-11-03T08:00:00.000Z');
    add('message.posted',{messageId:'tie-before',body:'hidden'},'2026-11-03T08:00:02.000Z');
    if(u.searchParams.get('pin')==='1')add('message.pinned',{messageId:'tie-before'},'2026-11-03T08:00:02.000Z');
-   add('member.added',{memberId:'late',displayName:'Late',kind:'agent',permissions:[]},'2026-11-03T08:00:02.000Z');
+   add('member.added',{memberId:'late',displayName:'Late',kind:'agent',permissions:['steer']},'2026-11-03T08:00:02.000Z');
    add('message.posted',{messageId:'tie-after',body:'visible'},'2026-11-03T08:00:02.000Z');
    add('message.posted',{messageId:'offset-after',body:'visible'},'2026-11-03T00:00:03.000-08:00');
    s.initialize(es,{representation:'normalized-current-v1'});return Response.json({late:s.issueAccessKey('commons','late'),owner:s.issueAccessKey('commons','owner')});}

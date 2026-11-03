@@ -1215,3 +1215,5 @@ These rows are source-checked against the offline schema 45 candidate at `47b40b
 | `current_account_erasure_unavailable` | 409 | An explicit account deletion encountered a noncanonical historical body outside its current protected erasure grammar. No partial deletion is committed. | no | Preserve the account and original confirmation evidence. Request the specific authorized historical privacy path; do not alter old proofs or report deletion complete. |
 
 | `current_updates_aggregate_unavailable` | 409 | The legacy Updates aggregate is unavailable for this normalized room. | fix+resend | Read the room needs-me endpoint named in the response; follow its cursor and coverage rather than treating it as a complete aggregate. |
+
+| `current_message_entity_too_large` | 422 | The prepared canonical message exceeds its derived 917504-byte input ceiling. | fix+resend | No changes were saved. Shorten new input; do not truncate retained history or retry unchanged. |

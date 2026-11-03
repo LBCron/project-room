@@ -956,6 +956,7 @@ summary { overflow-wrap: anywhere; }
 .agent-roster { display: flex; flex-wrap: wrap; gap: .45rem; margin: .45rem 0 .2rem; }
 .agent-roster .button { width: auto; min-height: 44px; padding: 0 .7rem; }
 .agent-type-catalog { margin: .45rem 0 .2rem; }
+.agent-type-card[aria-pressed="true"] { border-color: var(--accent); box-shadow: inset 0 0 0 1px var(--accent); }
 .agent-type-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(11.5rem, 1fr)); gap: .45rem; }
 .agent-type-card { display: flex; gap: .5rem; align-items: flex-start; width: 100%; margin: 0; padding: .55rem .6rem; min-height: 44px; text-align: left; border: 1px solid var(--room-rule); border-radius: .5rem; background: var(--room-paper); color: var(--room-ink); cursor: pointer; }
 .agent-type-card:hover, .agent-type-card:focus-visible { border-color: var(--room-ink); }

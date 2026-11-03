@@ -1,0 +1,16 @@
+// Research-only acceptance test: expected to fail until issue #5759 is fixed.
+import test from 'node:test';import assert from 'node:assert/strict';import{build}from'esbuild';import{Miniflare}from'miniflare';import{mkdtemp,rm}from'node:fs/promises';import{join}from'node:path';import{tmpdir}from'node:os';
+for(const [label,body] of [['cjk','界'.repeat(65536)],['control','\u0001'.repeat(65536)]])test('accepted '+label+' message remains readable and removable',{timeout:60000},async t=>{
+ const script=(await build({entryPoints:[new URL('./large-message-contract-research.test-fixture.mjs',import.meta.url).pathname],bundle:true,write:false,format:'esm',platform:'neutral',external:['node:*','cloudflare:*']})).outputFiles[0].text;
+ const dir=await mkdtemp(join(tmpdir(),'large-message-contract-'));const create=()=>new Miniflare({script,modules:true,compatibilityDate:'2026-07-30',compatibilityFlags:['nodejs_compat'],durableObjectsPersist:dir,durableObjects:{ROOM:{className:'PrivateLargeRoom',useSQLite:true}}});let mf=create();t.after(async()=>{await mf.dispose();await rm(dir,{recursive:true,force:true})});
+ const seed=await mf.dispatchFetch('http://localhost/seed-private'),keys=await seed.json();assert.equal(seed.status,200);const headers={host:'localhost',authorization:'Bearer '+keys.owner,'content-type':'application/json'},commands='http://localhost/api/rooms/commons/commands';
+ async function command(id,type,data){const r=await mf.dispatchFetch(commands,{method:'POST',headers,body:JSON.stringify({id,type,data})});return{status:r.status,body:await r.json()}}
+ for(const id of ['edit-target','delete-target']){const post=await command('post-'+id,'message.posted',{messageId:id,body});assert.equal(post.status,201,'valid message is accepted')}
+ const dm=await command('post-private','message.posted',{messageId:'private-target',body,toMemberId:'worker'});assert.equal(dm.status,201);
+ await mf.dispose();mf=create();
+ const denied=await mf.dispatchFetch('http://localhost/api/rooms/commons/conversation?messageId=private-target',{headers:{host:'localhost',authorization:'Bearer '+keys.other}});assert.equal(denied.status,404,'unrelated member cannot read private message');
+ for(const id of ['edit-target','delete-target']){const r=await mf.dispatchFetch('http://localhost/api/rooms/commons/conversation?messageId='+id,{headers});assert.equal(r.status,200,'author must be able to read accepted message after restart');const x=await r.json();assert.equal(x.messages[0].body,body,'return full original text')}
+ const edited=await command('edit','message.edited',{messageId:'edit-target',body:'short',expectedMessageRevision:0});assert.ok(edited.status>=200&&edited.status<300,'author can edit accepted message');
+ const deleted=await command('delete','message.deleted',{messageId:'delete-target',expectedMessageRevision:0});assert.ok(deleted.status>=200&&deleted.status<300,'author can delete accepted message');
+ await mf.dispose();mf=create();for(const [id,expected] of [['edit-target','short'],['delete-target',null]]){const r=await mf.dispatchFetch('http://localhost/api/rooms/commons/conversation?messageId='+id,{headers});assert.equal(r.status,200,'updated message available after restart');const x=await r.json();assert.equal(x.messages[0].body,expected)}
+});

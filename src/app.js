@@ -35,7 +35,7 @@ import { coordinationLoops } from "./work-loops.js";
 import { attemptReceipts, attemptLedger, attemptDeclarationLabel, cancellationState, workContinuity, spendLedger } from "./work-item-session.js";
 import { consumeJoinFragment, installShareLinks, canRetryInvitation, requestFailureMessage, failureTextWithHint } from "./share-links.js";
 import { FIRST_ROOM_SETUP_FAILURE } from "./first-room-copy.js";
-import { dmConsentPeerSummary, incomingDmRequests, dmConsentPairDescription, dmConsentActionsForPeer, fetchDmConsents, requestDmConsent, decideDmConsent, revokeDmConsent, blockDmMember, unblockDmMember, dmConsentFailureMessage, DM_CONSENT_REFUSAL_CODES } from "./dm-consents.js";
+import { dmConsentPeerSummary, incomingDmRequests, dmConsentPairDescription, dmConsentActionsForPeer, fetchDmConsents, requestDmConsent, decideDmConsent, revokeDmConsent, blockDmMember, unblockDmMember, dmConsentFailureMessage, DM_CONSENT_REFUSAL_CODES, DM_CONSENT_STATUSES } from "./dm-consents.js";
 import { identityIdOf, mergeFriendBonds, bondWithPeer, friendChrome, friendBondCommand, friendFailureMessage, friendFocusTarget, friendMessageHtml } from "./friend-bond.js";
 import { installAgentConnections } from "./agent-connections.js";
 import { installPairing } from "./pairing-ui.js";
@@ -7572,7 +7572,8 @@ async function refreshDmConsents() {
   try {
     const result = await fetchDmConsents(client);
     if (dmConsentStale(seq, generation, room)) return;
-    if (!Array.isArray(result)) throw new Error("Invalid direct message settings response");
+    if (!Array.isArray(result) || result.some(row => !row || typeof row !== "object" || Array.isArray(row) || !DM_CONSENT_STATUSES.includes(row.status)))
+      throw new Error("Invalid direct message settings response");
     dmConsents = result;
     dmConsentRefreshFailed = false;
   } catch {

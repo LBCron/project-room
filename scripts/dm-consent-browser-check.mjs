@@ -155,7 +155,7 @@ test("DM consent browser journey: request, approve, revoke, block, errors", { ti
   let malformedRefresh = false;
   const failRefresh = async route => {
     if (route.request().method() === "GET") await route.fulfill(malformedRefresh
-      ? {status:200,contentType:"application/json",body:'{}'}
+      ? {status:200,contentType:"application/json",body:'[{"status":"unknown"}]'}
       : {status:500,contentType:"application/json",body:'{"error":{"code":"synthetic","message":"offline"}}'});
     else await route.continue();
   };

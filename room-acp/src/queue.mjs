@@ -24,9 +24,12 @@ export class ThreadQueue {
     Promise.resolve().then(() => this.run(threadKey, batch)).catch(() => {}).finally(() => {
       thread.busy = false; this.active--;
       if (!thread.items.length) this.threads.delete(threadKey);
-      else this.#schedule(threadKey);
+      // Yield a freed slot to the oldest waiting thread before this thread's
+      // next batch. A continuously refilled thread must not reclaim the slot
+      // ahead of an independent thread that was already waiting.
       const next = this.waiting.shift();
       if (next) this.#schedule(next);
+      if (thread.items.length) this.#schedule(threadKey);
       if (!this.active) for (const resolve of this.idleWaiters.splice(0)) resolve();
     });
   }

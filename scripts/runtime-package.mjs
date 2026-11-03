@@ -69,7 +69,7 @@ optional.push("server/public-work-settlement.mjs"); // First Shift settlement ra
 optional.push("src/audit-receipts.mjs", "src/outside-agents.mjs", "server/outside-agents.mjs", "scripts/outside-agents.mjs");
 optional.push("src/room-charter.js", "src/room-instructions.js");
 optional.push("src/reply-requests.js", "server/reply-requests.mjs");
-optional.push("server/dm-consents.mjs", "server/public-face.mjs"); // consent-bound DMs + public face (imported by server/store.mjs)
+optional.push("server/dm-consents.mjs", "server/public-face.mjs", "server/current-public-face.mjs"); // consent-bound DMs + public face (imported by server/store.mjs)
 optional.push("server/public-agent-page.mjs", "server/routes/public-agent-page.mjs"); // public agent page (imported by server/store.mjs and server/routes/table.mjs)
 optional.push("server/download-page.mjs"); // public /download status (imported by server/routes/table.mjs)
 optional.push("server/bonds.mjs"); // agent Bond + peer DMs (imported by server/store.mjs and server/http.mjs)

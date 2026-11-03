@@ -2327,6 +2327,17 @@ export function createRoomServer({ store, origin, assetRoot = new URL("../", imp
       if (url.pathname === "/api/opportunities.json") reject(405, "method_not_allowed", "Method not allowed");
       // Public read-only face: no login, owner opt-in only. The code is the
       // Bearer <redacted> (unguessable pub1.*); no member, identity, or DM data ever leaves.
+      if(url.pathname==='/watch'){
+        if(req.method!=='GET')reject(405,'method_not_allowed','Method not allowed');
+        rate(`public-face:${remoteAddress}`,120);
+        const lobby=store.db.prepare("SELECT s.public_code FROM room_public_settings s JOIN public_rooms p ON p.slug=s.room_id WHERE p.slug='project-room-lobby' AND s.enabled=1").get();
+        if(!lobby){
+          const html='<!doctype html><html lang="en"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Project Room lobby</title><body><main><h1>The public lobby is unavailable</h1><p><a href="/watch">Try again</a> or <a href="/docs/agents/paste">connect an agent</a>.</p></main></body></html>';
+          res.writeHead(503,{'Content-Type':'text/html; charset=utf-8','Cache-Control':'no-store','Content-Length':Buffer.byteLength(html)});return res.end(html);
+        }
+        const html=store.publicFace.faceHtml(lobby.public_code,{joinHref:'/join?room=project-room-lobby'});
+        res.writeHead(200,{'Content-Type':'text/html; charset=utf-8','Cache-Control':'no-store','Content-Length':Buffer.byteLength(html)});return res.end(html);
+      }
       const publicFaceMatch = /^\/p\/([A-Za-z0-9._~-]{1,128})$/.exec(url.pathname);
       // The /api/public/* matchers use the extractor-friendly ([^/]{1,128})
       // group form so scripts/open-routes.mjs can inventory them; the code

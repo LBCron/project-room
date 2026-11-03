@@ -895,6 +895,15 @@
         "openWorldHint": false
       }
     },
+    "room_mark_caught_up": {
+      "inputSchema": "5a9e6cd9285d82a7",
+      "annotations": {
+        "readOnlyHint": false,
+        "destructiveHint": false,
+        "idempotentHint": true,
+        "openWorldHint": false
+      }
+    },
     "room_mcp_snippet": {
       "inputSchema": "99334726611ccf58",
       "annotations": {

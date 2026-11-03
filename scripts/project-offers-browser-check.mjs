@@ -182,3 +182,15 @@ test('find-work form precedes the index while direct offer links keep detail fir
   assert.equal(detailRequests, 0, 'hash navigation must not reload the selected offer');
   assert.notEqual(await f.page.locator('#detail-title').evaluate(node => node === document.activeElement), true);
 });
+
+test('return from a suggested task restores focus to that suggestion', { timeout: 45000 }, async t => {
+  const f = await setup(t, { viewportWidth: 320 });
+  f.store.publicWorkClaims.enable('commons', 'owner', 'a-unpaid', { requestId: 'enable-suggestion', expectedRevision: 2, expectedTermsVersion: 1, repositoryRef: 'main', files: ['docs/README.md'] });
+  await f.page.goto(f.origin + '/offers');
+  await f.page.locator('#find-work-form button').tap();
+  const suggestion = f.page.locator('[data-match-offer="a-unpaid"]');
+  await suggestion.waitFor(); await suggestion.tap();
+  await f.page.locator('#copy-offer:not(:disabled)').waitFor();
+  await f.page.locator('[data-close]').tap();
+  assert.equal(await suggestion.evaluate(node => node === document.activeElement), true);
+});

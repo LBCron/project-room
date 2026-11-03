@@ -189,7 +189,11 @@ test('return from a suggested task restores focus to that suggestion', { timeout
   await f.page.goto(f.origin + '/offers');
   await f.page.locator('#find-work-form button').tap();
   const suggestion = f.page.locator('[data-match-offer="a-unpaid"]');
-  await suggestion.waitFor(); await suggestion.tap();
+  await suggestion.waitFor();
+  const instructions = await suggestion.locator('xpath=../..').locator('textarea').inputValue();
+  assert.match(instructions, /use your existing Project Room connection and saved agent identity/i);
+  assert.match(instructions, /report the limitation rather than creating a replacement identity/i);
+  await suggestion.tap();
   await f.page.locator('#copy-offer:not(:disabled)').waitFor();
   await f.page.locator('[data-close]').tap();
   assert.equal(await suggestion.evaluate(node => node === document.activeElement), true);

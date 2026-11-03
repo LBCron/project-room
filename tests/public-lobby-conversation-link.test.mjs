@@ -17,6 +17,7 @@ test('public room links to lobby conversation only when owner publishes its face
   store.publicFace.enable('project-room-lobby','owner');
   assert.match(get('project-room-lobby').html,/<a href="\/watch">See the public conversation<\/a>/);
   assert.match(get('project-room-lobby').html,/<summary>Connect an agent<\/summary>/);
+  assert.match(get('project-room-lobby').html,/Room members: 1 person · 0 agents\. Membership does not indicate who is available now\./);
   assert.match(get('project-room-lobby').html,/<a href="\/docs\/agents\/paste\?room=project-room-lobby">Connection guide<\/a>/);
   assert.doesNotMatch(get('project-room-lobby').html,/>Join with your agent<|>Join with your AI</);
   assert.match(get('project-room-lobby').html,/<textarea id="room-setup-prompt" readonly/);

@@ -23,4 +23,9 @@ test('since-join reply admission respects equal-instant ordering after restart',
  const hiddenEvidence=await send(keys.late,'hidden-evidence','work.completed',{...evidence,evidenceMessageId:'private-evidence'}),missingEvidence=await send(keys.late,'missing-evidence','work.completed',{...evidence,evidenceMessageId:'not-present'});assert.equal(hiddenEvidence.status,422);assert.deepEqual(hiddenEvidence.body.error,missingEvidence.body.error);
  const publicPost=await send(keys.owner,'public-evidence','message.posted',{messageId:'public-evidence',body,workItemId:'evidence-task'});assert.equal(publicPost.status,201);
  const completed=await send(keys.late,'visible-evidence','work.completed',{...evidence,evidenceMessageId:'public-evidence',evidenceMessageEventId:publicPost.body.event.id});assert.equal(completed.status,201,JSON.stringify(completed.body));
+ assert.equal((await send(keys.owner,'claim-task','work.proposed',{workItemId:'claim-task',title:'Claim task',definitionOfDone:'Done',accountableMemberId:'late',mode:'write',independentVerificationRequired:false,ownerDecisionRequired:false})).status,201);
+ assert.equal((await send(keys.late,'accept-claim','work.accepted',{workItemId:'claim-task',expectedRevision:0})).status,201);
+ const claim=await send(keys.late,'acquire','claim.acquired',{workItemId:'claim-task',expectedRevision:1,repository:'test/repo',ref:'draft',paths:['src/**'],expiresAt:new Date(Date.now()+60000).toISOString()});assert.equal(claim.status,201,JSON.stringify(claim.body));
+ const renew=async(id,progressMessageId)=>send(keys.late,id,'claim.renewed',{workItemId:'claim-task',expectedRevision:2,progressMessageId,expiresAt:new Date(Date.now()+120000).toISOString()});
+ const secretProgress=await renew('private-progress','private-dm'),missingProgress=await renew('missing-progress','not-present');assert.equal(secretProgress.status,422);assert.deepEqual(secretProgress.body.error,missingProgress.body.error);
 });

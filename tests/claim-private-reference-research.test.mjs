@@ -1,0 +1,22 @@
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import {RoomStore} from '../server/store.mjs';
+import {initialRoom} from '../server/bootstrap.mjs';
+import {setTier} from '../server/autonomy-tiers.mjs';
+import {createTestClock} from './helpers/test-clock.mjs';
+for (const representation of [undefined, 'normalized-current-v1']) test(`compare private and absent progress references (${representation ?? 'legacy'})`,t=>{
+ const clock=createTestClock(),s=new RoomStore(':memory:',{now:clock.now});t.after(()=>s.close());s.initialize(initialRoom(), representation ? {representation} : undefined);
+ const owner=s.issueAccessKey('commons','owner'),send=(key,id,type,data)=>s.command(key,'commons',{id,type,data});
+ for(const id of ['worker','peer'])send(owner,'add-'+id,'member.added',{memberId:id,displayName:id,kind:'agent',accountableHumanId:'owner',permissions:['accept_work','complete_work','write_external']});
+ setTier(s.db,'commons','worker','t2_standard',{updatedBy:'owner',nowMs:clock.now()});const worker=s.issueAccessKey('commons','worker');
+ send(owner,'propose','work.proposed',{workItemId:'task',title:'Task',definitionOfDone:'Done',accountableMemberId:'worker',mode:'write',independentVerificationRequired:false,ownerDecisionRequired:false});
+ send(worker,'accept','work.accepted',{workItemId:'task',expectedRevision:0});
+ send(worker,'claim','claim.acquired',{workItemId:'task',expectedRevision:1,repository:'test/repo',ref:'draft',paths:['src/**'],expiresAt:new Date(clock.now()+60000).toISOString()});
+ clock.advance(1000);send(owner,'dm','message.posted',{messageId:'private',body:'secret',toMemberId:'peer'});
+ const reject=(id,target)=>{try{send(worker,id,'claim.renewed',{workItemId:'task',expectedRevision:2,progressMessageId:target,expiresAt:new Date(clock.now()+120000).toISOString()});return 'accepted'}catch(e){return [e.status,e.code,e.message]}};
+ const privateResult=reject('private-check','private'),missing=reject('missing-check','missing');assert.deepEqual(privateResult,missing);
+ const stale=(id,target)=>{try{send(worker,id,'claim.renewed',{workItemId:'task',expectedRevision:999,progressMessageId:target,expiresAt:new Date(clock.now()+120000).toISOString()});return 'accepted'}catch(e){return [e.status,e.code,e.message]}};
+ assert.deepEqual(stale('stale-private','private'),stale('stale-missing','missing'));
+ send(worker,'own','message.posted',{messageId:'own-progress',body:'Progress'});
+ const renewed=send(worker,'valid-renewal','claim.renewed',{workItemId:'task',expectedRevision:2,progressMessageId:'own-progress',expiresAt:new Date(clock.now()+120000).toISOString()});assert.equal(renewed.event.type,'claim.renewed');
+});

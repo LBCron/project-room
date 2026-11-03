@@ -69,6 +69,7 @@ export function assertMessageCommandReferences(store, roomId, state, command, ac
     [T.MESSAGE_DELETED]: ['messageId', 'Message not found'],
     [T.WORK_PROPOSED]: ['sourceMessageId', 'Source message must exist in this Room'],
     [T.WORK_COMPLETED]: ['evidenceMessageId', 'Choose a well-formed message explicitly linked to this work'],
+    [T.CLAIM_RENEWED]: ['progressMessageId', 'Renewal needs a progress message in this room — post a progress update in the room first'],
     [T.DECISION_RECORDED]: ['sourceMessageId', 'Decision source must be a message in this Room — post the rationale in the room first'],
   };
   const historyRef = historyRefs[command.type], targetId = historyRef && command.data?.[historyRef[0]];
@@ -76,12 +77,14 @@ export function assertMessageCommandReferences(store, roomId, state, command, ac
   const work = state.workItems?.[command.data?.workItemId];
   const eligible = command.type === T.WORK_PROPOSED ? memberCan(state, actorId, 'steer')
     : command.type === T.WORK_COMPLETED ? command.data?.evidenceKind === 'room_text' && work?.accountableMemberId === actorId && ['accepted','working'].includes(work?.state) && memberCan(state, actorId, 'complete_work')
-    : command.type === T.DECISION_RECORDED ? memberCan(state, actorId, 'decide') && (actor?.kind === 'human' || actor?.delegatedAdmin === true) : true;
+    : command.type === T.DECISION_RECORDED ? memberCan(state, actorId, 'decide') && (actor?.kind === 'human' || actor?.delegatedAdmin === true)
+    : command.type === T.CLAIM_RENEWED ? work?.claim?.holderId === actorId && ['accepted','working','blocked'].includes(work?.state)
+      && (command.data?.expectedRevision == null || command.data.expectedRevision === work.revision) : true;
   if (typeof targetId === 'string' && eligible) {
     const target = (state.messages ?? []).find(message => message.id === targetId);
-    if (!target && [T.WORK_PROPOSED, T.WORK_COMPLETED, T.DECISION_RECORDED].includes(command.type))
+    if (!target && [T.WORK_PROPOSED, T.WORK_COMPLETED, T.DECISION_RECORDED, T.CLAIM_RENEWED].includes(command.type))
       fail(422, 'command_rejected', historyRef[1]);
-    if ([T.WORK_PROPOSED, T.WORK_COMPLETED, T.DECISION_RECORDED].includes(command.type) && target?.toMemberId && target.authorId !== actorId && target.toMemberId !== actorId)
+    if ([T.WORK_PROPOSED, T.WORK_COMPLETED, T.DECISION_RECORDED, T.CLAIM_RENEWED].includes(command.type) && target?.toMemberId && target.authorId !== actorId && target.toMemberId !== actorId)
       fail(422, 'command_rejected', historyRef[1]);
     const floor = store.historyFloor(roomId, actorId);
     if (floor) {

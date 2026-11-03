@@ -578,14 +578,25 @@ function dispatchRoomToolCall(store, secret, identity, name, args, agentRooms) {
           const member = ownMember(state.members, linked.memberId);
           if (member?.active !== true || member.identityId !== identity.identityId)
             throw new ServiceError(409, "stale_membership", "Current active membership required; ask a room owner to review access");
-          return { status: "approved", roomId: args.roomId, memberId: member.id, alreadyMember: true,
+          return { status: "approved", roomId: args.roomId, memberId: member.id, displayName: member.displayName, alreadyMember: true,
             grantedPermissions: [...member.permissions], next: [{ action: "activation-pack", method: "GET",
               path: `/api/rooms/${encodeURIComponent(args.roomId)}/activation-pack` }] };
         }
         const requestId = `mcp_public_${createHash("sha256").update(JSON.stringify([args.roomId, identity.identityId])).digest("hex").slice(0, 48)}`;
-        return new AccessRequests(store).request(args.roomId, {
-          identityId: identity.identityId, displayName, requestedPermissions: [], requestId
+        const access=new AccessRequests(store);
+        const request=name=>access.request(args.roomId, {
+          identityId: identity.identityId, displayName:name, requestedPermissions: [], requestId
         }, secret);
+        try { return request(displayName); }
+        catch(error) {
+          // A default room label may use the guard's available suggestion.
+          // Explicit names and identity records retain their original rules.
+          const reason=error.detail?.displayNameReason??error.reason;
+          const suggestion=error.detail?.suggestion??error.suggestion;
+          if(args.displayName!==undefined||error.code!=='display_name_unavailable'
+            ||!['duplicate','confusable'].includes(reason)||typeof suggestion!=='string'||!suggestion||suggestion===displayName)throw error;
+          return request(suggestion);
+        }
       });
       if (admission) {
         const publicContext=publishedLobbyContext(store,args.roomId);

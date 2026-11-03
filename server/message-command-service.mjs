@@ -2,7 +2,7 @@
 // idempotency and the transaction; this boundary owns message persistence and
 // reference conflicts. Keep these phases separate so existing admission order
 // and error precedence remain stable during the writer migration.
-import { EVENT_TYPES as T } from '../src/events.js';
+import { EVENT_TYPES as T, memberCan } from '../src/events.js';
 import { classifyCommand } from './action-classes.mjs';
 import { createAgentPause } from './agent-pause.mjs';
 import { affectedMessageIds, captureMessageCertification, advanceMessageCertification, syncMessageRows, archivedMessageRow, archivedMessageCommandContext } from './messages-store.mjs';
@@ -70,10 +70,12 @@ export function assertMessageCommandReferences(store, roomId, state, command, ac
     [T.WORK_PROPOSED]: ['sourceMessageId', 'Source message must exist in this Room'],
   };
   const historyRef = historyRefs[command.type], targetId = historyRef && command.data?.[historyRef[0]];
-  if (typeof targetId === 'string') {
+  if (typeof targetId === 'string' && (command.type !== T.WORK_PROPOSED || memberCan(state, actorId, 'steer'))) {
+    const target = (state.messages ?? []).find(message => message.id === targetId);
+    if (command.type === T.WORK_PROPOSED && target?.toMemberId && target.authorId !== actorId && target.toMemberId !== actorId)
+      fail(422, 'command_rejected', historyRef[1]);
     const floor = store.historyFloor(roomId, actorId);
     if (floor) {
-      const target = (state.messages ?? []).find(message => message.id === targetId);
       if ((target && !messageInHistory(target, floor)) || (!target && [T.MESSAGE_UNPINNED, T.WORK_PROPOSED].includes(command.type)))
         fail(422, 'command_rejected', historyRef[1]);
     }

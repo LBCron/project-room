@@ -27,3 +27,14 @@ test('work proposals cannot use unseen prejoin messages as sources',t=>{
  s.now=()=>Date.now()+5000;s.command(owner,'commons',{id:'visible',type:'message.posted',data:{messageId:'visible',body:'visible'}});
  assert.ok(s.command(late,'commons',proposal('visible','visible-task')).event);
 });
+
+test('work proposals cannot use another pair’s direct message as a source',t=>{
+ const s=new RoomStore(':memory:');t.after(()=>s.close());const es=initialRoom();
+ for(const [type,data] of [['member.added',{memberId:'peer',displayName:'Peer',kind:'agent',permissions:['steer']}],['member.added',{memberId:'other',displayName:'Other',kind:'agent',permissions:['steer']}],['member.added',{memberId:'unprivileged',displayName:'Unprivileged',kind:'agent',permissions:[]}],['message.posted',{messageId:'private-dm',body:'private',toMemberId:'peer'}]])es.push(event({roomId:'commons',actorId:'owner',type,data}));
+ s.initialize(es,{representation:'normalized-current-v1'});const other=s.issueAccessKey('commons','other'),peer=s.issueAccessKey('commons','peer'),unprivileged=s.issueAccessKey('commons','unprivileged');
+ const proposal=(target,id,actor)=>({id,type:'work.proposed',data:{workItemId:id,title:'Task',definitionOfDone:'Done',accountableMemberId:actor,sourceMessageId:target}});
+ const reject=(token,target,actor)=>{try{s.command(token,'commons',proposal(target,'task-'+target,actor));assert.fail('expected refusal')}catch(e){return {status:e.status,code:e.code,message:e.message}}};
+ assert.deepEqual(reject(other,'private-dm','other'),reject(other,'missing','other'));
+ assert.deepEqual(reject(unprivileged,'private-dm','unprivileged'),reject(unprivileged,'missing','unprivileged'));
+ assert.ok(s.command(peer,'commons',proposal('private-dm','peer-task','peer')).event);
+});

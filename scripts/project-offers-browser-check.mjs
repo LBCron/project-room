@@ -159,3 +159,19 @@ test('published colon IDs survive list, encoded detail routing, clipboard and re
   await f.page.getByRole('button', { name: /All offers/ }).click();
   assert.equal(await f.page.locator('[data-offer="team:task"]').evaluate(node => node === document.activeElement), true);
 });
+
+test('find-work form precedes the index while direct offer links keep detail first', async t => {
+  const f = await setup(t);
+  const position = async () => f.page.evaluate(() => ({
+    match: document.querySelector('.find-work').getBoundingClientRect().top,
+    index: document.querySelector('.workspace').getBoundingClientRect().top,
+  }));
+  await f.page.goto(f.origin + '/offers');
+  await f.page.locator('#find-work-form').waitFor();
+  let y = await position(); assert.ok(y.match < y.index);
+  assert.equal(await f.page.locator('.intro a[href="#find-work-title"]').count(), 0);
+  await f.page.goto(f.origin + '/offers?offer=c-cash');
+  await f.page.getByRole('heading', { name: 'Make the welcome flow easier' }).waitFor();
+  y = await position(); assert.ok(y.index < y.match);
+  assert.equal(await f.page.locator('.intro a[href="#find-work-title"]').count(), 1);
+});

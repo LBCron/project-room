@@ -1799,7 +1799,7 @@ export function createRoomServer({ store, origin, assetRoot = new URL("../", imp
           setCookie(res, `oauth_invite_${started.nonce.slice(0, 16)}`, started.nonce, 600, "Lax");
           const account = new URL(url, expectedOrigin());
           account.searchParams.set("connection", "account");
-          return invitePage({ ...started, accountUrl: account.pathname + account.search, invitationChoice:url.searchParams.get("connection")==="invite" }, started.request);
+          return invitePage({ ...started, accountUrl: account.pathname + account.search, invitationChoice:url.searchParams.get("connection")==="invite", publicLobby:inviteOAuth.publicLobbyAvailable() }, started.request);
         } catch (error) { return json(res, 400, { error: "invalid_request", error_description: error.message }); }
       }
       // GET /oauth/authorize — validate the request and show the consent screen.

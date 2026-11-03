@@ -1734,8 +1734,10 @@ function syncComposerChrome() {
     if (audience) {
       note.textContent = activeDirectMemberId && !requestMode ? uiText("direct.private") : audience;
       note.title = audience;
-      const consent = dmConsentPeerSummary(dmConsents, state.members, session?.member?.id, to);
-      if (consent && consent.outgoing === "blocked") {
+      const consent = dmConsentRefreshFailed ? null : dmConsentPeerSummary(dmConsents, state.members, session?.member?.id, to);
+      if (dmConsentRefreshFailed) {
+        note.textContent += " Direct message settings could not be refreshed.";
+      } else if (consent && consent.outgoing === "blocked") {
         note.textContent += " They aren't accepting DMs from you.";
       } else if (consent && (consent.outgoing === "rejected" || consent.outgoing === "revoked")) {
         note.textContent += " They declined DMs from you — ask in the room instead.";

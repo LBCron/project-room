@@ -29,3 +29,5 @@ Root additionally qualified actual hosted MCP joining on the Native SQLite adapt
 Root focused results: 143 admission/history/public/attention Node tests; 33 actual HTTP setup and scope checks; 28 hosted MCP/pairing/credential/scope checks; 15 manifest/browser-shard/public contracts; four actual desktop/mobile Chromium checks; one actual Native fixture; four paste/docs checks. These are separate selected commands, with overlap possible, not a full-suite count. All passed without skips. Lint has zero errors and 366 pre-existing warnings. Source-level authority/privacy review found no blocker.
 
 Open-page copy now provides a short join-only prompt and existing room_join metadata. Computer sharing and installing a host are not prerequisites to participating. No private production room was published as part of qualification. Live deployment and a synthetic public QA room have separate release receipts.
+
+Captured baseline and lint logs containing native tool whitespace are stored as .log.gz, preserving original bytes. Their qualification hashes describe decompressed bytes; compression avoids changing the captured failures merely to satisfy diff whitespace checks.

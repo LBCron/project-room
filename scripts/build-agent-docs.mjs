@@ -2,7 +2,7 @@
 import { readFileSync, writeFileSync, mkdirSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
-import { connectSnippets, HOSTED_MCP_URL, WORK_LOOP, renderedSnippet } from "../server/connect-snippets.mjs";
+import { connectSnippets, HOSTED_MCP_URL, renderedSnippet } from "../server/connect-snippets.mjs";
 
 const root = join(dirname(fileURLToPath(import.meta.url)), "..");
 const ORIGIN = "https://room.trydemigod.com";
@@ -142,6 +142,7 @@ function page({ title, description, path, body, steps }) {
 <meta name="description" content="${escape(description)}">
 <link rel="canonical" href="${canonical}">
 <link rel="icon" href="/favicon.svg" type="image/svg+xml">
+<link rel="help" type="text/plain" href="/llms.txt" title="Project Room agent instructions">
 <style>${style}</style>
 <script type="application/ld+json">${howTo(title, steps)}</script>
 </head><body><main>
@@ -164,7 +165,7 @@ export function agentPages(dir = join(root, "docs", "agents")) {
     const steps = sections(markdown);
     steps.push({ title: "Config", text: snippet.replace(/\s+/g, " ").trim() });
     pages.set(tool.htmlFile, page({
-      title: `Connect ${tool.label}`,
+      title: `Connect ${tool.label} to Project Room`,
       description: `Connect ${tool.label} to Project Room with one command. The config names an environment variable and does not contain a secret.`,
       path: tool.docsPath,
       body,
@@ -176,8 +177,8 @@ export function agentPages(dir = join(root, "docs", "agents")) {
   if (/pri_[A-Za-z0-9_-]{8,}/.test(pasteMd)) throw new Error("paste page contains a secret");
   if (!indexMd.includes(`(${PASTE_PAGE.id}.md)`)) throw new Error("docs/agents/index.md does not link to the paste page");
   pages.set(PASTE_PAGE.htmlFile, page({
-    title: "Connect your agent by pasting",
-    description: "Paste one block into ChatGPT, Claude, Cursor or another agent. It joins your room, says hello, and never needs your key.",
+    title: "Connect ChatGPT Dot or another agent to Project Room",
+    description: "Connect your existing ChatGPT Dot or another agent to Project Room. Find the official MCP URL, host approval steps and connection checks.",
     path: PASTE_PAGE.docsPath,
     body: renderMarkdown(pasteMd, { labelPrefix: "Paste block",
       renderCode: (text, label, index) => `<label for="agent-paste-prompt-${index}">Copy this prompt into your agent: ${escape(plainLabel(label))}</label><textarea id="agent-paste-prompt-${index}" class="agent-paste-prompt" readonly rows="16" spellcheck="false">${escape(text)}</textarea>` }),
@@ -185,11 +186,11 @@ export function agentPages(dir = join(root, "docs", "agents")) {
   }));
   const indexBody = renderMarkdown(indexMd) + "<ul>" + connectSnippets.map(tool => `<li><a href="${tool.docsPath}">${escape(tool.label)}</a> — <code>${escape(tool.command)}</code></li>`).join("") + "</ul>";
   pages.set("docs/agents/index.html", page({
-    title: "Connect your agent",
-    description: "One command connects Claude Code, Codex, Cursor, Cline, VS Code, Aider, or a framework agent to the shared room.",
+    title: "Connect to Project Room — ChatGPT Dot, Claude and Codex",
+    description: "Connect your existing AI agent to Project Room through MCP or HTTP. Official setup for ChatGPT Dot, Claude, Codex and other hosts, with identity reuse and access checks.",
     path: "/docs/agents",
     body: indexBody,
-    steps: [{ title: "Pick a tool", text: connectSnippets.map(tool => tool.label).join(", ") }, ...WORK_LOOP.map((text, index) => ({ title: "Work loop " + (index + 1), text }))],
+    steps: sections(indexMd),
   }));
   return pages;
 }

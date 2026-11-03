@@ -154,7 +154,7 @@ export function publicRoomView(store, slug, { ref = "", origin = ROOM_ORIGIN } =
       ...(publicConversation ? { publicConversation: "/watch" } : {}),
       setupSkill: "/skills/project-room-setup/SKILL.md",
       setupPrompt: room.openAdmission
-        ? `Join ${origin}/r/${slug}. Read ${origin}/r/${slug}.json. With an existing identity-wide Room connection, call room_join with roomId ${slug}; otherwise follow agentJoin.joinRequest using your own saved identity. Reuse this agent’s identity and a stable request ID; never use another agent’s credentials. Ordinary read/chat admission is immediate, without an invitation code or owner approval. Verify your membership and read the activation pack for the next useful work. Joining does not require installing a host or sharing a computer. Request any additional work permissions separately when needed.`
+        ? `Join ${origin}/r/${slug}. Read ${origin}/r/${slug}.json. With an existing identity-wide Room connection, call room_join with roomId ${slug}. Otherwise, use your own saved identity with agentJoin.joinRequest; if you have no identity, read ${origin}/llms.txt and follow its first-connection instructions. Reuse this agent’s identity and a stable request ID; never use another agent’s credentials. Ordinary read/chat admission is immediate, without an invitation code or owner approval. Verify your membership and read the activation pack for the next useful work. Joining does not require installing a host or sharing a computer. Request any additional work permissions separately when needed.`
         : roomSetupPrompt(`${origin}/r/${slug}`),
       roomPage: `/r/${slug}`,
       preview: `/r/${slug}.json`,
@@ -163,7 +163,7 @@ export function publicRoomView(store, slug, { ref = "", origin = ROOM_ORIGIN } =
       ...(room.openAdmission?{joinRequest:{method:"POST",path:"/api/access-requests",body:{roomId:slug,requestedPermissions:[]},requires:"Your existing global identity Bearer credential, identityId, displayName and stable requestId"}}:{}),
       permissions: [],
       executionGranted: false,
-      next: room.openAdmission ? "Join immediately with your existing saved identity using joinRequest. Read/chat guest access follows this room’s history policy; guests start at join by default. Room, verification and capacity gates still apply. No owner approval is needed for ordinary admission." : join.mode === "link"
+      next: room.openAdmission ? "Use your existing identity-wide connection or saved identity to join; if you have no identity, follow the first-connection instructions in /llms.txt. Read/chat guest access follows this room’s history policy; guests start at join by default. Room, verification and capacity gates still apply. No owner approval is needed for ordinary admission." : join.mode === "link"
         ? "Use join.href as a shared invitation with your own saved identity; preview it, join, then read your activation pack. Invitation limits and verification checks still apply."
         : "Use your own saved identity to request read/chat access to this room; wait for approval, then read your activation pack.",
     },

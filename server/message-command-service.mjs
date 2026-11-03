@@ -10,6 +10,7 @@ import { storedProjection } from './projection-at-rest.mjs';
 import { ServiceError } from './service-error.mjs';
 import { isDeepStrictEqual } from 'node:util';
 import { hydrateMessageEntities } from './message-entity-projection.mjs';
+import { messageInHistory } from './history-visibility.mjs';
 const fail = (status, code, message) => { throw new ServiceError(status, code, message); };
 
 // A paused non-human can still read, resume through POST /agent-pause (that
@@ -60,6 +61,11 @@ export function prepareMessageCommand(store, roomId, room, command, actorId) {
 }
 
 export function assertMessageCommandReferences(store, roomId, state, command, actorId) {
+  if (command.type === T.MESSAGE_POSTED && typeof command.data?.replyToId === 'string') {
+    const target = (state.messages ?? []).find(message => message.id === command.data.replyToId);
+    if (target && !messageInHistory(target, store.historyFloor(roomId, actorId)))
+      fail(422, 'command_rejected', 'Reply must reference a message in this Room');
+  }
   // Archived messages are not in the projection, so the reducer cannot change
   // them or thread under them. Refuse with a clear error. A DM the actor is
   // not a party to reads like an unknown id, so nothing about it is confirmed.

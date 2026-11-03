@@ -25,7 +25,8 @@ export function readCurrentWorkDiscussion(store,token,roomId,workItemId,{cursor=
   if(!validId(workItemId)||!integer(limit)||limit<1||limit>DISCUSSION_MAX_LIMIT||typeof consistent!=='boolean'
    ||cursor!==null&&since!==undefined||resumeToken!==null&&(cursor!==null||since!==undefined)||consistent&&since!==undefined
    ||since!==undefined&&!integer(since))fail('invalid_discussion','Choose one work item and bounded page; use a cursor, checkpoint, or since separately');
-  const selected=readCurrentSelectedWorkState(store,roomId,workItemId,auth.member.id),item=selected.state.workItems[workItemId];
+  const selected=readCurrentSelectedWorkState(store,roomId,workItemId,auth.member.id);
+  const item=Object.hasOwn(selected.state.workItems,workItemId)?selected.state.workItems[workItemId]:null;
   if(!item)fail('work_not_found','Work item not found in this Room',404);
   const head=readCurrentHead(store.db,roomId,b),floor=readCurrentHistoryFloor(store.db,roomId,auth.member.id);
   const scope=digest([roomId,workItemId,auth.member.id,auth.member.revision,auth.credentialHash??null,auth.account?.id??null,

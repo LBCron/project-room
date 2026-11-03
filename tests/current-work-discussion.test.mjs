@@ -39,8 +39,9 @@ test('current hosted exact-result +discussion and REST SDK compose without hydra
  const prepared=await f.call({includeResult:true,includeDiscussion:true});
  assert.equal(prepared.review.result.text.body,f.saved.body);assert.ok(prepared.preparation.discussion.items.some(row=>row.message.id==='saved-result'));
  assert.ok(prepared.preparation.discussion.items.every(row=>!row.message.id.startsWith('later-')));
+ await assert.rejects(f.client.workDiscussion('toString'),{code:'work_not_found'});
  const first=await f.client.workDiscussion('task',{limit:25});assert.equal(first.contractVersion,2);assert.ok(ids(first).includes('saved-result'));
- assert.equal(f.store.headSequence('commons'),head);assert.equal(typeof readCurrentWorkDiscussion,'function');
+ assert.equal(f.store.headSequence('commons'),head);
 });
 
 test('bounded empty-more source pages preserve linked descendants and private subtree boundaries',async t=>{
@@ -103,7 +104,7 @@ test('since-join protected floor hides earlier source bodies without hydrating e
  add('task','work.proposed',{workItemId:'task',title:'Selected',definitionOfDone:'Read',accountableMemberId:'reader',sourceMessageId:'old',independentVerificationRequired:false,ownerDecisionRequired:false});
  add('fresh','message.posted',{messageId:'fresh',body:'Visible after join',workItemId:'task'});
  s.initialize(events,{representation:'normalized-current-v1'});const key=s.issueAccessKey('commons','reader');s.room=()=>{throw Error('Whole-room hydration');};
- const result=s.workDiscussion(key,'commons','task');assert.deepEqual(ids(result),['fresh']);assert.equal(JSON.stringify(result).includes('PREJOIN-SECRET'),false);
+ const result=readCurrentWorkDiscussion(s,key,'commons','task');assert.deepEqual(ids(result),['fresh']);assert.equal(JSON.stringify(result).includes('PREJOIN-SECRET'),false);
 });
 
 test('current preparation keeps incomplete tails and refuses a changed or withdrawn result packet',async t=>{

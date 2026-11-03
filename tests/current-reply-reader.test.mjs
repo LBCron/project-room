@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import {RoomStore} from '../server/store.mjs';
 import {initialRoom} from '../server/bootstrap.mjs';
 import {event} from '../src/events.js';
+import {withCurrentRoomWriter} from '../server/current-room-repository.mjs';
 
 function fixture(t,extend=()=>{}){
  const store=new RoomStore(':memory:');t.after(()=>store.close());const events=initialRoom();
@@ -16,6 +17,14 @@ function fixture(t,extend=()=>{}){
 test('normalized current requests list does not report an existing incoming obligation as empty',t=>{
  const {store,keys}=fixture(t),listed=store.replyRequests.list(keys.reader,'commons');
  assert.deepEqual(listed.requests.map(request=>request.id),['question']);
+});
+for(const [field,value] of [['recipientId','other'],['status','answered']])test(`list fails closed when the indexed ${field} disagrees with its witness`,t=>{
+ const {store,keys}=fixture(t);
+ store.transaction(()=>withCurrentRoomWriter(store.db,'commons',()=>store.db.prepare(
+  "UPDATE current_room_records SET payload=json_set(payload,?,?) WHERE room_id='commons' AND domain='replyRequests' AND record_key='question'"
+ ).run(`$.${field}`,value)));
+ store.room=()=>{throw Error('whole-room hydration forbidden');};
+ assert.throws(()=>store.replyRequests.list(keys.reader,'commons',{direction:'incoming',status:'open'}),/current_room_corrupt/);
 });
 test('large valid cancelled requests paginate within the shared read budget',t=>{
  const {store,keys}=fixture(t,(_events,add)=>{

@@ -35,10 +35,12 @@ export function publicMessageHtml(value) {
     let url = match[0];
     let balance = 0;
     for (const char of url) { if (char === '(') balance++; else if (char === ')') balance--; }
-    while (/[.,;:!?]$/.test(url) || (url.endsWith(')') && balance < 0)) {
-      if (url.endsWith(')')) balance++;
-      url = url.slice(0, -1);
+    let end = url.length;
+    while (end && (/[.,;:!?]/.test(url[end - 1]) || (url[end - 1] === ')' && balance < 0))) {
+      if (url[end - 1] === ')') balance++;
+      end--;
     }
+    url = url.slice(0, end);
     result += escape(text.slice(cursor, match.index));
     let safe = false;
     try { const parsed = new URL(url); safe = ['http:', 'https:'].includes(parsed.protocol) && !parsed.username && !parsed.password; } catch { /* leave invalid URL as text */ }

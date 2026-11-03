@@ -116,7 +116,7 @@ test('consent refuses other owners, wrong audiences and forged choices', async t
   }
   const wrongRefresh = await f.exchange({ grant_type: 'refresh_token', refresh_token: f.tokens.refresh_token, client_id: CLIENT.clientId, resource: 'https://evil.example/mcp' });
   assert.equal(wrongRefresh.status, 400);
-  const validRefresh = await f.exchange({ grant_type: 'refresh_token', refresh_token: f.tokens.refresh_token, client_id: CLIENT.clientId, resource });
+  const validRefresh = await f.exchange({ grant_type: 'refresh_token', refresh_token: f.tokens.refresh_token, client_id: CLIENT.clientId });
   assert.equal(validRefresh.status, 200);
 });
 test('removing sponsored membership rejects existing access and refresh tokens', async t => {
@@ -402,7 +402,7 @@ test('Claude DCR, existing owned seat consent and grant survive provider restart
  for(let round=0;round<3;round++) {
   now+=29*86400000;await f.restart();
   assert.equal((await f.rpc('tools/list',{},nextPair.access_token)).response.status,401,'expired access challenges');
-  const refreshed=await f.exchange({grant_type:'refresh_token',refresh_token:nextPair.refresh_token,client_id:registered.client_id,resource});assert.equal(refreshed.status,200);nextPair=await refreshed.json();
+  const refreshed=await f.exchange({grant_type:'refresh_token',refresh_token:nextPair.refresh_token,client_id:registered.client_id,...(round===1?{resource}:{})});assert.equal(refreshed.status,200);nextPair=await refreshed.json();
   const check=await f.rpc('tools/call',{name:'room_check_access',arguments:{}},nextPair.access_token);assert.equal(check.body.result.structuredContent.memberId,'friend-dot');
  }
  assert.equal(f.store.agentConnections.row('commons','friend-dot'),undefined);

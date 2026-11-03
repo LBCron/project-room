@@ -1,0 +1,7 @@
+import test from 'node:test';import assert from 'node:assert/strict';import {build} from 'esbuild';import {Miniflare} from 'miniflare';import {mkdtemp,rm} from 'node:fs/promises';import {join} from 'node:path';import {tmpdir} from 'node:os';
+test('legacy witness certification survives Worker cold restart',{timeout:60000},async t=>{
+ const script=(await build({entryPoints:[new URL('./routing-certification-research.test-fixture.mjs',import.meta.url).pathname],bundle:true,write:false,format:'esm',platform:'neutral',external:['node:*','cloudflare:*']})).outputFiles[0].text,dir=await mkdtemp(join(tmpdir(),'routing-cert-worker-'));
+ const create=()=>new Miniflare({script,modules:true,compatibilityDate:'2026-07-30',compatibilityFlags:['nodejs_compat'],durableObjectsPersist:dir,durableObjects:{ROOM:{className:'RoutingCertificationRoom',useSQLite:true}}});let mf=create();t.after(async()=>{await mf.dispose();await rm(dir,{recursive:true,force:true})});
+ const call=async path=>{const r=await mf.dispatchFetch('http://localhost'+path),body=await r.json();assert.equal(r.status,200,JSON.stringify(body));return body};
+ await call('/seed');assert.equal((await call('/witness')).version,undefined);const first=await call('/certify');assert.equal(first.result.changed,true);assert.equal(first.cost.unknown,0);assert.equal((await call('/certify')).result.changed,false);await mf.dispose();mf=create();assert.equal((await call('/witness')).version,2);assert.equal((await call('/reply')).duplicate,false);await call('/audit');t.diagnostic(JSON.stringify(first.cost));
+});

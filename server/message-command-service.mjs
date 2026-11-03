@@ -67,6 +67,7 @@ export function assertMessageCommandReferences(store, roomId, state, command, ac
     [T.MESSAGE_UNPINNED]: ['messageId', 'Unpin must reference a message in this Room'],
     [T.MESSAGE_EDITED]: ['messageId', 'Message not found'],
     [T.MESSAGE_DELETED]: ['messageId', 'Message not found'],
+    [T.POLL_VOTED]: ['messageId', 'Vote must reference a message in this Room'],
     [T.WORK_PROPOSED]: ['sourceMessageId', 'Source message must exist in this Room'],
     [T.WORK_COMPLETED]: ['evidenceMessageId', 'Choose a well-formed message explicitly linked to this work'],
     [T.CLAIM_RENEWED]: ['progressMessageId', 'Renewal needs a progress message in this room — post a progress update in the room first'],
@@ -84,7 +85,7 @@ export function assertMessageCommandReferences(store, roomId, state, command, ac
     const target = (state.messages ?? []).find(message => message.id === targetId);
     if (!target && [T.WORK_PROPOSED, T.WORK_COMPLETED, T.DECISION_RECORDED, T.CLAIM_RENEWED].includes(command.type))
       fail(422, 'command_rejected', historyRef[1]);
-    if ([T.WORK_PROPOSED, T.WORK_COMPLETED, T.DECISION_RECORDED, T.CLAIM_RENEWED].includes(command.type) && target?.toMemberId && target.authorId !== actorId && target.toMemberId !== actorId)
+    if ([T.WORK_PROPOSED, T.WORK_COMPLETED, T.DECISION_RECORDED, T.CLAIM_RENEWED, T.POLL_VOTED].includes(command.type) && target?.toMemberId && target.authorId !== actorId && target.toMemberId !== actorId)
       fail(422, 'command_rejected', historyRef[1]);
     const floor = store.historyFloor(roomId, actorId);
     if (floor) {

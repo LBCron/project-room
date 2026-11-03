@@ -29,4 +29,4 @@ jobs:
       - name: Native private-state and interrupted-save qualification
         run: node --test tests/private-state-platform.test.mjs
       - name: Existing-identity CLI import and retry against real local HTTP
-        run: node --test --test-name-pattern="CLI imports its existing identity" tests/room-acp-import-identity.test.js
+        run: node --test --test-name-pattern="CLI imports its existing identity|final save failure retains" tests/room-acp-import-identity.test.js

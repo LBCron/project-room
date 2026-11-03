@@ -91,7 +91,8 @@ function windowsAcl(path, directory, operation = 'verify') {
     const output = execFileSync(join(systemRoot, 'System32', 'WindowsPowerShell', 'v1.0', 'powershell.exe'),
       ['-NoLogo', '-NoProfile', '-NonInteractive', '-Command', powershell], {
         input: JSON.stringify({path: resolve(path), directory, operation}), encoding: 'utf8',
-        windowsHide: true, timeout: 10000, maxBuffer: 16384,
+        // First launch on a cold Windows host can exceed ten seconds.
+        windowsHide: true, timeout: 30000, maxBuffer: 16384,
         stdio: ['pipe', 'pipe', 'pipe'],
       });
     if (operation === 'create-directory' && output === 'exists') return false;

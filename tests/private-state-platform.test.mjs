@@ -10,6 +10,8 @@ import { openJoinJournal } from '../room-acp/src/private-state.mjs';
 import { openSetupJournal } from '../client/setup-journal.mjs';
 import { saveAgentConnection, readAgentConnection } from '../client/agent-connection.mjs';
 import { saveConnection, loadConnection } from '../room-acp/src/credentials.mjs';
+import { join as joinAgent } from '../room-acp/src/join.mjs';
+import { startRoom } from './room-acp-fixture.mjs';
 
 const windows = process.platform === 'win32';
 function fixture(t) {
@@ -28,7 +30,7 @@ function expose(path, directory = false, inheritedOnly = false) {
   ps(`$e=[IO.${directory ? 'DirectoryInfo' : 'FileInfo'}]::new($p); $acl=$e.GetAccessControl();
     $rule=[Security.AccessControl.FileSystemAccessRule]::new([Security.Principal.SecurityIdentifier]::new('S-1-1-0'),
       [Security.AccessControl.FileSystemRights]::FullControl,
-      [Security.AccessControl.InheritanceFlags]::${directory ? "'ContainerInherit,ObjectInherit'" : 'None'},
+      [Security.AccessControl.InheritanceFlags]${directory ? "'ContainerInherit,ObjectInherit'" : "'None'"},
       [Security.AccessControl.PropagationFlags]::${inheritedOnly ? 'InheritOnly' : 'None'},
       [Security.AccessControl.AccessControlType]::Allow);
     $acl.AddAccessRule($rule); $e.SetAccessControl($acl)`, path);
@@ -124,4 +126,31 @@ test('foreign inherited-only grant is excluded at directory creation; existing b
   assert.throws(() => ensurePrivateDirectory(parent), /private files/);
   assert.equal(ps('[Console]::Write([IO.DirectoryInfo]::new($p).GetAccessControl().Sddl)', parent), before);
   assert.throws(() => ensurePrivateDirectory(child, {exclusive: true}), e => e.code === 'EEXIST');
+});
+
+// Exercise the real recovery protocol on each OS, not only the file primitive.
+test('lost redemption response and interrupted final save retry the same member and scoped credential', async t => {
+  const f = await startRoom(t), root = fixture(t);
+  const env = {...f.env, ROOM_ACP_HOME: root}, link = f.invite().link;
+  let redeems = 0, rotates = 0;
+  const blocked = join(root, 'commons.json');
+  const fetchImpl = async (url, init) => {
+    const response = await fetch(url, init);
+    if (url.endsWith('/redeem') && ++redeems === 1) throw Error('synthetic lost response');
+    if (url.endsWith('/token/rotate') && ++rotates === 1) ensurePrivateDirectory(blocked);
+    return response;
+  };
+  await assert.rejects(joinAgent({link, displayName: 'Platform recovery', env, fetchImpl}));
+  await assert.rejects(joinAgent({link, displayName: 'Platform recovery', env, fetchImpl}));
+  assert.equal(redeems, 2); assert.equal(rotates, 1);
+  rmSync(blocked, {recursive: true});
+  const recovered = await joinAgent({link, displayName: 'Platform recovery', env, fetchImpl});
+  assert.equal(redeems, 2); assert.equal(rotates, 1);
+  assert.equal(loadConnection({}, env).credential, recovered.credential);
+  assert.match(recovered.credential, /^rak_/);
+  assert.equal(Object.values(f.f.store.room('commons').state.members).filter(m => m.displayName === 'Platform recovery').length, 1);
+  const again = await joinAgent({link, displayName: 'Platform recovery', env, fetchImpl});
+  assert.equal(again.memberId, recovered.memberId);
+  assert.equal(again.credential, recovered.credential);
+  assert.equal(redeems, 2); assert.equal(rotates, 1);
 });

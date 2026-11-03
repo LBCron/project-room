@@ -83,14 +83,25 @@ async function scanBackward(fetchPage, after, end, limit) {
   let bound = end, pages = 0;
   while (collected.length < limit && bound - 1 > after && pages < MESSAGE_SCAN_PAGES) {
     const lo = Math.max(after, bound - 1 - MESSAGE_SCAN_PAGE);
-    const page = await fetchPage(lo, MESSAGE_SCAN_PAGE);
-    pages += 1;
+    // A service may return fewer source events than requested (record or byte
+    // budgets). Finish this window before selecting its newest messages.
     const window = [];
-    for (const item of page?.events ?? []) {
-      if (!item || !Number.isSafeInteger(item.sequence)) continue;
-      if (item.sequence <= lo || item.sequence >= bound) continue;
-      if (isPostedMessage(item)) window.push(item);
+    let cursor = lo, complete = false;
+    while (!complete && pages < MESSAGE_SCAN_PAGES) {
+      const page = await fetchPage(cursor, MESSAGE_SCAN_PAGE);
+      pages += 1;
+      for (const item of page?.events ?? []) {
+        if (!item || !Number.isSafeInteger(item.sequence)) continue;
+        if (item.sequence <= lo || item.sequence >= bound) continue;
+        if (isPostedMessage(item)) window.push(item);
+      }
+      const next = page?.next;
+      complete = !page?.hasMore || Number.isSafeInteger(next) && next >= bound - 1;
+      if (!complete && (!Number.isSafeInteger(next) || next <= cursor))
+        throw new RoomClientError(409, "message_window_unavailable", "Message source did not advance; retry the selected window");
+      cursor = next;
     }
+    if (!complete) throw new RoomClientError(409, "message_window_unavailable", "Latest message window exceeds bounded scan; use an addressed after cursor");
     collected.unshift(...window);
     bound = lo + 1;
   }

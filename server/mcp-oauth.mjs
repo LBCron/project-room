@@ -22,13 +22,20 @@ export function mcpOAuthChallenge(metadataUrl) {
 
 // Binding authorization consumes only membership metadata, never history. This
 // does not certify unrelated message rows or change their recovery/count proof.
-function canonicalOAuthBindingMembers(store, roomId, memberId, humanMemberId) {
+function canonicalOAuthBindingState(store, roomId, memberId, humanMemberId) {
   // Existing lightweight store adapters retain their original room reader.
   if (typeof store.roomAuthority !== 'function' || typeof store.readTransaction !== 'function') return null;
   return store.readTransaction(() => {
     const db = store.db;
     const current = db.prepare("SELECT json_extract(projection,'$.normalizedCurrent.version') version FROM rooms WHERE id=?").get(roomId);
-    if(current?.version === 1) return {...store.roomAuthority(roomId,{memberId}).members,...store.roomAuthority(roomId,{memberId:humanMemberId}).members};
+    if(current?.version === 1) return withCurrentReadContext(db,roomId,()=>{
+      // Share the protected room/owner/agent read instead of rebuilding that
+      // authority three times inside each bound-token validation.
+      const room=store.roomAuthority(roomId,{memberId});
+      const human=readCurrentRecord(db,roomId,'members',humanMemberId);
+      if(human!==undefined&&human.id!==humanMemberId)throw Error('OAuth human membership identity differs');
+      return {room,members:{...room.members,[humanMemberId]:human}};
+    });
     const sizes = db.prepare(`SELECT length(CAST(r.projection AS BLOB)) AS projection_bytes,
       length(CAST(i.metadata_hash AS BLOB)) AS metadata_hash_bytes,
       COALESCE(length(CAST(i.projection_hash AS BLOB)),0) AS projection_hash_bytes,
@@ -45,7 +52,7 @@ function canonicalOAuthBindingMembers(store, roomId, memberId, humanMemberId) {
     if (!hasMessageAuthority(raw)) return null;
     if (Object.hasOwn(raw, 'messages')) throw Error('projection_corrupt: competing canonical message array');
     if (raw.messagesArchive || raw.room?.archivedAt) return null;
-    return raw.members;
+    return {members:raw.members,room:store.roomAuthority(roomId,{memberId})};
   });
 }
 
@@ -70,8 +77,7 @@ export function validateMcpOAuthBinding(store, userId, binding) {
   if (identityLink?.member_id !== memberId) return null;
   let state;
   try {
-    const members = canonicalOAuthBindingMembers(store, roomId, memberId, humanMemberId);
-    state = members === null ? store.room(roomId).state : { members, room: store.roomAuthority(roomId,{memberId}) };
+    state = canonicalOAuthBindingState(store, roomId, memberId, humanMemberId) ?? store.room(roomId).state;
   } catch { return null; }
   const human = ownMember(state.members,humanMemberId);
   const agent = ownMember(state.members,memberId);

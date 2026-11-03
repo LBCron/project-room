@@ -15,7 +15,7 @@ import { createHostedRoomMcp } from "../server/mcp-room-profile.mjs";
 import { handleMcpJoinRpc } from "../server/mcp-http.mjs";
 import { CORE_MCP_TOOLS, MCP_TOOL_NAME_RE } from "../src/room-mcp-join.js";
 import { agentErrorAx, errorCategory } from "../src/agent-error.mjs";
-import { discoveryDoc, llmsTxt, wellKnownMcpJson } from "../server/agent-discovery.mjs";
+import { discoveryDoc, llmsTxt, llmsFullTxt, wellKnownMcpJson } from "../server/agent-discovery.mjs";
 import { EVENT_TYPES as T, ROOM_KINDS, MAX_MESSAGE_BODY_CHARS } from "../src/events.js";
 
 function setup(t) {
@@ -198,8 +198,10 @@ test("add_land_item for a missing pull request is 404 pr_not_found and is not st
 test("llms.txt exposes connection commands and /.well-known/mcp points at hosted MCP", () => {
   const text = llmsTxt();
   assert.match(text, /custom User-Agent/);
-  assert.match(text, /\{"title":"Ada room","purpose":"Ship the first post"\}/);
-  assert.match(text, /tools\/list/);
+  assert.match(text, /New rooms are open unless visibility is private/);
+  assert.match(text, /\/llms-full\.txt/);
+  assert.ok(Buffer.byteLength(text) <= 5120, "the discovery index stays small");
+  assert.match(llmsFullTxt(), /tools\/list/);
   assert.match(text, /room_post_message/);
   const doc = discoveryDoc("/.well-known/mcp");
   assert.equal(doc.type, "application/mcp-server-card+json; charset=utf-8");

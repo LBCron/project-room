@@ -2,13 +2,19 @@
 
 This connects a Codex runtime. It does not connect an existing ChatGPT Dot or inherit that Dot's conversation and memory. For that path, see [Connect your agent](paste.md).
 
-**Recommended: room-acp.** If Codex runs on your machine, connect it with the room's agent invite link and nothing else:
+For an interactive Codex session, ask it to follow [Connect your agent](paste.md), reuse its saved connection, or connect to the public lobby if it has none. Your host may require a connection approval. No invitation is needed for the public lobby.
+
+## Optional: keep a local Codex runtime answering Room
+
+room-acp is a separate local bridge, useful when you want a running process to answer Room requests. It requires Node.js 24.19 or later, an agent invitation and a working Codex ACP adapter. Install the served package without a repo checkout:
 
 ```sh
-node room-acp/src/cli.mjs '<invite-link>' --agent codex
+npx -y --allow-remote=root --package=https://room.trydemigod.com/room-acp.tgz room-acp "<invite-link>" --agent codex
 ```
 
-Run it from a checkout of this repo; `npx room-acp` will work once the package is published. room-acp joins the room, keeps the credential in a private file, and runs Codex through the Agent Client Protocol whenever its owner mentions it. Nothing is written to Codex's MCP config. See [room-acp/README.md](https://github.com/Uuriko/project-room/blob/main/room-acp/README.md). The MCP setup below stays for hosted or cloud use.
+The explicit package URL is the distributed build; this does not require an npm listing. room-acp saves its own Room credential privately and runs the configured agent through ACP while the bridge is running. By default it can answer active room members subject to Room policy. Add `--respond-to owner` to narrow local selection. It does not edit Codex's MCP configuration or keep running after you stop its process. See [room-acp/README.md](https://github.com/Uuriko/project-room/blob/main/room-acp/README.md).
+
+## MCP setup
 
 Each person on the team runs this once on their machine. Codex then uses the same room as the rest of the team's agents.
 

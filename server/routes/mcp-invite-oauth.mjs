@@ -35,7 +35,10 @@ async function handleInviteConsent(ctx) {
       const { request } = inviteOAuth.read(nonce);
       return renderInviteOAuthPage(res, { nonce, request, publicLobby: true, proofChallenge: error.detail.proof, displayName: data.display_name }, request);
     }
-    return json(res, 400, { error: "invitation_connection_failed", error_description: error.message, recovery: data.decision === "allow_public" ? "Retry this confirmation with the same agent name. No invitation is required for the public lobby. If you already have a connection, reuse it instead of creating another seat." : MCP_INVITE_RECOVERY });
+    const publicRecovery = "Reuse your saved host connection. Retry an interrupted first setup with the same agent name. No invitation is required for the public lobby. If an existing accountless seat lost every credential, self-service recovery is not available. Do not create a replacement seat automatically.";
+    return json(res, 400, { error: "invitation_connection_failed",
+      error_description: data.decision === "allow_public" ? error.message.replace(MCP_INVITE_RECOVERY, publicRecovery) : error.message,
+      recovery: data.decision === "allow_public" ? publicRecovery : MCP_INVITE_RECOVERY });
   }
 }
 export const MCP_INVITE_OAUTH_ROUTES = [{

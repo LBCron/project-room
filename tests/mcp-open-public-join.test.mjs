@@ -24,7 +24,7 @@ async function fixture(t, roomId='mcp-public-join') {
     const body=await response.json();
     return {value:body.result?.structuredContent,error:body.result?.isError===true,body};
   };
-  return {store,owner,roomId,command,call,async list(secret){
+  return {store,owner,roomId,command,call,origin,async list(secret){
     const response=await fetch(origin+'/mcp',{method:'POST',headers:{'Content-Type':'application/json',Authorization:`Bearer ${secret}`},body:JSON.stringify({jsonrpc:'2.0',id:'list',method:'tools/list'})});
     return (await response.json()).result.tools;
   },open(){command('room.public_page_set',{enabled:true});command('room.join_link_set',{enabled:true});}};
@@ -190,6 +190,7 @@ test('an explicit colliding public join name is rejected without changing member
 
 test('destination-free MCP join self-enrolls in official public lobby and retries without a second seat',async t=>{
   const f=await fixture(t,'project-room-lobby');f.open();
+  f.store.publicFace.enable(f.roomId,f.store.authenticate(f.owner.secret,f.roomId).member.id);
   const minted=await f.call(null,'room_identity_mint',{displayName:'Self directed agent'});
   assert.equal(minted.error,false,JSON.stringify(minted.body));
   const peer=minted.value;
@@ -210,4 +211,19 @@ test('destination-free MCP join self-enrolls in official public lobby and retrie
   assert.equal(activation.error,false,JSON.stringify(activation.body));
   const post=await f.call(peer.secret,'room_post_message',{roomId:f.roomId,id:'first-hello',body:'Ready to help with a small task.'});
   assert.equal(post.error,false,JSON.stringify(post.body));
+  const ask=await f.call(f.owner.secret,'room_request_reply',{roomId:f.roomId,requestId:'first-question',toMemberId:peer.identityId,body:'What useful next step do you suggest?'});
+  assert.equal(ask.error,false,JSON.stringify(ask.body));
+  const context=await f.call(peer.secret,'room_read_request',{roomId:f.roomId,requestMessageId:ask.value.requestMessageId});
+  assert.equal(context.error,false,JSON.stringify(context.body));
+  const response=await f.call(peer.secret,'room_respond_to_request',{roomId:f.roomId,...context.value.responseActions[0].arguments,requestId:'first-answer',body:'Review the onboarding flow and report one issue.'});
+  assert.equal(response.error,false,JSON.stringify(response.body));
+  const readBack=await f.call(f.owner.secret,'room_read_request',{roomId:f.roomId,requestMessageId:ask.value.requestMessageId});
+  assert.equal(readBack.error,false,JSON.stringify(readBack.body));
+  assert.equal(readBack.value.request.status,'answered');
+  assert.match(JSON.stringify(readBack.value),/Review the onboarding flow and report one issue\./);
+  f.command('message.posted',{messageId:'private-check',body:'PRIVATE DIRECT MESSAGE',toMemberId:peer.identityId},'private-check');
+  const visible=await fetch(f.origin+'/watch');assert.equal(visible.status,200);
+  const html=await visible.text();assert.match(html,/Ready to help with a small task\./);assert.doesNotMatch(html,/PRIVATE DIRECT MESSAGE/);
+  f.store.publicFace.disable(f.roomId,f.store.authenticate(f.owner.secret,f.roomId).member.id);
+  const hidden=await (await fetch(f.origin+'/watch')).text();assert.doesNotMatch(hidden,/Ready to help with a small task\.|PRIVATE DIRECT MESSAGE/);
 });

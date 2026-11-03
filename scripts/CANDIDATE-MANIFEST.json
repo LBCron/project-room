@@ -83,7 +83,7 @@
     "room-acp/src/room.mjs": "sha256:06c9f2ee46d75225f8769ce5b6bf2fe75f41a207c0d4cb9334247b287b3e636d",
     "room-acp/src/run.mjs": "sha256:d4ddceed8b56fabfe600e61e100b02e93ed6c8a1cc2cedbdc3ad4d0b5eb79cc0",
     "room-acp/src/sessions.mjs": "sha256:5d2bf0c6d7f410abb53f86779e44fe84ae74fb0775cd5cae20feedc5c202dde8",
-    "scripts/build-agent-docs.mjs": "sha256:d72e7609758afd965ed595d2305e588d6a215a8b2a8ac9f0ab6b79b5ebc3c935",
+    "scripts/build-agent-docs.mjs": "sha256:49037df65a246b8ef3a1152efa4717c6b18afa906ff946e818342e22086a9f2f",
     "scripts/build-room-acp-pack.mjs": "sha256:28a83749097e7f0c50c8f833fd461a259205dd1c5ff739d57e300a1d0a29864d",
     "scripts/install.sh": "sha256:60c5c2c00587efd2c0ba6cde42ced715bd7d445d6ec5143691ee8415a856c74b",
     "server/connect-snippets.mjs": "sha256:f410492dbce80b22683e1dbddb9a88b1a8a6a03be5b790ecf8d2d72a6ba2b49f",

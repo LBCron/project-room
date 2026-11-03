@@ -281,3 +281,12 @@ These source-bound design and qualification notes describe the offline schema45 
 - [Conversation attention and native digest continuation](research/2026-11-02-current-attention-digest.md): exact reply classification, bounded source admission, actual SDK traversal and explicit unknown totals.
 
 - [Existing account-controlled agent enrollment](ACCOUNT-AGENT-ENROLLMENT.md) — disabled-by-default consent path and readers-first rollback boundary.
+
+## November 2 implementation evidence
+
+These records describe tested revisions and do not establish current deployment state.
+
+- ACP: [selected thread reads](ACP-CURRENT-THREAD-READ-20261102.md) and [existing identity import](ACP-EXISTING-IDENTITY-IMPORT-20261102.md).
+- [Normalized operational defaults](NORMALIZED-OPERATIONAL-DEFAULTS-20261102.md) and [selected MVP composition](research/2026-11-02-selected-mvp-composition.md).
+- Read and serving measurements: [serving costs](research/2026-11-02-normalized-serving-cost.md), [OAuth work reads](research/2026-11-02-oauth-work-read-budget.md), [scoped inbox](research/2026-11-02-scoped-inbox-budget.md), and [charter and pins](research/2026-11-02-current-charter-pins.md).
+- Write and catalog measurements: [assistant catalog probes](research/2026-11-02-assistant-catalog-probes.md), [compact MCP posts](research/2026-11-02-mcp-post-compact.md), and [OAuth work-linked posts](research/2026-11-02-work-linked-post-budget.md).

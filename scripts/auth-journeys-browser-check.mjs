@@ -399,3 +399,18 @@ test('refresh after expiry ends at actionable sign-in', {timeout:60000}, async t
   assert.equal((await f.session(page)).authenticated,false);
   await page.locator('#auth-signin-ui [data-signin-form="password"] [name="email"]').waitFor({state:'visible'});
 });
+
+test('old anonymous slot gets a fresh authenticated session after signup', { timeout: 60000 }, async t => {
+  const f=await setup(t),page=await f.open();
+  await page.goto(f.origin);
+  await page.locator('#auth-signin-ui [data-password-mode="signup"]').first().waitFor({state:'visible'});
+  const anonymous=await f.session(page);assert.equal(anonymous.authenticated,false);
+  f.store.now=()=>Date.now()+29*86400000;
+  assert.equal(await signUp(page,f.origin,'old-slot@example.invalid'),202);
+  await page.locator('#main').waitFor({state:'visible'});
+  const session=await f.session(page),remaining=session.expiresAt-f.store.now();
+  assert.equal(session.authenticated,true);
+  assert.ok(remaining>29*86400000&&remaining<=30*86400000,`remaining ${remaining}`);
+  const cookie=(await page.context().cookies()).find(x=>x.name==='account_session');assert.ok(cookie?.httpOnly);assert.ok(cookie.expires*1000-Date.now()>29*86400000);
+  console.log(JSON.stringify({remainingHours:Math.round(remaining/360000)/10}));
+});

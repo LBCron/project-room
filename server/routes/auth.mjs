@@ -73,7 +73,7 @@ export async function handleAuthGroup(ctx) {
     // slot token and invalidates the pre-login one.
     const { token: freshSlotToken, session: loggedIn } = store.loginAccountSessionWithMethod(slotToken, accountId, expectedRevision, {
       method: { kind: "password", ref: methodRef },
-      rotateSlot: true
+      rotateSlot: true, renewBrowserSession: true
     });
     setCookie(res, accountCookieName, freshSlotToken, Math.max(0, Math.floor((loggedIn.expiresAt - store.now()) / 1000)));
     return loggedIn;

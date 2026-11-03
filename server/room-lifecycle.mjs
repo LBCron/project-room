@@ -150,6 +150,7 @@ export function createAccountRoom(store, token, binding, request) {
       const same = state && state.room.ownerId === bound.member_id && state.room.title === title && state.room.purpose === purpose
         && roomKind(state.room) === kind && ownMember(state.members, bound.member_id)?.displayName === displayName;
       if (!same) fail(409, "room_exists", "That room id is already in use");
+      if (request.visibility === "private" && state.room.publicPage?.enabled === true) fail(409, "room_exists", "This saved room is public. Open its owner settings to make it private; creation retry did not change visibility.");
       if (wantsStarter) seedStarterForNewAccount(store, accountId, { intent, templateSlug, roomId, ownerMemberId: bound.member_id, start, token, binding });
       return view(bound.member_id, true);
     }

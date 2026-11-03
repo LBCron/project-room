@@ -339,6 +339,7 @@ export class AgentRooms {
             && state.room.kind === kind && ownMember(state.members, memberId)?.displayName === displayName
             && hadStarter(prior.room_id) === wantStarter;
           if (!same) fail(409, "request_conflict", "requestId was already used for a different room");
+          if (request.visibility === "private" && state.room.publicPage?.enabled === true) fail(409, "request_conflict", "This saved room is public. Open its owner settings to make it private; creation retry did not change visibility.");
           return this.#duplicateCreateResponse(prior.room_id, memberId, identity.identityId);
         }
       }
@@ -349,6 +350,7 @@ export class AgentRooms {
           && state.room.kind === kind && ownMember(state.members, memberId)?.displayName === displayName
           && hadStarter(roomId) === wantStarter;
         if (!same) fail(409, "room_exists", "That room id is already in use");
+        if (request.visibility === "private" && state.room.publicPage?.enabled === true) fail(409, "room_exists", "This saved room is public. Open its owner settings to make it private; creation retry did not change visibility.");
         return this.#duplicateCreateResponse(roomId, memberId, identity.identityId);
       }
       // The creation budget is spent here, past the idempotency short-circuit,

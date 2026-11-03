@@ -1,0 +1,21 @@
+import test from 'node:test';import assert from 'node:assert/strict';
+import {RoomStore} from '../server/store.mjs';import {initialRoom} from '../server/bootstrap.mjs';import {event} from '../src/events.js';
+import {auditRecovery} from '../server/recovery.mjs';
+test('a late member cannot unpin hidden pre-join content',t=>{
+ const s=new RoomStore(':memory:');t.after(()=>s.close());const es=initialRoom();
+ for(const [type,data] of [['message.posted',{messageId:'old-public',body:'hidden'}],['message.pinned',{messageId:'old-public'}],['room.history_visibility_set',{historyVisibility:'since_join'}],['member.added',{memberId:'late',displayName:'Late',kind:'agent',permissions:[]}]])es.push(event({roomId:'commons',actorId:'owner',type,data}));
+ s.initialize(es,{representation:'normalized-current-v1'});const late=s.issueAccessKey('commons','late');
+ const pins=()=>JSON.parse(s.db.prepare("SELECT payload FROM current_room_records WHERE room_id='commons' AND domain='metadata' AND record_key='pins'").get().payload);
+ assert.ok(pins().some(pin=>pin.messageId==='old-public'));
+ const failure=target=>{try{s.command(late,'commons',{id:'unpin-'+target,type:'message.unpinned',data:{messageId:target}});assert.fail('expected refusal')}catch(e){return {status:e.status,code:e.code,message:e.message}}};
+ assert.deepEqual(failure('old-public'),failure('missing'));
+ assert.ok(pins().some(pin=>pin.messageId==='old-public'),'hidden pin should not be removed');
+ const owner=s.issueAccessKey('commons','owner');s.now=()=>Date.now()+5000;
+ s.command(owner,'commons',{id:'new',type:'message.posted',data:{messageId:'new',body:'visible'}});
+ s.command(late,'commons',{id:'pin-new',type:'message.pinned',data:{messageId:'new'}});
+ s.command(late,'commons',{id:'unpin-new',type:'message.unpinned',data:{messageId:'new'}});
+ s.command(late,'commons',{id:'unpin-new-again',type:'message.unpinned',data:{messageId:'new'}});
+ s.command(owner,'commons',{id:'owner-unpin-old',type:'message.unpinned',data:{messageId:'old-public'}});
+ assert.ok(!pins().some(pin=>pin.messageId==='old-public'));
+ assert.ok(Object.values(auditRecovery(s).checks).every(Boolean));
+});

@@ -61,10 +61,21 @@ export function prepareMessageCommand(store, roomId, room, command, actorId) {
 }
 
 export function assertMessageCommandReferences(store, roomId, state, command, actorId) {
-  if (command.type === T.MESSAGE_POSTED && typeof command.data?.replyToId === 'string') {
-    const target = (state.messages ?? []).find(message => message.id === command.data.replyToId);
-    if (target && !messageInHistory(target, store.historyFloor(roomId, actorId)))
-      fail(422, 'command_rejected', 'Reply must reference a message in this Room');
+  const historyRefs = {
+    [T.MESSAGE_POSTED]: ['replyToId', 'Reply must reference a message in this Room'],
+    [T.MESSAGE_PINNED]: ['messageId', 'Pin must reference a message in this Room'],
+    [T.MESSAGE_UNPINNED]: ['messageId', 'Unpin must reference a message in this Room'],
+    [T.MESSAGE_EDITED]: ['messageId', 'Message not found'],
+    [T.MESSAGE_DELETED]: ['messageId', 'Message not found'],
+  };
+  const historyRef = historyRefs[command.type], targetId = historyRef && command.data?.[historyRef[0]];
+  if (typeof targetId === 'string') {
+    const floor = store.historyFloor(roomId, actorId);
+    if (floor) {
+      const target = (state.messages ?? []).find(message => message.id === targetId);
+      if ((target && !messageInHistory(target, floor)) || (!target && command.type === T.MESSAGE_UNPINNED))
+        fail(422, 'command_rejected', historyRef[1]);
+    }
   }
   // Archived messages are not in the projection, so the reducer cannot change
   // them or thread under them. Refuse with a clear error. A DM the actor is

@@ -7,6 +7,10 @@ test('since-join member cannot reference prejoin message',t=>{
  assert.throws(()=>readConversation(s,late,'commons',{messageId:'old-public'}),e=>e.status===404);
  const failure=target=>{try{s.command(late,'commons',{id:'reply-'+target,type:'message.posted',data:{messageId:'reply-'+target,body:'hello',replyToId:target}});assert.fail('expected refusal')}catch(e){return {status:e.status,code:e.code,message:e.message}}};
  assert.deepEqual(failure('old-public'),failure('missing'));
+ for(const [type,data] of [['message.pinned',id=>({messageId:id})],['message.edited',id=>({messageId:id,body:'edited',expectedMessageRevision:0})],['message.deleted',id=>({messageId:id,expectedMessageRevision:0})]]){
+  const attempt=target=>{try{s.command(late,'commons',{id:type+'-'+target,type,data:data(target)});assert.fail('expected refusal')}catch(e){return {status:e.status,code:e.code,message:e.message}}};
+  assert.deepEqual(attempt('old-public'),attempt('missing'),type);
+ }
  s.now=()=>Date.now()+5000;
  assert.ok(s.command(owner,'commons',{id:'recent',type:'message.posted',data:{messageId:'recent',body:'visible'}}).event);
  assert.ok(s.command(late,'commons',{id:'recent-reply',type:'message.posted',data:{messageId:'recent-reply',body:'visible reply',replyToId:'recent'}}).event);

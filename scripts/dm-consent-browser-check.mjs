@@ -152,8 +152,11 @@ test("DM consent browser journey: request, approve, revoke, block, errors", { ti
   // --- Bob proactively blocks Alice; her row says so and the gate refuses. ---
   const bobAlice2 = consentSection(b.page, "alice");
   await openConsentDetails(bobAlice2);
+  let malformedRefresh = false;
   const failRefresh = async route => {
-    if (route.request().method() === "GET") await route.fulfill({status:500,contentType:"application/json",body:'{"error":{"code":"synthetic","message":"offline"}}'});
+    if (route.request().method() === "GET") await route.fulfill(malformedRefresh
+      ? {status:200,contentType:"application/json",body:'{}'}
+      : {status:500,contentType:"application/json",body:'{"error":{"code":"synthetic","message":"offline"}}'});
     else await route.continue();
   };
   await b.page.route("**/dm-consents", failRefresh);
@@ -166,9 +169,11 @@ test("DM consent browser journey: request, approve, revoke, block, errors", { ti
   assert.match(await b.page.locator("#audience-note").textContent(), /Direct message settings could not be refreshed/);
   assert.equal(await consentSection(b.page, "alice").getByRole("button", { name: "Block", exact: true }).count(), 0);
   assert.equal(await consentSection(b.page, "alice").getByRole("button", { name: "Unblock", exact: true }).count(), 0);
-  const retryFailure = b.page.waitForResponse(response => response.request().method() === "GET" && response.url().endsWith("/dm-consents") && response.status() === 500);
+  malformedRefresh = true;
+  const retryFailure = b.page.waitForResponse(response => response.request().method() === "GET" && response.url().endsWith("/dm-consents") && response.status() === 200);
   await b.page.locator("#presence-list").getByRole("button", { name: "Retry", exact: true }).click();
   await retryFailure;
+  await b.page.waitForTimeout(200);
   await b.page.locator("#presence-list").getByText("Direct message settings could not be refreshed.").waitFor();
   assert.equal(await consentSection(b.page, "alice").getByRole("button", { name: "Block", exact: true }).count(), 0);
   await b.page.unroute("**/dm-consents", failRefresh);

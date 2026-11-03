@@ -7572,7 +7572,8 @@ async function refreshDmConsents() {
   try {
     const result = await fetchDmConsents(client);
     if (dmConsentStale(seq, generation, room)) return;
-    dmConsents = Array.isArray(result) ? result : [];
+    if (!Array.isArray(result)) throw new Error("Invalid direct message settings response");
+    dmConsents = result;
     dmConsentRefreshFailed = false;
   } catch {
     // Retain the last data for context, but hide its action controls until a

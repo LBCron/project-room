@@ -8,7 +8,7 @@ import {readRoomSnapshot} from '../server/snapshot-window.mjs';
 import {ROOM_ASSISTANT_INDEXES,verifyRoomAssistantIndexes} from '../server/room-assistant-schema.mjs';
 function fixture(t,filename=':memory:',StoreClass=RoomStore){
  const store=new StoreClass(filename);t.after(()=>store.close());store.createAccount('assistant-human');const slot=store.createAccountSessionSlot(),session=store.loginAccountSession(slot.token,store.issueAccountAccessKey('assistant-human'),0);
- const created=store.createAccountRoom(slot.token,session.sessionBinding,{roomId:'assistant-native',title:'Shared assistant',purpose:'Coordinate existing agents',kind:'personal',displayName:'Owner'}),ownerId=created.room.memberId,owner=store.issueAccessKey('assistant-native',ownerId);
+ const created=store.createAccountRoom(slot.token,session.sessionBinding,{roomId:'assistant-native',title:'Shared assistant',purpose:'Coordinate existing agents',kind:'personal',displayName:'Owner',...(StoreClass===RoomStore?{visibility:'private'}:{})}),ownerId=created.room.memberId,owner=store.issueAccessKey('assistant-native',ownerId);
  store.command(owner,'assistant-native',{id:'add-coordinator',type:'member.added',data:{memberId:'coordinator',displayName:'Coordinator',kind:'agent',permissions:['accept_work'],accountableHumanId:ownerId}});const coordinator=store.issueAccessKey('assistant-native','coordinator');
  const assistant=new RoomAssistant(store),apply=(token,input)=>assistant.apply('assistant-native',{requestId:randomUUID(),...input},()=>store.authenticate(token,'assistant-native'),token);return{store,ownerId,owner,coordinator,assistant,apply};
 }

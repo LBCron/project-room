@@ -39,7 +39,7 @@ test('bounded pin pages preserve hidden-only continuation without private ids/co
  const next=first.body.page.nextRead.path.replace('/api/rooms/commons',''),second=await f.call('owner',next);assert.deepEqual(second.body.pins.map(p=>p.messageId),['public-pin-0','public-pin-1']);assert.equal(second.body.sourceWindow.complete,true);
  assert.equal((await f.call('mallory',next)).status,422);
  for(const messageId of ['private-pin-0','missing']){const r=await f.call('owner','/pins',{messageId,pinned:true});assert.equal(r.status,404,JSON.stringify(r.body));assert.equal(r.body.error.code,'message_not_found');}
- const head=f.store.headSequence('commons');assert.throws(()=>f.command('mallory','message.pinned',{messageId:'private-pin-0'}),/not a party/);assert.throws(()=>f.command('owner','message.unpinned',{messageId:'private-pin-0'}),/not a party/);assert.equal(f.store.headSequence('commons'),head);
+ const head=f.store.headSequence('commons');assert.throws(()=>f.command('mallory','message.pinned',{messageId:'private-pin-0'}),/Pin must reference a message/);assert.throws(()=>f.command('owner','message.unpinned',{messageId:'private-pin-0'}),/Unpin must reference a message/);assert.equal(f.store.headSequence('commons'),head);
  const bob=await f.call('bob');assert.equal(bob.body.pins.length,4);const old=first.body.page.nextCursor;f.command('owner','message.posted',{messageId:'head-changed',body:'New head'});assert.equal((await f.call('owner','/pins?cursor='+old)).status,422);
  const live=(await f.call('owner')).body.page.nextCursor;await f.reopen();assert.equal((await f.call('owner','/pins?cursor='+live)).status,422);assert.doesNotThrow(()=>auditRecovery(f.store));
 });

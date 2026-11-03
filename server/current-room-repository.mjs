@@ -957,10 +957,15 @@ export function withCurrentWorkReadUnits(store,roomId,operation) {
 
 // Three separately indexed visibility streams avoid scanning private history
 // while constructing a public window. Only admitted scalars cross before rows.
-export function currentMessageMayBeVisible(db,roomId,messageId,viewerId,b=contextBudgets.get(db)??budget()) {
-  const candidate=db.prepare("SELECT 1 FROM messages WHERE room_id=? AND message_id=? AND (to_member_id IS NULL OR to_member_id='' OR author_id=? OR to_member_id=?)").get(roomId,messageId,viewerId,viewerId);
+export function currentMessageMayBeVisible(db,roomId,messageId,viewerId,b=contextBudgets.get(db)??budget(),floor=null) {
+  const candidate=db.prepare("SELECT CASE WHEN length(CAST(created_at AS BLOB))<=128 THEN created_at END AS at FROM messages WHERE room_id=? AND message_id=? AND (to_member_id IS NULL OR to_member_id='' OR author_id=? OR to_member_id=?)").get(roomId,messageId,viewerId,viewerId);
   charge(b,256);
-  if(candidate)return true;
+  if(candidate){
+    // This scalar can only deny. Long or malformed dates proceed to the
+    // authoritative reader; never infer visibility from an unverified index.
+    if(floor&&typeof candidate.at==='string'&&!messageInHistory({id:messageId,createdAt:candidate.at},floor))return false;
+    return true;
+  }
   const exists=db.prepare('SELECT 1 FROM messages WHERE room_id=? AND message_id=?').get(roomId,messageId);charge(b,256);
   if(!exists&&readCurrentRecord(db,roomId,'messageWitness',messageId,b)!==undefined)corrupt('witnessed canonical message missing');
   return false;
@@ -971,7 +976,7 @@ export function currentConversationRows(store,roomId,{viewerId,limit,before,befo
   if(messageId!==null) {
     // An unverified index may deny access, never grant it. Avoid loading a
     // different member's private body before the authoritative proof check.
-    if(!currentMessageMayBeVisible(db,roomId,messageId,viewerId,b)){
+    if(!currentMessageMayBeVisible(db,roomId,messageId,viewerId,b,floor)){
       return {rows:[],continuation:null,examined:0,complete:true};
     }
     // Addressed selection always uses the existing primary key, including a

@@ -181,7 +181,9 @@ function resolveWorkClaimAccess(store, roomId, auth) {
       ...auth.member,
       ...listed,
       id: memberId,
-      permissions: Array.isArray(listed.permissions) ? listed.permissions : (auth.member.permissions ?? []),
+      permissions: Array.isArray(listed.permissions)
+        ? listed.permissions
+        : (Object.hasOwn(listed, "permissions") ? [] : (auth.member.permissions ?? [])),
     }
     : null;
   return { authority, ownerId, member };
@@ -190,6 +192,8 @@ function resolveWorkClaimAccess(store, roomId, auth) {
 function holdsProfile(permissions, profile) {
   return WORK_CLAIM_PROFILES[profile].every(name => permissions.has(name));
 }
+
+const permissionList = member => (Array.isArray(member?.permissions) ? member.permissions : []);
 
 export function mayWriteWorkClaims(access) {
   const member = access.member;
@@ -214,14 +218,14 @@ export function mayClaimWorkClaims(access) {
   const member = access.member;
   if (!member || member.active === false) return false;
   if (access.ownerId && member.id === access.ownerId) return true;
-  return (member.permissions ?? []).includes("accept_work");
+  return permissionList(member).includes("accept_work");
 }
 
 export function mayCompleteWorkClaims(access) {
   const member = access.member;
   if (!member || member.active === false) return false;
   if (access.ownerId && member.id === access.ownerId) return true;
-  return (member.permissions ?? []).includes("complete_work");
+  return permissionList(member).includes("complete_work");
 }
 
 // Closing or cancelling is a completion exit for the holder; claim managers
@@ -234,7 +238,7 @@ function mayCloseWorkClaims(access) {
 // verify right can record a verdict just like an agent review profile.
 function mayReviewWorkClaims(access) {
   return Boolean(access.member && access.member.active !== false
-    && (mayWriteWorkClaims(access) || (access.member.permissions ?? []).includes("verify")));
+    && (mayWriteWorkClaims(access) || permissionList(access.member).includes("verify")));
 }
 
 const reviewersOf = (store, roomId) => {
@@ -246,7 +250,7 @@ function mayManageAnyClaim(access) {
   const member = access.member;
   if (!member || member.active === false) return false;
   if (access.ownerId && member.id === access.ownerId) return true;
-  return (member.permissions ?? []).includes("manage_claims");
+  return permissionList(member).includes("manage_claims");
 }
 
 function mayOptOutOfLease(access) {
@@ -260,7 +264,7 @@ function mayAttestWorkClaims(access) {
   const member = access.member;
   if (!member || member.active === false) return false;
   if (access.ownerId && member.id === access.ownerId) return true;
-  const permissions = member.permissions ?? [];
+  const permissions = permissionList(member);
   return permissions.includes("verify") || permissions.includes("manage_claims");
 }
 
@@ -473,7 +477,7 @@ function sweepRoom(registry, roomId, nowMs, onRelease = () => {}) {
 const verifiersOf = (store, roomId) => {
   const members = store.roomAuthority(roomId).members;
   return Object.values(members)
-    .filter(member => member && member.active !== false && (member.permissions ?? []).includes("verify"))
+    .filter(member => member && member.active !== false && permissionList(member).includes("verify"))
     .map(member => member.id);
 };
 
@@ -1360,6 +1364,10 @@ function handleWorkClaimsCore({ req, res, url, store, roomId, auth, workClaimRou
           reject(403, "work_review_rejected",
             `Review policy "self_attested" not satisfied for "${item.id}": only the owner may attest this work`);
         }
+        if (!canCloseWork(item, caller, { policy })) {
+          reject(403, "work_review_rejected",
+            `Review policy "self_attested" not satisfied for "${item.id}": only the owner may attest this work`);
+        }
       } else {
         const reviewer = caller;
         if (data.reviewedBy !== undefined && data.reviewedBy !== caller) {
@@ -1546,6 +1554,13 @@ function handleWorkClaimsCore({ req, res, url, store, roomId, auth, workClaimRou
     if (!targetMember || targetMember.active === false) {
       reject(422, "work_reassign_unknown_member",
         `newOwner "${typeof target === "string" ? target : "?"}" is not an active member of this room — reassign names a current memberId`);
+    }
+    // Reassign performs a claim for the new owner in this same request
+    // (an acquire path, like create-with-assignee), so the claim gate
+    // applies to the target: they must hold accept_work.
+    if (target !== item.owner
+      && !mayClaimWorkClaims({ ownerId: access.ownerId, member: { ...targetMember, id: target } })) {
+      refuseAssigneePermission();
     }
     // A handoff consumes the new owner's slot just like claim and
     // create-with-assignee do; otherwise reassign bypasses the per-member cap.

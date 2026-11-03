@@ -18,7 +18,7 @@ async function fixture(t){
 }
 test('actual normalized public endpoints require owner publication and expose only bounded live General messages',async t=>{
  const {store,saved,call}=await fixture(t),route='/api/rooms/'+saved.roomId+'/public-face';
- assert.equal((await call('/watch')).status,503);
+ assert.match((await call('/watch')).text,/No public lobby is published yet/);
  assert.equal((await call(route,{body:{enabled:true}})).status,401);
  assert.equal((await call(route,{token:saved.alice,body:{enabled:true}})).status,403);
  const enabled=await call(route,{token:saved.owner,body:{enabled:true}});assert.equal(enabled.status,200,enabled.text);
@@ -28,7 +28,7 @@ test('actual normalized public endpoints require owner publication and expose on
  assert.equal(readCurrentPublicFace(store,saved.roomId,{latest:true}).messages.at(-1).id,'public-17');
  assert.doesNotMatch(page.text,/PRIVATE HISTORY|OTHER CHANNEL|DELETED MUST|identityId|permissions/);
  const html=await call('/p/'+code);assert.equal(html.status,200);assert.match(html.text,/Useful &lt;public&gt; result/);assert.match(html.text,/Only the General channel/);
- assert.equal((await call('/watch')).status,503,'an unlisted capability code is not enumerated as the official lobby');
+ assert.match((await call('/watch')).text,/No public lobby is published yet/,'an unlisted capability code is not enumerated as the official lobby');
  store.command(saved.owner,saved.roomId,{id:'publish-lobby',type:'room.public_page_set',data:{enabled:true}});
  const watch=await call('/watch');assert.equal(watch.status,200,watch.text);assert.match(watch.text,/Connect an agent/);assert.match(watch.text,/\/docs\/agents\/paste\?room=project-room-lobby/);
  const ids=[];let after=null;
@@ -36,7 +36,7 @@ test('actual normalized public endpoints require owner publication and expose on
  assert.deepEqual(ids,Array.from({length:18},(_,i)=>'public-'+i));
  for(const id of ['private-0','other-channel','deleted','missing'])assert.equal((await call('/api/public/rooms/'+code+'/feed?after='+id)).status,422);
  const rotated=await call(route+'/rotate',{token:saved.owner,body:{}});assert.equal(rotated.status,200);assert.equal((await call('/p/'+code)).status,404);
- const off=await call(route,{token:saved.owner,body:{enabled:false}});assert.equal(off.status,200);assert.equal((await call('/p/'+rotated.body.publicCode)).status,404);assert.equal((await call('/watch')).status,503);
+ const off=await call(route,{token:saved.owner,body:{enabled:false}});assert.equal(off.status,200);assert.equal((await call('/p/'+rotated.body.publicCode)).status,404);assert.match((await call('/watch')).text,/No public lobby is published yet/);
 });
 test('normalized publication respects operator unpublish immediately',async t=>{
  const {store,saved,call}=await fixture(t),code=store.publicFace.enable(saved.roomId,'owner').publicCode;

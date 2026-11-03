@@ -14,7 +14,7 @@ test('Workers-native public HTTP publication is bounded, private by default and 
  for(const privateCount of [1000,5000]){
   const surface='p'+privateCount,call=async(path,{owner,body}={})=>{const url=new URL(path,'http://localhost');url.searchParams.set('surface',surface);const r=await mf.dispatchFetch(url,{...(body?{method:'POST',body:JSON.stringify(body)}:{}),headers:{host:'localhost',...(owner?{authorization:'Bearer '+owner}:{}),...(body?{'Content-Type':'application/json'}:{})}});const text=await r.text();return{status:r.status,text,cost:JSON.parse(r.headers.get('X-Fixture-Cost')??'null'),body:r.headers.get('Content-Type')?.includes('application/json')?JSON.parse(text):null};};
   const seed=await call('/seed?privateCount='+privateCount),owner=seed.body.owner;
-  const unavailable=await call('/watch');assert.equal(unavailable.status,503,unavailable.text);
+  const unavailable=await call('/watch');assert.equal(unavailable.status,200,unavailable.text);assert.match(unavailable.text,/No public lobby is published yet/);
   const on=await call('/api/rooms/project-room-lobby/public-face',{owner,body:{enabled:true}});assert.equal(on.status,200,on.text);
   const page=await call('/api/public/rooms/'+on.body.publicCode);assert.equal(page.status,200,page.text);assert.equal(page.body.messages.length,8);assert.doesNotMatch(page.text,/PRIVATE HISTORY|OTHER CHANNEL|DELETED MUST/);assert.equal(page.cost.unknown,0);costs.push(page.cost);
   const feed=await call('/api/public/rooms/'+on.body.publicCode+'/feed');assert.equal(feed.status,200,feed.text);assert.equal(feed.body.messages[0].id,'public-0');

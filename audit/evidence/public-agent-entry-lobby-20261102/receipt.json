@@ -44,14 +44,23 @@
   "limitations": [
     "no real second human host enrollment proved",
     "no automatic idle chat wake proved",
-    "two prior Room notes browser cases pending current UI reconciliation"
+    "remaining broad-suite failures require current-head triage; see full-suite-triage.json"
   ],
   "sources": {
     "server/current-public-face.mjs": "62d953a1be8e72598ed77dbf2c2a2619dfe949862033013c9b9d2a3f35531201",
     "server/public-face.mjs": "42962d714b997b1d22d1162cd806cfd4cd244c1bb49384e2b84c24c745982125",
-    "server/routes/public-lobby.mjs": "eb7066884b0e020ce33df484355a4848964b6ca4c17b354dbb3e0a1fd57a8938",
+    "server/routes/public-lobby.mjs": "75e78838a33400a31c787971d7ca2670bdd2cbe9d3375abb90879eaf9c787ed4",
     "server/agent-paste-copy.mjs": "ff670ac45af2a1b5db0a26aa6cc97d8a1a9db834e57b48085138539f02254985",
     "index.html": "029212323e1875a28317488ad4ce0f4e45530c03459756584e5661b297b2c49a",
     "scripts/public-entry-lobby-browser-check.mjs": "d5f01805062f17b616c870f3a03699c60781947eeedc3fa580f8939d1a28c193"
-  }
+  },
+  "additionalChecks": {
+    "currentInventoryNode": 20,
+    "contractCatalogNode": 15,
+    "contract": "CI=1 scripts/check.mjs passed",
+    "roomNavigationBrowser": 2,
+    "nativeUpdatedViewerCopyOAuth": 3
+  },
+  "workerBaselineAdopted": "2065aeafd82651698f6e3a6aa6286972eae1d77c",
+  "emptyState": "200 helpful unpublished state; not a storage outage"
 }

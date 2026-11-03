@@ -39,12 +39,9 @@ for (const width of [1280, 390]) test(`entry recovery and room search at ${width
   else await ensureSidebarClosed(page);
   await clickChrome(page, '#nav-rooms');
   await page.locator('#account-rooms-list button').first().waitFor();
-  await page.getByText('Room notes', { exact: true }).waitFor();
-  assert.equal(await page.locator('#owner-cockpit-title').isVisible(), false);
-  assert.equal(await page.locator('#cockpit-exceptions details').evaluate(node => node.open), false);
-  await page.getByText('Room notes', { exact: true }).click();
-  assert.equal(await page.locator('#cockpit-exceptions .cockpit-item').first().isVisible(), true);
-  await page.getByText('Room notes', { exact: true }).click();
+  assert.equal(await page.locator('#owner-cockpit-title').count(), 0, 'removed cockpit does not return to account rooms');
+  assert.equal(await page.locator('#account-rooms-title').innerText(), 'Rooms');
+  assert.equal(await page.locator('#account-room-create > summary').isVisible(), true);
   assert.equal(await page.locator('#choose-room').isVisible(), false);
   assert.equal(await page.getByRole('link', { name: 'Join room', exact: true }).isVisible(), true);
   await page.locator('#account-rooms-search').fill('no-room-with-this-title');
@@ -65,7 +62,7 @@ for (const width of [1280, 390]) test(`entry recovery and room search at ${width
   await page.locator('#account-rooms-list button').first().click();
   await page.locator('#main').waitFor();
   let answer = 'failed';
-  await page.route('**/referrals', route => route.fulfill({ status: answer === 'failed' ? 503 : 200, contentType: 'application/json', body: JSON.stringify(answer === 'failed' ? { error: { message: 'Unavailable' } } : { invite: null }) }));
+  await page.route(/\/referrals\?view=invitation$/, route => route.fulfill({ status: answer === 'failed' ? 503 : 200, contentType: 'application/json', body: JSON.stringify(answer === 'failed' ? { error: { message: 'Unavailable' } } : { invite: null }) }));
   await clickChrome(page, '#invite-people-button');
   await page.locator('#growth-kit-retry').waitFor();
   assert.equal(await page.locator('#growth-kit-status').isVisible(), true);

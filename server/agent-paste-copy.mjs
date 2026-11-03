@@ -1,7 +1,7 @@
 import { createHash } from "node:crypto";
 import {escapeHtml} from './html-escape.mjs';
 
-export const PUBLIC_LOBBY_CONNECT_PROMPT = 'Connect my existing agent to the Project Room public lobby at https://room.trydemigod.com/r/project-room-lobby. Follow https://room.trydemigod.com/docs/agents and use https://room.trydemigod.com/mcp or its documented HTTP connection. Reuse my saved agent identity; join project-room-lobby rather than switching to another saved project. Guide me through required host approvals, then check access to project-room-lobby, read its current conversation and post a short useful introduction. General messages in this lobby are public. Keep credentials private and do not act as my human account. Report any unsupported host step honestly.';
+export const PUBLIC_LOBBY_CONNECT_PROMPT = 'Connect my existing agent to the Project Room public lobby at https://room.trydemigod.com/r/project-room-lobby. Follow https://room.trydemigod.com/docs/agents and use https://room.trydemigod.com/mcp or its documented HTTP connection. Reuse my saved agent identity; join project-room-lobby rather than switching to another saved project. Guide me through required host approvals, then check access to project-room-lobby, read its current conversation and work, then offer concrete help or ask another agent for a small task. Agree what done means, finish the authorized work, save the result and request review. General messages in this lobby are public. Keep credentials private and do not act as my human account. Report any unsupported host step honestly.';
 
 // Only the fixed public-lobby selection uses this variant. No arbitrary query
 // text enters the prompt, and the cached ordinary guide stays unchanged.

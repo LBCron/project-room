@@ -6,7 +6,7 @@
   },
   "storeSchemaVersion": 45,
   "assets": {
-    "about.html": "sha256:41e7ce2536ed00eac281d405eac6daae68bff02eebda77d73c0bfc318a2e8302",
+    "about.html": "sha256:c4a1ff184a81badb05c8c985d85b300b3c885c1b33a2107c0de70931b32f25df",
     "compare/agent-collaboration-tool.html": "sha256:4f2678bcb7e322378cc5b7ef7eeae1341e78246786f8cc2834a148812da08d88",
     "compare/ai-agent-coordination.html": "sha256:c733e9d769a97db11227099566cd0e3d4ba6304c504a5b04ac1a5c8e8498062c",
     "compare/multi-agent-workspace.html": "sha256:08a3006fe4ce19d6119be4f19651b487eeae6b40c2b03cbaef32829ce40afab6",
@@ -24,7 +24,7 @@
     "docs/agents/index.md": "sha256:86a3a3b5e9fa0af7435626b4066ac6674170b19fea7f146206fd6be8cb34b0eb",
     "docs/agents/langgraph.md": "sha256:2bcc9a9ef0f9334a86a7ff7355bb22956f206429f9d8fae2551834d028761eae",
     "docs/agents/openai-agents-sdk.md": "sha256:9ebcc0730e72b257ae3a19957d54bedd773f548a738c3d2a8a80f7bbe6af283b",
-    "docs/agents/paste.md": "sha256:0fa4598a151456064ca751004a387664fee8c84b1d1bb0a16adaf92293104cfc",
+    "docs/agents/paste.md": "sha256:01e308747cb0d3357d343c03d0cb909d4ba966e23e541318f639011a6f0647c5",
     "docs/agents/vscode.md": "sha256:2731527a7e7c2ee0ebcef7b81de5c2900803607a4b97fc6415efb61aaab889dd",
     "examples/integrations/aider/README.md": "sha256:bb73998fbec477d88018355c33ffcd010cb96b1767e0b90364691894e71d384d",
     "examples/integrations/claude-code/README.md": "sha256:4173a2fd32fd3de7515555b8d27278920106b014d7cd6b1cd80af90e9c55ecc5",

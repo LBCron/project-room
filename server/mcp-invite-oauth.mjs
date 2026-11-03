@@ -9,7 +9,29 @@ import { publicPage, joinLink, isRoomArchived } from '../src/events.js';
 import { isUnpublished } from './legal-store.mjs';
 // The server supplies a short-lived challenge; work is done in the consenting
 // browser, so the normal anonymous mint proof and quotas remain meaningful.
-export const PUBLIC_LOBBY_PROOF_SCRIPT = `(async()=>{const f=document.getElementById('public-proof');if(!f)return;const out=document.getElementById('proof-status');try{const enc=new TextEncoder(),prefix=f.dataset.prefix,challenge=f.dataset.challenge;for(let i=0;i<1000000;i++){const n=i.toString(36),digest=await crypto.subtle.digest('SHA-256',enc.encode(challenge+':'+n)),hex=Array.from(new Uint8Array(digest),b=>b.toString(16).padStart(2,'0')).join('');if(hex.startsWith(prefix)){f.elements.proof.value=n;out.textContent='Verified. Connecting…';f.requestSubmit();return}if(i%5000===0)out.textContent='Verifying this connection… '+i}out.textContent='Verification took too long. Restart the connection or use an invitation.'}catch{out.textContent='Verification could not run. Restart the connection or use an invitation.'}})();`;
+export const PUBLIC_LOBBY_PROOF_SCRIPT = `(() => {
+ const f=document.getElementById('public-proof'); if(!f)return;
+ const out=document.getElementById('proof-status'),retry=document.getElementById('proof-retry');
+ let running=false;
+ const solve=async()=>{
+  if(running)return; running=true; retry.hidden=true; retry.disabled=true;
+  try {
+   const enc=new TextEncoder(),prefix=f.dataset.prefix,challenge=f.dataset.challenge;
+   // A fresh prefix avoids repeating an exhausted range in the same time bucket.
+   const seed=crypto.getRandomValues(new Uint32Array(2));
+   const start=Array.from(seed,x=>x.toString(36)).join('_')+'_';
+   out.textContent='Verifying this connection…';
+   for(let i=0;i<1000000;i++){
+    const n=start+i.toString(36),digest=await crypto.subtle.digest('SHA-256',enc.encode(challenge+':'+n));
+    const hex=Array.from(new Uint8Array(digest),b=>b.toString(16).padStart(2,'0')).join('');
+    if(hex.startsWith(prefix)){f.elements.proof.value=n;out.textContent='Verified. Connecting…';f.requestSubmit();return;}
+   }
+   out.textContent='Verification needs another attempt.';
+  } catch {out.textContent='Verification could not finish. You can retry.';}
+  finally {running=false;retry.hidden=false;retry.disabled=false;}
+ };
+ retry.addEventListener('click',solve); void solve();
+})();`;
 import { mcpInviteOAuthIdentityEpoch, validateMcpInviteOAuthBinding, PUBLIC_LOBBY_GRANT } from './mcp-oauth.mjs';
 export const MCP_INVITE_RECOVERY = 'If this connection expired, was revoked, or its invitation was already confirmed, ask the Room sponsor for a fresh agent invitation and reconnect the plugin. A fresh invitation creates a new agent seat; it does not restore the previous seat or extend its 30-day grant.';
 const hash = value => createHash('sha256').update(value).digest('hex');
@@ -159,8 +181,8 @@ export function inviteOAuthPage({ nonce, request, invitation = null, code = '', 
     : '<label>Agent invitation link or RM code <input name="invitation" maxlength="2048" autocomplete="off" required></label><button name="decision" value="preview">Review invitation</button>';
   const account = accountUrl ? `<section aria-labelledby="reconnect-title"><h2 id="reconnect-title">Already connected before?</h2><p>Use your Room account to choose an existing agent and room.</p><a class="primary" data-account-reconnect href="${escape(accountUrl)}">Reconnect existing agent</a></section>` : '';
   const publicForm = publicLobby && !invitation ? proofChallenge
-    ? `<section><h2>Verifying your connection</h2><p id="proof-status" role="status">Verifying this connection…</p><form id="public-proof" method="post" action="/oauth/invite" data-prefix="${escape(proofChallenge.prefix)}" data-challenge="${escape(proofChallenge.challenge)}">${hidden}<input type="hidden" name="display_name" value="${escape(displayName)}"><input type="hidden" name="decision" value="allow_public"><input type="hidden" name="proof"><noscript>JavaScript is required for verification. Please use an invitation instead.</noscript></form><script>${PUBLIC_LOBBY_PROOF_SCRIPT}</script></section>`
-    : `<section><h2>Join the public lobby</h2><p>Connect your agent as a guest in the public lobby. This creates a new agent seat with read and chat access. Lobby messages are public. No Room account or invitation is required. Reconnect an existing seat above if you already have one.</p><form method="post" action="/oauth/invite">${hidden}<label>Agent name <input name="display_name" maxlength="80" value="Agent ${escape(nonce.slice(0, 6))}" required></label><button name="decision" value="allow_public">Connect to the lobby</button></form></section>` : '';
+    ? `<section><h2>Verifying your connection</h2><p id="proof-status" role="status">Verifying this connection…</p><form id="public-proof" method="post" action="/oauth/invite" data-prefix="${escape(proofChallenge.prefix)}" data-challenge="${escape(proofChallenge.challenge)}">${hidden}<input type="hidden" name="display_name" value="${escape(displayName)}"><input type="hidden" name="decision" value="allow_public"><input type="hidden" name="proof"><noscript>JavaScript is required for verification. Please use an invitation instead.</noscript></form><button id="proof-retry" type="button" hidden>Retry verification</button><script>${PUBLIC_LOBBY_PROOF_SCRIPT}</script></section>`
+    : `<section><h2>Join the public lobby</h2><p>Connect your agent as a guest in the public lobby. This creates a new agent seat with read and chat access. Lobby messages are public. No Room account or invitation is required. Already connected? Reuse your saved host connection. The account reconnect option above is for seats linked to a Room account.</p><form method="post" action="/oauth/invite">${hidden}<label>Agent name <input name="display_name" maxlength="80" value="Agent ${escape(nonce.slice(0, 6))}" required></label><button name="decision" value="allow_public">Connect to the lobby</button></form></section>` : '';
   const form = `<form id="invite-connection" method="post" action="/oauth/invite">${hidden}${consent}</form>`;
   return `<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Connect to Project Room</title><style>body{font-family:system-ui,sans-serif;max-width:30rem;margin:3rem auto;padding:0 1rem;color:#1a1a1a;line-height:1.5}h1{font-size:1.5rem}h2{font-size:1.1rem}section,details{margin:1.5rem 0}summary{cursor:pointer;font-weight:600}label{display:block;margin:1rem 0}input{display:block;box-sizing:border-box;width:100%;padding:.7rem;font:inherit}button,.primary{display:inline-block;padding:.7rem 1rem;margin:.5rem .3rem .5rem 0;border:1px solid #bbb;border-radius:.5rem;font:inherit}.primary{background:#065dcc;color:white;text-decoration:none}button{background:white;cursor:pointer}a:focus-visible,button:focus-visible,summary:focus-visible,input:focus-visible{outline:3px solid #1468ce;outline-offset:3px}</style></head><body><main><h1>${invitation?'Confirm new agent connection':'Connect to Project Room'}</h1><p>Continue only if you just started this connection in your agent.</p>${publicForm}${account}${invitation?`<p>This invitation creates a new agent seat. It does not reconnect a previous seat.</p>${form}`:`<details${invitationChoice||!accountUrl?' open':''}><summary>Join with an invitation</summary><p>No Project Room signup is required. Confirming creates a new agent seat; use your Room account above to reconnect an existing one.</p>${form}</details>`}<button form="invite-connection" name="decision" value="deny" formnovalidate>Cancel connection</button><p>You can cancel before confirming without using the invitation.</p></main></body></html>`;
 }

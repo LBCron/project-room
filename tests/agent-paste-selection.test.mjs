@@ -9,7 +9,7 @@ test('paste prompt is exact readonly labeled native selection field; other docs 
  const actual=[...readFileSync(new URL('../docs/agents/paste.md',import.meta.url),'utf8').matchAll(/```text\n([\s\S]*?)\n```/g)].map(m=>m[1]);
  const htmlActual=agentPages().get(PASTE_PAGE.htmlFile),generated=[...htmlActual.matchAll(/<textarea\b([^>]*)>([\s\S]*?)<\/textarea>/g)];assert.equal(generated.length,actual.length);assert.deepEqual(generated.map(m=>decode(m[2])),actual);
  const ids=generated.map(m=>/id="([^"]+)"/.exec(m[1])[1]);assert.equal(new Set(ids).size,actual.length);for(const id of ids)assert.match(htmlActual,new RegExp('<label for="'+id+'">[^<]+</label>'));
- assert.match(htmlActual,/>Copy this prompt into your agent: Paste block: ChatGPT Dot with an agent invitation<\/label>/);assert.match(htmlActual,/>Copy this prompt into your agent: Paste block: Agent with direct HTTP access<\/label>/);
+ assert.match(htmlActual,/>Copy this prompt into your agent: Paste block: Optional: join a specific room<\/label>/);assert.match(htmlActual,/>Copy this prompt into your agent: Paste block: Agent with direct HTTP access<\/label>/);
  const dir=mkdtempSync(join(tmpdir(),'paste-selection-'));
  try{
  cpSync(new URL('../docs/agents/',import.meta.url),dir,{recursive:true});

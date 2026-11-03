@@ -7,10 +7,14 @@ on:
       - 'client/setup-journal.mjs'
       - 'tests/private-state-platform.test.mjs'
       - 'tests/room-acp-import-identity.test.js'
+      - 'tests/room-acp-fixture.mjs'
       - '.github/workflows/private-state-platform.yml'
   workflow_dispatch:
 permissions:
   contents: read
+concurrency:
+  group: private-state-${{ github.ref }}
+  cancel-in-progress: true
 jobs:
   private-state:
     strategy:

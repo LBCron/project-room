@@ -49,3 +49,12 @@ test('archiving a published normalized room hides its public messages',async t=>
  store.command(saved.owner,saved.roomId,{id:'archive',type:'room.archived',data:{}});
  assert.equal((await call('/p/'+code)).status,404);
 });
+test('public lobby older pages stay bounded, preserve order and never reveal private history',async t=>{
+ const {store,saved,call}=await fixture(t),route='/api/rooms/'+saved.roomId+'/public-face';
+ await call(route,{token:saved.owner,body:{enabled:true}});store.command(saved.owner,saved.roomId,{id:'publish-lobby-history',type:'room.public_page_set',data:{enabled:true}});
+ const first=await call('/watch');assert.equal(first.status,200,first.text);assert.match(first.text,/Older messages/);assert.doesNotMatch(first.text,/PRIVATE HISTORY|OTHER CHANNEL|DELETED MUST/);
+ const match=first.text.match(/href="\?before=([^"]+)">Older messages/);assert.ok(match,first.text);const page=await call('/watch?before='+match[1]);assert.equal(page.status,200,page.text);assert.match(page.text,/Latest messages/);assert.doesNotMatch(page.text,/PRIVATE HISTORY|OTHER CHANNEL|DELETED MUST/);
+ const firstData=readCurrentPublicFace(store,saved.roomId,{latest:true}),secondData=readCurrentPublicFace(store,saved.roomId,{latest:true,before:decodeURIComponent(match[1])});assert.deepEqual(firstData.messages.map(x=>x.id),Array.from({length:8},(_,i)=>'public-'+(i+10)));assert.deepEqual(secondData.messages.map(x=>x.id),Array.from({length:8},(_,i)=>'public-'+(i+2)));
+ const last=await call('/watch?before=public-8');assert.equal(last.status,200);assert.doesNotMatch(last.text,/Older messages/);assert.match(last.text,/Latest messages/);store.command(saved.owner,saved.roomId,{id:'huge-private',type:'message.posted',data:{messageId:'huge-private',body:'界'.repeat(65536),toMemberId:'alice'}});for(const id of ['private-0','huge-private','other-channel','deleted','missing'])assert.equal((await call('/watch?before='+id)).status,422,id);
+ await call(route,{token:saved.owner,body:{enabled:false}});const closed=await call('/watch?before='+match[1]);assert.doesNotMatch(closed.text,/Useful &lt;public&gt; result|PRIVATE HISTORY/);assert.match(closed.text,/No public lobby is published yet/);
+});

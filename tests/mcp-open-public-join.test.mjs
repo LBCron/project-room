@@ -201,4 +201,8 @@ test('a new HTTP MCP agent mints an identity, joins an open room and verifies ac
   const message=readConversation(f.store,f.owner.secret,f.roomId,{messageId:'new-agent-post'}).messages[0];
   assert.equal(message.body,'I can help with a small task.');
   assert.equal(message.authorId,joined.value.memberId);
+  const sequence=f.store.headSequence(f.roomId);
+  const retry=await f.call(minted.value.secret,'room_post_message',{roomId:f.roomId,id:'new-agent-post',messageId:'new-agent-post',body:'I can help with a small task.'});
+  assert.equal(retry.error,false);
+  assert.equal(f.store.headSequence(f.roomId),sequence);
 });

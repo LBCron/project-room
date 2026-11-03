@@ -509,6 +509,7 @@ const RECONCILE_CLASSES = [
       absentDetail: row => `OAuth client ${row.name} was deregistered after the backup and is registered again in the restored store` });
   } },
   { kind: "oauth_code", examine(restored, current, stale) {
+    const checkedAt = current.now();
     let examined = checkRowClass({ restored, current, stale, kind: "oauth_code",
       table: "oauth_provider_codes",
       select: "SELECT code_hash, client_id, used FROM oauth_provider_codes",
@@ -522,14 +523,14 @@ const RECONCILE_CLASSES = [
       describe: row => `native OAuth authorization code for client ${row.client_id}`,
       stateOf: row => (row.used ? "used" : "live") });
     examined += checkRowClass({ restored, current, stale, kind: "oauth_code",
-      table: "oauth_existing_seat_proofs", select: "SELECT nonce_hash,consumed_at FROM oauth_existing_seat_proofs",
+      table: "oauth_existing_seat_proofs", select: "SELECT nonce_hash,consumed_at,expires_at FROM oauth_existing_seat_proofs",
       keyOf: row => row.nonce_hash, idOf: row => row.nonce_hash.slice(0, 12),
       describe: () => "existing-seat OAuth holder proof",
-      stateOf: row => (row.consumed_at !== null ? "consumed" : "live") });
+      stateOf: row => (row.expires_at <= checkedAt ? "expired" : row.consumed_at !== null ? "consumed" : "live") });
     examined += checkRowClass({ restored, current, stale, kind: "oauth_code",
-      table: "oauth_existing_seat_handoffs", select: "SELECT reference_hash FROM oauth_existing_seat_handoffs",
+      table: "oauth_existing_seat_handoffs", select: "SELECT reference_hash,expires_at FROM oauth_existing_seat_handoffs",
       keyOf: row => row.reference_hash, idOf: row => row.reference_hash.slice(0, 12),
-      describe: () => "existing-seat OAuth handoff", stateOf: () => "live" });
+      describe: () => "existing-seat OAuth handoff", stateOf: row => row.expires_at <= checkedAt ? "expired" : "live" });
     return examined;
   } },
   { kind: "oauth_access", examine(restored, current, stale) {

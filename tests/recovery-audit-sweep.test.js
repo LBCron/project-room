@@ -354,6 +354,8 @@ test("the event surface has not grown without this sweep noticing", () => {
   // member.merged and pair.requested/approved/denied are not exercised here:
   // they need an agent-pairing flow and two live agent members. They are
   // covered by tests/pairing-flow.test.js and tests/pairing-reconnect.test.js.
-  assert.equal(Object.values(T).length, 72,
+  // member.sponsor_transferred requires explicit account sponsorship consent;
+  // tests/agent-sponsor-transfer.test.mjs exercises that event and auditRecovery.
+  assert.equal(Object.values(T).length, 73,
     "EVENT_TYPES changed: add the new type to this sweep, then update this count");
 });

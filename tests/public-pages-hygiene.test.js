@@ -93,7 +93,8 @@ test("favicon, icon, and manifest routes serve the public marks", async t => {
   const offline = await fetch(`${origin}/offline.html`);
   assert.equal(offline.status, 200);
   assert.match(await offline.text(), /Room is offline/);
-  assert.equal((home.match(/<h1[\s>]/g) ?? []).length, 1);
+  assert.equal((home.match(/<h1 class="static-hero-title"/g) ?? []).length, 1);
+  assert.match(home, /<section id="auth-panel"[^>]* hidden>/, "the alternate auth heading is hidden before app startup");
   assert.doesNotMatch(home, /id="message-input"[^>]*aria-expanded/);
   assert.doesNotMatch(home, /id="room-overview-open"[^>]*aria-label="Room overview"/);
 });

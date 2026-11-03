@@ -13,9 +13,11 @@ test('selected actions preserve since-join time and source order',t=>{
  add('message.posted',{messageId:'tie-before',body:'hidden'},'2026-11-03T08:00:02.000Z');
  add('member.added',{memberId:'late',displayName:'Late',kind:'agent',permissions:[]},'2026-11-03T08:00:02.000Z');
  add('message.posted',{messageId:'tie-after',body:'visible'},'2026-11-03T08:00:02.000Z');
+ add('message.posted',{messageId:'visible-reply',body:'visible',replyToId:'hidden-small'},'2026-11-03T08:00:03.000Z');
  add('message.posted',{messageId:'offset-after',body:'visible'},'2026-11-03T00:00:03.000-08:00');
  s.initialize(events,{representation:'normalized-current-v1'});const token=s.issueAccessKey('commons','late');
- const actions=id=>[()=>setPin(s,token,'commons',{messageId:id,pinned:false}),()=>setReadHorizon(s,token,'commons',{lastReadMessageId:id}),()=>s.roomAttachments.listCurrent(token,'commons',{messageIds:[id]})];
+ const actions=id=>[()=>setPin(s,token,'commons',{messageId:id,pinned:false}),()=>s.threadMutes.set(token,'commons',{threadId:id,muted:false}),()=>setReadHorizon(s,token,'commons',{lastReadMessageId:id}),()=>s.roomAttachments.listCurrent(token,'commons',{messageIds:[id]})];
  for(const id of ['hidden-large','hidden-small','tie-before','missing'])for(const action of actions(id))assert.throws(action,e=>e.status===404);
+ assert.throws(()=>s.threadMutes.set(token,'commons',{threadId:'visible-reply',muted:true}),e=>e.status===404);
  for(const id of ['tie-after','offset-after'])for(const action of actions(id))assert.doesNotThrow(action);
 });

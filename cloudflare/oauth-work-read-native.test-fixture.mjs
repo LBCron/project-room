@@ -2,6 +2,7 @@ import {WorkLinkedPostRoom} from './work-linked-post-native.test-fixture.mjs';
 import {seedOAuthWorkRead} from '../tests/helpers/oauth-work-read-source.mjs';
 import {providerFor,resource} from '../tests/helpers/work-linked-post-oauth.mjs';
 import {runMcpOAuthRequest,resolveMcpOAuthPrincipal} from '../server/mcp-oauth.mjs';
+import {callHostedStdioTool} from '../server/mcp-full-profile.mjs';
 import {readWorkSelection} from '../client/work-preparation.mjs';
 export class OAuthWorkReadRoom extends WorkLinkedPostRoom {
  async fetch(request){
@@ -13,7 +14,7 @@ export class OAuthWorkReadRoom extends WorkLinkedPostRoom {
    // Match hosted MCP's principal resolution before the tool's read transaction.
    const auth={store:s,provider:providerFor(s),token:saved.token,resource,roomId:'commons'};
    if(!resolveMcpOAuthPrincipal({...auth,requiredScopes:['rooms:read','chat:read','work:read']}))throw Error('OAuth principal refused');
-   const value=await runMcpOAuthRequest(auth,()=>readWorkSelection({
+   const value=await runMcpOAuthRequest(auth,()=>path.startsWith('/messages')?callHostedStdioTool(s,saved.token,'room_read_messages',{roomId:'commons',limit:1,...(path==='/messages-latest'?{latest:true}:{after:0})}).then(r=>{if(r.isError)throw Error(JSON.stringify(r.value));return r.value;}):readWorkSelection({
     workContext:(id,options)=>s.workContext(saved.token,'commons',id,options),
     workResult:(id,options)=>s.workResult(saved.token,'commons',id,options)
    },path==='/batch'?{workItemIds:['task','other-task'],brief:true}:{workItemId:'task',brief:true,includeResult:true},{hosted:true}));

@@ -13,6 +13,8 @@ test('actual Native adopted OAuth selected work and exact result survive cold re
  try{
   assert.equal((await call('/seed')).members,5);
   const selected=await call('/read');assert.equal(selected.value.revision,4);assert.ok(JSON.stringify(selected.value).includes('Saved useful result.'));assert.equal(selected.cost.unknown,0);
+  const latest=await call('/messages-latest');assert.equal(latest.value.messages.at(-1).messageId,'later-11');
+  const first=await call('/messages-forward');assert.equal(first.value.messages.length,1);
   const batch=await call('/batch');assert.equal(batch.value.items.length,2);assert.equal(batch.cost.unknown,0);
   await mf.dispose();mf=create();const cold=await call('/read');assert.equal(cold.value.revision,4);assert.equal(cold.value.workItemId,'task');
 

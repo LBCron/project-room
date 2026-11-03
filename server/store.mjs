@@ -6607,7 +6607,7 @@ this.slaBreachAlerts = new SlaBreachAlertJournal(this); // Task 26: durable in-a
     if (isCurrentRoom(this.db,roomId)) return this.readTransaction(() => withCurrentReadContext(this.db,roomId,() => {
       const auth=this.authenticate(token,roomId,expectedSessionBinding);
       return readCurrentEventWindow(this,roomId,auth.member.id,{...opts,after,limit});
-    }));
+    }, {maxRecords:512}));
     // #658: mention timeouts are evaluated lazily on read. The flip needs a
     // write-capable transaction, so it runs before the query_only read
     // below; usually a no-op (one indexed UPDATE, zero rows touched).

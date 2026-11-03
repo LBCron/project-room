@@ -1,4 +1,4 @@
-import{isCurrentRoom,withCurrentReadContext,readCurrentMessage}from'./current-room-repository.mjs';
+import{isCurrentRoom,withCurrentReadContext,readCurrentMessage,currentMessageMayBeVisible}from'./current-room-repository.mjs';
 // Per-thread mutes.
 //
 // A member can mute a thread: the thread's activity stops surfacing for
@@ -121,7 +121,12 @@ export class ThreadMutes {
         const visited=new Set();let id=data.threadId,rootId='';
         for(let depth=0;id;depth++){
           if(depth>=32)fail(409,'thread_context_too_large','Thread ancestry exceeds bounded selection');
-          if(visited.has(id))fail(409,'thread_context_invalid','Thread ancestry is cyclic');visited.add(id);const message=readCurrentMessage(this.db,roomId,id)?.value;
+          if(visited.has(id))fail(409,'thread_context_invalid','Thread ancestry is cyclic');visited.add(id);
+          if(!currentMessageMayBeVisible(this.db,roomId,id,memberId)){
+            if(!rootId||this.db.prepare('SELECT 1 FROM messages WHERE room_id=? AND message_id=?').get(roomId,id))fail(404,'message_not_found','No such thread in this room');
+            break;
+          }
+          const message=readCurrentMessage(this.db,roomId,id)?.value;
           if(!message){if(!rootId)fail(404,'message_not_found','No such thread in this room');break;}
           if(message.toMemberId&&message.authorId!==memberId&&message.toMemberId!==memberId)fail(404,'message_not_found','No such thread in this room');
           rootId=message.id;id=message.replyToId;

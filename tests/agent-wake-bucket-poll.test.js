@@ -31,7 +31,7 @@ async function serve(t) {
   const enqueue = messageId => hb.enqueueWake({ agentId: identity.identityId, kind: "mention", roomId: "commons", messageId });
   const poll = waitMs => call(`/api/agent-wakes/poll?hostId=loop-host&waitMs=${waitMs}`);
   const ack = signalIds => call("/api/agent-heartbeats/ack", { method: "POST", body: JSON.stringify({ signalIds }) });
-  return { identity, hb, enqueue, poll, ack };
+  return { identity, hb, enqueue, poll, ack, fixture: f };
 }
 
 const timed = async promise => { const start = performance.now(); const value = await promise; return { value, ms: performance.now() - start }; };
@@ -67,4 +67,35 @@ test("over budget: the held poll rides out waitMs, then returns every queued sig
   assert.equal(drained.acknowledged.length, 1);
   assert.deepEqual((await f.poll(0)).pendingWakes, [], "nothing left behind");
   t.diagnostic(`extra wait for an over-budget wake: ${Math.round(ms - 100)} ms at waitMs=${WAIT}; bounded by waitMs (room-acp first page holds 25000 ms)`);
+});
+
+// Behavior, not just the code path: a real mention posted in a reply wakes
+// the agent's held poll within one poll cycle, and a ping-pong of replies
+// that keep mentioning it gets throttled after the bucket is spent.
+const mentionReply = (f, keys, store, n, replyToId) => store.command(keys.owner, "commons", {
+  id: `pp-${n}`, type: "message.posted",
+  data: { messageId: `pp-${n}`, body: `<@loopagent> ping ${n}`, ...(replyToId ? { replyToId } : {}) } });
+
+test("a real mention in a reply releases the held poll within one poll cycle", async t => {
+  const f = await serve(t);
+  const held = timed(f.poll(3000));
+  await later(100, () => mentionReply(f, f.fixture.keys, f.fixture.store, 0));
+  const { value, ms } = await held;
+  assert.ok(ms < 1500, `woken within one cycle (${Math.round(ms)} ms of 3000)`);
+  assert.ok(value.pendingWakes.some(w => w.messageId === "pp-0"), "wake names the mentioning message");
+});
+
+test("ping-pong: replies that keep mentioning the agent are throttled once the bucket is spent", async t => {
+  const f = await serve(t);
+  let throttledAt = null;
+  for (let i = 1; i <= wakeBucketLimits.capacity + 5; i += 1) {
+    const held = timed(f.poll(400));
+    await later(20, () => mentionReply(f, f.fixture.keys, f.fixture.store, i, i > 1 ? `pp-${i - 1}` : undefined));
+    const { value, ms } = await held;
+    assert.ok(value.pendingWakes.some(w => w.messageId === `pp-${i}`), `turn ${i} signal still delivered`);
+    await f.ack(value.pendingWakes.map(w => w.signalId));
+    if (ms >= 350) { throttledAt = i; break; }
+  }
+  assert.equal(throttledAt, wakeBucketLimits.capacity + 1, "first capacity turns wake instantly, the next is throttled");
+  t.diagnostic(`ping-pong throttled at turn ${throttledAt}; signal still delivered on the same poll`);
 });

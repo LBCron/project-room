@@ -24,7 +24,7 @@ const peer = createPeer({
   input: process.stdin, output: process.stdout,
   async onRequest(method, params) {
     if (process.env.FAKE_ACP_TRACE) appendFileSync(process.env.FAKE_ACP_TRACE, method + "\n");
-    if (method === "initialize") { supportsNotices = typeof params.clientCapabilities?.session?.notices === "object" && params.clientCapabilities.session.notices !== null; return { protocolVersion: mode === "wrong-protocol" ? 99 : 1, agentCapabilities: { loadSession: mode !== "no-loadSession", promptCapabilities: { embeddedContext: true } }, authMethods: [], agentInfo: { name: "fake-acp", version: "1" } }; }
+    if (method === "initialize") { if (mode === "init-exit") { process.exit(7); } if (mode === "init-stall") return new Promise(() => {}); supportsNotices = typeof params.clientCapabilities?.session?.notices === "object" && params.clientCapabilities.session.notices !== null; return { protocolVersion: mode === "wrong-protocol" ? 99 : 1, agentCapabilities: { loadSession: mode !== "no-loadSession", promptCapabilities: { embeddedContext: true } }, authMethods: [], agentInfo: { name: "fake-acp", version: "1" } }; }
     if (method === "session/new") {
       if (mode === "unauthenticated") throw Object.assign(new Error("Authentication required"), { code: -32000 });
       if (mode === "session-stall") return new Promise(() => {});

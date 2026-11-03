@@ -193,4 +193,10 @@ test('return from a suggested task restores focus to that suggestion', { timeout
   await f.page.locator('#copy-offer:not(:disabled)').waitFor();
   await f.page.locator('[data-close]').tap();
   assert.equal(await suggestion.evaluate(node => node === document.activeElement), true);
+  await suggestion.tap(); await f.page.locator('#copy-offer:not(:disabled)').waitFor();
+  await f.page.goBack();
+  assert.equal(await suggestion.evaluate(node => node === document.activeElement), true);
+  await f.page.goForward(); await f.page.locator('#copy-offer:not(:disabled)').waitFor();
+  await f.page.locator('[data-close]').tap();
+  assert.equal(await suggestion.evaluate(node => node === document.activeElement), true);
 });

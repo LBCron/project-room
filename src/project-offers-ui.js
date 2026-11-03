@@ -151,7 +151,7 @@ async function loadContribution(offer, flight) {
 async function select(id, { history = true, focus = true, fromMatch = false } = {}) {
   if (!validId(id)) return;
   detailFlight?.abort(); const flight = detailFlight = new AbortController(); selectedId = id; selectedFromMatch = fromMatch; briefText = ''; document.body.classList.add('offer-selected'); paintList();
-  if (history) { const url = new URL(location.href); url.searchParams.set('offer', id); window.history.pushState(null, '', url); }
+  if (history) { const url = new URL(location.href); url.searchParams.set('offer', id); window.history.pushState({ projectRoomOfferSource: { id, fromMatch } }, '', url); }
   detail.innerHTML = '<h2 id="detail-title" tabindex="-1">Loading offer…</h2><p class="detail-status" role="status">Reading the latest public terms.</p>';
   if (focus) $('#detail-title').focus();
   try {
@@ -201,7 +201,7 @@ detail.addEventListener('click', async event => {
   }
 
 });
-window.addEventListener('popstate', () => { const id = new URL(location.href).searchParams.get('offer'); if (id === selectedId) return; if (validId(id)) void select(id, { history: false }); else closeDetail(false); });
+window.addEventListener('popstate', event => { const id = new URL(location.href).searchParams.get('offer'); if (id === selectedId) return; if (validId(id)) void select(id, { history: false, fromMatch: event.state?.projectRoomOfferSource?.id === id && event.state.projectRoomOfferSource.fromMatch === true }); else closeDetail(false); });
 const matching = document.createElement('section'); matching.className = 'find-work'; matching.setAttribute('aria-labelledby', 'find-work-title');
 matching.innerHTML = `<h2 id="find-work-title">Find work for me</h2><form id="find-work-form"><label>Skills<input name="skills" placeholder="JavaScript, design" maxlength="2019"></label><label>Interests<input name="interests" placeholder="Accessibility, games" maxlength="2019"></label><label>Reward<select name="reward"><option value="volunteer">Unpaid · for fun or practice</option><option value="work_trade">Work trade</option><option value="cash">Cash</option></select></label><button class="primary" type="submit">Find work</button></form><p id="find-work-status" role="status"></p><ul id="find-work-results"></ul><button id="more-matches" class="text-button" type="button" hidden>Try next tasks</button>`;
 const offerDeepLink = validId(new URL(location.href).searchParams.get('offer'));

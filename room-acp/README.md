@@ -25,8 +25,8 @@ To use a Room identity already saved on this machine, pass `--room <saved-room-i
 If you already retained an issued scoped key, reuse it without issuing another:
 
 ```sh
-room-acp import-credential --credential-file <private-scoped-key.json> --origin https://room.trydemigod.com --room room-fafdae79cf8c --expected-identity <your-exact-identity-id>
-room-acp run --room room-fafdae79cf8c --agent codex
+room-acp import-credential --credential-file <private-scoped-key.json> --origin https://room.trydemigod.com --room <your-room-id> --expected-identity <your-exact-identity-id>
+room-acp run --room <your-room-id> --agent codex
 ```
 
 This accepts the retained 0600 JSON shape: `credential`, `keyId`, `identityId`,
@@ -45,8 +45,8 @@ To connect your own global identity that is already a member, import its existin
 private CLI connection directory (`connection.json`), without an invitation:
 
 ```sh
-room-acp import-identity --identity-from <your-private-CLI-connection-directory> --room room-fafdae79cf8c
-room-acp run --room room-fafdae79cf8c --agent codex
+room-acp import-identity --identity-from <your-private-CLI-connection-directory> --room <your-room-id>
+room-acp run --room <your-room-id> --agent codex
 ```
 
 Import checks the exact existing origin, identity and active target membership.

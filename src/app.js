@@ -2211,7 +2211,7 @@ function render() {
   };
   const dmConsentDetails = m => {
     if (!session || m.id === session.member.id || m.active === false) return "";
-    if (dmConsentRefreshFailed) return `<details class="dm-consent"><summary data-focus-key="member-dm:${esc(m.id)}">Direct messages</summary><div class="dm-consent-body"><p>Direct message settings could not be refreshed.</p><button type="button" class="text-button" data-retry-dm-consents>Retry</button></div></details>`;
+    if (dmConsentRefreshFailed) return "";
     const summary = dmConsentPeerSummary(dmConsents, state.members, session.member.id, m.id);
     const lines = dmConsentPairDescription(summary, m.displayName).map(line => `<p>${esc(line)}</p>`).join("");
     const actions = dmConsentActionsForPeer(summary).map(a => a.disabled
@@ -2250,7 +2250,8 @@ function render() {
   const presenceNote = connectionStale ? uiText("connection.stalePresenceNote") : presenceUnrefreshed ? "Availability could not refresh. Try again." : presenceStale ? "Availability needs refresh. Reports older than 60 seconds need another check." : "";
   const checked = presenceCheckedAt ? `${presenceStale ? "Last successful check" : "Last checked"}: ${time(new Date(presenceCheckedAt).toISOString())}` : "";
   const presenceRefresh = `<div class="presence-refresh"><button type="button" class="text-button" data-refresh-presence data-focus-key="refresh-presence">Refresh availability</button><span class="presence-check-note">${esc([presenceNote, checked].filter(Boolean).join(" "))}</span></div>`;
-  renderContent("#presence-list", `${presenceRefresh}${dmRequestInbox()}${people.length ? `<p class="presence-heading">People</p>${people.map(presenceRow).join("")}` : ""}${agents.length ? `<p class="presence-heading">Agents</p>${agents.map(presenceRow).join("")}` : ""}${removedAgentsHtml}`);
+  const dmRefreshNotice = dmConsentRefreshFailed ? `<div class="presence-refresh" role="status"><span>Direct message settings could not be refreshed.</span> <button type="button" class="text-button" data-retry-dm-consents data-focus-key="retry-dm-consents">Retry</button></div>` : "";
+  renderContent("#presence-list", `${presenceRefresh}${dmRefreshNotice}${dmRequestInbox()}${people.length ? `<p class="presence-heading">People</p>${people.map(presenceRow).join("")}` : ""}${agents.length ? `<p class="presence-heading">Agents</p>${agents.map(presenceRow).join("")}` : ""}${removedAgentsHtml}`);
   // JDOT-MEMBER-PERMS-UI begin
   memberPermissionsUI.sync();
   ownerAttentionCard.sync();
@@ -7629,7 +7630,7 @@ async function runDmConsentAction(action, peerId, button) {
     if (!dmConsentStale(seq, generation, room) || drained) {
       await refreshDmConsents();
       if (saved && generation === client.generation && state?.room?.id === room?.room?.id && dmConsentRefreshFailed)
-        notice("Change saved, but direct message settings could not refresh. Open Direct messages and choose Retry.", true);
+        notice("Change saved, but direct message settings could not refresh. Choose Retry in People.", true);
     }
   }
 }

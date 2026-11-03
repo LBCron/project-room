@@ -164,8 +164,8 @@ test("DM consent browser journey: request, approve, revoke, block, errors", { ti
   assert.equal(await consentSection(b.page, "alice").getByRole("button", { name: "Block", exact: true }).count(), 0);
   assert.equal(await consentSection(b.page, "alice").getByRole("button", { name: "Unblock", exact: true }).count(), 0);
   await b.page.unroute("**/dm-consents", failRefresh);
+  await b.page.locator("#presence-list").getByRole("button", { name: "Retry", exact: true }).click();
   await openConsentDetails(bobAlice2);
-  await bobAlice2.getByRole("button", { name: "Retry", exact: true }).click();
   await bobAlice2.getByRole("button", { name: "Unblock", exact: true }).waitFor();
   await a.page.reload();
   await a.page.locator("#main").waitFor({ state: "visible" });
@@ -193,7 +193,8 @@ test("DM consent browser journey: request, approve, revoke, block, errors", { ti
   await serverError.waitFor();
   assert.match(await serverError.textContent(), /boom/, "the 500's message is visible, not swallowed");
   await a.page.unroute("**/dm-consents");
-  await aliceBob4.getByRole("button", { name: "Retry", exact: true }).click();
+  await a.page.locator("#presence-list").getByRole("button", { name: "Retry", exact: true }).click();
+  await openConsentDetails(aliceBob4);
   await aliceBob4.getByRole("button", { name: "Request again", exact: true }).waitFor();
 
   // --- Reject path: Alice requests again, Bob rejects. ---

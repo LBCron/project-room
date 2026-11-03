@@ -136,6 +136,24 @@ session (one per claim). The reply is posted as a note on the claim, so it shows
 in the claim's thread on the Board. Only claims created by someone the bridge
 answers are run; other claim wakes (CI, review, lease) are acknowledged and skipped.
 
+## Authority reads
+
+The runtime checks only the room owner, its own membership, its explicitly
+configured human approver and actual stored request authors through
+`GET /api/rooms/{roomId}?view=authority&memberId=...`. It does not download the
+room snapshot or message history to refresh authority. Selection covers at most
+64 explicit IDs plus caller/owner and returns at most 128 KiB. Protected records
+are verified before selecting the needed fields. Unresolved IDs do not mean
+revocation or permission: dependent work remains queued while unrelated turns
+can continue. Inactive resolved requesters retain the existing deny/skip policy.
+
+Each concurrent turn keeps its own selection and rechecks before execution and
+delivery. The configured human is separately checked before forwarding host
+tool approval. This preserves existing Room and local operator policy; the read
+is neither a durable grant nor an atomic lock across external tool execution.
+A server without the versioned view stops this runtime explicitly, rather than
+silently falling back to the full room snapshot. Upgrade the server first.
+
 ## Who it answers
 
 The bridge answers active room members by default, subject to the Room's server-side talk policy. New invite-code and share-link agents default to their Room sponsor, agents with that sponsor, and the room owner. For agents with different Room sponsors, allow the collaborating agents in each recipient's talk policy. `--respond-to owner` can narrow the bridge locally.

@@ -344,6 +344,7 @@ optional.push("src/session-expiry.js"); // Session-expiry locale rendering (impo
 optional.push("src/agent-invite-ui.js"); // People-rail invite-code mint (collaborate/contribute)
 optional.push("src/board-ui.js", "src/board-keyboard.mjs", "src/board-mine.js", "src/first-room-copy.js", "src/board.css"); // Tasks › Board (imported by src/app.js)
 optional.push("server/room-export-html.mjs");
+optional.push("server/room-authority-view.mjs"); // Selected runtime authority without conversation history.
 optional.push("server/room-export.mjs", "cloudflare/room-backup.mjs");
 optional.push("cloudflare/sql-cost-scope.mjs"); // optional bounded SQL diagnostic scopes
 optional.push("server/restore-ndjson.mjs"); // whole-store NDJSON restore (imported by cloudflare/room.mjs)

@@ -206,3 +206,56 @@ export function alertLeaseRefusal(store, roomId, { claimId, callerId, conflict }
   }
   return sent;
 }
+
+// Concurrent-change notice. A clean textual merge does not mean the other
+// live work still fits: nearly half of agent merge conflicts hit PRs with no
+// shared files (MergeGym, arXiv 2610.04779), and telling an agent what the
+// concurrent change was recovered most semantic breakages (arXiv 2609.25396).
+// When a claim's pull request merges, every other live claim in the same
+// repository is told what landed, which of its paths overlap, and to rebase
+// and re-run its tests. Same flag and post path as collision alerts; advisory
+// only, never a lease change. Pure selector first so it is testable alone.
+export function concurrentMergeTargets(claims, merged) {
+  if (!merged?.id || typeof merged.repo !== "string" || !merged.repo) return Object.freeze([]);
+  const mergedSlots = slotsOf(merged);
+  const targets = [];
+  for (const claim of liveClaims(claims)) {
+    if (claim.id === merged.id || claim.repo !== merged.repo) continue;
+    if (merged.owner && claim.owner === merged.owner && claim.branch && claim.branch === merged.branch) continue;
+    const overlap = [];
+    for (const a of slotsOf(claim)) for (const b of mergedSlots) {
+      if (slotsOverlap(a, b) && !overlap.includes(a.path)) overlap.push(a.path);
+    }
+    targets.push(Object.freeze({ claimId: claim.id, owner: claim.owner, overlap: Object.freeze(overlap) }));
+  }
+  targets.sort((a, b) => (a.claimId < b.claimId ? -1 : 1));
+  return Object.freeze(targets);
+}
+
+export function notifyConcurrentMerge(store, roomId, merged, { url, mergedSha } = {}) {
+  if (!collisionAlertsEnabled(store, roomId)) return [];
+  if (!store?.room || !store?.workClaims?.list || typeof url !== "string" || !url) return [];
+  let claims = [];
+  try { claims = store.workClaims.list(roomId); } catch { return []; }
+  let members = {};
+  try { members = store.room(roomId)?.state?.members ?? {}; } catch { return []; }
+  const sent = [];
+  const paths = slotsOf(merged).map(slot => slot.path);
+  const sha = typeof mergedSha === "string" && /^[0-9a-f]{7,40}$/.test(mergedSha) ? ` at ${mergedSha.slice(0, 12)}` : "";
+  for (const target of concurrentMergeTargets(claims, merged)) {
+    if (members?.[target.owner]?.kind !== "agent") continue;
+    const touched = paths.length ? `It changed ${paths.slice(0, 8).map(plain).join(", ")}${paths.length > 8 ? ` and ${paths.length - 8} more` : ""}.` : "Its changed files are not on the claim.";
+    const overlapText = target.overlap.length
+      ? `Overlap with your claim: ${target.overlap.slice(0, 8).map(plain).join(", ")}.`
+      : "No shared paths, but merges between disjoint PRs can still conflict or break callers.";
+    const body = `${memberName(members, target.owner)} (${plain(target.claimId)}): ${plain(url)} merged${sha} from ${plain(merged.id)}. ${touched} ${overlapText} Rebase onto the new base and re-run your tests before handing off.`;
+    const material = `${roomId}\0merged\0${merged.id}\0${url}\0${target.claimId}`;
+    try {
+      postAlert(store, roomId, { material, body, memberIds: [target.owner], members });
+      sent.push(material);
+    } catch (error) {
+      console.error("concurrent merge notice failed:", error?.message ?? error);
+    }
+  }
+  return sent;
+}

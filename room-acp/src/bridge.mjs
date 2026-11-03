@@ -404,12 +404,6 @@ export class Bridge {
 
   async pollOnce() {
     if (!(await this.lease())) { await sleep(5000, this.controller.signal); return; }
-    // The Room allows 30 polls a minute per identity; stay under it even
-    // when wakes arrive back to back.
-    const gap = this.lastPollAt + this.minPollIntervalMs - Date.now();
-    if (gap > 0) await sleep(gap, this.controller.signal);
-    if (this.controller.signal.aborted) return;
-    this.lastPollAt = Date.now();
     // Drain every queued page in this cycle: signals on later pages are
     // just as queued as the first page's, and a first-page signal that
     // cannot ack yet (a long turn, a parked receipt) must not hide them.
@@ -419,6 +413,14 @@ export class Bridge {
     let cursor = this.wakeCursor, refreshed = false;
     for (let page = 0; page < MAX_POLL_PAGES; page++) {
       if (this.controller.signal.aborted) return;
+      // Every page is an HTTP poll and counts toward the identity's 30/min
+      // limit. Pace continuation pages too, without losing their cursor.
+      const gap = this.lastPollAt + this.minPollIntervalMs - Date.now();
+      if (gap > 0) await sleep(gap, this.controller.signal);
+      if (this.controller.signal.aborted) return;
+      // A multi-page traversal may outlast a lease renewal interval.
+      if (page > 0 && !(await this.lease())) return;
+      this.lastPollAt = Date.now();
       const value = await this.room.poll({ hostId: this.connection.hostId, waitMs: page === 0 && cursor === null ? this.waitMs : 0, signal: this.controller.signal, cursor });
       const wakes = value?.pendingWakes ?? [];
       if (wakes.length && !refreshed) { await this.refreshRoom(); refreshed = true; }

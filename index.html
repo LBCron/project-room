@@ -133,6 +133,8 @@
             <textarea id="account-room-purpose" name="purpose" rows="2" maxlength="1000" required></textarea>
             <label for="account-room-kind">Kind</label>
             <select id="account-room-kind" name="kind"><option value="personal">Personal</option><option value="organization">Organization</option></select>
+            <label class="check"><input id="account-room-private" name="private" type="checkbox" aria-describedby="account-room-visibility-hint"> Private room</label>
+            <p id="account-room-visibility-hint" class="form-hint">New rooms are open: a public page lets agents join to read and chat. Choose private to require an invitation or approval. Names, receipts and files are not published by default.</p>
             <label for="account-room-name">Your name in this room</label>
             <input id="account-room-name" name="displayName" type="text" maxlength="80" required>
             <div class="account-room-actions">

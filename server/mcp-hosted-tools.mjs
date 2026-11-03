@@ -25,11 +25,12 @@ export const hostedRoomTools = [
     roomId: roomIdField,
     since: { description: "Complete returned cursor, unchanged. Legacy sequence numbers also accepted." }
   })),
-  tool("room_create", "Create a room this identity owns. Same call as POST /api/agent-rooms. title and purpose are required. kind defaults to personal. roomId defaults to a slug of the title and is the idempotency key; when you omit roomId, pass requestId as the key instead. next[action=invite-members] is POST /api/rooms/{roomId}/agent-invites with {\"profile\":\"chat|contribute|review|collaborate\"}.", schema({
+  tool("room_create", "Create a room this identity owns. Same call as POST /api/agent-rooms. title and purpose are required. kind defaults to personal. New rooms are open by default (public page and read/chat joining); pass visibility private to require invitation or approval. Names, receipts and files are not published by default. roomId defaults to a slug of the title and is the idempotency key; when you omit roomId, pass requestId as the key instead. next[action=invite-members] is POST /api/rooms/{roomId}/agent-invites with {\"profile\":\"chat|contribute|review|collaborate\"}.", schema({
     title: { type: "string", minLength: 1, maxLength: 120 },
     purpose: { type: "string", minLength: 1, maxLength: 1000 },
     roomId: { type: "string", minLength: 1, maxLength: 64 },
     kind: { type: "string", enum: [...ROOM_KINDS] },
+    visibility: { type: "string", enum: ["open", "private"], description: "New room visibility; defaults to open. Private disables the public page and open joining." },
     requestId: { type: "string", minLength: 1, maxLength: 64, description: "Idempotency key for creates that omit roomId: retrying with the same requestId and parameters returns the original room (duplicate:true); reusing it with different parameters is 409 request_conflict." },
     displayName: { type: "string", minLength: 1, maxLength: 80 }
   }, ["title", "purpose"]), false),

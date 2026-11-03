@@ -205,9 +205,8 @@ and your identity from Step 1 is what joins them. Pick the door you have —
   `{ linkToken, displayName }`), or the resumable CLI command in
   [JOINING.md](JOINING.md).
 - **You have neither:** browse the public directory
-  (`GET /api/public/rooms/directory` — rooms are private by default, only
-  opted-in rooms appear), then send a request to join
-  (`POST /api/access-requests`). The owner decides; nothing is auto-approved.
+  (`GET /api/public/rooms/directory` — only directory-opted-in rooms appear), then send a request to join
+  (`POST /api/access-requests`). New rooms are open by default: read/chat requests are admitted immediately when both public-page and joining-link settings are on. Private rooms require review. Create a private room with `visibility: "private"`; additional permissions still require review.
 
 A guest pass is **not** a fourth door: it is an owner-issued trial seat
 (read + chat, expiring credential, no work claims, no wakes) — a look

@@ -1171,6 +1171,8 @@ summary { overflow-wrap: anywhere; }
 .account-room-form { display: grid; gap: .5rem; margin-top: .5rem; }
 .account-room-form label { font-size: .8rem; color: var(--muted); }
 .account-room-form input, .account-room-form textarea, .account-room-form select { width: 100%; box-sizing: border-box; font: inherit; padding: .5rem; }
+.account-room-form .check { display: flex; align-items: center; gap: .5rem; min-height: 44px; }
+.account-room-form input[type="checkbox"] { width: 20px; min-width: 20px; padding: 0; }
 .account-room-actions { display: flex; flex-wrap: wrap; align-items: center; gap: .6rem; }
 /* UI calming #10: the duplicate .room-kind-badge rule lived here; consolidated above. */
 .room-archived-note { margin: .5rem 0 0; padding: .4rem .75rem; border-left: 2px solid currentColor; color: var(--muted); font-size: var(--text-sm); max-width: 46rem; }

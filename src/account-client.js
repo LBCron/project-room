@@ -186,6 +186,12 @@ export class AccountClient {
     if (!value?.authenticated || !sameAccountSession(value, session)) { this.invalidate(generation, session); return false; }
     return true; // Keep object identity and generation: Room and Inbox own these.
   }
+  createRoom(data, { session = this.currentSession("creating a room", { authenticated: true }) } = {}) {
+    return this.request("/api/account-rooms", { method: "POST", data, session });
+  }
+  createRoomFromTemplate(data, { session = this.currentSession("creating a room", { authenticated: true }) } = {}) {
+    return this.request("/api/account-rooms/from-template", { method: "POST", data, session });
+  }
   async rooms(after = null) {
     const session = this.currentSession("listing rooms", { authenticated: true }), generation = this.generation;
     let value;

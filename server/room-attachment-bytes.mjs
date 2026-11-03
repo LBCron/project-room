@@ -1,4 +1,4 @@
-import {isCurrentRoom,withCurrentReadContext,readCurrentMessage,readCurrentHead,readCurrentHistoryFloor,chargeCurrentReadBudget,withCurrentServingWriter} from './current-room-repository.mjs';
+import {isCurrentRoom,withCurrentReadContext,readCurrentMessage,currentMessageMayBeVisible,readCurrentHead,readCurrentHistoryFloor,chargeCurrentReadBudget,withCurrentServingWriter} from './current-room-repository.mjs';
 import {conversationCursorCodec} from './conversation-sync.mjs';
 import {messageInHistory} from './history-visibility.mjs';
 import { messageRepository } from "./message-repository.mjs";
@@ -228,7 +228,7 @@ export class RoomAttachmentBytes {
     const ids=[...messageIds].sort();
     return this.store.transaction(()=>withCurrentReadContext(this.db,roomId,b=>{
       const auth=this.store.authenticate(token,roomId),head=readCurrentHead(this.db,roomId),floor=readCurrentHistoryFloor(this.db,roomId,auth.member.id);
-      for(const id of ids){const source=readCurrentMessage(this.db,roomId,id),m=source?.value;
+      for(const id of ids){if(!currentMessageMayBeVisible(this.db,roomId,id,auth.member.id,undefined,floor))fail(404,'attachment_not_found','Attachment selection not found');const source=readCurrentMessage(this.db,roomId,id),m=source?.value;
         if(!m||!messageInHistory(m,floor)||(m.toMemberId&&m.authorId!==auth.member.id&&m.toMemberId!==auth.member.id))fail(404,'attachment_not_found','Attachment selection not found');}
       const codec=conversationCursorCodec(this.store),scope=createHash('sha256').update(JSON.stringify([roomId,auth.member.id,token,head.head_sha256,ids])).digest('hex');
       let after=['',''];if(cursor!==null){const decoded=codec.decode(cursor);if(decoded?.scope!==scope||!Array.isArray(decoded.after)||decoded.after.length!==2||decoded.after.some(v=>typeof v!=='string'))fail(409,'attachment_cursor_reset','Files changed or the server restarted; refresh this selection');after=decoded.after;}
@@ -268,6 +268,10 @@ export class RoomAttachmentBytes {
       const messages=current?{get:messageId=>{
         if(!selected.has(messageId)){
           if(selected.size)fail(409,'attachment_metadata_unavailable','Attachment binding changed');
+          if(!currentMessageMayBeVisible(this.db,roomId,messageId,auth.member.id,undefined,readCurrentHistoryFloor(this.db,roomId,auth.member.id))){
+            if(this.db.prepare('SELECT 1 FROM messages WHERE room_id=? AND message_id=?').get(roomId,messageId))fail(404,'attachment_not_found','Attachment not found');
+            selected.set(messageId,undefined);return undefined;
+          }
           selected.set(messageId,readCurrentMessage(this.db,roomId,messageId)?.value);
         }
         return selected.get(messageId);

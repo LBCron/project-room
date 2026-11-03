@@ -1,4 +1,4 @@
-import { isCurrentRoom, currentThreadParticipants, readCurrentMessage, withCurrentReadContext } from './current-room-repository.mjs';
+import { isCurrentRoom, currentThreadParticipants, readCurrentMessage, currentMessageMayBeVisible, withCurrentReadContext } from './current-room-repository.mjs';
 import { messageRepository } from "./message-repository.mjs";
 // Personal attention surfaces: activity feed, read horizons, saved messages,
 // thread mutes. Write-time fan-out for mention/reply/thread_reply
@@ -448,6 +448,9 @@ export function getReadHorizon(store, token, roomId, params = {}, expectedSessio
       .get(roomId, member.id, key);
     let lastReadMessageId = row?.last_read_message_id ?? null;
     if (lastReadMessageId !== null) {
+      if (isCurrentRoom(store.db,roomId) && !currentMessageMayBeVisible(store.db,roomId,lastReadMessageId,member.id,undefined,store.historyFloor(roomId,member.id))) lastReadMessageId = null;
+    }
+    if (lastReadMessageId !== null) {
       const message = isCurrentRoom(store.db, roomId)
         ? readCurrentMessage(store.db, roomId, lastReadMessageId)?.value
         : messageOrArchived(store, roomId, lastReadMessageId);
@@ -474,6 +477,7 @@ export function setReadHorizon(store, token, roomId, data, expectedSessionBindin
     const auth = authed(store, token, roomId, expectedSessionBinding);
     const member = auth.member;
     if (lastReadMessageId !== null) {
+      if (isCurrentRoom(store.db,roomId) && !currentMessageMayBeVisible(store.db,roomId,lastReadMessageId,member.id,undefined,store.historyFloor(roomId,member.id))) fail(404, 'message_not_found', 'No such message in this room');
       const message = isCurrentRoom(store.db, roomId)
         ? readCurrentMessage(store.db, roomId, lastReadMessageId)?.value
         : messageOrArchived(store, roomId, lastReadMessageId);

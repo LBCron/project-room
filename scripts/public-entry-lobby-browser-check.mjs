@@ -30,5 +30,6 @@ for(const width of [390,1280])for(const theme of ['dark','light'])test('public e
  assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth),true);
  const a11y=await new AxeBuilder({page}).withTags(['wcag2a','wcag2aa','wcag21aa']).analyze();assert.deepEqual(a11y.violations.map(v=>v.id),[]);
  mkdirSync('/tmp/pr-public-entry-1102',{recursive:true});await page.screenshot({path:'/tmp/pr-public-entry-1102/watch-'+width+'-'+theme+'.png',fullPage:true});
- await page.getByRole('link',{name:'Connect an agent',exact:true}).focus();await page.keyboard.press('Enter');await page.waitForURL('**/join?room=project-room-lobby');assert.equal(errors.length,0,errors.join(' | '));
+ await page.getByRole('link',{name:'Connect an agent',exact:true}).focus();await page.keyboard.press('Enter');await page.waitForURL('**/docs/agents/paste?room=project-room-lobby');await page.getByRole('heading',{name:'Connect to the public lobby'}).waitFor();
+ assert.match(await page.locator('#agent-paste-prompt-1').inputValue(),/join project-room-lobby rather than switching to another saved project/);await page.locator('[data-copy-prompt="agent-paste-prompt-1"]').waitFor({state:'visible'});assert.equal(errors.length,0,errors.join(' | '));
 });

@@ -1,0 +1,57 @@
+{
+  "base": "1bd20f2241bf298dee46f62a71bae93756f92144",
+  "adopted": {
+    "5724": "23e0d54c7df8211fd33d07e23379ea52a5644040",
+    "5725": "681b30dd7356653d5cc928cd09bc9cb336141874",
+    "5726": "a79865937b0e003278670220dca798bf8661eded"
+  },
+  "tests": {
+    "focusedNode": 63,
+    "guardNode": 39,
+    "nativeWorkers": 4,
+    "browser": 4
+  },
+  "nativeCost": {
+    "privateMessages": [
+      1000,
+      5000
+    ],
+    "rowsRead": [
+      463,
+      461
+    ],
+    "returnedSqlBytes": [
+      137051,
+      138386
+    ]
+  },
+  "independentPeer": {
+    "previousPin": "e57cfff755e0afa67fcf10abd103e2bcc3b5bad4",
+    "browserAndPublicEndpointTests": 7,
+    "openRoomInviteTests": 17,
+    "scriptedFakeAgentE2ESteps": 6,
+    "finding": "Watch CTA led to human join form; corrected to contextual agent instructions and browser assertion"
+  },
+  "privacy": [
+    "new dedicated lobby initially private",
+    "owner must enable viewer separately",
+    "published room page required for official Watch",
+    "only live General messages",
+    "DMs and other channels excluded",
+    "rotate/disable/archive/takedown respected",
+    "no existing room/history publication"
+  ],
+  "limitations": [
+    "no real second human host enrollment proved",
+    "no automatic idle chat wake proved",
+    "two prior Room notes browser cases pending current UI reconciliation"
+  ],
+  "sources": {
+    "server/current-public-face.mjs": "62d953a1be8e72598ed77dbf2c2a2619dfe949862033013c9b9d2a3f35531201",
+    "server/public-face.mjs": "42962d714b997b1d22d1162cd806cfd4cd244c1bb49384e2b84c24c745982125",
+    "server/routes/public-lobby.mjs": "eb7066884b0e020ce33df484355a4848964b6ca4c17b354dbb3e0a1fd57a8938",
+    "server/agent-paste-copy.mjs": "ff670ac45af2a1b5db0a26aa6cc97d8a1a9db834e57b48085138539f02254985",
+    "index.html": "029212323e1875a28317488ad4ce0f4e45530c03459756584e5661b297b2c49a",
+    "scripts/public-entry-lobby-browser-check.mjs": "d5f01805062f17b616c870f3a03699c60781947eeedc3fa580f8939d1a28c193"
+  }
+}

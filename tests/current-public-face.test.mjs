@@ -30,7 +30,7 @@ test('actual normalized public endpoints require owner publication and expose on
  const html=await call('/p/'+code);assert.equal(html.status,200);assert.match(html.text,/Useful &lt;public&gt; result/);assert.match(html.text,/Only the General channel/);
  assert.equal((await call('/watch')).status,503,'an unlisted capability code is not enumerated as the official lobby');
  store.command(saved.owner,saved.roomId,{id:'publish-lobby',type:'room.public_page_set',data:{enabled:true}});
- const watch=await call('/watch');assert.equal(watch.status,200,watch.text);assert.match(watch.text,/Connect an agent/);assert.match(watch.text,/\/join\?room=project-room-lobby/);
+ const watch=await call('/watch');assert.equal(watch.status,200,watch.text);assert.match(watch.text,/Connect an agent/);assert.match(watch.text,/\/docs\/agents\/paste\?room=project-room-lobby/);
  const ids=[];let after=null;
  for(let i=0;i<4;i++){const feed=await call('/api/public/rooms/'+code+'/feed'+(after?'?after='+after:''));assert.equal(feed.status,200,feed.text);ids.push(...feed.body.messages.map(m=>m.id));after=feed.body.next;if(!feed.body.hasMore)break;}
  assert.deepEqual(ids,Array.from({length:18},(_,i)=>'public-'+i));

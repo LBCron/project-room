@@ -26,3 +26,9 @@ node node_modules/eslint/bin/eslint.js server/current-native-inbox.mjs tests/cur
 ```
 
 Hashed compressed causal/final logs and detailed per-call counters: `audit/evidence/inbox-catch-up-v2-20261103/receipt.json`. Formal work/request coverage remains independent and explicitly incomplete; conversation completion is not global attention completion.
+
+## Follow-up: corrupt optional tail must not poison verified delivery
+
+Root's independent counterexample reproduced on `ac3012608`: a valid addressed DM in the original four-source page was withheld when the optional fifth-source witness failed integrity verification. Baseline delivered the DM before encountering the error on its next page. Runtime correction `7fee39b7f` stops the optional per-source classifier on its existing integrity/bounded-input errors, retaining only earlier fully verified skips. It does not catch baseline errors or mark the source complete. The unconsumed corrupt row is verified normally on the next call and raises the exact original error.
+
+The regression tests both first-optional-row corruption and corruption after two valid skips, asserting exact DM delivery, frontier, incomplete cursor and identical next-page integrity error. Before: 0/1. After: 29/29 focused Node tests, Native existing check 1/1, changed-file lint and diff secret scan clean. Native rerun qualifies unchanged healthy/cold/cost behavior; the new deliberate corrupt-tail controls are Node SQLite tests, not a new Worker corruption claim. Logs/hashes are in `later-corrupt-receipt.json` alongside the original receipt. No additional schema, routing, grants or reader changes.

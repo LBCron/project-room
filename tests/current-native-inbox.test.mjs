@@ -8,7 +8,7 @@ function fixture(t){const s=new RoomStore(':memory:');t.after(()=>s.close());con
  s.initialize(events,{representation:'normalized-current-v1'});const key=s.issueAccessKey('commons','worker');s.room=()=>{throw Error('whole-room hydration');};s.collab.listAssignments=()=>{throw Error('legacy assignment scan');};s.workClaims.inboxCandidates=()=>{throw Error('legacy board scan');};return{s,key,events};}
 test('native inbox traverses excluded windows and preserves independent work/request continuation',t=>{const{s,key}=fixture(t);let after=0,emptyMore=false;const messages=[],replies=[];let last;
  for(let i=0;i<50;i++){const page=s.agentInbox(key,'commons',{limit:200,after});last=page;assert.equal(page.coverage.mode,'native_bounded');assert.equal(page.coverage.globalAttentionComplete,false);emptyMore ||= !page.directMessages.length&&!page.replies.length&&page.cursor.hasMore;assert.ok(page.cursor.after>=after);assert.ok(page.coverage.conversation.examined<=16);assert.equal(JSON.stringify(page).includes('HIDDEN-'),false);messages.push(...page.directMessages);replies.push(...page.replies);if(!page.cursor.hasMore)break;assert.ok(page.cursor.after>after);after=page.cursor.after;}
- assert.equal(emptyMore,false);assert.deepEqual(replies.map(x=>x.messageId),['answer']);assert.equal(replies[0].body,'CURRENT-ANSWER');assert.deepEqual(messages.map(x=>x.messageId),['dm','request']);assert.equal(last.attention.acknowledges,false);assert.equal(last.coverage.work.complete,false);assert.ok(last.coverage.work.nextRead);let work=s.currentWorkListing(key,'commons',{focus:'needs_me',limit:4});const tasks=[],requests=[];for(let i=0;i<20;i++){tasks.push(...work.work);requests.push(...work.replyRequests);if(!work.page.nextRead)break;work=s.currentWorkListing(key,'commons',work.page.nextRead.arguments);}assert.deepEqual(tasks.map(x=>x.id),['task-9']);assert.deepEqual(requests.map(x=>x.id),['request']);
+ assert.ok(emptyMore);assert.deepEqual(replies.map(x=>x.messageId),['answer']);assert.equal(replies[0].body,'CURRENT-ANSWER');assert.deepEqual(messages.map(x=>x.messageId),['dm','request']);assert.equal(last.attention.acknowledges,false);assert.equal(last.coverage.work.complete,false);assert.ok(last.coverage.work.nextRead);let work=s.currentWorkListing(key,'commons',{focus:'needs_me',limit:4});const tasks=[],requests=[];for(let i=0;i<20;i++){tasks.push(...work.work);requests.push(...work.replyRequests);if(!work.page.nextRead)break;work=s.currentWorkListing(key,'commons',work.page.nextRead.arguments);}assert.deepEqual(tasks.map(x=>x.id),['task-9']);assert.deepEqual(requests.map(x=>x.id),['request']);
 });
 import {createHostedRoomMcp}from'../server/mcp-room-profile.mjs';import{createRoomServer}from'../server/http.mjs';import{RoomAgentClient}from'../client/room-agent.mjs';import{serveRoomMcp,MCP_VERSION}from'../client/mcp-stdio.mjs';import{PassThrough}from'node:stream';
 test('native inbox uses the same bounded contract through hosted MCP, SDK HTTP and stdio',async t=>{
@@ -51,13 +51,16 @@ test('catch-up with nothing addressed advances a bounded window and never claims
  const{s,key,after}=seeded(t,add=>{for(let i=0;i<100;i++)add('message.posted',{messageId:'quiet-'+i,body:'Quiet '+i});});
  const first=s.agentInbox(key,'commons',{limit:20,after});
  assert.equal(first.directMentions.length+first.directMessages.length+first.replies.length,0);
- assert.equal(first.cursor.hasMore,true);assert.equal(first.cursor.after,after+64);
- const second=s.agentInbox(key,'commons',{limit:20,after:first.cursor.after});
- assert.equal(second.cursor.hasMore,false);assert.equal(second.cursor.after,s.headSequence('commons'));
+ assert.equal(first.cursor.hasMore,true);assert.ok(first.cursor.after>after);
+ let page=first,calls=1;
+ while(page.cursor.hasMore&&calls<20){const previous=page.cursor.after;page=s.agentInbox(key,'commons',{limit:20,after:previous});calls++;assert.ok(page.cursor.after>previous);assert.equal(page.directMentions.length+page.directMessages.length+page.replies.length,0);assert.ok(page.coverage.conversation.skippedUnaddressed<=64);}
+ assert.equal(page.cursor.hasMore,false);assert.equal(page.cursor.after,s.headSequence('commons'));t.diagnostic('empty catch-up calls: '+calls);
 });
-test('catch-up reaches a mention behind unrelated traffic on the first page',t=>{
+test('catch-up reaches a mention behind unrelated traffic through honest bounded continuation',t=>{
  const{s,key,after}=seeded(t,add=>{for(let i=0;i<40;i++)add('message.posted',{messageId:'noise-'+i,body:'Unrelated '+i});});
  s.command(s.issueAccessKey('commons','owner'),'commons',{id:'ping',type:'message.posted',data:{messageId:'ping',body:'@worker please look'}});
  const first=s.agentInbox(key,'commons',{limit:20,after});
- assert.deepEqual(first.directMentions.map(x=>x.messageId),['ping']);assert.equal(JSON.stringify(first).includes('Unrelated'),false);
+ let page=first,calls=1;const ids=page.directMentions.map(x=>x.messageId);
+ while(page.cursor.hasMore&&calls<10){const previous=page.cursor.after;page=s.agentInbox(key,'commons',{limit:20,after:previous});calls++;assert.ok(page.cursor.after>previous);ids.push(...page.directMentions.map(x=>x.messageId));}
+ assert.equal(page.cursor.hasMore,false);assert.deepEqual(ids,['ping']);assert.equal(JSON.stringify(first).includes('Unrelated'),false);t.diagnostic('late mention catch-up calls: '+calls);
 });

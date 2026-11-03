@@ -1,16 +1,16 @@
 import {readCurrentEventEnvelope} from './current-event-envelope.mjs';
 import {inboxNext} from './inbox-next.mjs';
 import {readCurrentInboxDiscovery} from './current-inbox-discovery.mjs';
-import {withCurrentReadContext,readCurrentHead,readCurrentMessage,readCurrentRecord,chargeCurrentReadBudget,currentConversationRows} from './current-room-repository.mjs';
+import {withCurrentReadContext,readCurrentHead,readCurrentMessage,readCurrentRecord,chargeCurrentReadBudget,remainingCurrentReadBytes,currentConversationRows} from './current-room-repository.mjs';
 import {conversationCursorCodec} from './conversation-sync.mjs';
 import {ServiceError} from './service-error.mjs';
-import {readCurrentEventWindow,validateCurrentEventSelection,CURRENT_EVENT_SOURCE_BYTES} from './current-room-events.mjs';
+import {readCurrentEventWindow,CURRENT_EVENT_SOURCE_BYTES} from './current-room-events.mjs';
 import {effectiveMentionState} from './mention-lifecycle.mjs';
 import {stampInbox} from './content-trust.mjs';
-// Bounded, fail-open skip-ahead. An event is skipped only when trusted
+// Bounded, conservative skip-ahead. An event is skipped only when trusted
 // sources positively show catch-up would never surface it to this viewer:
 // - not message.posted (catch-up returns only message.posted), from the event log;
-// - the viewer's own message, from the event log actor;
+// - the viewer's own message, with matching protected witness routing;
 // - otherwise not a DM to the viewer, not mentioning the viewer, and not a reply
 //   to the viewer, where recipient, author and parent come from the event log AND
 //   must equal the protected messageWitness header (parent author from the
@@ -20,25 +20,69 @@ import {stampInbox} from './content-trust.mjs';
 // at that event, which then goes through the normal verified read.
 const SKIP_WINDOW=64,SKIP_EVENT_BYTES=4096;
 function firstAddressedSequence(db,roomId,memberId,after,headSequence,b){
- const small=key=>`CASE WHEN length(CAST(body AS BLOB))<=${SKIP_EVENT_BYTES} THEN json_extract(body,'${key}') END`;
- const rows=db.prepare(`SELECT sequence,id,length(CAST(body AS BLOB)) AS bytes,${small('$.type')} AS type,${small('$.actorId')} AS actorId,${small('$.data.messageId')} AS messageId,${small('$.data.toMemberId')} AS toMemberId,${small('$.data.replyToId')} AS replyToId
-   FROM events WHERE room_id=? AND sequence>? AND sequence<=? ORDER BY sequence LIMIT ?`).all(roomId,after,headSequence,SKIP_WINDOW);
- chargeCurrentReadBudget(b,rows.reduce((n,row)=>n+Math.min(row.bytes??0,SKIP_EVENT_BYTES)+64,0),1);
- const mention=db.prepare('SELECT 1 FROM mention_states WHERE room_id=? AND message_event_id=? AND mentioned_member_id=? LIMIT 1');
- const header=id=>typeof id==='string'&&id?readCurrentRecord(db,roomId,'messageWitness',id,b)?.header:undefined;
- const stop=row=>({found:true,after:row.sequence-1,skipped:row.sequence-1-after});
+ const records=()=>Math.max(0,(b.maxRecords??200)-b.records);
+ // Only bounded numeric scalars cross this first boundary. Never fetch raw
+ // event IDs or route strings before their size has been admitted.
+ const count=Math.min(SKIP_WINDOW,records(),Math.floor(remainingCurrentReadBytes(b)/64));
+ if(!count)return {after,skipped:0};
+ const rows=db.prepare(`SELECT sequence,length(CAST(id AS BLOB)) AS idBytes,length(CAST(body AS BLOB)) AS bodyBytes,
+   CASE WHEN length(CAST(body AS BLOB)) BETWEEN 2 AND ${SKIP_EVENT_BYTES} AND json_valid(body)
+    THEN length(CAST(CASE WHEN json_extract(body,'$.type') IN ('message.posted','message.edited')
+      THEN json_set(body,'$.data.body',NULL) ELSE body END AS BLOB)) END AS envelopeBytes
+   FROM events WHERE room_id=? AND sequence>? AND sequence<=? ORDER BY sequence LIMIT ?`).all(roomId,after,headSequence,count);
+ chargeCurrentReadBudget(b,rows.length*64,rows.length);
+ const fields=['message_id','seq','channel_id','thread_root_id','reply_to_id','to_member_id','work_item_id','author_id','created_at','deleted_at'];
+ const cache=new Map();
+ const header=id=>{
+  if(typeof id!=='string'||!id||Buffer.byteLength(id)>200)return undefined;
+  if(cache.has(id))return cache.get(id);
+  if(records()<1||remainingCurrentReadBytes(b)<64)return undefined;
+  const size=db.prepare(`SELECT length(CAST(r.payload AS BLOB)) AS payloadBytes,
+    length(CAST(a.counts_json AS BLOB)) AS receiptBytes
+    FROM current_room_record_proofs p LEFT JOIN current_room_records r
+      ON r.room_id=p.room_id AND r.domain=p.domain AND r.record_key=p.record_key
+    LEFT JOIN operator_actions a ON a.id=p.receipt_id AND a.action='current_room_transition'
+    WHERE p.room_id=? AND p.domain='messageWitness' AND p.record_key=?`).get(roomId,id);
+  chargeCurrentReadBudget(b,64);
+  // readCurrentRecord charges1024+payload and at most one full uncached
+  // receipt+256. Reserve that exact upper bound, sharing its real cache/budget.
+  if(!size||!Number.isSafeInteger(size.payloadBytes)||size.payloadBytes<1||size.payloadBytes>131072
+    ||!Number.isSafeInteger(size.receiptBytes)||size.receiptBytes<1||size.receiptBytes>131072
+    ||records()<4||remainingCurrentReadBytes(b)<1024+size.payloadBytes+size.receiptBytes+256)return undefined;
+  const witness=readCurrentRecord(db,roomId,'messageWitness',id,b),value=witness?.header;
+  if(!value||Object.keys(value).sort().join(',')!==[...fields].sort().join(','))return undefined;
+  if(records()<1||remainingCurrentReadBytes(b)<64)return undefined;
+  const scalar=db.prepare(`SELECT ${[...fields,'entity_hash'].map(key=>`coalesce(length(CAST(${key} AS BLOB)),0)`).join('+')} AS bytes FROM messages WHERE room_id=? AND message_id=?`).get(roomId,id);
+  chargeCurrentReadBudget(b,64);
+  if(!scalar||scalar.bytes>SKIP_EVENT_BYTES||records()<1||remainingCurrentReadBytes(b)<scalar.bytes+64)return undefined;
+  const row=db.prepare(`SELECT ${fields.join(',')},entity_hash FROM messages WHERE room_id=? AND message_id=?`).get(roomId,id);
+  chargeCurrentReadBudget(b,scalar.bytes+64);
+  // Projection scalars can deny a skip, never authorize one on their own.
+  // Routing corruption therefore falls back to the full proof reader.
+  if(witness.sequence!==row.seq||witness.entityHash!==row.entity_hash||fields.some(key=>value[key]!==row[key]))return undefined;
+  cache.set(id,value);return value;
+ };
+ let last=after;
  for(const row of rows){
-  if(!(row.bytes<=SKIP_EVENT_BYTES)||typeof row.type!=='string')return stop(row);
-  if(row.type!=='message.posted')continue;
-  if(typeof row.actorId!=='string')return stop(row);
-  if(row.actorId===memberId)continue;
-  if(row.toMemberId===memberId||mention.get(roomId,row.id,memberId))return stop(row);
-  const own=header(row.messageId??row.id);
-  if(!own||own.author_id!==row.actorId||own.to_member_id!==(row.toMemberId??null)||own.reply_to_id!==(row.replyToId??null)||own.seq!==row.sequence)return stop(row);
-  if(own.reply_to_id!==null){const parent=header(own.reply_to_id);if(!parent||parent.author_id===memberId)return stop(row);}
+  if(!Number.isSafeInteger(row.idBytes)||row.idBytes<1||row.idBytes>512
+    ||!Number.isSafeInteger(row.bodyBytes)||row.bodyBytes<2||row.bodyBytes>SKIP_EVENT_BYTES
+    ||!Number.isSafeInteger(row.envelopeBytes)||row.envelopeBytes<2
+    ||records()<1||remainingCurrentReadBytes(b)<row.idBytes+32+row.envelopeBytes)break;
+  const {id,event:e}=readCurrentEventEnvelope(db,roomId,row,b);
+  if(e.type==='message.posted'){
+   const own=header(e.data.messageId??id);
+   if(!own||own.author_id!==e.actorId||own.to_member_id!==(e.data.toMemberId??null)
+      ||own.reply_to_id!==(e.data.replyToId??null)||own.seq!==row.sequence)break;
+   if(e.actorId!==memberId){
+    if(e.data.toMemberId===memberId||records()<1||remainingCurrentReadBytes(b)<64)break;
+    const mention=db.prepare('SELECT 1 FROM mention_states WHERE room_id=? AND message_event_id=? AND mentioned_member_id=? LIMIT 1').get(roomId,id,memberId);
+    chargeCurrentReadBudget(b,64);if(mention)break;
+    if(own.reply_to_id!==null){const parent=header(own.reply_to_id);if(!parent||parent.author_id===memberId)break;}
+   }
+  }
+  last=row.sequence;
  }
- const last=rows.length?rows.at(-1).sequence:after;
- return {found:false,after:last,skipped:last-after};
+ return {after:last,skipped:rows.filter(row=>row.sequence<=last).length};
 }
 // Conversation delivery and standing obligations are separate cursors. Reading
 // a source window neither acknowledges conversation nor clears formal work.
@@ -48,7 +92,7 @@ export function readCurrentNativeInbox(store,secret,roomId,{limit=50,after,older
   const floor=store.historyFloor(roomId,memberId,head.sequence);
   const binding={kind:'native_inbox_older_v1',roomId,memberId,head:head.head_sha256,credential:auth.credentialHash,limit:Math.min(limit,4)};
   if(after!==undefined&&olderCursor!==undefined)throw new ServiceError(422,'invalid_inbox_cursor','Use after or olderCursor, not both');
-  const recent=after===undefined;let older=null,page,start=null;
+  const recent=after===undefined;let older=null,page;let skippedUnaddressed=0,examined=0;
   if(recent){
     const saved=olderCursor===undefined?null:conversationCursorCodec(store).decode(olderCursor);
     if(olderCursor!==undefined&&(!saved||Object.entries(binding).some(([k,v])=>saved[k]!==v)))throw new ServiceError(409,'stale_inbox_cursor','Inbox source changed or the service restarted; restart without olderCursor');
@@ -71,16 +115,8 @@ export function readCurrentNativeInbox(store,secret,roomId,{limit=50,after,older
     older={hasMore:prefixTruncated||!selected.complete,examined:selected.examined,nextRead:continuation?{tool:'room_read_inbox',arguments:{roomId,limit,olderCursor:conversationCursorCodec(store).encode({...binding,before:continuation.position,beforeId:continuation.messageId})}}:null};
     page={events,next:head.sequence,hasMore:false};
   }else{
-    // Skip only events that trusted sources positively show are not addressed
-    // to this viewer, so catch-up pages lead with attention (see above).
-    validateCurrentEventSelection(after,Math.min(limit,4),{types:['message.posted']});
-    if(after>head.sequence)throw new ServiceError(409,'cursor_ahead','Cursor exceeds room history; fetch a fresh snapshot');
-    // Opt-in for room_read_inbox only: needs-me and digests keep their exact
-    // four-event examined contract.
-    start=skipUnaddressed?firstAddressedSequence(store.db,roomId,memberId,after,head.sequence,b):{found:true,after};
-    page=start.found
-      ?readCurrentEventWindow(store,roomId,memberId,{after:start.after,limit:Math.min(limit,4),types:['message.posted']})
-      :{events:[],next:start.after,hasMore:start.after<head.sequence};
+    page=readCurrentEventWindow(store,roomId,memberId,{after,limit:Math.min(limit,4),types:['message.posted']});
+    examined=page.next-after;
   }
   const directMessages=[],directMentions=[],replies=[],parents=new Map();
   for(const {sequence,event:e}of page.events){if(e.type!=='message.posted'||e.actorId===memberId||e.data.body===null)continue;
@@ -97,7 +133,7 @@ export function readCurrentNativeInbox(store,secret,roomId,{limit=50,after,older
    }
   }
   const ownerId=store.roomAuthority(roomId,{memberId}).ownerId,discovery=readCurrentInboxDiscovery(store,roomId,auth.member,ownerId,floor,b),replyRequests=discovery.requests;
-  const workNext={tool:'room_list_work',arguments:{roomId,focus:'needs_me',limit:1}},conversationNext=page.hasMore?{tool:'room_read_inbox',arguments:{roomId,limit,after:page.next}}:null;
+  const workNext={tool:'room_list_work',arguments:{roomId,focus:'needs_me',limit:1}};
   const requestStates={};
   for(const item of [...directMessages,...directMentions])if(item.requestKind==='reply'){
    const request=readCurrentRecord(store.db,roomId,'replyRequests',item.messageId,b);
@@ -106,6 +142,13 @@ export function readCurrentNativeInbox(store,secret,roomId,{limit=50,after,older
   for(const request of replyRequests)requestStates[request.id]={...request,status:'open'};
   const formalPointers=replyRequests.map(request=>({nextRead:request.nextRead}));
   const peer=store.bonds.nativeInboxForMember(roomId,memberId,limit,(bytes,records)=>chargeCurrentReadBudget(b,bytes,records));
+  // Complete the baseline page and all standing-obligation reads first.
+  // Optional progress can spend only what is left, never starve useful items.
+  if(!recent&&skipUnaddressed&&page.hasMore){
+   const skip=firstAddressedSequence(store.db,roomId,memberId,page.next,head.sequence,b);
+   skippedUnaddressed=skip.skipped;page={...page,next:skip.after,hasMore:skip.after<head.sequence};
+  }
+  const conversationNext=page.hasMore?{tool:'room_read_inbox',arguments:{roomId,limit,after:page.next}}:null;
   const next=inboxNext(roomId,directMessages,[],[],[...formalPointers,...directMentions],peer.bondProposals,peer.peerMessages,requestStates)
    .map(step=>step.nextRead?{...step,nextRead:{...step.nextRead,arguments:{roomId,...step.nextRead.arguments}}}:step);
   if(!peer.coverage.bonds.complete)next.push({action:'inspect-bonds',method:'POST',path:`/api/rooms/${encodeURIComponent(roomId)}/commands`,description:'This bounded proposal source is incomplete. Inspect bond.list before treating bond attention as complete.'});
@@ -119,7 +162,7 @@ export function readCurrentNativeInbox(store,secret,roomId,{limit=50,after,older
    assignments:[],mentions:[],bondProposals:peer.bondProposals,peerMessages:peer.peerMessages,dmRequests:[],
    cursor:{after:page.next,hasMore:page.hasMore,nextRead:conversationNext},older,
    attention:{pendingMentions:directMentions.map(({sequence,replyToId,from,private:isPrivate})=>({sequence,replyToId,from,private:isPrivate})),hasMore:page.hasMore,acknowledges:false,nextRead:conversationNext},
-   coverage:{mode:'native_bounded',globalAttentionComplete:false,conversation:{direction:recent?'recent':'catch_up',examined:recent?older.examined:page.next-(start?.after??after),through:page.next,complete:recent?!older.hasMore:!page.hasMore,...(!recent&&skipUnaddressed?{skippedUnaddressed:(start?.after??after)-after}:{})},
+   coverage:{mode:'native_bounded',globalAttentionComplete:false,conversation:{direction:recent?'recent':'catch_up',examined:recent?older.examined:examined,through:page.next,complete:recent?!older.hasMore:!page.hasMore,...(!recent&&skipUnaddressed?{skippedUnaddressed}:{})},
     work:{complete:false,nextRead:workNext,examined:discovery.examinedWork},requests:{complete:false,nextRead:workNext,examined:discovery.examinedRequests},
     standingMentions:{complete:false,nextRead:{tool:'room_read_inbox',arguments:{roomId,limit,after:0}}},
     peer:peer.coverage,

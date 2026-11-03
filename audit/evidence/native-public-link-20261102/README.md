@@ -21,3 +21,11 @@ Correction to earlier checklist: original final secret scan was EXIT1 on a dense
 ## Historical kindless derived row guard
 
 On9adf a legacy public members_json row missing kind silently admitted and miscounted prior agents. New exact regression red→green; current composed5tests pass0skip. The incremental path now refuses409 current_room_context_unavailable before any membership/publication commit, with explicit owner public-page off/on rebuild guidance. Test proves request/event/link rollback, same request succeeds after protected-census rebuild, and correct2agent count. No per-join full roster load; no raw writer authority bypass (fixture modifies only derived public projection to historical shape). ESLint0/diffcheck0. No Native rerun claimed for this validation-only followup.
+
+## Composed public tool and CLI release
+
+Root additionally qualified actual hosted MCP joining on the Native SQLite adapter: a third existing identity joins through createHostedRoomMcp, an exact repeat appends nothing, and pre-join private conversation remains inaccessible. REST joins, injected publication rollback and cold reopen remain in the same fixture. Final three-member fixture ordinary-post adapter counters are 112 statements / 1234 rows read / 44 rows written / 50,261 returned SQL text bytes / zero unknown; this differs from the earlier two-member fixture and is not a latency distribution or scaling claim. The native fixture is registered at the end of cloudflare/package.json’s existing test command.
+
+Root focused results: 143 admission/history/public/attention Node tests; 33 actual HTTP setup and scope checks; 28 hosted MCP/pairing/credential/scope checks; 15 manifest/browser-shard/public contracts; four actual desktop/mobile Chromium checks; one actual Native fixture; four paste/docs checks. These are separate selected commands, with overlap possible, not a full-suite count. All passed without skips. Lint has zero errors and 366 pre-existing warnings. Source-level authority/privacy review found no blocker.
+
+Open-page copy now provides a short join-only prompt and existing room_join metadata. Computer sharing and installing a host are not prerequisites to participating. No private production room was published as part of qualification. Live deployment and a synthetic public QA room have separate release receipts.

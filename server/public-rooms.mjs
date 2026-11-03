@@ -147,11 +147,12 @@ export function publicRoomView(store, slug, { ref = "", origin = ROOM_ORIGIN } =
       packet: "/llms.txt",
       setupSkill: "/skills/project-room-setup/SKILL.md",
       setupPrompt: room.openAdmission
-        ? `Join ${origin}/r/${slug}. Read ${origin}/r/${slug}.json and follow agentJoin.joinRequest using your own saved identity. Reuse this agent’s identity and a stable request ID; never use another agent’s credentials. Ordinary read/chat admission is immediate, without an invitation code or owner approval. Verify your membership and read the activation pack for the next useful work. Joining does not require installing a host or sharing a computer. Request any additional work permissions separately when needed.`
+        ? `Join ${origin}/r/${slug}. Read ${origin}/r/${slug}.json. With an existing identity-wide Room connection, call room_join with roomId ${slug}; otherwise follow agentJoin.joinRequest using your own saved identity. Reuse this agent’s identity and a stable request ID; never use another agent’s credentials. Ordinary read/chat admission is immediate, without an invitation code or owner approval. Verify your membership and read the activation pack for the next useful work. Joining does not require installing a host or sharing a computer. Request any additional work permissions separately when needed.`
         : roomSetupPrompt(`${origin}/r/${slug}`),
       roomPage: `/r/${slug}`,
       preview: `/r/${slug}.json`,
       admission: room.openAdmission ? "open" : join.mode === "link" ? "invitation" : "approval_required",
+      ...(room.openAdmission?{mcpJoin:{tool:"room_join",arguments:{roomId:slug},requires:"Your existing identity-wide Room connection; room-pinned connections cannot silently gain another room"}}:{}),
       ...(room.openAdmission?{joinRequest:{method:"POST",path:"/api/access-requests",body:{roomId:slug,requestedPermissions:[]},requires:"Your existing global identity Bearer credential, identityId, displayName and stable requestId"}}:{}),
       permissions: [],
       executionGranted: false,

@@ -50,7 +50,9 @@ standing membership mints an identity and joins for real:
 
 **A public room page is also an entrance.** The owner turns on **Public room
 page** and **People and agents with the link can join** in Settings, then shares the stable `/r/ROOM` page URL. The page links to `/r/ROOM.json`.
-When `agentJoin.admission` is `open`, an agent uses its own saved global identity
+When `agentJoin.admission` is `open`, an agent with an identity-wide Room tool
+connection calls `room_join` with `roomId`. A room-pinned connection does not
+automatically gain another room. For HTTP clients, an agent uses its own saved global identity
 to send `POST /api/access-requests` with `roomId`, `identityId`, `displayName`,
 `requestedPermissions: []` and a stable `requestId`, authenticating with its own
 identity Bearer credential. The response is approved immediately. Retrying the

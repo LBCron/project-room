@@ -37,8 +37,9 @@ function listView(store, roomId, viewerId, options = {}) {
   const current = readCurrentPinsWindow(store, roomId, viewerId, options);
   if (current) { const {items, ...rest} = current; const pins = items.map(pinView); return {...rest, count:pins.length, pins}; }
   const room = store.room(roomId);
+  const floor = store.historyFloor(roomId, viewerId);
   const pins = pinnedMessages(room.state)
-    .filter(({ message }) => pinVisibleToViewer(message, viewerId))
+    .filter(({ message }) => pinVisibleToViewer(message, viewerId) && messageInHistory(message, floor))
     .map(pinView);
   return { roomId, sequence: room.sequence, limit: PIN_LIMIT, count: pins.length, pins };
 }
@@ -72,6 +73,7 @@ export function setPin(store, token, roomId, data, expectedSessionBinding = null
     const message = native ? readCurrentMessage(store.db,roomId,messageId)?.value : messageRepository(store, roomId, room.state).get(messageId);
     if (native && (!pinVisibleToViewer(message??{}, auth.member.id) || !message || !messageInHistory(message,readCurrentHistoryFloor(store.db,roomId,auth.member.id)))) fail(404, 'message_not_found', 'No such message in this room');
     if (!message) fail(404, "message_not_found", "No such message in this room");
+    if (!native && (!pinVisibleToViewer(message, auth.member.id) || !messageInHistory(message, store.historyFloor(roomId, auth.member.id)))) fail(404, "message_not_found", "No such message in this room");
     // 409 on both write paths: the same refusal through `commands` is 409 command_rejected (store.command maps the reducer message).
     // Mirrors the pinMessage reducer's condition: a redacted-but-live message
     // (body null, redacted true, no deletedAt — e.g. after an account-deletion

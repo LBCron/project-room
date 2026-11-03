@@ -104,8 +104,8 @@ test("a non-party cannot pin another pair's DM at the event layer", () => {
   }).event.data.messageId;
   assert.throws(
     () => cmd(malloryKey, T.MESSAGE_PINNED, { messageId: dmId }),
-    /not a party/,
-    "pinning a DM you cannot read must be refused by the reducer",
+    error => error.status === 422 && /reference a message/.test(error.message),
+    "pinning an unseen DM must be refused without confirming its existence",
   );
 });
 
@@ -162,7 +162,7 @@ test("a non-party cannot unpin a DM's pin; the parties can (muse-room agent audi
   setPin(store, aliceKey, "commons", { messageId: dmId, pinned: true });
   const pinned = () => store.room("commons").state.pins.some(pin => pin.messageId === dmId);
   assert.equal(pinned(), true);
-  assert.throws(() => setPin(store, malloryKey, "commons", { messageId: dmId, pinned: false }), error => error.status === 422 || error.status === 409);
+  assert.throws(() => setPin(store, malloryKey, "commons", { messageId: dmId, pinned: false }), error => error.status === 404);
   assert.throws(() => cmd(malloryKey, T.MESSAGE_UNPINNED, { messageId: dmId }), error => error.status === 422 || error.status === 409);
   assert.equal(pinned(), true, "a bystander's unpin must not remove the parties' pin");
   setPin(store, bobKey, "commons", { messageId: dmId, pinned: false });

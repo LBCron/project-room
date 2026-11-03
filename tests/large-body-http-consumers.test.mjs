@@ -79,6 +79,7 @@ async function postLarge(f, body) {
   status(posted, 201, 'Maximum-length message accepted through real HTTP');
   await f.reopen();
   await denyNonparty(f);
+  return posted.value.sequence;
 }
 
 for (const [label, body] of bodies) {
@@ -146,5 +147,48 @@ for (const [label, body] of bodies) {
     await f.reopen();
     assert.deepEqual((await f.call('worker', '/pins')).value.pins, []);
     t.diagnostic(JSON.stringify({ utf16Units: body.length, utf8Bytes: Buffer.byteLength(body), consumer: 'pins' }));
+  });
+}
+
+
+for (const [label, body] of bodies) {
+  test(`accepted 65536-unit ${label} DM does not block HTTP catch-up or hidden-source continuation`, async t => {
+    const f = await fixture(t), openingSequence = await postLarge(f, body);
+    assert.ok(Number.isSafeInteger(openingSequence) && openingSequence > 0);
+    status(await f.command('post-catchup-followup', 'message.posted', {
+      messageId: 'catchup-followup', body: 'Separate visible obligation', toMemberId: 'other'
+    }), 201, 'Later independent DM');
+    await f.reopen();
+    const before = f.head(), path = `/agent-inbox?limit=1&after=${openingSequence - 1}`;
+    // Execute both views before asserting either status: a private large
+    // source must not block the unrelated viewer's catch-up cursor either.
+    const recipient = await f.call('worker', path), unrelated = await f.call('other', path);
+    assert.equal(f.head(), before, 'Catch-up reads, including failures, must not write');
+    t.diagnostic(JSON.stringify({ openingSequence, after: openingSequence - 1,
+      recipient: { status: recipient.status, error: recipient.value.error },
+      unrelated: { status: unrelated.status, error: unrelated.value.error } }));
+    assert.deepEqual({ recipient: recipient.status, unrelated: unrelated.status },
+      { recipient: 200, unrelated: 200 }, 'An accepted opening event must not block either catch-up viewer');
+    assert.deepEqual(recipient.value.directMessages.map(row => row.messageId), ['consumer-large']);
+    exactBody(recipient.value.directMessages[0].body, body, 'Catch-up current accepted body');
+    assert.deepEqual(unrelated.value.directMessages, []);
+    assert.ok(!JSON.stringify(unrelated.value).includes('consumer-large'));
+    assert.ok(!JSON.stringify(unrelated.value).includes(body.slice(0, 64)));
+
+    for (const [actor, page] of [['worker', recipient.value], ['other', unrelated.value]]) {
+      assert.equal(page.cursor.after, openingSequence, 'Source cursor must reach the large opening event');
+      assert.equal(page.cursor.hasMore, true, 'Later source remains to be examined');
+      const next = page.cursor.nextRead?.arguments;
+      assert.equal(next?.roomId, 'commons');
+      assert.equal(next?.after, openingSequence);
+      const continued = await f.call(actor, `/agent-inbox?limit=${next.limit}&after=${next.after}`);
+      status(continued, 200, 'Follow the advertised catch-up continuation');
+      assert.ok(continued.value.cursor.after > openingSequence);
+      assert.equal(continued.value.cursor.hasMore, false);
+      assert.deepEqual(continued.value.directMessages.map(row => row.messageId), actor === 'other' ? ['catchup-followup'] : []);
+      if (actor === 'other') exactBody(continued.value.directMessages[0].body,
+        'Separate visible obligation', 'Unrelated viewer reaches its later obligation');
+    }
+    assert.equal(f.head(), before, 'Catch-up continuation must not acknowledge or write');
   });
 }

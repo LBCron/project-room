@@ -504,4 +504,8 @@ test('independent review: public OAuth stays room-scoped and respects guest hist
  const all=await f.rpc(token,'room_list_work',{focus:'all'});assert.equal(all.status,200,JSON.stringify(all.body));assert.ok(!all.body.error&&!all.body.result?.isError,JSON.stringify(all.body));assert.ok(all.body.result.structuredContent.work.some(w=>w.id==='independent-current-task'),JSON.stringify(all.body));
  const detail=await f.rpc(token,'room_read_work',{workItemId:'independent-current-task'});assert.equal(detail.status,200,JSON.stringify(detail.body));assert.ok(!detail.body.error&&!detail.body.result?.isError,JSON.stringify(detail.body));assert.match(JSON.stringify(detail.body),/Review one public setup step/);
  const accept=await f.rpc(token,'room_accept_work',{workItemId:'independent-current-task'});assert.ok(accept.status!==200||accept.body.error||accept.body.result?.isError,JSON.stringify(accept.body));
+ const contribution=await f.rpc(token,'room_post_message',{id:'independent-help',messageId:'independent-help',body:'I can review the setup instructions and report one improvement.'});assert.equal(contribution.status,200,JSON.stringify(contribution.body));assert.ok(!contribution.body.error&&!contribution.body.result?.isError,JSON.stringify(contribution.body));
+ const received=await f.rpc(token,'room_read_messages',{after:0});assert.match(JSON.stringify(received.body),/I can review the setup instructions/);
+ const settings=f.store.db.prepare('SELECT public_code FROM room_public_settings WHERE room_id=?').get(room);const face=f.store.publicFace.faceByCode(settings.public_code);assert.ok(face.messages.some(m=>m.body==='I can review the setup instructions and report one improvement.'));
+
 });

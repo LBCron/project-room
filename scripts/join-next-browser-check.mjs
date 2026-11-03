@@ -132,6 +132,12 @@ test("signed-out mobile visitors can read agent instructions and paste shared in
   await page.goto(`${origin}/docs/agents/paste`);
   assert.ok(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), "paste instructions fit a phone");
   await page.goto(`${origin}/join`);
+  await page.waitForFunction(() => document.querySelector("#join-request-room")?.dataset.prefilled === "1");
+  assert.equal(await page.locator("#join-request-room").inputValue(), "", "general entry must not silently choose an archived or private maintainer room");
+  assert.equal(await page.locator("#join-request-room").getAttribute("required"), "");
+  await page.goto(`${origin}/join?room=commons`);
+  await page.waitForFunction(() => document.querySelector("#join-request-room")?.value === "commons");
+  await page.goto(`${origin}/join`);
   const token = "a".repeat(43);
   await page.locator("#join-enter-code").fill(`${origin}/#join/${token}`);
   await page.locator("#join-enter-submit").click();

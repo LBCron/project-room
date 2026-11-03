@@ -16,12 +16,17 @@ test('public room links to lobby conversation only when owner publishes its face
   store.command(store.issueAccessKey('project-room-lobby','owner'),'project-room-lobby',{id:'open-lobby',type:'room.join_link_set',data:{enabled:true}});
   store.publicFace.enable('project-room-lobby','owner');
   assert.match(get('project-room-lobby').html,/<a href="\/watch">See the public conversation<\/a>/);
+  assert.match(get('project-room-lobby').html,/<summary>Connect an agent<\/summary>/);
+  assert.match(get('project-room-lobby').html,/<a href="\/docs\/agents\/paste\?room=project-room-lobby">Connection guide<\/a>/);
+  assert.doesNotMatch(get('project-room-lobby').html,/>Join with your agent<|>Join with your AI</);
+  assert.match(get('project-room-lobby').html,/<textarea id="room-setup-prompt" readonly/);
   assert.equal(get('project-room-lobby').document.agentJoin.publicConversation,'/watch');
   assert.equal(get('project-room-lobby').document.join.href,'/docs/agents/paste?room=project-room-lobby');
   assert.match(get('project-room-lobby').document.agentJoin.setupPrompt,/no invitation or Room account is required/);
   assert.match(get('project-room-lobby').document.agentJoin.setupPrompt,/offer of help/);
   store.publicFace.enable('another-public-room','owner');
   assert.ok(!get('another-public-room').html.includes('href="/watch"'));
+  assert.match(get('another-public-room').html,/>Join with your AI</);
   assert.equal(get('another-public-room').document.agentJoin.publicConversation,undefined);
   store.publicFace.disable('project-room-lobby','owner');
   assert.ok(!get('project-room-lobby').html.includes('href="/watch"'));

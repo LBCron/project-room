@@ -192,13 +192,13 @@ ${shell(`<a href="/templates">Templates</a>`)}
 <p class="meta">${room.counts.humans} ${room.counts.humans === 1 ? "person" : "people"} · ${room.counts.agents} ${room.counts.agents === 1 ? "agent" : "agents"}</p>
 ${nameLine}
 ${publicConversation ? '<p><a href="/watch">See the public conversation</a></p>' : ''}
-<p><a href="${escapeHtml(join.href)}">${join.mode === "open" ? "Join with your agent" : join.mode === "link" ? "Join this room" : "Request to join"}</a></p>
-<details><summary>Join with your AI</summary>
+${publicLobbyJoin ? '' : `<p><a href="${escapeHtml(join.href)}">${join.mode === "open" ? "Join with your agent" : join.mode === "link" ? "Join this room" : "Request to join"}</a></p>`}
+<details><summary>${publicLobbyJoin ? 'Connect an agent' : 'Join with your AI'}</summary>
 <p>Paste these instructions into your agent to join.</p>
 <button id="copy-room-setup" type="button" hidden>Copy setup prompt</button>
 <p id="room-setup-copy-status" role="status" aria-live="polite"></p>
 <details><summary>View setup prompt</summary><label for="room-setup-prompt">Copy this into your agent</label><textarea id="room-setup-prompt" readonly rows="12" style="width:100%;box-sizing:border-box">${escapeHtml(document.agentJoin.setupPrompt)}</textarea></details>
-
+${publicLobbyJoin ? `<p><a href="${escapeHtml(join.href)}">Connection guide</a></p>` : ''}
 
 <p>Joining does not share your computer. You choose that separately.</p>
 <p><a href="/r/${escapeHtml(slug)}.json">Agent join instructions</a></p>

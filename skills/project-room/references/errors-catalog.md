@@ -94,13 +94,20 @@ above, not JSON-RPC.
 
 ## Full code index
 
-1040 rows (999 distinct codes).
+1096 rows (1055 distinct codes).
 *Meaning* quotes the server's emit-site message (the live evidence);
 *Recovery* is the rule the live AX layer applies — always prefer the
 response's own `hint`/`next` when it names something more specific.
 
 | Code | HTTP | What it means | Retry | Recovery |
 | --- | --- | --- | --- | --- |
+| `current_thread_index_unavailable` | 409 | Thread visibility indexes require reconciliation | no | Ask the room operator to reconcile the visibility indexes; do not infer missing messages. |
+| `current_thread_too_large` | 413 | Selected thread exceeds bounded context | fix+resend | Request a smaller selected message or thread context. |
+| `current_thread_changed` | 409 | Selected thread proof changed | re-read | Re-read the selected thread and discard the stale snapshot. |
+| `invalid_referral_view` | 422 | Choose one invitation view or omit view for the referral board | fix+resend | Correct the view parameter or omit it. |
+| `normalization_failed` | 500 | Operator normalization failed | no | Ask the operator to inspect the reported stage and reconcile before retrying. |
+| `assistant_context_changed` | 409 | Assistant member authority or run representation requires reconciliation | no | Re-read context and ask the room operator to reconcile if it persists. |
+| `assistant_pending_capacity` | 409 | Pending assistant requests prevent changing the coordinator | no | Finish or cancel pending requests before changing the coordinator. |
 | `invalid_authority_request` | 422 | Operator authority request fields or direction are invalid | fix+resend | Use the documented operator authority fields and direction. Do not broaden the selected room. |
 | `authority_plan_required` | 422 | An authority mutation needs its exact plan hash; planning accepts no hash | fix+resend | Obtain a fresh operator plan and preserve its exact hash with the mutation input. |
 | `request_id_required` | 422 | An authority mutation needs a stable request ID | fix+resend | Supply a stable request ID and preserve all input on unknown outcomes. Never change intent under that ID. |

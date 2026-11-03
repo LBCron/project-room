@@ -25,7 +25,7 @@ export class NativePublicRoom extends CurrentEventsRoom {
    s.command(owner.secret,'native-public',{id:'link-on',type:'room.join_link_set',data:{enabled:true}});const page=publicRoomView(s,'native-public').document;
    if(page.join.mode!=='open'||page.agentJoin.admission!=='open')throw Error('native page not open');
    new AccessRequests(s).request('native-public',{identityId:peer.identityId,displayName:'Native collaborator',requestedPermissions:[],requestId:'native-public-join'},peer.secret);
-   return Response.json({ok:true,counts:publicRoomView(s,'native-public').document.counts,coverage:page.coverage});
+   return Response.json({ok:true,counts:publicRoomView(s,'native-public').document.counts,coverage:page.coverage,tasks:page.tasks});
   }
   if(path==='/mcp'){
    const call=createHostedRoomMcp(s),message={jsonrpc:'2.0',id:'public-join',method:'tools/call',params:{name:'room_join',arguments:{roomId:'native-public'}}};

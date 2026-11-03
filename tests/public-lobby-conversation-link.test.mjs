@@ -7,12 +7,13 @@ import { publicRoomView } from '../server/public-rooms.mjs';
 test('public room links to lobby conversation only when owner publishes its face', t => {
   const store=new RoomStore(':memory:'); t.after(()=>store.close());
   for(const room of ['project-room-lobby','another-public-room']) {
-    store.initialize(initialRoom(room)); const owner=store.issueAccessKey(room,'owner');
+    store.initialize(initialRoom(room),{representation:"normalized-current-v1"}); const owner=store.issueAccessKey(room,'owner');
     store.command(owner,room,{id:`publish-${room}`,type:'room.public_page_set',data:{enabled:true}});
   }
   const get=room=>publicRoomView(store,room);
   assert.ok(!get('project-room-lobby').html.includes('href="/watch"'));
   assert.equal(get('project-room-lobby').document.agentJoin.publicConversation,undefined);
+  store.command(store.issueAccessKey('project-room-lobby','owner'),'project-room-lobby',{id:'open-lobby',type:'room.join_link_set',data:{enabled:true}});
   store.publicFace.enable('project-room-lobby','owner');
   assert.match(get('project-room-lobby').html,/<a href="\/watch">See the public conversation<\/a>/);
   assert.equal(get('project-room-lobby').document.agentJoin.publicConversation,'/watch');

@@ -518,6 +518,17 @@ test('native public guest completes a reviewed first task after explicit contrib
   const exchanged=await f.exchange({grant_type:'authorization_code',code});assert.equal(exchanged.status,200,await exchanged.clone().text());
   const tokens=await exchanged.json(),memberId=(await f.rpc(tokens.access_token)).body.result.structuredContent.memberId;
   const call=async(name,args={})=>{const response=await f.rpc(tokens.access_token,name,args);assert.equal(response.status,200,JSON.stringify(response.body));assert.equal(response.body.error,undefined,JSON.stringify(response.body));assert.notEqual(response.body.result?.isError,true,JSON.stringify(response.body));return response.body.result.structuredContent;};
+  // A short useful collaboration needs no contribution grant or formal task.
+  command('short-review-request','message.posted',{messageId:'short-review-request',toMemberId:memberId,requestKind:'reply',body:'Review the public connection instruction and give one concrete finding.'});
+  const context=await call('room_read_request',{requestMessageId:'short-review-request'});
+  assert.equal(context.page.hasMore,false);
+  assert.ok(context.current.answerBasis);
+  const template=context.responseActions.find(action=>action.arguments.responseOutcome==='answered');
+  const shortAnswer={...template.arguments,requestId:'short-review-answer',body:'The native connection should offer the public lobby without an invitation.'};
+  const answered=await call('room_respond_to_request',shortAnswer),answerRetry=await call('room_respond_to_request',shortAnswer);
+  assert.equal(answerRetry.duplicate,true);assert.equal(answerRetry.eventId,answered.eventId);
+  assert.equal((await call('room_read_request',{requestMessageId:'short-review-request'})).request.status,'answered');
+  assert.deepEqual((await call('room_check_access')).permissions,[]);
   command('propose-first-task','work.proposed',{workItemId,title:'Review a connection instruction',definitionOfDone:'Save a concrete finding and have another member verify its exact text',accountableMemberId:memberId,verifierMemberId:'owner',independentVerificationRequired:true,ownerDecisionRequired:false,mode:'read'});
   const beforeGrant=await f.rpc(tokens.access_token,'room_accept_work',{requestId:'accept-first-task',workItemId,expectedRevision:0});
   assert.ok(beforeGrant.body.error||beforeGrant.body.result?.isError,'read/chat admission must not silently grant task authority');

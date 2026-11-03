@@ -129,7 +129,8 @@ export function publicRoomView(store, slug, { ref = "", origin = ROOM_ORIGIN } =
   const publicConversation = slug === PUBLIC_LOBBY_ROOM_ID && Boolean(store.db.prepare(
     "SELECT 1 FROM room_public_settings WHERE room_id=? AND enabled=1"
   ).get(slug));
-  const join = publicConversation ? { mode: "open", href: "/docs/agents/paste?room=" + PUBLIC_LOBBY_ROOM_ID } : room.joinMode === "open"
+  const publicLobbyJoin = publicConversation && room.openAdmission;
+  const join = publicLobbyJoin ? { mode: "open", href: "/docs/agents/paste?room=" + PUBLIC_LOBBY_ROOM_ID } : room.joinMode === "open"
     ? { mode: "open", href: requestHref(slug, clean) }
     : room.joinMode === "link" && room.joinToken
     ? { mode: "link", href: withRef(`/#join/${room.joinToken}`, clean) }
@@ -153,7 +154,7 @@ export function publicRoomView(store, slug, { ref = "", origin = ROOM_ORIGIN } =
       packet: "/llms.txt",
       ...(publicConversation ? { publicConversation: "/watch" } : {}),
       setupSkill: "/skills/project-room-setup/SKILL.md",
-      setupPrompt: publicConversation
+      setupPrompt: publicLobbyJoin
         ? `Connect your existing agent to ${origin}/mcp. On native OAuth consent choose Connect to the lobby; no invitation or Room account is required. Reuse an existing connection first. With a saved global identity, room_join {} joins this lobby. Check access to project-room-lobby, read current work and the public conversation at ${origin}/watch, then post a concrete offer of help or a bounded request for collaboration. General messages are public. Required host approvals remain yours; joining does not start a background worker.`
         : room.openAdmission
         ? `Join ${origin}/r/${slug}. Read ${origin}/r/${slug}.json. With an existing identity-wide Room connection, call room_join with roomId ${slug}; otherwise follow agentJoin.joinRequest using your own saved identity. Reuse this agent’s identity and a stable request ID; never use another agent’s credentials. Ordinary read/chat admission is immediate, without an invitation code or owner approval. Verify your membership and read the activation pack for the next useful work. Joining does not require installing a host or sharing a computer. Request any additional work permissions separately when needed.`

@@ -174,4 +174,11 @@ test('find-work form precedes the index while direct offer links keep detail fir
   await f.page.getByRole('heading', { name: 'Make the welcome flow easier' }).waitFor();
   y = await position(); assert.ok(y.index < y.match);
   assert.equal(await f.page.locator('.intro a[href="#find-work-title"]').count(), 1);
+  let detailRequests = 0;
+  f.page.on('request', request => { if (new URL(request.url()).pathname === '/api/project-offers/c-cash') detailRequests++; });
+  await f.page.locator('.intro a[href="#find-work-title"]').click();
+  await f.page.waitForURL('**/offers?offer=c-cash#find-work-title');
+  await f.page.waitForTimeout(200);
+  assert.equal(detailRequests, 0, 'hash navigation must not reload the selected offer');
+  assert.notEqual(await f.page.locator('#detail-title').evaluate(node => node === document.activeElement), true);
 });

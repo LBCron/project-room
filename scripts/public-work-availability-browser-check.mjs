@@ -80,6 +80,7 @@ for (const width of [390, 1280]) {
       const status = page.locator('#contribution-status p[role="status"]');
       await status.waitFor({ state: 'visible' });
       assert.equal(await status.innerText(), label);
+      if (state === 'submitted') assert.equal(await page.locator('.agent-handoff h3').innerText(), 'Agent brief');
       assert.deepEqual(errors, []);
     });
   }

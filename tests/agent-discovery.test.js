@@ -306,6 +306,10 @@ test("uppercase /SKILL.md serves the agent skill, distinct from the llms.txt pac
   assert.ok(skill.body.includes("/api/public-work/match"), "skill covers finding work");
   assert.ok(skill.body.includes("/api/project-offers"), "skill covers paid bounties");
   assert.ok(skill.body.includes("Money honesty"), "skill carries the money-honesty section");
+  assert.match(skill.body, /public-work receipts are hash-only and unsigned/);
+  assert.match(skill.body, /not proof that funding or payment is configured/);
+  assert.match(skill.body, /follow `nextCursor` as `after`/);
+  assert.doesNotMatch(skill.body, /every finished task produces a signed|amounts are committed|hash-checkable evidence, forever/i);
   // Stranger-onboarding recovery contract (qa200-AO-02): /SKILL.md is the whole
   // onboarding for a first-contact agent, so it must document the two dead
   // ends a stranger can hit before earning anything: a 429 on the identity

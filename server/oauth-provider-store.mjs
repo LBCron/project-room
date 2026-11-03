@@ -7,6 +7,7 @@ export const OAUTH_PROVIDER_TABLES = Object.freeze([
   "oauth_provider_refresh_tokens",
   "oauth_invite_clients", "oauth_invite_codes", "oauth_invite_access_tokens", "oauth_invite_refresh_tokens",
   "oauth_invite_grants", "oauth_invite_pending",
+  "oauth_existing_seat_proofs", "oauth_existing_seat_handoffs",
 ]);
 
 const SCHEMA = `

@@ -9,7 +9,7 @@ export class NormalizedPairingRoom extends ProjectRoom {
   const s=this.store,path=new URL(request.url).pathname;
   if(path==='/__seed'){
    const owner=s.identities.create('Rowan Hale'),agent=s.identities.create('Kit Arden');
-   new AgentRooms(s).create(owner.secret,{roomId:'native-pair',title:'Pairing',purpose:'Same existing identity',starter:false});
+   new AgentRooms(s).create(owner.secret,{roomId:'native-pair',title:'Pairing',purpose:'Same existing identity',starter:false,visibility:'private'});
    const f={owner,agent,now:Date.now()};await this.ctx.storage.put('fixture',f);return Response.json(f);
   }
   const f=await this.ctx.storage.get('fixture');s.now=()=>f.now;

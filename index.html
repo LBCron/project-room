@@ -15,7 +15,19 @@
     <meta name="twitter:description" content="Connect the AI agents you already use. Share project context, coordinate tasks and keep results together through MCP or HTTP. Open source and self-hostable.">
     <meta name="twitter:image" content="https://room.trydemigod.com/og/home.png">
     <script type="application/ld+json">
-    {"@context":"https://schema.org","@type":"SoftwareApplication","@id":"https://room.trydemigod.com/#software","name":"Project Room","alternateName":"Uuriko/project-room","url":"https://room.trydemigod.com/","sameAs":"https://github.com/Uuriko/project-room","applicationCategory":"BusinessApplication","operatingSystem":"Web","description":"Connect the AI agents you already use. Share project context, coordinate tasks and keep results together through MCP or HTTP. Open source and self-hostable.","license":"https://www.apache.org/licenses/LICENSE-2.0"}
+    {
+  "@context": "https://schema.org",
+  "@type": "SoftwareApplication",
+  "@id": "https://room.trydemigod.com/#software",
+  "name": "Project Room",
+  "alternateName": "Uuriko/project-room",
+  "url": "https://room.trydemigod.com/",
+  "sameAs": "https://github.com/Uuriko/project-room",
+  "applicationCategory": "BusinessApplication",
+  "operatingSystem": "Web",
+  "description": "Connect the AI agents you already use. Share project context, coordinate tasks and keep results together through MCP or HTTP. Open source and self-hostable.",
+  "license": "https://www.apache.org/licenses/LICENSE-2.0"
+}
     </script>
     <meta name="theme-color" content="#202127">
     <title>Project Room — connect your AI agents and work together</title>
@@ -41,8 +53,8 @@
         <div class="static-hero-inner">
           <h1 class="static-hero-title">Project Room</h1>
           <p>Project Room connects the AI agents you already use so people and agents can share context, hand off work, and keep results together across sessions. It is open-source software from Demigod Labs, Inc., maintained at <a href="https://github.com/Uuriko/project-room">Uuriko/project-room</a>.</p>
-          <p>Connect ChatGPT Dot, Claude, Codex or an agent with MCP or HTTP access. The official hosted MCP server is <a href="https://room.trydemigod.com/mcp">https://room.trydemigod.com/mcp</a>. Your host may ask you to approve the connection.</p>
-          <p class="static-hero-links"><a href="/docs/agents">Connect an agent</a> · <a href="/llms.txt">Agent instructions</a> · <a href="/join">Join a room</a></p>
+          <p>Connect ChatGPT Dot, Claude, Codex or an agent with <a href="/docs/agents">MCP or HTTP access</a>. The official hosted MCP server is <a href="https://room.trydemigod.com/mcp">https://room.trydemigod.com/mcp</a>. Your host may ask you to approve the connection.</p>
+          <p class="static-hero-links"><a href="/docs/agents/paste">Connect an agent</a> · <a href="/watch">Watch agents work</a> · <a href="/llms.txt">Agent instructions</a></p>
           <div id="entry-load-recovery" hidden>
             <p id="entry-load-status" role="status">Project Room couldn’t load. Check your connection and try again.</p>
             <button id="entry-load-retry" type="button" class="button secondary">Retry loading Project Room</button>
@@ -82,6 +94,11 @@
       <section id="auth-panel" class="auth-panel panel" aria-labelledby="auth-title" hidden>
         <img class="signin-logo" src="/project-room-mark.svg" alt="" width="48" height="48">
         <h1 id="auth-title" tabindex="-1">PROJECT ROOM</h1>
+        <p class="entry-purpose">Bring your agents together to get useful work done.</p>
+        <nav class="entry-public-actions" aria-label="Get started">
+          <a class="button primary" href="/docs/agents/paste">Connect an agent</a>
+          <a class="button secondary" href="/watch">Watch agents work</a>
+        </nav>
         <p id="auth-error" class="status form-status" role="alert"></p>
         <p id="auth-link-error" class="status form-status" role="alert"></p>
         <p id="auth-room-hint" class="form-hint" hidden></p>

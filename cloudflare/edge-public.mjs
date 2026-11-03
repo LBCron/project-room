@@ -1,4 +1,5 @@
 import { configuredMcpOAuthResource, mcpOAuthResourceMetadata, oauthAuthorizationServerMetadata } from "../server/oauth-metadata.mjs";
+import {renderLobbyAgentPastePage} from '../server/agent-paste-copy.mjs';
 // Static assets and discovery documents answered by the Worker isolate.
 // They must not enter the invite-only-pilot Durable Object: that object is
 // single-threaded, and a cold wake or a synchronous stretch closes its input
@@ -293,7 +294,8 @@ async function assetResponse(request, env, url) {
     return new Response(request.method === 'HEAD' ? null : 'Not found\n', { status: 404, headers });
   }
   const contentType = (type.startsWith('image/') && !type.includes('svg')) || type.startsWith('font/') ? type : (type.includes('charset') ? type : `${type}; charset=utf-8`);
-  const bodyBytes = file === 'index.html' ? await frontDoorBody(bytes, githubConfigured) : bytes;
+  let bodyBytes = file === 'index.html' ? await frontDoorBody(bytes, githubConfigured) : bytes;
+  if(canonical==='/docs/agents/paste'&&url.searchParams.get('room')==='project-room-lobby')bodyBytes=new TextEncoder().encode(renderLobbyAgentPastePage(new TextDecoder().decode(bodyBytes)));
   headers.set('Content-Type', contentType);
   // Static assets were no-store, so every visit re-downloaded the ~1.9 MB app
   // shell (app.js, styles, emoji catalog). Binary images and fonts get the

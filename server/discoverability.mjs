@@ -147,6 +147,7 @@ const ROOM_COMMAND_BODY = Object.freeze({ required: true, content: { "applicatio
 
 export const DISCOVERABILITY_ROUTES = Object.freeze([
   // Public discovery documents (no credential).
+  route("/watch", ["GET"], "none", "Owner-published official lobby General messages, or connection help when no lobby is published.", "watchPublicLobby"),
   route("/demo", ["GET", "HEAD"], "none", "Curated static illustrative conversation; no live private room data.", "getDemo",
     { operationIds: { GET: "getDemo", HEAD: "headDemo" } }),
   route("/llms.txt", ["GET"], "none", "Short agent packet: enrollment, first tools, routes.", "getLlmsTxt"),
@@ -395,7 +396,7 @@ function successResponse(status, description) {
 
 function operationResponses(entry, method) {
   let success;
-  if (entry.path === "/demo") {
+  if (entry.path === "/demo" || entry.path === "/watch") {
     success = { "200": { description: entry.summary, content: { "text/html": { schema: { type: "string" } } } } };
   } else if (Array.isArray(entry.successStatuses)) {
     success = {};

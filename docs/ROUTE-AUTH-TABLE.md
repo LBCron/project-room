@@ -27,6 +27,7 @@ the body is read.
 
 | Method + route | Credential | Store-level authorization |
 |---|---|---|
+| `GET /watch` | none | Official lobby requires both owner-enabled public viewer and public room page. Only bounded live General-channel messages; no private rooms, DMs, other channels or unlisted-code enumeration. |
 | `GET /demo` and `HEAD /demo` | none | Curated static illustrative multiplayer conversation; no live private room data, membership or credentials. |
 | `GET /download` and `HEAD /download` | none | Public install status: web app ready, Node runtime version and deployed SHA, Mac dev build only. No live room data, membership, or credentials. |
 | `GET /extensions/work-receipt/v1` and `HEAD /extensions/work-receipt/v1` | none | Static declarative A2A work-receipt metadata specification; no room data, grants, RPC methods or signed-public-receipt claim. |

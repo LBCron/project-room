@@ -54,6 +54,9 @@ assert.ok(SERVED_CANDIDATES.length >= 60 && SERVED_CANDIDATES.includes("/api/hea
 const token = () => randomBytes(32).toString("base64url");
 const PROBES = {
   "GET /demo": [undefined, 200],
+  "GET /watch": [undefined, 200],
+  "GET /extensions/work-receipt/v1": [undefined, 200],
+  "HEAD /extensions/work-receipt/v1": [undefined, 200],
   "HEAD /demo": [undefined, 200],
   "GET /download": [undefined, 200],
   "HEAD /download": [undefined, 200],

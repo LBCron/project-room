@@ -141,6 +141,8 @@ export const ALLOWLIST = [
 // Exact non-secret tokens only. Unlike the line allowlist, these suppress
 // entropy noise without skipping credential-pattern checks or adjacent tokens.
 export const SAFE_ENTROPY_TOKENS = [
+  // Public Apache license URL in the home page structured data; not a credential.
+  "https://www.apache.org/licenses/LICENSE-2.0",
   // Public relative documentation link embedded by wiki-build, not a credential.
   "ROOM-COORDINATION.md#when-the-room-is-unavailable",
   // Public release artifact URLs in the herdr pin manifest; they contain no

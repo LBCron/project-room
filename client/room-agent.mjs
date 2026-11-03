@@ -124,6 +124,7 @@ export async function paginateRoomMessages(fetchPage, { after = 0, limit = 50, l
   const map = mapMessage ?? (item => item);
   if (latest && Number.isSafeInteger(end) && end > after) {
     const { collected, reachedStart, capped } = await scanBackward(fetchPage, after, end, limit);
+    if (capped && !reachedStart && collected.length < limit) throw new RoomClientError(409, "message_window_unavailable", "Latest messages exceed bounded scan; use an addressed after cursor");
     const selected = collected.slice(-limit);
     return {
       messages: selected.map(map),
@@ -133,6 +134,7 @@ export async function paginateRoomMessages(fetchPage, { after = 0, limit = 50, l
   }
   const { collected, scanCursor, reachedEnd, capped } = await scanForward(fetchPage, after, limit, latest);
   if (latest) {
+    if (!reachedEnd) throw new RoomClientError(409, "message_window_unavailable", "Latest messages exceed bounded scan; use an addressed after cursor");
     const selected = collected.slice(-limit);
     return {
       messages: selected.map(map),

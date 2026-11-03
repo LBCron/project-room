@@ -1,4 +1,6 @@
 import { messageRepository } from "./message-repository.mjs";
+import {isCurrentRoom} from './current-room-repository.mjs';
+import {currentPublicMetadata,readCurrentPublicFace} from './current-public-face.mjs';
 // Public read-only face for rooms.
 //
 // This legacy public-face listing is opt-in. The room owner may opt a room
@@ -64,6 +66,8 @@ export class PublicFace {
   }
 
   _roomState(roomId) {
+    const current=currentPublicMetadata(this.store,roomId);
+    if(current)return current;
     const room = this.store.room(roomId);
     if (!room) fail(404, "room_not_found", "No such room");
     return room.state;
@@ -87,7 +91,7 @@ export class PublicFace {
          ON CONFLICT(room_id) DO UPDATE SET enabled=1, public_code=excluded.public_code,
            created_at=CASE WHEN room_public_settings.public_code IS NULL THEN excluded.created_at ELSE room_public_settings.created_at END`
       ).run(roomId, 1, code, at);
-      refreshListedRoom(this.store, roomId);
+      if(typeof this.store.readTransaction!=='function'||!isCurrentRoom(this.db,roomId))refreshListedRoom(this.store, roomId);
       return Object.freeze({ roomId, enabled: true, publicCode: code });
     });
   }
@@ -101,7 +105,7 @@ export class PublicFace {
          VALUES (?,0,NULL,?,NULL)
          ON CONFLICT(room_id) DO UPDATE SET enabled=0, public_code=NULL`
       ).run(roomId, nowMs());
-      refreshListedRoom(this.store, roomId);
+      if(typeof this.store.readTransaction!=='function'||!isCurrentRoom(this.db,roomId))refreshListedRoom(this.store, roomId);
       return Object.freeze({ roomId, enabled: false, publicCode: null });
     });
   }
@@ -191,6 +195,8 @@ export class PublicFace {
   faceByCode(code) {
     const row = this._resolveCode(code);
     const state = this._publicState(row);
+    const current=readCurrentPublicFace(this.store,row.room_id,{latest:true});
+    if(current)return Object.freeze({...this.sanitize(current),coverage:current.coverage});
     const messages = messageRepository(this.store, row.room_id, state).recent(MAX_FACE_MESSAGES, m => m && m.toMemberId == null && typeof m.body === "string" && m.body.length > 0);
     return this.sanitize({ ...state, messages });
   }
@@ -202,6 +208,23 @@ export class PublicFace {
     let n = Number(limit);
     if (!Number.isSafeInteger(n) || n < 1) n = 50;
     n = Math.min(n, MAX_FEED_LIMIT);
+    if(after!==null&&(!after||after.length>200))fail(422,'invalid_feed_cursor','Unknown public message cursor; reload the public view');
+    const current=readCurrentPublicFace(this.store,row.room_id,{after,limit:n});
+    if(current){
+      const messages=current.messages.map(m=>Object.freeze({
+        id:m.id,
+        at:m.createdAt??null,
+        from:handleOf(current,m.authorId)??'unknown',
+        body: m.body.length > MAX_BODY_CHARS ? m.body.slice(0, MAX_BODY_CHARS) + ' …' : m.body
+      }));
+      return Object.freeze({
+        messages:Object.freeze(messages),
+        next:current.messages.at(-1)?.id??after,
+        hasMore:current.hasMore,
+        fetchedAt:nowMs(),
+        coverage:current.coverage
+      });
+    }
     const repository = messageRepository(this.store, row.room_id, state);
     const visible = message => message && message.toMemberId == null && typeof message.body === 'string' && message.body.length > 0;
     if (after !== null && !visible(repository.get(after))) fail(422, 'invalid_feed_cursor', 'unknown feed cursor — re-fetch from the start');
@@ -225,12 +248,17 @@ export class PublicFace {
     });
   }
 
-  faceHtml(code) {
+  faceHtml(code,{joinHref='/docs/agents/paste'}={}) {
     const face = this.faceByCode(code);
     const esc = s => String(s).replaceAll("&", "&amp;").replaceAll("<", "&lt;")
       .replaceAll(">", "&gt;").replaceAll('"', "&quot;");
+    const readableTime=value=>{
+      const date=new Date(value);
+      return value!=null&&Number.isFinite(date.getTime())
+        ?new Intl.DateTimeFormat('en',{month:'short',day:'numeric',hour:'numeric',minute:'2-digit',timeZone:'UTC'}).format(date)+' UTC':'';
+    };
     const items = face.messages.map(m =>
-      `<article><header><strong>${esc(m.from)}</strong><time>${esc(m.at ?? "")}</time></header><p>${esc(m.body)}</p></article>`
+      `<article><header><strong>${esc(m.from)}</strong><time datetime="${esc(m.at ?? '')}">${esc(readableTime(m.at))}</time></header><p>${esc(m.body)}</p></article>`
     ).join("\n");
     const members = face.members.map(h => `<li>${esc(h)}</li>`).join("");
     return `<!doctype html>
@@ -241,13 +269,13 @@ export class PublicFace {
 body{font-family:var(--font-sans);max-width:44rem;margin:2rem auto;padding:0 1rem;background:var(--bg);color:var(--text)}
 a{color:var(--blue)}a:focus-visible{outline:2px solid var(--blue);outline-offset:2px}
 header.page{border-bottom:1px solid var(--line);margin-bottom:1rem}article{border-bottom:1px solid var(--line-soft);padding:.6rem 0}
-article header{display:flex;gap:.75rem;font-size:.85rem;color:var(--muted)}article p{white-space:pre-wrap;margin:.3rem 0 0}
+article header{display:flex;gap:.75rem;flex-wrap:wrap;font-size:.85rem;color:var(--muted)}article p{white-space:pre-wrap;margin:.3rem 0 0;overflow-wrap:anywhere}header.page p{overflow-wrap:anywhere}
 ul.members{display:flex;flex-wrap:wrap;gap:.4rem;list-style:none;padding:0}ul.members li{border:1px solid var(--line);border-radius:1rem;padding:.15rem .7rem;font-size:.85rem}
-footer{margin-top:2rem;font-size:.8rem;color:var(--muted)}</style></head><body>
-<header class="page"><h1>${esc(face.room.title || "Project Room")}</h1><p>${esc(face.room.purpose)}</p></header>
-<section><h2>Members</h2><ul class="members">${members}</ul></section>
+footer{margin-top:2rem;font-size:.8rem;color:var(--muted)}</style></head><body><main>
+<header class="page"><a href="/">Project Room</a><h1>${esc(face.room.title || "Project Room")}</h1><p>${esc(face.room.purpose)}</p><p><a href="${esc(joinHref)}">Connect an agent</a> · <a href="">Refresh activity</a></p></header>
+${face.coverage?'':`<section><h2>Members</h2><ul class="members">${members}</ul></section>`}
 <section><h2>Recent activity</h2>${items || "<p>No public messages yet.</p>"}</section>
-<footer>Public read-only face · updates as the room works<p>${LEGAL_FOOTER_LINKS}</p></footer>
-</body></html>`;
+<footer>Shared by the room owner.${face.coverage?' Only the General channel is shown.':''} Refresh to see new activity.<p>${LEGAL_FOOTER_LINKS}</p></footer>
+</main></body></html>`;
   }
 }

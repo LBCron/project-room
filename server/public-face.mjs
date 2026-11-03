@@ -58,11 +58,15 @@ const handleOf = (state, memberId) => {
   return name || null;
 };
 
-// Mention tokens (<@memberId>) carry member ids, which this face never
-// exposes. Show the member's public handle, or a neutral placeholder.
+// Resolve only authors of the already selected public page. Mentioning an
+// arbitrary active member must not publish the raw ID-to-name association.
 const MENTION_TOKEN = /<@([A-Za-z0-9][A-Za-z0-9_.:-]{0,127})>/g;
-const publicBody = (state, body) => {
-  const named = body.replace(MENTION_TOKEN, (_, id) => `@${handleOf(state, id) ?? "member"}`);
+const publicAuthorHandles = (state, messages) => new Map(messages
+  .filter(message => !message.deletedAt)
+  .map(message => [message.authorId, handleOf(state, message.authorId)])
+  .filter(([, handle]) => handle));
+const publicBody = (authors, body) => {
+  const named = body.replace(MENTION_TOKEN, (_, id) => `@${authors.get(id) ?? "member"}`);
   return named.length > MAX_BODY_CHARS ? named.slice(0, MAX_BODY_CHARS) + " …" : named;
 };
 
@@ -174,14 +178,15 @@ export class PublicFace {
       .map(id => handleOf(state, id))
       .filter(Boolean)
       .sort((a, b) => a.localeCompare(b));
-    const messages = (Array.isArray(state?.messages) ? state.messages : [])
+    const publicMessages = (Array.isArray(state?.messages) ? state.messages : [])
       // v1 channel caveat: the core projection has no channel field, so
       // every non-DM message is treated as public. Per-channel public
       // flags are explicitly out of v1 (see DESIGN.md).
       .filter(m => m && m.toMemberId == null && typeof m.body === "string" && m.body.length > 0)
-      .slice(-messageLimit)
-      .map(m => {
-        const body = publicBody(state, m.body);
+      .slice(-messageLimit);
+    const authors = publicAuthorHandles(state, publicMessages);
+    const messages = publicMessages.map(m => {
+        const body = publicBody(authors, m.body);
         return Object.freeze({
           at: m.createdAt ?? null,
           from: handleOf(state, m.authorId) ?? "unknown",
@@ -220,11 +225,12 @@ export class PublicFace {
     if(after!==null&&(!after||after.length>200))fail(422,'invalid_feed_cursor','Unknown public message cursor; reload the public view');
     const current=readCurrentPublicFace(this.store,row.room_id,{after,limit:n});
     if(current){
+      const authors=publicAuthorHandles(current,current.messages);
       const messages=current.messages.map(m=>Object.freeze({
         id:m.id,
         at:m.createdAt??null,
         from:handleOf(current,m.authorId)??'unknown',
-        body: publicBody(current, m.body)
+        body: publicBody(authors, m.body)
       }));
       return Object.freeze({
         messages:Object.freeze(messages),
@@ -244,12 +250,13 @@ export class PublicFace {
       if (page.length === n) { hasMore = true; break; }
       page.push(message);
     }
+    const authors = publicAuthorHandles(state, page);
     return Object.freeze({
       messages: Object.freeze(page.map(m => Object.freeze({
         id: m.id,
         at: m.createdAt ?? null,
         from: handleOf(state, m.authorId) ?? "unknown",
-        body: publicBody(state, m.body)
+        body: publicBody(authors, m.body)
       }))),
       next: page.length ? page[page.length - 1].id : after,
       hasMore,

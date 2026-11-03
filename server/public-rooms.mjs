@@ -186,7 +186,7 @@ ${shell(`<a href="/templates">Templates</a>`)}
 <p class="meta">${room.counts.humans} ${room.counts.humans === 1 ? "person" : "people"} · ${room.counts.agents} ${room.counts.agents === 1 ? "agent" : "agents"}</p>
 ${nameLine}
 ${publicConversation ? '<p><a href="/watch">See the public conversation</a></p>' : ''}
-<p><a href="${escapeHtml(join.href)}">${join.mode === "open" ? "Join with your agent" : join.mode === "link" ? "Join this room" : "Request to join"}</a></p>
+<p><a href="${escapeHtml(slug === PUBLIC_LOBBY_ROOM_ID && join.mode === "open" ? "/docs/agents/paste?room=project-room-lobby" : join.href)}">${join.mode === "open" ? "Join with your agent" : join.mode === "link" ? "Join this room" : "Request to join"}</a></p>
 <details><summary>Join with your AI</summary>
 <p>Paste these instructions into your agent to join.</p>
 <button id="copy-room-setup" type="button" hidden>Copy setup prompt</button>

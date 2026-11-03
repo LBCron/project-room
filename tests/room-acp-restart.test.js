@@ -6,6 +6,7 @@ import assert from "node:assert/strict";
 import { Bridge, CRASH_LIMIT } from "../room-acp/src/bridge.mjs";
 import { join } from "../room-acp/src/join.mjs";
 import { SessionMap } from "../room-acp/src/sessions.mjs";
+import { AgentHost } from "../room-acp/src/agent-host.mjs";
 import { startRoom, FAKE_AGENT } from "./room-acp-fixture.mjs";
 
 const waitFor = async (check, ms = 20000) => {
@@ -24,6 +25,45 @@ async function startBridge(t, room, mode) {
   return { bridge, connection };
 }
 const repliesTo = (room, rootId, memberId) => room.messages().filter(message => message.replyToId === rootId && message.authorId === memberId);
+
+test('a spawned adapter is not ready until its restart initialization finishes', async () => {
+  const host = { running: true, onExit() {} };
+  const bridge = new Bridge({connection:{apiBase:'https://example.test',roomId:'r',memberId:'m',credential:'test'},host,env:{},persistSessions:false});
+  let finish, complete = false;
+  bridge.ready = new Promise(resolve => { finish = resolve; });
+  const waiting = bridge.agentReady().then(() => { complete = true; });
+  await Promise.resolve(); assert.equal(complete, false, 'running process is not initialized');
+  finish(); await waiting; assert.equal(complete, true);
+});
+
+test('failed or interrupted initialization clears and terminates its process', async () => {
+  for (const mode of ['init-exit', 'init-stall']) {
+    const host = new AgentHost({candidate:{command:process.execPath,args:[FAKE_AGENT]},env:{...process.env,FAKE_ACP_MODE:mode}});
+    let exits=0;host.onExit(()=>exits++);
+    const starting=host.start({timeoutMs: mode === 'init-stall' ? 100 : 5000});
+    const child=host.process.child;
+    await assert.rejects(starting);
+    assert.equal(host.running,false);assert.equal(host.capabilities,null);
+    await waitFor(()=>child.exitCode!==null||child.signalCode!==null);
+    assert.equal(exits,0,'a failed startup is reported by start, not as a second crash');
+  }
+});
+
+test('stopping during initialization cannot publish stale readiness', async () => {
+  const host = new AgentHost({candidate:{command:process.execPath,args:[FAKE_AGENT]},env:{...process.env,FAKE_ACP_MODE:'init-stall'}});
+  const starting=host.start({timeoutMs:5000});const child=host.process.child;
+  host.stop();await assert.rejects(starting);
+  await waitFor(()=>child.exitCode!==null||child.signalCode!==null);
+  assert.equal(host.running,false);assert.equal(host.capabilities,null);
+});
+
+test('stopping during restart backoff never starts another adapter', async () => {
+  let starts=0;
+  const host={running:false,onExit(){},start(){starts++;},stop(){}};
+  const bridge=new Bridge({connection:{apiBase:'https://example.test',roomId:'r',memberId:'m',credential:'test'},host,env:{},persistSessions:false,restartDelayMs:100});
+  bridge.onAgentExit({code:1});const pending=bridge.ready;bridge.stop();await pending;
+  assert.equal(starts,0);
+});
 
 test("session map persists, survives reload, and stays bounded", t => {
   const env = { ROOM_ACP_HOME: `${process.env.TMPDIR ?? "/tmp"}/room-acp-sessions-${process.pid}` };

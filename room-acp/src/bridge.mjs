@@ -126,7 +126,14 @@ export class Bridge {
   }
 
   async agentReady() {
-    while (!this.host.running && this.ready && !this.controller.signal.aborted) await this.ready;
+    // A spawned process becomes "running" before ACP initialize completes.
+    // Always await the active restart, including any replacement restart
+    // scheduled after an initialization failure.
+    while (this.ready && !this.controller.signal.aborted) {
+      const pending = this.ready;
+      await pending;
+      if (this.ready === pending) break;
+    }
   }
 
   // Host tool approvals require the local operator to name a trusted human.

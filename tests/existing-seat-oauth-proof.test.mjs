@@ -10,6 +10,8 @@ import { createMcpInviteOAuth } from '../server/mcp-invite-oauth.mjs';
 import { createExistingSeatProof } from '../server/existing-seat-oauth-proof.mjs';
 import { EXISTING_SEAT_GRANT, validateMcpInviteOAuthBinding } from '../server/mcp-oauth.mjs';
 import { pruneOAuthProvider } from '../server/oauth-provider-store.mjs';
+import { exportNdjsonText } from '../server/room-export.mjs';
+import { replayNdjsonInto } from '../server/restore-ndjson.mjs';
 
 function fixture(t) {
   const store = new RoomStore(':memory:'); t.after(() => store.close()); store.initialize(initialRoom());
@@ -190,6 +192,19 @@ test('active existing-seat connection refreshes beyond 30 days and pruning prese
   assert.equal(f.store.db.prepare('SELECT count(*) n FROM oauth_invite_grants WHERE invite_hash=?').get(EXISTING_SEAT_GRANT).n, 1);
   f.store.db.prepare('UPDATE agent_identities SET revoked_at=? WHERE identity_id=?').run(now, f.identity.identityId);
   assert.equal(f.oauth.provider.verifyAccessToken(token.accessToken, { resource: 'https://room.example/mcp' }), null);
+});
+
+test('backup and restore preserve existing-seat grant proof without storing bearer secrets', t => {
+  const f = fixture(t), nonce = f.begin(), proof = f.oauth.existingSeatProof(), reference = proof.createHandoff(nonce);
+  const view = proof.inspect(reference, f.identity.secret, 'commons'); proof.approve(reference, f.identity.secret, 'commons', view.requestHash);
+  const code = new URL(f.oauth.approveExisting(nonce)).searchParams.get('code');
+  const tokens = f.oauth.provider.exchangeCode({ code, clientId: 'native-test', redirectUri: 'https://client.example/callback', codeVerifier: 'v'.repeat(43), resource: 'https://room.example/mcp' });
+  const exportText = exportNdjsonText(f.store.db);
+  assert.ok(!exportText.includes(reference) && !exportText.includes(f.identity.secret) && !exportText.includes(tokens.accessToken));
+  const restored = new RoomStore(':memory:'); t.after(() => restored.close());
+  assert.equal(replayNdjsonInto(exportText, restored).verified, true);
+  const oauth = createMcpInviteOAuth({ store: restored, clients: [{ clientId: 'native-test', name: 'Native test', redirectUris: ['https://client.example/callback'] }], resource: 'https://room.example/mcp' });
+  assert.equal(oauth.provider.verifyAccessToken(tokens.accessToken, { resource: 'https://room.example/mcp' })?.binding.memberId, f.joined.memberId);
 });
 
 for (const mutation of ['grant-revoked', 'member-unlinked', 'proof-mismatch']) test(`existing-seat token stops after ${mutation}`, t => {

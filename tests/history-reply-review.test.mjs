@@ -15,6 +15,7 @@ test('since-join member cannot reference prejoin message',t=>{
  assert.ok(s.command(owner,'commons',{id:'recent',type:'message.posted',data:{messageId:'recent',body:'visible'}}).event);
  assert.ok(s.command(late,'commons',{id:'recent-reply',type:'message.posted',data:{messageId:'recent-reply',body:'visible reply',replyToId:'recent'}}).event);
  assert.ok(s.command(owner,'commons',{id:'owner-old-reply',type:'message.posted',data:{messageId:'owner-old-reply',body:'owner reply',replyToId:'old-public'}}).event);
+ assert.ok(s.command(late,'commons',{id:'reply-visible-child',type:'message.posted',data:{messageId:'reply-visible-child',body:'continue',replyToId:'owner-old-reply'}}).event);
 });
 
 test('work proposals cannot use unseen prejoin messages as sources',t=>{

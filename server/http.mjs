@@ -907,7 +907,8 @@ export function createRoomServer({ store, origin, assetRoot = new URL("../", imp
       if (entry.n >= maximum || entry.n % stride === 0) saveAbuseRateBucket(store.db, id, entry);
     }
     if (entry.n > maximum) throw new ServiceError(429, "rate_limited", "Too many requests; retry after a minute",
-      { "X-RateLimit-Limit": maximum, "X-RateLimit-Remaining": 0, "X-RateLimit-Reset": Math.ceil(entry.until / 1000), "X-RateLimit-Bucket": family });
+      { "X-RateLimit-Limit": maximum, "X-RateLimit-Remaining": 0, "X-RateLimit-Reset": Math.ceil(entry.until / 1000), "X-RateLimit-Bucket": family,
+        ...(family === "agent-wake-poll" ? { "Retry-After": String(Math.max(1, Math.ceil((entry.until - now) / 1000))) } : {}) });
   }
   function cookie(req, name) {
     const scoped = scopedCookieName(name);

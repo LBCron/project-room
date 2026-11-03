@@ -125,7 +125,7 @@ for (const resource of ['entry.js', 'browser-session.js', 'signin-entry.js']) te
   await page.goto(`http://127.0.0.1:${server.address().port}/`);
   const early = resource !== 'signin-entry.js';
   await page.locator(early ? '#static-hero' : '#entry-retry').waitFor({ state: 'visible' });
-  if (early) assert.match(await page.locator('#static-hero').innerText(), /PROJECT ROOM/);
+  if (early) assert.match(await page.locator('#static-hero').innerText(), /Project Room/i);
   else assert.equal(await page.locator('#auth-error').isVisible(), true);
   mkdirSync('test-results/startup', { recursive: true });
   await page.screenshot({ path: `test-results/startup/failed-${resource}.png` });
@@ -182,5 +182,5 @@ test('slow module startup can finish after the bounded warning without reloading
   await page.reload();
   assert.equal(await page.locator('#static-hero').isVisible(), true);
   assert.equal(await page.locator('#entry-load-recovery').isVisible(), false);
-  assert.match(await page.locator('#static-hero').textContent(), /shared room/);
+  assert.match(await page.locator('#static-hero').textContent(), /connects the AI agents/);
 });

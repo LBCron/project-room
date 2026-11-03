@@ -210,7 +210,21 @@ export class PublicFace {
     n = Math.min(n, MAX_FEED_LIMIT);
     if(after!==null&&(!after||after.length>200))fail(422,'invalid_feed_cursor','Unknown public message cursor; reload the public view');
     const current=readCurrentPublicFace(this.store,row.room_id,{after,limit:n});
-    if(current)return Object.freeze({messages:Object.freeze(current.messages.map(m=>Object.freeze({id:m.id,at:m.createdAt??null,from:handleOf(current,m.authorId)??'unknown',body:m.body.length>MAX_BODY_CHARS?m.body.slice(0,MAX_BODY_CHARS)+' …':m.body}))),next:current.messages.at(-1)?.id??after,hasMore:current.hasMore,fetchedAt:nowMs(),coverage:current.coverage});
+    if(current){
+      const messages=current.messages.map(m=>Object.freeze({
+        id:m.id,
+        at:m.createdAt??null,
+        from:handleOf(current,m.authorId)??'unknown',
+        body: m.body.length > MAX_BODY_CHARS ? m.body.slice(0, MAX_BODY_CHARS) + ' …' : m.body
+      }));
+      return Object.freeze({
+        messages:Object.freeze(messages),
+        next:current.messages.at(-1)?.id??after,
+        hasMore:current.hasMore,
+        fetchedAt:nowMs(),
+        coverage:current.coverage
+      });
+    }
     const repository = messageRepository(this.store, row.room_id, state);
     const visible = message => message && message.toMemberId == null && typeof message.body === 'string' && message.body.length > 0;
     if (after !== null && !visible(repository.get(after))) fail(422, 'invalid_feed_cursor', 'unknown feed cursor — re-fetch from the start');
@@ -238,8 +252,13 @@ export class PublicFace {
     const face = this.faceByCode(code);
     const esc = s => String(s).replaceAll("&", "&amp;").replaceAll("<", "&lt;")
       .replaceAll(">", "&gt;").replaceAll('"', "&quot;");
+    const readableTime=value=>{
+      const date=new Date(value);
+      return value!=null&&Number.isFinite(date.getTime())
+        ?new Intl.DateTimeFormat('en',{month:'short',day:'numeric',hour:'numeric',minute:'2-digit',timeZone:'UTC'}).format(date)+' UTC':'';
+    };
     const items = face.messages.map(m =>
-      `<article><header><strong>${esc(m.from)}</strong><time>${esc(m.at ?? "")}</time></header><p>${esc(m.body)}</p></article>`
+      `<article><header><strong>${esc(m.from)}</strong><time datetime="${esc(m.at ?? '')}">${esc(readableTime(m.at))}</time></header><p>${esc(m.body)}</p></article>`
     ).join("\n");
     const members = face.members.map(h => `<li>${esc(h)}</li>`).join("");
     return `<!doctype html>
@@ -254,7 +273,7 @@ article header{display:flex;gap:.75rem;flex-wrap:wrap;font-size:.85rem;color:var
 ul.members{display:flex;flex-wrap:wrap;gap:.4rem;list-style:none;padding:0}ul.members li{border:1px solid var(--line);border-radius:1rem;padding:.15rem .7rem;font-size:.85rem}
 footer{margin-top:2rem;font-size:.8rem;color:var(--muted)}</style></head><body><main>
 <header class="page"><a href="/">Project Room</a><h1>${esc(face.room.title || "Project Room")}</h1><p>${esc(face.room.purpose)}</p><p><a href="${esc(joinHref)}">Connect an agent</a> · <a href="">Refresh activity</a></p></header>
-<section><h2>${face.coverage?'Contributors in this view':'Members'}</h2><ul class="members">${members}</ul></section>
+${face.coverage?'':`<section><h2>Members</h2><ul class="members">${members}</ul></section>`}
 <section><h2>Recent activity</h2>${items || "<p>No public messages yet.</p>"}</section>
 <footer>Shared by the room owner.${face.coverage?' Only the General channel is shown.':''} Refresh to see new activity.<p>${LEGAL_FOOTER_LINKS}</p></footer>
 </main></body></html>`;

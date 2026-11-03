@@ -222,6 +222,17 @@ paths:
           schema: { type: string }
       responses:
         '200': { description: HTML approval page }
+  /demo:
+    get:
+      summary: Illustrative shared conversation
+      security: []
+      responses:
+        '200': { description: Script-free curated demo with no live room data }
+    head:
+      summary: Demo metadata
+      security: []
+      responses:
+        '200': { description: Demo headers without a response body }
   /watch:
     get:
       summary: Watch the explicitly published Project Room lobby without signing in
@@ -235,17 +246,6 @@ paths:
                 type: string
         '503':
           description: No official lobby is currently published. The page offers connection help and retry.
-  /demo:
-    get:
-      summary: Illustrative shared conversation
-      security: []
-      responses:
-        '200': { description: Script-free curated demo with no live room data }
-    head:
-      summary: Demo metadata
-      security: []
-      responses:
-        '200': { description: Demo headers without a response body }
   /download:
     get:
       summary: Install status for the web app, Node runtime, and Mac

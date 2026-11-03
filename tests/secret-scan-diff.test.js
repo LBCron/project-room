@@ -3,7 +3,7 @@
 //
 // What this protects (test-audit authoring gate):
 //  1. Behavior: the diff gate flags secret-shaped ADDED lines (12 seeded
-//     rules, generated at runtime) and stays silent on the current main
+//     rules, generated at runtime) and stays silent on the checked-out candidate
 //     tree — the zero-false-positive acceptance for the CI gate.
 //  2. Credible regressions: parseDiff scanning removed lines or misreporting
 //     line numbers; wrong CLI exit codes; the path-allowlist loader dropping
@@ -280,14 +280,14 @@ test("CLI rejects unknown flags (exit 2)", () => {
   assert.equal(r.status, 2);
 });
 
-// --- acceptance: zero false positives against current main -------------------
+// --- acceptance: zero false positives against checked-out candidate -------------------
 
-test("zero false positives against the origin/main tree", () => {
+test("zero false positives against the checked-out HEAD tree", () => {
   // The diff gate reuses the detector + shared line allowlist under the
   // tree scan's scope policy: whatever main contains in scope today must
   // not trip it, or PRs touching those lines would fail the gate.
   const dir = mkdtempSync(path.join(os.tmpdir(), "secret-scan-diff-main-"));
-  const archive = execFileSync("git", ["-C", REPO_ROOT, "archive", "origin/main"], {
+  const archive = execFileSync("git", ["-C", REPO_ROOT, "archive", "HEAD"], {
     maxBuffer: 256 * 1024 * 1024,
   });
   const tar = spawnSync("tar", ["-x", "-C", dir], { input: archive });

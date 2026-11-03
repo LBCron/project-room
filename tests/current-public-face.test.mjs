@@ -5,9 +5,10 @@ import {createRoomServer} from '../server/http.mjs';
 import {seedPublicLobby} from './helpers/public-lobby-source.mjs';
 import {unpublishPublic} from '../server/legal-store.mjs';
 import {readCurrentPublicFace} from '../server/current-public-face.mjs';
+import {PUBLIC_LOBBY_ROOM_ID} from '../server/routes/public-lobby.mjs';
 
 async function fixture(t){
- const store=new RoomStore(':memory:'),saved=seedPublicLobby(store);
+ const store=new RoomStore(':memory:'),saved=seedPublicLobby(store,{roomId:PUBLIC_LOBBY_ROOM_ID});
  store.room=()=>{throw Error('Whole room hydration forbidden');};
  const server=createRoomServer({store});await new Promise(r=>server.listen(0,'127.0.0.1',r));
  t.after(async()=>{server.closeStreams();server.closeAllConnections();await new Promise(r=>server.close(r));store.close();});

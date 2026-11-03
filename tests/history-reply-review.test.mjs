@@ -37,6 +37,9 @@ test('work proposals cannot use another pair’s direct message as a source',t=>
  assert.deepEqual(reject(other,'private-dm','other'),reject(other,'missing','other'));
  assert.deepEqual(reject(unprivileged,'private-dm','unprivileged'),reject(unprivileged,'missing','unprivileged'));
  assert.ok(s.command(peer,'commons',proposal('private-dm','peer-task','peer')).event);
+ // A nonparticipant must not gain an oracle merely by reusing an existing task ID.
+ const otherDuplicate=target=>{try{s.command(other,'commons',proposal(target,'peer-task','other'));assert.fail('expected refusal')}catch(e){return {status:e.status,code:e.code,message:e.message}}};
+ assert.deepEqual(otherDuplicate('private-dm'),otherDuplicate('missing'));
 });
 
 test('legacy decisions do not confirm another pair’s private message ID',t=>{

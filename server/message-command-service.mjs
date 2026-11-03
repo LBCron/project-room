@@ -79,11 +79,13 @@ export function assertMessageCommandReferences(store, roomId, state, command, ac
     : command.type === T.DECISION_RECORDED ? memberCan(state, actorId, 'decide') && (actor?.kind === 'human' || actor?.delegatedAdmin === true) : true;
   if (typeof targetId === 'string' && eligible) {
     const target = (state.messages ?? []).find(message => message.id === targetId);
+    if (!target && [T.WORK_PROPOSED, T.WORK_COMPLETED, T.DECISION_RECORDED].includes(command.type))
+      fail(422, 'command_rejected', historyRef[1]);
     if ([T.WORK_PROPOSED, T.WORK_COMPLETED, T.DECISION_RECORDED].includes(command.type) && target?.toMemberId && target.authorId !== actorId && target.toMemberId !== actorId)
       fail(422, 'command_rejected', historyRef[1]);
     const floor = store.historyFloor(roomId, actorId);
     if (floor) {
-      if ((target && !messageInHistory(target, floor)) || (!target && [T.MESSAGE_UNPINNED, T.WORK_PROPOSED, T.WORK_COMPLETED, T.DECISION_RECORDED].includes(command.type)))
+      if ((target && !messageInHistory(target, floor)) || (!target && command.type === T.MESSAGE_UNPINNED))
         fail(422, 'command_rejected', historyRef[1]);
     }
   }

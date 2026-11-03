@@ -12,6 +12,8 @@ test('work completion cannot attach another pair’s private text',t=>{
  const {s,worker,data}=setup(t,'peer');const before=s.headSequence('commons');
  const reject=(id,messageId)=>{try{s.command(worker,'commons',{id,type:'work.completed',data:{...data,evidenceMessageId:messageId}});assert.fail('expected rejection')}catch(e){return {status:e.status,code:e.code,message:e.message}}};
  assert.deepEqual(reject('private','evidence'),reject('missing','missing'));assert.equal(s.headSequence('commons'),before);assert.ok(Object.values(auditRecovery(s).checks).every(Boolean));
+ const stale=(id,messageId)=>{try{s.command(worker,'commons',{id,type:'work.completed',data:{...data,expectedRevision:999,evidenceMessageId:messageId}});assert.fail('expected rejection')}catch(e){return {status:e.status,code:e.code,message:e.message}}};
+ assert.deepEqual(stale('stale-private','evidence'),stale('stale-missing','missing'));
 });
 for(const target of [null,'worker'])test('visible evidence remains usable '+(target??'public'),t=>{
  const {s,worker,data}=setup(t,target);assert.ok(s.command(worker,'commons',{id:'complete',type:'work.completed',data}).event);assert.ok(Object.values(auditRecovery(s).checks).every(Boolean));

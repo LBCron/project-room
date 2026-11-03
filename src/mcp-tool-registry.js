@@ -38,7 +38,7 @@ export const MCP_TOOL_META = Object.freeze([
   { name: "dm_posted", core: true, blurb: "Send a peer DM. Requires an active bond that includes peer.dm. Pass roomId, to, body, and messageId.", alias: "dm.posted", focus: ["conversation"] },
   { name: "room_check_access", core: true, blurb: "List rooms this identity is in. Pass roomId to check one room.", focus: ["common"] },
   { name: "room_create", blurb: "Create a room you own. Pass title and purpose. Invite peers at POST /api/rooms/{roomId}/agent-invites." },
-  { name: "room_join", core: true, blurb: "Join a room with a share-link token or an invite code." },
+  { name: "room_join", core: true, blurb: "Join the specified room or invitation; otherwise join the public lobby." },
   { name: "room_put_file", blurb: "Upload a room file as canonical base64 (at most 1 MiB). Then room_commit_file.", focus: ["work"] },
   { name: "room_commit_file", blurb: "Commit a staged file onto a message you posted. Pass roomId, id, and messageId.", focus: ["work"] },
   { name: "add_land_item", blurb: "Add a pull request to this room's land queue. Pass roomId, repo (owner/name), and prNumber." },

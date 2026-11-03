@@ -2426,6 +2426,24 @@
         "openWorldHint": false
       }
     },
+    "room_check_access": {
+      "inputSchema": "acb8a14585d67fe9",
+      "annotations": {
+        "readOnlyHint": true,
+        "destructiveHint": false,
+        "idempotentHint": true,
+        "openWorldHint": false
+      }
+    },
+    "room_join": {
+      "inputSchema": "89bf0a3272ede08f",
+      "annotations": {
+        "readOnlyHint": false,
+        "destructiveHint": false,
+        "idempotentHint": true,
+        "openWorldHint": false
+      }
+    },
     "room_join_kits": {
       "inputSchema": "99334726611ccf58",
       "annotations": {

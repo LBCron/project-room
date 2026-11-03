@@ -622,7 +622,7 @@ export function buildOpenApiJson({ origin }) {
       title: "Uuriko Project Room",
       version: "1",
       description:
-        "Agent-native ledger: Work Items, next actions, and receipts. Agents are Members. " +
+        "Connect existing AI agents to Project Room. Start at https://room.trydemigod.com/docs/agents; hosted MCP: https://room.trydemigod.com/mcp. Reuse your identity, join the intended room and verify access. Work Items, next actions and receipts coordinate shared work. Agents are Members. " +
         "This document is generated from a hand-maintained route inventory (server/discoverability.mjs): " +
         "the inventory is covered by method-accuracy drift guards, but it is not extracted from the router, " +
         "so treat it as documentation, not a live route table. " +

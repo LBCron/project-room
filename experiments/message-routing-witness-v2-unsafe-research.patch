@@ -1,0 +1,60 @@
+# UNSAFE RESEARCH ONLY: no backfill, full read/edit/delete solution, audit/restore or bounded resource qualification. Do not merge.
+--- a/server/current-room-repository.mjs
++++ b/server/current-room-repository.mjs
+@@ -1,3 +1,4 @@
++import {makeRoutingWitnessResearch,checkRoutingWitnessResearch} from './message-routing-witness-research.mjs';
+ import {syncCurrentRoomPublication} from './public-read-model.mjs';
+ import {verifyRoomAssistantIndexes} from './room-assistant-schema.mjs';
+ import {prepareClaimOverlap,matchClaimOverlap} from '../src/claim-overlap.js';
+@@ -607,17 +608,29 @@
+   if(assistant?.coordinatorMemberId!==null&&assistant?.coordinatorMemberId!==undefined&&!validId(assistant.coordinatorMemberId))corrupt('assistant coordinator identity differs');
+   if(store.humanPush?.vapid)refuse('Human push visibility dependencies require qualification');
+   const messages=new Map(),workRefs=new Map();
+-  const loadMessage=id=>{
++  const loadMessage=(id,routing=false)=>{
+     if(!id||messages.has(id))return messages.get(id);
+-    const source=readMessage?readMessage(id,b):readCurrentMessage(db,roomId,id,b);if(source)messages.set(id,source);return source;
++    let source;
++    if(routing&&!readMessage&&command.type==='message.posted'){
++      const witness=readCurrentRecord(db,roomId,'messageWitness',id,b);
++      if(witness?.version===2){
++        const value=checkRoutingWitnessResearch(witness,id);
++        const row=db.prepare('SELECT seq,entity_hash,author_id,channel_id,reply_to_id,to_member_id,work_item_id,created_at,deleted_at FROM messages WHERE room_id=? AND message_id=?').get(roomId,id);charge(b,1024);
++        if(!row||row.seq!==witness.sequence||row.entity_hash!==witness.entityHash)corrupt('routing witness binding differs');
++        for(const [field,column] of [['authorId','author_id'],['channelId','channel_id'],['replyToId','reply_to_id'],['toMemberId','to_member_id'],['workItemId','work_item_id'],['createdAt','created_at'],['deletedAt','deleted_at']])if((value[field]??null)!==(row[column]??null))corrupt('routing fields differ');
++        source={row,value};
++      }
++    }
++    source??=readMessage?readMessage(id,b):readCurrentMessage(db,roomId,id,b);
++    if(source)messages.set(id,source);return source;
+   };
+   const wantedMessages=[command.data.messageId??command.id,`${command.data.messageId??command.id}:channel`,command.data.replyToId,
+     command.data.sourceMessageId,command.data.evidenceMessageId,command.data.requestMessageId,command.data.progressMessageId];
+-  for(const id of wantedMessages)if(typeof id==='string')loadMessage(id);
++  for(const id of wantedMessages)if(typeof id==='string')loadMessage(id,id===command.data.replyToId);
+   let cursor = command.data.replyToId ?? (['message.edited','message.pinned','message.unpinned'].includes(command.type)?command.data.messageId:command.type==='message.deleted'?messages.get(command.data.messageId)?.value.replyToId:null), childSeq = Number.MAX_SAFE_INTEGER;
+   for(let depth=0;cursor;depth++) {
+     if(depth>=32)refuse('Reply ancestry exceeds bounded context');
+-    const source=loadMessage(cursor);if(!source)break;
++    const source=loadMessage(cursor,true);if(!source)break;
+     if(source.row.seq>=childSeq)corrupt('reply ancestry is cyclic or out of order');childSeq=source.row.seq;
+     const request=readCurrentRecord(db,roomId,'replyRequests',cursor,b);
+     if(request!==undefined)(state.replyRequests??={})[cursor]=request;
+@@ -838,7 +851,7 @@
+     const added=state.messages.filter(message=>!previous.state.messages.some(old=>old.id===message.id));
+     for(const message of added) {
+       const row=messageRowForWrite(message,{sequence,pinned:(state.pins??[]).some(pin=>pin.messageId===message.id),threadMessages:new Map(state.messages.map(m=>[m.id,m]))});
+-      changes.push({domain:'messageWitness',key:message.id,value:{sequence,entityHash:messageProofHash(row)}});
++      changes.push({domain:'messageWitness',key:message.id,value:makeRoutingWitnessResearch({...row,entity_hash:messageProofHash(row)})});
+       let root=message;const seen=new Set();
+       while(root.replyToId) {if(seen.has(root.id))corrupt('new reply cycle');seen.add(root.id);const parent=state.messages.find(m=>m.id===root.replyToId);if(!parent)corrupt('unloaded reply ancestor');root=parent;}
+       const key=root.id+'\0'+message.authorId;
+@@ -854,7 +867,7 @@
+       &&(state.pins??[]).some(pin=>pin.messageId===message.id)!==(source.row.pinned===1);
+     if(!source||(isDeepStrictEqual(message,source.value)&&!pinChanged))continue;
+     const row=messageRowForWrite(message,{sequence:source.row.seq,pinned:event.type==='member.merged'?source.row.pinned===1:(state.pins??[]).some(pin=>pin.messageId===message.id),threadMessages:new Map(state.messages.map(m=>[m.id,m]))});
+-    changes.push({domain:'messageWitness',key:message.id,value:{sequence:source.row.seq,entityHash:messageProofHash(row)}});
++    changes.push({domain:'messageWitness',key:message.id,value:makeRoutingWitnessResearch({...row,entity_hash:messageProofHash(row)})});
+   }
+   if(current.merge) {
+     const roots=new Set([...current.merge.touched].map(id=>current.messageRows.get(id).row.thread_root_id??id));

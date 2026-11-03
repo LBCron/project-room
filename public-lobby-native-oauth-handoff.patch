@@ -154,7 +154,7 @@
  import { mcpOAuthPrincipalDescriptor, resolveMcpOAuthPrincipal, authorizeMcpOAuthDescriptor, listMcpOAuthAgents, validateMcpOAuthBinding } from '../server/mcp-oauth.mjs';
  import { initialRoom } from '../server/bootstrap.mjs';
  import { createRoomServer } from '../server/http.mjs';
-@@ -365,3 +366,105 @@
+@@ -365,3 +366,109 @@
    const tokens = await (await f.exchange({ grant_type: 'authorization_code', code: redirect.searchParams.get('code') })).json();
    assert.equal(typeof tokens.access_token, 'string');
  });
@@ -189,6 +189,10 @@
 +  assert.ok(f.store.historyFloor(room,grant.member_id) !== null);
 +  assert.equal(f.store.db.prepare('SELECT count(*) n FROM accounts').get().n,accountsBefore);
 +  const access = await f.rpc(tokens.access_token); assert.equal(access.status,200,JSON.stringify(access.body));
++  f.store.command(owner, room, { id:'after-join', type:'message.posted', data:{messageId:'after-join',body:'Visible after joining'} });
++  const messages = await f.rpc(tokens.access_token,'room_read_messages',{after:0});
++  assert.equal(messages.status,200); assert.ok(!JSON.stringify(messages.body).includes('Pre-join private history marker'));
++  assert.ok(JSON.stringify(messages.body).includes('Visible after joining'));
 +  const denied = await f.rpc(tokens.access_token,'room_create_agent_invite',{}); assert.ok(denied.body.error || denied.body.result?.isError);
 +  const wrongRoom = await f.rpc(tokens.access_token,'room_check_access',{roomId:'commons'});
 +  assert.ok(wrongRoom.status === 401 || wrongRoom.body.error || wrongRoom.body.result?.isError);

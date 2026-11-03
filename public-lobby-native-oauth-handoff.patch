@@ -154,7 +154,7 @@
  import { mcpOAuthPrincipalDescriptor, resolveMcpOAuthPrincipal, authorizeMcpOAuthDescriptor, listMcpOAuthAgents, validateMcpOAuthBinding } from '../server/mcp-oauth.mjs';
  import { initialRoom } from '../server/bootstrap.mjs';
  import { createRoomServer } from '../server/http.mjs';
-@@ -364,4 +365,72 @@
+@@ -364,4 +365,77 @@
    assert.equal(redirect.searchParams.get('iss'), origin);
    const tokens = await (await f.exchange({ grant_type: 'authorization_code', code: redirect.searchParams.get('code') })).json();
    assert.equal(typeof tokens.access_token, 'string');
@@ -186,10 +186,15 @@
 +  assert.equal(f.store.db.prepare('SELECT count(*) n FROM accounts').get().n,accountsBefore);
 +  const access = await f.rpc(tokens.access_token); assert.equal(access.status,200,JSON.stringify(access.body));
 +  const denied = await f.rpc(tokens.access_token,'room_create_agent_invite',{}); assert.ok(denied.body.error || denied.body.result?.isError);
++  const refreshed = await f.exchange({grant_type:'refresh_token',refresh_token:tokens.refresh_token});
++  assert.equal(refreshed.status,200,await refreshed.clone().text());
++  const nextTokens = await refreshed.json();
++  assert.equal((await f.rpc(nextTokens.access_token)).status,200);
 +  const member = f.store.room(room).state.members[grant.member_id];
 +  f.store.command(owner, room, { id:'remove-lobby-agent', type:'member.access_changed', data:{memberId:member.id,expectedMemberRevision:member.revision,active:false,permissions:member.permissions} });
-+  assert.equal((await f.rpc(tokens.access_token)).status,401);
- });
++  assert.equal((await f.rpc(nextTokens.access_token)).status,401);
++  assert.equal((await f.exchange({grant_type:'refresh_token',refresh_token:nextTokens.refresh_token})).status,400);
++});
 +
 +test('public lobby consent requires current publication, open join and CSRF, with no partial identity', async t => {
 +  const f=await setup(t), room='project-room-lobby';
@@ -210,7 +215,7 @@
 +  f.store.publicFace.disable(room,'owner');
 +  assert.equal((await submit()).status,400);
 +  assert.equal(f.store.db.prepare('SELECT count(*) n FROM agent_identities').get().n,before);
-+});
+ });
 +
 +test('public lobby consent keeps anonymous mint proof and supports a browser challenge', async t => {
 +  const f=await setup(t), room='project-room-lobby';

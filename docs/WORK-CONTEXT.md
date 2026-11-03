@@ -264,7 +264,11 @@ Normalized rooms use the same work-discussion endpoint and SDK method. The respo
 has `contractVersion: 2`, `discussion.cursorMode: "opaque-head-bound-v1"`, and
 `discussion.sourceWindow.complete`. Each page examines at most four authorized
 conversation sources before selecting source, linked, and reply-descendant messages.
-Private DMs outside the viewer's parties do not consume that source window. The
+Private DMs outside the viewer's parties do not consume that source window.
+Historical posting bodies are projected out in SQL; discussion displays the
+protected current canonical body. The raw opening-event source ledger retains a
+64 KiB prefix with one legal large first atom, and can stop before the next
+opening even when the output page has spare space. The
 existing history floor is checked independently. Source messages can predate the
 work item; no timestamp-to-sequence inference skips them.
 

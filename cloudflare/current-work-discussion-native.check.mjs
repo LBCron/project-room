@@ -18,7 +18,15 @@ test('actual Native HTTP discussion has bounded source reads at1k/5k; private-on
   const tail=await call(surface,'/read?since='+(seed.sequence-1));assert.deepEqual(tail.page.discussion.items.map(row=>row.message.id),['linked']);assert.equal(tail.page.discussion.hasMore,false);
   const hidden='hidden'+n;await call(hidden,'/seed?n='+n+'&hidden=1');const privatePage=await call(hidden,'/read');assert.deepEqual(privatePage.page.discussion.items.map(row=>row.message.id),['source','linked']);assert.equal(privatePage.page.discussion.hasMore,false);assert.equal(JSON.stringify(privatePage.page).includes('PRIVATE-'),false);costs.push({n,kind:'private-unrelated',...privatePage.cost});
   await mf.dispose();mf=create();const cold=await call(surface,'/read');assert.deepEqual(cold.page.discussion.items.map(row=>row.message.id),['source']);
- }t.diagnostic(JSON.stringify({costs,completeUnrelatedEnumeration:false,sourceLimit:4,historySizes:[1000,5000],localClockNotCPU:true}));
+ }
+ const historical=await call('historical','/seed-historical');
+ let page=await call('historical','/read?since='+historical.since);assert.deepEqual(page.page.discussion.items.map(row=>row.message.id),['cjk']);assert.equal(page.page.discussion.hasMore,true);
+ const openingCost=page.cost;assert.ok(!JSON.stringify(page.page).includes('界'));assert.equal(page.cost.unknown,0);
+ page=await call('historical','/read?cursor='+page.page.discussion.nextCursor);assert.deepEqual(page.page.discussion.items.map(row=>row.message.id),['control']);assert.equal(page.page.discussion.hasMore,true);assert.equal(page.cost.unknown,0);
+ page=await call('historical','/read?cursor='+page.page.discussion.nextCursor);assert.deepEqual(page.page.discussion.items.map(row=>row.message.id),['tail']);assert.equal(page.page.discussion.hasMore,false);assert.equal(JSON.stringify(page.page).includes('Current private'),false);
+ await mf.dispose();mf=create();const historicalCold=await call('historical','/read?since='+historical.since);assert.deepEqual(historicalCold.page.discussion.items.map(row=>row.message.id),['cjk']);
+ t.diagnostic(JSON.stringify({historicalOpeningCost:openingCost,rawHistoricalTextReturned:false,rawPrefixBytes:65536,oneLegalFirstAtom:true}));
+ t.diagnostic(JSON.stringify({costs,completeUnrelatedEnumeration:false,sourceLimit:4,historySizes:[1000,5000],localClockNotCPU:true}));
  assert.equal(costs[0].rowsRead,costs[2].rowsRead);assert.equal(costs[1].rowsRead,costs[3].rowsRead);
  }finally{await mf.dispose();await rm(dir,{recursive:true,force:true});}
 });

@@ -1,5 +1,7 @@
 import {createHash} from 'node:crypto';
 import {isCurrentRoom,withCurrentReadContext,readCurrentHead,readCurrentSelectedWorkState,readCurrentMessage,readCurrentHistoryFloor,readCurrentRecord,chargeCurrentReadBudget} from './current-room-repository.mjs';
+import {readCurrentEventEnvelope} from './current-event-envelope.mjs';
+import {CURRENT_EVENT_SOURCE_BYTES} from './current-room-events.mjs';
 import {affectedMessageIds} from './messages-store.mjs';
 import {conversationCursorCodec} from './conversation-sync.mjs';
 import {messageInHistory} from './history-visibility.mjs';
@@ -80,18 +82,24 @@ export function readCurrentWorkDiscussion(store,token,roomId,workItemId,{cursor=
    for(const row of admitted){if(!validId(row.message_id))fail('current_room_context_unavailable','Discussion source identity exceeds bounded input',409);unique.set(row.message_id,row);}
   }
   const rows=[...unique.values()].sort((a,c)=>a.seq-c.seq||Buffer.compare(Buffer.from(a.message_id),Buffer.from(c.message_id))).slice(0,SOURCE_LIMIT+1);
-  const items=[];let bytes=0,hasMore = rows.length > SOURCE_LIMIT;
+  const items=[];let bytes=0,sourceBytes=0,hasMore = rows.length > SOURCE_LIMIT;
   for(const row of rows.slice(0,SOURCE_LIMIT)){
    if(!validId(row.message_id))fail('current_room_context_unavailable','Discussion source identity exceeds bounded input',409);
    const record=read(row.message_id),message=record.value;if(record.row.seq!==row.seq)throw Error('current_room_corrupt: discussion source sequence');
    const kind=relation(record),visible=(!message.toMemberId||message.toMemberId===auth.member.id||message.authorId===auth.member.id)&&messageInHistory(message,floor);
    // Removed text never enters a discussion cache, in either read mode.
    if(!kind||!visible||message.deletedAt||message.redacted||typeof message.body!=='string'){sourceAfter=row.seq;sourceAfterId=row.message_id;continue;}
-   const opening=store.db.prepare('SELECT CASE WHEN length(CAST(id AS BLOB))<=128 THEN id END AS id,length(CAST(body AS BLOB)) AS bytes FROM events WHERE room_id=? AND sequence=?').get(roomId,row.seq);
-   if(!opening||opening.bytes>131072)fail('current_room_context_unavailable','Discussion opening event exceeds bounded input',409);
-   chargeCurrentReadBudget(b,opening.bytes+256);
-   const event=JSON.parse(store.db.prepare('SELECT body FROM events WHERE room_id=? AND sequence=?').get(roomId,row.seq).body);
-   if(event.id!==opening.id||event.roomId!==roomId||event.type!=='message.posted'||!affectedMessageIds(event).includes(message.id)||event.actorId!==message.authorId)
+   const scalar=store.db.prepare('SELECT sequence,length(CAST(id AS BLOB)) AS idBytes,length(CAST(body AS BLOB)) AS bodyBytes FROM events WHERE room_id=? AND sequence=?').get(roomId,row.seq);
+   if(!scalar||!Number.isSafeInteger(scalar.idBytes)||scalar.idBytes<1||!Number.isSafeInteger(scalar.bodyBytes)||scalar.bodyBytes<2)
+    fail('current_room_context_unavailable','Discussion opening metadata is unavailable',409);
+   const rawBytes=scalar.idBytes+scalar.bodyBytes+32;
+   // Same raw-SQL prefix policy as the qualified current event reader: one
+   // legal large first atom, then stop BEFORE an unexamined opening. Only
+   // the projected envelope crosses into JS and consumes protected bytes.
+   if (sourceBytes && sourceBytes + rawBytes > CURRENT_EVENT_SOURCE_BYTES){hasMore=true;break;}
+   const opening=readCurrentEventEnvelope(store.db,roomId,scalar,b),event=opening.event;
+   sourceBytes+=rawBytes;
+   if(event.roomId!==roomId||event.type!=='message.posted'||!affectedMessageIds(event).includes(message.id)||event.actorId!==message.authorId)
     throw Error('current_room_corrupt: discussion opening identity');
    const entry={sequence:row.seq,eventId:opening.id,relation:kind,message:pick(message,'id authorId body createdAt replyToId toMemberId workItemId')};
    if(message.proposal)entry.message.proposal=pick(message.proposal,'packetId basisRevision submittedAtRevision attribution');

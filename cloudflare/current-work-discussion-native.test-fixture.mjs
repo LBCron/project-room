@@ -3,10 +3,15 @@ import {WorkLinkedPostRoom} from './work-linked-post-native.test-fixture.mjs';
 import {createRoomServer} from '../server/http.mjs';
 import {initialRoom} from '../server/bootstrap.mjs';
 import {event} from '../src/events.js';
+import {historicalDiscussionEvents} from '../tests/helpers/current-discussion-large-openings.mjs';
 export class CurrentWorkDiscussionRoom extends WorkLinkedPostRoom{
  async fetch(request){
   const url=new URL(request.url),s=this.store;
   try{
+   if(url.pathname==='/seed-historical'){
+    const source=historicalDiscussionEvents();s.initialize(source.events,{representation:'normalized-current-v1'});
+    await this.ctx.storage.put('key',s.issueAccessKey('commons','reader'));return Response.json({since:source.since,sequence:s.headSequence('commons')});
+   }
    if(url.pathname==='/seed'){
     const n=Number(url.searchParams.get('n')),hidden=url.searchParams.get('hidden')==='1';if(![1000,5000].includes(n))throw Error('Invalid fixture size');
     const events=initialRoom(),add=(id,type,data,actorId='owner')=>events.push(event({id,roomId:'commons',actorId,type,data}));

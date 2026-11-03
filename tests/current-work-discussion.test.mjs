@@ -129,3 +129,18 @@ test('a failed bounded read does not consume a cursor or write progress',async t
  try{assert.throws(()=>f.store.workDiscussion(f.saved.identitySecret,'commons','task',{cursor,limit:1}),/Synthetic discussion read fault/);}finally{f.store.db.prepare=prepare;}
  assert.equal(fired,true);assert.deepEqual(ids(await f.client.workDiscussion('task',{cursor,limit:1})),[]);assert.equal(f.store.headSequence('commons'),head);
 });
+
+test('historical maximum CJK/control openings use projected metadata; raw prefix stops before the next opening',async t=>{
+ const {historicalDiscussionEvents}=await import('./helpers/current-discussion-large-openings.mjs');
+ const s=new RoomStore(':memory:');t.after(()=>s.close());const source=historicalDiscussionEvents();s.initialize(source.events,{representation:'normalized-current-v1'});
+ const token=s.issueAccessKey('commons','reader');s.room=()=>{throw Error('Whole-room hydration');};
+ const prepare=s.db.prepare.bind(s.db);let obsoleteTextTransferred=false;
+ s.db.prepare=sql=>new Proxy(prepare(sql),{get(target,key){const value=Reflect.get(target,key,target);if(!['get','all'].includes(key))return typeof value==='function'?value.bind(target):value;return(...args)=>{const result=value.apply(target,args);for(const row of key==='all'?result:[result])for(const cell of Object.values(row??{}))if(typeof cell==='string'&&(cell.includes('界'.repeat(100))||cell.includes('\\u0001'.repeat(100))))obsoleteTextTransferred=true;return result;};}});
+ let page=s.workDiscussion(token,'commons','task',{since:source.since,limit:25});
+ assert.deepEqual(ids(page),['cjk']);assert.equal(page.discussion.hasMore,true);assert.equal(page.discussion.checkpoint,null);
+ const firstCursor=page.discussion.nextCursor;
+ page=s.workDiscussion(token,'commons','task',{cursor:firstCursor,limit:25});assert.deepEqual(ids(page),['control']);assert.equal(page.discussion.hasMore,true);
+ page=s.workDiscussion(token,'commons','task',{cursor:page.discussion.nextCursor,limit:25});assert.deepEqual(ids(page),['tail']);assert.equal(page.discussion.hasMore,false);
+ assert.equal(obsoleteTextTransferred,false);assert.equal(JSON.stringify(page).includes('Current private'),false);
+ const again=s.workDiscussion(token,'commons','task',{cursor:firstCursor,limit:25});assert.deepEqual(ids(again),['control']);
+});

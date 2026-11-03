@@ -49,6 +49,14 @@ test('failed or interrupted initialization clears and terminates its process', a
   }
 });
 
+test('stopping during initialization cannot publish stale readiness', async () => {
+  const host = new AgentHost({candidate:{command:process.execPath,args:[FAKE_AGENT]},env:{...process.env,FAKE_ACP_MODE:'init-stall'}});
+  const starting=host.start({timeoutMs:5000});const child=host.process.child;
+  host.stop();await assert.rejects(starting);
+  await waitFor(()=>child.exitCode!==null||child.signalCode!==null);
+  assert.equal(host.running,false);assert.equal(host.capabilities,null);
+});
+
 test('stopping during restart backoff never starts another adapter', async () => {
   let starts=0;
   const host={running:false,onExit(){},start(){starts++;},stop(){}};

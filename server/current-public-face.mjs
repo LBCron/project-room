@@ -1,5 +1,6 @@
 import {isCurrentRoom,withCurrentReadContext,readCurrentHead,readCurrentRecord,readCurrentMessage,currentConversationRows,chargeCurrentReadBudget} from './current-room-repository.mjs';
 import {ServiceError} from './service-error.mjs';
+import {CONTENT_TRUST} from './content-trust.mjs';
 
 // Explicit publication is checked by PublicFace before entering this reader.
 // The normalized viewer publishes only General, never a member's inbox or
@@ -42,4 +43,19 @@ export function readCurrentPublicFace(store,roomId,{after=null,limit=CURRENT_PUB
   }
   return {room,members,messages,hasMore,coverage:{channel:'general',bounded:true,limit:n}};
  },{maxRecords:512}));
+}
+
+
+export const PUBLIC_LOBBY_ROOM_ID='project-room-lobby';
+// Joining does not grant earlier member history. Only the official lobby's
+// independently published General view can supply public first-work context.
+export function publishedLobbyContext(store,roomId){
+ if(roomId!==PUBLIC_LOBBY_ROOM_ID||!isCurrentRoom(store.db,roomId))return null;
+ const row=store.db.prepare('SELECT s.public_code FROM room_public_settings s JOIN public_rooms p ON p.slug=s.room_id WHERE p.slug=? AND s.enabled=1').get(roomId);
+ if(!row)return null;
+ let face;
+ try{face=store.publicFace.faceByCode(row.public_code);}
+ catch(error){if(error.status===404)return null;throw error;}
+ return {source:'/watch',untrusted:true,contentTrust:CONTENT_TRUST,
+  room:face.room,messages:face.messages.slice(-CURRENT_PUBLIC_FACE_LIMIT),coverage:face.coverage};
 }

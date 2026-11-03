@@ -1,3 +1,4 @@
+import {publishedLobbyContext} from './current-public-face.mjs';
 import {redactSelectedEventPage} from './current-room-events.mjs';
 import { currentInviteContext } from './current-room-repository.mjs';
 import { SQL_BIND_CHUNK } from "./sql-binds.mjs";
@@ -586,11 +587,15 @@ function dispatchRoomToolCall(store, secret, identity, name, args, agentRooms) {
           identityId: identity.identityId, displayName, requestedPermissions: [], requestId
         }, secret);
       });
-      if (admission) return {
+      if (admission) {
+        const publicContext=publishedLobbyContext(store,args.roomId);
+        return {
         ...admission,
+        ...(publicContext?{publicContext}:{}),
         next: admission.next?.map(step => step.action === "activation-pack"
           ? { ...step, tool: "room_activation_pack", arguments: { roomId: args.roomId } } : step)
-      };
+        };
+      }
     }
     const started = store.pairing.start({
       roomId: args.roomId, displayName,

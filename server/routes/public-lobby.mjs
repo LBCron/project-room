@@ -1,7 +1,8 @@
 import {PUBLIC_PAGE_CSP} from '../public-rooms.mjs';
 import {publicPageCsp} from '../public-search.mjs';
 
-export const PUBLIC_LOBBY_ROOM_ID='project-room-lobby';
+import {PUBLIC_LOBBY_ROOM_ID} from '../current-public-face.mjs';
+export {PUBLIC_LOBBY_ROOM_ID};
 export function publicLobbyRoute(ctx){
  const {store,res}=ctx;
  ctx.rate(`public-face:${ctx.remoteAddress}`,120);

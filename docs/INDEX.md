@@ -296,3 +296,5 @@ These records describe tested revisions and do not establish current deployment 
 - Write and catalog measurements: [assistant catalog probes](research/2026-11-02-assistant-catalog-probes.md), [compact MCP posts](research/2026-11-02-mcp-post-compact.md), and [OAuth work-linked posts](research/2026-11-02-work-linked-post-budget.md).
 
 - [Bounded canonical message input and read-only size census](research/2026-11-03-large-message-bounded-input.md)
+
+- [Inbox catch-up V2: witnessed progress after verified delivery](research/2026-11-03-inbox-catch-up-v2.md) — original causal budget failure, corrected shared-budget admission, Native traversal and limits.

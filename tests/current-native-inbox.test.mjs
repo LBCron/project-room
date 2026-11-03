@@ -29,3 +29,38 @@ test('native inbox index DDL substitution and equal-size protected payload mutat
  {const{s,key}=fixture(t),row=s.db.prepare("SELECT payload,payload_bytes FROM current_room_records WHERE room_id='commons' AND domain='workSummary' AND record_key='task-9'").get(),changed=row.payload.replace('Useful task9','Altered text');assert.notEqual(changed,row.payload);assert.equal(Buffer.byteLength(changed),row.payload_bytes);s.transaction(()=>withCurrentRoomWriter(s.db,'commons',()=>s.db.prepare("UPDATE current_room_records SET payload=? WHERE room_id='commons' AND domain='workSummary' AND record_key='task-9'").run(changed)));assert.throws(()=>s.agentInbox(key,'commons'),/corrupt|hash|digest|proof/i);}
 });
 test('production normalized export and restore rebuild the exact owned discovery indexes',t=>{const{s,key}=fixture(t),target=new RoomStore(':memory:');t.after(()=>target.close());const ndjson=exportNdjsonText(s.db);replayNdjsonInto(ndjson,target);const indexes=target.db.prepare("SELECT name,sql FROM sqlite_master WHERE name GLOB 'current_inbox_*' ORDER BY name").all();assert.equal(indexes.length,6);assert.deepEqual(indexes,s.db.prepare("SELECT name,sql FROM sqlite_master WHERE name GLOB 'current_inbox_*' ORDER BY name").all());target.room=()=>{throw Error('full hydration');};const current=target.agentInbox(key,'commons');assert.deepEqual(current.nativeWork.map(x=>x.id),['task-9']);assert.deepEqual(current.replyRequests.map(x=>x.id),['request']);});
+
+function seeded(t,build){const s=new RoomStore(':memory:');t.after(()=>s.close());const events=initialRoom(),add=(type,data,actorId='owner')=>events.push(event({roomId:'commons',actorId,type,data}));
+ for(const id of ['worker','other'])add('member.added',{memberId:id,displayName:id,kind:'agent',permissions:[]});const start=events.length;build(add);
+ s.initialize(events,{representation:'normalized-current-v1'});s.room=()=>{throw Error('whole-room hydration');};return{s,key:s.issueAccessKey('commons','worker'),after:start};}
+test('catch-up skips unaddressed traffic so a DM and a reply to the viewer lead the page',t=>{
+ const{s,key,after}=seeded(t,add=>{
+  add('message.posted',{messageId:'own-root',body:'Worker asks'},'worker');
+  for(let i=0;i<40;i++)add('message.posted',{messageId:'noise-'+i,body:'Unrelated '+i});
+  for(let i=0;i<10;i++)add('message.posted',{messageId:'more-'+i,body:'More '+i},'other');
+  add('message.posted',{messageId:'to-worker',body:'Private note',toMemberId:'worker'},'other');
+  add('message.posted',{messageId:'answer-own',body:'Answer',replyToId:'own-root'},'other');
+ });
+ const first=s.agentInbox(key,'commons',{limit:20,after});
+ let page=first,calls=1;const seen=new Set([...page.directMentions,...page.directMessages,...page.replies].map(x=>x.messageId));
+ while(page.cursor.hasMore&&calls<10){page=s.agentInbox(key,'commons',{limit:20,after:page.cursor.after});calls++;for(const x of [...page.directMentions,...page.directMessages,...page.replies])seen.add(x.messageId);}
+ assert.ok(seen.has('to-worker')&&seen.has('answer-own'),'seen '+[...seen]);assert.ok(calls<=3,'catch-up took '+calls+' calls');
+ assert.equal(page.cursor.hasMore,false);assert.equal(JSON.stringify(first).includes('Unrelated'),false);
+});
+test('catch-up with nothing addressed advances a bounded window and never claims completion early',t=>{
+ const{s,key,after}=seeded(t,add=>{for(let i=0;i<100;i++)add('message.posted',{messageId:'quiet-'+i,body:'Quiet '+i});});
+ const first=s.agentInbox(key,'commons',{limit:20,after});
+ assert.equal(first.directMentions.length+first.directMessages.length+first.replies.length,0);
+ assert.equal(first.cursor.hasMore,true);assert.ok(first.cursor.after>after);
+ let page=first,calls=1;
+ while(page.cursor.hasMore&&calls<20){const previous=page.cursor.after;page=s.agentInbox(key,'commons',{limit:20,after:previous});calls++;assert.ok(page.cursor.after>previous);assert.equal(page.directMentions.length+page.directMessages.length+page.replies.length,0);assert.ok(page.coverage.conversation.skippedUnaddressed<=64);}
+ assert.equal(page.cursor.hasMore,false);assert.equal(page.cursor.after,s.headSequence('commons'));t.diagnostic('empty catch-up calls: '+calls);
+});
+test('catch-up reaches a mention behind unrelated traffic through honest bounded continuation',t=>{
+ const{s,key,after}=seeded(t,add=>{for(let i=0;i<40;i++)add('message.posted',{messageId:'noise-'+i,body:'Unrelated '+i});});
+ s.command(s.issueAccessKey('commons','owner'),'commons',{id:'ping',type:'message.posted',data:{messageId:'ping',body:'@worker please look'}});
+ const first=s.agentInbox(key,'commons',{limit:20,after});
+ let page=first,calls=1;const ids=page.directMentions.map(x=>x.messageId);
+ while(page.cursor.hasMore&&calls<10){const previous=page.cursor.after;page=s.agentInbox(key,'commons',{limit:20,after:previous});calls++;assert.ok(page.cursor.after>previous);ids.push(...page.directMentions.map(x=>x.messageId));}
+ assert.equal(page.cursor.hasMore,false);assert.deepEqual(ids,['ping']);assert.equal(JSON.stringify(first).includes('Unrelated'),false);t.diagnostic('late mention catch-up calls: '+calls);
+});

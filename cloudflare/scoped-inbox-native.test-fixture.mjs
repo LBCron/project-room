@@ -2,7 +2,7 @@ import entry,{DurableCoverageRoom as Base} from './durable-coverage-native.test-
 import {seedScopedInbox} from '../tests/helpers/scoped-inbox-source.mjs';
 export class DurableCoverageRoom extends Base{
  async fetch(request){const path=new URL(request.url).pathname,store=this.store;
-  if(path==='/__inbox-seed'){const saved=seedScopedInbox(store);return Response.json({token:saved.token,after:saved.after});}
+  if(path==='/__inbox-seed'){const saved=seedScopedInbox(store);return Response.json({token:saved.token,after:saved.after,head:store.headSequence('commons')});}
   if(path==='/__inbox-cost')return Response.json(this.lastCost);
   store.room=()=>{throw Error('Whole-room hydration forbidden');};
   const sql=this.ctx.storage.sql,exec=sql.exec.bind(sql),rows=[];

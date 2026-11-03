@@ -6765,7 +6765,7 @@ this.slaBreachAlerts = new SlaBreachAlertJournal(this); // Task 26: durable in-a
     // bond proposals, peer messages, DM requests) are current state, not a
     // log, and always ride in full. after=0 keeps the legacy response.
     if (after!==undefined&&(!Number.isSafeInteger(after) || after < 0)) fail(422, "invalid_inbox_cursor", "After must be a sequence number of 0 or more");
-    if(isCurrentRoom(this.db,roomId))return readCurrentNativeInbox(this,token,roomId,{limit,after,olderCursor,expectedSessionBinding});
+    if(isCurrentRoom(this.db,roomId))return readCurrentNativeInbox(this,token,roomId,{limit,after,olderCursor,expectedSessionBinding,skipUnaddressed:true});
     if(olderCursor!==undefined)fail(422,"invalid_inbox_cursor","Older inbox continuation requires a native room");
     after??=0;
     // RC-2026-09-18-013: the first per-room collab access lazily replays the

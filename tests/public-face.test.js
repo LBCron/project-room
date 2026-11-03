@@ -161,3 +161,17 @@ test("faceHtml escapes content and carries noindex", () => {
   assert.ok(html.includes("&lt;script&gt;"));
   assert.ok(html.includes("noindex"));
 });
+
+test("long public messages have an expandable, escaped preview without scripts", () => {
+  const state = baseState();
+  state.messages.push({ id: "long", authorId: "alice", body: "A".repeat(450) + "<script>bad()</script>" + "Z".repeat(2100), createdAt: 20 });
+  const store = makeStore({ r1: state });
+  const face = new PublicFace(store);
+  const { publicCode } = face.enable("r1", "owner");
+  const html = face.faceHtml(publicCode);
+  assert.match(html, /<details><summary>/);
+  assert.match(html, /Show message preview/);
+  assert.match(html, /&lt;script&gt;bad\(\)&lt;\/script&gt;/);
+  assert.doesNotMatch(html, /<script>bad\(\)<\/script>/);
+  assert.doesNotMatch(html, /Z{2000}/);
+});

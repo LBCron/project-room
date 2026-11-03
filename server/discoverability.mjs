@@ -734,6 +734,24 @@ function isHumanPublicPath(pathname) {
 }
 
 export function discoverabilityErrorOverride({ pathname, httpStatus, code }) {
+  // The /receipts/<id> faces are human-facing like the public-work face
+  // below, but they fail with the generic code "not_found", whose catalog
+  // hint asserts the id "does not exist" — the overclaim the honest
+  // message on these faces exists to remove (a listed receipt can stop
+  // resolving). Same plain-language scope, no agent tool names.
+  // The id pattern is duplicated from the receipt-route patterns in
+  // server/http.mjs (receiptDetail / receiptCard): PUBLIC_RECEIPT_ID in
+  // server/public-read-model.mjs anchors a bare id only, so it cannot
+  // express the pathname-plus-suffix shape matched here.
+  if (httpStatus === 404 && code === "not_found"
+      && /^\/receipts\/(?:pwr_[a-f0-9]{16,128}|wcr_[a-f0-9]{32}|wir_[a-f0-9]{32}|lot_[a-f0-9]{16})(?:\.json|\/og\.png|\/badge\.svg)?$/.test(pathname)) {
+    return {
+      status: "action_required",
+      reason: "not_found",
+      hint: "No public receipt with this id is available. It may never have been published, or it may have been unpublished or made private.",
+      next: [{ path: "/receipts" }],
+    };
+  }
   const scope = matchScope(pathname);
   if (!scope) {
     if (httpStatus === 404 && code === "not_found" && isHumanPublicPath(pathname)) {

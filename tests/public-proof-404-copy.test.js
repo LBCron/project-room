@@ -58,7 +58,7 @@ test("with agent pages off, the directory and sitemap emit no /u/ link", async t
 
 test("unavailable receipt 404 names the true scope on the HTML, JSON and share faces", async t => {
   const { request } = await live(t);
-  for (const path of [`/receipts/${MISSING_RECEIPT}`, `/receipts/${MISSING_RECEIPT}.json`, `/receipts/${MISSING_RECEIPT}/og.png`]) {
+  for (const path of [`/receipts/${MISSING_RECEIPT}`, `/receipts/${MISSING_RECEIPT}.json`, `/receipts/${MISSING_RECEIPT}/og.png`, `/receipts/${MISSING_RECEIPT}/badge.svg`]) {
     const res = await request(path);
     assert.equal(res.status, 404, path);
     const body = await res.json();
@@ -66,6 +66,12 @@ test("unavailable receipt 404 names the true scope on the HTML, JSON and share f
     assert.match(body.error.message, /No public receipt with this id is available/, path);
     assert.match(body.error.message, /never have been published/, path);
     assert.match(body.error.message, /unpublished or made private/, path);
+    // Full-body discipline, as on the API face below: no field of the 404
+    // body — the hint in particular — may assert the id does not exist,
+    // and the hint must carry the same honest scope as the message.
+    assert.ok(!JSON.stringify(body).includes("does not exist"),
+      `${path} body must not assert non-existence: ${JSON.stringify(body)}`);
+    assert.match(body.hint, /No public receipt with this id is available/, path);
   }
 });
 

@@ -28,6 +28,7 @@ import { initialRoom } from "../server/bootstrap.mjs";
 import {
   buildOpenApiJson,
   DISCOVERABILITY_ROUTES,
+  discoverabilityErrorOverride,
   MCP_DISCOVERY_BLOCK,
   nextActionsForIdentityMint,
   nextActionsForRoomCreate,
@@ -646,6 +647,45 @@ test("inventory method accuracy: served methods match the route table", { timeou
   for (const path of Object.keys(INVENTORY_METHOD_CONTRACT)) {
     assert.ok(doc.paths[path]?.get, `openapi.json documents GET ${path}`);
   }
+});
+
+// ---------------------------------------------------------------------------
+// 8. Receipt-face 404 hint (PR #5128 A8 / cure-spec T8).
+// ---------------------------------------------------------------------------
+// The /receipts/<id> faces fail with the generic code "not_found", whose
+// catalog hint asserts the id "does not exist" — false scope for an id
+// that may have been published and later unpublished or made private.
+// The override must give those faces the honest hint, and nothing else:
+// every other not_found path keeps its prior (null) result.
+
+test("discoverabilityErrorOverride: receipt 404 gets the honest hint, other not_found paths unchanged", () => {
+  const id = "pwr_0000000000000000000000000000000000000000000000000000000000000000";
+  for (const suffix of ["", ".json", "/og.png", "/badge.svg"]) {
+    const override = discoverabilityErrorOverride({
+      pathname: `/receipts/${id}${suffix}`, httpStatus: 404, code: "not_found",
+    });
+    assert.ok(override, `/receipts/<id>${suffix} is overridden`);
+    assert.equal(override.status, "action_required");
+    assert.equal(override.reason, "not_found");
+    assert.match(override.hint, /No public receipt with this id is available/);
+    assert.ok(!override.hint.includes("does not exist"),
+      "receipt hint must not assert non-existence");
+    assert.deepEqual(override.next, [{ path: "/receipts" }]);
+  }
+  // Non-receipt not_found paths keep their prior result (null here).
+  for (const pathname of ["/no-such-resource", "/receipts", "/receipts/not-a-receipt-id"]) {
+    assert.equal(
+      discoverabilityErrorOverride({ pathname, httpStatus: 404, code: "not_found" }),
+      null, `${pathname} is unchanged`);
+  }
+  // The receipt branch fires only for the generic 404: other statuses and
+  // codes on a receipt path are untouched.
+  assert.equal(discoverabilityErrorOverride({
+    pathname: `/receipts/${id}`, httpStatus: 403, code: "not_found",
+  }), null);
+  assert.equal(discoverabilityErrorOverride({
+    pathname: `/receipts/${id}`, httpStatus: 404, code: "public_receipt_not_found",
+  }), null);
 });
 
 test("cold walkthrough stranger surface: every documented no-credential endpoint is auth none (qa5-p4-grokbot)", () => {

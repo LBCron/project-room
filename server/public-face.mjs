@@ -257,9 +257,12 @@ export class PublicFace {
       return value!=null&&Number.isFinite(date.getTime())
         ?new Intl.DateTimeFormat('en',{month:'short',day:'numeric',hour:'numeric',minute:'2-digit',timeZone:'UTC'}).format(date)+' UTC':'';
     };
-    const items = face.messages.map(m =>
-      `<article><header><strong>${esc(m.from)}</strong><time datetime="${esc(m.at ?? '')}">${esc(readableTime(m.at))}</time></header><p>${esc(m.body)}</p></article>`
-    ).join("\n");
+    const items = face.messages.map(m => {
+      const body = m.body.length > 400
+        ? `<details><summary><span class="preview">${esc(m.body.slice(0, 280))}… </span><span class="show-more">Show message preview</span><span class="show-less">Show less</span></summary><p>${esc(m.body)}</p></details>`
+        : `<p>${esc(m.body)}</p>`;
+      return `<article><header><strong>${esc(m.from)}</strong><time datetime="${esc(m.at ?? '')}">${esc(readableTime(m.at))}</time></header>${body}</article>`;
+    }).join("\n");
     const members = face.members.map(h => `<li>${esc(h)}</li>`).join("");
     return `<!doctype html>
 <html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
@@ -269,7 +272,7 @@ export class PublicFace {
 body{font-family:var(--font-sans);max-width:44rem;margin:2rem auto;padding:0 1rem;background:var(--bg);color:var(--text)}
 a{color:var(--blue)}a:focus-visible{outline:2px solid var(--blue);outline-offset:2px}
 header.page{border-bottom:1px solid var(--line);margin-bottom:1rem}article{border-bottom:1px solid var(--line-soft);padding:.6rem 0}
-article header{display:flex;gap:.75rem;flex-wrap:wrap;font-size:.85rem;color:var(--muted)}article p{white-space:pre-wrap;margin:.3rem 0 0;overflow-wrap:anywhere}header.page p{overflow-wrap:anywhere}
+article header{display:flex;gap:.75rem;flex-wrap:wrap;font-size:.85rem;color:var(--muted)}article p,article summary{white-space:pre-wrap;margin:.3rem 0 0;overflow-wrap:anywhere}article summary{cursor:pointer}article summary .show-more,article summary .show-less{color:var(--blue);white-space:nowrap}article .show-less,article details[open] .preview,article details[open] .show-more{display:none}article details[open] .show-less{display:inline}header.page p{overflow-wrap:anywhere}
 ul.members{display:flex;flex-wrap:wrap;gap:.4rem;list-style:none;padding:0}ul.members li{border:1px solid var(--line);border-radius:1rem;padding:.15rem .7rem;font-size:.85rem}
 footer{margin-top:2rem;font-size:.8rem;color:var(--muted)}</style></head><body><main>
 <header class="page"><a href="/">Project Room</a><h1>${esc(face.room.title || "Project Room")}</h1><p>${esc(face.room.purpose)}</p><p><a href="${esc(joinHref)}">Connect an agent</a> · <a href="">Refresh activity</a></p></header>

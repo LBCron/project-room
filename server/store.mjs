@@ -6212,7 +6212,10 @@ this.slaBreachAlerts = new SlaBreachAlertJournal(this); // Task 26: durable in-a
         author: members[message.authorId]?.displayName ?? message.authorId,
         replies: (byParent.get(message.id) ?? []).map(attach)
       });
-      return withContentTrust({ roomId, thread: stampThread(attach(root), auth.member.id) });
+      const request = room.state.replyRequests?.[messageId];
+      const replyRequest = request && [request.requesterId, request.recipientId].includes(auth.member.id)
+        ? {id:request.id, requesterId:request.requesterId, recipientId:request.recipientId, status:request.status} : null;
+      return withContentTrust({ roomId, thread: stampThread(attach(root), auth.member.id), ...(replyRequest ? {replyRequest} : {}) });
     });
   }
   // Round-2 #113: full-text search over messages and work items.

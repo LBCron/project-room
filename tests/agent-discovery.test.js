@@ -307,7 +307,8 @@ test("uppercase /SKILL.md serves the agent skill, distinct from the llms.txt pac
   assert.ok(skill.body.includes("/api/project-offers"), "skill covers paid bounties");
   assert.ok(skill.body.includes("Money honesty"), "skill carries the money-honesty section");
   const money = skill.body.slice(skill.body.indexOf("## Money honesty"), skill.body.indexOf("## If you get stuck"));
-  assert.match(money, /hash-only and unsigned/, "receipt hashes must not be sold as signatures");
+  assert.match(money, /public-work receipts are unsigned/, "receipt hashes must not be sold as signatures");
+  assert.match(money, /some receipts include system-executed checks/, "do not erase stronger recorded checks");
   assert.match(money, /does not itself transfer money/, "an offer is not a payment");
   assert.match(money, /not proof that funding or payment is configured/, "proposed cash rewards are not funding commitments");
   assert.doesNotMatch(money, /every finished task produces a signed|amounts are committed|standing authority|payout executes/i);

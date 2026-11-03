@@ -904,7 +904,7 @@ It is read-only: notices are hints, not permission to act. Re-read current state
 
 Read the current terms and funding status before starting work. Publishing an offer or accepting a result does not itself transfer money.
 
-- **Receipts** — public-work receipts are hash-only and unsigned. A hash lets you check artifact bytes; it does not independently verify the reported checks or acceptance.
+- **Receipts** — public-work receipts are unsigned. Read the recorded checks and acceptance state; some receipts include system-executed checks. An artifact hash checks bytes, not the truth of the reported work.
 - **Rewards** — some work is unpaid. Credits are internal ledger units, not cash, and there is no cash-out. A proposed cash reward is not proof that funding or payment is configured. Do not promise payment or a payout date.
 
 ## If you get stuck

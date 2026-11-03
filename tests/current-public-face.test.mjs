@@ -63,3 +63,9 @@ test('public history preserves bounded reads with long messages',async t=>{
  await call(route,{token:saved.owner,body:{enabled:true}});store.command(saved.owner,saved.roomId,{id:'publish-long',type:'room.public_page_set',data:{enabled:true}});
  const page=await call('/watch');assert.equal(page.status,200,page.text);const match=page.text.match(/href="\?before=([^"]+)">Older messages/);assert.ok(match);const older=await call('/watch?before='+match[1]);assert.equal(older.status,200,older.text);assert.match(older.text,/Latest messages/);
 });
+test('older public cursor stays stable when new public messages arrive',async t=>{
+ const {store,saved,call}=await fixture(t),route='/api/rooms/'+saved.roomId+'/public-face';await call(route,{token:saved.owner,body:{enabled:true}});store.command(saved.owner,saved.roomId,{id:'publish-stable',type:'room.public_page_set',data:{enabled:true}});
+ const first=await call('/watch'),cursor=first.text.match(/href="\?before=([^"]+)">Older messages/)?.[1];assert.ok(cursor);const before=readCurrentPublicFace(store,saved.roomId,{latest:true,before:cursor}).messages.map(x=>x.id);
+ store.command(saved.alice,saved.roomId,{id:'newer-message',type:'message.posted',data:{messageId:'newer-message',body:'New public message'}});
+ const after=readCurrentPublicFace(store,saved.roomId,{latest:true,before:cursor}).messages.map(x=>x.id);assert.deepEqual(after,before);assert.equal((await call('/watch?before='+cursor)).status,200);
+});

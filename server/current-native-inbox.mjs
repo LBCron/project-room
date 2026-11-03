@@ -29,7 +29,7 @@ export function readCurrentNativeInbox(store,secret,roomId,{limit=50,after,older
       e.mentions=chip?[{memberId,state:effectiveMentionState(chip,store.now())}]:[];
       return {sequence:row.position,event:{...e,data:{...e.data,body:m.deletedAt?null:m.body,toMemberId:m.toMemberId,replyToId:m.replyToId}}};
     });
-    const continuation=selected.continuation;older={hasMore:!selected.complete,examined:selected.examined,nextRead:continuation?{tool:'room_read_inbox',arguments:{limit,olderCursor:conversationCursorCodec(store).encode({...binding,before:continuation.position,beforeId:continuation.messageId})}}:null};
+    const continuation=selected.continuation;older={hasMore:!selected.complete,examined:selected.examined,nextRead:continuation?{tool:'room_read_inbox',arguments:{roomId,limit,olderCursor:conversationCursorCodec(store).encode({...binding,before:continuation.position,beforeId:continuation.messageId})}}:null};
     page={events,next:head.sequence,hasMore:false};
   }else page=readCurrentEventWindow(store,roomId,memberId,{after,limit:Math.min(limit,4),types:['message.posted']});
   const directMessages=[],directMentions=[],replies=[],parents=new Map();
@@ -47,7 +47,7 @@ export function readCurrentNativeInbox(store,secret,roomId,{limit=50,after,older
    }
   }
   const ownerId=store.roomAuthority(roomId,{memberId}).ownerId,discovery=readCurrentInboxDiscovery(store,roomId,auth.member,ownerId,floor,b),replyRequests=discovery.requests;
-  const workNext={tool:'room_list_work',arguments:{roomId,focus:'needs_me',limit:1}},conversationNext=page.hasMore?{tool:'room_read_inbox',arguments:{limit,after:page.next}}:null;
+  const workNext={tool:'room_list_work',arguments:{roomId,focus:'needs_me',limit:1}},conversationNext=page.hasMore?{tool:'room_read_inbox',arguments:{roomId,limit,after:page.next}}:null;
   const requestStates={};
   for(const item of [...directMessages,...directMentions])if(item.requestKind==='reply'){
    const request=readCurrentRecord(store.db,roomId,'replyRequests',item.messageId,b);
@@ -71,7 +71,7 @@ export function readCurrentNativeInbox(store,secret,roomId,{limit=50,after,older
    attention:{pendingMentions:directMentions.map(({sequence,replyToId,from,private:isPrivate})=>({sequence,replyToId,from,private:isPrivate})),hasMore:page.hasMore,acknowledges:false,nextRead:conversationNext},
    coverage:{mode:'native_bounded',globalAttentionComplete:false,conversation:{direction:recent?'recent':'catch_up',examined:recent?older.examined:page.next-after,through:page.next,complete:recent?!older.hasMore:!page.hasMore},
     work:{complete:false,nextRead:workNext,examined:discovery.examinedWork},requests:{complete:false,nextRead:workNext,examined:discovery.examinedRequests},
-    standingMentions:{complete:false,nextRead:{tool:'room_read_inbox',arguments:{limit,after:0}}},
+    standingMentions:{complete:false,nextRead:{tool:'room_read_inbox',arguments:{roomId,limit,after:0}}},
     peer:peer.coverage,
     omitted:['ambient fleet presentation','global unresolved-mention census'],
     legacyAssignments:{reconciledBeforeActivation:true,historyInspect:{method:'GET',path:`/api/rooms/${encodeURIComponent(roomId)}/collab/assignments`}}},

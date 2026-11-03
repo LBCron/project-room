@@ -38,3 +38,13 @@ test('work proposals cannot use another pair’s direct message as a source',t=>
  assert.deepEqual(reject(unprivileged,'private-dm','unprivileged'),reject(unprivileged,'missing','unprivileged'));
  assert.ok(s.command(peer,'commons',proposal('private-dm','peer-task','peer')).event);
 });
+
+test('legacy decisions do not confirm another pair’s private message ID',t=>{
+ const s=new RoomStore(':memory:');t.after(()=>s.close());const es=initialRoom();
+ for(const [type,data] of [['member.added',{memberId:'peer',displayName:'Peer',kind:'agent',permissions:[]}],['member.added',{memberId:'observer',displayName:'Observer',kind:'human',permissions:['decide']}],['member.added',{memberId:'unprivileged',displayName:'Unprivileged',kind:'human',permissions:[]}],['message.posted',{messageId:'private-dm',body:'private',toMemberId:'peer'}],['message.posted',{messageId:'public',body:'public rationale'}]])es.push(event({roomId:'commons',actorId:'owner',type,data}));
+ s.initialize(es);const observer=s.issueAccessKey('commons','observer'),unprivileged=s.issueAccessKey('commons','unprivileged');
+ const reject=(key,target,id)=>{try{s.command(key,'commons',{id,type:'decision.recorded',data:{sourceMessageId:target,statement:'Adopt this'}});assert.fail('expected refusal')}catch(e){return {status:e.status,code:e.code,message:e.message}}};
+ assert.deepEqual(reject(observer,'private-dm','private'),reject(observer,'missing','missing'));
+ assert.deepEqual(reject(unprivileged,'private-dm','no-private'),reject(unprivileged,'missing','no-missing'));
+ assert.ok(s.command(observer,'commons',{id:'public-decision',type:'decision.recorded',data:{sourceMessageId:'public',statement:'Adopt this'}}).event);
+});

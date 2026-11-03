@@ -68,15 +68,19 @@ export function assertMessageCommandReferences(store, roomId, state, command, ac
     [T.MESSAGE_EDITED]: ['messageId', 'Message not found'],
     [T.MESSAGE_DELETED]: ['messageId', 'Message not found'],
     [T.WORK_PROPOSED]: ['sourceMessageId', 'Source message must exist in this Room'],
+    [T.DECISION_RECORDED]: ['sourceMessageId', 'Decision source must be a message in this Room — post the rationale in the room first'],
   };
   const historyRef = historyRefs[command.type], targetId = historyRef && command.data?.[historyRef[0]];
-  if (typeof targetId === 'string' && (command.type !== T.WORK_PROPOSED || memberCan(state, actorId, 'steer'))) {
+  const actor = state.members?.[actorId];
+  const eligible = command.type === T.WORK_PROPOSED ? memberCan(state, actorId, 'steer')
+    : command.type === T.DECISION_RECORDED ? memberCan(state, actorId, 'decide') && (actor?.kind === 'human' || actor?.delegatedAdmin === true) : true;
+  if (typeof targetId === 'string' && eligible) {
     const target = (state.messages ?? []).find(message => message.id === targetId);
-    if (command.type === T.WORK_PROPOSED && target?.toMemberId && target.authorId !== actorId && target.toMemberId !== actorId)
+    if ([T.WORK_PROPOSED, T.DECISION_RECORDED].includes(command.type) && target?.toMemberId && target.authorId !== actorId && target.toMemberId !== actorId)
       fail(422, 'command_rejected', historyRef[1]);
     const floor = store.historyFloor(roomId, actorId);
     if (floor) {
-      if ((target && !messageInHistory(target, floor)) || (!target && [T.MESSAGE_UNPINNED, T.WORK_PROPOSED].includes(command.type)))
+      if ((target && !messageInHistory(target, floor)) || (!target && [T.MESSAGE_UNPINNED, T.WORK_PROPOSED, T.DECISION_RECORDED].includes(command.type)))
         fail(422, 'command_rejected', historyRef[1]);
     }
   }

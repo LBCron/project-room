@@ -1,0 +1,17 @@
+# RESEARCH ONLY: arbitrary 2 MiB cap, unqualified resource/accounting and legacy behavior. Do not merge.
+--- a/server/current-room-repository.mjs
++++ b/server/current-room-repository.mjs
+@@ -1,3 +1,4 @@
++import {fullStreamProofResearch} from './full-stream-proof-research.mjs';
+ import {syncCurrentRoomPublication} from './public-read-model.mjs';
+ import {verifyRoomAssistantIndexes} from './room-assistant-schema.mjs';
+ import {prepareClaimOverlap,matchClaimOverlap} from '../src/claim-overlap.js';
+@@ -1065,7 +1066,7 @@
+   const assertActive=()=>{if(!active||!db.isTransaction)throw Error('Current audit unit scope expired');};
+   const unitBudget=()=>{assertActive();return {...budget(),schemaVerified:true,auditReceipts};};
+   try {const result=operation({head,record:(domain,key)=>{const value=readCurrentRecord(db,roomId,domain,key,unitBudget());if(value!==undefined)currentAuditFieldKind(domain,key,value);return value;},
+-    work:(id,ref)=>{assertActive();return readCurrentAuditWorkBody(db,roomId,id,ref);},message:id=>readCurrentMessage(db,roomId,id,unitBudget())});if(result?.then)throw Error('Current census must remain synchronous');return result;}
++    work:(id,ref)=>{assertActive();return readCurrentAuditWorkBody(db,roomId,id,ref);},message:id=>{const size=db.prepare(`SELECT ${MESSAGE_PROOF_SELECT.split(',').map(key=>`length(CAST(${key} AS BLOB)) AS ${key}`).join(',')} FROM messages WHERE room_id=? AND message_id=?`).get(roomId,id);const bytes=Object.values(size??{}).reduce((sum,n)=>sum+(n??0),0);return bytes>MAX_RECORD?fullStreamProofResearch(db,roomId,id,{maxBytes:2*1024*1024}):readCurrentMessage(db,roomId,id,unitBudget());}});if(result?.then)throw Error('Current census must remain synchronous');return result;}
+   finally {active=false;auditReceipts.clear();}
+ }
+ 

@@ -191,24 +191,38 @@ export class Bridge {
     if (result?.listener?.valid !== true) throw new RoomError(409, "stale_listener", "Listener validation failed");
   }
 
+  async messageAuthority(messageIds) {
+    const authors = [];
+    for (const id of messageIds) authors.push((await this.readThread(id, {selected:true})).thread?.authorId);
+    const authority = await this.refreshRoom({memberIds:authors.filter(Boolean)});
+    await this.assertListener();
+    return new Map(messageIds.map((id,index) => [id,
+      authority.unresolved.has(authors[index]) ? 'unresolved'
+        : authority.members[this.connection.memberId] && authority.me.active !== false
+          && mayTalk({authorId:authors[index],members:authority.members,me:authority.me,
+            ownerId:authority.ownerId,respondTo:this.respondTo}) ? 'allowed' : 'denied']));
+  }
+
   async authorized({ messageIds, claimId } = {}) {
     if (this.controller.signal.aborted) throw new Error("bridge stopped");
-    let claim;
-    const authors = [];
-    if (claimId) { claim = await this.room.claim(claimId); authors.push(claimRequester(claim)); }
-    else {
+    if (!claimId) {
       // Old receipts lack original source IDs; they cannot authorize disclosure.
       if (!Array.isArray(messageIds) || !messageIds.length) return false;
-      for (const id of messageIds) authors.push((await this.readThread(id, { selected: true })).thread?.authorId);
+      const statuses = [...(await this.messageAuthority(messageIds)).values()];
+      if (statuses.includes('unresolved'))
+        throw new RoomError(409, 'authority_member_unresolved', 'A request author is unresolved; retain the wake without executing or acknowledging it');
+      return statuses.every(status => status === 'allowed');
     }
-    const authority = await this.refreshRoom({ memberIds: authors.filter(Boolean) });
+    const initial = await this.room.claim(claimId), requester = claimRequester(initial);
+    const authority = await this.refreshRoom({memberIds:[requester].filter(Boolean)});
     await this.assertListener();
-    if (!authority.members[this.connection.memberId] || authority.me.active === false) return false;
-    if (authors.some(id => authority.unresolved.has(id))) {
-      throw new RoomError(409, 'authority_member_unresolved', 'A request author is unresolved; retain the wake without executing or acknowledging it');
-    }
-    const allowed = authorId => mayTalk({ authorId, members: authority.members, me: authority.me, ownerId: authority.ownerId, respondTo: this.respondTo });
-    return (!claimId || claim?.owner === authority.me.id) && authors.every(allowed);
+    // Assignment may change during the authority read or listener check.
+    const claim = await this.room.claim(claimId);
+    if (claimRequester(claim) !== requester || authority.unresolved.has(requester))
+      throw new RoomError(409, 'authority_member_unresolved', 'Claim requester changed or is unresolved; retry with fresh authority');
+    return Boolean(authority.members[this.connection.memberId] && authority.me.active !== false
+      && claim?.owner === authority.me.id && mayTalk({authorId:requester,members:authority.members,
+        me:authority.me,ownerId:authority.ownerId,respondTo:this.respondTo}));
   }
 
   async lease() {
@@ -345,7 +359,6 @@ export class Bridge {
     if (this.controller.signal.aborted) return;
     if (threadKey.startsWith(CLAIM_KEY)) return this.claimTurn(threadKey, batch);
     try {
-      if (!(await this.authorized({ messageIds: batch.map(item => item.messageId) }))) { await this.ack(batch.map(item => item.signalId)); this.stats.skipped+=batch.length; return; }
       const fresh = [], replay = new Map(), unique = new Set();
       for (const item of batch) {
         if (unique.has(item.signalId)) continue;
@@ -368,6 +381,23 @@ export class Bridge {
           for (const id of signalIds) this.seen.delete(id);
           this.log(`chat delivery failed (${error.code ?? error.message}); retrying delivery without repeating execution`);
           if (this.stopForContextLimit(error)) return;
+        }
+      }
+      if (!fresh.length) return;
+      // Only new inputs may be partitioned. Original replay groups retain all
+      // source authors and are revalidated together before disclosure.
+      const statuses = await this.messageAuthority(fresh.map(entry => entry.item.messageId));
+      for (let index = fresh.length - 1; index >= 0; index--) {
+        const entry = fresh[index], status = statuses.get(entry.item.messageId);
+        if (status === 'allowed') continue;
+        fresh.splice(index, 1);
+        if (status === 'unresolved') {
+          this.seen.delete(entry.item.signalId);
+          this.log('Request author unresolved; retaining wake without execution or acknowledgement');
+        } else {
+          this.chatReceipts.save(entry.key, {...entry.receipt,phase:'discarded'});
+          await this.deliverChatReceipt(entry.key);
+          this.stats.skipped++;
         }
       }
       if (!fresh.length) return;

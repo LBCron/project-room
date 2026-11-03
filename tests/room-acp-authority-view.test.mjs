@@ -102,3 +102,28 @@ test('selected member corruption is rejected rather than trusted as compact meta
  const r=await fetch(f.apiBase+'/api/rooms/commons?view=authority&memberId=other',{headers:f.headers});
  assert.equal(r.status,500);assert.doesNotMatch(await r.text(),/wrong/);
 });
+
+test('a mixed same-thread batch processes allowed wakes without losing them beside denied or unresolved authors',async t=>{
+ const f=await fixture(t),bridge=f.bridge;bridge.respondTo='owner';await bridge.refreshRoom();await bridge.lease();
+ const room=bridge.room.room.bind(bridge.room);bridge.room.room=async options=>{const result=await room(options);if(result.state.members.other)result.state.members.other.kind='human';return result;};
+ const original=bridge.readThread.bind(bridge);
+ bridge.readThread=async(id,...rest)=>id==='denied-message'?{thread:{id,authorId:'other'}}:id==='unresolved-message'?{thread:{id,authorId:'missing'}}:original(id,...rest);
+ let prompts=0;const acks=[];bridge.host.session=async()=>({sessionId:'synthetic'});
+ bridge.host.prompt=async()=>{prompts++;return {recorder:{text:'A useful answer',tools:new Map()},stopReason:'end_turn'};};
+ bridge.room.ack=async value=>acks.push(...value.signalIds);
+ await bridge.turn('mention',[
+  {signalId:'allowed-wake',messageId:'mention',body:'Owner ask',author:'owner'},
+  {signalId:'denied-wake',messageId:'denied-message',body:'Other ask',author:'other'},
+  {signalId:'unresolved-wake',messageId:'unresolved-message',body:'Missing author',author:'missing'}
+ ]);
+ assert.equal(prompts,1);assert.deepEqual(acks.sort(),['allowed-wake','denied-wake']);assert.equal(bridge.stats.skipped,1);
+ assert.equal(bridge.controller.signal.aborted,false);
+});
+
+test('claim assignment is re-read after authority and listener validation',async t=>{
+ const f=await fixture(t),bridge=f.bridge;bridge.respondTo='anyone';bridge.fencingToken='fence';
+ let owner='worker';bridge.room.claim=async()=>({owner,history:[{action:'created',agentId:'owner'}]});
+ const room=bridge.room.room.bind(bridge.room);bridge.room.room=async options=>{const result=await room(options);owner='other';return result;};
+ bridge.room.checkListener=async()=>({listener:{valid:true}});
+ assert.equal(await bridge.authorized({claimId:'claim'}),false);
+});

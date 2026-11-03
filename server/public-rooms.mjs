@@ -3,7 +3,8 @@ import { createHash } from "node:crypto";
 // Public acquisition pages: template gallery, opt-in room pages, agent directory,
 // and the demo room. A hash-authorized copy helper is the only inline script. Member-authored text is escaped on the
 // page and marked untrusted on the JSON agents read. The pages read
-// public_rooms, public_receipts, and public_directory_entries. They do not read
+// public_rooms, public_receipts, public_directory_entries and selected protected
+// public task records. They do not read
 // rooms.projection, and a GET does not mint a share link. The demo room is the
 // exception: it reads nothing at all — curated static content only.
 import { escapeHtml } from "./html-escape.mjs";
@@ -67,7 +68,9 @@ a{color:#8eb6ff}
 .tags li{border:1px solid #2a3340;border-radius:999px;padding:.1rem .55rem}
 .try{display:inline-flex;align-items:center;min-height:44px}
 footer{margin-top:2rem;border-top:1px solid #2a3340;padding-top:1rem;color:#9aa6b2}
-img,svg,table{max-width:100%}`;
+img,svg,table{max-width:100%}
+.public-tasks li{margin:.75rem 0;overflow-wrap:anywhere}
+.public-task-instructions{white-space:pre-wrap;margin:.35rem 0}`;
 
 function head({ title, description, path }) {
   const canonical = `${ROOM_ORIGIN}${path}`;
@@ -121,8 +124,14 @@ function requestHref(slug, ref) {
   return withRef(`/?request=${encodeURIComponent(slug)}`, ref);
 }
 
-export function publicRoomView(store, slug, { ref = "", origin = ROOM_ORIGIN } = {}) {
-  const room = loadPublicRoom(store, slug);
+export function publicTaskPageExpired(slug) {
+  return `${head({title:'Reload public tasks',description:'Reload the room to see current public tasks.',path:'/r/'+slug})}
+${shell('')}<main><h1>Reload this task page</h1><p>Reload the room to see its current public tasks.</p>
+<p><a class="try" href="${escapeHtml(encodeURIComponent(slug))}">Reload public tasks</a></p></main><footer><p>${LEGAL_FOOTER_LINKS}</p></footer></body></html>`;
+}
+
+export function publicRoomView(store, slug, { ref = "", origin = ROOM_ORIGIN, workAfter = '' } = {}) {
+  const room = loadPublicRoom(store, slug, {workAfter});
   if (!room) return null;
   const clean = publicRef(ref);
   // The public face is independently owner-published; a public room page
@@ -147,7 +156,9 @@ export function publicRoomView(store, slug, { ref = "", origin = ROOM_ORIGIN } =
     purpose: room.purpose,
     counts: room.counts,
     names: room.names,
-    tasks: room.tasks,
+    tasks: room.tasks.map(item => typeof item.id === 'string' ? {...item,
+      nextRead:{tool:'room_read_work',arguments:{roomId:slug,workItemId:item.id},
+        requires:'Join this room with your existing agent and use its normal read permissions'}} : item),
     receipts,
     proofHref: room.receiptsEnabled ? `/r/${slug}/proof` : null,
     join,
@@ -179,8 +190,12 @@ export function publicRoomView(store, slug, { ref = "", origin = ROOM_ORIGIN } =
   const taskLine = room.coverage?.tasks.available===false
     ? `<p>Public task and receipt listings are unavailable. Join to see current work.</p>`
     : room.tasks.length
-    ? `<ul>${room.tasks.map(item => `<li>${escapeHtml(item.title)}</li>`).join("")}</ul>`
-    : `<p>No open public tasks.</p>`;
+    ? `<p>Join to discuss a task and agree how to help.</p><ul class="public-tasks">${room.tasks.map(item => `<li><strong>${escapeHtml(item.title)}</strong>${item.definitionOfDone ? `<p class="public-task-instructions">${escapeHtml(item.definitionOfDone)}</p>` : ''}</li>`).join("")}</ul>`
+    : `<p>${room.coverage?.tasks.hasMore ? 'No public tasks on this page.' : 'No open public tasks.'}</p>`;
+  const taskPage = room.coverage?.tasks;
+  const taskQuery = taskPage?.hasMore ? new URLSearchParams({workAfter:taskPage.nextAfter,...(clean?{ref:clean}:{})}).toString() : '';
+  if (taskPage?.hasMore) taskPage.nextRead = '?' + taskQuery;
+  const taskPaging = taskPage?.hasMore ? `<p><a class="try" href="?${escapeHtml(taskQuery)}">More public tasks</a></p>` : '';
   const receiptLine = room.coverage?.receipts.available===false ? "" : receipts.length
     ? `<ul>${receipts.map(item => `<li><a href="${escapeHtml(item.href)}">${escapeHtml(item.title)}</a></li>`).join("")}</ul>`
     : `<p>No public receipts from this room yet.</p>`;
@@ -206,6 +221,7 @@ ${publicLobbyJoin ? `<p><a href="${escapeHtml(join.href)}">Connection guide</a><
 <script>${SETUP_COPY_SCRIPT}</script>
 <h2>Open tasks</h2>
 ${taskLine}
+${taskPaging}
 ${room.coverage?.receipts.available===false ? '' : `<h2>Public receipts</h2>\n${receiptLine}`}
 ${room.receiptsEnabled ? `<p><a href="/r/${escapeHtml(slug)}/proof">Proof of work — this room's published results, each traceable to its receipt</a></p>` : ""}
 <p><a href="${escapeHtml(reportHref("room", slug))}">Report</a></p>

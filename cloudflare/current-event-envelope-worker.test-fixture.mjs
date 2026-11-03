@@ -16,7 +16,9 @@ export class EventEnvelopeRoom extends CurrentEventsRoom {
         if (key !== 'get') return value.bind(target);
         return (...args) => {
           const row = value.apply(target, args);
-          if (sql.includes('projected AS MATERIALIZED') && row?.rawBytes) this.envelopeStats.rawEventSourceBytes += row.rawBytes;
+          // The query binds the immutable candidate's raw size and admits the
+          // envelope only when SQLite confirms equality; raw body stays in SQL.
+          if (sql.includes('projected AS MATERIALIZED') && typeof row?.envelope === 'string') this.envelopeStats.rawEventSourceBytes += args[2];
           if (typeof row?.envelope === 'string') this.envelopeStats.projectedEventBytesReturned += Buffer.byteLength(row.envelope);
           for (const text of Object.values(row ?? {})) if (typeof text === 'string'
             && (text.includes('界'.repeat(64)) || text.includes('🪷'.repeat(64)) || text.includes('\\u0001'.repeat(64)))) this.envelopeStats.historicalSqlPayloads++;

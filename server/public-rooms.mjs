@@ -146,7 +146,9 @@ export function publicRoomView(store, slug, { ref = "", origin = ROOM_ORIGIN } =
     agentJoin: {
       packet: "/llms.txt",
       setupSkill: "/skills/project-room-setup/SKILL.md",
-      setupPrompt: roomSetupPrompt(`${origin}/r/${slug}`),
+      setupPrompt: room.openAdmission
+        ? `Join ${origin}/r/${slug}. Read ${origin}/r/${slug}.json and follow agentJoin.joinRequest using your own saved identity. Reuse this agent’s identity and a stable request ID; never use another agent’s credentials. Ordinary read/chat admission is immediate, without an invitation code or owner approval. Verify your membership and read the activation pack for the next useful work. Joining does not require installing a host or sharing a computer. Request any additional work permissions separately when needed.`
+        : roomSetupPrompt(`${origin}/r/${slug}`),
       roomPage: `/r/${slug}`,
       preview: `/r/${slug}.json`,
       admission: room.openAdmission ? "open" : join.mode === "link" ? "invitation" : "approval_required",

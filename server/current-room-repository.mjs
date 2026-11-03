@@ -1,3 +1,5 @@
+import {measureFullProofResearch,ProofBudgetExceededResearch,ProofIntegrityErrorResearch} from './full-stream-accounting-research.mjs';
+import {makeRoutingWitnessResearch,checkRoutingWitnessResearch} from './message-routing-witness-research.mjs';
 import {syncCurrentRoomPublication} from './public-read-model.mjs';
 import {verifyRoomAssistantIndexes} from './room-assistant-schema.mjs';
 import {prepareClaimOverlap,matchClaimOverlap} from '../src/claim-overlap.js';
@@ -35,6 +37,9 @@ const hash = text => createHash('sha256').update(text).digest('hex');
 const serializeCurrentCarrier = (revision, headHash) =>
   JSON.stringify({normalizedCurrent:{version:1,headRevision:revision,headHash}});
 const corrupt = message => { throw Error('current_room_corrupt: ' + message); };
+class CurrentMessageProofError extends Error {
+  constructor() { super('current_room_corrupt: message field proof changed'); }
+}
 const refuse = message => { throw new ServiceError(409,'current_room_context_unavailable',message); };
 const MAX_INPUT = 256 * 1024, MAX_RECORD = 128 * 1024;
 const maps = new Set(['members','channels','workItems','replyRequests','agentHalts','helpOffers','bonds']);
@@ -460,10 +465,18 @@ export function readCurrentMessage(db,roomId,messageId,b=contextBudgets.get(db)?
   if(!scalar){if(witness!==undefined)corrupt('witnessed canonical message missing');return undefined;}
   if(!witness)corrupt('canonical message lacks independent membership witness');
   const bytes=Object.values(scalar).reduce((sum,value)=>sum+(value??0),0);
-  if(bytes>MAX_RECORD)refuse('Message dependency exceeds bounded input');charge(b,bytes+512);
+  if(bytes>MAX_RECORD){const used=b.experimentalProofUsage??={source:0,hash:0,chunks:0};let result;try{result=measureFullProofResearch(db,roomId,messageId,{witness,maxBytes:2*1024*1024-used.source,maxHashBytes:4*1024*1024-used.hash,maxBlobReads:256-used.chunks});}catch(error){if(error instanceof ProofBudgetExceededResearch)refuse('Message dependencies exceed the bounded verification budget');if(error instanceof ProofIntegrityErrorResearch)throw new CurrentMessageProofError();throw error;}used.source+=result.stats.sourceBytes;used.hash+=result.stats.hashBytes;used.chunks+=result.stats.blobReads;charge(b,512);return result;}charge(b,bytes+512);
   const row=db.prepare(`SELECT ${MESSAGE_PROOF_SELECT},entity_hash FROM messages WHERE room_id=? AND message_id=?`).get(roomId,messageId);
-  if(!messageProofMatches(row)||witness.sequence!==row.seq||witness.entityHash!==row.entity_hash)corrupt('message field proof changed');
+  if(!messageProofMatches(row)||witness.sequence!==row.seq||witness.entityHash!==row.entity_hash)throw new CurrentMessageProofError();
   return {row,value:decodeMessageEntity(row)};
+}
+
+function readCertifiedRoutingResearch(db,roomId,id,witness,b) {
+  const value=checkRoutingWitnessResearch(witness,id);
+  const row=db.prepare('SELECT seq,entity_hash,author_id,channel_id,reply_to_id,to_member_id,work_item_id,created_at,deleted_at FROM messages WHERE room_id=? AND message_id=?').get(roomId,id);charge(b,1024);
+  if(!row||row.seq!==witness.sequence||row.entity_hash!==witness.entityHash)corrupt('routing witness binding differs');
+  for(const [field,column] of [['authorId','author_id'],['channelId','channel_id'],['replyToId','reply_to_id'],['toMemberId','to_member_id'],['workItemId','work_item_id'],['createdAt','created_at'],['deletedAt','deleted_at']])if((value[field]??null)!==(row[column]??null))corrupt('routing fields differ');
+  return {row,value};
 }
 
 const supported = new Set(['message.pinned','message.unpinned','member.sponsor_transferred','channel.created','work.public_set','capabilities.advertised','bond.propose','bond.accept','bond.decline','bond.revoke','bond.proposed','bond.activated','bond.revoked','dm.posted','claim.acquired','claim.renewed','claim.released','room.spend_pricing_set','room.spend_allowance_set','room.archived','room.exported','room.charter_updated','room.policy_set','room.trust_set','message.deleted','message.edited','work.superseded','ownership.transferred','reply_request.cancelled','work_claim.updated','message.posted','work.proposed','work.accepted','work.started','work.completed','work.handoff_recorded','work.halt_cleared','verification.recorded','owner.decision_recorded']);
@@ -609,17 +622,24 @@ function commandContextFromHead(store,roomId,command,head,b,{readMessage,readWor
   if(assistant?.coordinatorMemberId!==null&&assistant?.coordinatorMemberId!==undefined&&!validId(assistant.coordinatorMemberId))corrupt('assistant coordinator identity differs');
   if(store.humanPush?.vapid)refuse('Human push visibility dependencies require qualification');
   const messages=new Map(),workRefs=new Map();
-  const loadMessage=id=>{
+  const loadMessage=(id,routing=false)=>{
     if(!id||messages.has(id))return messages.get(id);
-    const source=readMessage?readMessage(id,b):readCurrentMessage(db,roomId,id,b);if(source)messages.set(id,source);return source;
+    let source;
+    if(routing&&!readMessage&&command.type==='message.posted'){
+      const witness=readCurrentRecord(db,roomId,'messageWitness',id,b);
+      if(witness?.version===2){
+        source=readCertifiedRoutingResearch(db,roomId,id,witness,b);
+      }
+    }
+    source??=readMessage?readMessage(id,b):readCurrentMessage(db,roomId,id,b);if(source)messages.set(id,source);return source;
   };
   const wantedMessages=[command.data.messageId??command.id,`${command.data.messageId??command.id}:channel`,command.data.replyToId,
     command.data.sourceMessageId,command.data.evidenceMessageId,command.data.requestMessageId,command.data.progressMessageId];
-  for(const id of wantedMessages)if(typeof id==='string')loadMessage(id);
+  for(const id of wantedMessages)if(typeof id==='string')loadMessage(id,id===command.data.replyToId);
   let cursor = command.data.replyToId ?? (['message.edited','message.pinned','message.unpinned'].includes(command.type)?command.data.messageId:command.type==='message.deleted'?messages.get(command.data.messageId)?.value.replyToId:null), childSeq = Number.MAX_SAFE_INTEGER;
   for(let depth=0;cursor;depth++) {
     if(depth>=32)refuse('Reply ancestry exceeds bounded context');
-    const source=loadMessage(cursor);if(!source)break;
+    const source=loadMessage(cursor,true);if(!source)break;
     if(source.row.seq>=childSeq)corrupt('reply ancestry is cyclic or out of order');childSeq=source.row.seq;
     const request=readCurrentRecord(db,roomId,'replyRequests',cursor,b);
     if(request!==undefined)(state.replyRequests??={})[cursor]=request;
@@ -840,7 +860,7 @@ export function prepareCurrentWrite(store,{roomId,previous,state,event,sequence,
     const added=state.messages.filter(message=>!previous.state.messages.some(old=>old.id===message.id));
     for(const message of added) {
       const row=messageRowForWrite(message,{sequence,pinned:(state.pins??[]).some(pin=>pin.messageId===message.id),threadMessages:new Map(state.messages.map(m=>[m.id,m]))});
-      changes.push({domain:'messageWitness',key:message.id,value:{sequence,entityHash:messageProofHash(row)}});
+      changes.push({domain:'messageWitness',key:message.id,value:makeRoutingWitnessResearch({...row,entity_hash:messageProofHash(row)})});
       let root=message;const seen=new Set();
       while(root.replyToId) {if(seen.has(root.id))corrupt('new reply cycle');seen.add(root.id);const parent=state.messages.find(m=>m.id===root.replyToId);if(!parent)corrupt('unloaded reply ancestor');root=parent;}
       const key=root.id+'\0'+message.authorId;
@@ -856,7 +876,7 @@ export function prepareCurrentWrite(store,{roomId,previous,state,event,sequence,
       &&(state.pins??[]).some(pin=>pin.messageId===message.id)!==(source.row.pinned===1);
     if(!source||(isDeepStrictEqual(message,source.value)&&!pinChanged))continue;
     const row=messageRowForWrite(message,{sequence:source.row.seq,pinned:event.type==='member.merged'?source.row.pinned===1:(state.pins??[]).some(pin=>pin.messageId===message.id),threadMessages:new Map(state.messages.map(m=>[m.id,m]))});
-    changes.push({domain:'messageWitness',key:message.id,value:{sequence:source.row.seq,entityHash:messageProofHash(row)}});
+    changes.push({domain:'messageWitness',key:message.id,value:makeRoutingWitnessResearch({...row,entity_hash:messageProofHash(row)})});
   }
   if(current.merge) {
     const roots=new Set([...current.merge.touched].map(id=>current.messageRows.get(id).row.thread_root_id??id));
@@ -963,6 +983,9 @@ export function currentMessageMayBeVisible(db,roomId,messageId,viewerId,b=contex
   const candidate=db.prepare("SELECT CASE WHEN length(CAST(created_at AS BLOB))<=128 THEN created_at END AS at FROM messages WHERE room_id=? AND message_id=? AND (to_member_id IS NULL OR to_member_id='' OR author_id=? OR to_member_id=?)").get(roomId,messageId,viewerId,viewerId);
   charge(b,256);
   if(candidate){
+    const witness=readCurrentRecord(db,roomId,'messageWitness',messageId,b);
+    if(witness?.version===2){const routing=checkRoutingWitnessResearch(witness,messageId);
+      if(routing.toMemberId&&routing.authorId!==viewerId&&routing.toMemberId!==viewerId)return false;}
     // This scalar can only deny. Long dates proceed to the
     // authoritative reader; never infer visibility from an unverified index.
     if(floor&&typeof candidate.at==='string'&&!messageInHistory({id:messageId,createdAt:candidate.at},floor))return false;
@@ -983,7 +1006,17 @@ export function currentConversationRows(store,roomId,{viewerId,limit,before,befo
     }
     // Addressed selection always uses the existing primary key, including a
     // missing/old/private identity. Never scan a seq stream to find it.
-    const source=readCurrentMessage(db,roomId,messageId,b),m=source?.value;
+    let source;
+    try { source=readCurrentMessage(db,roomId,messageId,b); }
+    catch (error) {
+      if (!(error instanceof CurrentMessageProofError) && !(error instanceof Error && error.message.startsWith('current_room_corrupt:'))) throw error;
+      // Routing fields failed verification, so the requester cannot be
+      // distinguished from a nonparticipant. Deny the addressed read and
+      // retain a content-free operator diagnostic.
+      console.error('current_room_corrupt: addressed message proof failed');
+      return {rows:[],continuation:null,examined:0,complete:true};
+    }
+    const m=source?.value;
     const visible=m&&(!liveOnly||!m.deletedAt)&&(!m.toMemberId||m.authorId===viewerId||m.toMemberId===viewerId)
       &&(channelId===null||!m.toMemberId&&(m.channelId||'general')===channelId)
       &&(peerMemberId===null||(m.authorId===viewerId&&m.toMemberId===peerMemberId)||(m.authorId===peerMemberId&&m.toMemberId===viewerId))
@@ -1035,7 +1068,7 @@ export function currentConversationRows(store,roomId,{viewerId,limit,before,befo
   return {rows,continuation:!complete?last:null,examined,complete};
 }
 
-const auditDerivedDomains=Object.freeze(['workPrivacy','workRequest','workSummary','workCapacity','messageWitness','archiveRetained','threadParticipants','historyFloors','historyExclusions']);
+const auditDerivedDomains=Object.freeze(['workPrivacy','workRequest','workSummary','workCapacity','messageWitness','archiveRetained','threadParticipants','historyFloors','historyExclusions','routingMigrationResearch']);
 function currentAuditFieldKind(domain,key,value) {
  if(domain==='shape'){if(!maps.has(key)||value!=='object')corrupt('invalid recovered map shape');return 'shape';}
  if(domain==='metadata'){if(omitted.has(key)||maps.has(key)&&value!==null&&typeof value==='object'&&!Array.isArray(value))corrupt('competing recovered state');return 'metadata';}
@@ -1459,4 +1492,51 @@ export function readCurrentPrivateWorkParties(store,roomId,workIds) {
   if(!Array.isArray(workIds)||workIds.length>8||workIds.some(id=>typeof id!=='string'))refuse('Use bounded addressed work IDs for current private-work context');
   const b=contextBudgets.get(store.db)??budget();if(!readCurrentHead(store.db,roomId,b))return null;
   const result=new Map();for(const id of workIds){const privacy=readCurrentWorkPrivacy(store.db,roomId,id,b);if(privacy.requests)result.set(id,new Set(Object.keys(privacy.parties)));}return result;
+}
+
+// RESEARCH ONLY: test-seed certification. No migration or mixed-writer safety.
+export function certifyOneRoutingResearch(store,roomId,id){
+ return store.transaction(()=>withCurrentRoomWriter(store.db,roomId,()=>{
+  const db=store.db,b=budget(),head=readCurrentHead(db,roomId,b);if(!head)throw Error('current room required');
+  const prior=readCurrentRecord(db,roomId,'messageWitness',id,b);if(!prior)throw Error('missing witness');
+  if(prior.version===2)return {changed:false,sequence:head.sequence};
+  const source=measureFullProofResearch(db,roomId,id,{witness:prior,maxBytes:2*1024*1024,maxHashBytes:4*1024*1024,maxBlobReads:256});
+  const next=makeRoutingWitnessResearch(source.row);
+  const projection=saveTransition(db,roomId,head.sequence,head.event_id,head,[{domain:'messageWitness',key:id,value:next}],head.counts);
+  recordProjectionWrite(db,roomId,projection);db.prepare('UPDATE rooms SET projection=? WHERE id=?').run(projection,roomId);
+  store.ensureIntegrityRoomState();db.prepare('UPDATE integrity_room_state SET sequence=?,projection_bytes=?,projection_hash=NULL,metadata_hash=? WHERE room_id=?').run(head.sequence,Buffer.byteLength(projection),hash(projection),roomId);
+  return {changed:true,sequence:head.sequence};
+ }));
+}
+// RESEARCH ONLY: callers must independently audit the old state and establish
+// quiescence. This does not authorize deployment, recovery, or downgrade.
+export function upgradePopulatedWriterFenceResearch(db){
+ if(!db.isTransaction)throw Error('research fence upgrade requires transaction');
+ const oldFormat='normalized-current-v1-native-work-6',owned=[...definitions,...RESTORE_CONTROL_DEFINITIONS,...guardDefinitions,...RESTORE_CONTROL_GUARDS];
+ const rows=db.prepare('SELECT name,sql FROM sqlite_master WHERE name IN ('+owned.map(()=>'?').join(',')+')').all(...owned.map(([name])=>name));
+ if(rows.length!==owned.length||owned.some(([name,sql])=>normalized(rows.find(row=>row.name===name)?.sql)!==normalized(sql.replaceAll(CURRENT_WRITER_FORMAT,oldFormat))))throw Error('research previous schema mismatch');
+ const gate=db.prepare('SELECT * FROM current_room_writer_permit').all(),restore=db.prepare('SELECT * FROM current_restore_admission').all();
+ if(gate.length!==1||gate[0].enabled!==0||gate[0].room_id!==null||gate[0].receipt_id!==null||restore.length!==1||restore[0].state!=='clear'||restore[0].phase!=='clear'||restore[0].restore_id!==null)throw Error('research authority not quiescent');
+ for(const [name,sql] of [...guardDefinitions,...RESTORE_CONTROL_GUARDS].filter(([,sql])=>sql.includes(CURRENT_WRITER_FORMAT))){db.exec('DROP TRIGGER '+name);db.exec(sql)}
+ verifyCurrentRoomSchema(db);return true;
+}
+// does not prove that the scan began at the start or that writers never
+// generate old-format witnesses.
+export function certifyRoutingProtectedStepResearch(store,roomId){
+ return store.transaction(()=>withCurrentRoomWriter(store.db,roomId,()=>{
+  const db=store.db,b=budget(),head=readCurrentHead(db,roomId,b);if(!head)throw Error('current room required');
+  const checkpoint=readCurrentRecord(db,roomId,'routingMigrationResearch','cursor',b);
+  const cursor=checkpoint?.cursor??'';if(typeof cursor!=='string')throw Error('invalid research cursor');
+  const row=db.prepare("SELECT record_key FROM current_room_record_proofs WHERE room_id=? AND domain='messageWitness' AND present=1 AND record_key>? ORDER BY record_key LIMIT 1").get(roomId,cursor);
+  if(!row)return {cursor,endOfScan:true};
+  const prior=readCurrentRecord(db,roomId,'messageWitness',row.record_key,b);if(!prior)throw Error('missing witness');
+  if(prior.version!==undefined&&prior.version!==2)corrupt('unsupported message witness version');
+  const changes=[];if(prior.version!==2){const source=measureFullProofResearch(db,roomId,row.record_key,{witness:prior,maxBytes:2*1024*1024,maxHashBytes:4*1024*1024,maxBlobReads:256});changes.push({domain:'messageWitness',key:row.record_key,value:makeRoutingWitnessResearch(source.row)});}else readCertifiedRoutingResearch(db,roomId,row.record_key,prior,b);
+  changes.push({domain:'routingMigrationResearch',key:'cursor',value:{cursor:row.record_key}});
+  const counts={...head.counts};if(!checkpoint){counts.metadataRecords++;counts.metadataProofs++;}
+  const projection=saveTransition(db,roomId,head.sequence,head.event_id,head,changes,counts);
+  recordProjectionWrite(db,roomId,projection);db.prepare('UPDATE rooms SET projection=? WHERE id=?').run(projection,roomId);
+  store.ensureIntegrityRoomState();db.prepare('UPDATE integrity_room_state SET sequence=?,projection_bytes=?,projection_hash=NULL,metadata_hash=? WHERE room_id=?').run(head.sequence,Buffer.byteLength(projection),hash(projection),roomId);
+  return {cursor:row.record_key,changed:prior.version!==2,endOfScan:false};
+ }));
 }

@@ -61,7 +61,7 @@ import {
 } from "./mcp-hosted-tools.mjs";
 import { listedMcpTools, MCP_TOOL_FOCUSES } from "./mcp-discovery.mjs";
 import { ACTION_META_TOOL_NAMES, SEARCH_ACTIONS_TOOL, RUN_ACTION_TOOL, actionMetaToolDefs, isRunnableAction, searchActions, validRunActionArgs, validSearchActionsArgs } from "./mcp-action-search.mjs";
-import { stampAccessRequests, stampAttachmentGet, stampEvents, stampRoomContext, stampWorkListing, withContentTrust } from "./content-trust.mjs";
+import { CONTENT_TRUST, stampAccessRequests, stampAttachmentGet, stampEvents, stampRoomContext, stampWorkListing, withContentTrust } from "./content-trust.mjs";
 import { resolveCatalogAgent, catalogCallDenial } from "./capability-visibility.mjs";
 import { listSquads, getSquad, createSquad, updateSquadMembers, disbandSquad } from "./squads.mjs"; // plan-squads: squad roster
 import { runRoomMap } from "./project-map-store.mjs";
@@ -599,7 +599,15 @@ function dispatchRoomToolCall(store, secret, identity, name, args, agentRooms) {
         }
       });
       if (admission) {
-        const publicContext=publishedLobbyContext(store,args.roomId);
+        // Admission is already committed and independently authorized. A public
+        // welcome preview must not turn that success into an ambiguous failure.
+        let publicContext;
+        try { publicContext=publishedLobbyContext(store,args.roomId); }
+        catch(error) {
+          if(!(error instanceof ServiceError)||error.status!==409||error.code!=='current_room_context_unavailable')throw error;
+          publicContext={source:'/watch',available:false,reason:error.code,messages:[],
+            untrusted:true,contentTrust:CONTENT_TRUST};
+        }
         return {
         ...admission,
         ...(publicContext?{publicContext}:{}),

@@ -2,6 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { RoomStore } from '../server/store.mjs';
 import { initialRoom } from '../server/bootstrap.mjs';
+import { AgentRooms } from '../server/agent-rooms.mjs';
 import { publicRoomView } from '../server/public-rooms.mjs';
 
 test('public room links to lobby conversation only when owner publishes its face', t => {
@@ -22,4 +23,14 @@ test('public room links to lobby conversation only when owner publishes its face
   store.publicFace.disable('project-room-lobby','owner');
   assert.ok(!get('project-room-lobby').html.includes('href="/watch"'));
   assert.equal(get('project-room-lobby').document.agentJoin.publicConversation,undefined);
+});
+
+test('open public lobby join link preserves its target', t => {
+  const store = new RoomStore(':memory:'); t.after(() => store.close());
+  const owner = store.identities.create('Lobby owner');
+  new AgentRooms(store).create(owner.secret, {roomId:'project-room-lobby',title:'Lobby',purpose:'Welcome',starter:false,visibility:'private'});
+  const key = store.issueAccessKey('project-room-lobby',owner.identityId);
+  store.command(key,'project-room-lobby',{id:'publish',type:'room.public_page_set',data:{enabled:true}});
+  store.command(key,'project-room-lobby',{id:'open',type:'room.join_link_set',data:{enabled:true}});
+  assert.match(publicRoomView(store,'project-room-lobby').html, /href="\/docs\/agents\/paste\?room=project-room-lobby">Join with your agent/);
 });

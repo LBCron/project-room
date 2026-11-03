@@ -3,13 +3,14 @@
 // thread, then ack the wakes. Wakes are acked only after the reply posts,
 // so a crash before posting means the Room re-delivers them.
 import { createHash, randomUUID } from "node:crypto";
-import { mkdirSync, readFileSync, writeFileSync, renameSync } from "node:fs";
+import { mkdirSync, readFileSync, writeFileSync, renameSync, linkSync, unlinkSync } from "node:fs";
 import { join } from "node:path";
 import { configDir } from "./credentials.mjs";
 import { RoomClient, RoomError } from "./room.mjs";
 import { AgentHost } from "./agent-host.mjs";
 import { ThreadQueue } from "./queue.mjs";
-import { buildPrompt, buildClaimPrompt } from "./prompt.mjs";
+import { buildPrompt, buildClaimPrompt, buildFormalPrompt } from "./prompt.mjs";
+import { readCompleteRequest, prepareFormalDelivery, deliverFormal } from './formal-delivery.mjs';
 import { renderTurn } from "./render.mjs";
 import { SessionMap } from "./sessions.mjs";
 import { PermissionBroker, decisionOf, DEFAULT_PERMISSION_TIMEOUT_MS } from "./permission.mjs";
@@ -60,29 +61,32 @@ class TurnReceipts {
     this.memory = new Map();
   }
   key(signalId) { return createHash("sha256").update(this.scope + JSON.stringify(signalId)).digest("hex"); }
-  begin(signalId) {
+  begin(signalId, initial = {}) {
     const key = this.key(signalId);
+    const receipt = { ...initial, phase: initial.phase ?? 'started', requestId: randomUUID() };
     if (!this.dir) {
       if (this.memory.has(key)) return { key, receipt: this.memory.get(key), fresh: false };
-      const receipt = { phase: "started", requestId: randomUUID() };
       this.memory.set(key, receipt);
       return { key, receipt, fresh: true };
     }
     mkdirSync(this.dir, { recursive: true, mode: 0o700 });
     const path = join(this.dir, key + ".json");
-    const receipt = { phase: "started", requestId: randomUUID() };
-    try { writeFileSync(path, JSON.stringify(receipt), { flag: "wx", mode: 0o600 }); }
+    const temporary=path+'.'+randomUUID()+'.tmp';
+    try {
+      writeFileSync(temporary, JSON.stringify(receipt), {flag:'wx',mode:0o600});
+      linkSync(temporary,path); // Atomic complete-file commit, without replacing an existing operation.
+    }
     catch (error) {
       if (error.code !== "EEXIST") throw error;
       const existing = this.read(key);
       return { key, receipt: existing, fresh: false };
-    }
+    } finally {try{unlinkSync(temporary);}catch(error){if(error.code!=='ENOENT')throw error;}}
     return { key, receipt, fresh: true };
   }
   read(key) {
     const receipt = this.dir ? JSON.parse(readFileSync(join(this.dir, key + ".json"), "utf8")) : this.memory.get(key);
-    if (!receipt || !["started", "result", "posted", "discarded", "linked"].includes(receipt.phase) || typeof receipt.requestId !== "string" ||
-        receipt.phase === "result" && typeof receipt.body !== "string" ||
+    if (!receipt || !["queued", "started", "result", "needs_review", "posted", "discarded", "linked"].includes(receipt.phase) || typeof receipt.requestId !== "string" ||
+        ['result','needs_review'].includes(receipt.phase) && typeof receipt.body !== "string" ||
         receipt.phase === "linked" && !/^[a-f0-9]{64}$/.test(receipt.groupKey)) throw new Error("Invalid execution receipt; manual recovery required");
     return receipt;
   }
@@ -195,7 +199,7 @@ export class Bridge {
     // Old receipts lack source IDs: do not disclose their result without
     // evidence that every original requester still has access.
     if (!Array.isArray(messageIds) || !messageIds.length) return false;
-    for (const id of messageIds) if (!allowed((await this.readThread(id)).thread?.authorId)) return false;
+    for (const id of messageIds) if (!allowed((await this.readThread(id, {selected:true})).thread?.authorId)) return false;
     return true;
   }
 
@@ -219,24 +223,28 @@ export class Bridge {
   }
 
   stopForContextLimit(error) {
-    if (!(error instanceof RoomError) || error.status !== 413 || error.code !== "current_thread_too_large") return false;
+    if (!(error instanceof RoomError) || !(error.status === 413 && ['current_thread_too_large','formal_context_too_large'].includes(error.code)
+      || error.status === 409 && error.code === 'selected_message_context_unavailable')) return false;
     if (this.stopReason !== "context_unavailable") {
       this.stopReason = "context_unavailable";
-      this.log("Room thread exceeds this bridge's bounded context. Stopping; the wake remains unacknowledged. Inspect the request in Room before restarting.");
+      this.log("Room context is unavailable or exceeds this bridge's bounded context. Stopping; the wake remains unacknowledged. Inspect the request in Room before restarting.");
     }
     this.stop();
     return true;
   }
 
-  async readThread(messageId) {
-    try { return await this.room.thread(messageId); }
+  async readThread(messageId, options) {
+    try { return await this.room.thread(messageId, options); }
     catch (error) { this.stopForContextLimit(error); throw error; }
   }
 
   async threadRoot(messageId) {
-    let current = (await this.readThread(messageId)).thread;
-    for (let hops = 0; current.replyToId && hops < 5; hops++) current = (await this.readThread(current.replyToId)).thread;
-    return current;
+    let selected = await this.readThread(messageId, {selected:true});
+    for (let hops = 0; selected.thread.replyToId && hops < 5; hops++) {
+      if (selected.replyRequest?.recipientId === this.connection.memberId) break;
+      selected = await this.readThread(selected.thread.replyToId, {selected:true});
+    }
+    return selected.thread;
   }
 
   // Route one wake signal into the queue, or ack it as not for us.
@@ -246,12 +254,12 @@ export class Bridge {
     try {
       if (signal.workClaim) { await this.acceptClaim(signal); return; }
       if (!signal.messageId || !["mention", "dm", "reply", "direct"].includes(signal.kind)) { await this.ack([signal.signalId]); this.stats.skipped++; return; }
-      const message = (await this.readThread(signal.messageId)).thread;
+      const message = (await this.readThread(signal.messageId, {selected:true})).thread;
       if (!mayTalk({ authorId: message.authorId, members: this.members, me: this.me, ownerId: this.ownerId, respondTo: this.respondTo })) {
       this.log(`ignored a ${signal.kind} from ${message.author ?? message.authorId} (respond-to ${this.respondTo})`);
       await this.ack([signal.signalId]); this.stats.skipped++; return;
     }
-      const root = message.replyToId ? await this.threadRoot(message.replyToId) : message;
+      const root = message.replyToId ? await this.threadRoot(message.id) : message;
       // An "@agent allow" answer to a pending permission ask is not a new turn.
       if (this.permissions?.isPending(root.id) && decisionOf(message.body)) { await this.ack([signal.signalId]); return; }
       this.queue.push(root.id, { signalId: signal.signalId, messageId: message.id, author: message.author ?? message.authorId, body: message.body });
@@ -332,49 +340,126 @@ export class Bridge {
     if (threadKey.startsWith(CLAIM_KEY)) return this.claimTurn(threadKey, batch);
     try {
       if (!(await this.authorized({ messageIds: batch.map(item => item.messageId) }))) { await this.ack(batch.map(item => item.signalId)); return; }
-      const fresh = [], replay = new Set();
+      const fresh = [], replay = new Map(), unique = new Set();
       for (const item of batch) {
-        const saved = this.chatReceipts.begin(item.signalId);
+        if (unique.has(item.signalId)) continue;
+        unique.add(item.signalId);
+        // A crash even before grouping must retain a complete, executable
+        // pre-execution record. Claim receipts keep their existing default.
+        const saved = this.chatReceipts.begin(item.signalId, {phase:'queued', threadKey,
+          signalIds:[item.signalId], messageIds:[item.messageId], wakes:[{author:item.author, body:item.body}]});
         if (saved.fresh) fresh.push({ ...saved, item });
-        else replay.add(saved.receipt.phase === "linked" ? saved.receipt.groupKey : saved.key);
+        else {
+          const groupKey = saved.receipt.phase === "linked" ? saved.receipt.groupKey : saved.key;
+          if (!replay.has(groupKey)) replay.set(groupKey, []);
+          replay.get(groupKey).push(item.signalId);
+        }
       }
       // Retry original groups independently of this poll's new batching.
-      for (const key of replay) {
+      for (const [key, signalIds] of replay) {
         try { await this.deliverChatReceipt(key); }
-        catch (error) { this.log(`chat delivery failed (${error.code ?? error.message}); retrying delivery without repeating execution`); }
+        catch (error) {
+          for (const id of signalIds) this.seen.delete(id);
+          this.log(`chat delivery failed (${error.code ?? error.message}); retrying delivery without repeating execution`);
+          if (this.stopForContextLimit(error)) return;
+        }
       }
       if (!fresh.length) return;
       const { key, receipt } = fresh[0];
       const signalIds = fresh.map(entry => entry.item.signalId);
-      const started = { ...receipt, threadKey, signalIds, messageIds: fresh.map(entry => entry.item.messageId) };
-      this.chatReceipts.save(key, started);
-      for (const entry of fresh.slice(1)) this.chatReceipts.save(entry.key, { ...entry.receipt, phase: "linked", groupKey: key });
-      let body;
-      try {
-        await this.agentReady();
-        if (this.controller.signal.aborted) return;
-        const thread = (await this.readThread(threadKey)).thread;
-        const { sessionId, created } = await this.host.session(threadKey);
-        if (!(await this.authorized({ messageIds: started.messageIds }))) { await this.ack(signalIds); return; }
-        const prompt = buildPrompt({ roomTitle: this.title, thread, wakes: fresh.map(entry => entry.item), firstTurn: created });
-        const { recorder, stopReason } = await this.host.prompt(threadKey, prompt, { sessionId });
-        body = renderTurn(recorder, { stopReason });
-        this.stats.turns++;
-      } catch (error) {
-        this.log(`turn failed: ${error.message}`);
-        if (this.controller.signal.aborted) return;
-        body = renderTurn({ text: "", tools: new Map() }, { error: error.message });
-      }
-      this.chatReceipts.save(key, { ...started, phase: "result", body });
+      const queued = { ...receipt, phase: 'queued', threadKey, signalIds, messageIds: fresh.map(entry => entry.item.messageId),
+        wakes: fresh.map(entry => ({author:entry.item.author, body:entry.item.body})) };
+      this.chatReceipts.save(key, queued);
+      for (const entry of fresh.slice(1)) this.chatReceipts.save(entry.key, {requestId:entry.receipt.requestId, phase: "linked", groupKey: key});
       await this.deliverChatReceipt(key);
     } catch (error) {
+      this.stopForContextLimit(error);
       for (const item of batch) this.seen.delete(item.signalId);
       this.log(`chat delivery failed (${error.code ?? error.message}); retrying delivery without repeating execution`);
     }
   }
 
+  async executeQueuedChatReceipt(key, receipt) {
+    // Repair a crash during the per-signal link writes. An unlinked queued
+    // sibling has never executed and can join this group. A sibling already
+    // delivered in another replay order must not execute a second time.
+    const included=[];
+    for (let i=0;i<receipt.signalIds.length;i++) {
+      const siblingKey=this.chatReceipts.key(receipt.signalIds[i]);
+      if (siblingKey===key) {included.push(i);continue;}
+      let sibling=this.chatReceipts.read(siblingKey);
+      if (sibling.phase==='queued' && sibling.signalIds?.length===1) {
+        this.chatReceipts.save(siblingKey,{requestId:sibling.requestId,phase:'linked',groupKey:key});
+        included.push(i);continue;
+      }
+      if (sibling.phase==='linked' && sibling.groupKey===key) {included.push(i);continue;}
+      if (sibling.phase==='result' || sibling.phase==='linked') {
+        await this.deliverChatReceipt(siblingKey);
+        sibling=this.chatReceipts.read(sibling.phase==='linked'?sibling.groupKey:siblingKey);
+      }
+      if (!['posted','discarded'].includes(sibling.phase)) {
+        this.log('Grouped chat has an unresolved execution; inspect it before starting another turn');return;
+      }
+    }
+    if (included.length!==receipt.signalIds.length) {
+      receipt={...receipt,signalIds:included.map(i=>receipt.signalIds[i]),messageIds:included.map(i=>receipt.messageIds[i]),
+        wakes:included.map(i=>receipt.wakes?.[i]).filter(Boolean)};
+      this.chatReceipts.save(key,receipt);
+    }
+    // Only queued means no prompt has started. Persist started immediately
+    // before execution; after a crash that state is never silently rerun.
+    if (!(await this.authorized({messageIds:receipt.messageIds}))) {
+      this.chatReceipts.save(key, {...receipt, phase:'discarded'}); return;
+    }
+    await this.agentReady();
+    if (this.controller.signal.aborted) return;
+    const selected = await this.readThread(receipt.threadKey, {selected:true});
+    const formal = selected.replyRequest?.recipientId === this.connection.memberId
+      ? await readCompleteRequest(this.room, receipt.threadKey) : null;
+    if (formal && (formal.request.status !== 'open' || formal.current?.actions?.answer !== true)) {
+      this.chatReceipts.save(key, {...receipt, phase:'discarded'}); return;
+    }
+    const thread = formal ? selected.thread : (await this.readThread(receipt.threadKey)).thread;
+    const {sessionId, created} = await this.host.session(receipt.threadKey);
+    if (!(await this.authorized({messageIds:receipt.messageIds}))) {
+      this.chatReceipts.save(key, {...receipt, phase:'discarded'}); return;
+    }
+    const wakes = receipt.wakes ?? [];
+    const prompt = formal ? buildFormalPrompt(formal)
+      : buildPrompt({roomTitle:this.title, thread, wakes, firstTurn:created});
+    const started = {...receipt, phase:'started', ...(formal ? {formalContext:formal} : {})};
+    this.chatReceipts.save(key, started);
+    let body, formalDelivery;
+    try {
+      const {recorder, stopReason} = await this.host.prompt(receipt.threadKey, prompt, {sessionId});
+      this.stats.turns++;
+      if (formal) {
+        const delivery = prepareFormalDelivery(formal, recorder.text, stopReason);
+        body = delivery.kind === 'formal' ? delivery.recipe.command.data.body : delivery.body;
+        if (delivery.kind === 'formal') formalDelivery = delivery;
+      } else body = renderTurn(recorder, {stopReason});
+    } catch (error) {
+      this.log(`turn failed: ${error.message}`);
+      if (this.controller.signal.aborted) return;
+      body = formal ? 'The agent turn failed. This request remains open.'
+        : renderTurn({text:'', tools:new Map()}, {error:error.message});
+    }
+    // Save the exact filled recipe and answer BEFORE the first network send.
+    // Drop the input copy after execution, retaining it only for an interrupted
+    // started receipt that may need local inspection.
+    const {formalContext:_context, wakes:_wakes, ...result} = started;
+    this.chatReceipts.save(key, {...result, phase:'result', body, ...(formalDelivery ? {formalDelivery} : {})});
+  }
+
   async deliverChatReceipt(key) {
     let receipt = this.chatReceipts.read(key);
+    if (receipt.phase==='linked') return this.deliverChatReceipt(receipt.groupKey);
+    if (receipt.phase==='needs_review') return;
+    if (receipt.phase === 'queued') {
+      await this.executeQueuedChatReceipt(key, receipt);
+      receipt = this.chatReceipts.read(key);
+      if (receipt.phase === 'queued') return;
+    }
     if (receipt.phase === "started") {
       this.log("chat has an interrupted execution; inspect its work before sending a new request");
       return;
@@ -382,15 +467,33 @@ export class Bridge {
     if (!Array.isArray(receipt.signalIds) || typeof receipt.threadKey !== "string") throw new Error("Invalid chat execution receipt; manual recovery required");
     try {
       if (receipt.phase === "result" && !(await this.authorized({ messageIds: receipt.messageIds }))) {
-        const { body: _body, ...discarded } = receipt;
+        const { body: _body, formalDelivery:_delivery, ...discarded } = receipt;
         receipt = { ...discarded, phase: "discarded" };
         this.chatReceipts.save(key, receipt);
       }
       if (receipt.phase === "result") {
-        await this.room.post({ body: receipt.body, replyToId: receipt.threadKey,
+        if (receipt.formalDelivery && !receipt.formalReview) {
+          try { await deliverFormal(this.room, receipt.formalDelivery, this.fencingToken); }
+          catch (error) {
+            if (error instanceof RoomError && ['formal_context_invalid','formal_response_changed'].includes(error.code)) {
+              this.chatReceipts.save(key,{...receipt,phase:'needs_review'});
+              this.log('Saved formal response no longer matches Room. Retained for review; not resending or rerunning execution.');
+              return;
+            }
+            // Only a definitive CAS rejection permits changing delivery mode.
+            // Unknown results retain the identical recipe until reconciled.
+            if (!(error instanceof RoomError) || error.status !== 409 || error.code !== 'command_rejected'
+              || !/^Stale reply request (revision|context)$/.test(error.message)) throw error;
+            const revision=receipt.formalDelivery.recipe.command.data.expectedRequestRevision;
+            receipt={...receipt, formalReview:true,
+              body:`The request changed while I worked (prepared revision ${revision}). This is a draft for review, not a completed answer.\n\n${receipt.body}`};
+            this.chatReceipts.save(key, receipt);
+          }
+        }
+        if (!receipt.formalDelivery || receipt.formalReview) await this.room.post({ body: receipt.body, replyToId: receipt.threadKey,
           messageId: `acp-${receipt.requestId}`, requestId: receipt.requestId, listenerToken: this.fencingToken });
         this.stats.posted++;
-        const { body: _body, ...delivered } = receipt;
+        const { body: _body, formalDelivery:_delivery, ...delivered } = receipt;
         receipt = { ...delivered, phase: "posted" };
         this.chatReceipts.save(key, receipt);
       }

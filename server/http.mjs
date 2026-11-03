@@ -17,7 +17,7 @@ import { recordedReceiptsOptOut } from "./public-visibility.mjs";
 import { publicPageCsp } from "./public-search.mjs";
 // JDOT-PUBLIC-CSP-RUM end
 import { acceptPrefersHtml, publicHtmlNotFoundPath, publicSearchAssets, publicSearchCanonical, publicSearchMarketingPolicy, publicSearchPageCsp, publicSearchSitemap, PUBLIC_NOT_FOUND_HTML, PUBLIC_PAGE_LASTMOD, reviewedPublicSearchPaths } from "./public-search.mjs";
-import { readConversation } from "./conversation-sync.mjs";
+import { readConversation, readMessageContext } from "./conversation-sync.mjs";
 import { readRoomSnapshot } from "./snapshot-window.mjs";
 import { OutsideAgents } from "./outside-agents.mjs";
 import { GmailMailbox } from './gmail-mailbox.mjs';
@@ -4620,6 +4620,13 @@ export function createRoomServer({ store, origin, assetRoot = new URL("../", imp
         }));
       }
       if (route === "thread" && req.method === "GET") {
+        if (url.searchParams.has('view')) {
+          if (url.searchParams.get('view') !== 'message' || url.searchParams.getAll('view').length !== 1
+            || [...url.searchParams.keys()].some(key => !['view','auth'].includes(key)))
+            reject(422, 'invalid_conversation_selection', 'Choose view=message for one addressed message');
+          const context = readMessageContext(store, selected.token, roomId, threadMessageId, fence);
+          return json(res, 200, {...context, thread:redactMessageTree(context.thread)});
+        }
         // RC-2026-09-19-070: a DM thread root is invisible to non-participants
         // (404, like a missing message); DM replies inside a visible thread are dropped.
         const result = store.readTransaction(() => {

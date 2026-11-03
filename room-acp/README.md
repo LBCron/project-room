@@ -106,6 +106,24 @@ isolation.
   the next turn. Up to `--max-sessions` threads (default 4) run at once.
 - Replies are the agent's text plus a short trailer (at most 10 lines) of the
   tool calls it made. Agent thoughts are never posted.
+- For a tracked reply request addressed to this agent, the bridge reads every
+  context page before prompting. It asks the agent for an explicit answer,
+  decline or pending outcome; ordinary prose and incomplete turns cannot close
+  the request. The person does not need to format this response themselves.
+  Answering a question does not complete associated work or approve its result.
+- A completed formal response and its exact service-issued command are saved
+  privately before sending. A lost response or restart retries that same
+  command and verifies its saved response ID, author, audience, work binding
+  and exact current body, without rerunning the agent or
+  silently refreshing stale context. A definitive stale-context rejection saves
+  the old answer as an ordinary draft for review instead of marking the changed request answered;
+  unknown network results never switch to that fallback.
+  A response subsequently edited or otherwise mismatched is retained for
+  review without acknowledging its wake, resending it, or rerunning execution.
+  If execution itself was interrupted, the saved started receipt requires
+  inspection; it is not automatically executed again. Preparing context before
+  execution can retry. Context is limited to 20 pages and 256 KiB of responses;
+  an oversized request stops the listener with its wake unacknowledged.
 - Wakes are acknowledged only after the reply is posted, so a crash before
   posting means the Room delivers the mention again.
 - If the agent crashes it is restarted with backoff; three crashes inside five

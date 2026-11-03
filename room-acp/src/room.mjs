@@ -96,9 +96,19 @@ export class RoomClient {
   claimNote(claimId, note, requestId = randomUUID(), listenerToken = this.listenerToken) {
     return this.request(`/api/rooms/${encodeURIComponent(this.roomId)}/work-claims/${encodeURIComponent(claimId)}/update`, { body: { note, requestId }, listenerToken });
   }
-  thread(messageId) { return this.request(`/api/rooms/${encodeURIComponent(this.roomId)}/messages/${encodeURIComponent(messageId)}/thread`); }
+  thread(messageId, {selected = false} = {}) {
+    return this.request(`/api/rooms/${encodeURIComponent(this.roomId)}/messages/${encodeURIComponent(messageId)}/thread${selected ? '?view=message' : ''}`).then(value => {
+      if (selected && (value?.messageContextVersion !== 1 || value.roomId !== this.roomId || value.thread?.id !== messageId))
+        throw new RoomError(409, 'selected_message_context_unavailable', 'Room does not provide the addressed message context required by this listener');
+      return value;
+    });
+  }
+  requestContext(requestMessageId, cursor = null) {
+    return this.request(`/api/rooms/${encodeURIComponent(this.roomId)}/reply-context?requestMessageId=${encodeURIComponent(requestMessageId)}`
+      + (cursor ? `&cursor=${encodeURIComponent(cursor)}` : ''));
+  }
   async post({ body, replyToId = null, toMemberId: directTo = null, messageId = `acp-${randomUUID()}`, requestId = randomUUID(), listenerToken = this.listenerToken }) {
-    const parent = replyToId ? (await this.thread(replyToId)).thread : null;
+    const parent = replyToId ? (await this.thread(replyToId, {selected:true})).thread : null;
     const toMemberId = !parent && directTo ? directTo : parent?.toMemberId ? (parent.authorId === this.memberId ? parent.toMemberId : parent.authorId) : null;
     return this.request(`/api/rooms/${encodeURIComponent(this.roomId)}/commands`, { body: { id: requestId, type: "message.posted", data: { messageId, body, ...(replyToId ? { replyToId } : {}), ...(toMemberId ? { toMemberId } : {}) } }, listenerToken })
       .then(() => ({ messageId }));

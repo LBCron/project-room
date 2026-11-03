@@ -296,6 +296,24 @@ function readCurrentDirectDirectory(store,token,roomId,{limit,cursor,expectedSes
 }
 
 
+// The listener needs one addressed message and request hint for routing and
+// authorization, not its whole reply family. Execution still reads the complete
+// paged request or the existing bounded ordinary thread, as appropriate.
+export function readMessageContext(store, token, roomId, messageId, expectedSessionBinding = null) {
+  return store.readTransaction(() => withCurrentReadContext(store.db, roomId, b => {
+    const auth = store.authenticate(token, roomId, expectedSessionBinding);
+    const selected = readConversation(store, token, roomId, {messageId, expectedSessionBinding});
+    const message = selected.messages[0];
+    if (!message) fail(404, 'message_not_found', 'Message not found');
+    const request = isCurrentRoom(store.db, roomId)
+      ? readCurrentRecord(store.db, roomId, 'replyRequests', messageId, b)
+      : store.room(roomId).state.replyRequests?.[messageId];
+    const replyRequest = request && [request.requesterId, request.recipientId].includes(auth.member.id)
+      ? {id:request.id, requesterId:request.requesterId, recipientId:request.recipientId, status:request.status} : null;
+    return withContentTrust({roomId, messageContextVersion:1, thread:stampThread({...message, replies:[]}, auth.member.id), ...(replyRequest ? {replyRequest} : {})});
+  }));
+}
+
 // Selected current subtree only. Refuse oversized families rather than read a
 // whole projection or silently give an executing agent incomplete context.
 export function readCurrentMessageThread(store, token, roomId, messageId, expectedSessionBinding = null) {
@@ -348,6 +366,12 @@ export function readCurrentMessageThread(store, token, roomId, messageId, expect
     };
     const thread = attach(selected.value);
     if (Buffer.byteLength(JSON.stringify(thread)) > 65536) fail(413, 'current_thread_too_large', 'Selected thread exceeds bounded context; request a smaller selected message');
-    return withContentTrust({ roomId, thread: stampThread(thread, auth.member.id) });
+    // A protected request hint lets listeners select the paged request reader
+    // rather than mistaking a tracked question for ordinary thread chat. It is
+    // not an answer basis; that still comes from a fresh complete request read.
+    const request = readCurrentRecord(store.db, roomId, 'replyRequests', messageId, b);
+    const replyRequest = request && [request.requesterId, request.recipientId].includes(auth.member.id)
+      ? {id:request.id, requesterId:request.requesterId, recipientId:request.recipientId, status:request.status} : null;
+    return withContentTrust({ roomId, thread: stampThread(thread, auth.member.id), ...(replyRequest ? {replyRequest} : {}) });
   }));
 }

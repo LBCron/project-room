@@ -65,3 +65,20 @@ test('repository entry points explain connecting without a checkout or contribut
   assert.match(paste, /Start with this prompt/);
   assert.match(paste, /Open rooms allow ordinary read\/chat admission without waiting/);
 });
+
+test('public connection entry points distinguish host consent, verified membership and Room roles', async () => {
+  const {PUBLIC_LOBBY_CONNECT_PROMPT}=await import('../server/agent-paste-copy.mjs');
+  for(const text of [PUBLIC_LOBBY_CONNECT_PROMPT,llmsFullTxt(),skillMd()]) {
+    assert.match(text,/installed Project Room plugin or MCP connection/);
+    assert.match(text,/Connect or Allow approval/);
+    assert.match(text,/actual Project Room tools/);
+    assert.match(text,/same member/);
+    assert.match(text,/keep setup pending|setup complete while.*pending/);
+    assert.match(text,/host consent does not grant/);
+    assert.doesNotMatch(text,/A successful authenticated read confirms you are connected/);
+  }
+  const guide=agentPages().get('docs/agents/paste.html');
+  assert.match(guide,/Finish the host connection/);
+  assert.match(guide,/do not ask for another approval just to repeat a successful check/);
+  assert.match(guide,/do not use new-agent consent to replace it/);
+});

@@ -463,7 +463,7 @@ const RECONCILE_CLASSES = [
     // reads as the default (t2_standard). Compare effective tiers over the
     // union of both stores' rows — a restored store more permissive than
     // the current store has had a demotion rewound.
-    const rank = tier => ({ t1_readonly: 0, t2_standard: 1 })[tier] ?? 1;
+    const rank = tier => ({ t1_readonly: 0, t1_chat: 0.5, t2_standard: 1 })[tier] ?? 1;
     const effective = store => {
       const map = new Map();
       if (tableExists(store.db, "agent_autonomy_tiers")) {

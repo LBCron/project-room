@@ -38,7 +38,7 @@
 // carry status and code like ServiceError and the router reads them as such.
 import { EVENT_TYPES as T, ownMember } from "../src/events.js";
 
-export const AUTONOMY_TIERS = Object.freeze(["t1_readonly", "t2_standard"]);
+export const AUTONOMY_TIERS = Object.freeze(["t1_readonly", "t1_chat", "t2_standard"]);
 // Absent row = legacy behavior: no behavior change for existing members
 // until the operator acts.
 export const DEFAULT_AUTONOMY_TIER = "t2_standard";
@@ -48,6 +48,11 @@ export const DEFAULT_AUTONOMY_TIER = "t2_standard";
 // redeem and share-link joins skip that hook and leave no row, which is the
 // same full access (DEFAULT_AUTONOMY_TIER). A later demotion stays put:
 // assignEnrollmentTier is ON CONFLICT DO NOTHING.
+// Enrollment stays t2_standard. t1_chat (read plus chat) is an owner-set
+// tier: the agent may read, post, edit or delete messages and send DMs;
+// every other write is refused 403 agent_chat_only until promoted. Making
+// t1_chat the enrollment default is a separate change: it needs ~200 test
+// fixtures to promote their agents first.
 export const ENROLLMENT_TIER = "t2_standard";
 
 // t1_readonly agents may not change room state at all, except the session
@@ -60,6 +65,16 @@ export const T1_READONLY_ALLOWED_COMMANDS = Object.freeze(new Set([
   T.SESSION_STOP_REQUESTED,
   T.SESSION_STOPPED,        // stops always land
 ]));
+
+// Commands a t1_chat agent may issue: the read-only set plus chat.
+export const T1_CHAT_ALLOWED_COMMANDS = Object.freeze(new Set([
+  ...T1_READONLY_ALLOWED_COMMANDS,
+  T.MESSAGE_POSTED,
+  T.MESSAGE_EDITED,
+  T.MESSAGE_DELETED,
+  T.DM_POSTED,
+]));
+export const CHAT_TIER_PROMOTE_HINT = "Ask the room owner to promote this agent to t2_standard (PUT /api/rooms/{roomId}/operator/agents/{memberId}).";
 
 // Room-local autonomy tiers. Created lazily — by the enrollment hook for new
 // agent members and by the owner API for promotions/demotions. Absent row =
@@ -165,6 +180,8 @@ export function enforceAutonomyTiers({ db, roomId, state, command, actor, nowMs 
   const tier = getTier(db, roomId, actor.id)?.autonomyTier ?? DEFAULT_AUTONOMY_TIER;
   if (tier === "t1_readonly" && !T1_READONLY_ALLOWED_COMMANDS.has(command.type))
     fail(403, "agent_readonly", `${memberName(state, actor.id)} runs at the read-only autonomy tier: it may read and report session status, but it cannot ${command.type}`);
+  if (tier === "t1_chat" && !T1_CHAT_ALLOWED_COMMANDS.has(command.type))
+    fail(403, "agent_chat_only", `${memberName(state, actor.id)} runs at the read-and-chat autonomy tier: it may read and chat, but it cannot ${command.type}. ${CHAT_TIER_PROMOTE_HINT}`);
 }
 
 // Direct enforcement for store APIs that bypass store.command() — room file
@@ -178,6 +195,8 @@ export function enforceAutonomyTierForAction({ db, roomId, state, actor, action,
   const tier = getTier(db, roomId, actor.id)?.autonomyTier ?? DEFAULT_AUTONOMY_TIER;
   if (tier === "t1_readonly")
     fail(403, "agent_readonly", `${memberName(state, actor.id)} runs at the read-only autonomy tier: it may read and report session status, but it cannot ${action}`);
+  if (tier === "t1_chat")
+    fail(403, "agent_chat_only", `${memberName(state, actor.id)} runs at the read-and-chat autonomy tier: it may read and chat, but it cannot ${action}. ${CHAT_TIER_PROMOTE_HINT}`);
 }
 
 // Read model for the operator API: the tier row (null when neither the

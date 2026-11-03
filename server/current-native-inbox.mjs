@@ -4,18 +4,51 @@ import {readCurrentInboxDiscovery} from './current-inbox-discovery.mjs';
 import {withCurrentReadContext,readCurrentHead,readCurrentMessage,readCurrentRecord,chargeCurrentReadBudget,currentConversationRows} from './current-room-repository.mjs';
 import {conversationCursorCodec} from './conversation-sync.mjs';
 import {ServiceError} from './service-error.mjs';
-import {readCurrentEventWindow,CURRENT_EVENT_SOURCE_BYTES} from './current-room-events.mjs';
+import {readCurrentEventWindow,validateCurrentEventSelection,CURRENT_EVENT_SOURCE_BYTES} from './current-room-events.mjs';
 import {effectiveMentionState} from './mention-lifecycle.mjs';
 import {stampInbox} from './content-trust.mjs';
+// Bounded, fail-open skip-ahead. An event is skipped only when trusted
+// sources positively show catch-up would never surface it to this viewer:
+// - not message.posted (catch-up returns only message.posted), from the event log;
+// - the viewer's own message, from the event log actor;
+// - otherwise not a DM to the viewer, not mentioning the viewer, and not a reply
+//   to the viewer, where recipient, author and parent come from the event log AND
+//   must equal the protected messageWitness header (parent author from the
+//   parent's witness header). The mention check uses the same mention_states
+//   row the existing reader already relies on for directMentions.
+// Anything missing, oversized, legacy (no header) or inconsistent stops the skip
+// at that event, which then goes through the normal verified read.
+const SKIP_WINDOW=64,SKIP_EVENT_BYTES=4096;
+function firstAddressedSequence(db,roomId,memberId,after,headSequence,b){
+ const small=key=>`CASE WHEN length(CAST(body AS BLOB))<=${SKIP_EVENT_BYTES} THEN json_extract(body,'${key}') END`;
+ const rows=db.prepare(`SELECT sequence,id,length(CAST(body AS BLOB)) AS bytes,${small('$.type')} AS type,${small('$.actorId')} AS actorId,${small('$.data.messageId')} AS messageId,${small('$.data.toMemberId')} AS toMemberId,${small('$.data.replyToId')} AS replyToId
+   FROM events WHERE room_id=? AND sequence>? AND sequence<=? ORDER BY sequence LIMIT ?`).all(roomId,after,headSequence,SKIP_WINDOW);
+ chargeCurrentReadBudget(b,rows.reduce((n,row)=>n+Math.min(row.bytes??0,SKIP_EVENT_BYTES)+64,0),1);
+ const mention=db.prepare('SELECT 1 FROM mention_states WHERE room_id=? AND message_event_id=? AND mentioned_member_id=? LIMIT 1');
+ const header=id=>typeof id==='string'&&id?readCurrentRecord(db,roomId,'messageWitness',id,b)?.header:undefined;
+ const stop=row=>({found:true,after:row.sequence-1,skipped:row.sequence-1-after});
+ for(const row of rows){
+  if(!(row.bytes<=SKIP_EVENT_BYTES)||typeof row.type!=='string')return stop(row);
+  if(row.type!=='message.posted')continue;
+  if(typeof row.actorId!=='string')return stop(row);
+  if(row.actorId===memberId)continue;
+  if(row.toMemberId===memberId||mention.get(roomId,row.id,memberId))return stop(row);
+  const own=header(row.messageId??row.id);
+  if(!own||own.author_id!==row.actorId||own.to_member_id!==(row.toMemberId??null)||own.reply_to_id!==(row.replyToId??null)||own.seq!==row.sequence)return stop(row);
+  if(own.reply_to_id!==null){const parent=header(own.reply_to_id);if(!parent||parent.author_id===memberId)return stop(row);}
+ }
+ const last=rows.length?rows.at(-1).sequence:after;
+ return {found:false,after:last,skipped:last-after};
+}
 // Conversation delivery and standing obligations are separate cursors. Reading
 // a source window neither acknowledges conversation nor clears formal work.
-export function readCurrentNativeInbox(store,secret,roomId,{limit=50,after,olderCursor,expectedSessionBinding=null}={}){
+export function readCurrentNativeInbox(store,secret,roomId,{limit=50,after,olderCursor,expectedSessionBinding=null,skipUnaddressed=false}={}){
  return store.readTransaction(()=>withCurrentReadContext(store.db,roomId,b=>{
   const auth=store.authenticate(secret,roomId,expectedSessionBinding),memberId=auth.member.id,head=readCurrentHead(store.db,roomId);
   const floor=store.historyFloor(roomId,memberId,head.sequence);
   const binding={kind:'native_inbox_older_v1',roomId,memberId,head:head.head_sha256,credential:auth.credentialHash,limit:Math.min(limit,4)};
   if(after!==undefined&&olderCursor!==undefined)throw new ServiceError(422,'invalid_inbox_cursor','Use after or olderCursor, not both');
-  const recent=after===undefined;let older=null,page;
+  const recent=after===undefined;let older=null,page,start=null;
   if(recent){
     const saved=olderCursor===undefined?null:conversationCursorCodec(store).decode(olderCursor);
     if(olderCursor!==undefined&&(!saved||Object.entries(binding).some(([k,v])=>saved[k]!==v)))throw new ServiceError(409,'stale_inbox_cursor','Inbox source changed or the service restarted; restart without olderCursor');
@@ -37,7 +70,18 @@ export function readCurrentNativeInbox(store,secret,roomId,{limit=50,after,older
     const continuation=prefixTruncated?{position:last.position,messageId:last.messageId}:selected.continuation;
     older={hasMore:prefixTruncated||!selected.complete,examined:selected.examined,nextRead:continuation?{tool:'room_read_inbox',arguments:{roomId,limit,olderCursor:conversationCursorCodec(store).encode({...binding,before:continuation.position,beforeId:continuation.messageId})}}:null};
     page={events,next:head.sequence,hasMore:false};
-  }else page=readCurrentEventWindow(store,roomId,memberId,{after,limit:Math.min(limit,4),types:['message.posted']});
+  }else{
+    // Skip only events that trusted sources positively show are not addressed
+    // to this viewer, so catch-up pages lead with attention (see above).
+    validateCurrentEventSelection(after,Math.min(limit,4),{types:['message.posted']});
+    if(after>head.sequence)throw new ServiceError(409,'cursor_ahead','Cursor exceeds room history; fetch a fresh snapshot');
+    // Opt-in for room_read_inbox only: needs-me and digests keep their exact
+    // four-event examined contract.
+    start=skipUnaddressed?firstAddressedSequence(store.db,roomId,memberId,after,head.sequence,b):{found:true,after};
+    page=start.found
+      ?readCurrentEventWindow(store,roomId,memberId,{after:start.after,limit:Math.min(limit,4),types:['message.posted']})
+      :{events:[],next:start.after,hasMore:start.after<head.sequence};
+  }
   const directMessages=[],directMentions=[],replies=[],parents=new Map();
   for(const {sequence,event:e}of page.events){if(e.type!=='message.posted'||e.actorId===memberId||e.data.body===null)continue;
    const id=e.data.messageId??e.id,row={sequence,eventId:e.id,messageId:id,replyToId:id,from:e.actorId,body:e.data.body,at:e.at,channel:e.data.channelId??'general',private:Boolean(e.data.toMemberId),...(e.data.toMemberId?{replyToMemberId:e.actorId}:{}),...(e.data.requestKind==='reply'&&e.data.requestPolicyVersion===1?{requestKind:'reply',nextRead:{tool:'room_read_request',arguments:{roomId,requestMessageId:id}}}:{})};
@@ -75,7 +119,7 @@ export function readCurrentNativeInbox(store,secret,roomId,{limit=50,after,older
    assignments:[],mentions:[],bondProposals:peer.bondProposals,peerMessages:peer.peerMessages,dmRequests:[],
    cursor:{after:page.next,hasMore:page.hasMore,nextRead:conversationNext},older,
    attention:{pendingMentions:directMentions.map(({sequence,replyToId,from,private:isPrivate})=>({sequence,replyToId,from,private:isPrivate})),hasMore:page.hasMore,acknowledges:false,nextRead:conversationNext},
-   coverage:{mode:'native_bounded',globalAttentionComplete:false,conversation:{direction:recent?'recent':'catch_up',examined:recent?older.examined:page.next-after,through:page.next,complete:recent?!older.hasMore:!page.hasMore},
+   coverage:{mode:'native_bounded',globalAttentionComplete:false,conversation:{direction:recent?'recent':'catch_up',examined:recent?older.examined:page.next-(start?.after??after),through:page.next,complete:recent?!older.hasMore:!page.hasMore,...(!recent&&skipUnaddressed?{skippedUnaddressed:(start?.after??after)-after}:{})},
     work:{complete:false,nextRead:workNext,examined:discovery.examinedWork},requests:{complete:false,nextRead:workNext,examined:discovery.examinedRequests},
     standingMentions:{complete:false,nextRead:{tool:'room_read_inbox',arguments:{roomId,limit,after:0}}},
     peer:peer.coverage,

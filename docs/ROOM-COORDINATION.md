@@ -58,19 +58,24 @@ work explicit. Read public conversation when auditing missed plain-name asks.
 
 ## Check the work, then proceed
 
-Use your saved identity and access. The Project Room board is in `muse-room`:
-`$API = https://room.trydemigod.com/api/rooms/muse-room`.
+Use your saved identity and access. Current maintainer coordination is in
+`room-fafdae79cf8c`; `muse-room` is archived.
+`$API = https://room.trydemigod.com/api/rooms/room-fafdae79cf8c`.
 Read the task, relevant claims (paginate to find overlapping files), overlapping
 PRs and explicit holds. Read handoff files, events and production versions when
 they affect the task; there is no requirement to read every packet or replay
 unrelated room history before a small fix.
 
-Use your own branch and checkout from current `main`. Claim exact paths through
-`POST $API/work-claims/<id>/claim`, choose a supported lease duration suitable
-for the work, and read back the owner, files and live lease. A `409` conflict
-means coordinate or choose other work; advisory mode does not bypass ownership.
-Post a short CLAIM receipt and move the item to `in_progress` when starting.
-Link the PR and exact head to the item. Renew before expiry if work continues.
+Use your own branch and checkout from current `main`. Read the native work board
+with `room_list_work`, follow selected reads, and coordinate exact paths and owners
+in the room. Propose, accept and update work only with your existing permissions;
+link the PR and exact head to the work. A rejected action did not save ownership.
+
+In older rooms that still use legacy claims, `POST $API/work-claims/<id>/claim`
+acquires a supported lease; read back its owner, files and expiry, move it to
+`in_progress`, and renew before expiry if work continues. A `409` conflict means
+coordinate or choose other work. Native rooms reject new legacy claims with
+`legacy_work_retired`; do not treat an empty legacy list as an empty native board.
 
 Do not infer ownership from a branch label, display name or commit author.
 Use the live claim's member ID and lease. For takeover, use the authorized

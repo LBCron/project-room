@@ -306,6 +306,17 @@ test("uppercase /SKILL.md serves the agent skill, distinct from the llms.txt pac
   assert.ok(skill.body.includes("/api/public-work/match"), "skill covers finding work");
   assert.ok(skill.body.includes("/api/project-offers"), "skill covers paid bounties");
   assert.ok(skill.body.includes("Money honesty"), "skill carries the money-honesty section");
+  const money = skill.body.slice(skill.body.indexOf("## Money honesty"), skill.body.indexOf("## If you get stuck"));
+  assert.match(money, /public-work receipts are unsigned/, "receipt hashes must not be sold as signatures");
+  assert.match(money, /some receipts include system-executed checks/, "do not erase stronger recorded checks");
+  assert.match(money, /does not itself transfer money/, "an offer is not a payment");
+  assert.match(money, /not proof that funding or payment is configured/, "proposed cash rewards are not funding commitments");
+  assert.doesNotMatch(money, /every finished task produces a signed|amounts are committed|standing authority|payout executes/i);
+  assert.match(skill.body, /follow `nextCursor` as `after`/, "a bounded empty match page is not an empty board");
+  assert.match(skill.body, /matcher currently recommends volunteer tasks/, "matcher and funded board capabilities remain distinct");
+  assert.doesNotMatch(skill.body, /hash-checkable evidence, forever|every open task is claimed/);
+
+
   // Stranger-onboarding recovery contract (qa200-AO-02): /SKILL.md is the whole
   // onboarding for a first-contact agent, so it must document the two dead
   // ends a stranger can hit before earning anything: a 429 on the identity

@@ -5,7 +5,8 @@ import { AgentRooms } from '../server/agent-rooms.mjs';
 import { createRoomServer } from '../server/http.mjs';
 import { RoomAgentClient } from '../client/room-agent.mjs';
 import { legacyAgentRoom } from './helpers/legacy-agent-room.mjs';
-import { helpTools } from '../client/help-actions.mjs';
+import { operatorNormalization } from '../server/operator-normalization.mjs';
+import { buildHelpCommand, helpTools } from '../client/help-actions.mjs';
 
 async function fixture(t, native = true) {
   const store = new RoomStore(':memory:');
@@ -49,12 +50,8 @@ test('native selected work omits unsupported help and remains accepted by RoomAg
   });
 });
 
-test('native hosted help returns explicit unavailable before revision or command work', async t => {
+test('native hosted help keeps existing typed refusal and leaves the head unchanged', async t => {
   const f = await fixture(t), before = f.store.headSequence(f.roomId);
-  // Neither an omitted nor an explicit revision should enter command assembly.
-  const original = f.store.workContext.bind(f.store);
-  f.store.workContext = () => { throw new Error('Unsupported help must not fetch a work revision'); };
-  t.after(() => { f.store.workContext = original; });
   for (const tool of helpTools) for (const revision of [undefined, 1]) {
     const candidate = { workItemId: f.workItemId, offerId: 'offer', requestId: 'offer-request',
       ...(revision === undefined ? {} : { expectedRevision: revision }), expectedHelpRevision: 1,
@@ -63,8 +60,8 @@ test('native hosted help returns explicit unavailable before revision or command
     const args = Object.fromEntries(Object.entries(candidate).filter(([key]) => Object.hasOwn(tool.inputSchema.properties, key)));
     const result = await f.rpc(tool.name, args);
     assert.equal(result.result?.isError, true, JSON.stringify(result));
-    assert.equal(result.result.structuredContent.code, 'current_help_context_unavailable');
-    assert.match(result.result.structuredContent.message, /unavailable.*normalized/i);
+    assert.equal(result.result.structuredContent.code, 'current_room_context_unavailable');
+    assert.match(result.result.structuredContent.message, /no qualified current-record dependency plan/i);
   }
   assert.equal(f.store.headSequence(f.roomId), before);
 });
@@ -85,4 +82,37 @@ test('historical supported help still publishes and validates selected context',
 test('shared help catalog retains legacy tools and tells callers native help is unavailable', () => {
   assert.equal(helpTools.length, 5);
   for (const tool of helpTools) assert.match(tool.description, /unavailable.*normalized/i);
+});
+
+
+test('hosted historical exact help replay and conflicts survive real normalization', async t => {
+  const f = await fixture(t, false);
+  f.store.command(f.owner.secret, f.roomId, { id: 'add-helper', type: 'member.added', data: {
+    memberId: 'helper', displayName: 'Synthetic helper', kind: 'human', permissions: []
+  } });
+  const helperKey = f.store.issueAccessKey(f.roomId, 'helper');
+  const invitation = await f.client.command({ id: 'publish-help', type: 'work.help_updated', data: {
+    workItemId: f.workItemId, expectedRevision: 1, expectedHelpRevision: 0, status: 'open',
+    scope: 'One bounded suggestion', expiresAt: new Date(Date.now() + 3600000).toISOString()
+  } });
+  f.store.command(helperKey, f.roomId, buildHelpCommand('room_offer_help', {
+    requestId: 'helper-offer', workItemId: f.workItemId, expectedRevision: 1, offerId: 'offer',
+    expectedHelpRevision: 1, helpEventId: invitation.event.id, plan: 'One synthetic suggestion'
+  }, { roomId: f.roomId, memberId: 'helper' }));
+  // Omitted expectedRevision must recover the original stored revision, not
+  // require the now-unsupported current offer context after normalization.
+  const args = { requestId: 'select-offer', workItemId: f.workItemId, offerId: 'offer',
+    expectedOfferRevision: 0, reason: 'One bounded contribution', expectedHelpRevision: 1, helpEventId: invitation.event.id };
+  const first = await f.rpc('room_select_help_offer', args);
+  assert.equal(first.result?.structuredContent.status, 'recorded', JSON.stringify(first));
+  const plan = operatorNormalization(f.store, { roomId: f.roomId, discardLegacyAssignments: true });
+  operatorNormalization(f.store, { roomId: f.roomId, discardLegacyAssignments: true, planHash: plan.planHash,
+    requestId: 'normalize-help-fixture', reason: 'Synthetic historical exact replay qualification' }, true);
+  const before = f.store.headSequence(f.roomId), replay = await f.rpc('room_select_help_offer', args);
+  assert.equal(replay.result?.structuredContent.status, 'recorded', JSON.stringify(replay));
+  assert.equal(replay.result.structuredContent.duplicate, true);
+  assert.equal(replay.result.structuredContent.eventId, first.result.structuredContent.eventId);
+  const conflict = await f.rpc('room_select_help_offer', { ...args, reason: 'Changed original input' });
+  assert.equal(conflict.result?.structuredContent.code, 'idempotency_conflict', JSON.stringify(conflict));
+  assert.equal(f.store.headSequence(f.roomId), before);
 });

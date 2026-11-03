@@ -639,7 +639,7 @@ const client = new RoomClient({
     clearWorkNavigation(); updatesUi?.reset();
     // JDOT-COH-NAV end
     mutedThreads = new Set(); threadMuteBusy = false;threadMuteKnown=new Set();threadMuteGeneration=-1;
-    dmConsents = []; dmConsentSeq++;
+    dmConsents = []; dmConsentRefreshFailed = false; dmConsentSeq++;
     friendBonds = []; friendSeq++; friendBusy = false; friendDmPeerId = null;
     $("#friend-dm-dialog")?.close();
     stopPresencePoll();
@@ -2211,6 +2211,7 @@ function render() {
   };
   const dmConsentDetails = m => {
     if (!session || m.id === session.member.id || m.active === false) return "";
+    if (dmConsentRefreshFailed) return `<details class="dm-consent"><summary data-focus-key="member-dm:${esc(m.id)}">Direct messages</summary><div class="dm-consent-body"><p>Direct message settings could not be refreshed.</p><button type="button" class="text-button" data-retry-dm-consents>Retry</button></div></details>`;
     const summary = dmConsentPeerSummary(dmConsents, state.members, session.member.id, m.id);
     const lines = dmConsentPairDescription(summary, m.displayName).map(line => `<p>${esc(line)}</p>`).join("");
     const actions = dmConsentActionsForPeer(summary).map(a => a.disabled
@@ -2229,7 +2230,7 @@ function render() {
   // Incoming DM requests surface at the top of the People panel so they are
   // visible without opening any one member's details.
   const dmRequestInbox = () => {
-    if (!session) return "";
+    if (!session || dmConsentRefreshFailed) return "";
     const requests = incomingDmRequests(dmConsents, state.members, session.member.id);
     if (!requests.length) return "";
     const rows = requests.map(r => {
@@ -5938,6 +5939,15 @@ $("#presence-list").addEventListener("click", e => {
   if (button && state) setMute(button.dataset.muteMember, button.dataset.muted !== "true");
 });
 $("#presence-list").addEventListener("click", async e => {
+  const retry = e.target.closest("[data-retry-dm-consents]");
+  if (retry && state && session && !dmConsentBusy) {
+    e.preventDefault();
+    const generation = client.generation, roomId = state.room.id;
+    await refreshDmConsents();
+    if (generation === client.generation && state?.room?.id === roomId && !dmConsentRefreshFailed)
+      notice("Direct message settings refreshed.");
+    return;
+  }
   const consentButton = e.target.closest("[data-dm-consent-action]");
   if (!consentButton || !state || !session || dmConsentBusy) return;
   e.preventDefault();
@@ -7136,7 +7146,7 @@ let notificationNote = "", notificationBefore = null, notificationLoading = fals
 // DM consent pairs for the signed-in member (PR #731).
 // Refreshed on room open, when the People panel opens, and after every
 // consent action. Never loaded for the public read-only face.
-let dmConsents = [], dmConsentBusy = false, dmConsentSeq = 0, dmConsentRefetchQueued = false;
+let dmConsents = [], dmConsentBusy = false, dmConsentSeq = 0, dmConsentRefetchQueued = false, dmConsentRefreshFailed = false;
 let friendBonds = [], friendBusy = false, friendSeq = 0, friendDmPeerId = null;
 // #660: server-derived presence states per member (memberId -> presence API
 // entry). Refreshed on room open and on an interval while visible; the rail
@@ -7543,8 +7553,8 @@ function stopPresencePoll() {
 }
 // ---- DM consent ---------------------------------------------------------------
 // The signed-in member's consent pairs drive the People panel's Direct
-// messages sections and the composer's DM recipient hint. Load failures stay
-// silent (a stale list is worse than none); every action reports loudly.
+// messages sections and the composer's DM recipient hint. On load failure,
+// hide stale controls and offer a retry; every action reports its outcome.
 function dmConsentStale(seq, generation, room) {
   // Compare the room, not the state object: every stream snapshot assigns a
   // fresh state object, so an identity check discards a result that a
@@ -7560,11 +7570,12 @@ async function refreshDmConsents() {
     const result = await fetchDmConsents(client);
     if (dmConsentStale(seq, generation, room)) return;
     dmConsents = Array.isArray(result) ? result : [];
+    dmConsentRefreshFailed = false;
   } catch {
-    // A failed refresh keeps the last known list: wiping it would flash the
-    // whole People panel back to "no consent" while the failed action
-    // already reported loudly through the notice banner.
+    // Retain the last data for context, but hide its action controls until a
+    // successful refresh so an old button cannot imply current authority.
     if (dmConsentStale(seq, generation, room)) return;
+    dmConsentRefreshFailed = true;
   } finally {
     dmConsentBusy = false;
     if (!dmConsentStale(seq, generation, room)) render();
@@ -7577,6 +7588,7 @@ async function runDmConsentAction(action, peerId, button) {
   if (!peer || peer.active === false) return;
   const seq = ++dmConsentSeq, generation = client.generation, room = state;
   dmConsentBusy = true;
+  let saved = false;
   if (button) button.disabled = true;
   try {
     if (action === "request") await requestDmConsent(client, peerId);
@@ -7595,6 +7607,7 @@ async function runDmConsentAction(action, peerId, button) {
     else if (action === "revoke") await revokeDmConsent(client, peerId);
     else return;
     if (dmConsentStale(seq, generation, room)) return;
+    saved = true;
     notice(action === "request" ? `DM request sent to ${peer.displayName}.`
       : action === "approve" ? `${peer.displayName} can now message you directly.`
       : action === "reject" ? `Declined ${peer.displayName}'s DM request.`
@@ -7613,7 +7626,11 @@ async function runDmConsentAction(action, peerId, button) {
     dmConsentRefetchQueued = false;
     // Drain even across a room switch: the queued request came from the old
     // room, but the panel on the new room needs fresh consent data too.
-    if (!dmConsentStale(seq, generation, room) || drained) await refreshDmConsents();
+    if (!dmConsentStale(seq, generation, room) || drained) {
+      await refreshDmConsents();
+      if (saved && generation === client.generation && state?.room?.id === room?.room?.id && dmConsentRefreshFailed)
+        notice("Change saved, but direct message settings could not refresh. Open Direct messages and choose Retry.", true);
+    }
   }
 }
 // ---- Friend / Bond ------------------------------------------------------------

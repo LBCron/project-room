@@ -30,7 +30,7 @@ test("DM consent browser journey: request, approve, revoke, block, errors", { ti
   const aliceKey = store.issueAccessKey("commons", "alice");
   const bobKey = store.issueAccessKey("commons", "bob");
   // The browser fixture drives more reads per credential than the production burst; keep the wider window here only.
-  const server = createRoomServer({ store, streamInterval: 60, credentialReadBurst: 600, credentialWriteBurst: 600 });
+  const server = createRoomServer({ store, assetRoot:new URL("../", import.meta.url), streamInterval: 60, credentialReadBurst: 600, credentialWriteBurst: 600 });
   await new Promise(resolve => server.listen(0, "127.0.0.1", resolve));
   const origin = `http://127.0.0.1:${server.address().port}`;
   let browser;
@@ -152,9 +152,21 @@ test("DM consent browser journey: request, approve, revoke, block, errors", { ti
   // --- Bob proactively blocks Alice; her row says so and the gate refuses. ---
   const bobAlice2 = consentSection(b.page, "alice");
   await openConsentDetails(bobAlice2);
+  const failRefresh = async route => {
+    if (route.request().method() === "GET") await route.fulfill({status:500,contentType:"application/json",body:'{"error":{"code":"synthetic","message":"offline"}}'});
+    else await route.continue();
+  };
+  await b.page.route("**/dm-consents", failRefresh);
+  const refreshFailure = b.page.waitForResponse(response => response.request().method() === "GET" && response.url().endsWith("/dm-consents") && response.status() === 500);
   await bobAlice2.getByRole("button", { name: "Block", exact: true }).click();
-  await b.page.locator("#status.visible").getByText(/Alice blocked/).waitFor();
-  assert.equal(await consentSection(b.page, "alice").getByRole("button", { name: "Unblock", exact: true }).count(), 1);
+  await refreshFailure;
+  await b.page.locator("#status.visible.error").getByText(/Change saved, but direct message settings could not refresh/).waitFor();
+  assert.equal(await consentSection(b.page, "alice").getByRole("button", { name: "Block", exact: true }).count(), 0);
+  assert.equal(await consentSection(b.page, "alice").getByRole("button", { name: "Unblock", exact: true }).count(), 0);
+  await b.page.unroute("**/dm-consents", failRefresh);
+  await openConsentDetails(bobAlice2);
+  await bobAlice2.getByRole("button", { name: "Retry", exact: true }).click();
+  await bobAlice2.getByRole("button", { name: "Unblock", exact: true }).waitFor();
   await a.page.reload();
   await a.page.locator("#main").waitFor({ state: "visible" });
   await openPeople(a.page);
@@ -181,6 +193,8 @@ test("DM consent browser journey: request, approve, revoke, block, errors", { ti
   await serverError.waitFor();
   assert.match(await serverError.textContent(), /boom/, "the 500's message is visible, not swallowed");
   await a.page.unroute("**/dm-consents");
+  await aliceBob4.getByRole("button", { name: "Retry", exact: true }).click();
+  await aliceBob4.getByRole("button", { name: "Request again", exact: true }).waitFor();
 
   // --- Reject path: Alice requests again, Bob rejects. ---
   await aliceBob4.getByRole("button", { name: "Request again", exact: true }).click();

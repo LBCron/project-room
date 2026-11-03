@@ -1,3 +1,4 @@
+import {readCurrentEventEnvelope} from './current-event-envelope.mjs';
 import {ownMember} from '../src/events.js';
 // Normalized event-log compatibility reader. Candidate admission precedes all
 // residual/audience filters; an empty visible page can still have more source.
@@ -48,20 +49,16 @@ export function readCurrentEventWindow(store,roomId,viewerId,{after=0,limit=100,
   const candidates=db.prepare('SELECT sequence,length(CAST(id AS BLOB)) AS idBytes,length(CAST(body AS BLOB)) AS bodyBytes FROM events WHERE room_id=? AND sequence>? AND sequence<=? ORDER BY sequence LIMIT ?').all(roomId,after,ceiling,Math.min(limit,CURRENT_EVENT_WINDOW));
   const selected=[];let sourceBytes=0;
   for(const row of candidates){
-   if(!Number.isSafeInteger(row.sequence)||row.idBytes>512||row.bodyBytes>131072||row.bodyBytes<2)unavailable();
+   if(!Number.isSafeInteger(row.sequence)||!Number.isSafeInteger(row.idBytes)||row.idBytes<1||row.idBytes>512
+     ||!Number.isSafeInteger(row.bodyBytes)||row.bodyBytes<2)unavailable();
    const bytes=row.idBytes+row.bodyBytes+32;
-   // Preserve progress for one admitted legal atom. Subsequent payloads stay
-   // behind a byte prefix so current-body/proof reads retain their shared
-   // input budget; the cursor never advances over the excluded candidate.
-   if (selected.length && sourceBytes + bytes > CURRENT_EVENT_SOURCE_BYTES) break;
-   chargeCurrentReadBudget(b,bytes);sourceBytes+=bytes;selected.push(row);
+   // Raw SQL work retains the 64KiB prefix and one legal first atom. The
+   // projected envelope alone is charged to the shared protected JS budget.
+   if(selected.length&&sourceBytes+bytes>CURRENT_EVENT_SOURCE_BYTES)break;
+   const source=readCurrentEventEnvelope(db,roomId,row,b);
+   sourceBytes+=bytes;selected.push({sequence:row.sequence,event:source.event});
   }
-  const rows=selected.map(row=>{
-   const source=db.prepare('SELECT id,body FROM events WHERE room_id=? AND sequence=?').get(roomId,row.sequence);let e;
-   try{e=JSON.parse(source.body);}catch{unavailable();}
-   if(!e||Array.isArray(e)||e.id!==source.id||e.roomId!==roomId||typeof e.type!=='string'||typeof e.actorId!=='string'||typeof e.at!=='string'||Number.isNaN(Date.parse(e.at))||!e.data||typeof e.data!=='object'||Array.isArray(e.data))unavailable();
-   return {sequence:row.sequence,event:e};
-  });
+  const rows=selected;
   const chipMembers=new Map(),chipMember=id=>{if(!chipMembers.has(id)){const member=readCurrentRecord(db,roomId,'members',id,b);if(member!==undefined&&member.id!==id)unavailable();chipMembers.set(id,member);}return chipMembers.get(id);};
   const messages=new Map(),load=id=>{
    if(typeof id!=='string'||!id||id.length>200)return undefined;

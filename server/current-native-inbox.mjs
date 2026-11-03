@@ -1,9 +1,10 @@
+import {readCurrentEventEnvelope} from './current-event-envelope.mjs';
 import {inboxNext} from './inbox-next.mjs';
 import {readCurrentInboxDiscovery} from './current-inbox-discovery.mjs';
 import {withCurrentReadContext,readCurrentHead,readCurrentMessage,readCurrentRecord,chargeCurrentReadBudget,currentConversationRows} from './current-room-repository.mjs';
 import {conversationCursorCodec} from './conversation-sync.mjs';
 import {ServiceError} from './service-error.mjs';
-import {readCurrentEventWindow} from './current-room-events.mjs';
+import {readCurrentEventWindow,CURRENT_EVENT_SOURCE_BYTES} from './current-room-events.mjs';
 import {effectiveMentionState} from './mention-lifecycle.mjs';
 import {stampInbox} from './content-trust.mjs';
 // Conversation delivery and standing obligations are separate cursors. Reading
@@ -19,17 +20,22 @@ export function readCurrentNativeInbox(store,secret,roomId,{limit=50,after,older
     const saved=olderCursor===undefined?null:conversationCursorCodec(store).decode(olderCursor);
     if(olderCursor!==undefined&&(!saved||Object.entries(binding).some(([k,v])=>saved[k]!==v)))throw new ServiceError(409,'stale_inbox_cursor','Inbox source changed or the service restarted; restart without olderCursor');
     const selected=currentConversationRows(store,roomId,{viewerId:memberId,limit:binding.limit,before:saved?.before??head.sequence+1,beforeId:saved?.beforeId??'',messageId:null,channelId:null,peerMemberId:null,floor,liveOnly:true});
-    const events=selected.rows.map(row=>{
-      const m=JSON.parse(row.body),scalar=store.db.prepare('SELECT id,length(CAST(body AS BLOB)) AS bytes FROM events WHERE room_id=? AND sequence=?').get(roomId,row.position);
-      if(!scalar||scalar.bytes>131072)throw new ServiceError(409,'current_room_context_unavailable','Recent message needs a bounded opening event');
-      chargeCurrentReadBudget(b,scalar.bytes+256);const e=JSON.parse(store.db.prepare('SELECT body FROM events WHERE room_id=? AND sequence=?').get(roomId,row.position).body);
-      if(e.id!==scalar.id||e.type!=='message.posted'||(e.data.messageId??e.id)!==m.id||e.actorId!==m.authorId||e.roomId!==roomId)throw Error('current_room_corrupt: recent opening identity differs');
+    const events=[];let sourceBytes=0,last=null,prefixTruncated=false;
+    for(const row of selected.rows){
+      const m=JSON.parse(row.body),scalar=store.db.prepare('SELECT length(CAST(id AS BLOB)) AS idBytes,length(CAST(body AS BLOB)) AS bodyBytes FROM events WHERE room_id=? AND sequence=?').get(roomId,row.position);
+      if(!scalar)throw new ServiceError(409,'current_room_context_unavailable','Recent message needs a bounded opening event');
+      const bytes=scalar.idBytes+scalar.bodyBytes+32;
+      if(events.length&&sourceBytes+bytes>CURRENT_EVENT_SOURCE_BYTES){prefixTruncated=true;break;}
+      const source=readCurrentEventEnvelope(store.db,roomId,{sequence:row.position,...scalar},b),e=source.event;
+      sourceBytes+=bytes;last=row;
+      if(e.type!=='message.posted'||(e.data.messageId??e.id)!==m.id||e.actorId!==m.authorId||e.roomId!==roomId)throw Error('current_room_corrupt: recent opening identity differs');
       const chip=store.db.prepare("SELECT CASE WHEN length(CAST(state AS BLOB))<=128 THEN state END AS state,timeout_at AS timeoutAt FROM mention_states WHERE room_id=? AND message_event_id=? AND mentioned_member_id=?").get(roomId,e.id,memberId);chargeCurrentReadBudget(b,256);
       if(chip&&typeof chip.state!=='string')throw Error('current_room_corrupt: oversized mention state');
       e.mentions=chip?[{memberId,state:effectiveMentionState(chip,store.now())}]:[];
-      return {sequence:row.position,event:{...e,data:{...e.data,body:m.deletedAt?null:m.body,toMemberId:m.toMemberId,replyToId:m.replyToId}}};
-    });
-    const continuation=selected.continuation;older={hasMore:!selected.complete,examined:selected.examined,nextRead:continuation?{tool:'room_read_inbox',arguments:{roomId,limit,olderCursor:conversationCursorCodec(store).encode({...binding,before:continuation.position,beforeId:continuation.messageId})}}:null};
+      events.push({sequence:row.position,event:{...e,data:{...e.data,body:m.deletedAt?null:m.body,toMemberId:m.toMemberId,replyToId:m.replyToId}}});
+    }
+    const continuation=prefixTruncated?{position:last.position,messageId:last.messageId}:selected.continuation;
+    older={hasMore:prefixTruncated||!selected.complete,examined:selected.examined,nextRead:continuation?{tool:'room_read_inbox',arguments:{roomId,limit,olderCursor:conversationCursorCodec(store).encode({...binding,before:continuation.position,beforeId:continuation.messageId})}}:null};
     page={events,next:head.sequence,hasMore:false};
   }else page=readCurrentEventWindow(store,roomId,memberId,{after,limit:Math.min(limit,4),types:['message.posted']});
   const directMessages=[],directMentions=[],replies=[],parents=new Map();

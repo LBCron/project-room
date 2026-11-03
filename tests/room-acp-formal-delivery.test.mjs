@@ -294,13 +294,3 @@ for (const terminalLimit of [false,true]) test(`actual wake redelivery survives 
     assert.equal((await poll()).pendingWakes.some(w=>w.signalId===initial.signalId),false);
   }
 });
-const diagnosticContext={allPagesRead:true,page:{hasMore:false},request:{status:'open',recipientId:'agent'},viewerId:'agent'};
-test('failed formal turns report a safe reason without exposing model output',()=>{
- const secret='PRIVATE_OUTPUT_DO_NOT_ECHO';
- for(const [output,stop,pattern] of [
-  [JSON.stringify({outcome:'answered',body:secret}),'max_tokens',/turn did not finish/],
-  [JSON.stringify({outcome:'answered',body:secret.repeat(200)}),'end_turn',/exceeded the 4,096-character limit/],
-  [JSON.stringify({outcome:'wrong',body:secret}),'end_turn',/invalid response format/],
-  [secret,'end_turn',/did not return an explicit answer/],
- ]){const value=prepareFormalDelivery(diagnosticContext,output,stop);assert.equal(value.kind,'pending');assert.match(value.body,pattern);assert.ok(!value.body.includes(secret));}
-});

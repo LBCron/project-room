@@ -33,14 +33,12 @@ export async function readCompleteRequest(room, requestId) {
 export function prepareFormalDelivery(context, output, stopReason) {
   if (!context.allPagesRead || context.page?.hasMore !== false || context.request?.status !== 'open'
     || context.viewerId !== context.request.recipientId) invalid('Complete open recipient context is required');
-  if (stopReason !== 'end_turn') return {kind:'pending', body:'The agent turn did not finish. This request remains open.'};
   let value;
   try {value = JSON.parse(output);} catch {return {kind:'pending', body:'The agent did not return an explicit answer or decline. This request remains open.'};}
-  if (value && !Array.isArray(value) && typeof value.body === 'string' && value.body.length > 4096)
-    return {kind:'pending', body:'The agent response exceeded the 4,096-character limit. This request remains open.'};
   if (!value || Array.isArray(value) || Object.keys(value).some(key => !['outcome','body'].includes(key))
-    || !['answered','declined','pending'].includes(value.outcome) || typeof value.body !== 'string' || !value.body.trim())
-    return {kind:'pending', body:'The agent returned an invalid response format. This request remains open.'};
+    || !['answered','declined','pending'].includes(value.outcome) || typeof value.body !== 'string'
+    || !value.body.trim() || value.body.length > 4096 || stopReason !== 'end_turn')
+    return {kind:'pending', body:'The agent did not finish a valid response. This request remains open.'};
   if (value.outcome === 'pending') return {kind:'pending', body:value.body};
   const recipes = (context.responseHttpActions ?? []).filter(action => action.command?.data?.responseOutcome === value.outcome);
   if (recipes.length !== 1) invalid('No unique current response recipe');
@@ -75,4 +73,22 @@ export async function deliverFormal(room, delivery, listenerToken) {
   if (message.authorId!==room.memberId || message.toMemberId!==data.toMemberId || message.replyToId!==requestId
     || (message.workItemId??null)!==data.workItemId || message.deletedAt || message.body!==data.body)
     throw new RoomError(409,'formal_response_changed','Saved response content or binding changed; inspect without repeating execution');
+}
+
+// Safe diagnostics only: never return the model output or arbitrary stop text.
+// This classifier does not alter delivery, authorization, retries, or receipts.
+export function classifyFormalOutput(output, stopReason) {
+  const knownStops = new Set(['end_turn', 'max_tokens', 'max_turn_requests', 'refusal', 'cancelled']);
+  const stop = knownStops.has(stopReason) ? stopReason : 'other';
+  const outputChars = typeof output === 'string' ? output.length : null;
+  const result = reason => ({reason, stopReason:stop, outputChars});
+  if (stopReason !== 'end_turn') return result('interrupted');
+  let value;
+  try { value = JSON.parse(output); } catch { return result('invalid_json'); }
+  if (!value || Array.isArray(value) || typeof value !== 'object'
+    || Object.keys(value).some(key => !['outcome','body'].includes(key))
+    || !['answered','declined','pending'].includes(value.outcome)
+    || typeof value.body !== 'string' || !value.body.trim()) return result('invalid_shape');
+  if (value.body.length > 4096) return result('body_too_long');
+  return result('valid');
 }

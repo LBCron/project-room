@@ -8294,6 +8294,7 @@ const ready = (async () => {
     return;
   }
   if (await resumeEmailVerification()) return;
+  if (initialResult?.handledMagicSignIn) return;
   if (restoreRoomSession) { await restoreAtStartup(); return; }
   if (signedIn) { await landAfterSignIn(); return; }
   if (initialResult?.pendingPasswordReset) {

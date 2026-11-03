@@ -1,6 +1,8 @@
 import {ServiceError} from './service-error.mjs';
+import {readCurrentPublicWork} from './current-public-work.mjs';
 import { hydrateWorkItems } from "./work-repository.mjs";
-// Public pages read these tables and nothing from rooms.projection.
+// Public pages read explicit publication plus protected selected current tasks,
+// never rooms.projection or unrelated private work/conversation payloads.
 // Rows are written when an owner opts in, updated in the same transaction
 // as the change, and removed when they opt out. The cron backfill copies
 // rooms that opted in before the tables existed. It never runs from the
@@ -514,7 +516,8 @@ function upsertPublicRoom(store, state, auth) {
     typeof setAt === "string" ? setAt : null, updatedAt);
 }
 
-// Native public pages intentionally do not serve unqualified task/receipt listings.
+// Native publication caches room metadata only. The current public-task reader
+// qualifies selected tasks independently; receipt listings remain unavailable.
 // This hook runs after the protected transition, inside the originating writer TX.
 export function syncCurrentRoomPublication(store,{roomId,previous,state,event,changes,current,charge}) {
   const on=publicPage(state).enabled===true,was=publicPage(previous).enabled===true;
@@ -1288,25 +1291,29 @@ export function listPublicReceiptSitemap(store, limit = 1000) {
   }));
 }
 
-export function loadPublicRoom(store, slug) {
+export function loadPublicRoom(store, slug, {workAfter = ''} = {}) {
+  return store.readTransaction(() => {
   if (!SLUG.test(slug) || isUnpublished(store.db, "room", slug)) return null;
   const native=Boolean(store.db.prepare("SELECT 1 FROM current_room_head WHERE room_id=?").get(slug));
   const row = store.db.prepare(`SELECT slug, title, purpose, humans, agents, names_json, CASE WHEN ? THEN '[]' ELSE tasks_json END AS tasks_json, receipts_enabled, join_mode, join_token, set_at
     FROM public_rooms WHERE slug=?`).get(native?1:0,slug);
   if (!row) return null;
+  const currentWork = native ? readCurrentPublicWork(store, slug, {after:workAfter}) : null;
+  if (native && !currentWork) return null;
   return {
-    ...(native?{openAdmission:row.join_mode==='open',coverage:{tasks:{available:false},receipts:{available:false}}}:{}),
+    ...(native?{openAdmission:row.join_mode==='open',coverage:{tasks:currentWork.coverage,receipts:{available:false}}}:{}),
     slug: row.slug,
     title: row.title,
     purpose: row.purpose,
     counts: { humans: row.humans, agents: row.agents },
     names: parseJson(row.names_json, []),
-    tasks: native?[]:parseJson(row.tasks_json, []),
+    tasks: native?currentWork.tasks:parseJson(row.tasks_json, []),
     receiptsEnabled: !native&&row.receipts_enabled === 1,
     joinMode: native&&row.join_mode === "open" ? "open" : row.join_mode === "link" && row.join_token ? "link" : "request",
     joinToken: row.join_mode === "link" ? row.join_token : null,
     setAt: row.set_at,
   };
+  });
 }
 
 export function listPublicRoomSitemap(store, limit = 1000) {

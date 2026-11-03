@@ -102,7 +102,9 @@ export const CURRENT_REQUEST_PARTY_INDEXES = ['requester','recipient'].map(role 
 ).join('\n') + ['requester','recipient'].map(role =>
   `CREATE INDEX IF NOT EXISTS current_request_opening_${role} ON events(room_id,json_extract(body,'${role==='requester'?'$.actorId':'$.data.toMemberId'}'),sequence) WHERE ${CURRENT_REQUEST_OPENING_PREDICATE};`
 ).join('\n');
-export const CURRENT_ROOM_GUARDS = [...guardDefinitions,...RESTORE_CONTROL_GUARDS].map(([,sql])=>sql+';').join('\n') + CURRENT_LEGACY_WORK_INDEXES + CURRENT_WORK_CAPACITY_INDEXES + CURRENT_INBOX_DISCOVERY_INDEXES + CURRENT_REQUEST_PARTY_INDEXES + `
+export const CURRENT_PUBLIC_WORK_PREDICATE = "CASE WHEN json_valid(body) THEN json_extract(body,'$.publicTask.enabled')=1 AND json_extract(body,'$.state') IN ('proposed','accepted','working','blocked') ELSE 0 END";
+export const CURRENT_PUBLIC_WORK_INDEX_SQL = `CREATE INDEX IF NOT EXISTS current_public_work_keys ON work_entities(room_id,work_id) WHERE ${CURRENT_PUBLIC_WORK_PREDICATE}`;
+export const CURRENT_ROOM_GUARDS = [...guardDefinitions,...RESTORE_CONTROL_GUARDS].map(([,sql])=>sql+';').join('\n') + CURRENT_LEGACY_WORK_INDEXES + CURRENT_WORK_CAPACITY_INDEXES + CURRENT_INBOX_DISCOVERY_INDEXES + CURRENT_REQUEST_PARTY_INDEXES + CURRENT_PUBLIC_WORK_INDEX_SQL + ';\n' + `
 CREATE INDEX IF NOT EXISTS current_redaction_message_events ON events(room_id,CASE WHEN json_type(body,'$.data.messageId')='text' AND json_extract(body,'$.data.messageId')<>'' THEN json_extract(body,'$.data.messageId') ELSE id END,sequence);
 CREATE INDEX IF NOT EXISTS current_redaction_code_drops ON room_code_drops(room_id,message_id,id);
 CREATE INDEX IF NOT EXISTS current_room_attachments_message ON room_attachments(room_id,message_id,id);

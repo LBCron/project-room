@@ -154,11 +154,10 @@
  import { mcpOAuthPrincipalDescriptor, resolveMcpOAuthPrincipal, authorizeMcpOAuthDescriptor, listMcpOAuthAgents, validateMcpOAuthBinding } from '../server/mcp-oauth.mjs';
  import { initialRoom } from '../server/bootstrap.mjs';
  import { createRoomServer } from '../server/http.mjs';
-@@ -364,4 +365,77 @@
-   assert.equal(redirect.searchParams.get('iss'), origin);
+@@ -365,3 +366,105 @@
    const tokens = await (await f.exchange({ grant_type: 'authorization_code', code: redirect.searchParams.get('code') })).json();
    assert.equal(typeof tokens.access_token, 'string');
-+});
+ });
 +
 +test('public lobby native OAuth connects a guest without an invitation and fences removal', async t => {
 +  const f = await setup(t);
@@ -168,6 +167,7 @@
 +  f.store.command(owner, room, { id:'publish-lobby', type:'room.public_page_set', data:{enabled:true} });
 +  f.store.command(owner, room, { id:'open-lobby', type:'room.join_link_set', data:{enabled:true} });
 +  f.store.publicFace.enable(room, 'owner');
++  f.store.command(owner, room, { id:'before-join', type:'message.posted', data:{messageId:'before-join',body:'Pre-join private history marker'} });
 +  const accountsBefore = f.store.db.prepare('SELECT count(*) n FROM accounts').get().n;
 +  const start = await f.start();
 +  const html = await start.text();
@@ -183,9 +183,15 @@
 +  const tokens = await token.json();
 +  const grant = f.store.db.prepare('SELECT * FROM oauth_invite_grants').get();
 +  assert.equal(grant.room_id,room); assert.equal(grant.invite_hash,'public-lobby-guest-v1');
++  const joinedMember = f.store.room(room).state.members[grant.member_id];
++  assert.equal(joinedMember.historyGuest,true);
++  assert.deepEqual(joinedMember.permissions,[]);
++  assert.ok(f.store.historyFloor(room,grant.member_id) !== null);
 +  assert.equal(f.store.db.prepare('SELECT count(*) n FROM accounts').get().n,accountsBefore);
 +  const access = await f.rpc(tokens.access_token); assert.equal(access.status,200,JSON.stringify(access.body));
 +  const denied = await f.rpc(tokens.access_token,'room_create_agent_invite',{}); assert.ok(denied.body.error || denied.body.result?.isError);
++  const wrongRoom = await f.rpc(tokens.access_token,'room_check_access',{roomId:'commons'});
++  assert.ok(wrongRoom.status === 401 || wrongRoom.body.error || wrongRoom.body.result?.isError);
 +  const refreshed = await f.exchange({grant_type:'refresh_token',refresh_token:tokens.refresh_token});
 +  assert.equal(refreshed.status,200,await refreshed.clone().text());
 +  const nextTokens = await refreshed.json();
@@ -215,7 +221,7 @@
 +  f.store.publicFace.disable(room,'owner');
 +  assert.equal((await submit()).status,400);
 +  assert.equal(f.store.db.prepare('SELECT count(*) n FROM agent_identities').get().n,before);
- });
++});
 +
 +test('public lobby consent keeps anonymous mint proof and supports a browser challenge', async t => {
 +  const f=await setup(t), room='project-room-lobby';
@@ -231,4 +237,26 @@
 +  assert.equal(f.store.db.prepare('SELECT count(*) n FROM oauth_invite_grants').get().n,0);
 +  const proof=solveIdentityMintProof('Proof agent',f.store.now(),f.store.identities.powBits);
 +  assert.equal((await submit(proof)).status,302);
++});
++
++for (const mutation of ['identity-revoked', 'identity-rotated', 'grant-expired', 'grant-revoked']) test(`public guest OAuth stops after ${mutation}`, async t => {
++  const f=await setup(t), room='project-room-lobby';
++  f.store.initialize(initialRoom(room)); const owner=f.store.issueAccessKey(room,'owner');
++  f.store.command(owner,room,{id:'publish',type:'room.public_page_set',data:{enabled:true}});
++  f.store.command(owner,room,{id:'open',type:'room.join_link_set',data:{enabled:true}});
++  f.store.publicFace.enable(room,'owner');
++  const start=await f.start(),html=await start.text(),nonce=html.match(/name="nonce" value="([^"]+)"/)[1],cookie=start.headers.get('set-cookie').split(';')[0];
++  const submit=()=>fetch(f.base+'/oauth/invite',{method:'POST',headers:{Cookie:cookie,Origin:origin,'Content-Type':'application/x-www-form-urlencoded'},body:new URLSearchParams({nonce,decision:'allow_public',display_name:'Fence agent'})});
++  const allowed=await submit(); assert.equal(allowed.status,302,await allowed.clone().text());
++  const code=new URL(allowed.headers.get('location')).searchParams.get('code');
++  const exchanged=await f.exchange({grant_type:'authorization_code',code}); assert.equal(exchanged.status,200);
++  const tokens=await exchanged.json(),grant=f.store.db.prepare('SELECT * FROM oauth_invite_grants').get();
++  if(mutation==='identity-revoked') f.store.db.prepare('UPDATE agent_identities SET revoked_at=? WHERE identity_id=?').run(Date.now(),grant.identity_id);
++  if(mutation==='identity-rotated') f.store.db.prepare('UPDATE agent_identities SET secret_hash=? WHERE identity_id=?').run('changed-verifier',grant.identity_id);
++  if(mutation==='grant-expired') f.store.db.prepare('UPDATE oauth_invite_grants SET expires_at=0 WHERE id=?').run(grant.id);
++  if(mutation==='grant-revoked') f.store.db.prepare('UPDATE oauth_invite_grants SET revoked_at=? WHERE id=?').run(Date.now(),grant.id);
++  assert.equal((await f.rpc(tokens.access_token)).status,401);
++  assert.equal((await f.exchange({grant_type:'refresh_token',refresh_token:tokens.refresh_token})).status,400);
++  assert.equal((await submit()).status,400);
++  assert.equal(f.store.db.prepare('SELECT count(*) n FROM oauth_invite_grants').get().n,1);
 +});

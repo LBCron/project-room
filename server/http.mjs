@@ -19,6 +19,7 @@ import { publicPageCsp } from "./public-search.mjs";
 import { acceptPrefersHtml, publicHtmlNotFoundPath, publicSearchAssets, publicSearchCanonical, publicSearchMarketingPolicy, publicSearchPageCsp, publicSearchSitemap, PUBLIC_NOT_FOUND_HTML, PUBLIC_PAGE_LASTMOD, reviewedPublicSearchPaths } from "./public-search.mjs";
 import { readConversation, readMessageContext } from "./conversation-sync.mjs";
 import { readRoomSnapshot } from "./snapshot-window.mjs";
+import { readRoomAuthorityView } from "./room-authority-view.mjs";
 import { OutsideAgents } from "./outside-agents.mjs";
 import { GmailMailbox } from './gmail-mailbox.mjs';
 import { publicAssetPaths, generatedAgentPages } from "./public-assets.mjs";
@@ -4285,6 +4286,15 @@ export function createRoomServer({ store, origin, assetRoot = new URL("../", imp
         const granted = (auth.apiKeyScopes ?? []).some(scope =>
           scope === requiredScope || (scope.endsWith(":*") && requiredScope.startsWith(scope.slice(0, -1))));
         if (!granted) reject(403, "insufficient_scope", `API key lacks the ${requiredScope} scope`);
+      }
+      if (route === "" && req.method === "GET" && url.searchParams.get("view") === "authority") {
+        const params=url.searchParams;
+        if ([...params.keys()].some(key=>!["view","memberId","auth"].includes(key)
+            || key!=="memberId"&&params.getAll(key).length!==1)
+            || params.has("auth")&&!["room","account"].includes(params.get("auth"))
+            || ["x-project-room-help-context","x-project-room-offer-context","x-project-room-audit-view"].some(key=>req.headers[key]!==undefined))
+          reject(422,"invalid_snapshot_view","Choose the bounded authority view with exact member IDs");
+        return json(res,200,readRoomAuthorityView(store,selected.token,roomId,params.getAll("memberId"),fence));
       }
       // Fresh identity preflight ends before history/DM/work projection reads.
       // The normal room authentication, rate and API-key scope gates above apply.

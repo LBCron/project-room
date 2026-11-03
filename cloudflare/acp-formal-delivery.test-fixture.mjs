@@ -8,6 +8,10 @@ export class FormalDeliveryRoom extends CurrentEventsRoom {
     const url=new URL(request.url), store=this.store;
     if(url.pathname==='/__seed') {
       const f=seedScopedInbox(store);
+      if(url.searchParams.get('large')==='1'){
+        let now=Date.now();store.now=()=>now;
+        for(let n=0;n<30;n++){now+=2001;store.command(f.owner,'commons',{id:'large-'+n,type:'message.posted',data:{messageId:'large-'+n,body:'x'.repeat(12000),toMemberId:'worker'}});}
+      }
       return Response.json({credential:f.token,identityId:f.identityId});
     }
     if(url.pathname==='/__sequence') return Response.json(store.db.prepare('SELECT sequence FROM rooms WHERE id=?').get('commons'));

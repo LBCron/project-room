@@ -89,7 +89,37 @@ export class RoomClient {
   checkListener(fencingToken) {
     return this.request(`/api/agent-heartbeats?roomId=${encodeURIComponent(this.roomId)}`, { listenerToken: fencingToken });
   }
-  room() { return this.request(`/api/rooms/${encodeURIComponent(this.roomId)}`); }
+  async room({ authorityFor = null } = {}) {
+    const path = `/api/rooms/${encodeURIComponent(this.roomId)}`;
+    if (authorityFor === null) return this.request(path);
+    const unavailable = () => {
+      throw new RoomError(409, 'selected_authority_unavailable', 'Room does not provide complete selected authority; no full-snapshot fallback is allowed');
+    };
+    if (!Array.isArray(authorityFor)) unavailable();
+    const requested = [...new Set(authorityFor)].sort();
+    if (requested.length > 64 || requested.some(id => typeof id !== 'string' || !id || id.length > 128)) unavailable();
+    const query = new URLSearchParams({ view: 'authority' });
+    for (const id of requested) query.append('memberId', id);
+    let value;
+    try { value = await this.request(path + '?' + query); }
+    catch (error) {
+      if (error instanceof RoomError && error.status === 422 && error.code === 'invalid_snapshot_view') unavailable();
+      throw error;
+    }
+    const selection = value?.authoritySelection, members = value?.state?.members, ownerId = value?.state?.room?.ownerId;
+    if (value?.snapshotView !== 'authority' || value.snapshotVersion !== 1 || value.roomId !== this.roomId || value.viewerId !== this.memberId
+        || selection?.complete !== true || JSON.stringify(selection.requestedMemberIds) !== JSON.stringify(requested)
+        || !Array.isArray(selection.unresolvedMemberIds) || !members || Array.isArray(members) || typeof ownerId !== 'string'
+        || !Object.hasOwn(members, ownerId) || !Object.hasOwn(members, this.memberId)
+        || Buffer.byteLength(JSON.stringify(value)) > 128 * 1024) unavailable();
+    const included = [...new Set([this.memberId, ownerId, ...requested])].sort();
+    const unresolved = new Set(selection.unresolvedMemberIds);
+    if (unresolved.size !== selection.unresolvedMemberIds.length
+        || [...unresolved].some(id => !included.includes(id) || Object.hasOwn(members, id))
+        || Object.keys(members).some(id => !included.includes(id) || members[id]?.id !== id)
+        || included.some(id => !Object.hasOwn(members, id) && !unresolved.has(id))) unavailable();
+    return value;
+  }
   claim(claimId) { return this.request(`/api/rooms/${encodeURIComponent(this.roomId)}/work-claims/${encodeURIComponent(claimId)}`); }
   // A claim note lands in the claim's history and its work_claim.updated
   // event, so it shows in the claim thread (GET work-claims/{id}/thread).

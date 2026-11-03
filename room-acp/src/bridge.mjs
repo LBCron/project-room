@@ -147,8 +147,9 @@ export class Bridge {
       this.log("Tool permission cancelled: Room approvals are disabled. On this laptop, explicitly choose a trusted human with --permission-approver <member-id> to enable them.");
       return { outcome: { outcome: "cancelled" } };
     }
-    try { await this.refreshRoom(); } catch { return { outcome: { outcome: "cancelled" } }; }
-    if (this.controller.signal.aborted || this.me.active === false || !this.approverAvailable) {
+    let authority;
+    try { authority=await this.refreshRoom(); } catch { return { outcome: { outcome: "cancelled" } }; }
+    if (this.controller.signal.aborted || authority.me.active === false || !authority.approverAvailable) {
       this.log("Tool permission cancelled: the locally selected approver is not an active human in this room.");
       return { outcome: { outcome: "cancelled" } };
     }
@@ -156,15 +157,15 @@ export class Bridge {
     const approverId = this.permissions.approverId;
     const signal = AbortSignal.any([this.controller.signal, this.approverController.signal]);
     return this.permissions.request({ ...request, validateApproval: async () => {
-      await this.refreshRoom();
+      const current=await this.refreshRoom();
       await this.assertListener();
-      return !signal.aborted && this.me.active !== false && this.permissions.approverId === approverId &&
-        this.approverAvailable;
+      return !signal.aborted && current.me.active !== false && this.permissions.approverId === approverId &&
+        current.approverAvailable;
     } }, signal);
   }
 
-  async refreshRoom() {
-    const value = await this.room.room();
+  async refreshRoom({ memberIds = [] } = {}) {
+    const value = await this.room.room({ authorityFor: [...new Set([...memberIds, this.permissionApproverId].filter(Boolean))] });
     this.members = value?.state?.members ?? {};
     this.ownerId = value?.state?.room?.ownerId ?? null;
     this.title = value?.state?.room?.title ?? this.connection.roomId;
@@ -178,6 +179,10 @@ export class Bridge {
     }
     this.approverAuthority = authority;
     this.permissions ??= new PermissionBroker({ room: this.room, approverId, timeoutMs: this.permissionTimeoutMs, pollMs: this.permissionPollMs, log: this.log });
+    // Keep each turn's selection local: another concurrent turn may refresh
+    // a different author set while this one awaits its listener check.
+    return {members:this.members,ownerId:this.ownerId,me:this.me,approverAvailable:this.approverAvailable,
+      unresolved:new Set(value.authoritySelection?.unresolvedMemberIds??[])};
   }
 
   async assertListener() {
@@ -188,19 +193,22 @@ export class Bridge {
 
   async authorized({ messageIds, claimId } = {}) {
     if (this.controller.signal.aborted) throw new Error("bridge stopped");
-    await this.refreshRoom();
-    await this.assertListener();
-    if (!this.members[this.connection.memberId] || this.me.active === false) return false;
-    const allowed = authorId => mayTalk({ authorId, members: this.members, me: this.me, ownerId: this.ownerId, respondTo: this.respondTo });
-    if (claimId) {
-      const claim = await this.room.claim(claimId);
-      return claim?.owner === this.me.id && allowed(claimRequester(claim));
+    let claim;
+    const authors = [];
+    if (claimId) { claim = await this.room.claim(claimId); authors.push(claimRequester(claim)); }
+    else {
+      // Old receipts lack original source IDs; they cannot authorize disclosure.
+      if (!Array.isArray(messageIds) || !messageIds.length) return false;
+      for (const id of messageIds) authors.push((await this.readThread(id, { selected: true })).thread?.authorId);
     }
-    // Old receipts lack source IDs: do not disclose their result without
-    // evidence that every original requester still has access.
-    if (!Array.isArray(messageIds) || !messageIds.length) return false;
-    for (const id of messageIds) if (!allowed((await this.readThread(id, {selected:true})).thread?.authorId)) return false;
-    return true;
+    const authority = await this.refreshRoom({ memberIds: authors.filter(Boolean) });
+    await this.assertListener();
+    if (!authority.members[this.connection.memberId] || authority.me.active === false) return false;
+    if (authors.some(id => authority.unresolved.has(id))) {
+      throw new RoomError(409, 'authority_member_unresolved', 'A request author is unresolved; retain the wake without executing or acknowledging it');
+    }
+    const allowed = authorId => mayTalk({ authorId, members: authority.members, me: authority.me, ownerId: authority.ownerId, respondTo: this.respondTo });
+    return (!claimId || claim?.owner === authority.me.id) && authors.every(allowed);
   }
 
   async lease() {
@@ -224,7 +232,7 @@ export class Bridge {
 
   stopForContextLimit(error) {
     if (!(error instanceof RoomError) || !(error.status === 413 && ['current_thread_too_large','formal_context_too_large'].includes(error.code)
-      || error.status === 409 && error.code === 'selected_message_context_unavailable')) return false;
+      || error.status === 409 && ['selected_message_context_unavailable','selected_authority_unavailable'].includes(error.code))) return false;
     if (this.stopReason !== "context_unavailable") {
       this.stopReason = "context_unavailable";
       this.log("Room context is unavailable or exceeds this bridge's bounded context. Stopping; the wake remains unacknowledged. Inspect the request in Room before restarting.");
@@ -255,10 +263,8 @@ export class Bridge {
       if (signal.workClaim) { await this.acceptClaim(signal); return; }
       if (!signal.messageId || !["mention", "dm", "reply", "direct"].includes(signal.kind)) { await this.ack([signal.signalId]); this.stats.skipped++; return; }
       const message = (await this.readThread(signal.messageId, {selected:true})).thread;
-      if (!mayTalk({ authorId: message.authorId, members: this.members, me: this.me, ownerId: this.ownerId, respondTo: this.respondTo })) {
-      this.log(`ignored a ${signal.kind} from ${message.author ?? message.authorId} (respond-to ${this.respondTo})`);
-      await this.ack([signal.signalId]); this.stats.skipped++; return;
-    }
+      // Routing does not authorize execution. The queued turn checks all
+      // actual stored request authors against a fresh selected authority read.
       const root = message.replyToId ? await this.threadRoot(message.id) : message;
       // An "@agent allow" answer to a pending permission ask is not a new turn.
       if (this.permissions?.isPending(root.id) && decisionOf(message.body)) { await this.ack([signal.signalId]); return; }
@@ -276,7 +282,7 @@ export class Bridge {
       await this.ack([signal.signalId]); this.stats.skipped++; return;
     }
     const authorId = claimRequester(claim);
-    if (claim?.owner !== this.me.id || !mayTalk({ authorId, members: this.members, me: this.me, ownerId: this.ownerId, respondTo: this.respondTo })) {
+    if (claim?.owner !== this.connection.memberId) {
       this.log(`ignored claim ${signal.workClaim} (${signal.reason})`);
       await this.ack([signal.signalId]); this.stats.skipped++; return;
     }
@@ -293,7 +299,7 @@ export class Bridge {
     const claimId = threadKey.slice(CLAIM_KEY.length);
     try {
       if (this.controller.signal.aborted) return;
-      if (!(await this.authorized({ claimId }))) { await this.ack(signalIds); return; }
+      if (!(await this.authorized({ claimId }))) { await this.ack(signalIds); this.stats.skipped++; return; }
       const { key, receipt: saved, fresh } = this.claimReceipts.begin(item.signalId);
       let receipt = saved;
       if (!fresh && receipt.phase === "started") {
@@ -339,7 +345,7 @@ export class Bridge {
     if (this.controller.signal.aborted) return;
     if (threadKey.startsWith(CLAIM_KEY)) return this.claimTurn(threadKey, batch);
     try {
-      if (!(await this.authorized({ messageIds: batch.map(item => item.messageId) }))) { await this.ack(batch.map(item => item.signalId)); return; }
+      if (!(await this.authorized({ messageIds: batch.map(item => item.messageId) }))) { await this.ack(batch.map(item => item.signalId)); this.stats.skipped+=batch.length; return; }
       const fresh = [], replay = new Map(), unique = new Set();
       for (const item of batch) {
         if (unique.has(item.signalId)) continue;
@@ -513,7 +519,7 @@ export class Bridge {
     // Later pages are already waiting, so they are read without a wait.
     // A filtered source window can be empty yet have more. Carry its read
     // position across finite cycles; restart/terminal traversal starts fresh.
-    let cursor = this.wakeCursor, refreshed = false;
+    let cursor = this.wakeCursor;
     for (let page = 0; page < MAX_POLL_PAGES; page++) {
       if (this.controller.signal.aborted) return;
       // Every page is an HTTP poll and counts toward the identity's 30/min
@@ -526,7 +532,6 @@ export class Bridge {
       this.lastPollAt = Date.now();
       const value = await this.room.poll({ hostId: this.connection.hostId, waitMs: page === 0 && cursor === null ? this.waitMs : 0, signal: this.controller.signal, cursor });
       const wakes = value?.pendingWakes ?? [];
-      if (wakes.length && !refreshed) { await this.refreshRoom(); refreshed = true; }
       for (const signal of wakes) {
         if (this.controller.signal.aborted) break;
         await this.accept(signal);

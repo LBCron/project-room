@@ -1,3 +1,4 @@
+import { AGENT_PASTE_COPY_HASH } from "./agent-paste-copy.mjs";
 import { connectSnippets } from "./connect-snippets.mjs";
 import { BUILD_ID } from "./version.mjs";
 
@@ -56,7 +57,9 @@ export function aboutPageCsp(origin) {
 // The CSP a public search page is served under: the shared locked-down
 // policy, with /about's two path-pinned additions.
 export function publicSearchPageCsp(pathname, origin) {
-  return pathname === "/about" ? aboutPageCsp(origin) : publicPageCsp(origin, PUBLIC_SEARCH_CSP);
+  if (pathname === "/about") return aboutPageCsp(origin);
+  const csp = publicPageCsp(origin, PUBLIC_SEARCH_CSP);
+  return pathname === "/docs/agents/paste" ? csp.replace("script-src ", `script-src 'sha256-${AGENT_PASTE_COPY_HASH}' `) : csp;
 }
 // Use only a trusted, exact configured/validated served origin, never a
 // forwarded Host header. An absolute path source (without a trailing slash)

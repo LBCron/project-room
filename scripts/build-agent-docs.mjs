@@ -2,6 +2,7 @@
 import { readFileSync, writeFileSync, mkdirSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
+import { AGENT_PASTE_COPY_SCRIPT } from "../server/agent-paste-copy.mjs";
 import { connectSnippets, HOSTED_MCP_URL, renderedSnippet } from "../server/connect-snippets.mjs";
 
 const root = join(dirname(fileURLToPath(import.meta.url)), "..");
@@ -129,12 +130,14 @@ pre{box-sizing:border-box;max-width:100%;white-space:pre-wrap;overflow-wrap:anyw
 pre:focus-visible{outline:2px solid var(--blue);outline-offset:2px}
 .agent-paste-prompt{box-sizing:border-box;width:100%;max-width:100%;padding:12px 16px;background:#191a20;color:var(--text);border:1px solid var(--line);border-radius:.45rem;font:inherit;resize:vertical}
 .agent-paste-prompt:focus-visible{outline:2px solid var(--blue);outline-offset:2px}
+.copy-prompt{margin:8px 0;padding:8px 14px;border:1px solid var(--line);border-radius:.45rem;background:#393b45;color:var(--text);font:inherit;cursor:pointer}
+.copy-prompt:focus-visible{outline:2px solid var(--blue);outline-offset:2px}
 code{font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;font-size:.9em}
 :not(pre)>code{overflow-wrap:anywhere}
 footer{margin-top:40px;border-top:1px solid var(--line);padding-top:16px;color:var(--muted)}
 `;
 
-function page({ title, description, path, body, steps }) {
+function page({ title, description, path, body, steps, script = "" }) {
   const canonical = ORIGIN + path;
   return `<!doctype html>
 <html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
@@ -148,7 +151,7 @@ function page({ title, description, path, body, steps }) {
 </head><body><main>
 ${body}
 <footer><a href="/docs/agents">All agents</a> · <a href="/">Home</a> · <a href="/about">About</a> · <a href="/offers">Open offers</a> · <a href="https://github.com/Uuriko/project-room">Source</a></footer>
-</main></body></html>
+</main>${script ? `<script>${script}</script>` : ""}</body></html>
 `;
 }
 
@@ -181,8 +184,9 @@ export function agentPages(dir = join(root, "docs", "agents")) {
     description: "Connect your existing ChatGPT Dot or another agent to Project Room. Find the official MCP URL, host approval steps and connection checks.",
     path: PASTE_PAGE.docsPath,
     body: renderMarkdown(pasteMd, { labelPrefix: "Paste block",
-      renderCode: (text, label, index) => `<label for="agent-paste-prompt-${index}">Copy this prompt into your agent: ${escape(plainLabel(label))}</label><textarea id="agent-paste-prompt-${index}" class="agent-paste-prompt" readonly rows="16" spellcheck="false">${escape(text)}</textarea>` }),
+      renderCode: (text, label, index) => `<label for="agent-paste-prompt-${index}">Copy this prompt into your agent: ${escape(plainLabel(label))}</label><textarea id="agent-paste-prompt-${index}" class="agent-paste-prompt" readonly rows="16" spellcheck="false">${escape(text)}</textarea><button type="button" class="copy-prompt" data-copy-prompt="agent-paste-prompt-${index}" hidden>Copy prompt</button><span id="agent-paste-prompt-${index}-status" role="status" aria-live="polite"></span>` }),
     steps: sections(pasteMd),
+    script: AGENT_PASTE_COPY_SCRIPT,
   }));
   const indexBody = renderMarkdown(indexMd) + "<ul>" + connectSnippets.map(tool => `<li><a href="${tool.docsPath}">${escape(tool.label)}</a> — <code>${escape(tool.command)}</code></li>`).join("") + "</ul>";
   pages.set("docs/agents/index.html", page({

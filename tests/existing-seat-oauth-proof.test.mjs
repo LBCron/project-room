@@ -12,6 +12,7 @@ import { EXISTING_SEAT_GRANT, validateMcpInviteOAuthBinding } from '../server/mc
 import { pruneOAuthProvider } from '../server/oauth-provider-store.mjs';
 import { exportNdjsonText } from '../server/room-export.mjs';
 import { replayNdjsonInto } from '../server/restore-ndjson.mjs';
+import { reconcileRestoredAuthority } from '../server/backup.mjs';
 
 function fixture(t) {
   const store = new RoomStore(':memory:'); t.after(() => store.close()); store.initialize(initialRoom());
@@ -205,6 +206,29 @@ test('backup and restore preserve existing-seat grant proof without storing bear
   assert.equal(replayNdjsonInto(exportText, restored).verified, true);
   const oauth = createMcpInviteOAuth({ store: restored, clients: [{ clientId: 'native-test', name: 'Native test', redirectUris: ['https://client.example/callback'] }], resource: 'https://room.example/mcp' });
   assert.equal(oauth.provider.verifyAccessToken(tokens.accessToken, { resource: 'https://room.example/mcp' })?.binding.memberId, f.joined.memberId);
+});
+
+test('restore reconciliation reports an existing-seat grant revoked after the backup', t => {
+  const f = fixture(t), nonce = f.begin(), proof = f.oauth.existingSeatProof(), reference = proof.createHandoff(nonce);
+  const view = proof.inspect(reference, f.identity.secret, 'commons'); proof.approve(reference, f.identity.secret, 'commons', view.requestHash);
+  f.oauth.approveExisting(nonce);
+  const snapshot = exportNdjsonText(f.store.db), restored = new RoomStore(':memory:'); t.after(() => restored.close());
+  replayNdjsonInto(snapshot, restored);
+  f.store.db.prepare('UPDATE oauth_invite_grants SET revoked_at=?').run(Date.now());
+  const report = reconcileRestoredAuthority(restored, f.store);
+  assert.ok(report.stale.some(row => row.kind === 'oauth_access' && /grant.*revoked/.test(row.detail)));
+});
+
+test('restore reconciliation reports a consumed holder proof and rotated native refresh token', t => {
+  const f = fixture(t), nonce = f.begin(), proof = f.oauth.existingSeatProof(), reference = proof.createHandoff(nonce);
+  const view = proof.inspect(reference, f.identity.secret, 'commons'); proof.approve(reference, f.identity.secret, 'commons', view.requestHash);
+  const beforeConsent = exportNdjsonText(f.store.db), old = new RoomStore(':memory:'); t.after(() => old.close()); replayNdjsonInto(beforeConsent, old);
+  const code = new URL(f.oauth.approveExisting(nonce)).searchParams.get('code');
+  assert.ok(reconcileRestoredAuthority(old, f.store).stale.some(row => row.kind === 'oauth_code' && /holder proof.*consumed/.test(row.detail)));
+  const tokens = f.oauth.provider.exchangeCode({ code, clientId: 'native-test', redirectUri: 'https://client.example/callback', codeVerifier: 'v'.repeat(43), resource: 'https://room.example/mcp' });
+  const beforeRefresh = exportNdjsonText(f.store.db), previous = new RoomStore(':memory:'); t.after(() => previous.close()); replayNdjsonInto(beforeRefresh, previous);
+  f.oauth.provider.refresh({ refreshToken: tokens.refreshToken, clientId: 'native-test', resource: 'https://room.example/mcp' });
+  assert.ok(reconcileRestoredAuthority(previous, f.store).stale.some(row => row.kind === 'oauth_refresh' && /native OAuth refresh token.*revoked|native OAuth refresh token.*rotated/.test(row.detail)));
 });
 
 for (const mutation of ['grant-revoked', 'member-unlinked', 'proof-mismatch']) test(`existing-seat token stops after ${mutation}`, t => {

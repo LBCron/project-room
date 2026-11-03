@@ -25,6 +25,16 @@ async function startBridge(t, room, mode) {
 }
 const repliesTo = (room, rootId, memberId) => room.messages().filter(message => message.replyToId === rootId && message.authorId === memberId);
 
+test('a spawned adapter is not ready until its restart initialization finishes', async () => {
+  const host = { running: true, onExit() {} };
+  const bridge = new Bridge({connection:{apiBase:'https://example.test',roomId:'r',memberId:'m',credential:'test'},host,env:{},persistSessions:false});
+  let finish, complete = false;
+  bridge.ready = new Promise(resolve => { finish = resolve; });
+  const waiting = bridge.agentReady().then(() => { complete = true; });
+  await Promise.resolve(); assert.equal(complete, false, 'running process is not initialized');
+  finish(); await waiting; assert.equal(complete, true);
+});
+
 test("session map persists, survives reload, and stays bounded", t => {
   const env = { ROOM_ACP_HOME: `${process.env.TMPDIR ?? "/tmp"}/room-acp-sessions-${process.pid}` };
   t.after(async () => (await import("node:fs")).rmSync(env.ROOM_ACP_HOME, { recursive: true, force: true }));

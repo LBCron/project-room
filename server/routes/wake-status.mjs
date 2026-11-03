@@ -1,11 +1,11 @@
-// plan-wake-live: GET /api/wake-status — who is actually listening.
+// plan-wake-live: GET /api/wake-status — recent wake activity, not proof of an active listener.
 //
 // Wakeable = the agent polled (GET /api/agent-wakes/poll) or heartbeated
 // within 24h. Two modes, both scoped (Instinct-3 review, PR #1565):
 //   - no query params: the caller's own { agentId, wakeable, windowMs };
 //   - ?roomId=: { wakeable[], notWakeable[] } for that room's members —
-//     the data side for the COMMS-02 mention-target warning ("before I
-//     @mention someone here, are they listening?").
+//     the data side for the COMMS-02 mention-target warning ("has this
+//     agent polled or heartbeated recently?").
 // A room access key reads only its bound room; an identity credential must
 // be a member of the room it asks about. Exact poll timestamps never leave
 // the server (activity fingerprinting) — entries coarsen to

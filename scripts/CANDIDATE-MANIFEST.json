@@ -104,7 +104,7 @@
     "src/board-mine.js": "sha256:9fb057086af719f17f53640639021b2f9efcd668897b4b99ac4f41363daa3e7c",
     "src/board-ui.js": "sha256:bbd89f1b0e0837185032eb87741fcc7bcc1d618c2dac144347919b069941af5d",
     "src/board.css": "sha256:36db28cdb19e0d5c65f36003dead300597efb4034d4df864d8f435e6ee8da2d6",
-    "src/browser-session.js": "sha256:49fdffa1e396531f24a2441b76c5ba249cbbdac69a348cf90ff9b2037adc8b6b",
+    "src/browser-session.js": "sha256:b907501db24660e1e45453a1f0f6a2fe2c544160b7c42488ed2f4b6c33e4018c",
     "src/chat-suggestions.js": "sha256:60acc6b5c3de53a09dce6aa615f73b34a20bf5fc8a6f1061854afe2c51cc7901",
     "src/claim-overlap.js": "sha256:9fdf57e29229552f87e032240fc9a27a83ee297a9fd8ec1d0bf799a2f50e9b66",
     "src/client.js": "sha256:bccf2549f0de216a20c86b5e5db77120fd1db9b9eabbd9123853b9c6d77eb20b",
@@ -186,8 +186,8 @@
     "src/work-status.js": "sha256:fa3394eb7d8dfa39999d5f8b5c85f7b305f815bc573aa6e34be5a48e5ff34478",
     "src/workflow.js": "sha256:817422b3183d96e773f87bbe28b12453a1f761cd1bf024aecaa3e3e62438539a",
     "src/workspace-navigation.js": "sha256:9b36dd33d00c0015b61fdb2aeafdf22583658d9f04c758fca72e56233589aa4a",
-    "strings/en.js": "sha256:ce1eea2004e4a9e7c00cb2f78f99ca270ccf38559416eb26c95c9bcfedc76282",
-    "strings/en.json": "sha256:415617771296a8ea0ea969f34d3f924d2d66e0e0c4ddf2504c93c331a021b368"
+    "strings/en.js": "sha256:e6493b73da5166bf619bc7fe129af839e67609121ef180be419f05284e46afea",
+    "strings/en.json": "sha256:58ade923514f8f37a47ec117b8f774971d7dcf88944bb2c10b4a571a64d2670e"
   },
   "deployment": {
     ".github/workflows/deploy-prod.yml": "sha256:dde1a1a309b23870b9e9d11aee0499c8a9cf1089997f6f5cf61b5087110eb0a8",

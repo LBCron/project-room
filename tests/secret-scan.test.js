@@ -202,3 +202,10 @@ test("selected-status Miniflare exception matches only its complete synthetic de
   assert.ok(adjacent.some(f => f.rule === 'generic-secret'));
   assert.ok(adjacent.some(f => f.rule === 'stripe-key'));
 });
+
+test("historical fixture comparison does not hide a longer token-shaped value", async () => {
+  const { ALLOWLIST } = await import("../scripts/secret-scan-check.mjs");
+  const scan = line => scanText(line, { allowlist: ALLOWLIST });
+  assert.deepEqual(scan("sameRetry:first.invite?.token===second.invite?.token,"), []);
+  assert.ok(scan("sameRetry:first.invite?.token===second.invite?.tokenExtraLongLiteral").some(f => f.rule === "generic-secret"));
+});

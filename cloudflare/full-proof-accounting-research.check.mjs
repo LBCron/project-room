@@ -21,5 +21,7 @@ test('measure full proof byte amplification on Worker', {timeout:60000}, async t
   const measure=await mf.dispatchFetch('http://localhost/measure-large');const data=await measure.json();assert.equal(measure.status,200,JSON.stringify(data));assert.equal(data.length,65536);assert.equal(data.stats.sourceBytes,data.stats.blobBytes);assert.ok(data.stats.blobReads>0);t.diagnostic('cjk '+JSON.stringify(data.stats));
   const post=await mf.dispatchFetch(commands,{method:'POST',headers,body:JSON.stringify({id:'post-control-large',type:'message.posted',data:{messageId:'control-large',body:'\u0001'.repeat(65536)}})});assert.equal(post.status,201,await post.text());
   const control=await mf.dispatchFetch('http://localhost/measure-control'),controlData=await control.json();assert.equal(control.status,200,JSON.stringify(controlData));assert.equal(controlData.length,65536);assert.equal(controlData.stats.sourceBytes,controlData.stats.blobBytes);t.diagnostic('control '+JSON.stringify(controlData.stats));
+  const st=controlData.stats;const exact=await mf.dispatchFetch('http://localhost/measure-control?source='+st.sourceBytes+'&hash='+st.hashBytes+'&chunks='+st.blobReads);assert.equal(exact.status,200,await exact.text());
+  for(const [key,value] of [['source',st.sourceBytes-1],['hash',st.hashBytes-1],['chunks',st.blobReads-1]]){const refused=await mf.dispatchFetch('http://localhost/measure-control?'+key+'='+value);const data=await refused.json();assert.equal(refused.status,422,JSON.stringify(data));assert.match(data.error,/cap exceeded|reservation exceeded/);}
 
 });

@@ -163,6 +163,11 @@ test("DM consent browser journey: request, approve, revoke, block, errors", { ti
   await b.page.locator("#status.visible.error").getByText(/Change saved, but direct message settings could not refresh/).waitFor();
   assert.equal(await consentSection(b.page, "alice").getByRole("button", { name: "Block", exact: true }).count(), 0);
   assert.equal(await consentSection(b.page, "alice").getByRole("button", { name: "Unblock", exact: true }).count(), 0);
+  const retryFailure = b.page.waitForResponse(response => response.request().method() === "GET" && response.url().endsWith("/dm-consents") && response.status() === 500);
+  await b.page.locator("#presence-list").getByRole("button", { name: "Retry", exact: true }).click();
+  await retryFailure;
+  await b.page.locator("#presence-list").getByText("Direct message settings could not be refreshed.").waitFor();
+  assert.equal(await consentSection(b.page, "alice").getByRole("button", { name: "Block", exact: true }).count(), 0);
   await b.page.unroute("**/dm-consents", failRefresh);
   await b.page.locator("#presence-list").getByRole("button", { name: "Retry", exact: true }).click();
   await openConsentDetails(bobAlice2);

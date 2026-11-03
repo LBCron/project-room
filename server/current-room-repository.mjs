@@ -961,7 +961,7 @@ export function currentMessageMayBeVisible(db,roomId,messageId,viewerId,b=contex
   const candidate=db.prepare("SELECT CASE WHEN length(CAST(created_at AS BLOB))<=128 THEN created_at END AS at FROM messages WHERE room_id=? AND message_id=? AND (to_member_id IS NULL OR to_member_id='' OR author_id=? OR to_member_id=?)").get(roomId,messageId,viewerId,viewerId);
   charge(b,256);
   if(candidate){
-    // This scalar can only deny. Long or malformed dates proceed to the
+    // This scalar can only deny. Long dates proceed to the
     // authoritative reader; never infer visibility from an unverified index.
     if(floor&&typeof candidate.at==='string'&&!messageInHistory({id:messageId,createdAt:candidate.at},floor))return false;
     return true;

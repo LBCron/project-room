@@ -5,7 +5,7 @@
 //   - no query params: the caller's own { agentId, wakeable, windowMs };
 //   - ?roomId=: { wakeable[], notWakeable[] } for that room's members —
 //     the data side for the COMMS-02 mention-target warning ("before I
-//     @mention someone here, are they listening?").
+//     @mention someone here, has their host contacted Room recently?").
 // A room access key reads only its bound room; an identity credential must
 // be a member of the room it asks about. Exact poll timestamps never leave
 // the server (activity fingerprinting) — entries coarsen to

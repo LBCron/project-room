@@ -1527,6 +1527,8 @@ this.slaBreachAlerts = new SlaBreachAlertJournal(this); // Task 26: durable in-a
       this.storagePlatform.configure(this.db,readOnly);
       if(!readOnly)this.storagePlatform.registerWriter(this.db);
       this.storagePlatform.verifyWriterFence(this.db,version);
+      if(this.db.prepare("SELECT sql FROM sqlite_master WHERE name='current_room_permit_update'").get()?.sql?.includes('normalized-current-v1-native-work-6'))
+        this.storagePlatform.transaction(this.db,()=>upgradePopulatedWriterFenceResearch(this.db,{allowPendingLoading:true}),false);
       verifyRestoreControl(this.db);
       this._restoreOpening=false;
       this.initializationMs=Math.round(performance.now()-initializationStarted);

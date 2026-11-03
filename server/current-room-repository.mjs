@@ -1510,13 +1510,13 @@ export function certifyOneRoutingResearch(store,roomId,id){
 }
 // RESEARCH ONLY: callers must independently audit the old state and establish
 // quiescence. This does not authorize deployment, recovery, or downgrade.
-export function upgradePopulatedWriterFenceResearch(db){
+export function upgradePopulatedWriterFenceResearch(db,{allowPendingLoading=false}={}){
  if(!db.isTransaction)throw Error('research fence upgrade requires transaction');
  const oldFormat='normalized-current-v1-native-work-6',owned=[...definitions,...RESTORE_CONTROL_DEFINITIONS,...guardDefinitions,...RESTORE_CONTROL_GUARDS];
  const rows=db.prepare('SELECT name,sql FROM sqlite_master WHERE name IN ('+owned.map(()=>'?').join(',')+')').all(...owned.map(([name])=>name));
  if(rows.length!==owned.length||owned.some(([name,sql])=>normalized(rows.find(row=>row.name===name)?.sql)!==normalized(sql.replaceAll(CURRENT_WRITER_FORMAT,oldFormat))))throw Error('research previous schema mismatch');
  const gate=db.prepare('SELECT * FROM current_room_writer_permit').all(),restore=db.prepare('SELECT * FROM current_restore_admission').all();
- if(gate.length!==1||gate[0].enabled!==0||gate[0].room_id!==null||gate[0].receipt_id!==null||restore.length!==1||restore[0].state!=='clear'||restore[0].phase!=='clear'||restore[0].restore_id!==null)throw Error('research authority not quiescent');
+ if(gate.length!==1||gate[0].enabled!==0||gate[0].room_id!==null||gate[0].receipt_id!==null||restore.length!==1||!((restore[0].state==='clear'&&restore[0].phase==='clear'&&restore[0].restore_id===null)||(allowPendingLoading&&restore[0].state==='pending'&&restore[0].phase==='loading'&&typeof restore[0].restore_id==='string'&&restore[0].restore_id.length>0&&restore[0].source_seal===null&&restore[0].coverage===null&&restore[0].latest_receipt===null)))throw Error('research authority not quiescent');
  for(const [name,sql] of [...guardDefinitions,...RESTORE_CONTROL_GUARDS].filter(([,sql])=>sql.includes(CURRENT_WRITER_FORMAT))){db.exec('DROP TRIGGER '+name);db.exec(sql)}
  verifyCurrentRoomSchema(db);return true;
 }

@@ -364,3 +364,21 @@ test("an incoming room link owns navigation while its workspace module downloads
   assert.equal(await page.locator("#session-menu-button").isEnabled(), true);
   assert.match(page.url(), /#room\/commons$/);
 });
+
+test('account session survives nine hours and expires at the server deadline', { timeout: 60000 }, async t => {
+  const f = await setup(t), page = await f.open();
+  assert.equal(await signUp(page, f.origin, 'session-lifetime@example.invalid'), 202);
+  await page.locator('#main').waitFor({state:'visible'});
+  const cookie = (await page.context().cookies()).find(c => c.name === 'account_session');
+  assert.ok(cookie?.httpOnly);
+  const remaining = cookie.expires * 1000 - Date.now();
+  assert.ok(remaining > 29 * 86400000 && remaining <= 30 * 86400000, `cookie remaining ${remaining}`);
+  f.store.now = () => Date.now() + 9 * 3600000;
+  await page.reload();
+  await page.locator('#main').waitFor({state:'visible'});
+  assert.equal((await f.session(page)).authenticated, true);
+  f.store.now = () => Date.now() + 31 * 86400000;
+  await page.reload();
+  await page.locator('#auth-panel').waitFor({state:'visible'});
+  assert.equal((await f.session(page)).authenticated, false);
+});

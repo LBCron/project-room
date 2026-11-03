@@ -38,3 +38,9 @@ for(const maxRecords of [200,512])test(`skip preserves baseline success in neste
  }
  assert.ok(successes>0);
 });
+test('catch-up continuation rechecks revoked membership and never acknowledges attention',t=>{
+ const {s,key,after}=fixture(t,false),owner=s.issueAccessKey('commons','owner');
+ const page=s.agentInbox(key,'commons',{after,limit:20});assert.equal(page.attention.acknowledges,false);assert.equal(page.cursor.hasMore,true);
+ s.command(owner,'commons',{id:'remove-worker',type:'member.access_changed',data:{memberId:'worker',active:false,expectedMemberRevision:0,permissions:[]}});
+ for(const skipUnaddressed of [false,true])assert.throws(()=>readCurrentNativeInbox(s,key,'commons',{after:page.cursor.after,skipUnaddressed}),error=>[401,403].includes(error.status));
+});

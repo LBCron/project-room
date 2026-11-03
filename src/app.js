@@ -16,7 +16,7 @@ import { RoomClient, draftCommand, draftRefused, retryUnconfirmed } from "./clie
 import { ReturnBrief, groupBriefHistory } from "./return-brief.js";
 import { attentionPreview, needsAttention, workInvolvingMe, contributionSteps, searchWork, draftFeedback, completedResults, currentResult, roomOrientation } from "./work-selectors.js";
 import { workArrivalAnnouncements } from "./work-announcements.js";
-import { menuOpensUp, TIMELINE_WINDOW, windowTimeline, createTimelinePin, arrivalsAfterShown, windowToInclude, conversationIndex, searchMessages, ConversationDrafts, channelDraftKey, DraftRecovery, draftRecoveryScope, shouldPreserveDrafts, sendsOnEnter, escapeChatAction, messageCluster, mentionQuery, mentionMatches, createBodyHtmlCache, kindLabel, memberStatus, memberHandle, memberPresence, memberDoneChip, presenceLabel, queuedNote, addressMember, shouldAddressPresenceClick, messageMentionsMember, replyAuthorToAddress, composerPlaceholder, removeMention, parseSearchQuery, memberRowName } from "./conversation.js";
+import { menuOpensUp, TIMELINE_WINDOW, windowTimeline, createTimelinePin, arrivalsAfterShown, windowToInclude, conversationIndex, searchMessages, ConversationDrafts, channelDraftKey, DraftRecovery, draftRecoveryScope, shouldPreserveDrafts, sendsOnEnter, escapeChatAction, messageCluster, mentionQuery, mentionMatches, createBodyHtmlCache, kindLabel, memberStatus, memberHandle, memberPresence, memberDoneChip, observedPresenceLabel, queuedNote, addressMember, shouldAddressPresenceClick, messageMentionsMember, replyAuthorToAddress, composerPlaceholder, removeMention, parseSearchQuery, memberRowName } from "./conversation.js";
 // Clip to at most maxUnits UTF-16 units without splitting a grapheme.
 const graphemes = new Intl.Segmenter("en", { granularity: "grapheme" });
 function clipGraphemes(text, maxUnits) {
@@ -625,10 +625,14 @@ const client = new RoomClient({
     // persisted backup, the in-memory drafts, and the composer text so
     // re-authentication restores them.
     const sessionExpired = shouldPreserveDrafts({ leavingPage, pendingSignout, endedContext });
+    // A changed account session is unconfirmed until the next authenticated
+    // room snapshot. Hide in-memory content immediately, but leave the scoped
+    // backup for a matching recovery lineage to prove on a later open.
+    const preserveScopedBackup = !leavingPage && !pendingSignout && endedContext === 'unconfirmed-session-change';
     // Opening a room from the room list ends "access" first, with no room open. That
     // must not wipe the draft an expired session left for this same room (E-H2).
     const openingFromList = !hadRoom && ["accepted-room-switch", "invited-room-switch"].includes(endedContext);
-    if (!leavingPage && !sessionExpired && !openingFromList) recovery.clear();
+    if (!leavingPage && !sessionExpired && !openingFromList && !preserveScopedBackup) recovery.clear();
     releaseSubmission(submitControls);
     submitOperationId += 1; busy = false;
     displayNames = createMemberDisplayNames({});
@@ -757,7 +761,8 @@ const client = new RoomClient({
     const openingInvitedRoom = endedContext === "invited-room-switch";
     const switchedAccount = endedContext === "account-switch";
     setFormStatus($("#auth-error"), openingAcceptedRoom || openingInvitedRoom || $("#invitation-dialog").open ? ""
-      : switchedAccount ? uiText("room.session_changed_recovery")
+      : preserveScopedBackup ? uiText("room.session_changed_reconnect")
+        : switchedAccount ? uiText("room.session_changed_recovery")
         : "Session ended; private drafts were cleared.", true);
     setConnectionStatus(openingAcceptedRoom || openingInvitedRoom ? "Opening Room…" : "Not connected");
     if ($("#invitation-dialog").open && invitation.preview) {
@@ -938,8 +943,8 @@ const signinUI = createAuthSigninUI({
     destination.hash = invitation.secret ? `#invite/${invitation.secret}` : (shareLinksUI?.pendingFragment() || "");
     return `${destination.pathname}${destination.search}${destination.hash}`;
   },
-  onSignInUncertain: async () => {
-    endAccountAccess();
+  onSignInUncertain: async (options) => {
+    endAccountAccess(options);
     clearPrivateWorkspace();
     await accountClient.restore();
     if (accountClient.session?.authenticated) showAccountWorkspace();
@@ -1042,11 +1047,11 @@ function clearPrivateWorkspace(options) {
   $("#account-status").textContent = ""; $("#account-status").hidden = true;
   $("#account-settings").open = false; $("#account-settings-body").replaceChildren();
 }
-function endAccountAccess() {
+function endAccountAccess({ preserveScopedBackup = false } = {}) {
   const current = accountClient.session;
   if (current) accountClient.invalidate(accountClient.generation, current);
   $(".connection-bar").hidden = false;
-  accessEndContext = "account-switch"; client.endAccess();
+  accessEndContext = preserveScopedBackup ? 'unconfirmed-session-change' : 'account-switch'; client.endAccess();
   configureAuthPanel();
 }
 function rememberedRoomId() {
@@ -1167,6 +1172,7 @@ async function landAfterSignIn() {
 let startRoomFlight = null;
 function showAccountWorkspace() {
   if (!accountClient.session?.authenticated) return;
+  recovery.reconcileAccount(accountClient.session);
   if (resumeOAuthConsent()) return;
   if (accountClient.session.terms?.required) {
     $("#main").hidden = true;
@@ -1221,7 +1227,7 @@ async function confirmAccount() {
   accountCheckFlight = (async () => {
     try {
       const confirmed = await accountClient.confirm();
-      if (confirmed === false && accountClient.session === null) endAccountAccess();
+      if (confirmed === false && accountClient.session === null) endAccountAccess({ preserveScopedBackup: true });
       else if (confirmed && $("#account-status").textContent === "Couldn’t confirm account. Refresh to retry.") {
         $("#account-status").textContent = ""; $("#account-status").hidden = true;
       }
@@ -1272,7 +1278,7 @@ async function loadAccountRooms(more = false) {
       && !startRoomIntent && !startRoomFlight) nameThenEnsureDefaultRoom();
   } catch (error) {
     if (version !== roomListVersion || (accountClient.session && accountClient.session !== owned)) return;
-    if ([401, 403].includes(error.status) || !accountClient.session) endAccountAccess();
+    if ([401, 403].includes(error.status) || !accountClient.session) endAccountAccess({ preserveScopedBackup: true });
     else $("#account-rooms-status").textContent = "Couldn’t load rooms. Choose Rooms to retry.";
   }
 }
@@ -2148,7 +2154,7 @@ function render() {
     const agent = m.kind === "agent" && m.active !== false;
     const presence = (connectionStale || agent && presenceStale) ? "unknown" : memberPresence(merged, railCtx);
     const queued = agent && !connectionStale ? queuedNote(merged, presence) : "";
-    const availability = (connectionStale ? uiText("connection.staleAvailability") : agent && presenceStale ? (presenceUnrefreshed ? "Availability not refreshed" : "Availability needs refresh") : presenceLabel(presence)) + (queued ? ` · ${queued}` : "");
+    const availability = (connectionStale ? uiText("connection.staleAvailability") : agent && presenceStale ? (presenceUnrefreshed ? "Availability not refreshed" : "Availability needs refresh") : observedPresenceLabel(presence, serverPresence)) + (queued ? ` · ${queued}` : "");
     // Keep names readable; duplicate names retain their IDs and every exact
     // identity remains available in the member disclosure and action choices.
     const handle = m.kind === "agent" ? memberHandle(m, displayName(m.id)) : displayName(m.id);
@@ -2178,7 +2184,7 @@ function render() {
     const hostReport = Number.isFinite(serverPresence?.presence?.lastSeenAt)
       ? `<p class="member-observation">Last host report: <time datetime="${esc(new Date(serverPresence.presence.lastSeenAt).toISOString())}">${esc(new Date(serverPresence.presence.lastSeenAt).toLocaleString())}</time></p>` : "";
     const lastReport = agent && presenceStale && serverState
-      ? `<p class="member-observation">Last reported availability: ${esc(presenceLabel(serverState))}</p>` : "";
+      ? `<p class="member-observation">Last reported availability: ${esc(observedPresenceLabel(serverState, serverPresence))}</p>` : "";
     return `<div id="${recordDomId("member", m.id)}" class="presence-member" tabindex="-1" role="group" aria-label="${esc(memberRowName(m, availability))}" data-member-record-id="${esc(m.id)}" data-presence="${esc(presence)}" data-disclosure-host="${esc(m.id)}" data-focus-key="member:${esc(m.id)}"${m.agentType ? ` data-agent-type="${esc(m.agentType)}"` : ""} ${m.active === false ? "" : `title="${esc(`Address ${m.displayName} in chat`)}"`}><div class="member-avatar ${m.kind}" aria-hidden="true"><span>${initials(m.displayName)}</span><i class="presence-dot presence-${esc(presence)}" title="${esc(availability)}"></i></div><div><div class="member-head"><strong class="member-handle${m.kind === "agent" ? " member-handle-agent" : ""}">${esc(handle)}</strong><span class="sr-only">${esc(availability)}</span>${doneChip}${agentPauses.has(m.id) && m.active !== false ? `<span class="pause-chip" data-paused-member="${esc(m.id)}" title="Queued wakes will not start; a running attempt may finish">Wakes paused</span>` : ""}${friendBondHtml(m)}</div>${agent ? `<span class="member-availability">${esc(availability)}</span>` : ""}${workingOnTitle}${agent ? `<p class="member-status member-assignment">${esc(status)}</p>` : ""}<details class="member-profile"><summary data-focus-key="member-profile:${esc(m.id)}" aria-label="Member options for ${esc(m.displayName)}" title="Member options"><span aria-hidden="true">···</span></summary><div class="member-profile-body"><p class="form-hint">Member ID: <code>${esc(m.id)}</code></p><div class="member-profile-badges">${typeChip}${stateChip}${ownerChip}</div><p class="member-status">${esc(status)}</p>${lastReport}${hostReport}${connectionScope}${ownedBy}${agentPauses.has(m.id) && agent ? `<p class="member-pause-explanation">Queued wakes will not start; a running attempt may finish.</p>` : ""}${memberActions(m)}${workControl(m)}<details><summary data-focus-key="member-capabilities:${esc(m.id)}">Room capabilities</summary><p>${esc(m.permissions.join(", ") || "conversation only")}</p>${adminControl(m)}${muteControl(m)}</details>${dmConsentDetails(m)}${directoryCardDetails(m)}</div></details></div></div>`;
   };
   // E4: mute is the viewer's own preference; the owner (the appeal path) and yourself are never mutable.

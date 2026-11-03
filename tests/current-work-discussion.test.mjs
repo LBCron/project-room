@@ -1,5 +1,6 @@
 import test from 'node:test';
 import {request} from 'node:http';
+import {readWorkSelection} from '../client/work-preparation.mjs';
 import assert from 'node:assert/strict';
 import {mkdtempSync,rmSync} from 'node:fs';
 import {tmpdir} from 'node:os';
@@ -103,4 +104,27 @@ test('since-join protected floor hides earlier source bodies without hydrating e
  add('fresh','message.posted',{messageId:'fresh',body:'Visible after join',workItemId:'task'});
  s.initialize(events,{representation:'normalized-current-v1'});const key=s.issueAccessKey('commons','reader');s.room=()=>{throw Error('Whole-room hydration');};
  const result=s.workDiscussion(key,'commons','task');assert.deepEqual(ids(result),['fresh']);assert.equal(JSON.stringify(result).includes('PREJOIN-SECRET'),false);
+});
+
+test('current preparation keeps incomplete tails and refuses a changed or withdrawn result packet',async t=>{
+ const f=await fixture(t);
+ for(let i=0;i<16;i++)f.send('extra-'+i,{body:'Unrelated authorized conversation'});
+ const prepared=await readWorkSelection(f.client,{workItemId:'task',includeResult:true,includeDiscussion:true});
+ assert.equal(prepared.preparation.discussion.hasMore,true);assert.equal(prepared.preparation.discussion.checkpoint,null);
+ assert.equal(prepared.preparation.nextRead.tool,'room_read_work_discussion');assert.equal(prepared.review.result.text.body,f.saved.body);
+ const changing=f.client,discussion=changing.workDiscussion.bind(changing);let changed=false;
+ changing.workDiscussion=async(...args)=>{const result=await discussion(...args);if(!changed){changed=true;f.send('interleaved',{body:'Room changed between pages'});}return result;};
+ await assert.rejects(readWorkSelection(changing,{workItemId:'task',includeDiscussion:true}),{code:'discussion_reset_required'});
+ const client=f.client,result=client.workResult.bind(client);
+ client.workResult=async(...args)=>{const value=await result(...args);f.store.command(f.saved.owner,'commons',{id:'erase-result',type:'message.deleted',data:{messageId:'saved-result',expectedMessageRevision:0}});return value;};
+ await assert.rejects(readWorkSelection(client,{workItemId:'task',includeResult:true}),{code:'review_changed'});
+ const after=await pages(f.client);assert.equal(after.out.some(row=>row.message.id==='saved-result'),false);assert.equal(JSON.stringify(after).includes(f.saved.body),false);
+});
+
+test('a failed bounded read does not consume a cursor or write progress',async t=>{
+ const f=await fixture(t),first=await f.client.workDiscussion('task',{limit:1}),head=f.store.headSequence('commons'),cursor=first.discussion.nextCursor;
+ const prepare=f.store.db.prepare.bind(f.store.db);let fired=false;
+ f.store.db.prepare=sql=>{if(!fired&&sql.includes('INDEXED BY current_messages_public_seq')){fired=true;throw Error('Synthetic discussion read fault');}return prepare(sql);};
+ try{assert.throws(()=>f.store.workDiscussion(f.saved.identitySecret,'commons','task',{cursor,limit:1}),/Synthetic discussion read fault/);}finally{f.store.db.prepare=prepare;}
+ assert.equal(fired,true);assert.deepEqual(ids(await f.client.workDiscussion('task',{cursor,limit:1})),[]);assert.equal(f.store.headSequence('commons'),head);
 });

@@ -154,3 +154,33 @@ test('ordinary public rooms never disclose an unlisted public-face capability du
   assert.equal(joined.value.status,'approved');
   assert.equal(joined.value.publicContext,undefined);
 });
+
+test('omitted public join name recovers a collision without changing identity or grants',async t=>{
+  const f=await fixture(t);f.open();
+  const peer=f.store.identities.create('Public founder');
+  const joined=await f.call(peer.secret,'room_join',{roomId:f.roomId});
+  assert.equal(joined.error,false,JSON.stringify(joined.body));
+  assert.equal(joined.value.status,'approved');
+  assert.equal(joined.value.memberId,peer.identityId);
+  assert.equal(joined.value.displayName,'Public founder 2');
+  assert.deepEqual(joined.value.grantedPermissions,[]);
+  assert.equal(f.store.identities.get(peer.identityId).displayName,'Public founder');
+  const seq=f.store.headSequence(f.roomId);
+  const again=await f.call(peer.secret,'room_join',{roomId:f.roomId});
+  assert.equal(again.value.alreadyMember,true);
+  assert.equal(again.value.displayName,'Public founder 2');
+  assert.equal(f.store.headSequence(f.roomId),seq);
+  assert.equal(f.store.db.prepare('SELECT count(*) n FROM access_requests').get().n,1);
+  assert.throws(()=>readConversation(f.store,peer.secret,f.roomId,{messageId:'before'}),e=>e.status===404);
+});
+
+test('an explicit colliding public join name is rejected without changing membership',async t=>{
+  const f=await fixture(t);f.open();const peer=f.store.identities.create('Explicit collaborator');
+  const seq=f.store.headSequence(f.roomId);
+  const joined=await f.call(peer.secret,'room_join',{roomId:f.roomId,displayName:'Public founder'});
+  assert.equal(joined.error,true);
+  assert.equal(joined.value.code,'display_name_unavailable');
+  assert.equal(f.store.headSequence(f.roomId),seq);
+  assert.equal(f.store.db.prepare('SELECT count(*) n FROM access_requests').get().n,0);
+  assert.throws(()=>f.store.authenticate(peer.secret,f.roomId));
+});

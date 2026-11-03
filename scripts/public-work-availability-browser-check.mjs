@@ -38,10 +38,14 @@ async function fixture(t, state) {
     requestId: `enable-${id}`, expectedRevision: 2, expectedTermsVersion: 1,
     repositoryRef: 'main', files: ['src/example.js']
   });
-  if (state === 'claimed') {
+  if (state === 'claimed' || state === 'submitted') {
     const worker = f.store.identities.create('Synthetic claim worker');
-    f.store.publicWorkClaims.act(id, worker.secret, 'claim', {
+    const claim = f.store.publicWorkClaims.act(id, worker.secret, 'claim', {
       requestId: `claim-${id}`, expectedTermsVersion: 1
+    });
+    if (state === 'submitted') f.store.publicWorkClaims.act(id, worker.secret, 'finish', {
+      requestId: `finish-${id}`, expectedTermsVersion: 1,
+      generation: claim.task.claim.generation, artifactText: 'Synthetic result', checksReported: []
     });
   }
 
@@ -58,7 +62,8 @@ for (const width of [390, 1280]) {
   for (const [state, claimState, claimable, label] of [
     ['expired', 'unclaimed', false, 'Not currently claimable'],
     ['available', 'unclaimed', true, 'Open to contributors'],
-    ['claimed', 'claimed', false, 'Claimed']
+    ['claimed', 'claimed', false, 'Claimed'],
+    ['submitted', 'submitted', false, 'Submitted · not currently claimable']
   ]) {
     test(`${width}px ${state} offer renders server claimability`, { timeout: 30000 }, async t => {
       const { id, browser, origin } = await fixture(t, state);

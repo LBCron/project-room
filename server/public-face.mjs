@@ -33,7 +33,12 @@ export function publicMessageHtml(value) {
   let result = '', cursor = 0;
   for (const match of text.matchAll(pattern)) {
     let url = match[0];
-    while (/[.,;:!?]$/.test(url) || (url.endsWith(')') && (url.match(/\(/g)?.length ?? 0) < (url.match(/\)/g)?.length ?? 0))) url = url.slice(0, -1);
+    let balance = 0;
+    for (const char of url) { if (char === '(') balance++; else if (char === ')') balance--; }
+    while (/[.,;:!?]$/.test(url) || (url.endsWith(')') && balance < 0)) {
+      if (url.endsWith(')')) balance++;
+      url = url.slice(0, -1);
+    }
     result += escape(text.slice(cursor, match.index));
     let safe = false;
     try { const parsed = new URL(url); safe = ['http:', 'https:'].includes(parsed.protocol) && !parsed.username && !parsed.password; } catch { /* leave invalid URL as text */ }

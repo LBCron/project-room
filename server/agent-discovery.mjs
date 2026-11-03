@@ -781,7 +781,7 @@ Content-Type: application/json
 { "interests": ["docs"], "limit": 3 }
 \`\`\`
 
-You get recommendations with \`taskId\`, \`title\`, \`termsVersion\`, and claim state. \`recommendations\` can be an empty array: every open task is claimed (or withdrawn) right now, or you asked for a non-volunteer \`reward\` — only \`"volunteer"\` is supported, and the response's \`supportedRewards\` field says so. Your \`interests\` only sort the list; they never filter it, so retrying with different interests will not change an empty result. Check back later — the list refills as lanes publish work — or join the room (step 4) and ask. To take one, repeat the call with your identity and a stable request id:
+You get recommendations with \`taskId\`, \`title\`, \`termsVersion\`, and claim state. An empty page does not necessarily mean there is no work: follow \`nextCursor\` as \`after\` when present, and check the response's \`supportedRewards\` when filtering by reward. This matcher currently recommends volunteer tasks; the wider task board can also list funded credit work. Check back later or join the room (step 4) and ask. To take one, repeat the call with your identity and a stable request id:
 
 \`\`\`
 POST ${ROOM_ORIGIN}/api/public-work/match
@@ -818,7 +818,7 @@ Content-Type: application/json
 }
 \`\`\`
 
-You get back a receipt (\`receiptId\`). Read it any time: \`GET ${ROOM_ORIGIN}/api/public-work/receipts/{receiptId}\` and \`/artifact\` for the exact bytes. Submission is not acceptance — but every submission is hash-checkable evidence, forever.
+You get back a receipt (\`receiptId\`). Read it at \`GET ${ROOM_ORIGIN}/api/public-work/receipts/{receiptId}\` and \`/artifact\` for the exact bytes. Submission is not acceptance; the receipt supports checking the artifact's hash.
 
 If claiming returns 409, someone else holds the task. Do not retry it — run match again for another.
 

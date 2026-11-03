@@ -24,7 +24,7 @@ cd project-room
 npm ci
 ```
 
-Run the remaining commands from that directory. Do not install the unrelated npm package named `room`.
+Change to the project you want to connect. In the commands below, replace `<path-to-project-room>` with the absolute path to the checkout above. Do not install the unrelated npm package named `room`.
 If you already installed the Project Room CLI and it is on your PATH, `room setup codex` is the equivalent command.
 
 ## Command
@@ -32,20 +32,20 @@ If you already installed the Project Room CLI and it is on your PATH, `room setu
 Replace the URL below with your room URL or invitation. This saves the room connection and configures Codex in one command.
 
 ```sh
-node bin/room.mjs setup codex --room "<invite-or-room-url>"
+node "<path-to-project-room>/bin/room.mjs" setup codex --room "<invite-or-room-url>"
 ```
 
 If the command shows an invitation preview, review its access grant, then repeat the command with `--accept` to join. Setup continues only after the connection is saved.
 
-Already connected on this machine? Run `node bin/room.mjs setup codex` to use the saved connection.
+Already connected on this machine? From your project, run `node "<path-to-project-room>/bin/room.mjs" setup codex` to use the saved connection.
 
 ## What it writes
 
-Setup writes a `[mcp_servers.project-room]` block in `~/.codex/config.toml`. The block sets `bearer_token_env_var` to `PROJECT_ROOM_SECRET`. The secret is not in the file. Export it from `node bin/room.mjs token` before you start Codex.
+Setup writes a `[mcp_servers.project-room]` block in `~/.codex/config.toml`. The block sets `bearer_token_env_var` to `PROJECT_ROOM_SECRET`. The secret is not in the file. From your project, export it from `node "<path-to-project-room>/bin/room.mjs" token` before you start Codex.
 
 ## Verify
 
-Run `node bin/room.mjs doctor`. Exit 0 means Node, the saved connection, `/api/ready`, `room_check_access`, and this tool's config all check out.
+From your project, run `node "<path-to-project-room>/bin/room.mjs" doctor`. Exit 0 means Node, the saved connection, `/api/ready`, `room_check_access`, and this tool's config all check out.
 
 ## Work loop
 

@@ -5400,7 +5400,7 @@ this.slaBreachAlerts = new SlaBreachAlertJournal(this); // Task 26: durable in-a
       if (typeof helpContext !== "boolean" || helpContext && view !== "work") fail(422, "invalid_help_context", "Help discovery requires the current work view");
       if (typeof offerContext !== "boolean" || offerContext && view !== "full") fail(422, "invalid_offer_context", "Browser offers require the full room view");
       if(view==='work'&&isCurrentRoom(this.db,roomId)) {
-        if(helpContext)fail(409,'current_help_context_unavailable','Use selected work for current help context');
+        if(helpContext)fail(409,'current_help_context_unavailable','Help invitations and offers are unavailable in normalized Rooms');
         return readCurrentWorkSnapshot(this,token,roomId,{expectedSessionBinding,view,cursor:workCursor});
       }
       const room = this.withIdentityRevoked(roomId, view === "work" ? this.workProjection(roomId) : this.room(roomId));
@@ -6506,6 +6506,10 @@ this.slaBreachAlerts = new SlaBreachAlertJournal(this); // Task 26: durable in-a
         const value=selectedWorkContext({state:current.state,workItemId,viewerId:auth.member.id,sequence:current.sequence,now:this.now(),includeSource,includeOffers,sourceObservation,
           floor:this.historyFloor(roomId,auth.member.id,current.sequence),messageRecords:{get:id=>selectedMessageRecord(this,roomId,id,false)},
           replacementAvailable:validId(target)&&target!==workItemId&&Boolean(readWorkItem(this.db,roomId,target))});
+        // Native commands do not support the legacy help invitation/offer service.
+        // Omit its versioned capability contract rather than fabricate false v1 data.
+        delete value.helpContextVersion;
+        delete value.help;
         const ids=item.dependsOn??[];
         if(ids.length>16)fail(409,'current_room_context_unavailable','Selected dependency list exceeds bounded context');
         const dependencies=ids.map(id=>{

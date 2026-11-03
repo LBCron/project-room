@@ -3883,6 +3883,7 @@ function actions(i, scopeOnly = false, now = Date.now()) {
   return workActions(i, state.members[session.member.id], now).filter(([action]) => ["release", "renew"].includes(action)).map(([action, label]) => `<button type="button" class="button secondary" data-action="${action}" data-work-id="${esc(i.id)}" data-focus-key="work-action:${esc(i.id)}:${action}"${busy ? " disabled" : ""}>${label}</button>`).join("");
 }
 function helpView(item, now = Date.now()) {
+  if (partialWorkSnapshot) return null;
   try { return workHelpContext(state, item.id, session.member.id, new Date(now).toISOString()); }
   catch { return null; } // Invalid or unavailable context never advertises consent.
 }
@@ -3891,7 +3892,7 @@ const offerStatuses = { "select-offer": "selected", "decline-offer": "declined",
 const offerLabels = { "offer-help": "Offer help", "select-offer": "Select helper", "decline-offer": "Decline", "withdraw-offer": "Withdraw", "release-offer": "Release" };
 const isOfferAction = action => Object.hasOwn(offerLabels, action);
 function offersView(item, now = Date.now()) {
-  if (offerContextVersion !== 1) return null;
+  if (partialWorkSnapshot || offerContextVersion !== 1) return null;
   try { return workOffersContext(state, item.id, session.member.id, new Date(now).toISOString()); }
   catch { return null; }
 }
@@ -6712,6 +6713,7 @@ $("#room-results-list").addEventListener("click", event => {
 });
 function openWorkAction(item, action, draftMessageId = null, offerId = null) {
   if (pendingAction?.uncertain) { resumeAction(); return; }
+  if (partialWorkSnapshot && (isHelpAction(action) || isOfferAction(action))) return;
   if (!item || !Object.hasOwn(actionSpecs, action)) return;
   if (action === "complete" && !draftMessageId && humanExperience.shareResult(item)) return;
   const [type, , fields] = actionSpecs[action];

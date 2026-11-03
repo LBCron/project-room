@@ -1,3 +1,4 @@
+import {exportNdjsonText} from '../server/room-export.mjs';import {replayNdjsonInto} from '../server/restore-ndjson.mjs';
 // Research only: single legacy witness certification, not production migration.
 import test from 'node:test';import assert from 'node:assert/strict';import {mkdtempSync,rmSync} from 'node:fs';import {join} from 'node:path';import {tmpdir} from 'node:os';
 import {RoomStore} from '../server/store.mjs';import {initialRoom} from '../server/bootstrap.mjs';import {event} from '../src/events.js';import {auditRecovery} from '../server/recovery.mjs';import {certifyOneMessageRoutingResearch,withCurrentRoomWriter} from '../server/current-room-repository.mjs';
@@ -22,4 +23,9 @@ test('certification refuses a corrupted message without changing its witness',t=
  const before=s.db.prepare("SELECT payload FROM current_room_records WHERE room_id='commons' AND domain='messageWitness' AND record_key='legacy-large'").get().payload,head=s.db.prepare("SELECT * FROM current_room_head WHERE room_id='commons'").get();
  assert.throws(()=>certifyOneMessageRoutingResearch(s,'commons','legacy-large'),/row mismatch/);
  assert.equal(s.db.prepare("SELECT payload FROM current_room_records WHERE room_id='commons' AND domain='messageWitness' AND record_key='legacy-large'").get().payload,before);assert.deepEqual(s.db.prepare("SELECT * FROM current_room_head WHERE room_id='commons'").get(),head);
+});
+test('same-sequence certification and receipts survive export and restore',t=>{
+ const s=new RoomStore(':memory:'),target=new RoomStore(':memory:');t.after(()=>{s.close();target.close()});const events=initialRoom();events.push(event({roomId:'commons',actorId:'owner',type:'message.posted',data:{messageId:'legacy-large',body:'界'.repeat(65536)}}));s.initialize(events,{representation:'normalized-current-v1'});const key=s.issueAccessKey('commons','owner'),seq=s.headSequence('commons');certifyOneMessageRoutingResearch(s,'commons','legacy-large');
+ const snapshot=store=>Object.fromEntries(['rooms','events','current_room_head','current_room_records','current_room_record_proofs','operator_actions','integrity_room_state'].map(table=>[table,store.db.prepare('SELECT * FROM '+table).all()]));const before=snapshot(s);replayNdjsonInto(exportNdjsonText(s.db),target);assert.deepEqual(snapshot(target),before);assert.equal(target.headSequence('commons'),seq);assert.doesNotThrow(()=>auditRecovery(target));
+ const receipt=target.command(key,'commons',{id:'restored-reply',type:'message.posted',data:{messageId:'restored-reply',replyToId:'legacy-large',body:'hello'}});assert.equal(receipt.duplicate,false);assert.doesNotThrow(()=>auditRecovery(target));
 });

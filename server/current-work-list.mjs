@@ -34,6 +34,19 @@ function decode(cursor,store,secret) {
 // Each indexed stream is independently capped before workflow/history filters.
 // Merging their source keys keeps a complete id-ordered continuation even when
 // one task names this viewer in several roles or a page has no actionable work.
+// An assignment nobody accepted stays invisible to the member who proposed it.
+// After STALLED_ASSIGNMENT_MS the proposer sees it in needs_me with the age, so
+// a silent assignee surfaces instead of stalling the Board. Read-only: the step
+// describes a choice (nudge, reassign, supersede); it grants nothing.
+export const STALLED_ASSIGNMENT_MS=10*60*1000;
+export function stalledAssignmentStep(item,now,viewerId,thresholdMs=STALLED_ASSIGNMENT_MS){
+  if(item?.state!=='proposed'||item.supersededBy||item.proposedById!==viewerId||item.accountableMemberId===viewerId)return null;
+  const created=Date.parse(item.createdAt),age=now-created;
+  if(!Number.isFinite(created)||!(age>=thresholdMs))return null;
+  return {action:'stalled_assignment',label:`Assignee has not accepted after ${Math.floor(age/60000)} min; nudge, reassign, or supersede`,
+    memberId:viewerId,role:'proposer',needsAttention:true,workItemId:item.id,workRevision:item.revision,
+    completionEventId:null,evidenceVersion:null,assigneeId:item.accountableMemberId,stalledForMs:age};
+}
 function addressedWorkWindow(store,roomId,memberId,ownerId,after,limit,b) {
   const candidates=new Set(); let examinedKeys=0;
   for (const [role,path] of INBOX_WORK_ROLES) {
@@ -48,6 +61,16 @@ function addressedWorkWindow(store,roomId,memberId,ownerId,after,limit,b) {
       WHERE room_id=? AND domain='workSummary' AND json_extract(payload,'$.work.handoff.open')=1
         AND json_extract(payload,'$.work.handoff.triageMemberId') IS NULL AND record_key>?
       ORDER BY record_key LIMIT ?`).all(roomId,after,limit+1);
+    chargeCurrentReadBudget(b,rows.reduce((n,row)=>n+Buffer.byteLength(row.record_key)+32,0),rows.length);
+    examinedKeys+=rows.length; for(const row of rows)candidates.add(row.record_key);
+  }
+  // Stalled assignments: the proposer also sees its own proposals still
+  // waiting for acceptance; the listing filter applies the age threshold.
+  {
+    const rows=store.db.prepare(`SELECT record_key FROM current_room_records INDEXED BY current_inbox_proposed_by
+      WHERE room_id=? AND domain='workSummary' AND json_extract(payload,'$.work.proposedById')=?
+        AND json_extract(payload,'$.work.state')='proposed' AND record_key>?
+      ORDER BY record_key LIMIT ?`).all(roomId,memberId,after,limit+1);
     chargeCurrentReadBudget(b,rows.reduce((n,row)=>n+Buffer.byteLength(row.record_key)+32,0),rows.length);
     examinedKeys+=rows.length; for(const row of rows)candidates.add(row.record_key);
   }
@@ -109,11 +132,13 @@ export function readCurrentWorkListing(store,secret,roomId,args={}) {
         :readCurrentOverviewWindow(store,roomId,{viewerId:auth.member.id,workAfter:saved.workAfter,limit:saved.workDone?1:limit});
       const member=ownMember(overview.state.members,auth.member.id),now=saved.at;
       const items=saved.workDone?[]:source?.items??Object.values(overview.state.workItems);
+      const stepFor=item=>{const step=nextWorkStep(item,now,overview.state.room.ownerId);
+        return focus==='needs_me'&&!(step.memberId===member.id&&step.needsAttention)?stalledAssignmentStep(item,now,member.id)??step:step;};
       const work=items.filter(item=>focus==='all'||focus==='results'&&currentResult(item)
-        ||focus==='needs_me'&&member.active!==false&&nextWorkStep(item,now,overview.state.room.ownerId).memberId===member.id
-          &&nextWorkStep(item,now,overview.state.room.ownerId).needsAttention).map(item=>({
+        ||focus==='needs_me'&&member.active!==false&&stepFor(item).memberId===member.id
+          &&stepFor(item).needsAttention).map(item=>({
         id:item.id,title:item.title,state:item.state,revision:item.revision,mode:item.mode,
-        next:nextWorkStep(item,now,overview.state.room.ownerId),
+        next:stepFor(item),
         nextRead:{tool:'room_read_work',arguments:{workItemId:item.id}},
         ...(focus==='results'?(()=>{const current=readCurrentWorkItem(store.db,roomId,item.id);return {
           result:currentResult(current),nextResultRead:current.receipt.nativeText

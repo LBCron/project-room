@@ -78,12 +78,14 @@ test('native invitation HTTPS browser: review Back, lost-response retry and revo
   const nonce = await page.locator('input[name="nonce"]').inputValue();
   const consentCookie = (await context.cookies()).find(cookie => cookie.name === `__Host-oauth_invite_${nonce.slice(0, 16)}`);
   assert.equal(consentCookie?.value, nonce, 'real browser persisted the exact form nonce in its scoped cookie');
+  if (!await page.getByLabel('Agent invitation link or RM code').isVisible()) await page.getByText('Join with an invitation', { exact: true }).click();
   await page.getByLabel('Agent invitation link or RM code').fill(`${origin}/#agent-invite/${invitation.code}`);
   await page.getByRole('button', { name: 'Review invitation' }).click();
   await page.getByRole('button', { name: 'Connect this agent' }).waitFor().catch(async error => { throw new Error(JSON.stringify({ body: await page.locator('body').innerText(), submitted, cookies: (await context.cookies()).map(({ name, secure, sameSite }) => ({ name, secure, sameSite })) }), { cause: error }); });
   assert.match(await page.locator('main').innerText(), /Invitation sponsor/);
   assert.equal(store.db.prepare('SELECT count(*) n FROM oauth_invite_grants').get().n, 0);
   await page.goBack();
+  if (!await page.getByLabel('Agent invitation link or RM code').isVisible()) await page.getByText('Join with an invitation', { exact: true }).click();
   await page.getByLabel('Agent invitation link or RM code').fill(invitation.code);
   await page.getByRole('button', { name: 'Review invitation' }).click();
   await page.getByLabel('Agent name').fill('Browser friend agent');
@@ -124,6 +126,7 @@ test('native invitation HTTPS browser: review Back, lost-response retry and revo
   assert.equal(refreshed.status(), 400);
   // A fresh authorization cannot silently reuse the revoked/consumed invitation.
   await page.goto(start);
+  if (!await page.getByLabel('Agent invitation link or RM code').isVisible()) await page.getByText('Join with an invitation', { exact: true }).click();
   await page.getByLabel('Agent invitation link or RM code').fill(invitation.code);
   const denied = page.waitForResponse(response => response.url() === origin + '/oauth/invite');
   await page.getByRole('button', { name: 'Review invitation' }).click();

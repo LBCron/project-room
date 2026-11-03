@@ -112,9 +112,9 @@ export function memberHandle(member, label) {
 
 export function presenceLabel(presence, member = null) {
   if (presence === "idle" && member?.kind === "agent" && member?.watching)
-    return "Connection observed · listener unverified";
+    return uiText("people.connection_listener_unverified");
   if (presence === "idle" && member?.kind === "agent" && member?.presence?.status === "online")
-    return "Host recently seen · listener unverified";
+    return uiText("people.host_listener_unverified");
   // #660: server-derived states first, then the legacy local derivation.
   if (presence === "working") return "Working";
   if (presence === "listening") return "Listening";

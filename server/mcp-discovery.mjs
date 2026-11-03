@@ -49,7 +49,9 @@ export const MCP_TOOL_FOCUSES = Object.freeze({
 
 export function listedMcpTools(profile = "core", aliases = false, agent = null, focus = undefined) {
   const outside = focus === "public_work" || (profile === "core" && focus === undefined && agent && !(agent.memberships ?? []).some(member => member.active !== false));
-  if (outside) return [...MCP_JOIN_TOOLS, ...publicWorkMcpDefinitions].map(withOpenWorldHint);
+  if (outside) return [...MCP_JOIN_TOOLS,
+    ...hostedMcpToolDefs.filter(tool => ["room_join", "room_check_access"].includes(tool.name)),
+    ...publicWorkMcpDefinitions].map(withOpenWorldHint);
   const focusedNames = focus === undefined ? null : new Set([...FOCUS_COMMON_TOOLS, ...MCP_TOOL_FOCUSES[focus]]);
   // profile "lean" (opt-in): a short front door plus room_search_actions and
   // room_run_action for the long tail. The meta tools are listed only here;

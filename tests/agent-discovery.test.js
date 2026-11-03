@@ -869,3 +869,11 @@ test("public connection examples require the intended room and never advertise a
   }
   assert.match(llmsFullTxt(), /old muse-room is archived/);
 });
+
+ test("generic connection discovery chooses the public lobby without asking for an invitation",()=>{
+  for(const text of [llmsTxt(),llmsFullTxt(),skillMd()]) {
+    assert.match(text,/Otherwise join project-room-lobby/);
+    assert.doesNotMatch(text,/If no destination is known, ask which project/);
+  }
+  assert.match(llmsFullTxt(),/room_join \{\}/);
+});

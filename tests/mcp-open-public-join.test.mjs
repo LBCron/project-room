@@ -20,11 +20,14 @@ async function fixture(t, roomId='mcp-public-join') {
   t.after(async()=>{server.closeStreams();server.closeAllConnections();await new Promise(resolve=>server.close(resolve));store.close();rmSync(dir,{recursive:true,force:true});});
   const origin=`http://127.0.0.1:${server.address().port}`;
   const call=async(secret,name,args)=>{
-    const response=await fetch(origin+'/mcp',{method:'POST',headers:{'Content-Type':'application/json',Authorization:`Bearer ${secret}`},body:JSON.stringify({jsonrpc:'2.0',id:'test',method:'tools/call',params:{name,arguments:args}})});
+    const response=await fetch(origin+'/mcp',{method:'POST',headers:{'Content-Type':'application/json',...(secret?{Authorization:`Bearer ${secret}`}:{})},body:JSON.stringify({jsonrpc:'2.0',id:'test',method:'tools/call',params:{name,arguments:args}})});
     const body=await response.json();
     return {value:body.result?.structuredContent,error:body.result?.isError===true,body};
   };
-  return {store,owner,roomId,command,call,open(){command('room.public_page_set',{enabled:true});command('room.join_link_set',{enabled:true});}};
+  return {store,owner,roomId,command,call,async list(secret){
+    const response=await fetch(origin+'/mcp',{method:'POST',headers:{'Content-Type':'application/json',Authorization:`Bearer ${secret}`},body:JSON.stringify({jsonrpc:'2.0',id:'list',method:'tools/list'})});
+    return (await response.json()).result.tools;
+  },open(){command('room.public_page_set',{enabled:true});command('room.join_link_set',{enabled:true});}};
 }
 
 test('HTTP MCP roomId-only joins owner-open room as same identity guest, retries once, and reads activation',async t=>{
@@ -183,4 +186,28 @@ test('an explicit colliding public join name is rejected without changing member
   assert.equal(f.store.headSequence(f.roomId),seq);
   assert.equal(f.store.db.prepare('SELECT count(*) n FROM access_requests').get().n,0);
   assert.throws(()=>f.store.authenticate(peer.secret,f.roomId));
+});
+
+test('destination-free MCP join self-enrolls in official public lobby and retries without a second seat',async t=>{
+  const f=await fixture(t,'project-room-lobby');f.open();
+  const minted=await f.call(null,'room_identity_mint',{displayName:'Self directed agent'});
+  assert.equal(minted.error,false,JSON.stringify(minted.body));
+  const peer=minted.value;
+  assert.ok((await f.list(peer.secret)).some(tool=>tool.name==='room_join'));
+  const catalog=await f.call(peer.secret,'room_check_access',{});
+  assert.equal(catalog.error,false);
+  const joined=await f.call(peer.secret,'room_join',{});
+  assert.equal(joined.error,false,JSON.stringify(joined.body));
+  assert.equal(joined.value.roomId,'project-room-lobby');
+  assert.equal(joined.value.memberId,peer.identityId);
+  assert.deepEqual(joined.value.grantedPermissions,[]);
+  const seq=f.store.headSequence(f.roomId);
+  const retry=await f.call(peer.secret,'room_join',{});
+  assert.equal(retry.value.alreadyMember,true);
+  assert.equal(retry.value.memberId,peer.identityId);
+  assert.equal(f.store.headSequence(f.roomId),seq);
+  const activation=await f.call(peer.secret,'room_activation_pack',{roomId:f.roomId});
+  assert.equal(activation.error,false,JSON.stringify(activation.body));
+  const post=await f.call(peer.secret,'room_post_message',{roomId:f.roomId,id:'first-hello',body:'Ready to help with a small task.'});
+  assert.equal(post.error,false,JSON.stringify(post.body));
 });

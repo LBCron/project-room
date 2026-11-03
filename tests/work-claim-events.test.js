@@ -117,12 +117,13 @@ test('a blank title is refused before any claim or event is recorded', async t =
   assert.equal((await claimEvents(owner)).length, 0);
 });
 
-test('an archived room still records a claim and appends no event', async t => {
-  const { owner } = await fixture(t);
+test('an archived room refuses a claim and appends no event', async t => {
+  const { owner, store } = await fixture(t);
   // Archive with the owner's own key. Issuing a second key would revoke it.
   await owner.command({ id: 'archive-room', type: 'room.archived', data: { reason: 'pilot over' } });
-  const created = await owner.workClaimCreate({ id: 'after-archive', title: 'Still recorded' });
-  assert.equal(created.id, 'after-archive');
+  await assert.rejects(owner.workClaimCreate({ id: 'after-archive', title: 'Refused' }),
+    error => error.status === 409 && error.code === 'room_archived');
+  assert.equal(store.db.prepare('SELECT COUNT(*) AS n FROM work_claims WHERE room_id=?').get('commons').n, 0);
   assert.equal((await claimEvents(owner)).length, 0);
 });
 

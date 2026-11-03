@@ -69,4 +69,8 @@ export async function deliverFormal(room, delivery, listenerToken) {
   if (current.roomId !== room.roomId || current.viewerId !== room.memberId
     || current.request?.id !== data.responseToRequestId || current.request.status !== data.responseOutcome
     || current.request.responseMessageId !== data.messageId) invalid('Exact saved response is not verified; reconcile without a new recipe');
+  const selected=await room.thread(data.messageId,{selected:true}), message=selected.thread;
+  if (message.authorId!==room.memberId || message.toMemberId!==data.toMemberId || message.replyToId!==requestId
+    || (message.workItemId??null)!==data.workItemId || message.deletedAt || message.body!==data.body)
+    throw new RoomError(409,'formal_response_changed','Saved response content or binding changed; inspect without repeating execution');
 }

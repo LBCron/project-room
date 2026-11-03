@@ -113,10 +113,13 @@ isolation.
   Answering a question does not complete associated work or approve its result.
 - A completed formal response and its exact service-issued command are saved
   privately before sending. A lost response or restart retries that same
-  command and verifies its saved response ID, without rerunning the agent or
+  command and verifies its saved response ID, author, audience, work binding
+  and exact current body, without rerunning the agent or
   silently refreshing stale context. A definitive stale-context rejection saves
   the old answer as an ordinary draft for review instead of marking the changed request answered;
   unknown network results never switch to that fallback.
+  A response subsequently edited or otherwise mismatched is retained for
+  review without acknowledging its wake, resending it, or rerunning execution.
   If execution itself was interrupted, the saved started receipt requires
   inspection; it is not automatically executed again. Preparing context before
   execution can retry. Context is limited to 20 pages and 256 KiB of responses;

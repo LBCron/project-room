@@ -4623,7 +4623,7 @@ export function createRoomServer({ store, origin, assetRoot = new URL("../", imp
         if (url.searchParams.has('view')) {
           if (url.searchParams.get('view') !== 'message' || url.searchParams.getAll('view').length !== 1
             || [...url.searchParams.keys()].some(key => !['view','auth'].includes(key)))
-            reject(422, 'invalid_thread_view', 'Choose view=message for one addressed message');
+            reject(422, 'invalid_conversation_selection', 'Choose view=message for one addressed message');
           const context = readMessageContext(store, selected.token, roomId, threadMessageId, fence);
           return json(res, 200, {...context, thread:redactMessageTree(context.thread)});
         }

@@ -211,3 +211,86 @@ test('an older server cannot silently substitute full thread context for the sel
   const room=new RoomClient({apiBase:'https://room.example.test',roomId:'room',memberId:'agent',fetchImpl:async()=>Response.json({roomId:'room',thread:{id:'message',replies:[]}})});
   await assert.rejects(room.thread('message',{selected:true}),error=>error instanceof RoomError&&error.code==='selected_message_context_unavailable');
 });
+
+test('a crash before grouping leaves complete queued input, not a false started execution', {timeout:30000}, async t=>{
+  const f=await fixture(t),path=join(f.home,'crash-before-group.json');writeFileSync(path,JSON.stringify(f.connection),{mode:0o600});
+  const source=`import fs from 'node:fs';import {Bridge} from ${JSON.stringify(new URL('../room-acp/src/bridge.mjs',import.meta.url).href)};
+    const connection=JSON.parse(fs.readFileSync(process.argv[1],'utf8'));
+    const bridge=new Bridge({connection,env:{ROOM_ACP_HOME:${JSON.stringify(f.home)}},host:{session:async()=>({sessionId:'s'}),prompt:async()=>{throw Error('must not execute before grouping');}}});
+    bridge.chatReceipts.save=()=>process.kill(process.pid,'SIGKILL');
+    await bridge.refreshRoom();await bridge.lease();await bridge.turn('dm',[${JSON.stringify(f.wake)}]);process.exit(74);`;
+  const child=spawn(process.execPath,['--input-type=module','-e',source,path],{stdio:'ignore'});t.after(()=>child.kill());
+  const result=await new Promise((resolve,reject)=>{child.once('exit',(code,signal)=>resolve({code,signal}));child.once('error',reject);});
+  assert.equal(result.signal,'SIGKILL');
+  const second=f.make(),key=second.chatReceipts.key(f.wake.signalId),saved=second.chatReceipts.read(key);
+  assert.equal(saved.phase,'queued');assert.deepEqual(saved.messageIds,['dm']);
+  await f.ready(second);await second.turn('dm',[f.wake]);
+  assert.equal(f.counts.prompts,1);assert.equal((await f.read(second)).request.status,'answered');
+  assert.equal(second.chatReceipts.read(key).phase,'posted');
+});
+
+for (const point of ['second-begin','secondary-link']) test(`partial ${point} recovery handles reordered wakes without parked or duplicate execution`,async t=>{
+  const f=await fixture(t),first=f.make(),a={...f.wake,signalId:'a'},b={...f.wake,signalId:'b'};await f.ready(first);
+  if(point==='second-begin'){
+    const begin=first.chatReceipts.begin.bind(first.chatReceipts);let calls=0;
+    first.chatReceipts.begin=(...args)=>{if(++calls===2)throw Error('interrupted second begin');return begin(...args);};
+  }else{
+    const save=first.chatReceipts.save.bind(first.chatReceipts);
+    first.chatReceipts.save=(key,value)=>{if(value.phase==='linked')throw Error('interrupted link');return save(key,value);};
+  }
+  await first.turn('dm',[a,b]);assert.equal(f.counts.prompts,0);
+  const second=f.make(),acks=[];await f.ready(second);second.room.ack=async value=>{acks.push(...value.signalIds);};
+  await second.turn('dm',[b,a]);await second.turn('dm',[a,b]);
+  assert.equal(f.counts.prompts,1);assert.equal((await f.read(second)).request.status,'answered');
+  assert.ok(acks.includes('a')&&acks.includes('b'));
+  for(const wake of [a,b])assert.notEqual(second.chatReceipts.read(second.chatReceipts.key(wake.signalId)).phase,'started');
+});
+
+test('duplicate signal IDs inside a single batch execute once',async t=>{
+  const f=await fixture(t),bridge=f.make();await f.ready(bridge);await bridge.turn('dm',[f.wake,f.wake]);
+  assert.equal(f.counts.prompts,1);assert.equal((await f.read(bridge)).request.status,'answered');
+});
+
+test('a changed response body is retained for review instead of acknowledged or repeatedly sent',async t=>{
+  const f=await fixture(t);let mutate=true,posts=0,mutated=false;
+  const bridge=f.make(async(url,options)=>{
+    const response=await fetch(url,options);
+    if(options?.body&&JSON.parse(options.body).data?.responseToRequestId){
+      posts++;
+      if(mutate){mutate=false;await response.clone().json();const command=JSON.parse(options.body);
+        f.store.command(f.seeded.owner,'commons',{id:'owner-revised-answer',type:'message.edited',data:{messageId:command.data.messageId,body:'Owner revised this answer',expectedMessageRevision:0}});mutated=true;}
+    }
+    return response;
+  });
+  await f.ready(bridge);let acks=0;bridge.room.ack=async()=>{acks++;};
+  await bridge.turn('dm',[f.wake]);assert.equal(mutated,true);
+  assert.equal(bridge.chatReceipts.read(bridge.chatReceipts.key(f.wake.signalId)).phase,'needs_review');
+  await bridge.turn('dm',[f.wake]);assert.equal(posts,1);assert.equal(f.counts.prompts,1);assert.equal(acks,0);
+});
+
+for (const terminalLimit of [false,true]) test(`actual wake redelivery survives repeated preparation failure${terminalLimit?' and stops on a context limit':''}`,async t=>{
+  const f=await fixture(t),bridge=f.make();await f.ready(bridge);
+  f.store.command(f.seeded.owner,'commons',{id:'retry-formal',type:'message.posted',data:{messageId:'retry-formal',body:'@Worker please answer this fresh request',toMemberId:'worker',requestKind:'reply'}});
+  const original=bridge.room.requestContext.bind(bridge.room);let preparations=0;
+  bridge.room.requestContext=async(...args)=>{
+    preparations++;
+    if(preparations<=2){
+      if(terminalLimit&&preparations===2)throw new RoomError(413,'formal_context_too_large','Context budget exceeded');
+      throw Error('temporary preparation failure');
+    }
+    return original(...args);
+  };
+  const poll=()=>bridge.room.poll({hostId:f.connection.hostId,waitMs:0});
+  const initial=(await poll()).pendingWakes.find(w=>w.messageId==='retry-formal');assert.ok(initial,'real Room queue contains the formal request');
+  for(let attempt=0;attempt<(terminalLimit?2:3);attempt++){
+    const pending=(await poll()).pendingWakes.find(w=>w.signalId===initial.signalId);assert.ok(pending,'unanswered wake must still be queued');
+    await bridge.accept(pending);await bridge.queue.idle();
+  }
+  if(terminalLimit){
+    assert.equal(bridge.stopReason,'context_unavailable');assert.equal(bridge.controller.signal.aborted,true);
+    assert.equal(f.counts.prompts,0);assert.ok((await poll()).pendingWakes.some(w=>w.signalId===initial.signalId));
+  }else{
+    assert.equal(preparations,3);assert.equal(f.counts.prompts,1);assert.equal((await f.read(bridge,'retry-formal')).request.status,'answered');
+    assert.equal((await poll()).pendingWakes.some(w=>w.signalId===initial.signalId),false);
+  }
+});

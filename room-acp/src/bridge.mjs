@@ -3,7 +3,7 @@
 // thread, then ack the wakes. Wakes are acked only after the reply posts,
 // so a crash before posting means the Room re-delivers them.
 import { createHash, randomUUID } from "node:crypto";
-import { mkdirSync, readFileSync, writeFileSync, renameSync } from "node:fs";
+import { mkdirSync, readFileSync, writeFileSync, renameSync, linkSync, unlinkSync } from "node:fs";
 import { join } from "node:path";
 import { configDir } from "./credentials.mjs";
 import { RoomClient, RoomError } from "./room.mjs";
@@ -61,29 +61,32 @@ class TurnReceipts {
     this.memory = new Map();
   }
   key(signalId) { return createHash("sha256").update(this.scope + JSON.stringify(signalId)).digest("hex"); }
-  begin(signalId) {
+  begin(signalId, initial = {}) {
     const key = this.key(signalId);
+    const receipt = { ...initial, phase: initial.phase ?? 'started', requestId: randomUUID() };
     if (!this.dir) {
       if (this.memory.has(key)) return { key, receipt: this.memory.get(key), fresh: false };
-      const receipt = { phase: "started", requestId: randomUUID() };
       this.memory.set(key, receipt);
       return { key, receipt, fresh: true };
     }
     mkdirSync(this.dir, { recursive: true, mode: 0o700 });
     const path = join(this.dir, key + ".json");
-    const receipt = { phase: "started", requestId: randomUUID() };
-    try { writeFileSync(path, JSON.stringify(receipt), { flag: "wx", mode: 0o600 }); }
+    const temporary=path+'.'+randomUUID()+'.tmp';
+    try {
+      writeFileSync(temporary, JSON.stringify(receipt), {flag:'wx',mode:0o600});
+      linkSync(temporary,path); // Atomic complete-file commit, without replacing an existing operation.
+    }
     catch (error) {
       if (error.code !== "EEXIST") throw error;
       const existing = this.read(key);
       return { key, receipt: existing, fresh: false };
-    }
+    } finally {try{unlinkSync(temporary);}catch(error){if(error.code!=='ENOENT')throw error;}}
     return { key, receipt, fresh: true };
   }
   read(key) {
     const receipt = this.dir ? JSON.parse(readFileSync(join(this.dir, key + ".json"), "utf8")) : this.memory.get(key);
-    if (!receipt || !["queued", "started", "result", "posted", "discarded", "linked"].includes(receipt.phase) || typeof receipt.requestId !== "string" ||
-        receipt.phase === "result" && typeof receipt.body !== "string" ||
+    if (!receipt || !["queued", "started", "result", "needs_review", "posted", "discarded", "linked"].includes(receipt.phase) || typeof receipt.requestId !== "string" ||
+        ['result','needs_review'].includes(receipt.phase) && typeof receipt.body !== "string" ||
         receipt.phase === "linked" && !/^[a-f0-9]{64}$/.test(receipt.groupKey)) throw new Error("Invalid execution receipt; manual recovery required");
     return receipt;
   }
@@ -337,16 +340,29 @@ export class Bridge {
     if (threadKey.startsWith(CLAIM_KEY)) return this.claimTurn(threadKey, batch);
     try {
       if (!(await this.authorized({ messageIds: batch.map(item => item.messageId) }))) { await this.ack(batch.map(item => item.signalId)); return; }
-      const fresh = [], replay = new Set();
+      const fresh = [], replay = new Map(), unique = new Set();
       for (const item of batch) {
-        const saved = this.chatReceipts.begin(item.signalId);
+        if (unique.has(item.signalId)) continue;
+        unique.add(item.signalId);
+        // A crash even before grouping must retain a complete, executable
+        // pre-execution record. Claim receipts keep their existing default.
+        const saved = this.chatReceipts.begin(item.signalId, {phase:'queued', threadKey,
+          signalIds:[item.signalId], messageIds:[item.messageId], wakes:[{author:item.author, body:item.body}]});
         if (saved.fresh) fresh.push({ ...saved, item });
-        else replay.add(saved.receipt.phase === "linked" ? saved.receipt.groupKey : saved.key);
+        else {
+          const groupKey = saved.receipt.phase === "linked" ? saved.receipt.groupKey : saved.key;
+          if (!replay.has(groupKey)) replay.set(groupKey, []);
+          replay.get(groupKey).push(item.signalId);
+        }
       }
       // Retry original groups independently of this poll's new batching.
-      for (const key of replay) {
+      for (const [key, signalIds] of replay) {
         try { await this.deliverChatReceipt(key); }
-        catch (error) { this.log(`chat delivery failed (${error.code ?? error.message}); retrying delivery without repeating execution`); }
+        catch (error) {
+          for (const id of signalIds) this.seen.delete(id);
+          this.log(`chat delivery failed (${error.code ?? error.message}); retrying delivery without repeating execution`);
+          if (this.stopForContextLimit(error)) return;
+        }
       }
       if (!fresh.length) return;
       const { key, receipt } = fresh[0];
@@ -354,7 +370,7 @@ export class Bridge {
       const queued = { ...receipt, phase: 'queued', threadKey, signalIds, messageIds: fresh.map(entry => entry.item.messageId),
         wakes: fresh.map(entry => ({author:entry.item.author, body:entry.item.body})) };
       this.chatReceipts.save(key, queued);
-      for (const entry of fresh.slice(1)) this.chatReceipts.save(entry.key, { ...entry.receipt, phase: "linked", groupKey: key });
+      for (const entry of fresh.slice(1)) this.chatReceipts.save(entry.key, {requestId:entry.receipt.requestId, phase: "linked", groupKey: key});
       await this.deliverChatReceipt(key);
     } catch (error) {
       this.stopForContextLimit(error);
@@ -364,6 +380,32 @@ export class Bridge {
   }
 
   async executeQueuedChatReceipt(key, receipt) {
+    // Repair a crash during the per-signal link writes. An unlinked queued
+    // sibling has never executed and can join this group. A sibling already
+    // delivered in another replay order must not execute a second time.
+    const included=[];
+    for (let i=0;i<receipt.signalIds.length;i++) {
+      const siblingKey=this.chatReceipts.key(receipt.signalIds[i]);
+      if (siblingKey===key) {included.push(i);continue;}
+      let sibling=this.chatReceipts.read(siblingKey);
+      if (sibling.phase==='queued' && sibling.signalIds?.length===1) {
+        this.chatReceipts.save(siblingKey,{requestId:sibling.requestId,phase:'linked',groupKey:key});
+        included.push(i);continue;
+      }
+      if (sibling.phase==='linked' && sibling.groupKey===key) {included.push(i);continue;}
+      if (sibling.phase==='result' || sibling.phase==='linked') {
+        await this.deliverChatReceipt(siblingKey);
+        sibling=this.chatReceipts.read(sibling.phase==='linked'?sibling.groupKey:siblingKey);
+      }
+      if (!['posted','discarded'].includes(sibling.phase)) {
+        this.log('Grouped chat has an unresolved execution; inspect it before starting another turn');return;
+      }
+    }
+    if (included.length!==receipt.signalIds.length) {
+      receipt={...receipt,signalIds:included.map(i=>receipt.signalIds[i]),messageIds:included.map(i=>receipt.messageIds[i]),
+        wakes:included.map(i=>receipt.wakes?.[i]).filter(Boolean)};
+      this.chatReceipts.save(key,receipt);
+    }
     // Only queued means no prompt has started. Persist started immediately
     // before execution; after a crash that state is never silently rerun.
     if (!(await this.authorized({messageIds:receipt.messageIds}))) {
@@ -411,6 +453,8 @@ export class Bridge {
 
   async deliverChatReceipt(key) {
     let receipt = this.chatReceipts.read(key);
+    if (receipt.phase==='linked') return this.deliverChatReceipt(receipt.groupKey);
+    if (receipt.phase==='needs_review') return;
     if (receipt.phase === 'queued') {
       await this.executeQueuedChatReceipt(key, receipt);
       receipt = this.chatReceipts.read(key);
@@ -431,6 +475,11 @@ export class Bridge {
         if (receipt.formalDelivery && !receipt.formalReview) {
           try { await deliverFormal(this.room, receipt.formalDelivery, this.fencingToken); }
           catch (error) {
+            if (error instanceof RoomError && ['formal_context_invalid','formal_response_changed'].includes(error.code)) {
+              this.chatReceipts.save(key,{...receipt,phase:'needs_review'});
+              this.log('Saved formal response no longer matches Room. Retained for review; not resending or rerunning execution.');
+              return;
+            }
             // Only a definitive CAS rejection permits changing delivery mode.
             // Unknown results retain the identical recipe until reconciled.
             if (!(error instanceof RoomError) || error.status !== 409 || error.code !== 'command_rejected'

@@ -1,19 +1,14 @@
 // Local prototype only: not wired to HTTP, MCP or the OAuth provider.
 import { createHash, randomBytes } from 'node:crypto';
 import { mcpInviteOAuthIdentityEpoch } from './mcp-oauth.mjs';
+import { ensureExistingSeatOAuthSchema } from './existing-seat-oauth-schema.mjs';
 
 const digest = value => createHash('sha256').update(value).digest('hex');
 const fail = () => { throw Object.assign(new Error('Existing-seat proof unavailable'), { code: 'existing_seat_proof_unavailable' }); };
 
 export function createExistingSeatProof({ store, inviteOAuth }) {
   const db = store.db;
-  db.exec(`CREATE TABLE IF NOT EXISTS oauth_existing_seat_proofs (
-    nonce_hash TEXT PRIMARY KEY, request_hash TEXT NOT NULL, identity_id TEXT NOT NULL,
-    identity_epoch TEXT NOT NULL, room_id TEXT NOT NULL, member_id TEXT NOT NULL,
-    expires_at INTEGER NOT NULL, consumed_at INTEGER, grant_id TEXT UNIQUE
-  ); CREATE TABLE IF NOT EXISTS oauth_existing_seat_handoffs (
-    reference_hash TEXT PRIMARY KEY, nonce_hash TEXT NOT NULL UNIQUE, expires_at INTEGER NOT NULL
-  )`);
+  ensureExistingSeatOAuthSchema(db);
   // The reference is separate from the browser's CSRF nonce. It can be given
   // to the existing agent without giving it the browser's consent cookie.
   function createHandoff(nonce) {

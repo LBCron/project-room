@@ -13,7 +13,7 @@ async function fixture(t) {
   const store=new RoomStore(join(dir,'db'));
   const owner=store.identities.create('Public founder');
   const roomId='mcp-public-join';
-  new AgentRooms(store).create(owner.secret,{roomId,title:'Public project',purpose:'Useful work',starter:false});
+  new AgentRooms(store).create(owner.secret,{roomId,title:'Public project',purpose:'Useful work',starter:false,visibility:'private'});
   const command=(type,data,id=type)=>store.command(owner.secret,roomId,{id,type,data});
   command('message.posted',{messageId:'before',body:'PRIVATE BEFORE JOIN'});
   const server=createRoomServer({store});

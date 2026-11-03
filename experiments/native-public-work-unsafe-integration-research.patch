@@ -1,0 +1,26 @@
+# RESEARCH ONLY - NOT SAFE FOR PRODUCTION. Eight-task limit, incomplete resource accounting and publication transaction qualification.
+--- a/server/public-read-model.mjs
++++ b/server/public-read-model.mjs
+@@ -1,3 +1,4 @@
++import {researchPublicTasks} from './current-public-work-research.mjs';
+ import {ServiceError} from './service-error.mjs';
+ import { hydrateWorkItems } from "./work-repository.mjs";
+ // Public pages read these tables and nothing from rooms.projection.
+@@ -1294,14 +1295,15 @@
+   const row = store.db.prepare(`SELECT slug, title, purpose, humans, agents, names_json, CASE WHEN ? THEN '[]' ELSE tasks_json END AS tasks_json, receipts_enabled, join_mode, join_token, set_at
+     FROM public_rooms WHERE slug=?`).get(native?1:0,slug);
+   if (!row) return null;
++  const experiment=native?researchPublicTasks(store,slug):null;
+   return {
+-    ...(native?{openAdmission:row.join_mode==='open',coverage:{tasks:{available:false},receipts:{available:false}}}:{}),
++    ...(native?{openAdmission:row.join_mode==='open',coverage:{tasks:{available:experiment.available},receipts:{available:false}}}:{}),
+     slug: row.slug,
+     title: row.title,
+     purpose: row.purpose,
+     counts: { humans: row.humans, agents: row.agents },
+     names: parseJson(row.names_json, []),
+-    tasks: native?[]:parseJson(row.tasks_json, []),
++    tasks: native?experiment.tasks:parseJson(row.tasks_json, []),
+     receiptsEnabled: !native&&row.receipts_enabled === 1,
+     joinMode: native&&row.join_mode === "open" ? "open" : row.join_mode === "link" && row.join_token ? "link" : "request",
+     joinToken: row.join_mode === "link" ? row.join_token : null,

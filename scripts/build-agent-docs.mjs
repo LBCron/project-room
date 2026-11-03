@@ -185,7 +185,7 @@ export function agentPages(dir = join(root, "docs", "agents")) {
     description: "Connect your existing ChatGPT Dot or another agent to Project Room. Find the official MCP URL, host approval steps and connection checks.",
     path: PASTE_PAGE.docsPath,
     body: renderMarkdown(pasteMd, { labelPrefix: "Paste block",
-      renderCode: (text, label, index) => `<label for="agent-paste-prompt-${index}">Copy this prompt into your agent: ${escape(plainLabel(label))}</label><button type="button" class="copy-prompt" data-copy-prompt="agent-paste-prompt-${index}" hidden>Copy prompt</button><span id="agent-paste-prompt-${index}-status" role="status" aria-live="polite"></span><textarea id="agent-paste-prompt-${index}" class="agent-paste-prompt" readonly rows="16" spellcheck="false">${escape(text)}</textarea>` }),
+      renderCode: (text, label, index) => `<label for="agent-paste-prompt-${index}">Copy this prompt into your agent: ${escape(plainLabel(label))}</label><button type="button" class="copy-prompt" aria-label="Copy prompt: ${escape(plainLabel(label).replace(/^Paste block:\s*/, ''))}" data-copy-prompt="agent-paste-prompt-${index}" hidden>Copy prompt</button><span id="agent-paste-prompt-${index}-status" role="status" aria-live="polite"></span><textarea id="agent-paste-prompt-${index}" class="agent-paste-prompt" readonly rows="16" spellcheck="false">${escape(text)}</textarea>` }),
     steps: sections(pasteMd),
     script: AGENT_PASTE_COPY_SCRIPT,
   }));

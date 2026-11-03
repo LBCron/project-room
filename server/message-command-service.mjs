@@ -88,6 +88,11 @@ export function assertMessageCommandReferences(store, roomId, state, command, ac
       fail(422, 'command_rejected', historyRef[1]);
     const floor = store.historyFloor(roomId, actorId);
     if (floor) {
+      // An archived target is absent from the projection but still needs the
+      // same history check before the archive-specific response can reveal it.
+      const archived = !target && ARCHIVED_REF_FIELDS[command.type] ? archivedMessageRow(store.db, roomId, targetId) : null;
+      if (archived && !messageInHistory({id: archived.message_id, createdAt: archived.created_at}, floor))
+        fail(422, 'command_rejected', historyRef[1]);
       if ((target && !messageInHistory(target, floor)) || (!target && command.type === T.MESSAGE_UNPINNED))
         fail(422, 'command_rejected', historyRef[1]);
     }

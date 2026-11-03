@@ -68,7 +68,7 @@ export function setPin(store, token, roomId, data, expectedSessionBinding = null
     const auth = store.authenticate(token, roomId, expectedSessionBinding);
     const native = isCurrentRoom(store.db, roomId);
     const room = native ? {state:{pins:readCurrentRecord(store.db,roomId,'metadata','pins')??[]}} : store.room(roomId);
-    if (native && !currentMessageMayBeVisible(store.db,roomId,messageId,auth.member.id)) fail(404, 'message_not_found', 'No such message in this room');
+    if (native && !currentMessageMayBeVisible(store.db,roomId,messageId,auth.member.id,undefined,readCurrentHistoryFloor(store.db,roomId,auth.member.id))) fail(404, 'message_not_found', 'No such message in this room');
     const message = native ? readCurrentMessage(store.db,roomId,messageId)?.value : messageRepository(store, roomId, room.state).get(messageId);
     if (native && (!pinVisibleToViewer(message??{}, auth.member.id) || !message || !messageInHistory(message,readCurrentHistoryFloor(store.db,roomId,auth.member.id)))) fail(404, 'message_not_found', 'No such message in this room');
     if (!message) fail(404, "message_not_found", "No such message in this room");

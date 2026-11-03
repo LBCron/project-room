@@ -54,7 +54,7 @@ export function readCurrentEventWindow(store,roomId,viewerId,{after=0,limit=100,
    const bytes=row.idBytes+row.bodyBytes+32;
    // Raw SQL work retains the 64KiB prefix and one legal first atom. The
    // projected envelope alone is charged to the shared protected JS budget.
-   if(selected.length&&sourceBytes+bytes>CURRENT_EVENT_SOURCE_BYTES)break;
+   if (selected.length && sourceBytes + bytes > CURRENT_EVENT_SOURCE_BYTES)break;
    const source=readCurrentEventEnvelope(db,roomId,row,b);
    sourceBytes+=bytes;selected.push({sequence:row.sequence,event:source.event});
   }

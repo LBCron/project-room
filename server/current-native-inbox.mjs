@@ -25,7 +25,7 @@ export function readCurrentNativeInbox(store,secret,roomId,{limit=50,after,older
       const m=JSON.parse(row.body),scalar=store.db.prepare('SELECT length(CAST(id AS BLOB)) AS idBytes,length(CAST(body AS BLOB)) AS bodyBytes FROM events WHERE room_id=? AND sequence=?').get(roomId,row.position);
       if(!scalar)throw new ServiceError(409,'current_room_context_unavailable','Recent message needs a bounded opening event');
       const bytes=scalar.idBytes+scalar.bodyBytes+32;
-      if(events.length&&sourceBytes+bytes>CURRENT_EVENT_SOURCE_BYTES){prefixTruncated=true;break;}
+      if (events.length && sourceBytes + bytes > CURRENT_EVENT_SOURCE_BYTES){prefixTruncated=true;break;}
       const source=readCurrentEventEnvelope(store.db,roomId,{sequence:row.position,...scalar},b),e=source.event;
       sourceBytes+=bytes;last=row;
       if(e.type!=='message.posted'||(e.data.messageId??e.id)!==m.id||e.actorId!==m.authorId||e.roomId!==roomId)throw Error('current_room_corrupt: recent opening identity differs');

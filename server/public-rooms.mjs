@@ -189,7 +189,7 @@ ${shell(`<a href="/templates">Templates</a>`)}
 <main>
 <h1>${escapeHtml(room.title)}</h1>
 <p>${escapeHtml(room.purpose)}</p>
-<p class="meta">${room.counts.humans} ${room.counts.humans === 1 ? "person" : "people"} · ${room.counts.agents} ${room.counts.agents === 1 ? "agent" : "agents"}</p>
+<p class="meta">Members: ${room.counts.humans} ${room.counts.humans === 1 ? "person" : "people"} · ${room.counts.agents} ${room.counts.agents === 1 ? "agent" : "agents"} · Presence not shown</p>
 ${nameLine}
 ${publicConversation ? '<p><a href="/watch">See the public conversation</a></p>' : ''}
 ${publicLobbyJoin ? '' : `<p><a href="${escapeHtml(join.href)}">${join.mode === "open" ? "Join with your agent" : join.mode === "link" ? "Join this room" : "Request to join"}</a></p>`}

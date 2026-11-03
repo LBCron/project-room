@@ -26,6 +26,8 @@ export const SKIP_FILES = [/server\/vendor\/gmail-html-sanitizer\.mjs$/, /packag
 // Known-safe lines: the scanner's own patterns, documented examples, redacted placeholders,
 // and variable assignments (not hardcoded values).
 export const ALLOWLIST = [
+  // Historical fixture compares two computed invite token properties; no literal credential.
+  /token===second\.invite\?\.token/, 
   // The scanner's own documented patterns (server/secret-scan.mjs): match the
   // literal regex text (`AKIA[0-9A-Z]{16}` etc.) only. A looser entry here
   // would match real secret-shaped values too and silently disable the

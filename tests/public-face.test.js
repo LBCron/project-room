@@ -246,3 +246,19 @@ test("mention handles stay escaped and unavailable members stay anonymous", () =
   assert.ok(html.includes("@&lt;b&gt;Eve&lt;/b&gt; and @member"));
   assert.ok(!html.includes("<b>Eve</b>") && !html.includes("Former Member") && !html.includes("&lt;@left&gt;"));
 });
+
+test("mention resolution never associates an active private member's raw ID with its name", () => {
+  const state = baseState();
+  state.members.privateOnly = member("privateOnly", "Private Participant");
+  state.messages.push(
+    { id: "private-post", authorId: "privateOnly", toMemberId: "owner", body: "Private history", createdAt: 14 },
+    { id: "public-mention", authorId: "owner", body: "<@alice> / <@privateOnly> / <@not-known>", createdAt: 15 });
+  const store = makeStore({ r1: state }), face = new PublicFace(store);
+  const { publicCode } = face.enable("r1", "owner");
+  assert.equal(face.faceByCode(publicCode).messages.at(-1).body, "@Alice / @member / @member");
+  const feed = face.feedByCode(publicCode);
+  assert.equal(feed.messages.at(-1).body, "@Alice / @member / @member");
+  assert.doesNotMatch(JSON.stringify(feed), /privateOnly|Private Participant|Private history/);
+  // A cursor may not turn authors from another page into a member-name lookup.
+  assert.equal(face.feedByCode(publicCode, { after: "m4", limit: 1 }).messages[0].body, "@member / @member / @member");
+});

@@ -61,6 +61,8 @@ const AGENT_ROOM_CREATE_BODY = Object.freeze({ required: true, content: { "appli
     kind: { type: "string", enum: ["personal", "organization"], default: "personal", description: "Optional. Defaults to personal." },
     displayName: { type: "string", maxLength: 80, description: "Optional. Defaults to the identity display name." },
     starter: { type: "boolean", default: true, description: "Optional. Whether to seed the room's starter work-claim task. Defaults to true." },
+    requestId: { type: "string", maxLength: 64, description: "Stable idempotency key when roomId is omitted." },
+    visibility: { type: "string", enum: ["open", "private"], default: "open", description: "New rooms are open for ordinary agent joining. Choose private to require an invitation or approval." },
   },
 } } } });
 // POST /api/access-requests: diagnoseArguments in http.mjs
@@ -156,6 +158,7 @@ export const DISCOVERABILITY_ROUTES = Object.freeze([
   route("/join.txt", ["GET"], "none", "Join prompt for paste-in enrollment.", "getJoinTxt"),
   route("/.well-known/agent.json", ["GET"], "none", "Machine-readable discovery card.", "getAgentJson"),
   route("/.well-known/agent-card.json", ["GET"], "none", "A2A-style agent card with endpoints.", "getAgentCard"),
+  route("/extensions/work-receipt/v1", ["GET", "HEAD"], "none", "Public work-receipt extension documentation; no room history or credentials.", "getWorkReceiptExtension", {operationIds:{GET:"getWorkReceiptExtension",HEAD:"headWorkReceiptExtension"}}),
   route("/a2a", ["POST"], "none", "A2A JSON-RPC (message/send, SendMessage): replies with how to join. No credentials, no room data.", "a2aSendMessage"),
   route("/.well-known/mcp", ["GET"], "none", "Hosted MCP server card (alias).", "getMcpWellKnown"),
   route("/.well-known/mcp.json", ["GET"], "none", "Hosted MCP server card.", "getMcpJson"),

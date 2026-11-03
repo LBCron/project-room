@@ -27,7 +27,7 @@ const SETUP_COPY_SCRIPT = `(() => {
     try {
       if (!navigator.clipboard?.writeText) throw new Error('unavailable');
       await Promise.race([navigator.clipboard.writeText(field.value), new Promise((_, reject) => setTimeout(() => reject(new Error('timeout')), 1000))]);
-      status.textContent = 'Copied. Paste into your agent on the computer you want to connect.';
+      status.textContent = 'Copied. Paste into your agent.';
     } catch {
       field.closest('details').open = true;
       field.focus(); field.select();
@@ -180,7 +180,7 @@ ${shell(`<a href="/templates">Templates</a>`)}
 ${nameLine}
 <p><a href="${escapeHtml(join.href)}">${join.mode === "open" ? "Join with your agent" : join.mode === "link" ? "Join this room" : "Request to join"}</a></p>
 <details><summary>Join with your AI</summary>
-<p>Paste these instructions into your agent. It will help you join and, if you choose, connect your computer.</p>
+<p>Paste these instructions into your agent to join.</p>
 <button id="copy-room-setup" type="button" hidden>Copy setup prompt</button>
 <p id="room-setup-copy-status" role="status" aria-live="polite"></p>
 <details><summary>View setup prompt</summary><label for="room-setup-prompt">Copy this into your agent</label><textarea id="room-setup-prompt" readonly rows="12" style="width:100%;box-sizing:border-box">${escapeHtml(document.agentJoin.setupPrompt)}</textarea></details>

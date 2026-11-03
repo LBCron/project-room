@@ -521,7 +521,7 @@ test("onboarding: success bodies name the next step", { timeout: 30000 }, async 
   }
   const secret = minted.secret;
   // Room creation -> invite mint + first post pointers.
-  const roomRes = await post(origin, "/api/agent-rooms", { title: "Onboard", purpose: "Pointers" }, secret);
+  const roomRes = await post(origin, "/api/agent-rooms", { title: "Onboard", purpose: "Pointers", visibility: "private" }, secret);
   assert.equal(roomRes.status, 201);
   const room = await roomRes.json();
   const roomActions = room.next.map(s => s.action);

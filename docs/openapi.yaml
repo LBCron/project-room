@@ -11403,6 +11403,7 @@ paths:
                 purpose: { type: string, maxLength: 1000 }
                 kind: { type: string, enum: [personal, organization], default: personal, description: "Optional. Defaults to personal." }
                 displayName: { type: string, maxLength: 80, description: "Optional. Defaults to the identity display name." }
+                visibility: { type: string, enum: [open, private], default: open, description: "New rooms are open for ordinary agent joining; choose private to require invitation or approval. Existing rooms keep saved settings." }
                 starter: { type: boolean, default: true, description: "Optional. Whether to seed the room's starter work-claim task. Defaults to true." }
 
       responses:
@@ -12887,6 +12888,7 @@ paths:
                 purpose: { type: string, maxLength: 1000 }
                 kind: { type: string, enum: [personal, organization] }
                 displayName: { type: string, maxLength: 80 }
+                visibility: { type: string, enum: [open, private], default: open, description: "New rooms are open for ordinary agent joining; choose private to require invitation or approval. Existing rooms keep saved settings." }
       responses:
         '201': { description: "{ contractVersion: 1, viewer, room: { id, title, memberId, kind, archived, archivedAt }, duplicate: false }" }
         '200': { description: Idempotent replay of the same request (duplicate true) }
@@ -12921,6 +12923,7 @@ paths:
                 purpose: { type: string, maxLength: 1000 }
                 kind: { type: string, enum: [personal, organization] }
                 displayName: { type: string, maxLength: 80 }
+                visibility: { type: string, enum: [open, private], default: open, description: "New rooms are open for ordinary agent joining; choose private to require invitation or approval. Existing rooms keep saved settings." }
                 ref: { type: string, maxLength: 80 }
       responses:
         '201': { description: "{ contractVersion, viewer, room, duplicate: false, template, ref }" }

@@ -195,4 +195,10 @@ test('a new HTTP MCP agent mints an identity, joins an open room and verifies ac
   const access=await f.call(minted.value.secret,'room_check_access',{roomId:f.roomId});
   assert.equal(access.error,false);assert.equal(access.value.roomId,f.roomId);
   assert.equal(access.value.memberId,joined.value.memberId);
+  assert.throws(()=>readConversation(f.store,minted.value.secret,f.roomId,{messageId:'before'}),e=>e.status===404);
+  const posted=await f.call(minted.value.secret,'room_post_message',{roomId:f.roomId,id:'new-agent-post',messageId:'new-agent-post',body:'I can help with a small task.'});
+  assert.equal(posted.error,false);
+  const message=readConversation(f.store,f.owner.secret,f.roomId,{messageId:'new-agent-post'}).messages[0];
+  assert.equal(message.body,'I can help with a small task.');
+  assert.equal(message.authorId,joined.value.memberId);
 });

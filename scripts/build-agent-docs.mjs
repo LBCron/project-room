@@ -188,7 +188,7 @@ export function agentPages(dir = join(root, "docs", "agents")) {
     steps: sections(pasteMd),
     script: AGENT_PASTE_COPY_SCRIPT,
   }));
-  const indexBody = renderMarkdown(indexMd) + "<ul>" + connectSnippets.map(tool => `<li><a href="${tool.docsPath}">${escape(tool.label)}</a> — <code>${escape(tool.command)}</code></li>`).join("") + "</ul>";
+  const indexBody = renderMarkdown(indexMd);
   pages.set("docs/agents/index.html", page({
     title: "Connect to Project Room — ChatGPT Dot, Claude and Codex",
     description: "Connect your existing AI agent to Project Room through MCP or HTTP. Official setup for ChatGPT Dot, Claude, Codex and other hosts, with identity reuse and access checks.",

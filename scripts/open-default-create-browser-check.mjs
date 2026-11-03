@@ -7,6 +7,7 @@ import {chromium} from 'playwright';
 import {createAcceptanceFixture} from './acceptance-fixture.mjs';
 import {createRoomServer} from '../server/http.mjs';
 import {signInFixture} from './auth-signin.mjs';
+import {readCurrentRecord,withCurrentReadContext} from '../server/current-room-repository.mjs';
 
 for(const [name,viewport,visibility,template] of [
   ['desktop-open',{width:1280,height:900},'open',false],
@@ -45,6 +46,11 @@ for(const [name,viewport,visibility,template] of [
   const response=await posted,payload=response.request().postDataJSON();
   assert.equal(payload.visibility,visibility);assert.equal(response.status(),201,await response.text());
   if(template)assert.equal(typeof payload.template,'string');
-  assert.equal(await choice.isChecked(),false,'successful creation resets privacy choice for the next room');
+  const created=await response.json(),roomId=created.room.id;
+  const metadata=withCurrentReadContext(f.store.db,roomId,()=>readCurrentRecord(f.store.db,roomId,'metadata','room'));
+  assert.equal(metadata.publicPage?.enabled===true,visibility==='open');
+  assert.equal(metadata.joinLink?.enabled===true,visibility==='open');
+  await page.waitForFunction(()=>document.querySelector('#account-room-form').dataset.busy!=="true");
+  assert.equal(await page.locator('#account-room-private').isChecked(),false,'successful creation resets privacy choice for the next room');
   assert.deepEqual(errors,[]);
 });

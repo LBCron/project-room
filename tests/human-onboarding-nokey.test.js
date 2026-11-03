@@ -62,9 +62,12 @@ test("human guide documents the no-key 'Use my AI → Paste AI draft' path first
 });
 
 test("human guide keeps a live agent seat honest and one line", () => {
-  const connect = section(onboarding, /Connect your AI/i);
-  assert.ok(/invite/i.test(connect), "says a live seat needs an invite from the owner");
-  assert.ok(connect.includes("CONNECT-AGENT-QUICKSTART.md"),
+  // The B3 fold moved the live-seat paragraph out of "Connect your AI"
+  // (now the no-key paste path only) into its own owner-side section;
+  // the honest-seat contract follows the content to its new section.
+  const seat = section(onboarding, /Give an agent its own seat/i);
+  assert.ok(/invite/i.test(seat), "says a live seat needs an invite from the owner");
+  assert.ok(seat.includes("CONNECT-AGENT-QUICKSTART.md"),
     "points the technical setup at the quickstart doc, not at JOINING.md");
 });
 

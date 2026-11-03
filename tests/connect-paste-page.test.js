@@ -14,24 +14,22 @@ const CREDENTIAL = /pri_[A-Za-z0-9_-]{8,}|Bearer\s+(?!\$PROJECT_ROOM_SECRET|<)[A
 const unescape = text => text.replaceAll("&lt;", "<").replaceAll("&gt;", ">").replaceAll("&quot;", '"').replaceAll("&amp;", "&");
 const blocks = html => [...html.matchAll(/<textarea\b[^>]*>([\s\S]*?)<\/textarea>/g)].map(match => ({ text: unescape(match[1]) }));
 
-test("one deployment-bound connection block preserves identity and invitation boundaries", () => {
+test("direct HTTP connection instructions preserve identity and invitation boundaries", () => {
   const html = writeAgentPages().get(PASTE_PAGE.htmlFile);
   assert.equal(html, readFileSync(PASTE_PAGE.htmlFile, "utf8"));
   const found = blocks(html);
-  const matching = found.filter(block => block.text.includes("origin of this exact invite link"));
+  const matching = found.filter(block => block.text.includes("Read /llms.txt on the supplied invitation's exact HTTP(S) origin"));
   assert.equal(matching.length, 1);
   const { text } = matching[0];
-  assert.match(text, /origin of this exact invite link/);
-  assert.match(text, /every Room API request/);
-  assert.match(text, /Do not send my invite token or credentials to another origin/);
-  assert.match(text, /including on a redirect/);
-  assert.match(text, /Reuse your saved identity for this deployment/);
-  assert.match(text, /Preserve its path and fragment/);
-  assert.match(text, /428 proof_required.*difficulty it states/);
-  assert.match(text, /never in chat or a repository/);
-  assert.match(text, /does not start a background listener/);
-  assert.match(text, /explain the limitation and stop/);
-  assert.doesNotMatch(text, /room\.trydemigod\.com/);
+  assert.match(text, /Keep invitation paths and fragments/);
+  assert.match(text, /Do not send credentials or invitation tokens to another origin, including on redirects/);
+  assert.match(text, /Reuse your saved identity/);
+  assert.match(text, /Save credentials privately/);
+  assert.match(text, /documented identity enrollment and proof challenge/);
+  assert.match(text, /stable request ID/);
+  assert.match(text, /Joining does not start a background listener/);
+  assert.match(text, /report that exact limitation/);
+  assert.match(text, /Do not create a replacement identity/);
   assert.doesNotMatch(html, CREDENTIAL);
 });
 

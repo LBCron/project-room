@@ -290,6 +290,29 @@ function rowToPublic(row) {
 
 const RECEIPT_COLUMNS = `id, title, source, origin_room_id, room_id, room_title, agents_json, humans_json, pull_request, merged_at, verification_state, hashes_json, at, start_href`;
 
+// A public-work receipt lives in two stores: this mirror, which the
+// HTML faces serve, and public_work_receipts, which the API face
+// serves. The two are written together at submission, but nothing
+// keeps them in agreement afterwards — restore skew between the
+// tables, a backfill that has not yet projected a legacy receipt,
+// manual repair — and the faces then disagreed about whether the
+// receipt is available at all (A6): a mirror-only row served in full
+// here while the API face 404'd, a source-only row the reverse. Fail
+// closed, this module's doctrine (and rederivePublicReceipt's): a
+// 'public-work' row is public only while its source row exists. The
+// other sources carry no public_work_receipts row by design and are
+// untouched. A store predating the public-work tables can hold no
+// 'public-work' rows, so the fragment is omitted there — the standing
+// degrade on a predating schema, not a fail-closed throw
+// (publicWorkTablesReadable's own present-but-unreadable errors still
+// propagate, as they do for every other leg).
+const SOURCE_AGREEMENT = `(public_receipts.source <> 'public-work'
+  OR EXISTS (SELECT 1 FROM public_work_receipts pwr WHERE pwr.receipt_id = public_receipts.id))`;
+
+function sourceAgreementSql(db) {
+  return publicWorkTablesReadable(db) ? ` AND ${SOURCE_AGREEMENT}` : "";
+}
+
 function insertReceipt(store, row) {
   // agent_ids_json rides outside RECEIPT_COLUMNS (the read list): the
   // credited identity ids are bookkeeping for the directory count, not
@@ -783,7 +806,7 @@ function directoryCounts(store, agentId, identityId) {
     try {
       const visibility = receiptVisibilitySqlFor(store.db);
       const row = store.db.prepare(`SELECT COUNT(*) AS n FROM public_receipts
-        WHERE ${visibility} AND EXISTS (
+        WHERE ${visibility}${sourceAgreementSql(store.db)} AND EXISTS (
           SELECT 1 FROM json_each(COALESCE(public_receipts.agent_ids_json, '[]'))
           WHERE value IN (SELECT value FROM json_each(?)))`).get(JSON.stringify(keys));
       receiptCount = row?.n ?? 0;
@@ -953,6 +976,11 @@ export function queryPublicReceipts(store, { room = null, agent = null, cursor =
   // by hand, so it must name the leg itself or an opted-out room's
   // receipts would serve here while hidden everywhere else, R08-F1).
   if (recordedSettingReadable(store.db)) visibility.push(recordedOptOutReceiptSql({ taskRoomLeg }));
+  // The source-agreement leg (A6): a 'public-work' row whose source
+  // record is gone is not a receipt this list could serve, either as
+  // a page row or as a cursor position. taskRoomLeg is exactly the
+  // public-work-tables probe the fragment degrades on.
+  if (taskRoomLeg) visibility.push(SOURCE_AGREEMENT);
   let after = "";
   const afterParams = [];
   if (cursor != null) {
@@ -985,7 +1013,7 @@ export function publicReceiptById(store, id) {
   if (typeof id !== "string" || !PUBLIC_RECEIPT_ID.test(id)) return null;
   if (LOT_RECEIPT_ID.test(id)) return publicLotReceiptById(store, id);
   const visibility = receiptVisibilitySqlFor(store.db);
-  const row = store.db.prepare(`SELECT ${RECEIPT_COLUMNS} FROM public_receipts WHERE id=? AND ${visibility}`).get(id);
+  const row = store.db.prepare(`SELECT ${RECEIPT_COLUMNS} FROM public_receipts WHERE id=? AND ${visibility}${sourceAgreementSql(store.db)}`).get(id);
   if (!row) return null;
   const pub = receiptWithOutcome(store, row);
   if (typeof id === "string" && id.startsWith("pwr_")) {
@@ -1278,14 +1306,14 @@ export function publicLotReceiptById(store, id) {
 
 export function collectPublicReceipts(store) {
   const visibility = receiptVisibilitySqlFor(store.db);
-  return store.db.prepare(`SELECT ${RECEIPT_COLUMNS} FROM public_receipts WHERE ${visibility} ORDER BY at DESC, id ASC`).all()
+  return store.db.prepare(`SELECT ${RECEIPT_COLUMNS} FROM public_receipts WHERE ${visibility}${sourceAgreementSql(store.db)} ORDER BY at DESC, id ASC`).all()
     .map(row => receiptWithOutcome(store, row));
 }
 
 export function listPublicReceiptSitemap(store, limit = 1000) {
   const cap = Number.isInteger(limit) && limit > 0 ? Math.min(limit, 1000) : 1000;
   const visibility = receiptVisibilitySqlFor(store.db);
-  return store.db.prepare(`SELECT id, at FROM public_receipts WHERE ${visibility} ORDER BY at DESC, id ASC LIMIT ?`).all(cap).map(row => ({
+  return store.db.prepare(`SELECT id, at FROM public_receipts WHERE ${visibility}${sourceAgreementSql(store.db)} ORDER BY at DESC, id ASC LIMIT ?`).all(cap).map(row => ({
     path: `/receipts/${row.id}`,
     lastmod: typeof row.at === "string" ? row.at.slice(0, 10) : null,
   }));
@@ -1355,7 +1383,7 @@ export function proofLevelOf(receipt) {
 export function roomProofRows(store, slug) {
   const visibility = receiptVisibilitySqlFor(store.db);
   return store.db.prepare(`SELECT ${RECEIPT_COLUMNS} FROM public_receipts
-    WHERE ${visibility} AND (room_id=? OR (origin_room_id=? AND source IN ('work-claim','work-item')))
+    WHERE ${visibility}${sourceAgreementSql(store.db)} AND (room_id=? OR (origin_room_id=? AND source IN ('work-claim','work-item')))
     ORDER BY at DESC, id ASC`).all(slug, slug).map(row => receiptWithOutcome(store, row));
 }
 
@@ -1372,7 +1400,7 @@ export function roomPageReceipts(store, slug, receiptsEnabled, { limit = 5, afte
   params.push(cap);
   const visibility = receiptVisibilitySqlFor(store.db);
   return store.db.prepare(`SELECT id, title, at FROM public_receipts
-    WHERE ${visibility} AND (room_id=? OR (?=1 AND origin_room_id=? AND source IN ('work-claim','work-item')))${cursor}
+    WHERE ${visibility}${sourceAgreementSql(store.db)} AND (room_id=? OR (?=1 AND origin_room_id=? AND source IN ('work-claim','work-item')))${cursor}
     ORDER BY at DESC, id ASC LIMIT ?`).all(...params);
 }
 

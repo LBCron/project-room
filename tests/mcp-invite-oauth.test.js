@@ -509,5 +509,12 @@ test('independent review: public OAuth stays room-scoped and respects guest hist
  const contribution=await f.rpc(token,'room_post_message',{id:'independent-help',messageId:'independent-help',body:'I can review the setup instructions and report one improvement.'});assert.equal(contribution.status,200,JSON.stringify(contribution.body));assert.ok(!contribution.body.error&&!contribution.body.result?.isError,JSON.stringify(contribution.body));
  const received=await f.rpc(token,'room_read_messages',{after:0});assert.match(JSON.stringify(received.body),/I can review the setup instructions/);
  const settings=f.store.db.prepare('SELECT public_code FROM room_public_settings WHERE room_id=?').get(room);const face=f.store.publicFace.faceByCode(settings.public_code);assert.ok(face.messages.some(m=>m.body==='I can review the setup instructions and report one improvement.'));
+ const memberId=f.store.db.prepare('SELECT member_id FROM oauth_invite_grants WHERE room_id=?').get(room).member_id;let member=f.store.roomAuthority(room,{memberId}).members[memberId];f.store.command(owner,room,{id:'grant-contribution',type:'member.access_changed',data:{memberId,expectedMemberRevision:member.revision,active:true,permissions:['accept_work','complete_work']}});
+ f.store.command(owner,room,{id:'assigned-work',type:'work.proposed',data:{workItemId:'assigned-work',title:'Check one sentence',definitionOfDone:'A clear suggestion',accountableMemberId:memberId,mode:'read'}});
+ const accepted=await f.rpc(token,'room_accept_work',{workItemId:'assigned-work'});assert.ok(!accepted.body.error&&!accepted.body.result?.isError,JSON.stringify(accepted.body));
+ member=f.store.roomAuthority(room,{memberId}).members[memberId];f.store.command(owner,room,{id:'remove-contribution',type:'member.access_changed',data:{memberId,expectedMemberRevision:member.revision,active:true,permissions:[]}});
+ const start=await f.rpc(token,'room_start_work',{workItemId:'assigned-work'});assert.ok(start.status!==200||start.body.error||start.body.result?.isError,JSON.stringify(start.body));
+ const chat=await f.rpc(token,'room_post_message',{id:'after-grant-removal',body:'Chat still works after work access is removed.'});assert.ok(!chat.body.error&&!chat.body.result?.isError,JSON.stringify(chat.body));
+
 
 });

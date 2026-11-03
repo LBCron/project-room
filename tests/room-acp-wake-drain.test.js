@@ -17,6 +17,7 @@ function fixture(pollImpl) {
   });
   bridge.room.heartbeat = async () => ({ listener: { acquired: true, fencingToken: 'tok', leaseExpiresAt: Date.now() + 60000 } });
   bridge.room.poll = pollImpl;
+  bridge.minPollIntervalMs = 0;
   bridge.refreshRoom = async () => {};
   const accepted = [];
   bridge.accept = async signal => { accepted.push(signal.signalId); };
@@ -24,6 +25,24 @@ function fixture(pollImpl) {
 }
 
 const sig = id => ({ signalId: id, messageId: `m-${id}`, kind: 'mention' });
+
+test('continuation pages are paced and an interrupted wait preserves the cursor', async () => {
+  const times=[];
+  const {bridge}=fixture(async ({cursor})=>{times.push(Date.now());return cursor?{pendingWakes:[],more:false}:{pendingWakes:[],more:true,nextCursor:'next'};});
+  bridge.minPollIntervalMs=40;
+  await bridge.pollOnce();assert.equal(times.length,2);assert.ok(times[1]-times[0]>=35,'each page must respect the interval');
+  bridge.room.poll=async()=>({pendingWakes:[],more:true,nextCursor:'pending'});
+  bridge.lastPollAt=0;const running=bridge.pollOnce();
+  while(bridge.wakeCursor!=='pending')await new Promise(resolve=>setTimeout(resolve,1));
+  bridge.stop();await running;assert.equal(bridge.wakeCursor,'pending');
+});
+
+test('continuation rechecks the lease and preserves its cursor when ownership is lost', async () => {
+  let calls=0;
+  const {bridge}=fixture(async()=>{calls++;return {pendingWakes:[],more:true,nextCursor:'next'};});
+  let leases=0;bridge.lease=async()=>++leases===1;
+  await bridge.pollOnce();assert.equal(calls,1);assert.equal(bridge.wakeCursor,'next');
+});
 
 test('pollOnce follows nextCursor until the wake queue is drained', async () => {
   const cursors = [];

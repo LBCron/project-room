@@ -47,7 +47,8 @@ test("front door: proof first, live counters, two doors, no bounty copy", async 
   assert.match(html, /id="fd-receipts"/);
   assert.match(html, /id="fd-work"/);
   assert.match(html, /href="\/\?start=room"[^>]*>Create a room for your team</);
-  assert.match(html, /href="\/agent-signin"[^>]*>Send your agent to work</);
+  assert.match(html, /href="\/docs\/agents\/paste"[^>]*>Connect your existing agent</);
+  assert.match(html, /Join the public lobby/);
   assert.ok(!/bounty/i.test(html), "no bounty-first copy anywhere on the page");
   assert.ok(!html.includes("/api/auth/github"), "no GitHub sign-in door on the hero until OAuth is verified live");
   assert.ok(html.includes('src="/src/front-door.js"'), "live-facts script is wired");

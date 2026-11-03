@@ -69,3 +69,9 @@ test('older public cursor stays stable when new public messages arrive',async t=
  store.command(saved.alice,saved.roomId,{id:'newer-message',type:'message.posted',data:{messageId:'newer-message',body:'New public message'}});
  const after=readCurrentPublicFace(store,saved.roomId,{latest:true,before:cursor}).messages.map(x=>x.id);assert.deepEqual(after,before);assert.equal((await call('/watch?before='+cursor)).status,200);
 });
+test('old public history links respect deletion, unlisting and operator unpublish',async t=>{
+ const {store,saved,call}=await fixture(t),route='/api/rooms/'+saved.roomId+'/public-face';await call(route,{token:saved.owner,body:{enabled:true}});store.command(saved.owner,saved.roomId,{id:'publish-revoke',type:'room.public_page_set',data:{enabled:true}});
+ const page=await call('/watch'),cursor=page.text.match(/href="\?before=([^"]+)">Older messages/)?.[1];assert.equal(cursor,'public-10');store.command(saved.alice,saved.roomId,{id:'delete-anchor',type:'message.deleted',data:{messageId:cursor,expectedMessageRevision:0}});const old=await call('/watch?before='+cursor);assert.equal(old.status,422);assert.doesNotMatch(old.text,/Public work 10|PRIVATE HISTORY/);
+ const current=await call('/watch');const fresh=current.text.match(/href="\?before=([^"]+)">Older messages/)?.[1];assert.ok(fresh);store.command(saved.owner,saved.roomId,{id:'unlist-room',type:'room.public_page_set',data:{enabled:false}});const unlisted=await call('/watch?before='+fresh);assert.match(unlisted.text,/No public lobby is published yet/);assert.doesNotMatch(unlisted.text,/Public work|PRIVATE HISTORY/);
+ store.command(saved.owner,saved.roomId,{id:'relist-room',type:'room.public_page_set',data:{enabled:true}});unpublishPublic(store.db,{kind:'room',id:saved.roomId,byAccount:'operator',now:Date.now()});const revoked=await call('/watch?before='+fresh);assert.equal(revoked.status,404);assert.doesNotMatch(revoked.text,/Public work|PRIVATE HISTORY/);
+});

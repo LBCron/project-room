@@ -100,6 +100,11 @@ export function installAgentConnections({ client, getState }) {
   const catalogButtons = () => $("#agent-type-catalog")?.querySelectorAll("[data-agent-type], [data-roster]")
     ?? $("#agent-roster")?.querySelectorAll("[data-agent-type], [data-roster]")
     ?? [];
+  function showCatalogChoice(id = null) {
+    for (const button of catalogButtons()) {
+      button.setAttribute("aria-pressed", String(Boolean(id) && (button.dataset.agentType || button.dataset.roster) === id));
+    }
+  }
   const ACCESS_HINT = {
     chat: "Can read this room’s history and post messages.",
     contribute: "Can read this room, post messages, and contribute work.",
@@ -212,7 +217,7 @@ export function installAgentConnections({ client, getState }) {
   }
   function reset() {
     flow++; listVersion++; existingChoices = []; existingPending = null; existingBox.hidden = true; owner = null; generation = null; ownerRevision = null; pending = null; forget(); busy = false;
-    conceal(); form.reset(); rosterId = null; $("#agent-other-types").open = false;
+    conceal(); form.reset(); rosterId = null; showCatalogChoice(); $("#agent-other-types").open = false;
     if ($("#agent-roster-hint")) $("#agent-roster-hint").textContent = "";
     if ($("#agent-import-route")) $("#agent-import-route").textContent = "";
     list.replaceChildren(); status(""); render(); dialog.close();
@@ -398,7 +403,7 @@ export function installAgentConnections({ client, getState }) {
   $("#agent-retry").addEventListener("click", () => { void submit(); });
   $("#agent-connect-done").addEventListener("click", () => {
     if (!busy && !copying && !existingPending) {
-      forget(); form.reset(); rosterId = null;
+      forget(); form.reset(); rosterId = null; showCatalogChoice();
       if ($("#agent-roster-hint")) $("#agent-roster-hint").textContent = "";
       if ($("#agent-import-route")) $("#agent-import-route").textContent = "";
       describeRoute(); status(""); render(); catalogButtons()[0]?.focus();
@@ -408,6 +413,7 @@ export function installAgentConnections({ client, getState }) {
     if (busy || pending || existingPending || setup) return;
     const row = catalogSelection(id) || rosterSelection(id);
     if (!row) return;
+    showCatalogChoice(id);
     $("#agent-connect-name").value = row.name;
     $("#agent-connect-access").value = row.access;
     if ($("#agent-connect-route")) $("#agent-connect-route").value = row.route;
@@ -419,6 +425,7 @@ export function installAgentConnections({ client, getState }) {
     }
   }
   for (const button of catalogButtons()) {
+    button.setAttribute("aria-pressed", "false");
     button.addEventListener("click", () => {
       applyCatalogChoice(button.dataset.agentType || button.dataset.roster);
     });

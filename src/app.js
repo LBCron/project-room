@@ -618,6 +618,8 @@ const client = new RoomClient({
     resultCopyUI?.reset();
     remindersUI?.reset();
     remindersFeature.reset(); reminderClicks.cancel();
+    pairingFeature.reset();
+    humanPushFeature.reset();
     resetNotifications();
     resetAttention();
     // JDOT-MEMBER-PERMS-UI begin
@@ -7135,6 +7137,7 @@ function renderNotifications() {
   }).join("") || (owned && feed && !notificationError ? `<li class="rb-empty">${feed.nextBefore ? 'No notifications in this part of the history.' : feed.pageBefore !== null ? 'No older notifications.' : 'Nothing new for you.'}</li>` : ""));
   loadHumanPushIfNeeded();
 }
+const humanPushEligible = () => Boolean(state) && ownsNotifications(notificationOwner) && client.session?.member?.kind !== "agent";
 const humanPushFeature = onDemand({ label: "notification settings", specifier: "./human-push.js",
   install: ({ installHumanPush }) => (humanPushUi = installHumanPush({
   client,
@@ -7145,7 +7148,7 @@ const humanPushFeature = onDemand({ label: "notification settings", specifier: "
     mention: $("#human-push-pref-mention"),
     dm: $("#human-push-pref-dm")
   },
-  eligible: () => Boolean(state) && ownsNotifications(notificationOwner) && client.session?.member?.kind !== "agent"
+  eligible: humanPushEligible
 })) });
 // Push settings live in the catch-up dialog. Load them when it opens, or at
 // once when this browser already granted notifications, so an existing push
@@ -7153,6 +7156,7 @@ const humanPushFeature = onDemand({ label: "notification settings", specifier: "
 function loadHumanPushIfNeeded() {
   if (humanPushUi) { humanPushUi.refresh(); return; }
   if (!state) return;
+  if (!humanPushEligible()) return;
   if (globalThis.Notification?.permission === "granted" || $("#catchup-dialog")?.open)
     void humanPushFeature.ensure().then(view => view?.refresh());
 }

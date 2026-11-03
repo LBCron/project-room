@@ -1,4 +1,5 @@
 import {measureFullProofResearch,ProofBudgetExceededResearch,ProofIntegrityErrorResearch} from './full-stream-accounting-research.mjs';
+import {readCurrentEventEnvelope} from './current-event-envelope.mjs';
 import {makeRoutingWitnessResearch,checkRoutingWitnessResearch} from './message-routing-witness-research.mjs';
 import {syncCurrentRoomPublication} from './public-read-model.mjs';
 import {verifyRoomAssistantIndexes} from './room-assistant-schema.mjs';
@@ -226,6 +227,7 @@ function charge(b,n,rows=1) {
   if(b.bytes>MAX_INPUT||b.records>(b.maxRecords??200))refuse('Current record context exceeds bounded input; use a smaller addressed request');
 }
 export const chargeCurrentReadBudget=(b,bytes,records=1)=>charge(b,bytes,records);
+export const remainingCurrentReadBytes=b=>Math.max(0,MAX_INPUT-(b?.bytes??0));
 function receipt(db,id,b) {
   if(b.receipts.has(id))return b.receipts.get(id);
   // Audit units retain independent input accounting while reusing at most four
@@ -1398,12 +1400,15 @@ export function readCurrentWorkSummaryForViewer(db,roomId,id,viewerId,b=contextB
 // refuse instead of scanning history or inventing a visible cursor.
 export function currentVisibleHorizon(store,roomId,viewerId,head) {
   const db=store.db,b=contextBudgets.get(db)??budget();
-  const rows=db.prepare('SELECT sequence,id,length(CAST(body AS BLOB)) AS bytes FROM events WHERE room_id=? AND sequence<=? ORDER BY sequence DESC LIMIT 16').all(roomId,head);
+  const rows=db.prepare('SELECT sequence,length(CAST(id AS BLOB)) AS idBytes,length(CAST(body AS BLOB)) AS bodyBytes FROM events WHERE room_id=? AND sequence<=? ORDER BY sequence DESC LIMIT 16').all(roomId,head);
   charge(b,rows.length*64,rows.length);
+  let examined=0,sourceBytes=0,sourceLimit=65536,largeSource=false;
   for(const row of rows) {
-    if(row.bytes>MAX_RECORD)refuse('Latest visible cursor requires a bounded event envelope');
-    charge(b,row.bytes);
-    const event=JSON.parse(db.prepare('SELECT body FROM events WHERE room_id=? AND sequence=?').get(roomId,row.sequence).body);
+    const bytes=row.idBytes+row.bodyBytes+32;
+    if(bytes>65536&&!largeSource){sourceLimit+=bytes;largeSource=true;}
+    if(sourceBytes+bytes>sourceLimit)refuse('Visible cursor needs a qualified bounded continuation beyond the excluded tail');
+    const event=readCurrentEventEnvelope(db,roomId,row,b).event;
+    sourceBytes+=bytes;examined++;
     if(event.type==='message.posted') {
       if(event.data?.toMemberId&&event.actorId!==viewerId&&event.data.toMemberId!==viewerId)continue;
     } else if(['message.edited','message.deleted','message.redacted','poll.voted','message.pinned','message.unpinned'].includes(event.type)) {

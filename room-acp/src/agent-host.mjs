@@ -50,18 +50,24 @@ export class AgentHost {
     // After a restart, resume the thread's saved session when the agent can.
     const saved = this.savedSessions?.get(threadKey);
     if (saved && this.capabilities?.loadSession) {
+      let loaded = false;
       try {
         const recorder = { update() {} }; // replayed history is not re-posted
         this.recorders.set(saved, recorder);
         await this.process.peer.request("session/load", { sessionId: saved, cwd: this.cwd, mcpServers: [] }, { timeoutMs });
-        this.recorders.delete(saved);
+        loaded = true;
+      } catch (error) { this.log(`could not resume the saved session (${error.message}); starting fresh`); }
+      finally { this.recorders.delete(saved); }
+      if (loaded) {
+        // Mode refusal is not a load failure: never fall back or prompt past it.
+        if (this.mode) await this.process.peer.request("session/set_mode", { sessionId: saved, modeId: this.mode }, { timeoutMs: 15000 });
         this.sessions.set(threadKey, saved); this.threadOf.set(saved, threadKey);
         return { sessionId: saved, created: false, loaded: true };
-      } catch (error) { this.recorders.delete(saved); this.log(`could not resume the saved session (${error.message}); starting fresh`); }
+      }
     }
     const { sessionId } = await this.process.peer.request("session/new", { cwd: this.cwd, mcpServers: [] }, { timeoutMs });
     if (typeof sessionId !== "string" || !sessionId.trim()) throw new Error("ACP agent returned no usable session ID");
-    if (this.mode) await this.process.peer.request("session/set_mode", { sessionId, modeId: this.mode }, { timeoutMs: 15000 }).catch(error => this.log(`set_mode ${this.mode} failed: ${error.message}`));
+    if (this.mode) await this.process.peer.request("session/set_mode", { sessionId, modeId: this.mode }, { timeoutMs: 15000 });
     this.sessions.set(threadKey, sessionId); this.threadOf.set(sessionId, threadKey);
     this.savedSessions?.set(threadKey, sessionId);
     return { sessionId, created: true };

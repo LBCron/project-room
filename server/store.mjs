@@ -4513,7 +4513,7 @@ this.slaBreachAlerts = new SlaBreachAlertJournal(this); // Task 26: durable in-a
       const access = this.authenticateAccountAccessKey(accountAccessKey);
       const revision = expectedRevision + 1;
       this.db.prepare(`UPDATE account_session_slots SET revision=?,account_id=?,account_auth_epoch=?,parent_credential_hash=?,authenticated_until=?,login_method_kind='access-key',login_method_ref=NULL
-        WHERE hash=? AND revision=?`).run(revision, access.account.id, access.account.authEpoch, access.credentialHash, Math.min(slot.expiresAt, access.expiresAt, this.now() + 8 * 3600000), slot.credentialHash, expectedRevision);
+        WHERE hash=? AND revision=?`).run(revision, access.account.id, access.account.authEpoch, access.credentialHash, Math.min(slot.expiresAt, access.expiresAt, this.now() + 30 * 86400000), slot.credentialHash, expectedRevision);
       // Switching browser identity and retiring its former Room credential are one
       // commit. A storage failure must not report a rejected login after switching.
       if (revokeRoomToken !== null) {
@@ -4543,7 +4543,7 @@ this.slaBreachAlerts = new SlaBreachAlertJournal(this); // Task 26: durable in-a
       const account = this.account(accountId);
       if (!account.active) fail(403, "access_denied", "Active account required");
       const revision = expectedRevision + 1;
-      const authenticatedUntil = Math.min(slot.expiresAt, this.now() + 8 * 3600000);
+      const authenticatedUntil = Math.min(slot.expiresAt, this.now() + 30 * 86400000);
       const parentCredentialHash = hash(this.insertAccountCredential(accountId, authenticatedUntil));
       // CX4: persist the verified method on the slot itself (bounded,
       // public data only — kind + the ref the login already treats as a
@@ -4619,7 +4619,7 @@ this.slaBreachAlerts = new SlaBreachAlertJournal(this); // Task 26: durable in-a
       // The slot table requires a parent credential when an account is set.
       // Record the Google login as an account credential (the token is never
       // exposed; the verified Google subject is the credential).
-      const authenticatedUntil = Math.min(slot.expiresAt, this.now() + 8 * 3600000);
+      const authenticatedUntil = Math.min(slot.expiresAt, this.now() + 30 * 86400000);
       const parentCredentialHash = hash(this.insertAccountCredential(accountId, authenticatedUntil));
       this.db.prepare(`UPDATE account_session_slots SET revision=?,account_id=?,account_auth_epoch=?,parent_credential_hash=?,authenticated_until=?,login_method_kind='google',login_method_ref=NULL
         WHERE hash=? AND revision=?`).run(revision, accountId, accountAuthEpoch, parentCredentialHash,

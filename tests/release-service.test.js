@@ -23,7 +23,7 @@ test("account login is bounded by the existing browser slot and still rejects it
     const slot = store.createAccountSessionSlot(lifetime);
     const start = store.now();
     const auth = store.loginAccountSession(slot.token, key, slot.session.sessionRevision);
-    assert.equal(auth.expiresAt, Math.min(slot.session.expiresAt, start + 8 * 3600000));
+    assert.equal(auth.expiresAt, Math.min(slot.session.expiresAt, store.authenticateAccountAccessKey(key).expiresAt, start + 30 * 86400000));
     assert.equal(auth.authenticatedUntil, auth.expiresAt);
     if (lifetime === 60000) {
       advance(lifetime);
@@ -48,4 +48,33 @@ test("snapshot and return brief request read-only transactions and never acknowl
   store.revoke(owner);
   for (const read of [() => store.snapshot(owner, "commons"), () => store.returnBrief(owner, "commons")])
     assert.throws(read, /revoked/);
+});
+
+test("verified account sessions last beyond eight hours and still honor sign out and slot expiry", t => {
+  const { store, owner, advance } = fixture(t);
+  const accountId = store.authenticate(owner).account.id;
+  const methodSlot = store.createAccountSessionSlot();
+  const method = store.loginAccountSessionWithMethod(methodSlot.token, accountId, 0, { method: { kind: "password" } });
+  const googleSlot = store.createAccountSessionSlot();
+  const google = store.loginAccountSessionWithGoogle(googleSlot.token, "123456789", 0);
+  assert.equal(method.expiresAt, methodSlot.session.expiresAt);
+  assert.equal(google.expiresAt, googleSlot.session.expiresAt);
+  advance(9 * 3600000);
+  assert.equal(store.authenticateAccountSession(methodSlot.token).account.id, accountId);
+  assert.equal(store.authenticateAccountSession(googleSlot.token).account.id, google.account.id);
+  store.logoutAccountSession(methodSlot.token, method.sessionRevision);
+  assert.throws(() => store.authenticateAccountSession(methodSlot.token), /expired|revoked|ended/);
+  advance(30 * 86400000);
+  assert.throws(() => store.authenticateAccountSession(googleSlot.token), /expired|revoked|ended/);
+});
+
+test("account-key sessions never outlive their parent credential, including guest keys", t => {
+  const { store, owner, advance } = fixture(t);
+  const accountId = store.authenticate(owner).account.id;
+  const key = store.insertAccountCredential(accountId, store.now() + 8 * 3600000);
+  const slot = store.createAccountSessionSlot();
+  const session = store.loginAccountSession(slot.token, key, 0);
+  assert.equal(session.expiresAt, store.now() + 8 * 3600000);
+  advance(8 * 3600000);
+  assert.throws(() => store.authenticateAccountSession(slot.token), /expired|revoked|ended/);
 });

@@ -49,7 +49,7 @@ async function read(path, signal, asText = false, input) {
   return asText ? body : JSON.parse(body);
 }
 function paintList() {
-  list.innerHTML = offers.map(offer => `<li><button class="offer-card" type="button" data-offer="${escape(offer.id)}" ${selectedId === offer.id ? 'aria-current="true"' : ''}><span class="card-top"><span class="kind">${escape(offer.kind)}</span><span class="reward-chip">${offer.reward.kind === 'unpaid' ? '' : 'Proposed '}${escape(amount(offer.reward))}${offer.reward.basis === 'pool' ? ' pool' : ''}</span></span><span class="card-title">${escape(offer.title)}</span><p>${escape(offer.summary)}</p><span class="card-arrow" aria-hidden="true">↗</span></button></li>`).join('');
+  list.innerHTML = offers.map(offer => `<li><button class="offer-card" type="button" data-offer="${escape(offer.id)}" ${selectedId === offer.id ? 'aria-current="true"' : ''}><span class="card-top"><span class="kind">${escape(offer.kind)}</span><span class="reward-chip">${offer.reward.kind === 'unpaid' ? '' : 'Proposed '}${escape(amount(offer.reward))}${offer.reward.basis === 'pool' ? ' pool' : ''}</span></span><span class="card-title">${escape(offer.title)}</span><span class="card-arrow" aria-hidden="true">↗</span></button></li>`).join('');
   $('#more-offers').hidden = !cursor;
 }
 async function loadList(more = false, refreshSelection = false) {

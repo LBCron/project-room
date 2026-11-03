@@ -109,3 +109,17 @@ test('cold restart: a file store reopened mid catch-up continues with the same r
  const ids=[...new Set([...first.directMessages,...first.replies].map(x=>x.messageId).concat(rest.ids))].sort();
  assert.deepEqual(ids,full.ids);
 });
+for(const corruptIndex of [3,5])test(`optional skip preserves a verified DM before corrupt witness ${corruptIndex}`,t=>{
+ const s=new RoomStore(':memory:');t.after(()=>s.close());
+ const events=initialRoom(),add=(messageId,toMemberId)=>events.push(event({roomId:'commons',actorId:'owner',type:'message.posted',data:{messageId,body:messageId,...(toMemberId?{toMemberId}:{})}}));
+ events.push(event({roomId:'commons',actorId:'owner',type:'member.added',data:{memberId:'worker',displayName:'Worker',kind:'agent',permissions:[]}}));
+ const after=events.length;add('useful-dm','worker');for(let i=0;i<6;i++)add('later-'+i);
+ s.initialize(events,{representation:'normalized-current-v1'});const key=s.issueAccessKey('commons','worker');
+ raw(s,"UPDATE current_room_records SET payload=json_set(payload,'$.entityHash','corrupt') WHERE room_id='commons' AND domain='messageWitness' AND record_key=?",'later-'+corruptIndex);
+ const full=readCurrentNativeInbox(s,key,'commons',{after,skipUnaddressed:false});
+ assert.deepEqual(full.directMessages.map(x=>x.messageId),['useful-dm']);
+ const fast=readCurrentNativeInbox(s,key,'commons',{after,skipUnaddressed:true});
+ assert.deepEqual(fast.directMessages,full.directMessages);assert.equal(fast.cursor.after,full.cursor.after+corruptIndex-3);assert.equal(fast.cursor.hasMore,true);assert.equal(fast.coverage.conversation.skippedUnaddressed,corruptIndex-3);
+ const fails=skipUnaddressed=>{try{readCurrentNativeInbox(s,key,'commons',{after:fast.cursor.after,skipUnaddressed});assert.fail('verified corruption must refuse');}catch(error){assert.match(error.message,/current_room_corrupt/);return error.message;}};
+ assert.equal(fails(true),fails(false));
+});

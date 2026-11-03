@@ -68,19 +68,27 @@ function firstAddressedSequence(db,roomId,memberId,after,headSequence,b){
     ||!Number.isSafeInteger(row.bodyBytes)||row.bodyBytes<2||row.bodyBytes>SKIP_EVENT_BYTES
     ||!Number.isSafeInteger(row.envelopeBytes)||row.envelopeBytes<2
     ||records()<1||remainingCurrentReadBytes(b)<row.idBytes+32+row.envelopeBytes)break;
-  const {id,event:e}=readCurrentEventEnvelope(db,roomId,row,b);
-  if(e.type==='message.posted'){
-   const own=header(e.data.messageId??id);
-   if(!own||own.author_id!==e.actorId||own.to_member_id!==(e.data.toMemberId??null)
-      ||own.reply_to_id!==(e.data.replyToId??null)||own.seq!==row.sequence)break;
-   if(e.actorId!==memberId){
-    if(e.data.toMemberId===memberId||records()<1||remainingCurrentReadBytes(b)<64)break;
-    const mention=db.prepare('SELECT 1 FROM mention_states WHERE room_id=? AND message_event_id=? AND mentioned_member_id=? LIMIT 1').get(roomId,id,memberId);
-    chargeCurrentReadBudget(b,64);if(mention)break;
-    if(own.reply_to_id!==null){const parent=header(own.reply_to_id);if(!parent||parent.author_id===memberId)break;}
+  try{
+   const {id,event:e}=readCurrentEventEnvelope(db,roomId,row,b);
+   if(e.type==='message.posted'){
+    const own=header(e.data.messageId??id);
+    if(!own||own.author_id!==e.actorId||own.to_member_id!==(e.data.toMemberId??null)
+       ||own.reply_to_id!==(e.data.replyToId??null)||own.seq!==row.sequence)break;
+    if(e.actorId!==memberId){
+     if(e.data.toMemberId===memberId||records()<1||remainingCurrentReadBytes(b)<64)break;
+     const mention=db.prepare('SELECT 1 FROM mention_states WHERE room_id=? AND message_event_id=? AND mentioned_member_id=? LIMIT 1').get(roomId,id,memberId);
+     chargeCurrentReadBudget(b,64);if(mention)break;
+     if(own.reply_to_id!==null){const parent=header(own.reply_to_id);if(!parent||parent.author_id===memberId)break;}
+    }
    }
+   last=row.sequence;
+  }catch(error){
+   // Optional progress must not withhold the already verified page. Leave the
+   // failing row unconsumed: its next normal window retains the original error.
+   if(error?.code==='current_room_context_unavailable'
+     ||typeof error?.message==='string'&&error.message.startsWith('current_room_corrupt: '))break;
+   throw error;
   }
-  last=row.sequence;
  }
  return {after:last,skipped:rows.filter(row=>row.sequence<=last).length};
 }

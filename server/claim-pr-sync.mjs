@@ -26,6 +26,7 @@
 import { emitWorkClaimEvent, enqueueClaimWake, wakeNamedReviewers } from "./work-claim-events.mjs";
 import { ACTIVE_CLAIM_STATES, STALE_SWEEP_BATCH, STALE_UNCLAIMED_DAYS, ClaimError, closeStaleUnclaimed, closeWhenLive, notePullMerged, recordCi, releaseExpired } from "./work-claims.mjs";
 import { SOURCE_REVISION } from "./version.mjs";
+import { notifyLeaseExpired } from "./agent-collisions.mjs";
 import {
   PULL_CANDIDATE_CAP, PULL_MISSING_BACKOFF_MS, holdForRateLimit, nextPullBackoff,
   batchPullOutcome, parsePullRequestUrl, pullLinks, pullRequestDue, pullRequestOutcomeFromApi, pullRequestOutcomeFromWebhook,
@@ -1181,6 +1182,7 @@ function releaseExpiredCandidates(store, roomId, claimIds, nowMs, skipped) {
       enqueueClaimWake(store, roomId, before.owner,
         `work-claim:${item.id}:lease_expired:${before.leaseExpiresAt ?? receipt?.sequence ?? nowMs}`,
         { reason: "lease_expired", actorId: before.owner });
+      notifyLeaseExpired(store, roomId, before);
       released += 1;
     }
   });

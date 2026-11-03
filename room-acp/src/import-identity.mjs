@@ -1,35 +1,26 @@
 // Import an operator-selected existing identity without persisting its global
 // bearer. Generic key issuance has no replay contract: unknown means stop.
-import { constants, openSync, closeSync, lstatSync, fstatSync, readFileSync } from 'node:fs';
 import { join as pathJoin } from 'node:path';
 import { createHash, randomUUID } from 'node:crypto';
 import { normalizeBase } from './link.mjs';
 import { RoomClient } from './room.mjs';
 import { configDir, listConnections, saveConnection, loadConnection } from './credentials.mjs';
 import { openJoinJournal } from './private-state.mjs';
+import { assertPrivatePath, readPrivateJson } from './private-files.mjs';
 import { defaultHostId } from './join.mjs';
 import { registerSecret } from './redact.mjs';
 
 const digest = value => createHash('sha256').update(JSON.stringify(value)).digest('hex');
 const id = value => typeof value === 'string' && /^[A-Za-z0-9][A-Za-z0-9_.:-]{0,127}$/.test(value);
-function privateStat(stat, directory = false) {
-  if (!(directory ? stat.isDirectory() : stat.isFile() && stat.nlink === 1) || (stat.mode & 0o077)
-    || process.getuid && stat.uid !== process.getuid()) throw Error('Identity connection must be private, owned by this user and without links');
-}
 export function readExistingIdentity(directory) {
-  let fd;
   try {
-    privateStat(lstatSync(directory), true);
-    fd = openSync(pathJoin(directory, 'connection.json'), constants.O_RDONLY | constants.O_NOFOLLOW | constants.O_NONBLOCK);
-    const stat = fstatSync(fd); privateStat(stat);
-    if (stat.size > 4096) throw Error('invalid');
-    const value = JSON.parse(readFileSync(fd, 'utf8'));
+    assertPrivatePath(directory, true);
+    const value = readPrivateJson(pathJoin(directory, 'connection.json'), 4096);
     registerSecret(value?.token);
     if (value?.version !== 1 || !id(value.memberId) || typeof value.token !== 'string' || !/^pri_[A-Za-z0-9_-]+$/.test(value.token)
       || typeof value.origin !== 'string' || normalizeBase(value.origin) !== value.origin) throw Error('invalid');
     return { apiBase: value.origin, memberId: value.memberId, credential: value.token };
   } catch { throw Error('Select your existing private CLI connection directory with a global identity credential; no key was issued'); }
-  finally { if (fd !== undefined) closeSync(fd); }
 }
 
 export async function importIdentity({ identityFrom, roomId, agent = null, env = process.env, fetchImpl = fetch }) {
@@ -99,15 +90,11 @@ export async function importCredential({ credentialFile, roomId, expectedIdentit
   if (typeof credentialFile !== 'string' || !credentialFile || !id(roomId) || !id(expectedIdentity) || typeof origin !== 'string')
     throw Error('Use import-credential --credential-file <private JSON file> --room <exact room ID> --expected-identity <identity ID> --origin <service origin>');
   const apiBase = normalizeBase(origin);
-  let fd, supplied;
+  let supplied;
   try {
-    fd = openSync(credentialFile, constants.O_RDONLY | constants.O_NOFOLLOW | constants.O_NONBLOCK);
-    const stat = fstatSync(fd); privateStat(stat);
-    if (stat.size > 8192) throw Error('invalid');
-    supplied = JSON.parse(readFileSync(fd, 'utf8'));
+    supplied = readPrivateJson(credentialFile, 8192);
     registerSecret(supplied?.credential);
   } catch { throw Error('Select the existing private scoped-key JSON file; no remote write or key issuance was attempted'); }
-  finally { if (fd !== undefined) closeSync(fd); }
   const scopes = [`mcp:room:${roomId}`, 'rooms:read', 'rooms:write', 'heartbeats:report', 'heartbeats:read'];
   if (supplied?.identityId !== expectedIdentity || supplied.roomId !== roomId
     || typeof supplied.credential !== 'string' || !/^rak_[A-Za-z0-9_-]+$/.test(supplied.credential)

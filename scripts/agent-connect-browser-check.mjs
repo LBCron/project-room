@@ -467,7 +467,7 @@ test('existing owned agent is primary; separate-agent creation is explicit and u
  f.page.once('dialog',dialog=>dialog.dismiss());await add.click();assert.equal(requests.length,0,'declined explicit consent grants no access');
  f.page.once('dialog',dialog=>dialog.accept());await add.click();
  const retry=f.page.getByRole('button',{name:'Retry original enrollment',exact:true});await retry.waitFor({state:'visible'});
- assert.equal(await retry.isEnabled(),true);assert.equal(await f.page.locator('#agent-separate-agent').evaluate(node=>node.open),false);
+  await f.page.waitForFunction(()=>[...document.querySelectorAll('button')].some(button=>button.textContent==='Retry original enrollment'&&!button.disabled));assert.equal(await retry.isEnabled(),true);assert.equal(await f.page.locator('#agent-separate-agent').evaluate(node=>node.open),false);
  assert.equal(await f.page.locator('#agent-type-catalog').isVisible(),false);assert.equal(await f.page.locator('#agent-connect-access').isDisabled(),true);
  const original=JSON.stringify(requests[0]);await retry.click();await f.page.waitForFunction(()=>document.querySelector('#agent-connect-status').textContent.includes('OAuth'));
  assert.equal(requests.length,2);assert.equal(JSON.stringify(requests[1]),original);assert.ok(requests.every(value=>value.action==='enroll-existing'));

@@ -311,6 +311,8 @@ jobs:
           key: playwright-${{ runner.os }}-${{ steps.pw.outputs.version }}-chromium
       - name: Install Playwright Chromium (binary cached) and its OS deps
         run: npx playwright install --with-deps chromium
+      - name: Build the agent guides used by browser journeys
+        run: node scripts/build-agent-docs.mjs
       - name: Run conversation, composer recovery, Quiet Focus, accessibility, and session browser gates
         # Same suites as test:browser, plus a junit file under test-results/ for the step below.
         run: scripts/test-env.sh npm run test:browser:ci -- --shard=${{ matrix.shard }}/6

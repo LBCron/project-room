@@ -12,6 +12,7 @@ import { saveAgentConnection } from '../client/agent-connection.mjs';
 import { initialRoom } from '../server/bootstrap.mjs';
 import { startRoom, FAKE_AGENT } from './room-acp-fixture.mjs';
 import { Bridge } from '../room-acp/src/bridge.mjs';
+import { assertPrivatePath } from '../room-acp/src/private-files.mjs';
 
 async function setup(t) {
   const f = await startRoom(t);
@@ -38,7 +39,8 @@ test('CLI imports its existing identity with a scoped key, real listener access,
   assert.equal(saved.identitySecret, undefined); assert.match(saved.credential, /^rak_/);
   assert.equal(f.identities(), 1); assert.equal(f.keys().length, before + 1);
   assert.deepEqual(readFileSync(pathJoin(f.source, 'connection.json')), original);
-  assert.equal(statSync(pathJoin(f.env.ROOM_ACP_HOME, 'commons.json')).mode & 0o777, 0o600);
+  assertPrivatePath(pathJoin(f.env.ROOM_ACP_HOME, 'commons.json'));
+  if (process.platform !== 'win32') assert.equal(statSync(pathJoin(f.env.ROOM_ACP_HOME, 'commons.json')).mode & 0o777, 0o600);
   const client = new RoomClient({ ...saved });
   await client.checkConnection();
   const beat = await client.heartbeat({ hostId: saved.hostId });

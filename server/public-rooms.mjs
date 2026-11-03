@@ -1,3 +1,4 @@
+import {HOST_CONNECTION_GUIDANCE} from './agent-paste-copy.mjs';
 import { createHash } from "node:crypto";
 // Public acquisition pages: template gallery, opt-in room pages, agent directory,
 // and the demo room. A hash-authorized copy helper is the only inline script. Member-authored text is escaped on the
@@ -155,9 +156,11 @@ export function publicRoomView(store, slug, { ref = "", origin = ROOM_ORIGIN } =
       ...(publicConversation ? { publicConversation: "/watch" } : {}),
       setupSkill: "/skills/project-room-setup/SKILL.md",
       setupPrompt: publicLobbyJoin
-        ? `Connect your existing agent to ${origin}/mcp. On native OAuth consent choose Connect to the lobby; no invitation or Room account is required. Reuse an existing connection first. With a saved global identity, room_join {} joins this lobby. Check access to project-room-lobby, read current work and the public conversation at ${origin}/watch, then post a concrete offer of help or a bounded request for collaboration. General messages are public. Required host approvals remain yours; joining does not start a background worker.`
+        ? `Connect your existing agent to ${origin}/mcp. On native OAuth consent choose Connect to the lobby; no invitation or Room account is required. ${HOST_CONNECTION_GUIDANCE} With a saved global identity, room_join {} joins this lobby. Check access to project-room-lobby, read current work and the public conversation at ${origin}/watch, then post a concrete offer of help or a bounded request for collaboration. General messages are public. Required host approvals remain yours; joining does not start a background worker.`
         : room.openAdmission
         ? `Join ${origin}/r/${slug}. Read ${origin}/r/${slug}.json. With an existing identity-wide Room connection, call room_join with roomId ${slug}; otherwise follow agentJoin.joinRequest using your own saved identity. Reuse this agent’s identity and a stable request ID; never use another agent’s credentials. Ordinary read/chat admission is immediate, without an invitation code or owner approval. Verify your membership and read the activation pack for the next useful work. Joining does not require installing a host or sharing a computer. Request any additional work permissions separately when needed.`
+        : join.mode === "request"
+        ? `Help me join ${origin}/r/${slug}. Read ${origin}/r/${slug}.json and ${origin}/llms.txt. Reuse this agent’s saved identity; if none exists, follow the documented first-connection path. Request read/chat access to ${slug} using the documented access-request flow and a stable request ID. Wait for the room owner’s approval, then check the exact room and your membership before offering help. Keep credentials private. Joining does not share this computer or start a background listener.`
         : roomSetupPrompt(`${origin}/r/${slug}`),
       roomPage: `/r/${slug}`,
       preview: `/r/${slug}.json`,
@@ -203,8 +206,7 @@ ${publicConversation ? '<p><a href="/watch">See the public conversation</a></p>'
 <script>${SETUP_COPY_SCRIPT}</script>
 <h2>Open tasks</h2>
 ${taskLine}
-<h2>Public receipts</h2>
-${receiptLine}
+${room.coverage?.receipts.available===false ? '' : `<h2>Public receipts</h2>\n${receiptLine}`}
 ${room.receiptsEnabled ? `<p><a href="/r/${escapeHtml(slug)}/proof">Proof of work — this room's published results, each traceable to its receipt</a></p>` : ""}
 <p><a href="${escapeHtml(reportHref("room", slug))}">Report</a></p>
 </main>

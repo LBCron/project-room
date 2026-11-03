@@ -957,17 +957,21 @@ export function withCurrentWorkReadUnits(store,roomId,operation) {
 
 // Three separately indexed visibility streams avoid scanning private history
 // while constructing a public window. Only admitted scalars cross before rows.
+export function currentMessageMayBeVisible(db,roomId,messageId,viewerId,b=contextBudgets.get(db)??budget()) {
+  const candidate=db.prepare("SELECT 1 FROM messages WHERE room_id=? AND message_id=? AND (to_member_id IS NULL OR to_member_id='' OR author_id=? OR to_member_id=?)").get(roomId,messageId,viewerId,viewerId);
+  charge(b,256);
+  if(candidate)return true;
+  const exists=db.prepare('SELECT 1 FROM messages WHERE room_id=? AND message_id=?').get(roomId,messageId);charge(b,256);
+  if(!exists&&readCurrentRecord(db,roomId,'messageWitness',messageId,b)!==undefined)corrupt('witnessed canonical message missing');
+  return false;
+}
 export function currentConversationRows(store,roomId,{viewerId,limit,before,beforeId,messageId,channelId,peerMemberId,floor,liveOnly=false}) {
   if(limit>64)refuse('Current conversation pages support at most64 messages');
   const db=store.db,b=contextBudgets.get(db)??budget();
   if(messageId!==null) {
     // An unverified index may deny access, never grant it. Avoid loading a
     // different member's private body before the authoritative proof check.
-    const candidate=db.prepare("SELECT 1 FROM messages WHERE room_id=? AND message_id=? AND (to_member_id IS NULL OR to_member_id='' OR author_id=? OR to_member_id=?)").get(roomId,messageId,viewerId,viewerId);
-    charge(b,256);
-    if(!candidate){
-      const exists=db.prepare('SELECT 1 FROM messages WHERE room_id=? AND message_id=?').get(roomId,messageId);charge(b,256);
-      if(!exists&&readCurrentRecord(db,roomId,'messageWitness',messageId,b)!==undefined)corrupt('witnessed canonical message missing');
+    if(!currentMessageMayBeVisible(db,roomId,messageId,viewerId,b)){
       return {rows:[],continuation:null,examined:0,complete:true};
     }
     // Addressed selection always uses the existing primary key, including a

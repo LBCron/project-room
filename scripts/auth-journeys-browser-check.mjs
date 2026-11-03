@@ -382,3 +382,20 @@ test('account session survives nine hours and expires at the server deadline', {
   await page.locator('#auth-panel').waitFor({state:'visible'});
   assert.equal((await f.session(page)).authenticated, false);
 });
+
+test('refresh after expiry ends at actionable sign-in', {timeout:60000}, async t => {
+  const f=await setup(t),page=await f.open();
+  assert.equal(await signUp(page,f.origin,'reconnect-expiry@example.invalid'),202);
+  await page.locator('#main').waitFor({state:'visible'});
+  f.store.now=()=>Date.now()+31*86400000;
+  await page.evaluate(()=>window.dispatchEvent(new Event('focus')));
+  await page.locator('#auth-panel').waitFor({state:'visible'});
+  const initial=(await page.locator('#auth-error').innerText()).trim();
+  const refresh=page.locator('#refresh-button');
+  assert.match(initial,/session ended or changed/i);
+  assert.equal(await refresh.isVisible(),true);
+  await refresh.click();
+  await page.waitForFunction(()=>document.querySelector('#connection-status').textContent.includes('sign in required'),null,{timeout:10000});
+  assert.equal((await f.session(page)).authenticated,false);
+  await page.locator('#auth-signin-ui [data-signin-form="password"] [name="email"]').waitFor({state:'visible'});
+});

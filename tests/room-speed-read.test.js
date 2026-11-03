@@ -75,8 +75,13 @@ test("a 2000-message room opens as a window under 30 KB, and bootstrap matches i
   assert.equal(boot.readHorizon.available, true);
   assert.equal(boot.saved.available, true);
   assert.equal(boot.updates.available, false);
-  assert.equal(boot.updates.code, "current_room_context_required");
-  assert.equal(boot.snapshot.sections.updates.code, "current_updates_aggregate_unavailable");
+  assert.equal(boot.updates.code, "current_updates_aggregate_unavailable");
+  assert.equal(boot.snapshot.sections.updates.available, false);
+  assert.equal(boot.snapshot.sections.updates.replacement, "needs-me");
+  assert.deepEqual(boot.snapshot.sections.updates.nextRead,{method:"GET",path:`/api/rooms/${created.roomId}/needs-me`});
+  const attention=await fetch(f.origin+boot.snapshot.sections.updates.nextRead.path,{headers});
+  assert.equal(attention.status,200);
+  assert.equal((await attention.json()).contractVersion,2);
   assert.ok(Buffer.byteLength(JSON.stringify(boot.snapshot)) <= HARD_CEILING);
 
   const mcp = await fetch(`${f.origin}/room/mcp`, {
@@ -94,6 +99,7 @@ test("a 2000-message room opens as a window under 30 KB, and bootstrap matches i
 test("the shared window fitter and bootstrap builder are the modules the read uses", () => {
   assert.equal(typeof buildRoomBootstrap, "function");
   assert.deepEqual(ROOM_WINDOW_ROUTES.map(row => `${row.method} ${row.path}`), [
+    "GET /api/rooms/{roomId}/needs-me",
     "GET /api/rooms/{roomId}/work-list",
     "GET /api/rooms/{roomId}/conversations",
     "GET /api/rooms/{roomId}/bootstrap",

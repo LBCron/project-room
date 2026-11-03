@@ -43,7 +43,7 @@ async function call(origin, name, args, secret) {
 test("room_join pairs, a stranger is not_member, and the owner can merge", async t => {
   const { origin, store, rooms, advance } = await boot(t);
   const owner = store.identities.create("Rowan Hale");
-  const room = rooms.create(owner.secret, { roomId: "pair-den", title: "Pair den", purpose: "Pair agents", displayName: "Rowan Hale" });
+  const room = rooms.create(owner.secret, { roomId: "pair-den", title: "Pair den", purpose: "Pair agents", displayName: "Rowan Hale", visibility: "private" });
   const stranger = store.identities.create("Kit Arden");
   const blocked = await call(origin, "room_post_message", { roomId: room.roomId, body: "hello" }, stranger.secret);
   assert.equal(blocked.isError, true);

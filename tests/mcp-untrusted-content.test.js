@@ -194,7 +194,7 @@ test("gap tools stamp results: room files, inbox attachments, access requests", 
   const owner = store.identities.create("Trust owner");
   const peer = store.identities.create("Trust peer");
   const created = rooms.create(owner.secret, {
-    roomId: "trust-files", title: "Trust files", purpose: "Gap marking", kind: "personal", displayName: "Trust owner"
+    roomId: "trust-files", title: "Trust files", purpose: "Gap marking", kind: "personal", displayName: "Trust owner", visibility: "private"
   });
   const roomId = created.roomId;
   linkWithProof(store, owner.secret, roomId, peer, {

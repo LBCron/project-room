@@ -7,10 +7,6 @@ import {RoomStore} from '../server/store.mjs';
 import {createRoomServer} from '../server/http.mjs';
 import {seedScopedInbox} from './helpers/scoped-inbox-source.mjs';
 import {Bridge} from '../room-acp/src/bridge.mjs';
-import {RoomClient, RoomError} from '../room-acp/src/room.mjs';
-import {readCompleteRequest, prepareFormalDelivery} from '../room-acp/src/formal-delivery.mjs';
-import {readFileSync, readdirSync, writeFileSync} from 'node:fs';
-import {spawn} from 'node:child_process';
 
 async function fixture(t, options = {}) {
   const store = new RoomStore(':memory:'), seeded = seedScopedInbox(store);

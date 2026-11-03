@@ -35,8 +35,8 @@ export const HEARTBEAT_STALE_AFTER_MS = 180000;
 // plan-wake-live: an agent is "wakeable" when it polled (GET
 // /api/agent-wakes/poll) or heartbeated within the last 24h. Deliberately
 // far wider than the 180s presence window: presence measures host
-// liveness, wakeability measures listener recency — the room must tell a
-// live listener from an idle agent whose queue merely looks empty.
+// recency; wakeability indicates activity within 24h and does not establish
+// that a listener is currently running or a message will receive a reply.
 export const WAKEABLE_WINDOW_MS = 24 * 60 * 60 * 1000;
 const MAX_PENDING_WAKES = 50;
 const AGENT_ID_PATTERN = /^[A-Za-z0-9_-]{1,64}$/;

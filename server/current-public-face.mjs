@@ -12,7 +12,7 @@ export function currentPublicMetadata(store,roomId){
  if(typeof store.readTransaction!=='function'||!isCurrentRoom(store.db,roomId))return null;
  return store.readTransaction(()=>withCurrentReadContext(store.db,roomId,()=>({room:readCurrentRecord(store.db,roomId,'metadata','room'),members:{}})));
 }
-export function readCurrentPublicFace(store,roomId,{after=null,limit=CURRENT_PUBLIC_FACE_LIMIT,latest=false}={}){
+export function readCurrentPublicFace(store,roomId,{after=null,before=null,limit=CURRENT_PUBLIC_FACE_LIMIT,latest=false}={}){
  if(typeof store.readTransaction!=='function'||!isCurrentRoom(store.db,roomId))return null;
  return store.readTransaction(()=>withCurrentReadContext(store.db,roomId,b=>{
   const db=store.db,head=readCurrentHead(db,roomId,b),room=readCurrentRecord(db,roomId,'metadata','room',b);
@@ -21,9 +21,15 @@ export function readCurrentPublicFace(store,roomId,{after=null,limit=CURRENT_PUB
   const messages=[],members={},n=Math.min(limit,CURRENT_PUBLIC_FACE_LIMIT);
   let hasMore=false;
   if(latest){
-   const page=currentConversationRows(store,roomId,{viewerId:room.ownerId,limit:n,before:head.sequence+1,beforeId:'',messageId:null,channelId:'general',peerMemberId:null,floor:null,liveOnly:true});
-   for(const row of page.rows.toReversed()){const m=JSON.parse(row.body);if(visible(m))messages.push(m);}
-   hasMore=!page.complete;
+   let beforeSeq=head.sequence+1,beforeId='';
+   if(before!==null){if(typeof before!=='string'||!before||before.length>200)invalid();
+    // Reject nonpublic cursors before loading their protected message body.
+    // This scalar can deny only; admission still requires the verified record.
+    const candidate=db.prepare("SELECT 1 FROM messages WHERE room_id=? AND message_id=? AND channel_id='general' AND (to_member_id IS NULL OR to_member_id='') AND deleted_at IS NULL").get(roomId,before);chargeCurrentReadBudget(b,256);if(!candidate)invalid();
+    const source=readCurrentMessage(db,roomId,before,b);if(!visible(source?.value))invalid();beforeSeq=source.row.seq;beforeId=before;}
+   const page=currentConversationRows(store,roomId,{viewerId:room.ownerId,limit:n+1,before:beforeSeq,beforeId,messageId:null,channelId:'general',peerMemberId:null,floor:null,liveOnly:true});
+   for(const row of page.rows.slice(0,n).toReversed()){const m=JSON.parse(row.body);if(visible(m))messages.push(m);}
+   hasMore=page.rows.length>n||!page.complete;
   }else{
    let sequence=0;
    if(after!==null){const source=readCurrentMessage(db,roomId,after,b);if(!visible(source?.value))invalid();sequence=source.row.seq;}

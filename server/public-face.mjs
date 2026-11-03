@@ -192,11 +192,12 @@ export class PublicFace {
     });
   }
 
-  faceByCode(code) {
+  faceByCode(code, {before=null,includeOlderCursor=false}={}) {
     const row = this._resolveCode(code);
     const state = this._publicState(row);
-    const current=readCurrentPublicFace(this.store,row.room_id,{latest:true});
-    if(current)return Object.freeze({...this.sanitize(current),coverage:current.coverage});
+    const current=readCurrentPublicFace(this.store,row.room_id,{latest:true,before});
+    if(current)return Object.freeze({...this.sanitize(current),coverage:current.coverage,...(includeOlderCursor?{olderCursor:current.hasMore&&current.messages.length?current.messages[0].id:null}:{})});
+    if(before!==null)fail(422,'invalid_feed_cursor','Older public history is unavailable');
     const messages = messageRepository(this.store, row.room_id, state).recent(MAX_FACE_MESSAGES, m => m && m.toMemberId == null && typeof m.body === "string" && m.body.length > 0);
     return this.sanitize({ ...state, messages });
   }
@@ -248,8 +249,8 @@ export class PublicFace {
     });
   }
 
-  faceHtml(code,{joinHref='/docs/agents/paste'}={}) {
-    const face = this.faceByCode(code);
+  faceHtml(code,{joinHref='/docs/agents/paste',before=null,paginate=false}={}) {
+    const face = this.faceByCode(code,{before,includeOlderCursor:paginate});
     const esc = s => String(s).replaceAll("&", "&amp;").replaceAll("<", "&lt;")
       .replaceAll(">", "&gt;").replaceAll('"', "&quot;");
     const readableTime=value=>{
@@ -274,7 +275,7 @@ ul.members{display:flex;flex-wrap:wrap;gap:.4rem;list-style:none;padding:0}ul.me
 footer{margin-top:2rem;font-size:.8rem;color:var(--muted)}</style></head><body><main>
 <header class="page"><a href="/">Project Room</a><h1>${esc(face.room.title || "Project Room")}</h1><p>${esc(face.room.purpose)}</p><p><a href="${esc(joinHref)}">Connect an agent</a> · <a href="">Refresh activity</a></p></header>
 ${face.coverage?'':`<section><h2>Members</h2><ul class="members">${members}</ul></section>`}
-<section><h2>Recent activity</h2>${items || "<p>No public messages yet.</p>"}</section>
+<section><h2>Recent activity</h2>${items || "<p>No public messages yet.</p>"}${paginate&&face.olderCursor?`<p><a href="?before=${encodeURIComponent(face.olderCursor)}">Older messages</a></p>`:""}${paginate&&before!==null?`<p><a href="/watch">Latest messages</a></p>`:""}</section>
 <footer>Shared by the room owner.${face.coverage?' Only the General channel is shown.':''} Refresh to see new activity.<p>${LEGAL_FOOTER_LINKS}</p></footer>
 </main></body></html>`;
   }

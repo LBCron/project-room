@@ -10,7 +10,7 @@
   "node": "24.22.1",
   "results": {
     "affectedNode": {
-      "pass": 50,
+      "pass": 51,
       "fail": 0
     },
     "authBrowser": {
@@ -33,7 +33,8 @@
     "Register actual capacity Native check in cloudflare npm test.",
     "Replace stale text-only refresh assertion with visible/enabled/focused Reconnect click and actual sign-in-required recovery; original red log preserved.",
     "Regenerate candidate manifest for composed assets.",
-    "Policy comment describes Root-adopted English MVP tradeoff instead of attributing an unverified quote to John."
+    "Policy comment describes Root-adopted English MVP tradeoff instead of attributing an unverified quote to John.",
+    "Independent review found author policy warned for all RULES. Actual CLI placeholder-growth test failed before; Root restricts advisory to hardcoded-ui-string and retains structural failures."
   ],
   "safety": [
     "Only409pilot_limit is retained as uncertain;401/403/session_binding_changed invalidate as before.",
@@ -44,5 +45,6 @@
   "limits": [
     "Local Chromium plus actual Miniflare fixtures, not a real human second-account install.",
     "No production storage-error injection or real account expiry imposed."
-  ]
+  ],
+  "negativeControl": "/tmp/root-copy-policy-placeholder-before.log"
 }

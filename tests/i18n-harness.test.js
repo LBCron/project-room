@@ -303,3 +303,14 @@ test("--check without a baseline exits 2 with guidance", () => {
     if (had !== null) renameSync(baselinePath + ".bak", baselinePath);
   }
 });
+
+// English copy growth may warn, but broken positional placeholders still block.
+test("--check keeps positional-placeholder growth gated when English copy is advisory", () => {
+  const probe = join(root, "src", "__i18n-probe-placeholder.tmp.mjs");
+  try {
+    writeFileSync(probe, 'export const value = "You have {0} pending messages in this room";\n');
+    const result = spawnSync(process.execPath, [harness, "--check"], { encoding: "utf8", env: { ...strictEnv(), I18N_BASE_REF: "HEAD" } });
+    assert.equal(result.status, 1, result.stdout + result.stderr);
+    assert.match(result.stderr, /positional-placeholder/);
+  } finally { rmSync(probe, { force: true }); }
+});

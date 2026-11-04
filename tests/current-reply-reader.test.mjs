@@ -4,6 +4,9 @@ import {RoomStore} from '../server/store.mjs';
 import {initialRoom} from '../server/bootstrap.mjs';
 import {event} from '../src/events.js';
 import {withCurrentReadContext,withCurrentRoomWriter} from '../server/current-room-repository.mjs';
+import {mkdtempSync,rmSync} from 'node:fs';
+import {tmpdir} from 'node:os';
+import {join} from 'node:path';
 
 function fixture(t,extend=()=>{}){
  const store=new RoomStore(':memory:');t.after(()=>store.close());const events=initialRoom();
@@ -217,4 +220,44 @@ test('denied directional consent removes answer and reply actions without acknow
  validateReplyRead(read,{name:'room_read_request',args:{requestMessageId:'question'},roomId:'commons'});
  store.replyRequests.list(keys.reader,'commons');store.replyRequests.history(keys.reader,'commons');
  for(const table of Object.keys(before))assert.deepEqual(store.db.prepare('SELECT * FROM '+table).all(),before[table]);
+});
+test('incoming open asks come first through the open-request index, then the witnessed scan skips them',t=>{
+ const {store,keys}=fixture(t,(_events,add)=>{
+  for(let i=0;i<40;i++)add('message.posted',{messageId:`a-noise-${String(i).padStart(2,'0')}`,toMemberId:'other',requestKind:'reply',requestPolicyVersion:1,body:'Private'});
+  add('message.posted',{messageId:'z-late-ask',toMemberId:'reader',requestKind:'reply',requestPolicyVersion:1,body:'Late'});
+ },);
+ store.room=()=>{throw Error('whole-room hydration forbidden');};
+ const first=store.replyRequests.list(keys.reader,'commons',{limit:20});
+ assert.deepEqual(first.requests.map(r=>r.id).sort(),['question','z-late-ask'],'both open asks on page one despite 40 earlier requests');
+  assert.equal(JSON.stringify(first).includes('a-noise-'),false);
+ let args=first.nextRead?.arguments,later=[],pages=0;
+ while(args){const read=store.replyRequests.list(keys.reader,'commons',args);later.push(...read.requests.map(r=>r.id));args=read.nextRead?.arguments;assert.ok(++pages<40);}
+ assert.deepEqual(later,[],'the witnessed scan does not repeat the index hits');
+ const small=store.replyRequests.list(keys.reader,'commons',{limit:1});
+ assert.equal(small.requests.length,1);assert.equal(small.page.hasMore,true);
+ const rest=[];let a=small.nextRead.arguments,p=0;
+ assert.throws(()=>store.replyRequests.list(keys.other,'commons',a),e=>e.code==='reply_cursor_identity_changed');
+ while(a){const read=store.replyRequests.list(keys.reader,'commons',a);rest.push(...read.requests.map(r=>r.id));a=read.nextRead?.arguments;assert.ok(++p<60);}
+ assert.deepEqual([...small.requests.map(r=>r.id),...rest].sort(),['question','z-late-ask'],'limit 1: each open ask exactly once across pages');
+ const outgoing=store.replyRequests.list(keys.reader,'commons',{direction:'both',limit:20});
+ assert.equal(outgoing.requests.some(r=>r.id==='a-noise-00'),false,'other paths unchanged: no access to others\' asks');
+});
+test('open-ask head start: revoked credentials and restarted stores refuse its continuation, and a fresh read still leads with the ask',t=>{
+ const dir=mkdtempSync(join(tmpdir(),'open-asks-')),path=join(dir,'room.sqlite');
+ let store=new RoomStore(path);t.after(()=>{store.close();rmSync(dir,{recursive:true,force:true});});
+ const events=initialRoom(),add=(type,data,actorId='owner')=>events.push(event({roomId:'commons',actorId,type,data}));
+ for(const memberId of ['reader','other'])add('member.added',{memberId,displayName:memberId,kind:'agent',permissions:[]});
+ for(let i=0;i<20;i++)add('message.posted',{messageId:`a-noise-${String(i).padStart(2,'0')}`,toMemberId:'other',requestKind:'reply',requestPolicyVersion:1,body:'Private'});
+ add('message.posted',{messageId:'z-late-ask',toMemberId:'reader',requestKind:'reply',requestPolicyVersion:1,body:'Late'});
+ store.initialize(events,{representation:'normalized-current-v1'});
+ let key=store.issueAccessKey('commons','reader');
+ const first=store.replyRequests.list(key,'commons',{limit:1});
+ assert.deepEqual(first.requests.map(r=>r.id),['z-late-ask']);
+ store.close();store=new RoomStore(path);
+ assert.throws(()=>store.replyRequests.list(key,'commons',first.nextRead.arguments),e=>e.code==='invalid_reply_cursor','a cold store never resumes an old head-start cursor');
+ assert.deepEqual(store.replyRequests.list(key,'commons',{limit:1}).requests.map(r=>r.id),['z-late-ask'],'cold reopen: the ask still leads');
+ const again=store.replyRequests.list(key,'commons',{limit:1});
+ store.revokeRoomCredential('commons','reader',key);
+ assert.throws(()=>store.replyRequests.list(key,'commons',again.nextRead.arguments),e=>e.status===401,'revoked credential cannot continue');
+ assert.throws(()=>store.replyRequests.list(key,'commons',{limit:1}),e=>e.status===401,'revoked credential cannot start');
 });

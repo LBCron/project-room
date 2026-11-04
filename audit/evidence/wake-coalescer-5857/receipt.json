@@ -1,0 +1,10 @@
+{
+  "sourceHead": "67240d682d19c36692da7ed0129c9ff0c6f0acab",
+  "sourcePath": "server/wake-adapters.mjs",
+  "node": "v24.22.1",
+  "command": "/Users/johnpotter/.local/bin/node audit/evidence/wake-coalescer-5857/probe.mjs",
+  "result": "FAIL: new signal coalesced at600001ms after second old re-wake; dueRewakes empty at900001ms; no further signal means exhausted entry remains ineligible",
+  "control": "outside-window arrival at930001ms returns send:true,count:2",
+  "scope": "deterministic exported coalescer; source integration offer and sweep callers confirmed; no provider/HTTP/Room live calls; underlying wake queue not asserted lost",
+  "implementation": "none; coordinate author before fix"
+}

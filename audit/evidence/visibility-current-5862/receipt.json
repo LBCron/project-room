@@ -1,0 +1,16 @@
+{
+  "baseline": "924492a4143b59bb6c663be4d16977668dcf8185",
+  "prHead": "b1849bab00ba7d8e704558d52a2fb00dc7d22cee",
+  "composedSource": "b24e3628e9f03aa708c394896206a56b9c490a8e",
+  "node": "24.22.1",
+  "command": "/Users/johnpotter/.local/bin/node audit/evidence/visibility-current-5862/probe.mjs",
+  "shape": "source row exists x mirror row exists x receipt operator-unpublished x recorded task-owner publication off; six anonymous HTTP faces",
+  "controls": "Real room.public_receipts_set owner commands; legal-store unpublishPublic receipt entrypoint. Directory public_receipts kept default on, separate from recorded owner setting. Source/mirror rows deliberately deleted after projection; task row retained. Synthetic fixture only, no claim these row losses occur naturally.",
+  "baselineChecks": 96,
+  "baselineAgreementFailures": 10,
+  "composedChecks": 96,
+  "composedAgreementFailures": 0,
+  "privacy": "Baseline mirror-only+recorded-off leaks marker in HTML/JSON/badge and serves PNG200. Composed hidden responses403/404 with no raw marker. PNG text marker search does not establish pixel content. Receipt unpublish hides all faces even orphan mirrors. Room-wide unpublish and origin-directory toggle are outside this matrix.",
+  "authority": "Source/task relationship provides deciding-room attribution; losing source severs recorded opt-out attribution on mirror baseline. Row absence itself is consistency hypothesis, distinct from explicit owner/operator privacy decisions.",
+  "composition": "Five PR commits applied cleanly; no runtime conflicts resolved; no author branch changes."
+}

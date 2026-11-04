@@ -16,6 +16,7 @@ test('Workers-native public HTTP publication is bounded, private by default and 
   const seed=await call('/seed?privateCount='+privateCount),owner=seed.body.owner;
   const unavailable=await call('/watch');assert.equal(unavailable.status,200,unavailable.text);assert.match(unavailable.text,/No public lobby is published yet/);
   const on=await call('/api/rooms/project-room-lobby/public-face',{owner,body:{enabled:true}});assert.equal(on.status,200,on.text);
+  const publish=await call('/api/rooms/project-room-lobby/commands',{owner,body:{id:'publish-reviewer-lobby',type:'room.public_page_set',data:{enabled:true}}});assert.equal(publish.status,201,publish.text);const watch=await call('/watch');assert.match(watch.text,/href="\/r\/project-room-lobby#open-tasks">View open tasks/);const room=await call('/r/project-room-lobby');assert.equal(room.status,200);assert.match(room.text,/<h2 id="open-tasks">Open tasks/);
   const page=await call('/api/public/rooms/'+on.body.publicCode);assert.equal(page.status,200,page.text);assert.equal(page.body.messages.length,8);assert.doesNotMatch(page.text,/PRIVATE HISTORY|OTHER CHANNEL|DELETED MUST/);assert.equal(page.cost.unknown,0);costs.push(page.cost);
   const feed=await call('/api/public/rooms/'+on.body.publicCode+'/feed');assert.equal(feed.status,200,feed.text);assert.equal(feed.body.messages[0].id,'public-0');
   const off=await call('/api/rooms/project-room-lobby/public-face',{owner,body:{enabled:false}});assert.equal(off.status,200);assert.equal((await call('/api/public/rooms/'+on.body.publicCode)).status,404);

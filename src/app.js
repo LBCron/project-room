@@ -764,13 +764,17 @@ const client = new RoomClient({
       : preserveScopedBackup ? uiText("room.session_changed_reconnect")
         : switchedAccount ? uiText("room.session_changed_recovery")
         : "Session ended; private drafts were cleared.", true);
+    $("#auth-reconnect").hidden = !preserveScopedBackup;
     setConnectionStatus(openingAcceptedRoom || openingInvitedRoom ? "Opening Room…" : "Not connected");
     if ($("#invitation-dialog").open && invitation.preview) {
       if (!accountClient.session?.authenticated && ["ready", "wrong-account", "changed-account"].includes(invitation.phase)) invitation.phase = "needs-account";
       renderInvitation();
     }
     if (!pendingSignout) queueMicrotask(() => {
-      if (!$("#invitation-dialog").open) focusSignin();
+      if (!$("#invitation-dialog").open) {
+        if (preserveScopedBackup && !$("#auth-reconnect").hidden) $("#auth-reconnect").focus();
+        else focusSignin();
+      }
     });
   }
 });
@@ -4599,6 +4603,7 @@ $("#refresh-button").addEventListener("click", async () => {
   }
 });
 $("#refresh-button").disabled = false;
+$("#auth-reconnect").addEventListener("click", () => $("#refresh-button").click());
 // A DM refused by the explicit-denial gate (blocked/rejected/revoked) names
 // the recipient and the next step, instead of surfacing the raw gate
 // message. Returns null when the error is not a DM denial.

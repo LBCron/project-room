@@ -543,3 +543,17 @@ test('OAuth help_wanted gives a truthful supported pointer without scanning or i
   assert.notEqual(all.body.result?.isError,true,JSON.stringify(all.body));
   assert.equal(f.store.db.prepare('SELECT count(*) n FROM events').get().n,before,'discovery and selected reads write no events');
 });
+
+test('OAuth agents can post a long message up to the advertised body limit; anonymous bodies stay on the small cap', async t => {
+  const f = await setup(t);
+  assert.match(f.tokens.access_token, /^oat_/);
+  // 40,000 characters with newlines is ~45 KB of JSON, well past the 16 KiB join cap.
+  const body = ('line of patch text with "quotes"\n').repeat(1300).slice(0, 40000);
+  const posted = await f.rpc('tools/call', { name: 'room_post_message', arguments: { body, id: 'oauth-long-body' } });
+  assert.equal(posted.response.status, 200, JSON.stringify(posted.body).slice(0, 300));
+  assert.notEqual(posted.body.result?.isError, true, JSON.stringify(posted.body).slice(0, 300));
+  const read = await f.rpc('tools/call', { name: 'room_read_messages', arguments: { latest: true, limit: 1 } });
+  assert.equal(read.body.result.structuredContent.messages[0].body.length, 40000);
+  const anonymous = await f.rpc('tools/call', { name: 'room_post_message', arguments: { body } }, null);
+  assert.equal(anonymous.response.status, 413, 'no bearer: the small join cap still applies');
+});

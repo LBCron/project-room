@@ -1,4 +1,5 @@
 import { digestMessagePage } from "../src/message-digest.js";
+import { filterMessagePage } from "../src/message-query.js";
 import {redactSelectedEventPage} from './current-room-events.mjs';
 import { resolveNamedReviewers, hasCurrentReview } from "./work-claims.mjs";
 import { RoomAssistant } from "./room-assistant.mjs";
@@ -124,7 +125,9 @@ async function roomMessages(store, secret, roomId, args, memberId) {
     next: cursor.next, hasMore: cursor.hasMore,
     ...(catchUp ? { catchUp } : {}),
   });
-  return args.view === "digest" ? digestMessagePage(page, memberId) : page;
+  // Search filters the authorized page only; it never widens what is read.
+  const searched = args.query === undefined ? page : filterMessagePage(page, args.query);
+  return args.view === "digest" ? digestMessagePage(searched, memberId) : searched;
 }
 
 // Bounded: one cursors point lookup plus the protected history floor. No

@@ -1,3 +1,4 @@
+import { withAgentSessions } from "./agent-session-state.mjs";
 import { readWorkItem } from "./work-repository.mjs";
 import { boardPlanningEnabled, PLANNING_FIELDS, PLANNING_QUERY, planningPatchOf, hasPlanningInput, applyPlanning, planningQueryOf, filterPlanning, sortPlanning, groupPlanning } from "./board-planning.mjs";
 import { boardViewsEnabled, getView, withSavedView } from "./board-views.mjs";
@@ -477,7 +478,7 @@ export function buildWorkClaimPage(items, roomId, viewerId, query = new URLSearc
     // its pull record (verified / asserted / pending; link-less claims
     // keep pullRequest null, which reads as "none").
     const stamped = stampClaimPage({ ...metadata, ...page,
-      claims: page.claims.map(item => withPullSettlement(summarizeClaimHistory(item, LIST_HISTORY_ENTRIES))) }, viewerId);
+      claims: withAgentSessions(page.claims, nowMs).map(item => withPullSettlement(summarizeClaimHistory(item, LIST_HISTORY_ENTRIES))) }, viewerId);
     return view === "summary" ? withContentTrust({ ...stamped, claims: stamped.claims.map(summarizeBoardClaim) }) : stamped;
   };
   if (params.has("queue")) {

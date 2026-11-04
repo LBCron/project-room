@@ -61,7 +61,9 @@ const SETUP_COPY_SCRIPT = `(() => {
           connectionGuide: data.agentJoin?.packet || '/llms.txt' };
       },
     };
-    Promise.resolve(document.modelContext.registerTool(tool)).catch(() => {});
+    try {
+      Promise.resolve(document.modelContext.registerTool(tool)).catch(() => {});
+    } catch {} // WebMCP is optional; retain the ordinary page if registration fails.
   }
 })();`;
 export { RECEIPTS_PAGE_CSP as PUBLIC_PAGE_CSP };

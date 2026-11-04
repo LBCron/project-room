@@ -36,6 +36,7 @@
 //   but still contribute coverable lines, so a brand-new untested module file
 //   drags the module percentage down and trips the gate.
 import { spawnSync } from "node:child_process";
+import { discoverUnitTests } from "./unit-shards.mjs";
 import {
   existsSync,
   mkdirSync,
@@ -96,22 +97,46 @@ export function loadConfig(configPath, root = ROOT) {
   return config;
 }
 
+// Isolate two expensive qualification files without changing discovery, test
+// limits or coverage membership. This is workload isolation, not a claim that
+// concurrency caused any particular CI timeout.
+export function coverageTestBatches(root = ROOT) {
+  const directory = resolve(root);
+  const files = discoverUnitTests(directory);
+  if (!files.length || new Set(files).size !== files.length) {
+    throw new Error("coverage collector requires nonempty, unique discovered test files");
+  }
+  const isolated = ["tests/runtime-package.test.js", "tests/store-relief-bounded.test.js"]
+    .map(file => join(directory, file)).filter(file => files.includes(file));
+  const remaining = files.filter(file => !isolated.includes(file));
+  return [...isolated.map(file => [file]), ...(remaining.length ? [remaining] : [])];
+}
+
 /** Run the root `node --test` suite with V8 coverage into coverageDir. Returns the suite exit status. */
 export function collectCoverage({ root = ROOT, coverageDir, tmpDir } = {}) {
-  const dir = coverageDir || join(root, "coverage");
-  const tmp = tmpDir || join(root, ".tmp");
+  const batches = coverageTestBatches(root);
+  const dir = resolve(coverageDir || join(root, "coverage"));
+  const tmp = resolve(tmpDir || join(root, ".tmp"));
   mkdirSync(dir, { recursive: true });
   mkdirSync(tmp, { recursive: true });
   // Drop stale coverage files so a re-run never mixes old and new data.
   for (const name of readdirSync(dir)) {
     if (name.endsWith(".json")) rmSync(join(dir, name));
   }
-  const res = spawnSync(process.execPath, ["--test"], {
-    cwd: root,
-    stdio: "inherit",
-    env: { ...process.env, NODE_V8_COVERAGE: dir, TMPDIR: tmp },
-  });
-  return { status: res.status ?? 1, coverageDir: dir };
+  const env = { ...process.env, NODE_V8_COVERAGE: dir, TMPDIR: tmp };
+  delete env.NODE_TEST_CONTEXT;
+  let status = 0;
+  for (const files of batches) {
+    const result = spawnSync(process.execPath, ["--test", ...files], {
+      cwd: root,
+      stdio: "inherit",
+      env,
+    });
+    // Finish every batch, preserving every payload in the directory cleared
+    // above exactly once. A failed or interrupted batch still fails the gate.
+    if (result.status !== 0) status = 1;
+  }
+  return { status, coverageDir: dir };
 }
 
 /** Read every coverage-*.json payload in dir, yielding parsed payloads one at a time. */

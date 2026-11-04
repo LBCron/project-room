@@ -24,9 +24,12 @@ import { spawnSync } from "node:child_process";
 import { mkdtempSync, realpathSync, mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { fileURLToPath } from "node:url";
+import { discoverUnitTests } from "../scripts/unit-shards.mjs";
 
 import {
   checkThresholds,
+  coverageTestBatches,
   coverableLines,
   coveredLinesForPayload,
   evaluateModules,
@@ -338,4 +341,81 @@ test("coverage provisions the unit job's Native archive runtime before the suite
     assert.ok(index >= 0 && index < gate, "Native dependency setup must precede coverage: " + (expected.name ?? expected.id ?? expected.uses));
     assert.deepEqual(coverage[index], expected);
   }
+});
+
+function collectorFixture(t, failFirst = false) {
+  const root = realpathSync(mkdtempSync(join(tmpdir(), "coverage-batches-")));
+  t.after(() => rmSync(root, { recursive: true, force: true }));
+  for (const dir of ["tests", "src", "coverage"]) mkdirSync(join(root, dir));
+  writeFileSync(join(root, "coverage", "stale.json"), JSON.stringify({ result: [] }));
+  const files = ["runtime-package.test.js", "store-relief-bounded.test.js", "ordinary.test.js"];
+  for (const [index, file] of files.entries()) {
+    writeFileSync(join(root, "src", `part${index}.mjs`), `export const value = ${index};\n`);
+    writeFileSync(join(root, "tests", file), `
+      import test from 'node:test';
+      import assert from 'node:assert/strict';
+      import { appendFileSync } from 'node:fs';
+      import { value } from '../src/part${index}.mjs';
+      test('batch ${index}', () => {
+        appendFileSync(${JSON.stringify(join(root, "executions.jsonl"))}, JSON.stringify({file:${JSON.stringify(file)}, runner:process.ppid, value})+${JSON.stringify("\n")});
+        assert.equal(value, ${failFirst && index === 0 ? -1 : index});
+      });
+    `);
+  }
+  return { root, files };
+}
+
+function runCollectorFixture(root, inheritedContext = false) {
+  const env = { ...process.env };
+  delete env.NODE_TEST_CONTEXT;
+  const script = new URL("../scripts/coverage-thresholds.mjs", import.meta.url).href;
+  return spawnSync(process.execPath, ["--input-type=module", "-e", `
+    import { collectCoverage } from ${JSON.stringify(script)};
+    ${inheritedContext ? 'process.env.NODE_TEST_CONTEXT="child-v8";' : ''}
+    const result=collectCoverage({root:${JSON.stringify(root)}});
+    process.exit(result.status);
+  `], { env, encoding: "utf8", timeout: 15000 });
+}
+
+function fixtureExecutions(root) {
+  return readFileSync(join(root, "executions.jsonl"), "utf8").trim().split("\n").map(line => JSON.parse(line));
+}
+
+test("collector isolates expensive files and retains real coverage from every discovered batch", t => {
+  const { root, files } = collectorFixture(t);
+  const result = runCollectorFixture(root);
+  assert.equal(result.status, 0, result.stdout + result.stderr);
+  const executions = fixtureExecutions(root);
+  assert.deepEqual(executions.map(row => row.file).sort(), files.sort());
+  assert.equal(new Set(executions.map(row => row.runner)).size, 3, "each expensive file must run alone in a separate completed runner");
+  const payloads = [...readCoveragePayloads(join(root, "coverage"))];
+  assert.ok(payloads.length >= 3);
+  assert.ok(payloads.every(value => value.result.length > 0), "stale payload was removed before collection");
+  const grouped = groupFunctionsByUrl(payloads, root);
+  const config = { modules: { src: { dir: "src", threshold: 100 } } };
+  const measured = evaluateModules(root, config, grouped);
+  assert.equal(measured.src.files, 3);
+  assert.equal(measured.src.pct, 100, "earlier batches must not be erased by a later batch");
+  assert.equal(checkThresholds(config, measured).ok, true);
+});
+
+test("collector clears inherited test context and finishes later batches after a failure", t => {
+  const { root, files } = collectorFixture(t, true);
+  const result = runCollectorFixture(root, true);
+  assert.equal(result.status, 1, result.stdout + result.stderr);
+  assert.deepEqual(fixtureExecutions(root).map(row => row.file).sort(), files.sort());
+  const grouped = groupFunctionsByUrl([...readCoveragePayloads(join(root, "coverage"))], root);
+  assert.equal(evaluateModules(root, { modules: { src: { dir: "src", threshold: 100 } } }, grouped).src.pct, 100);
+});
+
+
+test("collector partitions exactly existing Node discovery with no missing or duplicate files", () => {
+  const root = fileURLToPath(new URL("..", import.meta.url)).replace(/\/$/, "");
+  const expected = discoverUnitTests(root);
+  const batches = coverageTestBatches(root);
+  assert.deepEqual(batches[0], [join(root, "tests/runtime-package.test.js")]);
+  assert.deepEqual(batches[1], [join(root, "tests/store-relief-bounded.test.js")]);
+  assert.equal(batches.length, 3);
+  assert.deepEqual(batches.flat().sort(), expected);
+  assert.equal(new Set(batches.flat()).size, expected.length);
 });

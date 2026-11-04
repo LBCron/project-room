@@ -31,6 +31,9 @@ import { BOND_SCOPES } from "./bonds.mjs";
 import { EscrowError, canonicalLane, ACCEPT_ATTESTATION_CONTRACT } from "./bounty-escrow.mjs";
 import { buildActivationPack } from "./room-activation-pack.mjs";
 import { readComposedRoomContext } from "./orient.mjs";
+import { BOARD_CLAIM_TOOLS, validBoardClaimArgs, runBoardClaimTool, boardClaimToolsEnabled } from "./board-claim-tools.mjs";
+import { handleWorkClaims } from "./work-claim-routes.mjs";
+import { handoffPacketEnabled, buildHandoffPacket, collectDecisions, DECISION_TYPES, decisionWindowStart } from "./handoff-packet.mjs";
 import { memoizeBoardList } from "./available-work.mjs";
 import { walkProvenance, ClaimError } from "./work-claims.mjs";
 import { claimThread } from "./claim-thread.mjs";
@@ -216,7 +219,8 @@ function validRoomArgs(name, args) {
       && (!code || typeof args.inviteCode === "string" && args.inviteCode.length > 0 && args.inviteCode.length <= 80);
   }
   if (name === "room_merge_members") return validId(args.keepMemberId) && validId(args.retireMemberId);
-  if (name === "get_room_context") return (args.since_version === undefined || typeof args.since_version === "string" && /^[a-f0-9]{64}$/.test(args.since_version)) && (args.work_after === undefined || validId(args.work_after));
+  if (BOARD_CLAIM_TOOLS.includes(name)) { const { roomId: _room, ...rest } = args; return boardClaimToolsEnabled() && validBoardClaimArgs(name, rest); }
+  if (name === "get_room_context") return (args.view === undefined || args.view === "handoff" && handoffPacketEnabled()) && (args.since_version === undefined || typeof args.since_version === "string" && /^[a-f0-9]{64}$/.test(args.since_version)) && (args.work_after === undefined || validId(args.work_after));
   if (name === "room_read_bootstrap") return true;
   if (name === "room_list_events") {
     return (args.after === undefined || Number.isSafeInteger(args.after) && args.after >= 0)
@@ -553,7 +557,37 @@ function callRoomTool(store, secret, identity, name, args, agentRooms, spendCred
     () => dispatchRoomToolCall(store, secret, identity, name, args, agentRooms, signal));
 }
 
+// A work-item tool given a Board claim id answered a bare work_not_found
+// (harness 2026-11-03: agents then retried the same tool). Name the Board
+// tool that acts on that id instead. Existence only; no claim content.
+function boardIdHint(store, args, outcome) {
+  const value = outcome?.value;
+  if (!outcome?.isError || value?.code !== "work_not_found" || typeof args?.workItemId !== "string") return value;
+  let board = null;
+  try { board = store.workClaims?.get(args.roomId, args.workItemId) ?? null; } catch { board = null; }
+  if (!board) return value;
+  const on = boardClaimToolsEnabled();
+  return { ...value, hint: `"${args.workItemId}" is a Board task, not a proposed work item. ${on
+    ? "Take it with room_work_claim op take and finish it with op finish."
+    : "Take it with POST /api/rooms/{roomId}/work-claims/{claimId}/claim; retire it with room_close_work_claim."}`,
+    next: [{ tool: on ? "room_work_claim" : "room_read_board", arguments: on ? { roomId: args.roomId, claimId: args.workItemId, op: "take" } : { roomId: args.roomId } }] };
+}
+
+// Flag ROOM_BOARD_CLAIM_TOOLS: same REST handler (handleWorkClaims) in-process.
+async function boardClaimCall(store, secret, name, args) {
+  const { roomId, ...rest } = args;
+  const auth = store.authenticate(secret, roomId);
+  const outcome = await runBoardClaimTool({ handleWorkClaims, store, roomId, auth, name, args: rest,
+    reauthorize: () => store.authenticate(secret, roomId, auth.sessionBinding) });
+  if (!outcome.isError) return outcome.value;
+  const { status, code, message, ...extra } = outcome.value;
+  const error = new ServiceError(status, code ?? "work_claim_refused", message ?? "Refused");
+  if (extra.next) error.next = extra.next;
+  throw error;
+}
+
 function dispatchRoomToolCall(store, secret, identity, name, args, agentRooms, signal) {
+  if (BOARD_CLAIM_TOOLS.includes(name)) return boardClaimCall(store, secret, name, args);
   if (name === 'room_wait_for_attention') return waitForAttention(store, secret, args.roomId, {...args, signal});
   if (name === "room_needs_me") return collectNeedsMe(store, secret, { since: args.since, roomId: args.roomId });
   if (name === "room_create") {
@@ -691,6 +725,13 @@ function dispatchRoomToolCall(store, secret, identity, name, args, agentRooms, s
     return updateSquadMembers(store, secret, roomId, args.squadId, { add: args.add, remove: args.remove });
   }
   if (name === "squads_disband") return disbandSquad(store, secret, roomId, args.squadId);
+  if (name === "get_room_context" && args.view === "handoff") {
+    // Flag ROOM_HANDOFF_PACKET: validRoomArgs refuses view unless enabled.
+    const context = readComposedRoomContext(store, secret, roomId, { workAfter: args.work_after ?? "" });
+    const since = decisionWindowStart(store.now?.() ?? Date.now());
+    const decisions = collectDecisions(after => store.eventsAfter(secret, roomId, after, 100, { types: [...DECISION_TYPES], since }));
+    return withContentTrust(buildHandoffPacket({ context: { ...context, roomId }, decisions, now: store.now?.() ?? Date.now() }));
+  }
   if (name === "get_room_context") {
     const context = readComposedRoomContext(store, secret, roomId, {
       workAfter:args.work_after??"", sinceVersion: args.since_version === undefined ? null : args.since_version
@@ -1173,7 +1214,7 @@ async function handleAuthed(message, { store, secret, identity, mcpUrl, searchPa
       if (oauthPrincipal) enforceMcpCallVisibility(store, identity, name);
       if (isHostedStdioTool(name)) {
         const outcome = await callHostedStdioTool(store, secret, name, args);
-        return { jsonrpc: "2.0", id: requestId, result: toolResult(outcome.value, outcome.isError) };
+        return { jsonrpc: "2.0", id: requestId, result: toolResult(boardIdHint(store, args, outcome), outcome.isError) };
       }
       if (INBOX_TOOLS.some(entry => entry.name === name)) {
         // Scoped API keys need the mcp:inbox scope: inbox tools reach the
@@ -1261,6 +1302,7 @@ function mcpKeyGrantsScope(store, secret, requiredScope) {
 // Heartbeat, wake and webhook tools never reach callRoomTool; they run through
 // callWakeTool under the mcp:wake gate and are unchanged here.
 const MCP_ROOM_WRITE_TOOLS = new Set([
+  ...BOARD_CLAIM_TOOLS,
   "room_create", "room_join", "room_merge_members",
   "squads_create", "squads_update_members", "squads_disband",
   "room_post_message",

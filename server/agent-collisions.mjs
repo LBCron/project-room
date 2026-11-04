@@ -173,6 +173,22 @@ export function leaseExpiryTargets(claims, expired) {
   return Object.freeze(targets);
 }
 
+// Who handed this claim to its holder, from history already on the claim:
+// the latest "reassigned:<owner>" stamp, else the "created" stamp. No new
+// field. A trimmed history (SEC-2 cap) or a system or self create yields null.
+export function leaseExpiryProposer(expired) {
+  const history = Array.isArray(expired?.history) ? expired.history : [];
+  const owner = expired?.owner;
+  if (!owner) return null;
+  let by = null;
+  for (let i = history.length - 1; i >= 0; i--) {
+    const action = history[i]?.action;
+    if (action === `reassigned:${owner}` || action === "created") { by = history[i]?.agentId ?? null; break; }
+  }
+  if (typeof by !== "string" || !by || by === "system" || by === owner) return null;
+  return by;
+}
+
 // Never throws. Idempotent per (room, expired claim, lapsed lease time,
 // target claim): a repeat sweep of the same lapse coalesces on the post id.
 export function notifyLeaseExpired(store, roomId, expired) {
@@ -190,6 +206,17 @@ export function notifyLeaseExpired(store, roomId, expired) {
       const material = `${roomId}\0lease_expired\0${expired.id}\0${lapse}\0${target.claimId}`;
       try {
         postAlert(store, roomId, { material, body, memberIds: [target.owner], members });
+        sent.push(material);
+      } catch (error) {
+        console.error("lease expiry notice failed:", error?.message ?? error);
+      }
+    }
+    const proposer = leaseExpiryProposer(expired);
+    if (proposer && members?.[proposer]?.kind === "agent") {
+      const body = `${memberName(members, proposer)}: the lease on ${plain(expired.id)}, which you handed to ${memberName(members, expired.owner)}, expired and was released with no result. The item is unclaimed; reassign it or take it from the Board.`;
+      const material = `${roomId}\0lease_expired_proposer\0${expired.id}\0${lapse}\0${proposer}`;
+      try {
+        postAlert(store, roomId, { material, body, memberIds: [proposer], members });
         sent.push(material);
       } catch (error) {
         console.error("lease expiry notice failed:", error?.message ?? error);

@@ -1,4 +1,6 @@
 import { uiText } from './strings.js';
+const flagEnv = name => String(globalThis.process?.env?.[name] ?? "").trim();
+const boardClaimToolsOn = () => /^(1|true|on)$/i.test(flagEnv("ROOM_BOARD_CLAIM_TOOLS"));
 // MCP tool registry — the single metadata source for catalog selection.
 //
 // Before this module, a tool's catalog identity was hand-declared in up to
@@ -29,6 +31,10 @@ import { uiText } from './strings.js';
 // the rest follow HOSTED_ROOM_MCP_TOOLS order.
 export const MCP_TOOL_META = Object.freeze([
   { name: "room_needs_me", core: true, blurb: "Cross-room attention and messages. Pass the complete cursor as since; continue while hasMore, even on an empty page. Pass roomId to scope one room, or omit it with a room-pinned key; discovery is not resolution.", focus: ["common"] },
+  // Flag ROOM_BOARD_CLAIM_TOOLS (off by default): core when on, so a default
+  // catalog can take and finish a Board task (harness 2026-11-03: 0/10 on main).
+  ...(boardClaimToolsOn() ? [
+    { name: "room_work_claim", core: true, blurb: "Board task: op take or finish (with note).", focus: ["work"] }] : []),
   { name: "room_read_messages", core: true, blurb: "Read room messages oldest first. latest:true returns newest messages; view:digest retains directed/reply context and groups other headlines, same cursor. Pass roomId, or omit it with a room-pinned key.", focus: ["conversation"] },
   { name: "room_post_message", core: true, blurb: "Post a room message. Optional replyToId.", focus: ["common"] },
   { name: "room_reply", core: true, blurb: "Reply under a room message. Pass replyToId and body; requestId is optional and derived when omitted. Ordinary replies do not close formal requests.", focus: ["common"] },

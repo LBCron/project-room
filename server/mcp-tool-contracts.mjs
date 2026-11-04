@@ -1,3 +1,4 @@
+import { boardClaimToolsEnabled } from "./board-claim-tools.mjs";
 // AUX-08: on the full MCP profile, each front-door tool (the core and lean
 // lists) states its access, its cost and its REST twin in the description, so an agent
 // that reads only tools/list knows who may call it, what it costs and how to
@@ -103,6 +104,9 @@ export const MCP_TOOL_CONTRACTS = Object.freeze({
   room_submit_text_result: { access: `write, assigned room member with complete_work; write mode also needs write authority and an active claim; hidden from guest and read-only-tier agents`, cost: WRITE, rest: `${COMMANDS} (work.completed)` },
   room_supersede_work: { access: `write, room member with steer and Board write access; hidden from guest and read-only-tier agents`, cost: WRITE, rest: `${COMMANDS} (work.superseded)` },
   room_map: { access: `read, ${MEMBER}`, cost: READ, rest: "GET /api/rooms/{roomId}/map/query" }
+  // Flag ROOM_BOARD_CLAIM_TOOLS (off by default): contracts exist only when listed.
+  ,...(boardClaimToolsEnabled() ? {
+    room_work_claim: { access: `write, Board writer (finish: the holder); hidden from guest and read-only-tier agents`, cost: WRITE, rest: "POST /api/rooms/{roomId}/work-claims/{claimId}/claim, POST /api/rooms/{roomId}/work-claims/{claimId}/update" } } : {})
 });
 
 export function mcpToolContractLine(name) {

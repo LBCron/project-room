@@ -6,7 +6,7 @@ import { RoomAgentClient } from "../client/room-agent.mjs";
 import { RoomStore } from "../server/store.mjs";
 import { initialRoom } from "../server/bootstrap.mjs";
 import { createRoomServer } from "../server/http.mjs";
-import { leaseExpiryTargets } from "../server/agent-collisions.mjs";
+import { leaseExpiryProposer, leaseExpiryTargets } from "../server/agent-collisions.mjs";
 import { linkWithProof } from "./helpers/link-with-proof.mjs";
 
 const live = (id, owner, extra) => ({ id, owner, state: "claimed", files: [], ...extra });
@@ -76,5 +76,39 @@ test("a lapsed lease tells the overlapping live agent the paths are free, once, 
     assert.equal(store.agentHeartbeats.pendingWakes(beaId).length, wakesBefore + 1);
     await bea.workClaims();
     assert.equal((await posts(bea)).filter(body => body.includes("the lease on lane-a")).length, 1, "a repeat sweep does not duplicate");
+  }
+});
+
+test("the proposer is derived from existing history: latest reassign to the holder, else create", () => {
+  const stamp = (agentId, action) => ({ at: "2026-11-03T00:00:00.000Z", agentId, action, note: null });
+  assert.equal(leaseExpiryProposer({ owner: "ada", history: [stamp("bea", "created"), stamp("ada", "claimed")] }), "bea");
+  assert.equal(leaseExpiryProposer({ owner: "ada", history: [stamp("bea", "created"), stamp("cy", "reassigned:ada")] }), "cy");
+  assert.equal(leaseExpiryProposer({ owner: "ada", history: [stamp("ada", "created"), stamp("ada", "claimed")] }), null, "self-created");
+  assert.equal(leaseExpiryProposer({ owner: "ada", history: [stamp("system", "created")] }), null, "system create");
+  assert.equal(leaseExpiryProposer({ owner: "ada", history: [stamp("ada", "claimed")], historyOmitted: 300 }), null, "trimmed history");
+  assert.equal(leaseExpiryProposer({ owner: null, history: [stamp("bea", "created")] }), null);
+});
+
+test("a lapsed assigned claim tells the agent who assigned it, once, only when the flag is on", async t => {
+  for (const flag of ["off", "on"]) {
+    const { store, bea, beaId, advance } = await room(t, { ROOM_COLLISION_ALERTS: flag });
+    await bea.workClaimCreate({ id: "handed", title: "Handed work", files: ["docs/h.md"], assignee: "ada" });
+    const created = await bea.workClaimGet("handed");
+    assert.equal((created.item ?? created).owner, "ada");
+    const wakesBefore = store.agentHeartbeats.pendingWakes(beaId).length;
+    advance(400 * 24 * 60 * 60 * 1000);
+    const listed = await bea.workClaims();
+    assert.ok(listed.swept.includes("handed"), "the assigned lease lapsed");
+    const notices = (await posts(bea)).filter(body => body.includes("which you handed to"));
+    if (flag === "off") {
+      assert.equal(notices.length, 0);
+      assert.equal(store.agentHeartbeats.pendingWakes(beaId).length, wakesBefore);
+      continue;
+    }
+    assert.equal(notices.length, 1);
+    assert.match(notices[0], /^Bea: the lease on handed, which you handed to Ada, expired and was released with no result\./);
+    assert.equal(store.agentHeartbeats.pendingWakes(beaId).length, wakesBefore + 1);
+    await bea.workClaims();
+    assert.equal((await posts(bea)).filter(body => body.includes("which you handed to")).length, 1, "a repeat sweep does not duplicate");
   }
 });

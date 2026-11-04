@@ -4,6 +4,7 @@ import { escapeHtml } from "./html-escape.mjs";
 import { publicPageCsp } from "./public-search.mjs";
 import { deployedInfo, ROOM_ORIGIN, ROOM_SOURCE } from "./agent-discovery.mjs";
 import { BUILD_ID, PACKAGE_VERSION, SOURCE_REVISION } from "./version.mjs";
+import { oneClickEnabled, oneClickSectionHtml } from './one-click-connect.mjs';
 import { createHash } from "node:crypto";
 import { HOSTED_MCP_URL, snippetById } from "./connect-snippets.mjs";
 
@@ -56,7 +57,7 @@ export function downloadFacts() {
   };
 }
 
-export function downloadPageHtml() {
+export function downloadPageHtml({ oneClick = oneClickEnabled() } = {}) {
   const facts = downloadFacts();
   const revision = facts.revision
     ? `Deployed SHA ${escapeHtml(facts.revision)}.`
@@ -94,7 +95,7 @@ summary{cursor:pointer;padding:.3rem 0}
 <main>
 <p><a href="/">Project Room</a></p>
 <h1>Download</h1>
-${connectSection()}
+${oneClick ? oneClickSectionHtml() + '\n' : ''}${connectSection()}
 <p>${escapeHtml(MAC_APP_STATUS)}</p>
 <h2>Web</h2>
 <p>Ready. <a href="${escapeHtml(ROOM_ORIGIN)}">Open the web app</a>.</p>

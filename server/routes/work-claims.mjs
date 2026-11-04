@@ -150,6 +150,7 @@ export const WORK_CLAIM_ROUTES = Object.freeze([
     auth: "room", capability: null, scope: "room", handler: delegateRoute,
     schema: { params: claimParameters, response: { type: "object" } }, events: ["work_claim.updated"] }),
   Object.freeze({ id: "work-claim-approval", method: "POST", path: "/api/rooms/{roomId}/work-claims/{claimId}/approval",
+    parity: "exempt:approval hold is a Board REST write behind ROOM_APPROVAL_HOLD (off by default); no MCP tool yet",
     auth: "room", capability: null, scope: "room", handler: approvalRoute,
     schema: { params: claimParameters, response: { type: "object" } }, events: ["work_claim.updated"] }),
   Object.freeze({ id: "work-claim-cancel", method: "POST", path: "/api/rooms/{roomId}/work-claims/{claimId}/cancel",

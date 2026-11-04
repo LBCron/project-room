@@ -150,6 +150,58 @@ function postAlert(store, roomId, { material, body, memberIds, members }) {
   return posted ? messageId : messageId;
 }
 
+// Lease-expiry notice. When a lapsed lease is auto-released, the sweep wakes
+// only the lapsed owner; agents whose live claims overlap the freed paths
+// never learn the item is free. Tell each overlapping live claim holder (a
+// different owner, same repo when both name one) once per lapse. Advisory
+// only, same flag and post path as collision alerts. Pure selector first.
+export function leaseExpiryTargets(claims, expired) {
+  if (!expired?.id) return Object.freeze([]);
+  const freed = slotsOf(expired);
+  if (!freed.length) return Object.freeze([]);
+  const targets = [];
+  for (const claim of liveClaims(claims)) {
+    if (claim.id === expired.id || !claim.owner || claim.owner === expired.owner) continue;
+    if (expired.repo && claim.repo && claim.repo !== expired.repo) continue;
+    const overlap = [];
+    for (const a of slotsOf(claim)) for (const b of freed) {
+      if (slotsOverlap(a, b) && !overlap.includes(b.path)) overlap.push(b.path);
+    }
+    if (overlap.length) targets.push(Object.freeze({ claimId: claim.id, owner: claim.owner, overlap: Object.freeze(overlap) }));
+  }
+  targets.sort((a, b) => (a.claimId < b.claimId ? -1 : 1));
+  return Object.freeze(targets);
+}
+
+// Never throws. Idempotent per (room, expired claim, lapsed lease time,
+// target claim): a repeat sweep of the same lapse coalesces on the post id.
+export function notifyLeaseExpired(store, roomId, expired) {
+  try {
+    if (!collisionAlertsEnabled(store, roomId)) return [];
+    if (!store?.room || !store?.workClaims?.list) return [];
+    const claims = store.workClaims.list(roomId);
+    const members = store.room(roomId)?.state?.members ?? {};
+    const lapse = String(expired?.leaseExpiresAt ?? "");
+    const sent = [];
+    for (const target of leaseExpiryTargets(claims, expired)) {
+      if (members?.[target.owner]?.kind !== "agent") continue;
+      const paths = target.overlap.slice(0, 8).map(plain).join(", ") + (target.overlap.length > 8 ? ` and ${target.overlap.length - 8} more` : "");
+      const body = `${memberName(members, target.owner)} (${plain(target.claimId)}): the lease on ${plain(expired.id)} held by ${memberName(members, expired.owner)} expired and was released. Paths it held that overlap your claim are now free: ${paths}. The item is unclaimed; check the Board before taking it.`;
+      const material = `${roomId}\0lease_expired\0${expired.id}\0${lapse}\0${target.claimId}`;
+      try {
+        postAlert(store, roomId, { material, body, memberIds: [target.owner], members });
+        sent.push(material);
+      } catch (error) {
+        console.error("lease expiry notice failed:", error?.message ?? error);
+      }
+    }
+    return sent;
+  } catch (error) {
+    console.error("lease expiry notice failed:", error?.message ?? error);
+    return [];
+  }
+}
+
 function pairInvolvesAgent(members, pair) {
   return members?.[pair.left.owner]?.kind === "agent" || members?.[pair.right.owner]?.kind === "agent";
 }

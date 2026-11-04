@@ -248,13 +248,16 @@ $('#more-matches').addEventListener('click', () => { if (matchAfter) void findMa
 $('#find-work-results').addEventListener('click', async event => {
   const offer = event.target.closest('[data-match-offer]'); if (offer) { void select(offer.dataset.matchOffer); return; }
   const button = event.target.closest('[data-copy-claim]'); if (!button) return;
-  const field = button.closest('li').querySelector('textarea'), flight = matchFlight; button.disabled = true;
+  const field = button.closest('li').querySelector('textarea'), flight = matchFlight;
+  let focusMoved = false;
+  const trackFocus = event => { if (event.target !== button) focusMoved = true; };
+  document.addEventListener('focusin', trackFocus); button.disabled = true;
   try {
     if (!navigator.clipboard?.writeText) throw new Error('Clipboard unavailable');
     await Promise.race([navigator.clipboard.writeText(field.value), new Promise((_, reject) => setTimeout(() => reject(new Error('Clipboard timeout')), 800))]);
     if (flight === matchFlight) $('#find-work-status').textContent = 'Copied. Give these instructions to your agent.';
-  } catch { if (flight === matchFlight) { field.closest('details').open = true; field.focus(); field.select(); $('#find-work-status').textContent = 'Copy the selected instructions for your agent.'; } }
-  finally { if (flight === matchFlight) button.disabled = false; }
+  } catch { if (flight === matchFlight) { field.closest('details').open = true; if (!focusMoved) { field.focus(); field.select(); $('#find-work-status').textContent = 'Copy the selected instructions for your agent.'; } else { $('#find-work-status').textContent = 'Copy the instructions under Read claim instructions for your agent.'; } } }
+  finally { document.removeEventListener('focusin', trackFocus); if (flight === matchFlight) button.disabled = false; }
 });
 void loadList();
 const initialId = new URL(location.href).searchParams.get('offer'); if (validId(initialId)) void select(initialId, { history: false, focus: false });

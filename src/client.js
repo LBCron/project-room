@@ -718,22 +718,30 @@ export class RoomClient {
     const generation = this.generation, session = this.session;
     const anchored = () => this.live && this.live.generation === generation && this.live.session === session ? this.live : null;
     if (anchored()?.snapshot?.snapshotVersion === 2) {
-      const live = anchored(), held = this.heldMessages(), page = live.snapshot.messagesPage;
-      if (!held?.partial || !page?.hasMore || typeof page.cursor !== "string") return false;
-      const params = new URLSearchParams({ cursor: page.cursor, limit: String(page.limit) });
-      const read = await this.request(this.path(`/conversation?${params}`), { fresh: true });
-      if (generation !== this.generation || this.session !== session || anchored() !== live) return false;
-      if (!this.ownsResponse(read, session)) { this.endAccess(); throw new Error(uiText("error.connection_changed")); }
-      if (read.mode === "reset") { await this.refresh(null, { revalidate: true }); return false; }
-      if (read.mode !== "replace" || !Array.isArray(read.messages)) throw new Error(uiText("conversation.invalidPage"));
-      const seen = new Set(held.messages.map(message => message.id));
-      const messages = [...read.messages.filter(message => !seen.has(message.id)), ...held.messages];
-      const more = read.nextCursor !== null;
-      const snapshot = { ...live.snapshot, state: { ...live.snapshot.state, messages },
-        messagesPage: { ...page, cursor: read.nextCursor, hasMore: more } };
-      this.held = { ...held, messages: messages.slice(), partial: more, owesFull: false };
-      this.live = { generation, session, snapshot }; this.onSnapshot(snapshot, session);
-      return true;
+      // A stream refresh can replace the recent window while this read is in
+      // flight. Retry its current cursor once; never merge a stale page or loop
+      // indefinitely in a busy room. A second replacement leaves history owed.
+      for (let attempt = 0; attempt < 2; attempt++) {
+        const live = anchored(), held = this.heldMessages(), page = live?.snapshot?.messagesPage;
+        if (live?.snapshot?.snapshotVersion !== 2) return false;
+        if (!held?.partial || !page?.hasMore || typeof page.cursor !== "string") return false;
+        const params = new URLSearchParams({ cursor: page.cursor, limit: String(page.limit) });
+        const read = await this.request(this.path(`/conversation?${params}`), { fresh: true });
+        if (generation !== this.generation || this.session !== session) return false;
+        if (anchored() !== live) continue;
+        if (!this.ownsResponse(read, session)) { this.endAccess(); throw new Error(uiText("error.connection_changed")); }
+        if (read.mode === "reset") { await this.refresh(null, { revalidate: true }); return false; }
+        if (read.mode !== "replace" || !Array.isArray(read.messages)) throw new Error(uiText("conversation.invalidPage"));
+        const seen = new Set(held.messages.map(message => message.id));
+        const messages = [...read.messages.filter(message => !seen.has(message.id)), ...held.messages];
+        const more = read.nextCursor !== null;
+        const snapshot = { ...live.snapshot, state: { ...live.snapshot.state, messages },
+          messagesPage: { ...page, cursor: read.nextCursor, hasMore: more } };
+        this.held = { ...held, messages: messages.slice(), partial: more, owesFull: false };
+        this.live = { generation, session, snapshot }; this.onSnapshot(snapshot, session);
+        return true;
+      }
+      return false;
     }
     let before = anchored()?.snapshot?.messagesPage?.before;
     let beforeId = anchored()?.snapshot?.messagesPage?.beforeId ?? null;

@@ -99,6 +99,16 @@ export async function delegateRoute(ctx) {
     helpers: { json: ctx.json, reject: ctx.reject, body: ctx.body } });
 }
 
+// Approval hold: pause a risky step until a named approver says yes.
+// 404 unless ROOM_APPROVAL_HOLD=1 (checked in handleWorkClaims).
+export async function approvalRoute(ctx) {
+  const { roomId, auth } = authenticateRead(ctx, true);
+  return handleWorkClaims({ req: ctx.req, res: ctx.res, url: ctx.url, store: ctx.store,
+    roomId, auth, workClaimRoute: "approval", workClaimId: ctx.params.claimId,
+    registry: ctx.store.workClaims, reauthorize: () => authenticateRead(ctx, true).auth,
+    helpers: { json: ctx.json, reject: ctx.reject, body: ctx.body } });
+}
+
 // #5378: the claim thread, one ordered record per Board claim. Same
 // visibility as the claim read: any active room member who may read the
 // claim reads its thread. Entries are board events and the claim's own
@@ -137,6 +147,9 @@ export const WORK_CLAIM_ROUTES = Object.freeze([
     schema: { params: claimParameters, response: { type: "object" } }, events: ["work_claim.updated"] }),
   Object.freeze({ id: "work-claim-delegate", method: "POST", path: "/api/rooms/{roomId}/work-claims/{claimId}/delegate",
     auth: "room", capability: null, scope: "room", handler: delegateRoute,
+    schema: { params: claimParameters, response: { type: "object" } }, events: ["work_claim.updated"] }),
+  Object.freeze({ id: "work-claim-approval", method: "POST", path: "/api/rooms/{roomId}/work-claims/{claimId}/approval",
+    auth: "room", capability: null, scope: "room", handler: approvalRoute,
     schema: { params: claimParameters, response: { type: "object" } }, events: ["work_claim.updated"] }),
   Object.freeze({ id: "work-claim-cancel", method: "POST", path: "/api/rooms/{roomId}/work-claims/{claimId}/cancel",
     auth: "room", capability: null, scope: "room", handler: closeRoute,

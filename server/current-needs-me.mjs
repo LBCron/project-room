@@ -58,7 +58,7 @@ function readPage(store,secret,roomId,{cursor,after,freshWindow=500,expectedMode
   // returns an honest incomplete page (see the complete field), never a
   // forced complete.
   let workPages=0;
-  while(!state.workDone&&workPages<MAX_NEEDS_ME_WORK_PAGES){
+  while (!state.workDone && workPages < MAX_NEEDS_ME_WORK_PAGES) {
    workPages++;
    const itemsBefore=items.length;
    const page=store.currentWorkListing(secret,roomId,{focus:'needs_me',limit:1,expectedSessionBinding,...(state.workCursor?{cursor:state.workCursor}:{})});

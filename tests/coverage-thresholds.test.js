@@ -33,6 +33,7 @@ import {
   coverableLines,
   coveredLinesForPayload,
   evaluateModules,
+  evaluatePayloads,
   groupFunctionsByUrl,
   lineCoverage,
   listModuleFiles,
@@ -310,6 +311,12 @@ test("real V8: split-process coverage equals single-process coverage", () => {
       }
       return union;
     };
+    const config = { modules: { all: { dir: ".", threshold: 100 } } };
+    for (const inputs of [together, splitA, splitB, [...splitA, ...splitB]]) {
+      assert.deepEqual(evaluatePayloads(dir, config, inputs.values()).results,
+        evaluateModules(dir, config, groupFunctionsByUrl(inputs, dir)),
+        "streaming and grouped evaluators agree on actual V8 process payloads");
+    }
     const covTogether = coverTarget(together);
     const covSplit = coverTarget([...splitA, ...splitB]);
     assert.deepEqual(
@@ -418,4 +425,61 @@ test("collector partitions exactly existing Node discovery with no missing or du
   assert.equal(batches.length, 3);
   assert.deepEqual(batches.flat().sort(), expected);
   assert.equal(new Set(batches.flat()).size, expected.length);
+});
+
+
+test("streaming evaluator preserves grouped results across changing ranges, excludes and missing files", () => {
+  const root = mkdtempSync(join(tmpdir(), "coverage-stream-parity-"));
+  try {
+    mkdirSync(join(root, "mod"));
+    const text = "export function f(flag) {\n  if (flag) return 1;\n  return 2;\n}\n";
+    writeFileSync(join(root, "mod/a.mjs"), text);
+    writeFileSync(join(root, "mod/missing.mjs"), "export const missing = true;\n");
+    writeFileSync(join(root, "mod/blank.mjs"), "// blank\n");
+    writeFileSync(join(root, "mod/excluded.mjs"), "export const excluded = true;\n");
+    const url = scriptUrl(root, "mod/a.mjs");
+    const inputs = [
+      payload(url, [fn("f", [range(0, text.length, 1), range(27, 50, 0)])]),
+      payload(url, [fn("f", [range(0, text.length, 0)])]),
+      payload(url, [fn("f", [range(0, text.length, 1), range(50, 62, 0)])]),
+      payload(scriptUrl(root, "node_modules/ignore.mjs"), [fn("", [range(0, 10, 1)])]),
+      { result: null },
+    ];
+    const config = { modules: { mod: { dir: "mod", threshold: 95, exclude: ["excluded.mjs"] }, overlapping: { dir: "mod", threshold: 100 } } };
+    const expected = evaluateModules(root, config, groupFunctionsByUrl(inputs, root));
+    for (const values of [inputs, inputs.toReversed(), [...inputs, ...inputs]]) {
+      const actual = evaluatePayloads(root, config, values.values());
+      assert.equal(actual.payloadCount, values.length);
+      assert.deepEqual(actual.results, expected);
+      assert.deepEqual(checkThresholds(config, actual.results), checkThresholds(config, expected));
+    }
+    assert.deepEqual(evaluatePayloads(root, config, []).results, evaluateModules(root, config, new Map()));
+  } finally { rmSync(root, { recursive: true, force: true }); }
+});
+
+test("streaming evaluator does not retain raw ranges across thousands of payloads", () => {
+  const root = mkdtempSync(join(tmpdir(), "coverage-stream-memory-"));
+  try {
+    mkdirSync(join(root, "mod"));
+    writeFileSync(join(root, "mod/a.mjs"), "export const used = true;\n");
+    const program = `
+      import * as gate from ${JSON.stringify(new URL("../scripts/coverage-thresholds.mjs", import.meta.url).href)};
+      const root = ${JSON.stringify(root)};
+      const url = new URL('mod/a.mjs', 'file://' + root + '/').href;
+      function* payloads() {
+        for (let i = 0; i < 2000; i++) yield { result: [{ url, functions:
+          Array.from({ length: 150 }, () => ({ functionName: 'synthetic', ranges:
+            Array.from({ length: 12 }, () => ({ startOffset: 0, endOffset: 24, count: 1 })) })) }] };
+      }
+      const config = { modules: { mod: { dir: 'mod', threshold: 100 } } };
+      const result = gate.evaluatePayloads(root, config, payloads());
+      console.log(JSON.stringify(result));
+    `;
+    const env = { ...process.env }; delete env.NODE_V8_COVERAGE; delete env.NODE_TEST_CONTEXT;
+    const result = spawnSync(process.execPath, ["--max-old-space-size=64", "--input-type=module", "-e", program], { encoding: "utf8", env, timeout: 30000, maxBuffer: 1024 * 1024 });
+    assert.equal(result.status, 0, result.stderr);
+    const measured = JSON.parse(result.stdout.trim());
+    assert.equal(measured.payloadCount, 2000);
+    assert.equal(measured.results.mod.pct, 100);
+  } finally { rmSync(root, { recursive: true, force: true }); }
 });

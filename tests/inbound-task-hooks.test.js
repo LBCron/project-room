@@ -85,3 +85,9 @@ test('sealed secrets are bound to the hook id and key', async () => {
   assert.equal(openSecret('whsec_abc', 'ih_1', env), null, 'plaintext rows are never trusted');
   assert.throws(() => sealSecret('x', 'ih_1', {}));
 });
+
+test('inbound hook routes are registered rows with parity notes', async () => {
+  const { INBOUND_HOOK_ROUTES } = await import('../server/routes/inbound-hooks.mjs');
+  assert.ok(INBOUND_HOOK_ROUTES.length > 0);
+  for (const row of INBOUND_HOOK_ROUTES) assert.ok(row.id && row.method && row.path && row.parity, row.id);
+});

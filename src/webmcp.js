@@ -5,6 +5,7 @@
 // Room text returned by a tool is data for the agent, never instructions.
 import { claimDeliverBody } from "./board-ui.js";
 import { replyDraftData } from "./reply-requests.js";
+import { uiText } from "./strings.js";
 
 export const WEBMCP_TOOL_NAMES = Object.freeze(["post_message", "read_since_marker", "mark_caught_up",
   "claim_board_task", "finish_board_task", "request_review"]);
@@ -21,7 +22,7 @@ function sessionOf(client) {
   if (!client?.session?.roomId) throw new Error("Open a room first");
   return client.session;
 }
-const claimPath = (client, workId, suffix = "") => client.path(`/work-claims/${encodeURIComponent(workId)}${suffix}`);
+const claimPath = (client, workId, suffix = "") => client.path("/work-claims/".concat(encodeURIComponent(workId), suffix));
 
 // Ask the human before acting for them. Prefer the agent-mediated
 // requestUserInteraction; fall back to a page confirm dialog.
@@ -98,7 +99,7 @@ export function buildWebMcpTools({ client, getMarker = () => 0, confirm = q => g
       description: "Deliver your in-progress Board task with an artifact and checks. Asks the user to confirm first.",
       inputSchema: { type: "object", additionalProperties: false, required: ["workItemId", "artifactKind", "artifactRef", "artifactSha256", "checks"],
         properties: { workItemId: id, artifactKind: { type: "string", maxLength: 64 }, artifactRef: { type: "string", maxLength: 512 },
-          artifactSha256: { type: "string", pattern: "^(sha256:)?[0-9a-f]{64}$" },
+          artifactSha256: { type: "string", pattern: /^(sha256:)?[0-9a-f]{64}$/.source },
           checks: { type: "array", minItems: 1, items: { type: "object", required: ["name", "result"], properties: { name: { type: "string" }, result: { type: "string" } } } },
           criteria: { type: "array", items: { type: "string" }, description: "One status per acceptance criterion, in order." } } },
       annotations: { readOnlyHint: false, destructiveHint: true, idempotentHint: false },
@@ -112,7 +113,7 @@ export function buildWebMcpTools({ client, getMarker = () => 0, confirm = q => g
           : k === "checkResult" ? input.checks.map(c => c.result) : k === "criterion" ? input.criteria ?? [] : [] };
         const body = claimDeliverBody(item, form, session.member.id);
         if (!body) return fail("Delivery details are incomplete or invalid");
-        const approved = await confirmed(agent, `Let the agent mark '${item.title || item.id}' delivered?`, question => { current(); return confirm(question); });
+        const approved = await confirmed(agent, uiText('webmcp.confirmDelivery', { title: item.title || item.id }), question => { current(); return confirm(question); });
         current();
         if (!approved) return fail("The user declined");
         await client.request(claimPath(client, item.id, "/update"), { method: "POST", data: body });
@@ -126,7 +127,7 @@ export function buildWebMcpTools({ client, getMarker = () => 0, confirm = q => g
       execute: run(async ({ toMemberId, body, replyToId = null }, agent, current) => {
         const session = sessionOf(client);
         if (!body?.trim() || toMemberId === session.member?.id) return fail("Choose another member and a request body");
-        const approved = await confirmed(agent, `Let the agent send a review request to ${toMemberId}?`, question => { current(); return confirm(question); });
+        const approved = await confirmed(agent, uiText('webmcp.confirmReview', { member: toMemberId }), question => { current(); return confirm(question); });
         current();
         if (!approved) return fail("The user declined");
         const messageId = randomId();

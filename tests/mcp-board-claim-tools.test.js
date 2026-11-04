@@ -7,6 +7,7 @@ import { rmSync } from "node:fs";
 import { createAcceptanceFixture } from "../scripts/acceptance-fixture.mjs";
 import { createRoomServer } from "../server/http.mjs";
 import { linkWithProof } from "./helpers/link-with-proof.mjs";
+import { API_KEY_PREFIX } from "../server/agent-api-keys.mjs";
 
 const ON = /^(1|true|on)$/i.test(String(process.env.ROOM_BOARD_CLAIM_TOOLS ?? "").trim());
 
@@ -94,5 +95,23 @@ test("op list returns Board tasks through the REST list route; query is flat par
     assert.equal(body(one).claims.length, 1);
     const bad = await w.rpc(a, "tools/call", { name: "room_work_claim", arguments: { op: "list", roomId: "commons", query: { sort: "nope" } } });
     assert.ok(bad.error || bad.result?.isError);
+  } finally { await w.close(); }
+});
+
+test("Board facade keeps the existing rooms:write API-key boundary", { skip: !ON }, async () => {
+  const w = await world();
+  try {
+    assert.equal((await w.rest(w.f.keys.owner, "/api/rooms/commons/work-claims", { id: "scoped-work", title: "Scope check", note: "n" })).status, 201);
+    const identity = w.f.store.identities.create("Scoped worker");
+    linkWithProof(w.f.store, w.f.keys.owner, "commons", identity, { memberId: "scoped-worker", displayName: "Scoped worker", permissions: ["accept_work", "complete_work"] });
+    const issue = scopes => API_KEY_PREFIX + w.f.store.agentPlugin.issueApiKey({ identityId: identity.identityId, scopes }).secret;
+    const args = { op: "take", roomId: "commons", claimId: "scoped-work" };
+    const refused = await w.rpc(issue(["rooms:read"]), "tools/call", { name: "room_work_claim", arguments: args });
+    assert.ok(refused.error || refused.result?.isError, JSON.stringify(refused));
+    assert.match(JSON.stringify(refused), /insufficient_scope/);
+    assert.equal(w.f.store.workClaims.get("commons", "scoped-work").state, "unclaimed");
+    const accepted = await w.rpc(issue(["rooms:read", "rooms:write"]), "tools/call", { name: "room_work_claim", arguments: args });
+    assert.notEqual(accepted.result?.isError, true, JSON.stringify(accepted));
+    assert.equal(body(accepted).state, "claimed");
   } finally { await w.close(); }
 });

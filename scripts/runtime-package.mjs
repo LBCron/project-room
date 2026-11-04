@@ -125,6 +125,7 @@ optional.push("server/inbox-threads.mjs"); // thread builder (imported by server
 optional.push("server/inbox-stitch.mjs"); // stitch key derivation + scoring (imported by server/inbox.mjs and server.mjs; pure)
 optional.push("server/inbox-stitch-store.mjs"); // hash-only stitch graph (imported by server/inbox.mjs; pure persistence, no imports beyond inbox-stitch.mjs)
 optional.push("server/inbox-spam.mjs"); // spam/phishing flagging (imported by server/inbox-import-guards.mjs; pure, no imports of its own)
+optional.push("server/status-digest.mjs"); // status-only post hint (flag ROOM_STATUS_DIGEST; imported by server/mcp-room-profile.mjs; pure)
 optional.push("server/first-connect-task.mjs"); // first-connect task hint on room_join (flag ROOM_FIRST_CONNECT_TASK; imported by server/mcp-room-profile.mjs; pure)
 optional.push("server/invite-share.mjs"); // ROOM_INVITE_SHARE teammate paste line (imported by server/mcp-room-profile.mjs; imports connect-snippets.mjs)
 optional.push("server/showcase-page.mjs"); // ROOM_SHOWCASE example room page (imported by server/routes/table.mjs; imports public-search.mjs and connect-snippets.mjs)

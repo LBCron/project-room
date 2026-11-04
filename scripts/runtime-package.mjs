@@ -254,7 +254,6 @@ optional.push("server/persisted-row.mjs"); // RC-2026-09-27-2730: replay-safe pe
 optional.push("server/claim-collisions.mjs");
 optional.push("server/agent-collisions.mjs"); // overlap alerts for live claims (imported by server/work-claim-routes.mjs)
 optional.push("server/work-claim-routes.mjs"); // RC-2026-09-18-041: work-claim HTTP routes (imported by server/http.mjs)
-optional.push("server/inbound-task-hooks.mjs", "server/routes/inbound-hooks.mjs"); // grok/inbound-task-hooks new modules
 optional.push("server/work-claim-events.mjs"); // work_claim.updated receipts (imported by server/work-claim-routes.mjs; imports src/events.js)
 optional.push("server/work-claim-integrity.mjs"); // SEC-2: Board input bounds, event budget and status cache (imported by server/work-claim-routes.mjs; imports src/display-name-guard.js via server/display-name-guard.mjs and server/store.mjs limits)
 optional.push("server/work-item-board.mjs"); // decision #10: workItems -> board claims migration core + write-path sync (imported by server/store.mjs)
@@ -276,6 +275,7 @@ optional.push("server/bounty-escrow.mjs"); // agent work exchange slice 1: escro
 optional.push("server/bounty-escrow-routes.mjs"); // agent work exchange slice 1: bounty/credit HTTP routes (imported by server/http.mjs)
 optional.push("server/bounty-flag.mjs"); // bounty new-work pause flag (imported by server/bounty-escrow-routes.mjs and server/mcp-full-profile.mjs)
 optional.push("server/bounty-disputes.mjs"); // agent work exchange slice 1: dispute state machine (imported by server/bounty-escrow.mjs)
+optional.push("server/inbound-task-hooks.mjs", "server/routes/inbound-hooks.mjs"); // grok/inbound-task-hooks new modules
 optional.push("server/bounty-receipts.mjs"); // bounty receipts slice #1: Ed25519-signed, externally verifiable movement receipts (imported by server/bounty-escrow.mjs; pure, node:crypto only)
 optional.push("server/dispute-arbiters.mjs"); // agent work exchange slice 1: designated-verifier arbitration (imported by server/bounty-escrow.mjs)
 optional.push("server/bounty-disputability.mjs"); // DA3-P3: computed disputability derivation for bounty reads (imported by server/bounty-escrow.mjs; pure, no imports)

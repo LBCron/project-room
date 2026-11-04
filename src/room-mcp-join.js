@@ -3,6 +3,8 @@
 // unlocks the enrolled room profile (stdio room tools plus the hosted extras).
 
 import { MCP_TOOL_META } from "./mcp-tool-registry.js";
+const flagEnv = name => String(globalThis.process?.env?.[name] ?? "").trim();
+const boardClaimToolsOn = () => /^(1|true|on)$/i.test(flagEnv("ROOM_BOARD_CLAIM_TOOLS"));
 
 export const PUBLIC_WORK_MCP_TOOLS = Object.freeze([
   "public_work_recommend", "public_work_read_task", "public_work_claim", "public_work_renew",
@@ -78,7 +80,7 @@ export const HOSTED_ROOM_MCP_TOOLS = Object.freeze([
   "squads_disband",
   "room_map",
   // Flag ROOM_BOARD_CLAIM_TOOLS (off by default); mirrors server/board-claim-tools.mjs.
-  ...(/^(1|true|on)$/i.test(String(globalThis.process?.env?.ROOM_BOARD_CLAIM_TOOLS ?? "").trim()) ? ["room_work_claim"] : []),
+  ...(boardClaimToolsOn() ? ["room_work_claim"] : []),
   "inbox_put_attachment",
   "inbox_list_attachments",
   "inbox_get_attachment",

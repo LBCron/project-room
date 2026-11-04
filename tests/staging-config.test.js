@@ -1,6 +1,9 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { readFileSync } from "node:fs";
+import { readFileSync, mkdtempSync, mkdirSync, writeFileSync, rmSync } from "node:fs";
+import { execFileSync } from "node:child_process";
+import { join, dirname } from "node:path";
+import { tmpdir } from "node:os";
 import { parse } from "yaml";
 
 // The checked-in Worker config is the staging isolation contract. A deploy
@@ -51,6 +54,21 @@ test("persistent staging deploys only an explicitly dispatched candidate", () =>
   const steps = workflow.jobs.deploy.steps;
   const checkout = steps.find(step => step.uses?.startsWith("actions/checkout@"));
   assert.equal(checkout.with?.ref, undefined, "checkout must retain the explicitly selected workflow ref");
-  assert.match(steps.find(step => step.name === "Deploy isolated staging").run, /wrangler deploy --env staging --keep-vars/);
+  const directory = mkdtempSync(join(tmpdir(), "staging-argv-"));
+  try {
+    const origin = JSON.parse(readFileSync(new URL("../cloudflare/wrangler.jsonc", import.meta.url), "utf8")).env.staging.vars.ROOM_ORIGIN;
+    mkdirSync(join(directory, "bin")); mkdirSync(join(directory, "cloudflare"));
+    writeFileSync(join(directory, "cloudflare", "wrangler.jsonc"), JSON.stringify({ env: { staging: { vars: { ROOM_ORIGIN: origin } } } }));
+    writeFileSync(join(directory, "bin", "pnpm"), `#!${process.execPath}\nconst fs=require('node:fs');fs.writeFileSync(process.env.ARGV_LOG,JSON.stringify(process.argv.slice(2)));console.log(${JSON.stringify(origin)});`, { mode: 0o755 });
+    execFileSync("/bin/bash", ["-c", steps.find(step => step.name === "Deploy isolated staging").run], {
+      cwd: join(directory, "cloudflare"), env: { PATH: join(directory, "bin") + ":" + dirname(process.execPath) + ":/usr/bin:/bin", RUNNER_TEMP: directory, ARGV_LOG: join(directory, "argv.json") }, stdio: "pipe"
+    });
+    const argv = JSON.parse(readFileSync(join(directory, "argv.json"), "utf8"));
+    assert.deepEqual(argv.slice(0, 3), ["exec", "wrangler", "deploy"]);
+    assert.equal(argv[argv.indexOf("--env") + 1], "staging");
+    assert.ok(argv.includes("--keep-vars"));
+    assert.equal(argv[argv.indexOf("--durable-objects-code-update-mode") + 1], "deferred 60s");
+    assert.ok(!argv.includes("production"));
+  } finally { rmSync(directory, { recursive: true, force: true }); }
   assert.match(steps.find(step => step.name === "Smoke and browser checks").run, /live-smoke\.mjs --browser/);
 });

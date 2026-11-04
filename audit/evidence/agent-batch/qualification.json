@@ -87,5 +87,19 @@
     "head": "65ee1232765a80f60e4655a921f7bb8d6835367c",
     "run": 41797057622,
     "result": "full requested CI success: unit/contract/cloudflare/friendagent andall6browser shards; baseline39plus5745, not entirecomposedsource"
+  },
+  "rootFollowups": {
+    "coldPackage": {
+      "pass": 1,
+      "fail": 0,
+      "log": "/tmp/root-coordination-cold-package.log"
+    },
+    "contractAndStaging": {
+      "pass": 23,
+      "log": "/tmp/root-coordination-contract-final.log"
+    },
+    "stagingRepair": "Old exactregex rejected addeddeferred60s flag. Existing test now executes actualstaging shell with fakepnpm and assertsisolatedstaging argv/keepvars/deferredvalue; no Cloudflarecall.",
+    "caughtUpText": "Clarifies hiddenguest/read-only catalog vs allowed ownread-position update; no visibility/auth/scope behaviorchange.",
+    "inProgress": "Pending5745 urgency+bounded bookkeeping correction beforefinalhead"
   }
 }

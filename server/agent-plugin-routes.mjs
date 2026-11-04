@@ -1111,6 +1111,7 @@ export function createAgentPluginRoutes({ store, json, reject, body, rate, beare
           || selectedMember(current) !== initialMemberId)
         reject(403, "identity_changed", "Credential or selected room binding changed during wake wait");
       const fresh = store.agentHeartbeats.notePoll({ agentId: current.identityId, roomId, hostId: waiterHostId, cursor, order });
+      store.agentHeartbeats.clearWakeBudgetMarks(current.identityId, fresh.pendingWakes.map(s => s.signalId));
       const timedOut = !woken && fresh.pendingWakes.length === 0 && fresh.more !== true;
       return json(res, 200, { agentId: auth.identityId, roomId, hostId: waiterHostId, ...selectionField, pendingWakes: fresh.pendingWakes,
         cadenceSeconds: fresh.cadenceSeconds,

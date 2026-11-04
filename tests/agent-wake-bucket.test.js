@@ -48,3 +48,23 @@ test("over-budget wakes stay queued but do not release the poll", t => {
   hb.enqueueWake({ agentId: "ai_loop", kind: "mention", roomId: "commons", messageId: "m-after" });
   assert.equal(wakes, wakeBucketLimits.capacity + 1, "a refilled token wakes instantly again");
 });
+
+
+test("throttle bookkeeping has one global 4096-id cap; eviction leaves durable signals intact", t => {
+  const db = new DatabaseSync(":memory:"); db.exec(agentHeartbeatSchema); t.after(() => db.close());
+  const hb = new AgentHeartbeats({ db, now: () => 1750000000000, transaction: fn => fn() });
+  let oldest;
+  for (let a = 0; a < 5; a++) {
+    const agentId = `ai_bounded_${a}`;
+    for (let i = 0; i < wakeBucketLimits.capacity; i++) hb.wakeBucket.take(agentId, "commons");
+    for (let i = 0; i < 1000; i++) {
+      const result = hb.enqueueWake({ agentId, roomId: "commons", kind: "mention", messageId: `bounded-${a}-${i}` });
+      assert.equal(result.throttled, true);
+      if (!oldest) oldest = result.signal;
+    }
+  }
+  const total = [...hb._throttledSignals.values()].reduce((n, value) => n + (value instanceof Set ? value.size : 1), 0);
+  assert.ok(total <= 4096, `global metadata count ${total} exceeds 4096`);
+  assert.equal(db.prepare("SELECT count(*) n FROM agent_wake_signals WHERE delivered_at IS NULL").get().n, 5000);
+  assert.equal(hb.holdForWakeBudget("ai_bounded_0", [oldest]), false, "metadata eviction fails open for delivery");
+});

@@ -31,7 +31,7 @@ async function serve(t) {
   const enqueue = messageId => hb.enqueueWake({ agentId: identity.identityId, kind: "mention", roomId: "commons", messageId });
   const poll = waitMs => call(`/api/agent-wakes/poll?hostId=loop-host&waitMs=${waitMs}`);
   const ack = signalIds => call("/api/agent-heartbeats/ack", { method: "POST", body: JSON.stringify({ signalIds }) });
-  return { identity, hb, enqueue, poll, ack, fixture: f };
+  return { identity, hb, enqueue, poll, ack, call, fixture: f };
 }
 
 const timed = async promise => { const start = performance.now(); const value = await promise; return { value, ms: performance.now() - start }; };
@@ -135,4 +135,49 @@ test("pingpong with pre-queued wakes: turns past the burst each cost a full wait
   }
   assert.equal(slow, turns - wakeBucketLimits.capacity, "every turn past capacity is held");
   t.diagnostic(`${turns} turns in ${Math.round(performance.now() - start)} ms; ${slow} held turns`);
+});
+
+
+for (const kind of ["ask", "assignment"]) test(`${kind} bypasses an exhausted chat bucket for an actually held poll`, async t => {
+  const f = await serve(t);
+  for (let i = 0; i < wakeBucketLimits.capacity; i++) f.enqueue(`burst-${i}`);
+  await f.ack((await f.poll(0)).pendingWakes.map(w => w.signalId));
+  // Wait for actual waiter registration, not an arbitrary sleep before enqueue.
+  let ready;
+  const registered = new Promise(resolve => { ready = resolve; });
+  const add = f.hb.addWakeWaiter.bind(f.hb);
+  f.hb.addWakeWaiter = (...args) => { const release = add(...args); ready(); return release; };
+  const held = timed(f.poll(2500));
+  await registered;
+  const queued = f.hb.enqueueWake({ agentId: f.identity.identityId, roomId: "commons", kind, messageId: `obligation-${kind}` });
+  const { value, ms } = await held;
+  assert.ok(ms < 1500, `obligation should release held poll, waited ${ms}ms`);
+  assert.equal(queued.throttled, undefined);
+  assert.ok(value.pendingWakes.some(w => w.signalId === queued.signal.signalId));
+  assert.deepEqual((await f.ack([queued.signal.signalId])).acknowledged, [queued.signal.signalId]);
+  assert.equal(f.enqueue("ordinary-still-over").throttled, true, "ordinary quota was not raised");
+});
+
+test("heartbeat delivery clears throttle bookkeeping without acknowledging", async t => {
+  const f = await serve(t);
+  for (let i = 0; i < wakeBucketLimits.capacity; i++) f.enqueue(`spent-${i}`);
+  await f.ack((await f.poll(0)).pendingWakes.map(w => w.signalId));
+  const first = f.enqueue("delivered-by-heartbeat").signal;
+  const beat = await f.call("/api/agent-heartbeats", { method: "POST", body: JSON.stringify({ hostId: "loop-host", mode: "wakeable" }) });
+  assert.ok(beat.pendingWakes.some(w => w.signalId === first.signalId));
+  assert.equal(f.hb.holdForWakeBudget(f.identity.identityId, [first]), false, "heartbeat-delivered signal should not be delayed again");
+  assert.ok(f.hb.pendingWakes(f.identity.identityId).some(w => w.signalId === first.signalId), "heartbeat is not an ack");
+ });
+
+test("only successful scoped ack clears throttle bookkeeping", async t => {
+  const f = await serve(t);
+  for (let i = 0; i < wakeBucketLimits.capacity; i++) f.enqueue(`spent-${i}`);
+  await f.ack((await f.poll(0)).pendingWakes.map(w => w.signalId));
+  const second = f.enqueue("ack-scoped").signal;
+  assert.deepEqual(f.hb.ackWakes({ agentId: f.identity.identityId, signalIds: [second.signalId], roomId: "wrong-room" }).acknowledged, []);
+  assert.equal(f.hb.holdForWakeBudget(f.identity.identityId, [second]), true, "wrong-room ack cannot clear the mark");
+  const third = f.enqueue("ack-real").signal;
+  assert.deepEqual((await f.ack([third.signalId])).acknowledged, [third.signalId]);
+  assert.equal(f.hb.holdForWakeBudget(f.identity.identityId, [third]), false, "successful ack removes bookkeeping");
+  assert.ok(f.hb.pendingWakes(f.identity.identityId).some(w => w.signalId === second.signalId));
 });

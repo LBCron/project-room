@@ -62,7 +62,7 @@
     "project-room-mark.svg": "sha256:abc1e95e4d76b7e84d1c3eb2c004da6e6225e616b765bc0c02e4658cc04ec08a",
     "push-sw.js": "sha256:dd274367cfbe1ec861c0605f1f996773b0e80267c06aecdac8e4a42b1c173a28",
     "room-acp/README.md": "sha256:769d0ce2bb08d3bd253261a5d0c3e6d7b38a694a063cb3f2799acd6cd0366054",
-    "room-acp/package.json": "sha256:2f8ff0498926f45ed04a15d1e34563d10f8481252f5cf91ea527a8085601e133",
+    "room-acp/package.json": "sha256:413c81a210d2e81bde01421e1e27b6bc8ecb1bd30e8d973964f8bc2898804d6f",
     "room-acp/src/agent-host.mjs": "sha256:e743fbf88027bef05e8772b12aa5223667a1fd1b8d72053751985f381e76fb35",
     "room-acp/src/agents.mjs": "sha256:f5a01ce8c86661ec8ab965b99e42ca30941c6c052a87602eec49965117a46984",
     "room-acp/src/args.mjs": "sha256:de76e90e65b893f4acc0efbd513868afe178443d721d1aab84ef0aa839165650",

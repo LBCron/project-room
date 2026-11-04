@@ -238,3 +238,18 @@ test('a completed native clipboard write cannot restore old match feedback after
   await f.page.locator('.match-filters summary').click(); await f.page.locator('#find-work-form [name=interests]').fill('Games'); await f.page.evaluate(() => window.finishClipboardResponse()); await f.page.evaluate(() => new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve))));
   assert.equal(await f.page.locator('[data-copy-claim]').count(), 0); assert.equal(await f.page.locator('#find-work-status').textContent(), '');
 });
+test('late rejected match copy leaves subsequent focus alone', { timeout: 45000 }, async t => {
+  const f = await setup(t, 1280); preferenceTask(f);
+  await f.page.goto(`${f.origin}/offers`); await f.page.locator('#find-work-form [type=submit]').click(); await f.page.locator('[data-copy-claim]').waitFor();
+  await f.page.evaluate(() => Object.defineProperty(navigator, 'clipboard', {configurable:true,value:{writeText:()=>new Promise((_,reject)=>{window.rejectCopy=reject;})}}));
+  await f.page.locator('[data-copy-claim]').click(); const terms=f.page.getByRole('link',{name:'Terms',exact:true}); await terms.focus();
+  await f.page.evaluate(()=>window.rejectCopy(new Error('denied'))); await f.page.locator('#find-work-status').filter({hasText:'Copy the instructions under Read claim instructions'}).waitFor();
+  assert.equal(await terms.evaluate(el=>el===document.activeElement),true,'late rejection must not steal focus');
+});
+test('immediate rejected match copy selects instructions for manual copy', { timeout: 45000 }, async t => {
+  const f=await setup(t,320); preferenceTask(f); await f.page.goto(`${f.origin}/offers`);
+  await f.page.locator('#find-work-form [type=submit]').click(); await f.page.locator('[data-copy-claim]').waitFor();
+  await f.page.evaluate(()=>Object.defineProperty(navigator,'clipboard',{configurable:true,value:{writeText:async()=>{throw new Error('denied');}}}));
+  await f.page.locator('[data-copy-claim]').click(); await f.page.locator('#find-work-status').filter({hasText:'Copy the selected instructions'}).waitFor();
+  assert.equal(await f.page.locator('#find-work-results textarea').evaluate(el=>el===document.activeElement && el.selectionEnd>el.selectionStart),true);
+});

@@ -100,6 +100,22 @@
     },
     "stagingRepair": "Old exactregex rejected addeddeferred60s flag. Existing test now executes actualstaging shell with fakepnpm and assertsisolatedstaging argv/keepvars/deferredvalue; no Cloudflarecall.",
     "caughtUpText": "Clarifies hiddenguest/read-only catalog vs allowed ownread-position update; no visibility/auth/scope behaviorchange.",
-    "inProgress": "Pending5745 urgency+bounded bookkeeping correction beforefinalhead"
+    "priorityAndMemory": {
+      "source": "258cdb74a483d0260e91dcc7e3b9fc0e39b3baf0",
+      "rootAdoption": "2eed78bc4",
+      "peerAffectedNodePass": 74,
+      "finalComposedNodePass": 81,
+      "fail": 0,
+      "postChangeNativePass": 2,
+      "bounds": "4096 bookkeeping IDs globally; eviction fails open for delay only, not durable signals",
+      "priority": "Trusted ask/assignment producer paths bypass ordinary chat bucket, under unchanged pause guard",
+      "proof": "Five independent red controls before; actual authenticated polls, actual scoped acknowledgements and5000 queued rows retained after bookkeeping eviction",
+      "limits": [
+        "Not end-to-end public producer authentication proof; producer permissions are unchanged.",
+        "Not a universal model-turn rate limiter or cross-host SLA.",
+        "Native2 tests cover compiled listener/attention flow and cold lease; urgency/exhaustion is actual NodeHTTP proof.",
+        "Cold package proof predates priority-only changes; dependency closure unchanged."
+      ]
+    }
   }
 }

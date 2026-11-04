@@ -30,6 +30,7 @@
     "provision": "node scripts/provision.mjs",
     "audit:invitations": "node scripts/audit-invitations.mjs",
     "test:handoff": "node --test tests/agent-handoff.test.js",
+    "test:presence-soak": "node --test tests/presence-claim-soak.test.js",
     "build:agent-docs": "node scripts/build-agent-docs.mjs",
     "test:machine": "node --test machine/test/machine.test.mjs",
     "agent:inbox": "node scripts/agent-inbox.mjs",

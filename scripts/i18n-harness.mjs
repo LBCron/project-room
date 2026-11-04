@@ -480,9 +480,9 @@ if (isCli) {
           if (allowance) {
             console.log(`i18n-harness: ${r} grew ${base} -> ${now}, allowed by ${allowance}`);
           } else {
-            // Advisory, not a gate (Potter, Nov 3: keep only rules that prevent
-            // real harm). Untranslated English copy harms no agent or user
-            // today; it is reported so the catalog can catch up.
+            // Copy growth is advisory for the current English MVP. Scope,
+            // catalog integrity, placeholder and budget checks remain gates.
+            // Report new copy so the translation catalog can catch up.
             console.log(`::warning::i18n-harness: ${r} grew ${base} -> ${now} (base ${ref}). Consider moving the copy into strings/en.json. Advisory only.`);
           }
         }

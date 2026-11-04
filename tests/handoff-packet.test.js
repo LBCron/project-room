@@ -22,11 +22,11 @@ test("collectDecisions pages, keeps the newest, and reports truncation", () => {
   assert.equal(endless.decisions.length, 2);
 });
 
-test("buildHandoffPacket reads the nested orient shape and splits your claims", () => {
+test("buildHandoffPacket retains only the supplied caller-owned summary fields", () => {
   const packet = buildHandoffPacket({
     context: { roomId: "r", viewerId: "me", cursors: { eventCursor: 5 }, orient: {
       instructions: { charter: { text: "be kind" }, pinned: [{ messageId: "p1" }] },
-      claims: [{ id: "c1", owner: "me", paths: ["src/a.js"], leaseExpiresAt: "2026-11-05T00:00:00Z" }, { id: "c2", owner: "you", paths: ["src/b.js"] }],
+      claims: [{ id: "c1", title: "Own claim", state: "claimed" }],
       workItems: [{ id: "w1" }]
     } },
     decisions: { decisions: [{ statement: "ship it" }], total: 1, truncated: false },
@@ -36,8 +36,9 @@ test("buildHandoffPacket reads the nested orient shape and splits your claims", 
   assert.equal(packet.rules.charter.text, "be kind");
   assert.equal(packet.rules.pinned.length, 1);
   assert.deepEqual(packet.claims.yours.map(c => c.id), ["c1"]);
-  assert.equal(packet.claims.openTotal, 2);
-  assert.equal(packet.claims.open[1].holder, "you");
+  assert.equal(packet.claims.total, 1);
+  assert.equal(packet.claims.scope, "caller_owned_summaries");
+  assert.equal(packet.claims.yours[0].holder, undefined);
   assert.equal(packet.decisions[0].statement, "ship it");
   assert.equal(packet.yourWork.length, 1);
 });

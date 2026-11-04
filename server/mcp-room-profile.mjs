@@ -694,7 +694,7 @@ function dispatchRoomToolCall(store, secret, identity, name, args, agentRooms, s
   if (name === "squads_disband") return disbandSquad(store, secret, roomId, args.squadId);
   if (name === "get_room_context" && args.view === "handoff") {
     // Flag ROOM_HANDOFF_PACKET: validRoomArgs refuses view unless enabled.
-    const context = readComposedRoomContext(store, secret, roomId, {});
+    const context = readComposedRoomContext(store, secret, roomId, { workAfter: args.work_after ?? "" });
     const since = decisionWindowStart(store.now?.() ?? Date.now());
     const decisions = collectDecisions(after => store.eventsAfter(secret, roomId, after, 100, { types: [...DECISION_TYPES], since }));
     return withContentTrust(buildHandoffPacket({ context: { ...context, roomId }, decisions, now: store.now?.() ?? Date.now() }));

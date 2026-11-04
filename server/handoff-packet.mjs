@@ -1,11 +1,8 @@
-// room_handoff_packet (flag ROOM_HANDOFF_PACKET, off by default).
-// One read that gives an agent what it needs after joining or after its
-// context was compacted: the room's rules (charter + pinned), recent recorded
-// decisions, open claims (who holds which files until when), and the caller's
-// own work. Pure composition over existing reads: no writes, no new storage.
-// Research basis: "decision log / handoff packet" on the 50-agent-needs Page.
+// Optional get_room_context handoff view (ROOM_HANDOFF_PACKET, default off).
+// Composes existing authorized reads only. Board data is caller-owned summaries,
+// not all open claims or repository/lease detail. Normalized omissions and work
+// windows remain explicit; no new read source, grant, storage or write.
 
-export const HANDOFF_PACKET_TOOL = "room_handoff_packet";
 export const DECISION_TYPES = Object.freeze(["decision.recorded", "owner.decision_recorded"]);
 const MAX_DECISIONS = 20;
 const MAX_CLAIMS = 50;
@@ -38,11 +35,7 @@ function claimOf(item) {
   return Object.freeze({
     id: item.id ?? item.workItemId ?? null,
     title: text(item.title, 200),
-    state: item.state ?? null,
-    holder: item.owner ?? item.holderId ?? item.claim?.holderId ?? null,
-    repository: item.repository ?? item.claim?.repository ?? null,
-    paths: Array.isArray(item.paths) ? item.paths.slice(0, 64) : Array.isArray(item.claim?.paths) ? item.claim.paths.slice(0, 64) : [],
-    leaseExpiresAt: item.leaseExpiresAt ?? item.claim?.expiresAt ?? null
+    state: item.state ?? null
   });
 }
 
@@ -67,11 +60,14 @@ export function collectDecisions(readPage, { max = MAX_DECISIONS, maxPages = MAX
 }
 
 export function buildHandoffPacket({ context: raw, decisions, now = Date.now() }) {
-  // get_room_context nests the orientation under `orient`; accept both shapes.
+  // get_room_context nests the caller-scoped orientation under `orient`.
   const context = { ...(raw?.orient ?? {}), viewerId: raw?.viewerId ?? raw?.orient?.member?.id, roomId: raw?.roomId, cursors: raw?.cursors ?? raw?.orient?.cursors };
   const viewerId = context?.viewerId ?? context?.member?.id ?? null;
-  const claims = (context?.claims ?? []).map(claimOf).filter(Boolean);
-  const yours = claims.filter(claim => claim.holder && claim.holder === viewerId);
+  const claimsKnown = Array.isArray(context.claims) && !context.omitted?.includes("board_claims");
+  const claims = claimsKnown ? context.claims.map(claimOf).filter(Boolean) : null;
+  const workWindow = raw?.workWindow ?? context.workWindow ?? null;
+  const workScope = raw?.workScope ?? context.workScope ?? "caller_work_summaries";
+  const omitted = [...new Set([...(raw?.omitted ?? []), ...(context.omitted ?? [])])];
   const openWork = Array.isArray(context?.workItems) ? context.workItems : [];
   const roomId = context?.roomId ?? context?.room?.slug ?? null;
   return {
@@ -80,18 +76,24 @@ export function buildHandoffPacket({ context: raw, decisions, now = Date.now() }
     viewerId,
     rules: {
       charter: context?.instructions?.charter ?? null,
-      pinned: context?.instructions?.pinned ?? []
+      pinned: context?.instructions?.pinned ?? null
     },
     decisions: decisions?.decisions ?? [],
-    decisionsTotal: decisions?.total ?? 0,
+    decisionsTotal: decisions?.truncated ? null : decisions?.total ?? null,
+    decisionsObserved: decisions?.total ?? 0,
     decisionsWindowDays: DECISION_WINDOW_MS / (24 * 3600 * 1000),
     decisionsTruncated: decisions?.truncated === true,
-    claims: { open: claims.slice(0, MAX_CLAIMS), openTotal: claims.length, yours },
-    yourWork: openWork.slice(0, MAX_CLAIMS),
+    claims: { scope: claimsKnown ? "caller_owned_summaries" : "omitted",
+      yours: claimsKnown ? claims.slice(0, MAX_CLAIMS) : null,
+      total: claimsKnown ? claims.length : null,
+      truncated: claimsKnown ? claims.length > MAX_CLAIMS : null },
+    workScope, workWindow, omitted,
+    yourWork: openWork.slice(0, MAX_CLAIMS).map(item => ({ ...item,
+      nextRead: { tool: "room_read_work", arguments: { roomId, workItemId: item.id } } })),
     cursors: context?.cursors ?? null,
     next: [
-      { tool: "room_needs_me", why: "Pick up mentions and requests addressed to you since this packet." },
-      { tool: "room_claim", why: "Claim work with paths; overlap returns file_lease_conflict naming the holder." }
+      ...(workWindow?.nextRead ? [{ ...workWindow.nextRead,
+        arguments: { ...workWindow.nextRead.arguments, view: "handoff" } }] : [])
     ],
     generatedAt: new Date(now).toISOString()
   };

@@ -75,6 +75,7 @@ optional.push("server/dm-consents.mjs", "server/public-face.mjs", "server/curren
 optional.push("server/public-agent-page.mjs", "server/routes/public-agent-page.mjs"); // public agent page (imported by server/store.mjs and server/routes/table.mjs)
 optional.push("server/download-page.mjs"); // public /download status (imported by server/routes/table.mjs)
 optional.push("server/bonds.mjs"); // agent Bond + peer DMs (imported by server/store.mjs and server/http.mjs)
+optional.push("server/agent-wake-bucket.mjs"); // grok/agent-wake-token-bucket
 optional.push("server/membership-delegation-journal.mjs"); // append-only membership grant decisions
 optional.push("server/journal.mjs"); // shared per-kind journal (imported by server/store.mjs and the other journal callers)
 optional.push("server/room-directory.mjs"); // #605 opt-in public room directory (imported by server/store.mjs)

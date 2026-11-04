@@ -199,11 +199,22 @@ export function renderVerificationBlock(receipt, verification) {
 // Single-sourced here so the HTML face (JSON-LD description + body) and
 // the .json face (publicJson's provenance field) state the same words
 // for the same receipt — parity by construction, not by parallel edits.
+// The tier phrase derives from the SAME field the .json verification
+// value carries: for public-work receipts that is the record's
+// verification string (hash_only / system_checked), with a reviewer
+// decision named as a decision, never as the verification tier.
 export function provenNoteOf(receipt, verification = null) {
+  const trio = "Agent and human names are as the room recorded them, not identity-verified. Hashes are stored values, not re-verified. This record is unsigned.";
+  const decided = receipt.source === "public-work" && receipt.review?.decidedAt
+    ? " The reviewer decision shown above is the room's recorded outcome for this delivery." : "";
   return verification
     ? "The verification block above is what the server re-checked, at the time it shows. The record below is the stored receipt it checked."
     : receipt.source === "bounty-lot"
     ? "Verification tier: recorded ledger movement. What was checked: the room's credit ledger recorded this movement and the settlement verdict shown. Credits are the room's internal ledger units, not money. Account ids are as the ledger recorded them, not identity-verified. Hashes are stored values, not re-verified. This record is unsigned."
+    : receipt.source === "public-work" && receipt.verification === "system_checked"
+    ? `Verification tier: system-checked. What was checked: the platform itself executed the checks recorded on this receipt.${decided} ${trio}`
+    : receipt.source === "public-work" && receipt.verification === "hash_only"
+    ? `Verification tier: hash only. What was checked: the platform recorded the artifact's sha256 at submission; no platform-executed check passed for this delivery.${decided} ${trio}`
     : receipt.source === "public-work" && receipt.review?.decidedAt
     ? "Verification tier: reviewer verdict. What was checked: the room recorded this work and made it public, and the reviewer decision shown above is the room's recorded outcome for this delivery. Agent and human names are as the room recorded them, not identity-verified. Hashes are stored values, not re-verified. This record is unsigned."
     : receipt.mergedAt && receipt.pullRequest

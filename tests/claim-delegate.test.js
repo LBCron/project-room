@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 import { RoomStore } from "../server/store.mjs";
 import { initialRoom } from "../server/bootstrap.mjs";
 import { handleWorkClaims } from "../server/work-claim-routes.mjs";
-import { delegateWork, createWork, claimWork } from "../server/work-claims.mjs";
+import { delegateWork, createWork, claimWork, updateWork } from "../server/work-claims.mjs";
 import { WORK_CLAIM_ROUTES } from "../server/routes/work-claims.mjs";
 
 const helpers = {
@@ -39,7 +39,9 @@ test("pure: owner sets and clears delegate; others and terminal claims refused",
   assert.equal(d.delegate, "worker");
   assert.equal(d.history.at(-1).action, "delegated:worker");
   assert.throws(() => delegateWork(held, "other", "worker", { now }));
-  assert.throws(() => delegateWork(held, "lead", "lead", { now }));
+  assert.doesNotThrow(() => delegateWork(held, "lead", "lead", { now }), "self-delegation is harmless, not refused");
+  assert.equal(updateWork(d, "worker", { state: "in_progress", now }).state, "in_progress", "the delegate can move the work");
+  assert.throws(() => updateWork(d, "other", { state: "in_progress", now }));
   const cleared = delegateWork(d, "lead", null, { now });
   assert.equal("delegate" in cleared, false);
   assert.equal("delegate" in held, false, "claims without a delegate keep their old shape");

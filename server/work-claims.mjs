@@ -1257,7 +1257,9 @@ export function updateWork(work, agentId, { state, note, deliveryMode, reviewedB
     if (verdict === "conflict") fail("work_claim_conflict",
       `requestId "${key}" already landed on work "${item.id}" with a different update — a reused requestId cannot carry a new payload`);
   }
-  check(authority === true || item.owner === agent, `work "${item.id}" is owned by ${item.owner ?? "nobody"} — only the owner can update it`);
+  // The delegate (#5876) does the work, so it may move the claim like the owner.
+  check(authority === true || item.owner === agent || (item.delegate !== undefined && item.delegate === agent),
+    `work "${item.id}" is owned by ${item.owner ?? "nobody"} — only the owner or its delegate can update it`);
   check(!isTerminalClaimState(item.state), `work "${item.id}" is ${item.state} and immutable`);
   // The effective review policy for this transition: the caller (route)
   // resolves the room default and passes it in; the item's own policy is
@@ -1678,7 +1680,6 @@ export function delegateWork(work, agentId, delegateId, { note, now, authority =
     return withHistory(rest, atMs, agent, "undelegated", note);
   }
   const target = agentOf(delegateId);
-  check(target !== item.owner, "the delegate must differ from the owner");
   return withHistory({ ...item, delegate: target }, atMs, agent, `delegated:${target}`, note);
 }
 export const claimDelegateEnabled = (env = process.env) => env?.ROOM_CLAIM_DELEGATE === "1";

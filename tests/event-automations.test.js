@@ -97,3 +97,9 @@ test('trigger states are the real claim states', () => {
   assert.equal(validTrigger({ states: ['closed', 'unclaimed'] }), true);
   assert.equal(validTrigger({ states: ['cancelled'] }), false);
 });
+
+test('automation routes are registered rows with parity notes', async () => {
+  const { AUTOMATION_ROUTES } = await import('../server/routes/automations.mjs');
+  assert.ok(AUTOMATION_ROUTES.length > 0);
+  for (const row of AUTOMATION_ROUTES) assert.ok(row.id && row.method && row.path && row.parity, row.id);
+});

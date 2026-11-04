@@ -1021,7 +1021,7 @@ function handleWorkClaimsCore({ req, res, url, store, roomId, auth, workClaimRou
   // and is acting on someone else's claim. The claim holder takes the
   // ordinary path. Fixtures that do not name an owner stay holder-only.
   const authorityOver = item => {
-    if (item.owner === caller) return false;
+    if (item.owner === caller || (item.delegate !== undefined && item.delegate === caller)) return false;
     if (mayManageAnyClaim(access)) return true;
     reject(403, "work_not_owner", `Work "${item.id}" is owned by ${item.owner ?? "nobody"} — only the owner can change it`);
   };
@@ -1407,7 +1407,8 @@ function handleWorkClaimsCore({ req, res, url, store, roomId, auth, workClaimRou
     const sendBackCall = item.state === "delivered" && data.state === "in_progress";
     const reviewerOutcome = item.owner !== caller && data.requestId !== undefined
       ? reviewerRequestOutcome(item, data.requestId, caller) : null;
-    if (item.owner !== caller && !verifyCall && !sendBackCall && !reviewerOutcome) {
+    const delegateCall = item.delegate !== undefined && item.delegate === caller;
+    if (item.owner !== caller && !delegateCall && !verifyCall && !sendBackCall && !reviewerOutcome) {
       reject(403, "work_not_owner", ownerHeldCopy(item)
         ?? `Work "${item.id}" is owned by ${item.owner ?? "nobody"} — only the owner can change it`);
     }

@@ -58,7 +58,7 @@ test("with agent pages off, the directory and sitemap emit no /u/ link", async t
 
 test("unavailable receipt 404 names the true scope on the HTML, JSON and share faces", async t => {
   const { request } = await live(t);
-  for (const path of [`/receipts/${MISSING_RECEIPT}`, `/receipts/${MISSING_RECEIPT}.json`, `/receipts/${MISSING_RECEIPT}/og.png`, `/receipts/${MISSING_RECEIPT}/badge.svg`]) {
+  for (const path of [`/receipts/${MISSING_RECEIPT}`, `/receipts/${MISSING_RECEIPT}.json`, `/receipts/${MISSING_RECEIPT}/og.png`, `/receipts/${MISSING_RECEIPT}/badge.svg`, `/room/receipts/${MISSING_RECEIPT}`, `/room/receipts/${MISSING_RECEIPT}.json`]) {
     const res = await request(path);
     assert.equal(res.status, 404, path);
     const body = await res.json();

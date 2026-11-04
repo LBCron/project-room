@@ -743,8 +743,20 @@ export function discoverabilityErrorOverride({ pathname, httpStatus, code }) {
   // server/http.mjs (receiptDetail / receiptCard): PUBLIC_RECEIPT_ID in
   // server/public-read-model.mjs anchors a bare id only, so it cannot
   // express the pathname-plus-suffix shape matched here.
+  // The www door also serves the bare and .json faces under the /room
+  // prefix (gr1PublicPath in server/http.mjs rewrites them to the
+  // canonical path before routing), but this override is computed from
+  // the original request pathname — normalise the alias the way
+  // matchScope normalises /room/api above, or the alias faces keep the
+  // catalog hint. Only the bare and .json faces are aliased; the share
+  // faces are not served under /room.
+  const receiptPathname = pathname.startsWith("/room/receipts/")
+    ? pathname.slice("/room".length)
+    : pathname;
   if (httpStatus === 404 && code === "not_found"
-      && /^\/receipts\/(?:pwr_[a-f0-9]{16,128}|wcr_[a-f0-9]{32}|wir_[a-f0-9]{32}|lot_[a-f0-9]{16})(?:\.json|\/og\.png|\/badge\.svg)?$/.test(pathname)) {
+      && (/^\/receipts\/(?:pwr_[a-f0-9]{16,128}|wcr_[a-f0-9]{32}|wir_[a-f0-9]{32}|lot_[a-f0-9]{16})(?:\.json|\/og\.png|\/badge\.svg)?$/.test(pathname)
+        || (receiptPathname !== pathname
+          && /^\/receipts\/(?:pwr_[a-f0-9]{16,128}|wcr_[a-f0-9]{32}|wir_[a-f0-9]{32}|lot_[a-f0-9]{16})(?:\.json)?$/.test(receiptPathname)))) {
     return {
       status: "action_required",
       reason: "not_found",

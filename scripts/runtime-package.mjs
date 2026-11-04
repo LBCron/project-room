@@ -245,6 +245,7 @@ optional.push("server/content-trust.mjs"); // structured untrusted markers for m
 optional.push("server/room-activation-pack.mjs"); // quill lane RC-2026-09-18-040: room activation pack (imported by server/http.mjs)
 optional.push("server/orient.mjs"); // jill lane RC-2026-09-28: orient endpoint builder (imported by server/http.mjs; pure, imports ../src/* only)
 optional.push("server/available-work.mjs"); // E1 AvailableWork projection (imported by server/orient.mjs and server/room-activation-pack.mjs; pure read projection, imports ../src/events.js + server/work-claim-routes.mjs)
+optional.push("server/mcp-call-log.mjs"); // grok/mcp-call-log new modules
 optional.push("server/wiki-read-api.mjs"); // W009: read-only wiki API for agents (imported by server/http.mjs; serves embedded wiki-data, no fs)
 optional.push("server/wiki-parse.mjs", "server/wiki-data.mjs"); // W009: pure wiki parsers (imported by wiki-read-api.mjs + scripts/wiki-build.mjs) and the build-time embedded wiki planes
 optional.push("server/updates.mjs"); // Updates projection (imported by server/http.mjs, server/needs-me.mjs, server/orient.mjs, server/store.mjs)
@@ -254,7 +255,6 @@ optional.push("server/persisted-row.mjs"); // RC-2026-09-27-2730: replay-safe pe
 optional.push("server/claim-collisions.mjs");
 optional.push("server/agent-collisions.mjs"); // overlap alerts for live claims (imported by server/work-claim-routes.mjs)
 optional.push("server/work-claim-routes.mjs"); // RC-2026-09-18-041: work-claim HTTP routes (imported by server/http.mjs)
-optional.push("server/mcp-call-log.mjs"); // grok/mcp-call-log new modules
 optional.push("server/work-claim-events.mjs"); // work_claim.updated receipts (imported by server/work-claim-routes.mjs; imports src/events.js)
 optional.push("server/work-claim-integrity.mjs"); // SEC-2: Board input bounds, event budget and status cache (imported by server/work-claim-routes.mjs; imports src/display-name-guard.js via server/display-name-guard.mjs and server/store.mjs limits)
 optional.push("server/work-item-board.mjs"); // decision #10: workItems -> board claims migration core + write-path sync (imported by server/store.mjs)

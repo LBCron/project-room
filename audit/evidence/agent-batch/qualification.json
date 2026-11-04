@@ -26,14 +26,14 @@
     "5874": {
       "head": "588d71cd0c25ab72a07f8aa706af4aec4c49f630",
       "ancestor": false,
-      "exit": 128,
-      "error": "fatal: Not a valid commit name 588d71cd0c25ab72a07f8aa706af4aec4c49f630"
+      "exit": 1,
+      "error": ""
     },
     "5891": {
       "head": "eacefceb158d9c0235ae175150ffa29049f9dae3",
       "ancestor": false,
-      "exit": 128,
-      "error": "fatal: Not a valid commit name eacefceb158d9c0235ae175150ffa29049f9dae3"
+      "exit": 1,
+      "error": ""
     }
   },
   "node": "v24.22.1",

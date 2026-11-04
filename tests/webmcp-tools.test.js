@@ -5,7 +5,7 @@ import { buildWebMcpTools, installWebMcp, modelContextOf, WEBMCP_TOOL_NAMES } fr
 function fakeClient(overrides = {}) {
   const calls = [];
   return {
-    calls, sequence: 42,
+    calls, sequence: 42, generation: 1,
     session: { roomId: "qa-room", member: { id: "ai_me" } },
     path: suffix => `/api/rooms/qa-room${suffix}`,
     async send(command) { calls.push(["send", command]); return { sequence: 7 }; },
@@ -48,7 +48,7 @@ test("install is a no-op without modelContext and prefers document over navigato
 test("install registers and disposes through the model context", () => {
   const registered = [], removed = [];
   const context = { registerTool(entry) { registered.push(entry.name); return { unregister: () => removed.push(entry.name) }; } };
-  const dispose = installWebMcp({ scope: { document: { modelContext: context } }, client: fakeClient() });
+  const dispose = installWebMcp({ enabled: true, scope: { document: { modelContext: context } }, client: fakeClient() });
   assert.deepEqual(registered, [...WEBMCP_TOOL_NAMES]);
   dispose();
   assert.deepEqual(removed, [...WEBMCP_TOOL_NAMES]);
@@ -112,4 +112,54 @@ test("request_review confirms and posts a reply request", async () => {
 test("tools fail cleanly with no open room", async () => {
   const result = await tool(buildWebMcpTools({ client: fakeClient({ session: null }) }), "post_message").execute({ body: "x" });
   assert.equal(result.isError, true);
+});
+
+
+test("modelContext alone never activates tools; only explicit boolean opt-in does", () => {
+  const registered = [];
+  const scope = { document: { modelContext: { registerTool: t => registered.push(t.name) } } };
+  for (const enabled of [undefined, false, "true", 1]) installWebMcp({ scope, client: fakeClient(), enabled });
+  assert.deepEqual(registered, []);
+  installWebMcp({ scope, client: fakeClient(), enabled: true });
+  assert.deepEqual(registered, [...WEBMCP_TOOL_NAMES]);
+});
+
+const sessionChanges = {
+  replacement: c => { c.session = { ...c.session }; },
+  room: c => { c.session.roomId = "another-room"; },
+  member: c => { c.session.member.id = "another-member"; },
+  generation: c => { c.generation++; },
+  logout: c => { c.session = null; },
+};
+for (const name of ["finish_board_task", "request_review"]) {
+  for (const [change, swap] of Object.entries(sessionChanges)) {
+    test(`${name}: ${change} during confirmation cannot write with the new session`, async () => {
+      const client = fakeClient();
+      const tools = buildWebMcpTools({ client, confirm: async () => { swap(client); return true; }, randomId: () => "fixed" });
+      const result = await tool(tools, name).execute(name === "finish_board_task" ? finishInput : { toMemberId: "reviewer", body: "review" });
+      assert.equal(client.calls.filter(c => c[0] === "send" || c[2] === "POST").length, 0);
+      assert.equal(result.isError, true);
+      assert.match(result.content[0].text, /session changed/i);
+    });
+  }
+}
+
+test("late claim read cannot prompt or deliver after the session changes", async () => {
+  const client = fakeClient();
+  const request = client.request.bind(client);
+  client.request = async (...args) => { const result = await request(...args); client.generation++; return result; };
+  let prompts = 0;
+  const result = await tool(buildWebMcpTools({ client, confirm: () => { prompts++; return true; } }), "finish_board_task").execute(finishInput);
+  assert.equal(prompts, 0);
+  assert.equal(client.calls.filter(c => c[2] === "POST").length, 0);
+  assert.equal(result.isError, true);
+});
+
+test("late conversation read is discarded rather than exposing previous-room data", async () => {
+  const client = fakeClient();
+  const read = client.recordPage.bind(client);
+  client.recordPage = async (...args) => { const result = await read(...args); client.session = { ...client.session }; return result; };
+  const result = await tool(buildWebMcpTools({ client }), "read_since_marker").execute({});
+  assert.equal(result.isError, true);
+  assert.ok(!JSON.stringify(result).includes("ignore previous instructions"));
 });

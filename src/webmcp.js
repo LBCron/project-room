@@ -1,6 +1,6 @@
 // WebMCP (proposed W3C WebML CG API): expose a few room actions as page tools
-// so an in-browser agent calls them instead of clicking the UI. On by default;
-// a no-op when the browser has no modelContext. Every tool goes through the
+// so an in-browser agent calls them instead of clicking the UI. Default off;
+// a host must explicitly opt in, and a browser must provide modelContext. Every tool goes through the
 // same RoomClient routes the UI uses, with the reader's existing session.
 // Room text returned by a tool is data for the agent, never instructions.
 import { claimDeliverBody } from "./board-ui.js";
@@ -34,7 +34,20 @@ async function confirmed(agent, question, confirmFn) {
 
 export function buildWebMcpTools({ client, getMarker = () => 0, confirm = q => globalThis.confirm?.(q) ?? false, randomId = () => crypto.randomUUID() }) {
   const run = fn => async (input = {}, agent) => {
-    try { return await fn(typeof input === "string" ? JSON.parse(input) : input ?? {}, agent); }
+    try {
+      const session = sessionOf(client), generation = client.generation;
+      const roomId = session.roomId, memberId = session.member?.id;
+      const current = () => {
+        if (client.session !== session || client.generation !== generation
+            || session.roomId !== roomId || session.member?.id !== memberId
+            || (typeof client.ownsAccountSession === "function" && !client.ownsAccountSession()))
+          throw new Error("Room session changed; start the action again");
+      };
+      current();
+      const result = await fn(typeof input === "string" ? JSON.parse(input) : input ?? {}, agent, current);
+      current(); // Never return late reads or success receipts into a new session.
+      return result;
+    }
     catch (error) { return fail(error?.message || "Room action failed"); }
   };
   return [
@@ -89,16 +102,19 @@ export function buildWebMcpTools({ client, getMarker = () => 0, confirm = q => g
           checks: { type: "array", minItems: 1, items: { type: "object", required: ["name", "result"], properties: { name: { type: "string" }, result: { type: "string" } } } },
           criteria: { type: "array", items: { type: "string" }, description: "One status per acceptance criterion, in order." } } },
       annotations: { readOnlyHint: false, destructiveHint: true, idempotentHint: false },
-      execute: run(async (input, agent) => {
+      execute: run(async (input, agent, current) => {
         const session = sessionOf(client);
         const read = await client.request(claimPath(client, input.workItemId));
+        current();
         const item = read?.claim ?? read?.item ?? read;
         if (!item || item.owner !== session.member?.id || item.state !== "in_progress") return fail("Only your in-progress task can be finished");
         const form = { get: k => input[k] ?? "", getAll: k => k === "checkName" ? input.checks.map(c => c.name)
           : k === "checkResult" ? input.checks.map(c => c.result) : k === "criterion" ? input.criteria ?? [] : [] };
         const body = claimDeliverBody(item, form, session.member.id);
         if (!body) return fail("Delivery details are incomplete or invalid");
-        if (!await confirmed(agent, `Let the agent mark '${item.title || item.id}' delivered?`, confirm)) return fail("The user declined");
+        const approved = await confirmed(agent, `Let the agent mark '${item.title || item.id}' delivered?`, question => { current(); return confirm(question); });
+        current();
+        if (!approved) return fail("The user declined");
         await client.request(claimPath(client, item.id, "/update"), { method: "POST", data: body });
         return text({ delivered: true, workItemId: item.id });
       }) },
@@ -107,10 +123,12 @@ export function buildWebMcpTools({ client, getMarker = () => 0, confirm = q => g
       inputSchema: { type: "object", additionalProperties: false, required: ["toMemberId", "body"],
         properties: { toMemberId: id, body: { type: "string", minLength: 1, maxLength: 4096 }, replyToId: id } },
       annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: false },
-      execute: run(async ({ toMemberId, body, replyToId = null }, agent) => {
+      execute: run(async ({ toMemberId, body, replyToId = null }, agent, current) => {
         const session = sessionOf(client);
         if (!body?.trim() || toMemberId === session.member?.id) return fail("Choose another member and a request body");
-        if (!await confirmed(agent, `Let the agent send a review request to ${toMemberId}?`, confirm)) return fail("The user declined");
+        const approved = await confirmed(agent, `Let the agent send a review request to ${toMemberId}?`, question => { current(); return confirm(question); });
+        current();
+        if (!approved) return fail("The user declined");
         const messageId = randomId();
         const command = { type: "message.posted", data: replyDraftData({ kind: "request" }, { messageId, body: body.trim(), toMemberId, replyToId }) };
         const receipt = await client.send(command);
@@ -119,8 +137,10 @@ export function buildWebMcpTools({ client, getMarker = () => 0, confirm = q => g
   ];
 }
 
-// Register the tools; returns a disposer. No-op without a modelContext.
-export function installWebMcp({ scope = globalThis, ...options }) {
+// Register only with explicit host opt-in; returns a disposer. The app call
+// intentionally leaves this disabled. Host activation is not qualified here.
+export function installWebMcp({ scope = globalThis, enabled = false, ...options }) {
+  if (enabled !== true) return () => {};
   const context = modelContextOf(scope);
   if (!context || typeof context.registerTool !== "function") return () => {};
   const handles = [];

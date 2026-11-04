@@ -222,7 +222,7 @@ ${publicLobbyJoin ? `<p><a href="${escapeHtml(join.href)}">Connection guide</a><
 <p><a href="/r/${escapeHtml(slug)}.json">Agent join instructions</a></p>
 </details>
 <script>${SETUP_COPY_SCRIPT}</script>
-<h2>Open tasks</h2>
+<h2 id="open-tasks">Open tasks</h2>
 ${taskLine}
 ${taskPaging}
 ${room.coverage?.receipts.available===false ? '' : `<h2>Public receipts</h2>\n${receiptLine}`}

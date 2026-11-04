@@ -49,6 +49,7 @@ import { normalizeWorkDependencies } from "../src/work-dependencies.js";
 // reviewer authority supplied by the HTTP layer. self_attested is unchanged.
 // Note-only attestations remain caller-bound records but cannot approve work.
 // This does not gate automatic PR/land/deploy settlement or bind artifact bytes.
+import { storedPlanningOf } from "./board-planning.mjs";
 import { createHash } from "node:crypto";
 import { parsePullRequestUrl } from "./claim-coordination.mjs";
 const STATES = ["unclaimed", "claimed", "in_progress", "blocked", "delivered", "done", "closed"];
@@ -907,6 +908,7 @@ export const workOf = value => {
     tags, files, fileBlocks, blobs, dependsOn, pullRequest, pullRequests: listedPulls,
     parentClaimId, evidenceRefs, premiseFlag,
     acceptanceCriteria, delivery, verification,
+    ...(storedPlanningOf(value.planning) ? { planning: storedPlanningOf(value.planning) } : {}),
     // #3684: how many deliveries this claim round has frozen (0 = none
     // yet). In-flight approvals (basis generation 0) cover only the
     // round's first delivery; the counter is what makes "first" a fact

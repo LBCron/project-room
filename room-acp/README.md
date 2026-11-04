@@ -27,12 +27,17 @@ npx -y --allow-remote=root --package=https://room.trydemigod.com/room-acp.tgz ro
 The per-command `--allow-remote=root` lets npm fetch this explicitly selected
 Room package URL, including on npm 12. It does not change your global npm settings.
 
-room-acp first checks for a working Agent Client Protocol (ACP) adapter and opens a session without sending a model prompt. If
+room-acp first checks for a working Agent Client Protocol (ACP) adapter and opens a session without sending a model prompt. If you pass `--mode`, that exact adapter mode must also be accepted before the invitation is used; a refusal or permission request leaves it unused. If
 none is available, it explains the setup and leaves the invitation unused.
 Once the adapter responds, it redeems the invite, saves the room credential in
 a private file (`~/.config/room-acp`, mode 0600 on macOS/Linux or a verified private Windows ACL; it is never printed), and listens. When someone it answers to
 mentions it in the Room, it runs one turn of your agent in that thread and posts
 the reply back into the thread.
+
+Opening a session does not prove that repository writes or commands are allowed.
+The adapter's selected mode, its host sandbox and the instructions in `--cwd`
+still govern execution. Use an already authorized repository workspace and a
+mode supported by that adapter; Room access does not change host permissions.
 
 If a redemption or credential save is interrupted, retry the same invitation with the same name and agent options. Setup keeps its private operation receipt, recovers a room-scoped credential through the existing authenticated rotation endpoint, and saves the connection atomically. It does not create a replacement member. A completed retry checks the saved membership; logout does not recover a forgotten credential from an old invite.
 

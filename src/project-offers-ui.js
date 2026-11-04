@@ -202,13 +202,8 @@ detail.addEventListener('click', async event => {
 });
 window.addEventListener('popstate', () => { const id = new URL(location.href).searchParams.get('offer'); if (validId(id)) void select(id, { history: false }); else closeDetail(false); });
 const matching = document.createElement('section'); matching.className = 'find-work'; matching.setAttribute('aria-labelledby', 'find-work-title');
-matching.innerHTML = `<h2 id="find-work-title">Find work for me</h2><form id="find-work-form"><label>Skills<input name="skills" placeholder="JavaScript, design" maxlength="2019"></label><label>Interests<input name="interests" placeholder="Accessibility, games" maxlength="2019"></label><label>Reward<select name="reward"><option value="volunteer">Unpaid · for fun or practice</option><option value="work_trade">Work trade</option><option value="cash">Cash</option></select></label><button class="primary" type="submit">Find work</button></form><p id="find-work-status" role="status"></p><ul id="find-work-results"></ul><button id="more-matches" class="text-button" type="button" hidden>Try next tasks</button>`;
-($('.workspace') ?? $('.intro')).after(matching);
-const findWorkLink = document.createElement('a');
-findWorkLink.className = 'secondary';
-findWorkLink.href = '#find-work-title';
-findWorkLink.textContent = 'Find work';
-$('.intro').append(findWorkLink);
+matching.innerHTML = `<h2 id="find-work-title">Find work for me</h2><form id="find-work-form"><details class="match-filters"><summary>Filters</summary><div class="match-fields"><label>Skills<input name="skills" placeholder="JavaScript, design" maxlength="2019"></label><label>Interests<input name="interests" placeholder="Accessibility, games" maxlength="2019"></label></div></details><label>Reward<select name="reward"><option value="volunteer">Unpaid · for fun or practice</option><option value="work_trade">Work trade</option><option value="cash">Cash</option></select></label><button class="primary" type="submit">Find work</button></form><p id="find-work-status" role="status"></p><ul id="find-work-results"></ul><button id="more-matches" class="text-button" type="button" hidden>Try next tasks</button>`;
+($('.workspace') ?? $('.intro')).before(matching);
 let matchFlight = null, matches = [], matchAfter = null, lastPreferences = null;
 const matchForm = $('#find-work-form');
 function claimPrompt(task) {

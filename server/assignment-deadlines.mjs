@@ -149,7 +149,8 @@ export function runAssignmentDeadlines(store, roomId, nowMs, { append = appendRo
 }
 
 export function runAssignmentDeadlinesAll(store, nowMs) {
-  if (!store?.db || !store?.featureEnv?.ROOM_ASSIGNMENT_DEADLINES) return 0;
+  const env = store?.featureEnv;
+  if (!store?.db || !env?.ROOM_ASSIGNMENT_DEADLINES) return 0;
   let roomIds = [];
   try { roomIds = store.db.prepare("SELECT DISTINCT room_id AS roomId FROM work_claims").all().map(r => r.roomId); }
   catch { roomIds = []; }

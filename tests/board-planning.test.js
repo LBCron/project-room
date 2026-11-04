@@ -70,3 +70,27 @@ test("flag on: create, update, filter and sort", async t => {
   assert.deepEqual(due.value.claims.map(c => c.id), ["w3"]);
   assert.equal((await f.call("list", { query: "?sort=title" })).status, 422);
 });
+
+test("projects: flag off refuses project fields; on: set, filter, groupBy", async t => {
+  process.env.ROOM_BOARD_PLANNING_FIELDS = "1";
+  t.after(() => { delete process.env.ROOM_BOARD_PROJECTS; });
+  const f = fixture(t);
+  assert.equal((await f.call("create", { body: { id: "p0", title: "p0", projectId: "alpha" } })).status, 422);
+  assert.equal((await f.call("list", { query: "?groupBy=projectId" })).status, 422);
+  process.env.ROOM_BOARD_PROJECTS = "1";
+  for (const [id, extra] of [["p1", { projectId: "alpha", initiativeId: "q1" }], ["p2", { projectId: "beta", initiativeId: "q1" }], ["p3", {}], ["p4", { projectId: "alpha" }]]) {
+    const r = await f.call("create", { body: { id, title: id, ...extra } });
+    assert.ok(r.status === 200 || r.status === 201, `${id} ${r.code}`);
+  }
+  assert.equal((await f.call("update", { id: "p3", body: { projectId: "beta" } })).status, 200);
+  const alpha = await f.call("list", { query: "?projectId=alpha" });
+  assert.deepEqual(alpha.value.claims.map(c => c.id).sort(), ["p1", "p4"]);
+  const g = await f.call("list", { query: "?groupBy=initiativeId" });
+  assert.equal(g.value.groupBy, "initiativeId");
+  const q1 = g.value.groups.find(x => x.key === "q1");
+  assert.deepEqual(q1.claimIds.sort(), ["p1", "p2"]);
+  assert.equal(g.value.groups.at(-1).key, null);
+  const gs = await f.call("list", { query: "?groupBy=projectId&view=summary" });
+  assert.equal(gs.value.groups.find(x => x.key === "beta").count, 2);
+  assert.equal((await f.call("list", { query: "?groupBy=title" })).status, 422);
+});

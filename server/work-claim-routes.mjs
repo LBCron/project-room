@@ -1,5 +1,5 @@
 import { readWorkItem } from "./work-repository.mjs";
-import { boardPlanningEnabled, PLANNING_FIELDS, PLANNING_QUERY, planningPatchOf, hasPlanningInput, applyPlanning, planningQueryOf, filterPlanning, sortPlanning } from "./board-planning.mjs";
+import { boardPlanningEnabled, PLANNING_FIELDS, PLANNING_QUERY, planningPatchOf, hasPlanningInput, applyPlanning, planningQueryOf, filterPlanning, sortPlanning, groupPlanning } from "./board-planning.mjs";
 import { assertListenerFence, LISTENER_TOKEN_HEADER } from "./listener-fence.mjs";
 import { messageRepository } from "./message-repository.mjs";
 // Work-claim HTTP routes (task RC-2026-09-18-041; receipts RC-2026-09-24-205).
@@ -450,11 +450,13 @@ export function buildWorkClaimPage(items, roomId, viewerId, query = new URLSearc
   // Board planning fields: filters narrow the items; sort returns the first
   // `limit` sorted items (a sorted page has no cursor).
   let planningSort = null;
+  let groupBy = null;
   if (boardPlanningEnabled() && PLANNING_QUERY.some(key => params.has(key))) {
     const { query: pq, error } = planningQueryOf(params);
     if (error) invalidInput(reject, error);
     items = filterPlanning(items, pq);
     planningSort = pq.sort ?? null;
+    groupBy = pq.groupBy ?? null;
   }
   const limit = boardLimitOf(reject, params.get("limit"));
   const cursor = params.has("cursor") ? boardCursorOf(reject, params.get("cursor")) : null;
@@ -462,7 +464,8 @@ export function buildWorkClaimPage(items, roomId, viewerId, query = new URLSearc
   if (view !== null && view !== "summary") invalidInput(reject, "view=summary");
   const metadata = { roomId, source: "work-claims", evaluatedAt: new Date(nowMs).toISOString(),
     consistency: "live", limit, historyLimit: LIST_HISTORY_ENTRIES };
-  const present = page => {
+  const present = page => groupBy === null ? presentPage(page) : ({ ...presentPage(page), groupBy, groups: groupPlanning(page.claims, groupBy) });
+  const presentPage = page => {
     // #3661: every claim read carries the derived pull settlement state on
     // its pull record (verified / asserted / pending; link-less claims
     // keep pullRequest null, which reads as "none").

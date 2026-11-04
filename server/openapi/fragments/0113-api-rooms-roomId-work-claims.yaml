@@ -58,6 +58,18 @@
           in: query
           schema: { type: string, enum: [priority, dueAt, estimate] }
           description: Board planning fields (flag on only). Ascending, unset last; a sorted page returns the first `limit` items and no cursor.
+        - name: projectId
+          in: query
+          schema: { type: string }
+          description: Board projects (ROOM_BOARD_PROJECTS=1 and planning flag). Tasks in this project.
+        - name: initiativeId
+          in: query
+          schema: { type: string }
+          description: Board projects (flag on only). Tasks in this initiative.
+        - name: groupBy
+          in: query
+          schema: { type: string, enum: [projectId, initiativeId, cycleId, milestone] }
+          description: Board projects (flag on only). Adds `groups` [{key, count, claimIds}] for this page; tasks without the key are in a final null group.
       responses:
         '200':
           description: |
@@ -120,6 +132,8 @@
                 dueAt: { type: string, format: date-time, description: Board planning fields (flag on only). }
                 cycleId: { type: string, description: Board planning fields (flag on only). }
                 milestone: { type: string, description: Board planning fields (flag on only). }
+                projectId: { type: string, description: Board projects (ROOM_BOARD_PROJECTS=1 only). }
+                initiativeId: { type: string, description: Board projects (flag on only). }
                 note: { type: string }
                 tags:
                   type: array

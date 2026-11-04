@@ -22,6 +22,7 @@ export const MCP_TOOL_CONTRACTS = Object.freeze({
   room_work_claim_thread: { access: `read, ${MEMBER}`, cost: READ, rest: "GET /api/rooms/{roomId}/work-claims/{claimId}/thread" },
   room_needs_me: { access: `read, ${ANY_OR_ROOM}`, cost: READ, rest: "GET /api/needs-me" },
   room_read_messages: { access: `read, ${MEMBER}`, cost: READ, rest: "GET /api/rooms/{roomId}/events" },
+  room_mark_caught_up: { access: "write, room member; hidden from guest and read-only-tier catalogs; reader access updates own read-position marker only", cost: "one cursor upsert; posts nothing", rest: "POST /api/rooms/{roomId}/cursor" },
   room_post_message: { access: `write, ${GUEST_OK}`, cost: POST, rest: `${COMMANDS} (message.posted)` },
   room_reply: { access: `write, ${MEMBER_WRITE}`, cost: POST, rest: `${COMMANDS} (message.posted)` },
   room_list_requests: { access: `read, ${MEMBER}`, cost: READ, rest: "GET /api/rooms/{roomId}/reply-requests" },

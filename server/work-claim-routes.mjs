@@ -49,7 +49,7 @@ import { enforceAutonomyTierForAction } from "./autonomy-tiers.mjs";
 import { evaluateReceipt } from "./jev-receipts.mjs";
 import { findClaimCollisions } from "./claim-collisions.mjs";
 import { emitWorkClaimEvent, enqueueClaimWake, wakeNamedReviewers } from "./work-claim-events.mjs";
-import { alertLeaseRefusal, notifyClaimCollisions } from "./agent-collisions.mjs";
+import { alertLeaseRefusal, notifyClaimCollisions, notifyLeaseExpired } from "./agent-collisions.mjs";
 import { noteProjectMapOverlap, publishProjectMapOverlap, withProjectMapOverlap } from "./project-map-store.mjs";
 import { noteReadyWork } from "./work-wants.mjs"; // BOARD-WAKE-2
 import { getActiveSquad } from "./squads.mjs"; // plan-squads: work offers target squads
@@ -978,6 +978,7 @@ function handleWorkClaimsCore({ req, res, url, store, roomId, auth, workClaimRou
     enqueueClaimWake(store, roomId, before.owner,
       `work-claim:${item.id}:lease_expired:${before.leaseExpiresAt ?? receipt?.sequence ?? nowMs}`,
       { reason: "lease_expired", actorId: before.owner });
+    notifyLeaseExpired(store, roomId, before);
   });
   const config = registry.configFor(roomId);
   const roomLike = { workClaims: registry.rawConfig(roomId) };

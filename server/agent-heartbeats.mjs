@@ -25,6 +25,10 @@ import { validateWebhookUrl, assertWebhookHostDnsPublic, WAKE_ACK_HINT } from ".
 import { postDelivery } from "./webhook-dispatch.mjs";
 import { recordWakeEvent, wakeAccounting } from "./wake-metrics.mjs";
 import { sqlChunks, sqlPlaceholders } from "./sql-binds.mjs";
+import { WakeBucket } from "./agent-wake-bucket.mjs";
+
+// One global metadata budget, independent of durable signal/agent counts.
+const MAX_THROTTLED_SIGNALS = 4096;
 
 const MODES = Object.freeze(["wakeable", "pull-only"]);
 const WAKE_KINDS = Object.freeze(["mention", "dm", "bond", "assignment", "land", "ask"]);
@@ -332,6 +336,14 @@ export class AgentHeartbeats {
     check(Number.isFinite(staleAfterMs) && staleAfterMs > 0,
       500, "invalid_heartbeat_config", "staleAfterMs must be positive");
     this.staleAfterMs = staleAfterMs;
+    // Wake-loop guard (server/agent-wake-bucket.mjs).
+    this.wakeBucket = new WakeBucket(() => this.now());
+    // Signal ids queued while the bucket was empty (signalId -> agentId).
+    // Global FIFO cap: evicting metadata allows delivery, never removes a row. A poll
+    // whose whole pending page is throttled holds for its waitMs once
+    // instead of returning at once, so over-budget turns are actually
+    // capped, not only the instant release (Root review on #5745).
+    this._throttledSignals = new Map();
     // Push delivery transport (RC-2026-09-24-203). Production leaves both
     // null: postDelivery then uses the real fetch and real DNS. Tests inject
     // mocks via setPushTransport so the push path never touches the network.
@@ -634,6 +646,7 @@ export class AgentHeartbeats {
       reachableUntil,
     });
     const page = this.pendingWakePage(agentId, { hostId, roomId: workScopeRoomId, door });
+    this.clearWakeBudgetMarks(agentId, page.signals.map(s => s.signalId));
     const pausedRooms = this.pausedRoomsOf(agentId);
     return Object.freeze({
       host: { ...host, workWakes: this.store.workWakes?.hostEnabled(agentId, hostId) ?? false },
@@ -917,6 +930,7 @@ export class AgentHeartbeats {
           event: "acked", door, kind: "work", subjectId: agentId });
         acknowledged.push(signalId);
       }
+      this.clearWakeBudgetMarks(agentId, acknowledged);
       if (acknowledged.length > 0) { try { this.store.agentPlugin?.noteWakeAcknowledged?.(agentId, roomId, acknowledged); } catch { /* wake adapters are advisory */ } }
       return Object.freeze({ acknowledged: Object.freeze(acknowledged) });
     });
@@ -1077,8 +1091,21 @@ export class AgentHeartbeats {
     // poll waiter (coalesced duplicates don't — nothing new arrived).
     // R327-1 (r6): a held (paused) room wake does not release the host's
     // poll; it stays queued until the pause is lifted.
-    if (applied.changes > 0 && !(roomId && this.pausedRoomsOf(agentId).some(p => p.roomId === roomId))) this._releaseWakeWaiter(agentId, roomId);
-    return Object.freeze({ enqueued: applied.changes > 0, signal: signalView(row) });
+    // Wake-loop guard: an over-budget signal stays queued for the next
+    // heartbeat or poll; only the instant waiter release is skipped.
+    let throttled = false;
+    if (applied.changes > 0 && !(roomId && this.pausedRoomsOf(agentId).some(p => p.roomId === roomId))) {
+      // Obligation kinds arrive from existing authorized producers; their own
+      // request/work limits still apply. Chat noise must not delay them.
+      if (kind === "ask" || kind === "assignment" || this.wakeBucket.take(agentId, roomId)) this._releaseWakeWaiter(agentId, roomId);
+      else {
+        throttled = true;
+        this._throttledSignals.set(row.signal_id, agentId);
+        if (this._throttledSignals.size > MAX_THROTTLED_SIGNALS)
+          this._throttledSignals.delete(this._throttledSignals.keys().next().value);
+      }
+    }
+    return Object.freeze({ enqueued: applied.changes > 0, ...(throttled ? { throttled: true } : {}), signal: signalView(row) });
   }
 
   // Undelivered wake signals, oldest first, capped at the caller's limit.
@@ -1219,6 +1246,23 @@ export class AgentHeartbeats {
       // Older database without the push table: no hint is stored.
     }
     return assignedCadenceSeconds(stored);
+  }
+
+  // True when every pending signal was queued over budget: the poll should
+  // hold once. Holding clears the marks, so a signal is held at most once
+  // and is always delivered by the post-wait read.
+  holdForWakeBudget(agentId, pendingWakes) {
+    if (pendingWakes.length === 0 || !pendingWakes.every(s => this._throttledSignals.get(s.signalId) === agentId)) return false;
+    this.clearWakeBudgetMarks(agentId, pendingWakes.map(s => s.signalId));
+    return true;
+  }
+
+  // Clear only delivered/actually acknowledged IDs owned by this agent.
+  // This is advisory memory cleanup, never queue acknowledgement.
+  clearWakeBudgetMarks(agentId, signalIds) {
+    for (const signalId of signalIds) {
+      if (this._throttledSignals.get(signalId) === agentId) this._throttledSignals.delete(signalId);
+    }
   }
 
   // RC-2026-09-28-3602: register one in-process waiter per HOST for the

@@ -77,6 +77,8 @@ export const HOSTED_ROOM_MCP_TOOLS = Object.freeze([
   "squads_update_members",
   "squads_disband",
   "room_map",
+  // Flag ROOM_BOARD_CLAIM_TOOLS (off by default); mirrors server/board-claim-tools.mjs.
+  ...(/^(1|true|on)$/i.test(String(globalThis.process?.env?.ROOM_BOARD_CLAIM_TOOLS ?? "").trim()) ? ["room_take_work_claim", "room_finish_work_claim"] : []),
   "inbox_put_attachment",
   "inbox_list_attachments",
   "inbox_get_attachment",

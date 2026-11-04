@@ -19,6 +19,8 @@ const commandIdField = { ...idField, description: "Client command id. Stable acr
 const bondIdField = { ...idField, description: "Bond id from bond_propose or bond_list." };
 const scopesField = { type: "array", items: { type: "string", enum: [...BOND_SCOPES] }, minItems: 1, maxItems: BOND_SCOPES.length };
 
+import { boardClaimToolsEnabled, boardClaimToolDefinitions } from "./board-claim-tools.mjs";
+
 export const hostedRoomTools = [
   tool("room_wait_for_attention", "Wait for new caller-addressed mentions, replies, DMs or formal requests after a saved inbox cursor. Normalized rooms only. Returns pointers or an explicit catch-up continuation; never acknowledges messages or starts an AI. timeoutSec defaults to 25, maximum 120; your host may cancel earlier. Standing work and older obligations require separate inbox/work reads.", schema({roomId: roomIdField, after: {type: "integer", minimum: 0}, timeoutSec: {type: "integer", minimum: 0, maximum: 120}}, ["roomId", "after"])),
   tool("room_check_access", "Check this identity's Room access. Pass roomId for access and nativeMonitoring diagnostics on this connection; omit it to list linked rooms. A subscription does not prove execution. Metadata only; does not read history or start an AI.", schema({ roomId: roomIdField })),
@@ -237,7 +239,9 @@ export const hostedRoomTools = [
     to: { type: "string", minLength: 1, maxLength: 300, description: "End symbol or file for map.path." },
     repo: { type: "string", minLength: 3, maxLength: 200, description: "owner/name. Defaults to the room's newest map." }
   }, ["roomId", "op"]))
-
+,
+  // Flag ROOM_BOARD_CLAIM_TOOLS (off by default): take and finish Board tasks.
+  ...(boardClaimToolsEnabled() ? boardClaimToolDefinitions() : [])
 ];
 
 export const hostedInboxTools = [

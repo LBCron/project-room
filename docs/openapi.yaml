@@ -5776,6 +5776,10 @@ paths:
           in: query
           schema: { type: string, format: date-time }
           description: Board planning fields (flag on only). Tasks due at or before this time.
+        - name: savedView
+          in: query
+          schema: { type: string }
+          description: Saved Board view id (ROOM_BOARD_VIEWS=1 only); its params apply under any explicit ones.
         - name: sort
           in: query
           schema: { type: string, enum: [priority, dueAt, estimate] }
@@ -18762,6 +18766,189 @@ paths:
           description: Native agent connections are not configured
         '429':
           description: Confirmation rate limit reached
+  /api/rooms/{roomId}/inbound-hooks:
+    post:
+      summary: Create, list or revoke signed inbound task hooks
+      x-room-permission: owner
+      description: |
+        Off unless ROOM_INBOUND_HOOKS=1 (404 otherwise). Room owner only.
+        `{target}` creates a hook whose deliveries open Board tasks assigned to
+        that member (default: the caller); the `whsec_` signing secret is
+        returned once and stored encrypted at rest (AES-256-GCM, key derived
+        from the ROOM_INBOUND_HOOK_KEY Worker secret; 503 when unset).
+        `{revoke: hookId}` disables a hook. `{list: true}` lists the room's
+        hooks with delivery counts and never returns secrets.
+      parameters:
+        - $ref: '#/components/parameters/RoomId'
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              properties:
+                target: { type: string }
+                revoke: { type: string }
+                list: { type: boolean }
+      responses:
+        '201':
+          description: Hook created; secret shown once
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  ok: { type: boolean }
+                  hookId: { type: string }
+                  secret: { type: string }
+                  path: { type: string }
+                  target: { type: string }
+        '200':
+          description: Revoke result, or `{hooks:[…]}` for list (no secrets)
+        '403':
+          description: Caller is not the room owner
+        '404':
+          description: Feature flag off
+        '422':
+          description: Target is not an active member
+  /api/inbound/{hookId}:
+    post:
+      summary: Deliver a signed MCP Events payload that opens a Board task
+      x-room-permission: webhook_signature
+      description: |
+        Off unless ROOM_INBOUND_HOOKS=1. Body is an MCP Events payload
+        `{eventId, name, timestamp, data: {title, body?, url?}}` signed with
+        Standard Webhooks headers (`webhook-id`, `webhook-timestamp` within 300 s,
+        `webhook-signature: v1,<base64 HMAC-SHA256>`). Opens one task per
+        eventId, assigns it to the hook target and wakes them. Redelivery of a
+        webhook-id is idempotent. Payload text is stored as data, never echoed.
+      parameters:
+        - name: hookId
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        '201':
+          description: Task opened
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  ok: { type: boolean }
+                  claimId: { type: string }
+                  duplicate: { type: boolean }
+        '200':
+          description: Duplicate delivery or event
+        '401':
+          description: Missing, stale or bad signature
+        '404':
+          description: Flag off, unknown or revoked hook
+        '413':
+          description: Body over 64 KiB
+        '422':
+          description: Not an MCP Events payload
+  /api/rooms/{roomId}/automations:
+    post:
+      summary: List, create, enable, disable or delete room automations
+      x-room-permission: owner
+      description: |
+        Off unless ROOM_AUTOMATIONS=1 (404 otherwise). Room owner only.
+        A rule runs on the room's own `work_claim.updated` events: `trigger`
+        matches `actions`, `kinds`, `states` and/or `tags`; `action` is
+        `{type: wake, member, brief}` or `{type: open_task, title, assignee?}`.
+        Rules start disabled. Each rule runs at most once per event, and events
+        from automation-opened tasks never trigger rules. Built-in template
+        `post-deploy-check`: a deploy claim reaching done wakes `member` to run
+        the prod smoke check and baselines and open a Board task with evidence
+        on regression.
+      parameters:
+        - $ref: '#/components/parameters/RoomId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              properties:
+                list: { type: boolean }
+                template: { type: string, enum: [post-deploy-check] }
+                member: { type: string }
+                create:
+                  type: object
+                  required: [name, trigger, action]
+                  properties:
+                    name: { type: string, maxLength: 80 }
+                    trigger:
+                      type: object
+                      properties:
+                        actions: { type: array, items: { type: string } }
+                        kinds: { type: array, items: { type: string, enum: [work, land, deploy] } }
+                        states: { type: array, items: { type: string } }
+                        tags: { type: array, items: { type: string } }
+                    action:
+                      type: object
+                      required: [type]
+                      properties:
+                        type: { type: string, enum: [wake, open_task] }
+                        member: { type: string }
+                        brief: { type: string, maxLength: 1000 }
+                        title: { type: string, maxLength: 200 }
+                        assignee: { type: string }
+                enable: { type: string }
+                disable: { type: string }
+                delete: { type: string }
+      responses:
+        '201':
+          description: Rule created (disabled)
+        '200':
+          description: List (`rules`, `templates`) or enable/disable/delete result
+        '403':
+          description: Caller is not the room owner
+        '404':
+          description: Feature flag off, or unknown rule
+        '422':
+          description: Invalid trigger, action, template or member
+  /api/rooms/{roomId}/board-views:
+    post:
+      x-room-permission: member
+      operationId: postBoardViews
+      summary: Board saved views (ROOM_BOARD_VIEWS=1 only)
+      description: |
+        Named, room-shared Board list queries (Linear custom views). Body is
+        exactly one of `{list: true}`, `{create: {name, query}}` or
+        `{delete: viewId}`. `query` holds Board list params (state, queue,
+        view, priority, cycleId, milestone, dueBefore, sort). Read a view with
+        GET /api/rooms/{roomId}/work-claims?savedView={viewId}; explicit params
+        win. Any member may save a view; its creator or the room owner may
+        delete it. 404 while the flag is off.
+      parameters:
+        - $ref: '#/components/parameters/RoomId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              properties:
+                list: { type: boolean }
+                create:
+                  type: object
+                  required: [name, query]
+                  properties:
+                    name: { type: string }
+                    query: { type: object }
+                delete: { type: string }
+      responses:
+        '200': { description: Views listed or a view deleted }
+        '201': { description: View created }
+        '401': { description: unauthenticated }
+        '403': { description: not_view_creator or access_denied }
+        '404': { description: not_found (flag off) or unknown_view }
+        '422': { description: invalid_body, invalid_name or invalid_query }
 components:
   securitySchemes:
     operatorToken:

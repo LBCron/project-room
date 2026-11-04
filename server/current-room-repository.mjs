@@ -1424,26 +1424,16 @@ export function readCurrentReplyRequestWindow(store,roomId,{after='',limit=4}={}
   if(!after&&!hasMore&&requests.length!==head.counts.replyRequests)corrupt('complete request source membership differs');
   return {requests,examinedAfter,hasMore,total:head.counts.replyRequests};
 }
-// viewerAuthority: the Board work list needs only the viewer's and owner's
-// member records. Reading the full member census (each record plus its
-// witness receipt) exhausted the shared 200-record/256KiB read budget once a
-// room had more than a handful of members, so big rooms got a 409 instead of
-// their Board. Cost is now O(page), not O(members).
-function viewerAuthorityFromHead(db,roomId,viewerId,b) {
-  const room=readCurrentRecord(db,roomId,'metadata','room',b),members={};
-  if(!room)corrupt('missing owner authority');
-  for(const key of new Set([room.ownerId,viewerId].filter(k=>typeof k==='string'))){
-    const member=readCurrentRecord(db,roomId,'members',key,b);
-    if(member!==undefined)Object.defineProperty(members,key,{value:member,enumerable:true,writable:true,configurable:true});
-  }
-  if(!Object.hasOwn(members,room.ownerId))corrupt('missing owner authority');
-  return {members,room};
-}
+// viewerAuthority: the Board work list needs only the owner's and viewer's
+// member records, so it uses the existing addressed authority
+// (currentMemberAuthorityFromHead) instead of the full member census, which
+// exhausted the shared 200-record/256KiB read budget in rooms with more than a
+// handful of members. Cost is O(page), not O(members).
 export function readCurrentOverviewWindow(store,roomId,{workAfter='',limit=8,viewerId=null,viewerAuthority=false}={}) {
   const db=store.db,b=contextBudgets.get(db)??budget(),head=readCurrentHead(db,roomId,b);if(!head)return null;
   if(typeof workAfter!=='string'||Buffer.byteLength(workAfter)>200||!Number.isInteger(limit)||limit<1||limit>8)refuse('Invalid bounded work context window');
   const scoped=viewerAuthority&&typeof viewerId==='string';
-  const authority=scoped?viewerAuthorityFromHead(db,roomId,viewerId,b):currentAuthorityFromHead(db,roomId,head,b),room=scoped?authority.room:readCurrentRecord(db,roomId,'metadata','room',b);
+  const authority=scoped?currentMemberAuthorityFromHead(db,roomId,head,b,viewerId):currentAuthorityFromHead(db,roomId,head,b),room=readCurrentRecord(db,roomId,'metadata','room',b);
   const state={room,members:authority.members,workItems:{},messages:[],pins:[]};
   if(!scoped){const pins=readCurrentRecord(db,roomId,'metadata','pins',b);if(pins!==undefined)state.pins=pins;}
   const rows=db.prepare("SELECT record_key FROM current_room_record_proofs INDEXED BY current_work_summary_keys WHERE room_id=? AND domain='workSummary' AND present=1 AND record_key>? ORDER BY record_key LIMIT ?").all(roomId,workAfter,limit+1);

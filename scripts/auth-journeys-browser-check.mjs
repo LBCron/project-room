@@ -392,12 +392,37 @@ test('refresh after expiry ends at actionable sign-in', {timeout:60000}, async t
   await page.evaluate(()=>window.dispatchEvent(new Event('focus')));
   await page.locator('#auth-panel').waitFor({state:'visible'});
   const initial=(await page.locator('#auth-error').innerText()).trim();
-  const refresh=page.locator('#refresh-button');
+  const reconnect=page.getByRole('button',{name:'Reconnect',exact:true});
   assert.equal(initial,uiText("room.session_changed_reconnect"));
-  assert.match(initial,/sign in or refresh/i);
-  assert.equal(await refresh.isVisible(),true);
-  await refresh.click();
+  assert.equal(await reconnect.isVisible(),true);
+  assert.equal(await reconnect.isEnabled(),true);
+  await page.waitForFunction(()=>document.activeElement?.id==='auth-reconnect');
+  await reconnect.click();
   await page.waitForFunction(()=>document.querySelector('#connection-status').textContent.includes('sign in required'),null,{timeout:10000});
   assert.equal((await f.session(page)).authenticated,false);
   await page.locator('#auth-signin-ui [data-signin-form="password"] [name="email"]').waitFor({state:'visible'});
+});
+
+test('account confirmation capacity error keeps the open room and draft', {timeout:60000}, async t => {
+  const f=await setup(t),page=await f.open();
+  assert.equal(await signUp(page,f.origin,'confirm-capacity@example.invalid'),202);
+  await page.locator('#main').waitFor({state:'visible'});
+  const draft='Synthetic unsent draft';await page.locator('#message-input').fill(draft);
+  let injected;const seen=new Promise(resolve=>{injected=resolve;});
+  const handler=route=>{
+    if(route.request().method()==='GET'&&route.request().headers()['x-session-binding']){
+      injected();return route.fulfill({status:409,json:{error:{code:'pilot_limit',message:'Storage capacity'}}});
+    }
+    return route.continue();
+  };
+  await page.route('**/api/account-session',handler);
+  await page.evaluate(()=>window.dispatchEvent(new Event('focus')));await seen;
+  await page.waitForFunction(()=>document.querySelector('#account-status').textContent.includes('Couldn’t confirm account'));
+  assert.equal(await page.locator('#main').isVisible(),true);
+  assert.equal(await page.locator('#auth-panel').isVisible(),false);
+  assert.equal(await page.locator('#message-input').inputValue(),draft);
+  await page.unroute('**/api/account-session',handler);
+  await page.evaluate(()=>window.dispatchEvent(new Event('focus')));
+  await page.waitForFunction(()=>document.querySelector('#account-status').textContent==='');
+  assert.equal(await page.locator('#message-input').inputValue(),draft);
 });

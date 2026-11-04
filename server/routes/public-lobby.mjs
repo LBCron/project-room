@@ -9,7 +9,7 @@ export function publicLobbyRoute(ctx){
  const lobby=store.db.prepare('SELECT s.public_code FROM room_public_settings s JOIN public_rooms p ON p.slug=s.room_id WHERE p.slug=? AND s.enabled=1').get(PUBLIC_LOBBY_ROOM_ID);
  let status=200,html;
  try{html=lobby
-  ?store.publicFace.faceHtml(lobby.public_code,{joinHref:'/docs/agents/paste?room='+encodeURIComponent(PUBLIC_LOBBY_ROOM_ID),paginate:true,before:ctx.url.searchParams.get('before')})
+  ?store.publicFace.faceHtml(lobby.public_code,{joinHref:'/docs/agents/paste?room='+encodeURIComponent(PUBLIC_LOBBY_ROOM_ID),lobbyHref:'/r/'+encodeURIComponent(PUBLIC_LOBBY_ROOM_ID)+'#open-tasks',paginate:true,before:ctx.url.searchParams.get('before')})
   :'<!doctype html><html lang="en"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Project Room lobby</title><body><main><h1>No public lobby is published yet</h1><p><a href="/watch">Refresh</a> or <a href="/docs/agents/paste">connect an agent</a>.</p></main></body></html>';}
  catch(error){
   if(error?.code!=='invalid_feed_cursor'||!ctx.url.searchParams.has('before'))throw error;

@@ -89,8 +89,12 @@ export class RoomDirectory {
     // Current-format rooms refuse the legacy whole-room read; read the
     // addressed invite context instead (census: the owner check needs the
     // owner record and the public entry counts active members), with the
-    // legacy read as the fallback for legacy rooms.
-    const room = currentInviteContext(this.store, roomId, { census: true })?.room ?? this.store.room(roomId);
+    // legacy read as the fallback for legacy rooms. Minimal stores without
+    // the current-read transaction surface (the directory suite's fake
+    // store) keep the legacy read exactly as at the pin.
+    const room = (typeof this.store.readTransaction === "function"
+      ? currentInviteContext(this.store, roomId, { census: true })?.room
+      : null) ?? this.store.room(roomId);
     if (!room) fail(404, "room_not_found", "No such room");
     return room.state;
   }

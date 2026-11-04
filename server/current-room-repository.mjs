@@ -498,6 +498,14 @@ export function currentRoomAuthority(db,roomId,{memberId=null}={}) {
   const b=contextBudgets.get(db)??budget(),head=readCurrentHead(db,roomId,b);if(!head)return null;
   return memberId===null?currentAuthorityFromHead(db,roomId,head,b):currentMemberAuthorityFromHead(db,roomId,head,b,memberId);
 }
+// Owner-only authority: protected head and room record, no member census.
+// For callers that need only ownerId/sequence; cost is constant in member count.
+export function currentRoomOwnerAuthority(db,roomId) {
+  const b=contextBudgets.get(db)??budget(),head=readCurrentHead(db,roomId,b);if(!head)return null;
+  const room=readCurrentRecord(db,roomId,'metadata','room',b);
+  if(!room||!validId(room.ownerId))corrupt('missing owner authority');
+  return {sequence:head.sequence,ownerId:room.ownerId};
+}
 // Explicit addressed authority: protected room/owner and this principal only.
 // Default roster callers retain their full-census contract and budget.
 function currentMemberAuthorityFromHead(db,roomId,head,b,memberId) {

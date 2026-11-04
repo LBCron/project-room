@@ -1,6 +1,6 @@
 import {createCipheriv,createDecipheriv,createHash,randomBytes} from 'node:crypto';
-import {isCurrentRoom,readCurrentHead,readCurrentRecord,readCurrentMessage,readCurrentHistoryFloor,readCurrentReplyRequestWindow,readCurrentWorkItem,currentRoomAuthority,withCurrentReadContext,chargeCurrentReadBudget,remainingCurrentReadBytes} from './current-room-repository.mjs';
-import {validId,ownMember} from '../src/events.js';
+import {isCurrentRoom,readCurrentHead,readCurrentRecord,readCurrentMessage,readCurrentHistoryFloor,readCurrentReplyRequestWindow,readCurrentWorkItem,withCurrentReadContext,chargeCurrentReadBudget,remainingCurrentReadBytes} from './current-room-repository.mjs';
+import {validId} from '../src/events.js';
 import {messageInHistory} from './history-visibility.mjs';
 import {charterContext} from '../src/room-charter.js';
 import {currentWorkRecord} from './work-context.mjs';
@@ -35,7 +35,10 @@ export function readCurrentReplies(store,token,roomId,mode,args,shape){
  if(!isCurrentRoom(store.db,roomId))return undefined;
  return store.readTransaction(()=>withCurrentReadContext(store.db,roomId,b=>{
   const auth=store.authenticate(token,roomId,args.expectedSessionBinding??null),db=store.db,head=readCurrentHead(db,roomId,b);
-  const floor=readCurrentHistoryFloor(db,roomId,auth.member.id,b),authority=currentRoomAuthority(db,roomId),crypto=codec(store);
+  const floor=readCurrentHistoryFloor(db,roomId,auth.member.id,b),crypto=codec(store);
+  // Addressed member reads (requester/recipient only), never the full member
+  // census: the census exhausts the shared read budget in rooms of ~20+ members.
+  const memberCache=new Map(),memberAt=id=>{if(!validId(id))return undefined;if(!memberCache.has(id)){const m=readCurrentRecord(db,roomId,'members',id,b);if(m!==undefined&&m?.id!==id)changed();memberCache.set(id,m);}return memberCache.get(id);};
   const limit=args.limit??20;if(!Number.isSafeInteger(limit)||limit<1||limit>50)fail('invalid_reply_selection','Choose a page limit from1 to50',422);
   const requestMessageId=mode==='selected'?args.requestMessageId:null,direction=mode==='list'||mode==='history'?args.direction??'incoming':null,status=mode==='list'?args.status??'open':null;
   if(direction!==null&&!['incoming','outgoing','both'].includes(direction)||status!==null&&!['open','answered','declined','cancelled','all'].includes(status))fail('invalid_reply_selection','Choose a request direction and status',422);
@@ -236,7 +239,7 @@ export function readCurrentReplies(store,token,roomId,mode,args,shape){
     evaluatedThrough=Math.max(evaluatedThrough,terminal.row.seq);
    }
   }
-  const requester=ownMember(authority.members,request.requesterId),recipient=ownMember(authority.members,request.recipientId),room=readCurrentRecord(db,roomId,'metadata','room',b);
+  const requester=memberAt(request.requesterId),recipient=memberAt(request.recipientId),room=readCurrentRecord(db,roomId,'metadata','room',b);
   const denied=store.dmConsents.deniedDirection(roomId,auth.member.id,auth.member.id===request.requesterId?request.recipientId:request.requesterId);
   const canReply=!denied&&requester?.active===true&&recipient?.active===true;
   const answerBasis = request.status === 'open' && auth.member.id === request.recipientId && canReply && !hasMore && context.row.seq <= horizon ? {expectedRequestRevision: request.revision, contextEventId: contextEvent.id, contextSequence: context.row.seq} : null;

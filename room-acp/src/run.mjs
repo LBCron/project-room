@@ -1,3 +1,4 @@
+import { receiveCloudNotifications } from "./notification-receiver.mjs";
 // `room-acp run`: load the saved connection, pick the agent, run the bridge.
 import { candidates, probe } from "./agents.mjs";
 import { loadConnection, saveConnection } from "./credentials.mjs";
@@ -9,7 +10,7 @@ import { logger } from "./redact.mjs";
 export async function selectAgent(options, { env = process.env, onFailure = () => {} } = {}) {
   const list = candidates({ agent: options.agent, agentCmd: options.agentCmd, env });
   for (const entry of list) {
-    const result = await probe(entry, { cwd: options.cwd ?? process.cwd(), env, executionReady: true, timeoutMs: entry.command === "npx" ? 120000 : 10000 });
+    const result = await probe(entry, { cwd: options.cwd ?? process.cwd(), env, mode: options.mode, executionReady: true, timeoutMs: entry.command === "npx" ? 120000 : 10000 });
     if (result.ok) return entry;
     onFailure(result);
   }
@@ -17,8 +18,20 @@ export async function selectAgent(options, { env = process.env, onFailure = () =
 }
 
 export async function run(options, { print, env = process.env, fetchImpl = fetch, onBridge = null, candidate: preparedCandidate = null } = {}) {
+  const receiverPolicy = options.receiverPolicy === undefined ? 'respond' : options.receiverPolicy;
+  if (!['respond', 'disabled', 'notify-cloud'].includes(receiverPolicy)) throw Error('Receiver policy must be respond, disabled or notify-cloud');
+  if (receiverPolicy === 'disabled') {
+    print('Room receiver disabled. No host or receiver was started; no wakes or formal requests were accepted, answered or acknowledged. Existing Room work and local retry state are unchanged.');
+    return 0;
+  }
   const connection = loadConnection({ roomId: options.room }, env);
   if (!connection) { print("Not joined. Run: room-acp <invite link>"); return 1; }
+  if (receiverPolicy === 'notify-cloud') {
+    const controller = new AbortController(), stop = () => controller.abort();
+    process.once('SIGINT', stop); process.once('SIGTERM', stop);
+    try { return await receiveCloudNotifications({connection, configFile:options.notifyConfig, env, fetchImpl, print, signal:controller.signal}); }
+    finally { process.off('SIGINT', stop); process.off('SIGTERM', stop); }
+  }
   if (options.permissionApprover !== undefined) {
     connection.permissionApproverId = options.permissionApprover === "none" ? null : options.permissionApprover;
     saveConnection(connection, env);

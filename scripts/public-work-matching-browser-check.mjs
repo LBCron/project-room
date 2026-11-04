@@ -73,6 +73,7 @@ for (const width of [1280, 320]) test(`owner enables scoped public work and anon
   await visitor.locator('[data-close]').click();
   assert.equal(await visitor.locator('[data-match-offer]').evaluate(node => node === document.activeElement), true, 'All offers returns focus to the selected suggestion');
   assert.equal(new URL(visitor.url()).searchParams.has('offer'), false);
+  await visitor.locator('#find-work-form [name=reward]').selectOption('work_trade'); await visitor.locator('#find-work-form [type=submit]').click(); await visitor.locator('#find-work-status').filter({ hasText: 'Work-trade search is not available yet.' }).waitFor(); assert.equal(await visitor.locator('[data-copy-claim]').count(), 0);
   await visitor.locator('#find-work-form [name=reward]').selectOption('cash'); await visitor.locator('#find-work-form [type=submit]').click(); await visitor.locator('#find-work-status').filter({ hasText: 'No claimable cash matches' }).waitFor(); assert.equal(await visitor.locator('[data-copy-claim]').count(), 0);
   const identity = await createAgentIdentity(f.origin, 'Synthetic explicit contributor');
   const client = new PublicWorkClaimsClient({ origin: f.origin, identitySecret: identity.secret });

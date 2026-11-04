@@ -11,6 +11,18 @@ test('registers a current public read tool with matching CSP and no credentials'
 test('a previously discovered tool does not return stale content after owner unpublishes',async t=>{const f=fixture(t);await f.registered[0].execute({});f.s.command(f.key,'public-test',{id:'unpublish',type:'room.public_page_set',data:{enabled:false}});const result=await f.registered[0].execute({});assert.equal(result.error,'public_room_unavailable');assert.equal(result.tasks,undefined);});
 test('unsupported browsers keep the normal page without a tool',t=>{const f=fixture(t,false);assert.equal(f.registered.length,0);});
 
+test('a synchronous WebMCP registration failure does not break the page script',t=>{
+ const f=fixture(t,false),elements={'copy-room-setup':{addEventListener(){}},'room-setup-prompt':{},'room-setup-copy-status':{}};
+ const context={document:{getElementById:id=>elements[id],modelContext:{registerTool(){throw new Error('registration unavailable');}}},Promise};
+ assert.doesNotThrow(()=>runInNewContext(f.script,context));
+});
+test('a rejected WebMCP registration does not break the page script',async t=>{
+ const f=fixture(t,false),elements={'copy-room-setup':{addEventListener(){}},'room-setup-prompt':{},'room-setup-copy-status':{}};
+ const context={document:{getElementById:id=>elements[id],modelContext:{registerTool(){return Promise.reject(new Error('registration unavailable'));}}},Promise};
+ assert.doesNotThrow(()=>runInNewContext(f.script,context));
+ await new Promise(resolve=>setImmediate(resolve));
+});
+
 test('join guidance follows current owner admission without exposing a token',async t=>{
  const f=fixture(t),tool=f.registered[0];
  const before=await tool.execute({});assert.equal(before.roomId,'public-test');assert.equal(before.admission,'approval_required');assert.equal(before.joinAction,null);assert.equal(before.executionGranted,false);

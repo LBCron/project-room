@@ -386,7 +386,7 @@ textarea {
   color:var(--red)
 }
 .detail-close {
-  display:none
+  display:inline-block
 }
 footer {
   max-width:1280px;

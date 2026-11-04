@@ -35,7 +35,7 @@ test("board claim tools follow the flag in tools/list", async () => {
   const w = await world();
   try {
     const names = (await w.rpc(w.agent("Lister"), "tools/list", {})).result.tools.map(t => t.name);
-    for (const name of ["room_take_work_claim", "room_finish_work_claim"]) assert.equal(names.includes(name), ON, name);
+    for (const name of ["room_work_claim"]) assert.equal(names.includes(name), ON, name);
   } finally { await w.close(); }
 });
 
@@ -44,15 +44,15 @@ test("take then finish moves a Board task to delivered; a second taker is refuse
   try {
     assert.equal((await w.rest(w.f.keys.owner, "/api/rooms/commons/work-claims", { id: "fix-login", title: "Fix login", note: "n" })).status, 201);
     const a = w.agent("Alpha"), b = w.agent("Beta");
-    const took = await w.rpc(a, "tools/call", { name: "room_take_work_claim", arguments: { roomId: "commons", claimId: "fix-login" } });
+    const took = await w.rpc(a, "tools/call", { name: "room_work_claim", arguments: { op: "take", roomId: "commons", claimId: "fix-login" } });
     assert.notEqual(took.result.isError, true);
     assert.equal(body(took).state, "claimed");
-    const lost = await w.rpc(b, "tools/call", { name: "room_take_work_claim", arguments: { roomId: "commons", claimId: "fix-login" } });
+    const lost = await w.rpc(b, "tools/call", { name: "room_work_claim", arguments: { op: "take", roomId: "commons", claimId: "fix-login" } });
     assert.ok(lost.error || lost.result?.isError);
-    const done = await w.rpc(a, "tools/call", { name: "room_finish_work_claim", arguments: { roomId: "commons", claimId: "fix-login", note: "Fixed; tests pass." } });
+    const done = await w.rpc(a, "tools/call", { name: "room_work_claim", arguments: { op: "finish", roomId: "commons", claimId: "fix-login", note: "Fixed; tests pass." } });
     assert.notEqual(done.result.isError, true, JSON.stringify(done));
     assert.equal(body(done).state, "delivered");
-    const stranger = await w.rpc(b, "tools/call", { name: "room_finish_work_claim", arguments: { roomId: "commons", claimId: "fix-login", note: "x" } });
+    const stranger = await w.rpc(b, "tools/call", { name: "room_work_claim", arguments: { op: "finish", roomId: "commons", claimId: "fix-login", note: "x" } });
     assert.ok(stranger.error || stranger.result?.isError);
   } finally { await w.close(); }
 });
@@ -61,9 +61,9 @@ test("finish refuses unknown fields and a missing note", { skip: !ON }, async ()
   const w = await world();
   try {
     const a = w.agent("Gamma");
-    const r = await w.rpc(a, "tools/call", { name: "room_finish_work_claim", arguments: { roomId: "commons", claimId: "x" } });
+    const r = await w.rpc(a, "tools/call", { name: "room_work_claim", arguments: { op: "finish", roomId: "commons", claimId: "x" } });
     assert.ok(r.error || r.result?.isError);
-    const r2 = await w.rpc(a, "tools/call", { name: "room_take_work_claim", arguments: { roomId: "commons", claimId: "x", bogus: 1 } });
+    const r2 = await w.rpc(a, "tools/call", { name: "room_work_claim", arguments: { op: "take", roomId: "commons", claimId: "x", bogus: 1 } });
     assert.ok(r2.error || r2.result?.isError);
   } finally { await w.close(); }
 });

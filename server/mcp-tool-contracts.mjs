@@ -105,8 +105,7 @@ export const MCP_TOOL_CONTRACTS = Object.freeze({
   room_map: { access: `read, ${MEMBER}`, cost: READ, rest: "GET /api/rooms/{roomId}/map/query" }
   // Flag ROOM_BOARD_CLAIM_TOOLS (off by default): contracts exist only when listed.
   ,...(boardClaimToolsEnabled() ? {
-    room_take_work_claim: { access: `write, Board writer; hidden from guest and read-only-tier agents`, cost: WRITE, rest: "POST /api/rooms/{roomId}/work-claims/{claimId}/claim" },
-    room_finish_work_claim: { access: `write, Board writer holding the claim; hidden from guest and read-only-tier agents`, cost: WRITE, rest: "POST /api/rooms/{roomId}/work-claims/{claimId}/update" } } : {})
+    room_work_claim: { access: `write, Board writer (finish: the holder); hidden from guest and read-only-tier agents`, cost: WRITE, rest: "POST /api/rooms/{roomId}/work-claims/{claimId}/claim, POST /api/rooms/{roomId}/work-claims/{claimId}/update" } } : {})
 });
 
 export function mcpToolContractLine(name) {

@@ -567,9 +567,9 @@ function boardIdHint(store, args, outcome) {
   if (!board) return value;
   const on = boardClaimToolsEnabled();
   return { ...value, hint: `"${args.workItemId}" is a Board task, not a proposed work item. ${on
-    ? "Take it with room_take_work_claim and finish it with room_finish_work_claim."
+    ? "Take it with room_work_claim op take and finish it with op finish."
     : "Take it with POST /api/rooms/{roomId}/work-claims/{claimId}/claim; retire it with room_close_work_claim."}`,
-    next: [{ tool: on ? "room_take_work_claim" : "room_read_board", arguments: on ? { roomId: args.roomId, claimId: args.workItemId } : { roomId: args.roomId } }] };
+    next: [{ tool: on ? "room_work_claim" : "room_read_board", arguments: on ? { roomId: args.roomId, claimId: args.workItemId, op: "take" } : { roomId: args.roomId } }] };
 }
 
 // Flag ROOM_BOARD_CLAIM_TOOLS: same REST handler (handleWorkClaims) in-process.

@@ -32,8 +32,7 @@ export const MCP_TOOL_META = Object.freeze([
   // Flag ROOM_BOARD_CLAIM_TOOLS (off by default): core when on, so a default
   // catalog can take and finish a Board task (harness 2026-11-03: 0/10 on main).
   ...(/^(1|true|on)$/i.test(String(globalThis.process?.env?.ROOM_BOARD_CLAIM_TOOLS ?? "").trim()) ? [
-    { name: "room_take_work_claim", core: true, blurb: "Take a Board task.", focus: ["work"] },
-    { name: "room_finish_work_claim", core: true, blurb: "Deliver a Board task you hold.", focus: ["work"] }] : []),
+    { name: "room_work_claim", core: true, blurb: "Board task: op take or finish (with note).", focus: ["work"] }] : []),
   { name: "room_read_messages", core: true, blurb: "Read room messages oldest first. latest:true returns newest messages; view:digest retains directed/reply context and groups other headlines, same cursor. Pass roomId, or omit it with a room-pinned key.", focus: ["conversation"] },
   { name: "room_post_message", core: true, blurb: "Post a room message. Optional replyToId.", focus: ["common"] },
   { name: "room_reply", core: true, blurb: "Reply under a room message. Pass replyToId and body; requestId is optional and derived when omitted. Ordinary replies do not close formal requests.", focus: ["common"] },

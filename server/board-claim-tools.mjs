@@ -8,9 +8,10 @@
 //
 // Both tools call the same handleWorkClaims routes as REST (claim, update), so
 // caps, leases, review policy, autonomy tiers, events and wakes are unchanged.
-export const BOARD_TAKE_TOOL = "room_take_work_claim";
-export const BOARD_FINISH_TOOL = "room_finish_work_claim";
-export const BOARD_CLAIM_TOOLS = Object.freeze([BOARD_TAKE_TOOL, BOARD_FINISH_TOOL]);
+// One tool, two ops (take | finish): a second tool would push the full
+// catalog past its 116-tool budget and the core list past 17 KiB.
+export const BOARD_WORK_CLAIM_TOOL = "room_work_claim";
+export const BOARD_CLAIM_TOOLS = Object.freeze([BOARD_WORK_CLAIM_TOOL]);
 const CLAIM_ID = /^[A-Za-z0-9_-]{1,128}$/;
 
 export function boardClaimToolsEnabled(env = globalThis.process?.env ?? {}) {
@@ -19,34 +20,28 @@ export function boardClaimToolsEnabled(env = globalThis.process?.env ?? {}) {
 
 const text = (max) => ({ type: "string", minLength: 1, maxLength: max });
 export const boardClaimToolDefinitions = () => [
-  { name: BOARD_TAKE_TOOL,
-    description: "Take an unclaimed Board task by claimId, with a lease. Same rules as POST .../work-claims/{claimId}/claim. Finish with room_finish_work_claim.",
-    inputSchema: { type: "object", additionalProperties: false, required: ["roomId", "claimId"], properties: {
+  { name: BOARD_WORK_CLAIM_TOOL,
+    description: "Board task by claimId. op take: claim it with a lease (optional files). op finish: deliver one you hold with a note (state done only if review policy allows). Rules and caps match the REST work-claims claim and update routes.",
+    inputSchema: { type: "object", additionalProperties: false, required: ["roomId", "claimId", "op"], properties: {
       roomId: { type: "string", maxLength: 128 },
       claimId: { type: "string", pattern: CLAIM_ID.source },
-      note: { ...text(2000) },
-      files: { type: "array", maxItems: 64, items: text(512) } } },
-    annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: false, openWorldHint: false } },
-  { name: BOARD_FINISH_TOOL,
-    description: "Finish a Board task you hold: note, then delivered (or done if review policy allows). Same rules as POST .../work-claims/{claimId}/update.",
-    inputSchema: { type: "object", additionalProperties: false, required: ["roomId", "claimId", "note"], properties: {
-      roomId: { type: "string", maxLength: 128 },
-      claimId: { type: "string", pattern: CLAIM_ID.source },
+      op: { type: "string", enum: ["take", "finish"] },
       note: { ...text(4000) },
+      files: { type: "array", maxItems: 64, items: text(512) },
       state: { type: "string", enum: ["delivered", "done"] } } },
     annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: false, openWorldHint: false } }
 ];
 
 export function validBoardClaimArgs(name, args) {
-  if (!args || typeof args !== "object" || !CLAIM_ID.test(String(args.claimId ?? ""))) return false;
+  if (name !== BOARD_WORK_CLAIM_TOOL || !args || typeof args !== "object" || !CLAIM_ID.test(String(args.claimId ?? ""))) return false;
   const str = (v, max) => v === undefined || typeof v === "string" && v.trim().length > 0 && v.length <= max;
-  if (name === BOARD_TAKE_TOOL) {
-    const allowed = new Set(["claimId", "note", "files"]);
+  if (args.op === "take") {
+    const allowed = new Set(["claimId", "op", "note", "files"]);
     return Object.keys(args).every(k => allowed.has(k)) && str(args.note, 2000)
       && (args.files === undefined || Array.isArray(args.files) && args.files.length <= 64 && args.files.every(f => str(f, 512)));
   }
-  if (name === BOARD_FINISH_TOOL) {
-    const allowed = new Set(["claimId", "note", "state"]);
+  if (args.op === "finish") {
+    const allowed = new Set(["claimId", "op", "note", "state"]);
     return Object.keys(args).every(k => allowed.has(k)) && typeof args.note === "string" && str(args.note, 4000)
       && (args.state === undefined || args.state === "delivered" || args.state === "done");
   }
@@ -54,10 +49,9 @@ export function validBoardClaimArgs(name, args) {
 }
 
 // Plan of REST route calls for one tool call. `current` is the claim's state.
-export function boardClaimSteps(name, args, current) {
-  if (name === BOARD_TAKE_TOOL) {
-    return [["claim", { ...(args.leaseHours ? { leaseHours: args.leaseHours } : {}),
-      ...(args.note ? { note: args.note } : {}), ...(args.files ? { files: args.files } : {}) }]];
+export function boardClaimSteps(_name, args, current) {
+  if (args.op === "take") {
+    return [["claim", { ...(args.note ? { note: args.note } : {}), ...(args.files ? { files: args.files } : {}) }]];
   }
   const steps = [];
   if (current === "claimed") steps.push(["update", { state: "in_progress" }]);

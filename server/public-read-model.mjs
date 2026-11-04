@@ -430,7 +430,11 @@ function optedInRows(store, state) {
       agents, humans, agentIds: creditedIds(agentIds),
       pullRequest: pullRequestUrl(item.receipt.evidenceUrl),
       mergedAt: null,
-      verificationState: null,
+      // The room recorded this item complete and issued the receipt;
+      // that is the whole claim (receipt-share.mjs "room-recorded
+      // completion"), stated on the .json face too instead of the
+      // verification key vanishing while the HTML face claims it.
+      verificationState: "room_recorded",
       hashes: hashList(version ? [version] : []),
       at: iso(item.updatedAt) ?? new Date(0).toISOString(),
       startHref: href,

@@ -90,6 +90,7 @@ optional.push("server/routes/room-window.mjs"); // windowed bootstrap and older-
 optional.push("server/room-bootstrap.mjs"); // one-read room open (imported by server/http.mjs and server/mcp-room-profile.mjs)
 optional.push("src/curiosity-rank.mjs"); // curiosity sort for room_list_work (imported by server/mcp-room-profile.mjs)
 optional.push("src/dm-consents.js"); // DM consent browser view-model + API helpers (imported by src/app.js)
+optional.push("server/wake-adapters.mjs"); // grok/wake-adapters new modules
 optional.push("src/friend-bond.js"); // Friend / Bond People chrome (imported by src/app.js and src/client.js)
 optional.push("src/error-copy.js"); // Human error copy (imported by src/client.js, src/friend-bond.js, src/operator-ui.js)
 optional.push("src/room-layout.js", "src/member-display-names.js", "src/result-reader.js", "src/clipboard.js", "src/result-comparison.js", "src/result-feedback.js", "src/result-availability.js");
@@ -254,7 +255,6 @@ optional.push("server/persisted-row.mjs"); // RC-2026-09-27-2730: replay-safe pe
 optional.push("server/claim-collisions.mjs");
 optional.push("server/agent-collisions.mjs"); // overlap alerts for live claims (imported by server/work-claim-routes.mjs)
 optional.push("server/work-claim-routes.mjs"); // RC-2026-09-18-041: work-claim HTTP routes (imported by server/http.mjs)
-optional.push("server/wake-adapters.mjs"); // grok/wake-adapters new modules
 optional.push("server/work-claim-events.mjs"); // work_claim.updated receipts (imported by server/work-claim-routes.mjs; imports src/events.js)
 optional.push("server/work-claim-integrity.mjs"); // SEC-2: Board input bounds, event budget and status cache (imported by server/work-claim-routes.mjs; imports src/display-name-guard.js via server/display-name-guard.mjs and server/store.mjs limits)
 optional.push("server/work-item-board.mjs"); // decision #10: workItems -> board claims migration core + write-path sync (imported by server/store.mjs)

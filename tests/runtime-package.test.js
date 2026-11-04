@@ -213,13 +213,14 @@ test("exact-commit runtime package verifies cold, excludes private state and pre
   {
     const damaged = join(directory, "unsupported-schema"); cpSync(destination, damaged, { recursive: true });
     const relative = "server/writer-fence.mjs", path = join(damaged, relative);
-    const source = readFileSync(path, "utf8").replace(/STORE_SCHEMA_VERSION = \d+/, "STORE_SCHEMA_VERSION = 46");
+    const unsupportedSchema = Math.max(46, STORE_SCHEMA_VERSION) + 1;
+    const source = readFileSync(path, "utf8").replace(/STORE_SCHEMA_VERSION = \d+/, `STORE_SCHEMA_VERSION = ${unsupportedSchema}`);
     writeFileSync(path, source);
     const manifestPath = join(damaged, "runtime-manifest.json"), manifest = JSON.parse(readFileSync(manifestPath));
     const entry = manifest.files.find(file => file.path === relative);
     entry.bytes = Buffer.byteLength(source); entry.sha256 = createHash("sha256").update(source).digest("hex");
     writeFileSync(manifestPath, JSON.stringify(manifest));
-    assert.throws(() => verifyRuntimePackage(damaged), /unsupported store schema 46/);
+    assert.throws(() => verifyRuntimePackage(damaged), new RegExp(`unsupported store schema ${unsupportedSchema}`));
   }
 
   for (const fault of ["missing", "changed", "extra", "symlink", "duplicate", "partial", "empty-directory"]) {

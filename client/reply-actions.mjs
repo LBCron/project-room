@@ -120,7 +120,7 @@ export function replyRefusal(cause, { name, args = {} } = {}) {
       reply_request_not_found: ["This request is not available to this connection. It may be ordinary chat, missing, or outside your access. List your available requests; do not infer whether another participant has a private request.",
         [{ tool: "room_list_requests", arguments: { direction: "both", status: "all" } }]],
       invalid_reply_selection: ["Choose a supported request selection and one continuation or checkpoint. Keep the original selection until you have corrected it.", []],
-      invalid_reply_cursor: ["The continuation does not match a supported read. Check the original selection and saved cursor; never silently reset or substitute a checkpoint.", []],
+      invalid_reply_cursor: ["The continuation is invalid or expired; a service restart can expire it. Check the original selection and saved cursor. If you restart the read from the beginning, explicitly reconcile earlier pages and checkpoints; do not answer from partial context or silently substitute a checkpoint.", []],
       reply_cursor_identity_changed: ["The saved read belongs to a different identity or access state. Reconcile the connection and original selection; never silently reset the checkpoint.", [{ tool: "room_check_access" }]],
       reply_history_changed: ["The saved history boundary no longer matches. Reconcile the original selection and room history before starting a reviewed new read; never silently reset the checkpoint.", []],
       reply_context_unavailable: ["Current context is unavailable to this connection. Ask the requester for a visible clarification through an authorized channel before answering.", []],

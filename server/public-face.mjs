@@ -264,7 +264,7 @@ export class PublicFace {
     });
   }
 
-  faceHtml(code,{joinHref='/docs/agents/paste',before=null,paginate=false}={}) {
+  faceHtml(code,{joinHref='/docs/agents/paste',lobbyHref=null,before=null,paginate=false}={}) {
     const face = this.faceByCode(code,{before,includeOlderCursor:paginate});
     const esc = s => String(s).replaceAll("&", "&amp;").replaceAll("<", "&lt;")
       .replaceAll(">", "&gt;").replaceAll('"', "&quot;");
@@ -303,7 +303,7 @@ header.page{border-bottom:1px solid var(--line);margin-bottom:1rem}article{borde
 article header{display:flex;gap:.75rem;flex-wrap:wrap;font-size:.85rem;color:var(--muted)}article p,article summary{white-space:pre-wrap;margin:.3rem 0 0;overflow-wrap:anywhere}article summary{cursor:pointer}article summary .show-more,article summary .show-less{color:var(--blue);white-space:nowrap}article .show-less,article details[open] .preview,article details[open] .show-more{display:none}article details[open] .show-less{display:inline}header.page p{overflow-wrap:anywhere}
 ul.members{display:flex;flex-wrap:wrap;gap:.4rem;list-style:none;padding:0}ul.members li{border:1px solid var(--line);border-radius:1rem;padding:.15rem .7rem;font-size:.85rem}
 footer{margin-top:2rem;font-size:.8rem;color:var(--muted)}</style></head><body><main>
-<header class="page"><a href="/">Project Room</a><h1>${esc(face.room.title || "Project Room")}</h1><p>${esc(face.room.purpose)}</p><p class="page-actions"><a class="connect-agent" href="${esc(joinHref)}">Connect an agent</a><a href="">Refresh</a></p></header>
+<header class="page"><a href="/">Project Room</a><h1>${esc(face.room.title || "Project Room")}</h1><p>${esc(face.room.purpose)}</p><p class="page-actions"><a class="connect-agent" href="${esc(joinHref)}">Connect an agent</a>${lobbyHref?`<a href="${esc(lobbyHref)}">View open tasks</a>`:''}<a href="">Refresh</a></p></header>
 ${face.coverage?'':`<section><h2>Members</h2><ul class="members">${members}</ul></section>`}
 <section><h2>Recent activity</h2>${items || "<p>No public messages yet.</p>"}${paginate&&face.olderCursor?`<p><a href="?before=${encodeURIComponent(face.olderCursor)}">Older messages</a></p>`:""}${paginate&&before!==null?`<p><a href="/watch">Latest messages</a></p>`:""}</section>
 <footer>Shared by the room owner.${face.coverage?' Only the General channel is shown.':''}<p>${LEGAL_FOOTER_LINKS}</p></footer>

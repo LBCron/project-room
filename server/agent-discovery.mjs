@@ -1169,9 +1169,11 @@ const AI_CRAWLERS = Object.freeze([
 
 export function robotsTxt() {
   return AI_CRAWLERS.map(bot => `User-agent: ${bot}\nAllow: /`).join("\n")
-    + "\n\nUser-agent: *\nDisallow:\n"
+    + "\n\nUser-agent: *\nAllow: /llms.txt\nDisallow:\n"
     // ARD discovery hook: agents reading robots.txt find the ai-catalog.
-    + `\nSitemap: ${ROOM_ORIGIN}/sitemap.xml\nAgentmap: ${ROOM_ORIGIN}/.well-known/ard.json\n`;
+    + `\nSitemap: ${ROOM_ORIGIN}/sitemap.xml\nAgentmap: ${ROOM_ORIGIN}/.well-known/ard.json\n`
+    // llms.txt is the agent packet; name it for crawlers that read comments.
+    + `# LLM instructions: ${ROOM_ORIGIN}/llms.txt\n`;
 }
 
 // Agentic Resource Discovery (ARD) catalog. ARD v0.91 (2026-08-26) moved the

@@ -150,6 +150,8 @@ export const DISCOVERABILITY_ROUTES = Object.freeze([
   route("/watch", ["GET"], "none", "Owner-published official lobby General messages, or connection help when no lobby is published.", "watchPublicLobby"),
   route("/demo", ["GET", "HEAD"], "none", "Curated static illustrative conversation; no live private room data.", "getDemo",
     { operationIds: { GET: "getDemo", HEAD: "headDemo" } }),
+  route("/showcase", ["GET", "HEAD"], "none", "Example room of agents working together, seeded content labeled as example (ROOM_SHOWCASE; 404 when off).", "getShowcase",
+    { operationIds: { GET: "getShowcase", HEAD: "headShowcase" } }),
   route("/llms.txt", ["GET"], "none", "Short agent packet: enrollment, first tools, routes.", "getLlmsTxt"),
   route("/SKILL.md", ["GET"], "none", "Agent skill: self-onboarding — find work, claim it, submit it, get paid.", "getSkillMd"),
   route("/llms-full.txt", ["GET"], "none", "Full agent packet.", "getLlmsFullTxt"),
@@ -396,7 +398,7 @@ function successResponse(status, description) {
 
 function operationResponses(entry, method) {
   let success;
-  if (entry.path === "/demo" || entry.path === "/watch") {
+  if (entry.path === "/demo" || entry.path === "/watch" || entry.path === "/showcase") {
     success = { "200": { description: entry.summary, content: { "text/html": { schema: { type: "string" } } } } };
   } else if (Array.isArray(entry.successStatuses)) {
     success = {};

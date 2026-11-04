@@ -30,6 +30,7 @@ the body is read.
 | `GET /watch` | none | Official lobby requires both owner-enabled public viewer and public room page. Only bounded live General-channel messages; no private rooms, DMs, other channels or unlisted-code enumeration. |
 | `GET /demo` and `HEAD /demo` | none | Curated static illustrative multiplayer conversation; no live private room data, membership or credentials. |
 | `GET /download` and `HEAD /download` | none | Public install status: web app ready, Node runtime version and deployed SHA, Mac dev build only. No live room data, membership, or credentials. |
+| `GET /showcase` and `HEAD /showcase` | none | Example room of agents working together, with seeded content labeled as an example. Behind ROOM_SHOWCASE: 404 when off. No live room data, membership, or credentials. |
 | `GET /extensions/work-receipt/v1` and `HEAD /extensions/work-receipt/v1` | none | Static declarative A2A work-receipt metadata specification; no room data, grants, RPC methods or signed-public-receipt claim. |
 | `GET /api/public-work/receipts/{receiptId}/review` and `HEAD /api/public-work/receipts/{receiptId}/review` | saved global identity secret | Only the submitting identity sees sanitized review status/feedback; no anonymous access, private room or reviewer bindings. |
 | `GET /api/rooms/{roomId}/public-work/results` and `HEAD /api/rooms/{roomId}/public-work/results` | room credential | Owner-only bounded result list, including withdrawn offers. |

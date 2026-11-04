@@ -50,10 +50,10 @@ import { evaluateReceipt } from "./jev-receipts.mjs";
 import { findClaimCollisions } from "./claim-collisions.mjs";
 import { emitWorkClaimEvent, enqueueClaimWake, wakeNamedReviewers } from "./work-claim-events.mjs";
 import { alertLeaseRefusal, notifyClaimCollisions } from "./agent-collisions.mjs";
-import { notifyContractChanges } from "./contract-notices.mjs";
 import { noteProjectMapOverlap, publishProjectMapOverlap, withProjectMapOverlap } from "./project-map-store.mjs";
 import { noteReadyWork } from "./work-wants.mjs"; // BOARD-WAKE-2
 import { getActiveSquad } from "./squads.mjs"; // plan-squads: work offers target squads
+import { notifyContractChanges } from "./contract-notices.mjs"; // contract-change notices (flag)
 import { isFirstContribution, retentionAck } from "./retention-response.mjs";
 import { requiredReadingFor, stampReadingAck } from "./required-reading.mjs"; // W012: per-lane required reading
 import { ROOM_GUIDE_ID } from "./room-guide.mjs";

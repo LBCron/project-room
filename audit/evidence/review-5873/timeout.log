@@ -1,0 +1,16 @@
+{"event":"room.cold_start","clockSemantics":"runtime-dependent","durationMs":54,"integrity":"eager","phases":{"schema":{"ms":10,"rowsRead":0},"plugin":{"ms":19,"rowsRead":0},"fence":{"ms":14,"rowsRead":0},"verifies":{"ms":5,"rowsRead":0},"checksum":{"ms":0,"rowsRead":0}},"cpuMs":92,"heapBytes":73778376,"rooms":0,"sequences":0,"projectionBytes":0,"events":0}
+{"event":"room.store_initialized","initializationMs":54,"legacyColdStartMs":54,"clockSemantics":"runtime-dependent","cpuMeasured":false}
+[boot-config] ERROR: the agent card is UNSIGNED and no explicit opt-in was recorded at build time — members fetching /.well-known/agent-card.json will see an unsigned card (marked signed:false). To fix: set ROOM_AGENT_CARD_SIGNING_KEY and re-run scripts/sign-agent-card.mjs, or pass --allow-unsigned explicitly to record the choice.
+ROOM_SECURITY_CONTACT is unset; /.well-known/security.txt returns 404
+No magic-link mailer is configured: email-verification gates are relaxed (agent-invite escape hatch); /api/health reports emailVerification: relaxed-no-mailer
+{"moved":false,"timeoutFocusPreserved":true,"buttonReenabled":true,"lateResolutionIgnored":true,"retrySelects":true,"browser":"151.0.7922.34"}
+{"moved":true,"timeoutFocusPreserved":true,"buttonReenabled":true,"lateResolutionIgnored":true,"retrySelects":true,"browser":"151.0.7922.34"}
+✔ acquisition pages fit a 390px viewport (3254.27975ms)
+ℹ tests 1
+ℹ suites 0
+ℹ pass 1
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 3523.642084

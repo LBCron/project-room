@@ -1,0 +1,12 @@
+{
+  "head": "c9697b88cfcdcab41c6877d76114118bee952511",
+  "node": "24.22.1",
+  "browser": "Chromium151.0.7922.34",
+  "commands": [
+    "/Users/johnpotter/.local/bin/node --test scripts/acquisition-browser-check.mjs",
+    "/Users/johnpotter/.local/bin/node --test audit/evidence/review-5873/timeout.test.mjs"
+  ],
+  "results": "Exact acquisition test1/1 pass; narrow additional test1/1 pass with2 timeout cases (focus unchanged/moved), verifies fallback focus, reenabled button, ignored late resolution, subsequent immediate-failure selection. Existing test covers390px layout, actual served CSP execution, immediate rejection selection, delayed rejection preservation, no-JS manual instructions.",
+  "findings": [],
+  "limits": "Chromium390px only; no Safari/Firefox, screen reader, OS permission prompt or actual clipboard contents verification. Test-controlled clipboard promises; actual served product script. Background tab/window focus changes not tested. No production or author source edits."
+}

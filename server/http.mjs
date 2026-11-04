@@ -774,7 +774,8 @@ export function createRoomServer({ store, origin, assetRoot = new URL("../", imp
       if (res && !res.headersSent) {
         res.setHeader("X-RateLimit-Limit", String(limiter.capacity));
         res.setHeader("X-RateLimit-Remaining", String(decision.remaining));
-        res.setHeader("X-RateLimit-Reset", String(Math.ceil((Date.now() + decision.resetAfterMs) / 1000)));
+        // Match the existing refusal header: next admission, not a full refill.
+        res.setHeader("X-RateLimit-Reset", String(Math.ceil((Date.now() + decision.nextAllowedAfterMs) / 1000)));
         res.setHeader("X-RateLimit-Bucket", kind === "write" ? "write" : "read");
       }
       return;

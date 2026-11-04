@@ -28,12 +28,14 @@ async function serve(t, options = {}) {
   const mcp = (name, args) => fetch(`${origin}/mcp`, { method: "POST",
     headers: { authorization: `Bearer ${ada.secret}`, "content-type": "application/json", accept: "application/json, text/event-stream" },
     body: JSON.stringify({ jsonrpc: "2.0", id: n++, method: "tools/call", params: { name, arguments: { roomId: "ada-den", ...args } } }) });
-  return { origin, get, post, mcp };
+  const getOwner = path => fetch(origin + path, { headers: { authorization: `Bearer ${owner}` } });
+  return { origin, get, getOwner, post, mcp };
 }
 const budget = response => ["limit", "remaining", "reset", "bucket"].map(k => response.headers.get(`x-ratelimit-${k}`));
 
 test("authenticated REST reads report the read budget on every success, then refuse with the same headers", async t => {
   const { get } = await serve(t);
+  t.mock.timers.enable({ apis: ["Date"], now: Date.now() });
   const seen = [];
   for (let i = 0; i < 4; i++) {
     const response = await get("/api/rooms/commons/events?after=0");
@@ -43,15 +45,28 @@ test("authenticated REST reads report the read budget on every success, then ref
     assert.ok(Number(reset) * 1000 >= Date.now() - 1000, "reset is a future epoch second");
     seen.push(Number(remaining));
   }
-  // The bucket refills continuously, so a slow host can see a value repeat;
-  // it never rises while requests keep spending, and it falls overall.
-  assert.equal(seen[0], 3, "first success reports one token spent");
-  assert.ok(seen.every((v, i) => i === 0 || v <= seen[i - 1]), `non-increasing: ${seen}`);
-  assert.ok(seen.at(-1) < seen[0], `falls overall: ${seen}`);
-  let refused;
-  for (let i = 0; i < 20 && !refused; i++) { const r = await get("/api/rooms/commons/events?after=0"); if (r.status === 429) refused = r; }
-  assert.ok(refused, "the burst is eventually refused");
+  assert.deepEqual(seen, [3, 2, 1, 0], "the injected clock prevents host load from refilling the bucket");
+  const refused = await get("/api/rooms/commons/events?after=0");
+  assert.equal(refused.status, 429);
   assert.deepEqual(budget(refused).filter((_, i) => i !== 2), ["4", "0", "read"]);
+});
+
+test("overlapping requests keep credential and read/write response budgets isolated", async t => {
+  const { get, getOwner, post } = await serve(t);
+  t.mock.timers.enable({ apis: ["Date"], now: Date.now() });
+  const path = "/api/rooms/commons/events?after=0";
+  for (let n = 0; n < 3; n++) assert.equal((await get(path)).status, 200);
+  const [botRead, ownerRead, botWrite] = await Promise.all([get(path), getOwner(path), post("overlap")]);
+  assert.equal(botRead.status, 200);
+  assert.equal(ownerRead.status, 200);
+  assert.equal(botWrite.status, 201);
+  assert.deepEqual(budget(botRead).filter((_, i) => i !== 2), ["4", "0", "read"]);
+  assert.deepEqual(budget(ownerRead).filter((_, i) => i !== 2), ["4", "3", "read"]);
+  assert.deepEqual(budget(botWrite).filter((_, i) => i !== 2), ["3", "2", "write"]);
+  const refused = await get(path);
+  assert.equal(refused.status, 429);
+  assert.equal(refused.headers.get("x-ratelimit-remaining"), "0");
+  assert.equal((await getOwner(path)).headers.get("x-ratelimit-remaining"), "2");
 });
 
 test("writes report the write bucket separately from reads", async t => {
@@ -64,6 +79,23 @@ test("writes report the write bucket separately from reads", async t => {
   const read = await get("/api/rooms/commons/events?after=0");
   assert.equal(read.headers.get("x-ratelimit-bucket"), "read");
   assert.equal(read.headers.get("x-ratelimit-remaining"), "3", "a write did not spend the read budget");
+});
+
+test("success and refusal reset headers agree on when another request is allowed", async t => {
+  const { post } = await serve(t);
+  const now = Math.floor(Date.now() / 1000) * 1000;
+  t.mock.timers.enable({ apis: ["Date"], now });
+  let last;
+  for (let n = 0; n < 3; n++) {
+    last = await post(`reset check ${n}`);
+    assert.equal(last.status, 201);
+  }
+  const refused = await post("same exhausted budget");
+  assert.equal(refused.status, 429);
+  assert.equal(refused.headers.get("retry-after"), "1");
+  assert.equal(last.headers.get("x-ratelimit-reset"), String(now / 1000 + 1),
+    "an empty success budget must not tell callers to wait for a full refill");
+  assert.equal(last.headers.get("x-ratelimit-reset"), refused.headers.get("x-ratelimit-reset"));
 });
 
 test("hosted MCP tool calls that spend the credential budget carry the same headers", async t => {

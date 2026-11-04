@@ -85,19 +85,55 @@ test("a real mention in a reply releases the held poll within one poll cycle", a
   assert.ok(value.pendingWakes.some(w => w.messageId === "pp-0"), "wake names the mentioning message");
 });
 
-test("ping-pong: replies that keep mentioning the agent are throttled once the bucket is spent", async t => {
+for (const delayedFirstResponse of [false, true]) test(`ping-pong: actual bucket decisions cap replies${delayedFirstResponse ? " despite a slow poll response" : ""}`, async t => {
   const f = await serve(t);
+  // Freeze only token refill, not HTTP timers, so a slow CI host cannot refill
+  // the bucket while this finite burst is being asserted.
+  const bucketAt = f.fixture.store.now();
+  f.hb.wakeBucket.now = () => bucketAt;
+  const decisions = new Map();
+  const enqueue = f.hb.enqueueWake.bind(f.hb);
+  f.hb.enqueueWake = args => {
+    const result = enqueue(args);
+    if (result.enqueued && args.agentId === f.identity.identityId) decisions.set(args.messageId, result);
+    return result;
+  };
+  const addWaiter = f.hb.addWakeWaiter.bind(f.hb);
+  const WAIT = 400;
   let throttledAt = null;
-  for (let i = 1; i <= wakeBucketLimits.capacity + 5; i += 1) {
-    const held = timed(f.poll(400));
-    await later(20, () => mentionReply(f, f.fixture.keys, f.fixture.store, i, i > 1 ? `pp-${i - 1}` : undefined));
+  for (let i = 1; i <= wakeBucketLimits.capacity + 1; i += 1) {
+    let ready, wakeReleased = false;
+    const registered = new Promise(resolve => { ready = resolve; });
+    f.hb.addWakeWaiter = (agentId, hostId, options) => {
+      const release = addWaiter(agentId, hostId, { ...options, onWake: () => {
+        wakeReleased = true; options.onWake();
+      } });
+      ready(); return release;
+    };
+    const held = timed(f.poll(WAIT).then(async value => {
+      // Reproduce a slow host/network response after the server made its
+      // decision. Elapsed time alone must never relabel it as throttled.
+      if (delayedFirstResponse && i === 1) await later(WAIT, () => {});
+      return value;
+    }));
+    await registered;
+    mentionReply(f, f.fixture.keys, f.fixture.store, i, i > 1 ? `pp-${i - 1}` : undefined);
     const { value, ms } = await held;
+    const decision = decisions.get(`pp-${i}`);
+    assert.ok(decision?.enqueued, `turn ${i} produced a new wake`);
     assert.ok(value.pendingWakes.some(w => w.messageId === `pp-${i}`), `turn ${i} signal still delivered`);
-    await f.ack(value.pendingWakes.map(w => w.signalId));
-    if (ms >= 350) { throttledAt = i; break; }
+    const ids = value.pendingWakes.map(w => w.signalId);
+    assert.deepEqual((await f.ack(ids)).acknowledged.sort(), ids.sort(), `turn ${i} ack drains every delivered signal`);
+    if (decision.throttled) {
+      assert.equal(wakeReleased, false, "over-budget mention must not release the held waiter");
+      assert.ok(ms >= WAIT - 50, `over-budget poll still holds for waitMs (${Math.round(ms)} ms)`);
+      throttledAt = i; break;
+    }
+    assert.equal(wakeReleased, true, `in-budget turn ${i} releases its registered waiter`);
   }
-  assert.equal(throttledAt, wakeBucketLimits.capacity + 1, "first capacity turns wake instantly, the next is throttled");
-  t.diagnostic(`ping-pong throttled at turn ${throttledAt}; signal still delivered on the same poll`);
+  assert.equal(throttledAt, wakeBucketLimits.capacity + 1, "first capacity turns release the waiter, the next is throttled");
+  assert.deepEqual((await f.poll(0)).pendingWakes, [], "ack leaves no signal behind");
+  t.diagnostic(`actual bucket throttled at turn ${throttledAt}; delayed first response=${delayedFirstResponse}; every signal delivered and acknowledged`);
 });
 
 // Root review on #5745: a wake queued BEFORE the next poll, while the bucket

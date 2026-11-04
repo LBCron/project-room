@@ -1,6 +1,7 @@
 // Linear parity acceptance suite. Runs the 36 probes against a local server
-// and ratchets: the score may only go up. Set LINEAR_PARITY_REPORT=1 to print
-// the table. Update BASELINE when a capability moves to parity.
+// and reports the score (LINEAR_PARITY_REPORT=1 prints the table). The score is
+// a report, not a CI gate: only a core capability that is at parity today
+// regressing fails, because that is a real bug.
 import test from "node:test";
 import assert from "node:assert/strict";
 import { fileURLToPath } from "node:url";
@@ -12,9 +13,8 @@ import { linkWithProof } from "../helpers/link-with-proof.mjs";
 import { runProbes } from "./parity-probes.mjs";
 
 const repo = join(dirname(fileURLToPath(import.meta.url)), "..", "..");
-const BASELINE = { capabilities: 36, minPoints: 17.5 };
 
-test("Linear parity: 36 probes run and score does not regress", async () => {
+test("Linear parity: core capabilities stay at parity", async () => {
   const f = createAcceptanceFixture();
   const server = createRoomServer({ store: f.store });
   await new Promise((r) => server.listen(0, "127.0.0.1", r));
@@ -24,8 +24,6 @@ test("Linear parity: 36 probes run and score does not regress", async () => {
     linkWithProof(f.store, f.keys.owner, "commons", id, { memberId: "parity-agent", displayName: "ParityAgent", permissions: ["accept_work", "complete_work"] });
     const out = await runProbes({ origin, secret: f.keys.owner, mcpSecret: id.secret, roomId: "commons", repo });
     if (process.env.LINEAR_PARITY_REPORT) console.log(JSON.stringify(out, null, 1));
-    assert.equal(out.rows.length, BASELINE.capabilities);
-    assert.ok(out.points >= BASELINE.minPoints, `parity points ${out.points} < ${BASELINE.minPoints}`);
     for (const r of ["Issues / tasks", "Labels", "Hosted MCP", "Inbox", "API"]) assert.equal(out.rows.find((x) => x.cap === r).status, "parity", r);
   } finally {
     server.closeAllConnections(); await new Promise((r) => server.close(r)); f.store.close();

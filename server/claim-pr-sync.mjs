@@ -24,6 +24,7 @@
 // The token (GITHUB_TOKEN or GH_TOKEN) is never logged or stored. Public
 // repositories still answer when it is absent.
 import { emitWorkClaimEvent, enqueueClaimWake, wakeNamedReviewers } from "./work-claim-events.mjs";
+import { notifyConcurrentMerge } from "./agent-collisions.mjs";
 import { ACTIVE_CLAIM_STATES, STALE_SWEEP_BATCH, STALE_UNCLAIMED_DAYS, ClaimError, closeStaleUnclaimed, closeWhenLive, notePullMerged, recordCi, releaseExpired } from "./work-claims.mjs";
 import { SOURCE_REVISION } from "./version.mjs";
 import {
@@ -489,6 +490,10 @@ export function commitPullRequestLookup(store, registry, roomId, item, result, n
       paths: settled.paths,
       pullRequest: { url: fresh.pullRequest.url, outcome: result.kind }
     });
+    if (result.kind === "merged") {
+      try { notifyConcurrentMerge(store, roomId, fresh, { url: result.url, mergedSha: result.mergedSha }); }
+      catch (error) { console.error("concurrent merge notice failed:", error?.message ?? error); }
+    }
     return true;
   }
   if (result.kind === "open" || result.kind === "notModified" || result.kind === "missing" || result.kind === "error" || result.kind === "unconfigured") {

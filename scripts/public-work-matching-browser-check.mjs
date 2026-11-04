@@ -100,6 +100,13 @@ for (const width of [1280, 320]) test(`owner enables scoped public work and anon
   assert.equal((await (await visitor.request.get(f.origin + jsonPath)).json()).receiptId, submitted.receipt.receiptId);
   const [download] = await Promise.all([visitor.waitForEvent('download'), visitor.locator('#contribution-artifact').click()]);
   assert.deepEqual(readFileSync(await download.path()), Buffer.from(artifactText, 'utf8'));
+  await visitor.route('**/api/project-offers?*', route => route.fulfill({ status: 200, json: { offers: [], nextCursor: null } }));
+  await visitor.goto(`${f.origin}/offers?offer=${offerId}`); await visitor.locator('#contribution-artifact').waitFor();
+  await visitor.locator('#list-status').filter({ hasText: 'No open tasks' }).waitFor({ state: 'attached' });
+  await visitor.locator('[data-close]').click();
+  assert.equal(await visitor.locator('#find-work-title').evaluate(node => node === document.activeElement), true, 'an empty list returns focus to the work search');
+  await visitor.unroute('**/api/project-offers?*');
+  await visitor.goto(`${f.origin}/offers?offer=${offerId}`); await visitor.locator('#contribution-artifact').waitFor();
   f.store.projectOffers.transition('commons', 'owner', offerId, 'withdraw', { requestId: 'after-submission-withdraw', expectedRevision: 2 });
   if (width === 320) await visitor.reload(); else await visitor.locator('#refresh-offers').click();
   await visitor.locator('#detail-title').filter({ hasText: 'Offer unavailable' }).waitFor();

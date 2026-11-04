@@ -27,5 +27,5 @@ test("harness misses: claim, release, answer, read messages, review, decisions",
   assert.equal(closestToolName("room_reply_message", NAMES), "room_reply");
   assert.equal(closestToolName("room_get_messages", NAMES), "room_read_messages");
   assert.equal(closestToolName("room_request_review", NAMES), "room_request_reply");
-  assert.equal(closestToolName("room_read_decisions", NAMES), "room_list_events");
+  assert.equal(closestToolName("room_read_decisions", NAMES), "get_room_context", "decisions live in get_room_context view:handoff (#5866)");
 });

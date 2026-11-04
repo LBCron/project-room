@@ -59,9 +59,10 @@ export const MCP_AUTH_MESSAGE = "Room tools need Authorization: Bearer with your
 // `room_block_work` (the opposite intent). Verb synonyms map a guessed name to
 // the tool that does that job, but only when that tool is actually offered.
 // Order matters: the first matching row wins (release before claim, decisions
+// (the #5866 handoff packet is get_room_context view:"handoff")
 // before generic reads). Harness 2026-11-03: 18 guessed names, 11 -> 17 hits.
 const INTENT_VERBS = Object.freeze([
-  [/(^|_)(decisions?|rules|charter|handoff_packet)(_|$)/, ["room_handoff_packet", "room_list_events", "get_room_context"]],
+  [/(^|_)(decisions?|rules|charter|handoff_packet)(_|$)/, ["get_room_context", "room_list_events"]],
   [/(^|_)(close|finish|complete|done|resolve)(_|$)/, ["room_record_completion", "room_submit_text_result"]],
   [/(^|_)(unclaim|unlock|drop|abandon|release)(_|$)/, ["room_release_claim", "room_claim"]],
   [/(^|_)(take|grab|lock|reserve|acquire|claim)(_|$)/, ["room_claim", "room_acquire_claim"]],

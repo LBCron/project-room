@@ -69,7 +69,7 @@ import { agentErrorBody, ownerHeldClaimCopy } from "../src/agent-error.mjs";
 import { SOURCE_REVISION } from "./version.mjs";
 import { ServiceError } from "./service-error.mjs";
 import { isGuestAgentMemberId } from "./guest-agent-links.mjs";
-import { isRoomArchived, publicReceipts } from "../src/events.js";
+import { isRoomArchived, ownMember, publicReceipts } from "../src/events.js";
 
 const CLAIM_ID_PATTERN = /^[A-Za-z0-9_-]{1,128}$/;
 
@@ -1719,7 +1719,7 @@ function handleWorkClaimsCore({ req, res, url, store, roomId, auth, workClaimRou
     const target = data.delegate;
     if (target !== null) {
       const members = store.roomAuthority(roomId).members ?? {};
-      const member = typeof target === "string" && Object.hasOwn(members, target) ? members[target] : null;
+      const member = typeof target === "string" ? ownMember(members, target) : null;
       if (!member || member.active === false) {
         reject(422, "work_delegate_unknown_member", `delegate "${typeof target === "string" ? target : "?"}" is not an active member of this room`);
       }

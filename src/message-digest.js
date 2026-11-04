@@ -11,6 +11,10 @@ export function headline(message) {
 }
 export function addressedReason(message, viewerId) {
   if (message.requestKind === "reply") return "request";
+  // The viewer's own posts are context they already know. Show them as
+  // headlines (expandable by exact sequence and messageId), never in full.
+  // Formal requests stay full above: an open ask is still an obligation.
+  if (viewerId && message.from === viewerId) return null;
   if (viewerId && message.toMemberId === viewerId) return "dm";
   if (viewerId && (message.mentions ?? []).some(m => m.memberId === viewerId)) return "mention";
   // Imported visible messages may predate the persisted mention-routing index.
@@ -26,7 +30,7 @@ export function digestMessagePage(page, viewerId) {
   for (const message of page.messages) {
     const why = addressedReason(message, viewerId);
     if (why) { addressed.push({ ...message, why, untrusted: true }); continue; }
-    if (!groups.has(message.from)) groups.set(message.from, { from: message.from, count: 0, items: [], untrusted: true });
+    if (!groups.has(message.from)) groups.set(message.from, { from: message.from, ...(viewerId && message.from === viewerId ? { self: true } : {}), count: 0, items: [], untrusted: true });
     const group = groups.get(message.from);
     group.count++;
     group.items.push([message.sequence, headline(message), message.messageId]);

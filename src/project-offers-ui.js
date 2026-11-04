@@ -6,7 +6,7 @@ const apiPath = path => ['getdasha.com', 'www.getdasha.com'].includes(location.h
 const escape = value => String(value ?? '').replace(/[&<>"']/g, char => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[char]));
 const validId = value => typeof value === 'string' && /^[A-Za-z0-9][A-Za-z0-9_.:-]{0,127}$/.test(value) && !['constructor', 'prototype', '__proto__'].includes(value);
 const list = $('#offer-list'), detail = $('#offer-detail'), listStatus = $('#list-status');
-let offers = [], cursor = null, listFlight = null, detailFlight = null, selectedId = null, briefText = '';
+let offers = [], cursor = null, listFlight = null, detailFlight = null, selectedId = null, matchSelectionId = null, briefText = '';
 const reviewLabels = { human: 'Human review', agent: 'Agent review', human_with_agent_review: 'Human + agent review' };
 function amount(reward) {
   if (reward.kind === 'unpaid') return 'Unpaid';
@@ -167,9 +167,10 @@ function closeDetail(recordHistory = true) {
   detailFlight?.abort(); document.body.classList.remove('offer-selected'); selectedId = null; briefText = ''; paintList();
   const url = new URL(location.href); url.searchParams.delete('offer'); if (recordHistory) window.history.pushState(null, '', url);
   detail.innerHTML = '<div class="detail-empty"><h2 id="detail-title">Choose an offer</h2></div>';
-  (list.querySelector(`[data-offer="${previousId}"]`) || list.querySelector('button'))?.focus();
+  const match = matchSelectionId === previousId ? document.querySelector(`#find-work-results [data-match-offer="${previousId}"]`) : null;
+  (match || list.querySelector(`[data-offer="${previousId}"]`) || list.querySelector('button') || $('#find-work-title'))?.focus();
 }
-list.addEventListener('click', event => { const button = event.target.closest('[data-offer]'); if (button) void select(button.dataset.offer); });
+list.addEventListener('click', event => { const button = event.target.closest('[data-offer]'); if (button) { matchSelectionId = null; void select(button.dataset.offer); } });
 $('#refresh-offers').addEventListener('click', () => void loadList(false, true));
 $('#more-offers').addEventListener('click', () => void loadList(true));
 detail.addEventListener('click', async event => {
@@ -202,13 +203,8 @@ detail.addEventListener('click', async event => {
 });
 window.addEventListener('popstate', () => { const id = new URL(location.href).searchParams.get('offer'); if (validId(id)) void select(id, { history: false }); else closeDetail(false); });
 const matching = document.createElement('section'); matching.className = 'find-work'; matching.setAttribute('aria-labelledby', 'find-work-title');
-matching.innerHTML = `<h2 id="find-work-title">Find work for me</h2><form id="find-work-form"><label>Skills<input name="skills" placeholder="JavaScript, design" maxlength="2019"></label><label>Interests<input name="interests" placeholder="Accessibility, games" maxlength="2019"></label><label>Reward<select name="reward"><option value="volunteer">Unpaid · for fun or practice</option><option value="work_trade">Work trade</option><option value="cash">Cash</option></select></label><button class="primary" type="submit">Find work</button></form><p id="find-work-status" role="status"></p><ul id="find-work-results"></ul><button id="more-matches" class="text-button" type="button" hidden>Try next tasks</button>`;
-($('.workspace') ?? $('.intro')).after(matching);
-const findWorkLink = document.createElement('a');
-findWorkLink.className = 'secondary';
-findWorkLink.href = '#find-work-title';
-findWorkLink.textContent = 'Find work';
-$('.intro').append(findWorkLink);
+matching.innerHTML = `<h2 id="find-work-title" tabindex="-1">Find work for me</h2><form id="find-work-form"><details class="match-filters"><summary>Filters</summary><div class="match-fields"><label>Skills<input name="skills" placeholder="JavaScript, design" maxlength="2019"></label><label>Interests<input name="interests" placeholder="Accessibility, games" maxlength="2019"></label></div></details><label>Reward<select name="reward"><option value="volunteer">Unpaid · for fun or practice</option><option value="work_trade">Work trade</option><option value="cash">Cash</option></select></label><button class="primary" type="submit">Find work</button></form><p id="find-work-status" role="status"></p><ul id="find-work-results"></ul><button id="more-matches" class="text-button" type="button" hidden>Try next tasks</button>`;
+($('.workspace') ?? $('.intro')).before(matching);
 let matchFlight = null, matches = [], matchAfter = null, lastPreferences = null;
 const matchForm = $('#find-work-form');
 function claimPrompt(task) {
@@ -231,7 +227,7 @@ async function findMatches(more = false) {
     }
     matches = result.recommendations; matchAfter = result.nextCursor; $('#more-matches').hidden = !matchAfter;
     $('#find-work-results').innerHTML = matches.map((item, index) => `<li><h3><button class="text-button" data-match-offer="${escape(item.task.taskId)}" type="button">${escape(item.task.title)}</button></h3><p>${item.reasons.map(escape).join(' · ')}</p><p class="match-scope">${item.task.files.map(escape).join(', ')} · ${escape(item.task.repositoryRef)}</p><button class="secondary" data-copy-claim="${index}" type="button">Copy agent task</button><details><summary>Read claim instructions</summary><textarea aria-label="Claim instructions" readonly></textarea></details></li>`).join('');
-    $('#find-work-status').textContent = matches.length ? 'Suggestions only. Your agent chooses whether to claim.' : input.reward === 'cash' ? 'No claimable cash matches. Funding and payment are not configured.' : input.reward === 'work_trade' ? 'No claimable work-trade matches yet.' : 'No matching public tasks right now. Try again later.';
+    $('#find-work-status').textContent = matches.length ? 'Suggestions only. Your agent chooses whether to claim.' : matchAfter ? uiText('offers.noMatchesThisSet') : more ? uiText('offers.noMoreMatches') : input.reward === 'cash' ? 'No claimable cash matches. Funding and payment are not configured.' : input.reward === 'work_trade' ? result.supportedRewards?.includes('work_trade') ? 'No claimable work-trade matches yet.' : uiText('offers.workTradeSearchUnavailable') : 'No matching public tasks right now. Try again later.';
     if (result.hasMore && matches.length) $('#find-work-status').textContent += ' Showing a bounded selection.';
     for (const [index, field] of [...$('#find-work-results').querySelectorAll('textarea')].entries()) field.value = claimPrompt(matches[index].task);
   } catch { if (flight === matchFlight && !flight.signal.aborted) $('#find-work-status').textContent = 'Couldn’t find work. Try Find work again.'; }
@@ -246,15 +242,18 @@ matchForm.addEventListener('input', clearMatches); matchForm.addEventListener('c
 matchForm.addEventListener('submit', event => { event.preventDefault(); void findMatches(); });
 $('#more-matches').addEventListener('click', () => { if (matchAfter) void findMatches(true); });
 $('#find-work-results').addEventListener('click', async event => {
-  const offer = event.target.closest('[data-match-offer]'); if (offer) { void select(offer.dataset.matchOffer); return; }
+  const offer = event.target.closest('[data-match-offer]'); if (offer) { matchSelectionId = offer.dataset.matchOffer; void select(offer.dataset.matchOffer); return; }
   const button = event.target.closest('[data-copy-claim]'); if (!button) return;
-  const field = button.closest('li').querySelector('textarea'), flight = matchFlight; button.disabled = true;
+  const field = button.closest('li').querySelector('textarea'), flight = matchFlight;
+  let focusMoved = false;
+  const trackFocus = event => { if (event.target !== button) focusMoved = true; };
+  document.addEventListener('focusin', trackFocus); button.disabled = true;
   try {
     if (!navigator.clipboard?.writeText) throw new Error('Clipboard unavailable');
     await Promise.race([navigator.clipboard.writeText(field.value), new Promise((_, reject) => setTimeout(() => reject(new Error('Clipboard timeout')), 800))]);
     if (flight === matchFlight) $('#find-work-status').textContent = 'Copied. Give these instructions to your agent.';
-  } catch { if (flight === matchFlight) { field.closest('details').open = true; field.focus(); field.select(); $('#find-work-status').textContent = 'Copy the selected instructions for your agent.'; } }
-  finally { if (flight === matchFlight) button.disabled = false; }
+  } catch { if (flight === matchFlight) { field.closest('details').open = true; if (!focusMoved) { field.focus(); field.select(); $('#find-work-status').textContent = 'Copy the selected instructions for your agent.'; } else { $('#find-work-status').textContent = uiText('offers.manualClaimInstructions'); } } }
+  finally { document.removeEventListener('focusin', trackFocus); if (flight === matchFlight) button.disabled = false; }
 });
 void loadList();
 const initialId = new URL(location.href).searchParams.get('offer'); if (validId(initialId)) void select(initialId, { history: false, focus: false });

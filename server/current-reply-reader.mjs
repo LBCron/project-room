@@ -21,7 +21,7 @@ function codec(store){
    const bytes=Buffer.from(token,'base64url');if(bytes.length<29||bytes.toString('base64url')!==token)throw Error();
    const decipher=createDecipheriv('aes-256-gcm',keys.get(store),bytes.subarray(0,12));decipher.setAuthTag(bytes.subarray(12,28));
    return JSON.parse(Buffer.concat([decipher.update(bytes.subarray(28)),decipher.final()]).toString('utf8'));
-  }catch{fail('invalid_reply_cursor','Continuation expired, is malformed, or belongs to another store; restart this read. No request was changed.');}}
+  }catch{fail('invalid_reply_cursor','Continuation expired, is malformed, or belongs to another store. A service restart can expire it. If restarting this read, reconcile earlier pages and checkpoints; do not answer from partial context. No request was changed.');}}
  };
 }
 const selectionKeys='v mode roomId viewerId accountId authEpoch credentialHash sessionBinding sessionRevision roomCreatedEventId direction status requestMessageId'.split(' ');

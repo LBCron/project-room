@@ -698,7 +698,7 @@ export function orientSections(store, roomId, memberId, { limit = 10 } = {}) {
 
 export function readEventTail(store, token, roomId, tail, binding = null) {
   if (!Number.isSafeInteger(tail) || tail < 1 || tail > 200) fail(422, "invalid_event_cursor", "tail must be an integer from 1 to 200");
-  const sequence = store.roomAuthority(roomId).sequence;
+  const sequence = store.headSequence(roomId);
   const start = Math.max(0, sequence - tail);
   // One admitted normalized source window; continuation stays explicit.
   if (isCurrentRoom(store.db,roomId)) return store.eventsAfter(token,roomId,start,Math.min(100,tail),{expectedSessionBinding:binding});

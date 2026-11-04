@@ -5213,7 +5213,14 @@ this.slaBreachAlerts = new SlaBreachAlertJournal(this); // Task 26: durable in-a
   }
   authenticate(token, roomId, expectedSessionBinding = null, { allowAccountSession = true } = {}) {
     if(!this._restoreOpening)assertRestoreAdmitted(this.db);
-    if (typeof token === "string" && /^(oat|iat)_/.test(token)) {
+    // Opaque room credentials can randomly begin with a typed token prefix.
+    // Exact issued records select their existing path, never grant access here:
+    // expiry, revocation, room/account binding and session checks still follow.
+    // Ordinary room keys and full-length typed tokens add no storage lookup.
+    const issuedOpaque = isRoomAccessToken(token) && /^(?:oat|iat|rak)_/.test(token)
+      && (this.db.prepare("SELECT 1 FROM credentials WHERE hash=?").get(hash(token))
+        || (allowAccountSession && this.db.prepare("SELECT 1 FROM account_session_slots WHERE hash=?").get(hash(token))));
+    if (!issuedOpaque && typeof token === "string" && /^(oat|iat)_/.test(token)) {
       const principal = authenticateMcpOAuthRequest(this, token, roomId);
       if (!principal) fail(401, "unauthenticated", "OAuth grant is expired, revoked, outside its resource, or no longer owns this agent");
       const resolved = this.identities.resolveIdentityLink(principal.identityId, roomId);
@@ -5228,7 +5235,7 @@ this.slaBreachAlerts = new SlaBreachAlertJournal(this); // Task 26: durable in-a
     // AGENT identity bound at issue, with its stored scopes. account stays
     // null — a key can never grant human-account access, so account-session
     // gates (e.g. /api/inbox/*) remain unreachable to keys.
-    if (isApiKeyToken(token)) {
+    if (!issuedOpaque && isApiKeyToken(token)) {
       const record = this.agentPlugin.verifyPresentedApiKey(token);
       if (!record) fail(401, "unauthenticated", "Unknown, revoked, or expired API key");
       const roomScopes = record.scopes.filter(scope => scope.startsWith("mcp:room:"));

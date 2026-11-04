@@ -337,6 +337,7 @@ optional.push("src/password-auth.mjs"); // Email+password crypto (imported by se
 optional.push("src/account-settings-ui.js"); // Sign-in & security settings UI (imported by src/app.js, slice 7)
 optional.push("src/auth-signin-ui.js"); // Multi-method sign-in / create-account UI (imported by src/app.js, slice 7)
 optional.push("src/agent-signin-ui.js"); // Agent browser sign-in choice UI (imported by src/agent-signin-page.js; formerly src/app.js, RC-2026-09-23)
+optional.push("src/palette-destinations.js"); // Ctrl/Cmd-K palette extras (static browser import).
 optional.push("src/board-deeplink.js"); // Agent first-run board navigation (static browser import).
 optional.push("src/agent-first-run.js"); // Agent first-run orientation card (imported by src/agent-signin-ui.js, RC-2026-09-24-213)
 optional.push("src/invite-context.js"); // Invitation context stashed at OAuth start (imported by src/app.js, RC-2026-09-18-007)

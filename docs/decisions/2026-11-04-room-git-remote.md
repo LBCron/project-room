@@ -2,6 +2,8 @@
 
 Status: proposed.
 
+Revised 2026-11-04: Cloudflare Artifacts backend (GitHub = source of truth), GitHub App planned (not created), phase 1 = webhook PR/CI cache + wakes behind a flag; Artifacts billing starts 2026-11-12 so flags stay off. See docs/design/git-remote.md "Update".
+
 ## Decision
 
 - Build an agent Git remote into Room, inspired by code.storage, without buying anything: smart-HTTP receive-pack in a Durable Object, packs in R2, relay to GitHub through a GitHub Actions job Room triggers with its existing integration.

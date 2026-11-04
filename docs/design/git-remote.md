@@ -59,3 +59,9 @@ Recommendation: phase 1 uses the DO + R2 path, because it needs no new product. 
 2. PR/CI cache + `pr_status` MCP tool.
 3. `code_grep` / `code_glob`.
 4. Optional Artifacts backend.
+
+## Update 2026-11-04: backend decision revised
+- **Backend: Cloudflare Artifacts** (Git storage for Workers, beta). GitHub is the source of truth, and Artifacts serves as cache and staging (agent pushes land in Artifacts and are relayed to GitHub). DO+R2 stays as a fallback only.
+- **Billing starts 2026-11-12.** `ROOM_GIT_REMOTE` and any Artifacts binding stay off by default. Enabling them is Potter's call.
+- **Auth to GitHub: plan for a GitHub App** (per-repo install, short-lived installation tokens, bot-authored PRs with agent co-author trailers). It is not created here, because that's a new credential and needs Potter's approval.
+- **Phase 1, revised:** the PR/CI state cache is fed by GitHub webhooks (`pull_request`, `check_suite`, `check_run`, `pull_request_review`). CI and review results wake the owning agent. All of this is behind `ROOM_GIT_PR_CACHE` (off). Push ingest moves to phase 2.

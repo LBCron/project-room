@@ -1,4 +1,5 @@
 import { readWorkItem } from "./work-repository.mjs";
+import { boardViewsEnabled, getView, withSavedView } from "./board-views.mjs";
 import { boardPlanningEnabled, PLANNING_FIELDS, PLANNING_QUERY, planningPatchOf, hasPlanningInput, applyPlanning, planningQueryOf, filterPlanning, sortPlanning } from "./board-planning.mjs";
 import { assertListenerFence, LISTENER_TOKEN_HEADER } from "./listener-fence.mjs";
 import { messageRepository } from "./message-repository.mjs";
@@ -1068,8 +1069,14 @@ function handleWorkClaimsCore({ req, res, url, store, roomId, auth, workClaimRou
   }
   if (workClaimRoute === "list" && req.method === "GET") {
     closeLiveClaims();
+    let listParams = url?.searchParams;
+    if (boardViewsEnabled() && listParams?.has("savedView")) {
+      const saved = getView(store.db, { roomId, viewId: listParams.get("savedView") });
+      if (!saved) reject(404, "unknown_view", "No such saved Board view in this room");
+      listParams = withSavedView(listParams, saved);
+    }
     return json(res, 200, withProjectMapOverlap(store, roomId, { ...buildWorkClaimPage(registry.list(roomId), roomId, caller,
-      url?.searchParams, nowMs), swept: sweptIds }));
+      listParams, nowMs), swept: sweptIds }));
   }
   if (workClaimRoute === "receipts" && req.method === "GET") {
     // RC-2026-09-24-205: receipts search. The room block already rejected

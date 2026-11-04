@@ -54,6 +54,10 @@
           in: query
           schema: { type: string, format: date-time }
           description: Board planning fields (flag on only). Tasks due at or before this time.
+        - name: savedView
+          in: query
+          schema: { type: string }
+          description: Saved Board view id (ROOM_BOARD_VIEWS=1 only); its params apply under any explicit ones.
         - name: sort
           in: query
           schema: { type: string, enum: [priority, dueAt, estimate] }

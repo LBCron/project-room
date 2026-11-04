@@ -179,8 +179,11 @@ test("read tools advertise openWorldHint and the catalogs stay inside the tool b
   // count by one; the core token/count limits and all annotation guards stay.
   assert.equal(fullTools.filter(tool => tool.name === "room_wait_for_attention").length, 1);
   assert.equal(coreTools.some(tool => tool.name === "room_wait_for_attention"), false);
-  assert.ok(existingTools.length <= 116,
-    `existing full catalog has ${existingTools.length} tools (${fullTokens} total tokens); its budget is 116 tools including the reviewed attention wait`);
+  // room_mark_caught_up adds one more reviewed tool outside core (own read
+  // marker for the #5819 catch-up hint); ratchet by one again.
+  assert.equal(coreTools.some(tool => tool.name === "room_mark_caught_up"), false);
+  assert.ok(existingTools.length <= 117,
+    `existing full catalog has ${existingTools.length} tools (${fullTokens} total tokens); its budget is 117 tools including the reviewed attention wait and catch-up marker`);
   for (const name of ["room_read_messages", "room_read_request", "room_needs_me"]) {
     assert.equal(coreTools.find(tool => tool.name === name).annotations.openWorldHint, true, name);
   }

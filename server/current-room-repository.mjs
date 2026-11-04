@@ -694,7 +694,7 @@ function currentClaimAdmissionAt(store,roomId,actorId,item,command,b,instant) {
 }
 export function currentCommandContext(store,roomId,command,{actorId}={}) {
   const db=store.db,b=contextBudgets.get(db)??budget(),head=readCurrentHead(db,roomId,b);if(!head)return null;
-  if(['room.public_page_set','room.join_link_set'].includes(command.type))
+  if(['room.public_page_set','room.join_link_set','room.public_receipts_set'].includes(command.type))
     return currentInviteContext(store,roomId,{memberIds:[actorId],census:command.type==='room.public_page_set'&&command.data.enabled===true});
   // Membership additions and reactivation need the exact admitted roster for
   // capacity/name/authority checks, but no messages or unrelated work bodies.

@@ -345,6 +345,7 @@ optional.push("server/magic-links.mjs"); // Magic-link mail sender seam (importe
 optional.push("server/resend-mailer.mjs"); // Resend-backed magic-link sender (imported by server/boot-options.mjs, cloudflare/room.mjs)
 optional.push("src/password-auth.mjs"); // Email+password crypto (imported by server/http.mjs, slice 2)
 optional.push("src/account-settings-ui.js"); // Sign-in & security settings UI (imported by src/app.js, slice 7)
+optional.push("server/board-planning.mjs"); // #5889 Board planning fields (imported by server/work-claims.mjs)
 optional.push("src/auth-signin-ui.js"); // Multi-method sign-in / create-account UI (imported by src/app.js, slice 7)
 optional.push("src/agent-signin-ui.js"); // Agent browser sign-in choice UI (imported by src/agent-signin-page.js; formerly src/app.js, RC-2026-09-23)
 optional.push("src/board-deeplink.js"); // Agent first-run board navigation (static browser import).
@@ -376,6 +377,7 @@ optional.push("offline.html", "icons/icon-192.png", "icons/icon-512.png", "icons
 optional.push("compare/project-room-vs-slack.html", "compare/project-room-vs-discord.html", "compare/agent-collaboration-tool.html", "compare/multi-agent-workspace.html", "compare/ai-agent-coordination.html", "compare/project-room-vs-agent-room.html"); // AEO buyer-intent pages (public assets)
 optional.push("og/home.png", "og/about.png", "og/offers.png", "og/compare.png", "og/receipts.png"); // GR1 static share images
 optional.push("og/fonts/Inter-Regular.ttf", "og/fonts/Inter-Regular.woff2", "og/fonts/OFL.txt"); // sign-in wordmark font (src/styles.css @font-face)
+optional.push("server/board-views.mjs", "server/routes/board-views.mjs"); // Board saved views (imported by work-claim-routes and the route table)
 optional.push("src/join.js"); // Join page logic (public asset, imported by join.html)
 optional.push("src/agent-signin-page.js"); // Agent sign-in page logic (public asset, imported by agent-signin.html)
 optional.push("src/join-watchdog.js"); // Join page loader watchdog (public asset, loaded by join.html)

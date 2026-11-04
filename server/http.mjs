@@ -2529,6 +2529,13 @@ export function createRoomServer({ store, origin, assetRoot = new URL("../", imp
       }
       // --- GR2 public acquisition pages. Hash-authorized copy helper; indexable without a query. ---
       const templateDetail = /^\/templates\/([a-z0-9][a-z0-9-]{0,63})(\.json)?$/.exec(url.pathname);
+      // Linear-style /r/{room}/board: hand off to the app's existing ?board=1
+      // deep link (membership checks still run in the app, nothing leaks here).
+      const roomBoard = /^\/r\/([a-z0-9][a-z0-9-]{0,63})\/board\/?$/.exec(url.pathname);
+      if (roomBoard && (req.method === "GET" || req.method === "HEAD")) {
+        res.writeHead(302, { Location: `/?room=${roomBoard[1]}&board=1`, "Cache-Control": "no-store" });
+        return res.end();
+      }
       const roomPage = /^\/r\/([a-z0-9][a-z0-9-]{0,63})(\.json)?$/.exec(url.pathname);
       const proofPage = /^\/r\/([a-z0-9][a-z0-9-]{0,63})\/proof(\.json)?$/.exec(url.pathname);
       const proofOg = /^\/r\/([a-z0-9][a-z0-9-]{0,63})\/proof\/og\.png$/.exec(url.pathname);

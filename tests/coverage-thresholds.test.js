@@ -18,6 +18,7 @@
 //    needed here.
 // 4. No production seam: the script's exported functions are the boundary.
 import test from "node:test";
+import {parse} from "yaml";
 import assert from "node:assert/strict";
 import { spawnSync } from "node:child_process";
 import { mkdtempSync, realpathSync, mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
@@ -320,5 +321,21 @@ test("real V8: split-process coverage equals single-process coverage", () => {
     assert.ok(covTogether.size >= 4, `expected >=4 lines, got ${covTogether.size}`);
   } finally {
     rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+// The root suite executes the offline archive in actual workerd. Coverage must
+// provision that same locked runtime before invoking the full test suite.
+test("coverage provisions the unit job's Native archive runtime before the suite", () => {
+  const workflow = parse(readFileSync(new URL("../.github/workflows/test.yml", import.meta.url), "utf8"));
+  const unit = workflow.jobs.unit.steps, coverage = workflow.jobs.coverage.steps;
+  const required = unit.filter(step => step.uses?.startsWith("pnpm/action-setup@") || step.id === "cloudflare-modules" || step.name === "Install the Native offline-archive test runtime");
+  assert.equal(required.length, 3);
+  const gate = coverage.findIndex(step => step.name === "Enforce per-module coverage thresholds");
+  assert.ok(gate > 0);
+  for (const expected of required) {
+    const index = coverage.findIndex(step => expected.id ? step.id === expected.id : expected.name ? step.name === expected.name : step.uses === expected.uses);
+    assert.ok(index >= 0 && index < gate, "Native dependency setup must precede coverage: " + (expected.name ?? expected.id ?? expected.uses));
+    assert.deepEqual(coverage[index], expected);
   }
 });

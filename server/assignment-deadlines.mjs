@@ -1,5 +1,6 @@
 import { appendRoomEvent, stableEventId } from "./receipt-cards.mjs";
 import { enqueueClaimWake } from "./work-claim-events.mjs";
+import { ownMember } from "../src/events.js";
 
 // Assignment deadlines and escalation ladder (pure policy).
 //
@@ -107,7 +108,7 @@ export function assignmentDeadlinesEnabled(env, roomId) {
 
 const COPY = {
   reping: n => `Assignment still waiting: "${n.title}" has not been accepted. Accept it, decline it, or say what blocks you.`,
-  escalate: n => `Escalation: "${n.title}" has had no answer from its assignee for 30 min. Nudge, reassign, or supersede it.`,
+  escalate: n => `Escalation: "${n.title}" has had no answer from its assignee. Nudge, reassign, or supersede it.`,
   free: n => `Task is free: "${n.title}" was never accepted. Anyone may propose to take it.`,
   warn: n => `Lease ending soon on "${n.title}". Renew the claim to keep it, or release it.`,
 };
@@ -115,13 +116,13 @@ const COPY = {
 // One tick for one room: post each due rung once (the message id is derived
 // from the rung key, so a repeat tick or restart coalesces) and wake agent
 // recipients through the claim wake path. Never throws.
-export function runAssignmentDeadlines(store, roomId, nowMs, options = {}) {
+export function runAssignmentDeadlines(store, roomId, nowMs, { append = appendRoomEvent, ...options } = {}) {
   try {
     if (!assignmentDeadlinesEnabled(store?.featureEnv, roomId)) return [];
     const room = store.room(roomId);
     const state = room?.state;
     const ownerId = state?.room?.ownerId ?? null;
-    const author = state?.members?.[ownerId];
+    const author = ownerId ? ownMember(state?.members ?? {}, ownerId) : null;
     if (!author || author.active === false) return [];
     const items = Object.values(state.workItems ?? {});
     let claims = [];
@@ -132,9 +133,10 @@ export function runAssignmentDeadlines(store, roomId, nowMs, options = {}) {
       const messageId = stableEventId("ad", notice.key);
       const body = COPY[notice.stage]?.({ title: titles.get(notice.workItemId) ?? notice.workItemId });
       if (!body) continue;
-      appendRoomEvent(store, roomId, { id: messageId, type: "message.posted", actorId: author.id, data: { messageId, body } });
+      // A rung already posted (repeat tick, restart) returns null: no repeat wake.
+      if (!append(store, roomId, { id: messageId, type: "message.posted", actorId: author.id, data: { messageId, body } })) continue;
       for (const memberId of notice.notify) {
-        if (state.members?.[memberId]?.kind !== "agent") continue;
+        if (ownMember(state.members ?? {}, memberId)?.kind !== "agent") continue;
         enqueueClaimWake(store, roomId, memberId, messageId, { reason: "assignment_deadline", actorId: author.id });
       }
       posted.push(messageId);

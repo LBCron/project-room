@@ -67,8 +67,9 @@ test("runner is off by default and posts each rung once when on", async () => {
   const store = { featureEnv: {}, room: () => ({ state }), workClaims: { list: () => [] } };
   assert.deepEqual(runAssignmentDeadlines(store, "r", T0 + 11 * MIN), []);
   store.featureEnv = { ROOM_ASSIGNMENT_DEADLINES: "on" };
-  // appendRoomEvent needs a real db; a store without one is a no-op post.
-  const ids = runAssignmentDeadlines(store, "r", T0 + 11 * MIN);
+  const seen = new Set();
+  const append = (_s, _r, { id }) => (seen.has(id) ? null : (seen.add(id), { sequence: seen.size }));
+  const ids = runAssignmentDeadlines(store, "r", T0 + 11 * MIN, { append });
   assert.equal(ids.length, 1); events.push(...ids);
-  assert.deepEqual(runAssignmentDeadlines(store, "r", T0 + 11 * MIN), ids, "same rung -> same message id");
+  assert.deepEqual(runAssignmentDeadlines(store, "r", T0 + 11 * MIN, { append }), [], "a rung already posted is not posted or woken again");
 });

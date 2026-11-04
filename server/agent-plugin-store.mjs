@@ -1033,15 +1033,28 @@ export class AgentPluginStore {
   // with the cron tick as the restart-safe backstop; the agent sees each
   // delivery in its journal. No subscription, no delivery — the heartbeat
   // queue alone carries the wake.
-  deliverWakePing({ identityId, signal }) {
+  deliverWakePing({ identityId, signal, rewake = null }) {
     // R282-1: a revoked identity's secret is dead, so its wake must be too.
     if (this.identityRevoked(identityId)) return Object.freeze({ deliveries: Object.freeze([]) });
+    // Wake adapters (ROOM_WAKE_ADAPTERS, default off): a burst of signals for
+    // the same agent and room inside the window rides the pending wake.
+    const adapters = this.wakeAdapters;
+    let wakeCount = 1;
+    if (rewake) wakeCount = rewake.count;
+    else if (adapters?.enabled) {
+      const offer = adapters.coalescer.offer(identityId, signal ?? {});
+      if (!offer.send) return Object.freeze({ deliveries: Object.freeze([]), coalesced: true });
+      wakeCount = offer.count;
+    }
     const result = this.mutate(() => {
       const rows = this.db.prepare(
         "SELECT subscription_id AS subscriptionId, events_json AS eventsJson FROM agent_webhook_subs WHERE agent_id=? AND enabled=1").all(identityId);
       const deliveries = [];
       const wakePing = buildWakePing({ agentId: identityId, signal });
       const eventId = signal?.signalId ?? null;
+      // Each bounded retry is a new delivery, while replaying that same
+      // signal/attempt still deduplicates against its durable journal row.
+      const retrySuffix = rewake ? `rewake:${rewake.attempt}` : null;
       // T2-L03a-C1: journal the signal's real room, not null. The drain's
       // dispatch-time membership re-check only fires for rows with a
       // room_id, so a null room disarmed it for every agent.wake delivery.
@@ -1051,7 +1064,7 @@ export class AgentPluginStore {
         try { events = JSON.parse(row.eventsJson); } catch { continue; }
         if (!events.includes(WAKE_PING_EVENT) && !events.includes("*")) continue;
         deliveries.push(this.buildWebhookDelivery(row.subscriptionId,
-          { eventType: WAKE_PING_EVENT, data: wakePing, eventId, roomId }));
+          { eventType: WAKE_PING_EVENT, data: wakePing, eventId, roomId, idempotencySuffix: retrySuffix }));
       }
       // Event-push: when the agent registered wakeable hosts with wakeUrls,
       // the same wake ping is also POSTed to each distinct wakeUrl via the
@@ -1063,9 +1076,13 @@ export class AgentPluginStore {
       if (deliveries.length > 0) {
         for (const wake of this.wakeUrlTargets(identityId)) {
           try {
+            const kind = adapters?.enabled ? adapters.inferAdapterKind(wake.wakeUrl) : null;
+            const data = kind && kind !== "generic"
+              ? adapters.buildAdapterBody({ kind, agentId: identityId, signal, count: wakeCount, attempt: rewake?.attempt ?? 0 })
+              : wakePing;
             deliveries.push(this.buildWebhookDelivery(deliveries[0].subscriptionId,
-              { eventType: WAKE_PING_EVENT, data: wakePing, eventId, roomId,
-                url: wake.wakeUrl, idempotencySuffix: `wake-url:${wake.hostId}` }));
+              { eventType: WAKE_PING_EVENT, data, eventId, roomId,
+                url: wake.wakeUrl, idempotencySuffix: `wake-url:${wake.hostId}${retrySuffix ? `:${retrySuffix}` : ""}` }));
           } catch { /* skip invalid wakeUrl; the subscription-URL delivery still stands */ }
         }
       }
@@ -1628,6 +1645,33 @@ export class AgentPluginStore {
   // drain after a commit journals deliveries; the cron tick and manual
   // drain remain the restart-safe backstop. kickDispatch never throws, so
   // the command that triggered the fan-out cannot fail from the kick.
+  // Install wake adapters (server/wake-adapters.mjs). Absent or disabled
+  // means deliverWakePing behaves exactly as before.
+  setWakeAdapters(adapters) { this.wakeAdapters = adapters ?? null; }
+
+  nextRewakeAt() {
+    return this.wakeAdapters?.enabled ? this.wakeAdapters.coalescer.nextRewakeAt() : null;
+  }
+
+  // Re-send wakes whose inbox is still unread (ROOM_WAKE_ADAPTERS only).
+  sweepRewakes() {
+    const adapters = this.wakeAdapters;
+    if (!adapters?.enabled) return 0;
+    let sent = 0;
+    for (const due of adapters.coalescer.dueRewakes()) {
+      if (!due.signal?.signalId) continue;
+      sent += this.deliverWakePing({ identityId: due.agentId, signal: due.signal, rewake: due }).deliveries.length;
+    }
+    return sent;
+  }
+
+  // Explicit whole-room read; signal acknowledgements use the separate API below.
+  noteWakeRead(identityId, roomId) { this.wakeAdapters?.coalescer?.markRead(identityId, roomId ?? null); }
+
+  noteWakeAcknowledged(identityId, roomId, signalIds) {
+    this.wakeAdapters?.coalescer?.markAcknowledged(identityId, roomId ?? null, signalIds);
+  }
+
   setDispatchKick(fn) {
     this.dispatchKick = typeof fn === "function" ? fn : null;
     return this;

@@ -1,0 +1,21 @@
+{"event":"room.cold_start","clockSemantics":"io-bound","durationMs":60,"integrity":"deferred","phases":{"schema":{"ms":12,"rowsRead":8402},"plugin":{"ms":29,"rowsRead":41041},"fence":{"ms":14,"rowsRead":47606},"verifies":{"ms":3,"rowsRead":21846},"checksum":{"ms":0,"rowsRead":0}},"rooms":0,"sequences":0,"projectionBytes":0,"events":0}
+{"event":"room.store_initialized","initializationMs":60,"legacyColdStartMs":60,"clockSemantics":"io-bound","cpuMeasured":false}
+[boot-config] ERROR: the agent card is UNSIGNED and no explicit opt-in was recorded at build time — members fetching /.well-known/agent-card.json will see an unsigned card (marked signed:false). To fix: set ROOM_AGENT_CARD_SIGNING_KEY and re-run scripts/sign-agent-card.mjs, or pass --allow-unsigned explicitly to record the choice.
+No magic-link mailer is configured: email-verification gates are relaxed (agent-invite escape hatch); /api/health reports emailVerification: relaxed-no-mailer
+{"event":"room.do_initialized","clockSemantics":"io-bound","cpuMeasured":false,"initializationMs":64,"storeInitializationMs":60}
+{"event":"room.cold_start","phase":"first_request","clockSemantics":"io-bound","cpuMeasured":false,"constructMs":60,"firstRequestMs":6,"storeInitializationMs":60,"durableObjectInitializationMs":64,"rooms":0,"sequences":0,"projectionBytes":0,"phases":{"schema":{"ms":12,"rowsRead":8402},"plugin":{"ms":29,"rowsRead":41041},"fence":{"ms":14,"rowsRead":47606},"verifies":{"ms":3,"rowsRead":21846},"checksum":{"ms":0,"rowsRead":0}}}
+{"event":"room.do_request","clockSemantics":"io-bound","cpuMeasured":false,"method":"GET","path":"/support","status":200,"appMs":6}
+{"event":"room.request","method":"GET","path":"/support","status":200,"totalMs":78,"servedBy":"durable-object","clockSemantics":"io-bound","cpuMeasured":false,"appMs":6,"queueMs":72,"residualMs":72,"residualAttribution":"unattributed"}
+{"path":"/support","status":200,"contentType":"text/html; charset=utf-8","hasConfiguredContact":true,"hasOpenaiProof":false,"hasGoogleProof":false,"hasExpectedPage":true}
+{"event":"room.do_request","clockSemantics":"io-bound","cpuMeasured":false,"method":"GET","path":"/docs","status":200,"appMs":1}
+{"event":"room.request","method":"GET","path":"/docs","status":200,"totalMs":1,"servedBy":"durable-object","clockSemantics":"io-bound","cpuMeasured":false,"appMs":1,"queueMs":0,"residualMs":0,"residualAttribution":"unattributed"}
+{"path":"/docs","status":200,"contentType":"text/html; charset=utf-8","hasConfiguredContact":false,"hasOpenaiProof":false,"hasGoogleProof":false,"hasExpectedPage":true}
+{"event":"room.do_request","clockSemantics":"io-bound","cpuMeasured":false,"method":"GET","path":"/.well-known/openai-apps-challenge","status":200,"appMs":0}
+{"event":"room.request","method":"GET","path":"/.well-known/openai-apps-challenge","status":200,"totalMs":0,"servedBy":"durable-object","clockSemantics":"io-bound","cpuMeasured":false,"appMs":0,"queueMs":0,"residualMs":0,"residualAttribution":"unattributed"}
+{"path":"/.well-known/openai-apps-challenge","status":200,"contentType":"text/plain; charset=utf-8","hasConfiguredContact":false,"hasOpenaiProof":true,"hasGoogleProof":false,"hasExpectedPage":false}
+{"event":"room.do_request","clockSemantics":"io-bound","cpuMeasured":false,"method":"GET","path":"/google12345678.html","status":200,"appMs":1}
+{"event":"room.request","method":"GET","path":"/google12345678.html","status":200,"totalMs":1,"servedBy":"durable-object","clockSemantics":"io-bound","cpuMeasured":false,"appMs":1,"queueMs":0,"residualMs":0,"residualAttribution":"unattributed"}
+{"path":"/google12345678.html","status":200,"contentType":"text/html; charset=utf-8","hasConfiguredContact":false,"hasOpenaiProof":false,"hasGoogleProof":true,"hasExpectedPage":false}
+{"event":"room.do_request","clockSemantics":"io-bound","cpuMeasured":false,"method":"GET","path":"/google87654321.html","status":404,"appMs":0}
+{"event":"room.request","method":"GET","path":"/google87654321.html","status":404,"totalMs":0,"servedBy":"durable-object","clockSemantics":"io-bound","cpuMeasured":false,"appMs":0,"queueMs":0,"residualMs":0,"residualAttribution":"unattributed"}
+{"path":"/google87654321.html","status":404,"contentType":"text/plain; charset=utf-8","hasConfiguredContact":false,"hasOpenaiProof":false,"hasGoogleProof":false,"hasExpectedPage":false}

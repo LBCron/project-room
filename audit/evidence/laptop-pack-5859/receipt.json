@@ -25,5 +25,18 @@
     "Exact PR head only; not composed with newer courier main",
     "No publication, provider, live credentials or service exercised"
   ],
-  "nextTask": "Check PR5859 Cloudflare route coverage for /support and /docs; no production calls"
+  "nextTask": "Check PR5859 Cloudflare route coverage for /support and /docs; no production calls",
+  "edgeResults": {
+    "runtime": "actual local Miniflare/workerd with synthetic bindings and absent-assets double",
+    "canonicalChecksPassed": 5,
+    "support200": true,
+    "docs200": true,
+    "configuredOpenaiExact200": true,
+    "configuredGoogleExact200": true,
+    "mismatchedGoogle404": true,
+    "unsetOpenai404": true,
+    "exploratoryAlias": "/room/support returns404; unpromised alias, not classified as release blocker",
+    "probeNote": "saved edge-probe.mjs preserves exploratory alias assertion red; remove alias entries to repeat five canonical checks",
+    "productionVerified": false
+  }
 }

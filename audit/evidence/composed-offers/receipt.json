@@ -33,5 +33,6 @@
     "No broad14focus rerun; existing singlehead evidence reused only as context.",
     "Direct empty-list is controlled published-list response; not proof of real lifecycle publication transition.",
     "Bounded-search continuation case did not itself navigate to detail; detail-return separately exercised in first2cases."
-  ]
+  ],
+  "artifactNaming": "Saved browser reproductions renamed from .test.mjs to .probe.mjs after integration, so npm test does not auto-discover browser evidence. Original logs retain historical executed filenames. Source unchanged; probes can still be invoked explicitly with node --test."
 }

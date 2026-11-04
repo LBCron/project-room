@@ -55,7 +55,9 @@ export function agentSessionOf(claim, now = Date.now()) {
 export function withAgentSessions(claims, now, env = process.env) {
   if (!agentSessionStatesEnabled(env) || !Array.isArray(claims)) return claims;
   return claims.map(claim => {
+    // List pages carry only the state string to stay inside the 64 KiB page
+    // budget; agentSessionOf() gives the reason for a single claim.
     const session = agentSessionOf(claim, now);
-    return session ? { ...claim, agentSession: session } : claim;
+    return session ? { ...claim, agentSession: session.state } : claim;
   });
 }

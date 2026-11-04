@@ -39,7 +39,7 @@ test("board decoration is off by default and additive when on", () => {
   const claims = [claim(), { id: "w2", state: "unclaimed", owner: null }];
   assert.equal(withAgentSessions(claims, T0, {}), claims);
   const on = withAgentSessions(claims, T0 + 1000, { ROOM_AGENT_SESSION_STATES: "1" });
-  assert.equal(on[0].agentSession.state, "pending");
+  assert.equal(on[0].agentSession, "pending");
   assert.equal("agentSession" in on[1], false);
   assert.equal(on[0].id, "w1");
 });

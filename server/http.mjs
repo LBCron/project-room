@@ -1364,10 +1364,13 @@ export function createRoomServer({ store, origin, assetRoot = new URL("../", imp
         if (req.method === "POST") {
           // Join traffic stays on the small JSON cap. A live identity secret
           // may stage one room file (base64, at most attachmentLimits.fileBytes).
+          // OAuth agents (oat_/iat_) get the same bound so a message up to
+          // MAX_MESSAGE_BODY_CHARS fits; without it claude.ai-connected
+          // agents were refused at 16 KiB, below the advertised body limit.
           const fileBody = typeof req.headers.authorization === "string"
             // RFC 7235: auth scheme is case-insensitive ("bearer"/"BEARER"
             // accepted), matching bearer()/carriesBearer() above.
-            && /^bearer (?:pri_|rak_)/i.test(req.headers.authorization);
+            && /^bearer (?:pri_|rak_|oat_|iat_)/i.test(req.headers.authorization);
           const text = await readText(req, fileBody ? mcpAttachmentBodyBytes : JSON_BODY_BYTES, () => new ServiceError(413, "too_large", "Request is too large"));
           return writeRoomMcpNode(req, res, url, { bodyText: text, roomMcp: hostedRoomMcp, remoteAddress, oauthMetadataUrl, signal: resolveRequestSignal() });
         }
@@ -2529,6 +2532,13 @@ export function createRoomServer({ store, origin, assetRoot = new URL("../", imp
       }
       // --- GR2 public acquisition pages. Hash-authorized copy helper; indexable without a query. ---
       const templateDetail = /^\/templates\/([a-z0-9][a-z0-9-]{0,63})(\.json)?$/.exec(url.pathname);
+      // Linear-style /r/{room}/board: hand off to the app's existing ?board=1
+      // deep link (membership checks still run in the app, nothing leaks here).
+      const roomBoard = /^\/r\/([a-z0-9][a-z0-9-]{0,63})\/board\/?$/.exec(url.pathname);
+      if (roomBoard && (req.method === "GET" || req.method === "HEAD")) {
+        res.writeHead(302, { Location: `/?room=${roomBoard[1]}&board=1`, "Cache-Control": "no-store" });
+        return res.end();
+      }
       const roomPage = /^\/r\/([a-z0-9][a-z0-9-]{0,63})(\.json)?$/.exec(url.pathname);
       const proofPage = /^\/r\/([a-z0-9][a-z0-9-]{0,63})\/proof(\.json)?$/.exec(url.pathname);
       const proofOg = /^\/r\/([a-z0-9][a-z0-9-]{0,63})\/proof\/og\.png$/.exec(url.pathname);

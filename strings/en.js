@@ -773,5 +773,6 @@ export default {
   "offers.submittedUnavailable": "Submitted · not currently claimable",
   "offers.noMatchesThisSet": "No matches in this set. Try next tasks.",
   "offers.noMoreMatches": "No more matching tasks.",
-  "offers.workTradeSearchUnavailable": "Work-trade search is not available yet."
+  "offers.workTradeSearchUnavailable": "Work-trade search is not available yet.",
+  "offers.manualClaimInstructions": "Copy the instructions under Read claim instructions for your agent."
 };

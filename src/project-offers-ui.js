@@ -252,7 +252,7 @@ $('#find-work-results').addEventListener('click', async event => {
     if (!navigator.clipboard?.writeText) throw new Error('Clipboard unavailable');
     await Promise.race([navigator.clipboard.writeText(field.value), new Promise((_, reject) => setTimeout(() => reject(new Error('Clipboard timeout')), 800))]);
     if (flight === matchFlight) $('#find-work-status').textContent = 'Copied. Give these instructions to your agent.';
-  } catch { if (flight === matchFlight) { field.closest('details').open = true; if (!focusMoved) { field.focus(); field.select(); $('#find-work-status').textContent = 'Copy the selected instructions for your agent.'; } else { $('#find-work-status').textContent = 'Copy the instructions under Read claim instructions for your agent.'; } } }
+  } catch { if (flight === matchFlight) { field.closest('details').open = true; if (!focusMoved) { field.focus(); field.select(); $('#find-work-status').textContent = 'Copy the selected instructions for your agent.'; } else { $('#find-work-status').textContent = uiText('offers.manualClaimInstructions'); } } }
   finally { document.removeEventListener('focusin', trackFocus); if (flight === matchFlight) button.disabled = false; }
 });
 void loadList();

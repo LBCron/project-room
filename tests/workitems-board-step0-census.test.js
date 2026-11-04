@@ -49,6 +49,7 @@ const WORKITEMS_REFERENCE_SITES = [
   "server/current-work-list.mjs",
   "server/current-work-privacy.mjs",
   "server/current-work-snapshot.mjs",
+  "server/handoff-packet.mjs",
   "server/inbox.mjs",
   "server/legacy-session-replay.mjs",
   "server/mcp-events-runtime.mjs",

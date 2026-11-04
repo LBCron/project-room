@@ -203,7 +203,7 @@ test('actual HTTP paging preserves chronology and exact expansion never substitu
 });
 
 
-test('actual formal request and outgoing private message remain full, with unchanged selected-read routing',async t=>{
+test('actual formal request stays full and an outgoing private message becomes an expandable own headline',async t=>{
   const f=fixture(t);await f.ready;
   f.post('owner','formal-ask',{body:'A formal question',toMemberId:'worker1',requestKind:'reply'});
   f.post('worker1','outgoing-private',{body:'Private context I authored',toMemberId:'owner'});
@@ -212,8 +212,11 @@ test('actual formal request and outgoing private message remain full, with uncha
   assert.equal(formal.why,'request');assert.equal(formal.body,'A formal question');
   assert.deepEqual(formal.nextRead,full.messages.find(m=>m.messageId==='formal-ask').nextRead);
   assert.equal(formal.nextRead.tool,'room_read_request');
-  const own=digest.addressed.find(m=>m.messageId==='outgoing-private');
-  assert.equal(own.body,'Private context I authored');assert.equal(own.untrusted,true);
+  assert.equal(digest.addressed.some(m=>m.messageId==='outgoing-private'),false,'own posts are headlines, not full');
+  const mine=digest.others.find(g=>g.from==='worker1');assert.equal(mine.self,true);assert.equal(mine.untrusted,true);
+  const [seq,line,id]=mine.items.find(i=>i[2]==='outgoing-private');assert.equal(line,'Private context I authored');
+  const expanded=await f.hosted({after:seq-1,limit:1});assert.equal(expanded.messages[0].sequence,seq);assert.equal(expanded.messages[0].messageId,id);
+  assert.equal(expanded.messages[0].body,'Private context I authored');
   assert.equal(digest.next,full.next);
   await assert.rejects(()=>f.client().roomMessages({view:'invalid'}),/Choose full or digest/);
 });
@@ -234,4 +237,28 @@ test('normalized guest digest cannot expand prejoin history or another private p
   const candidate=(await callHostedStdioTool(store,guest.secret,'room_read_messages',{roomId:'digest-guest',after:pre-1,limit:1,view:'full'})).value;
   assert.equal(candidate.messages.some(m=>m.sequence===pre&&m.messageId==='prejoin'),false,'expansion must not substitute the later visible message');
   assert.equal(JSON.stringify(candidate).includes('PREJOIN PRIVATE HISTORY'),false);
+});
+
+test('own posts become headlines: replies, DMs and answers, but an own open formal request stays full; privacy unchanged', async t => {
+  const f = fixture(t); await f.ready;
+  f.post('mate', 'their-q', { body: 'Question from mate' });
+  f.post('worker1', 'own-reply', { body: 'My long reply. ' + 'detail '.repeat(40), replyToId: 'their-q' });
+  f.post('worker1', 'own-dm', { body: 'My private note to owner', toMemberId: 'owner' });
+  f.post('worker1', 'own-ask', { body: 'My formal question to owner', toMemberId: 'owner', requestKind: 'reply' });
+  f.post('owner', 'others-dm', { body: 'OWNER TO MATE ONLY', toMemberId: 'mate' });
+  f.post('mate', 'to-me', { body: '<@worker1> please check' });
+  const digest = await f.hosted({ after: 0, limit: 100, view: 'digest' });
+  assert.deepEqual(digest.addressed.map(m => [m.messageId, m.why]), [['own-ask', 'request'], ['to-me', 'mention']]);
+  assert.equal(digest.addressed[0].body, 'My formal question to owner');
+  assert.equal(digest.addressed[0].nextRead.tool, 'room_read_request');
+  const mine = digest.others.find(g => g.self);
+  assert.equal(mine.from, 'worker1');
+  assert.deepEqual(mine.items.map(i => i[2]), ['own-reply', 'own-dm']);
+  assert.ok(Array.from(mine.items[0][1]).length <= 80);
+  assert.equal(digest.others.filter(g => g.self).length, 1, 'only the viewer group is marked self');
+  assert.equal(JSON.stringify(digest).includes('OWNER TO MATE ONLY'), false, 'a private pair the viewer is not in never appears');
+  assert.equal(digest.counts.addressed + digest.counts.others, digest.counts.messages);
+  const local = await f.client().roomMessages({ after: 0, limit: 100, view: 'digest' });
+  assert.deepEqual(local.others.map(g => [g.from, g.self ?? false, g.items]), digest.others.map(g => [g.from, g.self ?? false, g.items]));
+  assert.deepEqual(local.addressed.map(m => m.messageId), digest.addressed.map(m => m.messageId));
 });

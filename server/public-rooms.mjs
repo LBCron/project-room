@@ -26,6 +26,9 @@ const SETUP_COPY_SCRIPT = `(() => {
   if (!button || !field || !status) return;
   button.hidden = false;
   button.addEventListener('click', async () => {
+    let focusMoved = false;
+    const trackFocus = event => { if (event.target !== button) focusMoved = true; };
+    document.addEventListener('focusin', trackFocus);
     button.disabled = true;
     try {
       if (!navigator.clipboard?.writeText) throw new Error('unavailable');
@@ -33,9 +36,13 @@ const SETUP_COPY_SCRIPT = `(() => {
       status.textContent = 'Copied. Paste into your agent.';
     } catch {
       field.closest('details').open = true;
-      field.focus(); field.select();
-      status.textContent = 'Copy the selected prompt, then paste it into your agent.';
-    } finally { button.disabled = false; }
+      if (!focusMoved) {
+        field.focus(); field.select();
+        status.textContent = 'Copy the selected prompt, then paste it into your agent.';
+      } else {
+        status.textContent = 'Copy the prompt under View setup prompt, then paste it into your agent.';
+      }
+    } finally { document.removeEventListener('focusin', trackFocus); button.disabled = false; }
   });
 })();`;
 export { RECEIPTS_PAGE_CSP as PUBLIC_PAGE_CSP };

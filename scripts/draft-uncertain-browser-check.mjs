@@ -38,7 +38,7 @@ for (const scenario of ['same','other','logout']) for (const privateDraft of [fa
     const context=await browser.newContext(),page=await context.newPage();
     const origin=`http://127.0.0.1:${server.address().port}`;
     await page.goto(origin+'/fixture/login');
-    await page.getByText('Connected',{exact:true}).waitFor({state:'visible'});
+    await page.locator('#connection-status').filter({hasText:/^Connected$/}).waitFor({state:'visible'});
     if(privateDraft) {
       await page.locator('#new-direct-message').click();
       await page.locator('#new-direct-dialog').getByRole('button',{name:'Other'}).click();

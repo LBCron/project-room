@@ -39,7 +39,7 @@ import { messageRepository } from "./message-repository.mjs";
 // 409; unknown ids as 404. Unknown errors are rethrown for the generic 500
 // path — never wrapped, so no internal detail leaks.
 import {
-  createWork, claimWork, updateWork, releaseWork, appendWorkPullRequest, attestWork, recordReview, reassignWork, releaseExpired, canCloseWork,
+  createWork, claimWork, updateWork, releaseWork, delegateWork, claimDelegateEnabled, requestApproval, decideApproval, approvalHoldEnabled, appendWorkPullRequest, attestWork, recordReview, reassignWork, releaseExpired, canCloseWork,
   renewWork, roomWorkClaimConfig, closeWhenLive, isReceiptTag, ClaimError, REVIEW_POLICIES, CLAIM_KINDS,
   claimUpdatedAt, ACTIVE_CLAIM_STATES, MAX_LEASE_HOURS, STATES, summarizeClaimHistory, isHardWork,
   walkProvenance, flagPremiseInvalid, clearPremiseFlag, closeWork, isTerminalClaimState, claimHistoryLength,
@@ -71,7 +71,7 @@ import { agentErrorBody, ownerHeldClaimCopy } from "../src/agent-error.mjs";
 import { SOURCE_REVISION } from "./version.mjs";
 import { ServiceError } from "./service-error.mjs";
 import { isGuestAgentMemberId } from "./guest-agent-links.mjs";
-import { isRoomArchived, publicReceipts } from "../src/events.js";
+import { isRoomArchived, ownMember, publicReceipts } from "../src/events.js";
 
 const CLAIM_ID_PATTERN = /^[A-Za-z0-9_-]{1,128}$/;
 
@@ -1754,6 +1754,52 @@ function handleWorkClaimsCore({ req, res, url, store, roomId, auth, workClaimRou
       wakeMemberId: target, wakeReason: "assigned"
     });
     return json(res, 200, reassigned);
+  }
+  if (workClaimRoute === "approval" && req.method === "POST") {
+    if (!approvalHoldEnabled()) reject(404, "not_found", "Approval holds are not enabled on this server");
+    const data = body(req);
+    if (!shape(data, { required: ["action"], optional: ["approver", "step", "note"] })) invalidInput(reject, "{action: request|approve|deny, approver?, step?, note?}");
+    const item = load(claimIdOf(reject, workClaimId));
+    requireEventBudget();
+    let next, wake;
+    try {
+      if (data.action === "request") {
+        const members = store.roomAuthority(roomId).members ?? {};
+        const member = typeof data.approver === "string" ? ownMember(members, data.approver) : null;
+        if (!member || member.active === false) reject(422, "work_approver_unknown_member", "approver must be an active member of this room");
+        next = requestApproval(item, caller, { approverId: data.approver, step: text("step", data.step, { multiline: true }), now: nowMs });
+        wake = { memberId: data.approver, reason: "approval_requested" };
+      } else if (data.action === "approve" || data.action === "deny") {
+        next = decideApproval(item, caller, { decision: data.action, note: text("note", data.note, { multiline: true }), now: nowMs });
+        const worker = item.approvalHold?.requestedBy;
+        wake = worker ? { memberId: worker, reason: `approval_${next.approvalHold.status}` } : null;
+      } else reject(422, "invalid_claim_input", "action must be request, approve or deny");
+    } catch (error) { if (error instanceof ClaimError) reject(422, error.code, error.message); throw error; }
+    commit(next, "approval", wake ? { attention: "assigned", attentionMemberId: wake.memberId, wakeMemberId: wake.memberId, wakeReason: wake.reason } : {});
+    return json(res, 200, next);
+  }
+  if (workClaimRoute === "delegate" && req.method === "POST") {
+    if (!claimDelegateEnabled()) reject(404, "not_found", "Claim delegation is not enabled on this server");
+    const data = body(req);
+    if (!shape(data, { required: ["delegate"], optional: ["note"] })) invalidInput(reject, "{delegate: memberId|null, note?}");
+    const item = load(claimIdOf(reject, workClaimId));
+    const authority = authorityOver(item);
+    const target = data.delegate;
+    if (target !== null) {
+      const members = store.roomAuthority(roomId).members ?? {};
+      const member = typeof target === "string" ? ownMember(members, target) : null;
+      if (!member || member.active === false) {
+        reject(422, "work_delegate_unknown_member", `delegate "${typeof target === "string" ? target : "?"}" is not an active member of this room`);
+      }
+    }
+    requireEventBudget();
+    const note = text("note", data.note, { multiline: true });
+    let delegated;
+    try { delegated = delegateWork(item, caller, target, { note, now: nowMs, authority }); }
+    catch (error) { if (error instanceof ClaimError) reject(422, error.code, error.message); throw error; }
+    commit(delegated, "delegated", target === null ? {} : {
+      attention: "assigned", attentionMemberId: target, wakeMemberId: target, wakeReason: "assigned" });
+    return json(res, 200, delegated);
   }
   if (workClaimRoute === "renew" && req.method === "POST") {
     // Lease-renewal check-ins: the owner extends their claim's lease only by

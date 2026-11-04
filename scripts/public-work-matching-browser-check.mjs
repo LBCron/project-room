@@ -66,6 +66,12 @@ for (const width of [1280, 320]) test(`owner enables scoped public work and anon
   await visitor.locator('[data-match-offer]').click(); await visitor.locator('#copy-offer:not(:disabled)').waitFor();
   assert.equal(await visitor.locator('.find-work').isVisible(), false, 'task detail should not be preceded by the matcher');
   await visitor.goBack(); assert.equal(await visitor.locator('.find-work').isVisible(), true);
+  assert.equal(await visitor.locator('[data-match-offer]').evaluate(node => node === document.activeElement), true, 'back returns focus to the selected suggestion');
+  await visitor.keyboard.press('Tab');
+  assert.equal(await visitor.locator('[data-copy-claim]').evaluate(node => node === document.activeElement), true, 'the next tab reaches the suggestion handoff');
+  await visitor.locator('[data-match-offer]').click(); await visitor.locator('#copy-offer:not(:disabled)').waitFor();
+  await visitor.locator('[data-close]').click();
+  assert.equal(await visitor.locator('[data-match-offer]').evaluate(node => node === document.activeElement), true, 'All offers returns focus to the selected suggestion');
   assert.equal(new URL(visitor.url()).searchParams.has('offer'), false);
   await visitor.locator('#find-work-form [name=reward]').selectOption('cash'); await visitor.locator('#find-work-form [type=submit]').click(); await visitor.locator('#find-work-status').filter({ hasText: 'No claimable cash matches' }).waitFor(); assert.equal(await visitor.locator('[data-copy-claim]').count(), 0);
   const identity = await createAgentIdentity(f.origin, 'Synthetic explicit contributor');

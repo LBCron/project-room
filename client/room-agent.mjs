@@ -1,4 +1,5 @@
 import { digestMessagePage } from "../src/message-digest.js";
+import { filterMessagePage, validMessageQuery } from "../src/message-query.js";
 import { validWorkPage } from "../server/work-list-page.mjs";
 import { workTemplate, WORK_TEMPLATES } from "../src/work-templates.js";
 import { roomTemplate, ROOM_TEMPLATES } from "../src/room-templates.js";
@@ -632,7 +633,8 @@ export class RoomAgentClient {
     return this.#request("/cursor", { sequence }, signal);
   }
 
-  async roomMessages({ after = 0, limit = 50, latest = false, view = "full", signal } = {}) {
+  async roomMessages({ after = 0, limit = 50, latest = false, view = "full", query, signal } = {}) {
+    if (query !== undefined && !validMessageQuery(query)) throw new Error("Search text is 1 to 80 characters");
     if (!["full", "digest"].includes(view)) throw new Error("Choose full or digest message view");
     const fetchPage = (cursor, pageLimit) => this.#request(`/events?after=${cursor}&limit=${pageLimit}`, undefined, signal);
     const mapMessage = ({ sequence, event }) => ({
@@ -663,7 +665,8 @@ export class RoomAgentClient {
       next: cursor.next,
       hasMore: cursor.hasMore,
     });
-    return view === "digest" ? digestMessagePage(page, this.#memberId) : page;
+    const searched = query === undefined ? page : filterMessagePage(page, query);
+    return view === "digest" ? digestMessagePage(searched, this.#memberId) : searched;
   }
   async replyRead(name, args = {}, { signal } = {}) {
     const route = replyRoute(name);

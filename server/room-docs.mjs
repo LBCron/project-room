@@ -30,21 +30,22 @@ export function getDoc(db, { roomId, docId, rev = null }) {
   return r ? out(r) : null;
 }
 
-// Returns { doc } or { conflict: currentRev }.
-export function writeDoc(db, { roomId, docId, title, body, baseRev, author, now = Date.now() }) {
+// Returns { doc } or { conflict: currentRev }. One store transaction, so a
+// write and its revision row land together or not at all.
+export function writeDoc(store, { roomId, docId, title, body, baseRev, author, now = Date.now() }) {
+  const db = store.db;
   ensure(db);
-  db.exec("BEGIN IMMEDIATE");
-  try {
+  const conflict = store.transaction(() => {
     const cur = db.prepare("SELECT rev FROM room_docs WHERE room_id = ? AND doc_id = ?").get(roomId, docId);
     const currentRev = cur?.rev ?? 0;
-    if (currentRev !== baseRev) { db.exec("ROLLBACK"); return { conflict: currentRev }; }
+    if (currentRev !== baseRev) return currentRev;
     const rev = currentRev + 1;
     db.prepare(`INSERT INTO room_docs (room_id, doc_id, title, body, rev, updated_by, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?)
       ON CONFLICT (room_id, doc_id) DO UPDATE SET title = excluded.title, body = excluded.body, rev = excluded.rev,
       updated_by = excluded.updated_by, updated_at = excluded.updated_at`).run(roomId, docId, title, body, rev, author, now);
     db.prepare("INSERT INTO room_doc_revisions (room_id, doc_id, rev, title, body, author, at) VALUES (?, ?, ?, ?, ?, ?, ?)")
       .run(roomId, docId, rev, title, body, author, now);
-    db.exec("COMMIT");
-  } catch (error) { try { db.exec("ROLLBACK"); } catch {} throw error; }
-  return { doc: getDoc(db, { roomId, docId }) };
+    return null;
+  });
+  return conflict === null ? { doc: getDoc(db, { roomId, docId }) } : { conflict };
 }

@@ -59,7 +59,7 @@ export async function postRoomDoc(ctx) {
   if (typeof data.title !== "string" || !data.title.trim() || data.title.length > MAX_TITLE) ctx.reject(422, "invalid_body", `title must be 1..${MAX_TITLE} characters`);
   if (typeof data.body !== "string" || data.body.length > MAX_BODY) ctx.reject(422, "invalid_body", `body must be a string of at most ${MAX_BODY} characters`);
   if (!Number.isSafeInteger(data.baseRev) || data.baseRev < 0) ctx.reject(422, "invalid_body", "baseRev must be the rev you read (0 to create)");
-  const result = writeDoc(ctx.store.db, { roomId, docId, title: data.title.trim(), body: data.body, baseRev: data.baseRev, author: auth.member.id });
+  const result = writeDoc(ctx.store, { roomId, docId, title: data.title.trim(), body: data.body, baseRev: data.baseRev, author: auth.member.id });
   if (result.conflict !== undefined) ctx.reject(409, "doc_rev_conflict", `Doc is at rev ${result.conflict}; read it and retry with that baseRev`);
   return ctx.json(ctx.res, data.baseRev === 0 ? 201 : 200, { ok: true, doc: result.doc });
 }

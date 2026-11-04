@@ -67,5 +67,25 @@
     "Wake bucket/coalescer are in-memory; restart refills bucket. Guard delays only long polls with waitMs>0 and cannot promise universal model-turn rate limiting across heartbeat, waitMs=0, multiple hosts or push paths.",
     "Merge-notice behavior tests invoke helper plus separate existing claim-sync scoping tests; no claim of end-to-end external GitHub merge execution.",
     "Current-native-inbox.test.mjs is a Node SQLite test, not workerd."
-  ]
+  ],
+  "rootNative": {
+    "pass": 3,
+    "fail": 0,
+    "log": "/tmp/root-agent-coordination-native.log",
+    "coverage": [
+      "actual current-native-inbox Worker",
+      "attention wait Native",
+      "normalized claims Native conflicts/lost-save/cold-retry/100expiredclaims"
+    ],
+    "limits": [
+      "SQL-cost diagnostics include incomplete observer coverage; no aggregate cost-completeness claim.",
+      "No live quota exhaustion or collision flag activation."
+    ]
+  },
+  "hostedHeadEvidence": {
+    "pr": 5745,
+    "head": "65ee1232765a80f60e4655a921f7bb8d6835367c",
+    "run": 41797057622,
+    "result": "full requested CI success: unit/contract/cloudflare/friendagent andall6browser shards; baseline39plus5745, not entirecomposedsource"
+  }
 }

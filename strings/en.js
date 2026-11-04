@@ -770,5 +770,8 @@ export default {
   "agent.existing.confirm": "Add {name} ({identityId}) to {roomId} with {access} access ({permissions})? This grants new room access. Its existing identity and other room connections stay unchanged. OAuth connection requires separate consent.",
   "agent.existing.connected": "Existing agent added. Reconnect through OAuth and select this room.",
   "agent.existing.unconfirmed": "Enrollment not confirmed. Retry the original request.",
-  "offers.submittedUnavailable": "Submitted · not currently claimable"
+  "offers.submittedUnavailable": "Submitted · not currently claimable",
+  "offers.noMatchesThisSet": "No matches in this set. Try next tasks.",
+  "offers.noMoreMatches": "No more matching tasks.",
+  "offers.workTradeSearchUnavailable": "Work-trade search is not available yet."
 };

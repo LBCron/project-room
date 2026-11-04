@@ -1,3 +1,4 @@
+import { withInviteShare } from "./invite-share.mjs";
 import { withMcpCallLog } from "./mcp-call-log.mjs";
 import {publishedLobbyContext} from './current-public-face.mjs';
 import {waitForAttention} from './attention-wait.mjs';
@@ -827,7 +828,7 @@ function dispatchRoomToolCall(store, secret, identity, name, args, agentRooms, s
     for (const key of ["profile", "permissions", "ownerEquivalent", "expiresInMinutes", "displayName"]) {
       if (args[key] !== undefined) request[key] = args[key];
     }
-    return store.invites.create(secret, roomId, request);
+    return withInviteShare(store.invites.create(secret, roomId, request));
   }
   if (name === "room_list_agent_invites") return { roomId, invites: store.invites.list(secret, roomId) };
   if (name === "room_revoke_agent_invite") return store.invites.revoke(secret, roomId, args.inviteId);

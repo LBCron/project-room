@@ -24,7 +24,8 @@ import { ownMember } from "../src/events.js";
 
 const FLAG = "ROOM_CONTRACT_NOTICES";
 const PATHS = "ROOM_CONTRACT_PATHS";
-const LIVE = new Set(["unclaimed", "claimed", "in_progress", "blocked", "review"]);
+// Real claim states (server/work-claims.mjs STATES); delivered work has not merged yet.
+const LIVE = new Set(["unclaimed", "claimed", "in_progress", "blocked", "delivered"]);
 
 function envOf(store) {
   return store && Object.hasOwn(store, "featureEnv") ? store.featureEnv : (globalThis.process?.env ?? {});
@@ -131,8 +132,11 @@ export function notifyContractChanges(store, roomId, upstream) {
       const material = `${roomId}\0contract\0${upstream.id}\0${entry.pullUrl}\0${entry.dependent.id}`;
       const messageId = stableEventId("cn", material);
       try {
-        appendRoomEvent(store, roomId, { id: messageId, type: "message.posted", actorId: author.id,
+        // Every later claim write re-runs this; a notice already posted
+        // returns null and must not wake the dependent again.
+        const posted = appendRoomEvent(store, roomId, { id: messageId, type: "message.posted", actorId: author.id,
           data: { messageId, body: noticeBody(upstream, entry, members) } });
+        if (!posted) continue;
         if (ownMember(members, entry.dependent.owner)?.kind === "agent") {
           enqueueClaimWake(store, roomId, entry.dependent.owner, messageId, { reason: "contract_change", actorId: author.id });
         }

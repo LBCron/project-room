@@ -106,3 +106,11 @@ test("flag on with interface globs that miss: nothing is posted", async t => {
   const { posts } = await scenario(t, { ROOM_CONTRACT_NOTICES: "on", ROOM_CONTRACT_PATHS: "docs/openapi.yaml" });
   assert.equal(posts.some(body => body.startsWith("Contract change:")), false);
 });
+
+test("delivered dependents still hear about a contract change; closed ones do not", async () => {
+  const { contractNoticePlan } = await import("../server/contract-notices.mjs");
+  const upstream = { id: "up", owner: "a", pullRequests: [{ url: "https://github.com/o/r/pull/1" }] };
+  const dep = state => ({ id: `d-${state}`, owner: "b", state, dependsOn: ["up"] });
+  const plan = contractNoticePlan(upstream, [dep("delivered"), dep("closed"), dep("done")]);
+  assert.deepEqual(plan.map(p => p.dependent.id), ["d-delivered"]);
+});

@@ -448,6 +448,7 @@ async function dispatchHostedStdioTool(store, secret, name, args) {
     } : row);
     return { value: { ...inbox, boardAssignments, boardAssignmentsHasMore: owned.length > 50, boardReviewRequests, boardReviewRequestsHasMore: reviews.length > 50, directMessages: stamp(inbox.directMessages), directMentions: stamp(inbox.directMentions), next: stamp(inbox.next) }, isError: false };
   }
+  if (name === "room_mark_caught_up") return { value: { roomId, ...store.markCaughtUp(secret, roomId, rest.sequence), source: "saved_catch_up_marker" }, isError: false };
   if (name === "room_read_messages") return { value: await roomMessages(store, secret, roomId, rest, auth.member.id), isError: false };
   if (isBountyTool(name)) return { value: callBountyTool(store, secret, roomId, auth, name, rest), isError: false };
   if (isTrustTool(name)) return { value: callTrustTool(store, roomId, auth, name, rest), isError: false };

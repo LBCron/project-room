@@ -625,6 +625,13 @@ export class RoomAgentClient {
   // latest:true returns the latest messages in chronological order
   // (GET /conversation parity). next is the newest sequence, so following it
   // as after does not repeat the page. hasMore means older messages exist.
+  // Saves this member's catch-up marker (POST /cursor). Forward-only on the
+  // service; a later cold room_read_messages returns it as catchUp.after.
+  async markCaughtUp(sequence, { signal } = {}) {
+    if (!Number.isSafeInteger(sequence) || sequence < 0) throw new RoomClientError(0, "invalid_cursor", "Use a nonnegative integer sequence");
+    return this.#request("/cursor", { sequence }, signal);
+  }
+
   async roomMessages({ after = 0, limit = 50, latest = false, view = "full", signal } = {}) {
     if (!["full", "digest"].includes(view)) throw new Error("Choose full or digest message view");
     const fetchPage = (cursor, pageLimit) => this.#request(`/events?after=${cursor}&limit=${pageLimit}`, undefined, signal);

@@ -33,6 +33,7 @@ import { buildActivationPack } from "./room-activation-pack.mjs";
 import { readComposedRoomContext } from "./orient.mjs";
 import { BOARD_CLAIM_TOOLS, validBoardClaimArgs, runBoardClaimTool, boardClaimToolsEnabled } from "./board-claim-tools.mjs";
 import { handleWorkClaims } from "./work-claim-routes.mjs";
+import { handoffPacketEnabled, buildHandoffPacket, collectDecisions, DECISION_TYPES, decisionWindowStart } from "./handoff-packet.mjs";
 import { memoizeBoardList } from "./available-work.mjs";
 import { walkProvenance, ClaimError } from "./work-claims.mjs";
 import { claimThread } from "./claim-thread.mjs";
@@ -219,7 +220,7 @@ function validRoomArgs(name, args) {
   }
   if (name === "room_merge_members") return validId(args.keepMemberId) && validId(args.retireMemberId);
   if (BOARD_CLAIM_TOOLS.includes(name)) { const { roomId: _room, ...rest } = args; return boardClaimToolsEnabled() && validBoardClaimArgs(name, rest); }
-  if (name === "get_room_context") return (args.since_version === undefined || typeof args.since_version === "string" && /^[a-f0-9]{64}$/.test(args.since_version)) && (args.work_after === undefined || validId(args.work_after));
+  if (name === "get_room_context") return (args.view === undefined || args.view === "handoff" && handoffPacketEnabled()) && (args.since_version === undefined || typeof args.since_version === "string" && /^[a-f0-9]{64}$/.test(args.since_version)) && (args.work_after === undefined || validId(args.work_after));
   if (name === "room_read_bootstrap") return true;
   if (name === "room_list_events") {
     return (args.after === undefined || Number.isSafeInteger(args.after) && args.after >= 0)
@@ -724,6 +725,13 @@ function dispatchRoomToolCall(store, secret, identity, name, args, agentRooms, s
     return updateSquadMembers(store, secret, roomId, args.squadId, { add: args.add, remove: args.remove });
   }
   if (name === "squads_disband") return disbandSquad(store, secret, roomId, args.squadId);
+  if (name === "get_room_context" && args.view === "handoff") {
+    // Flag ROOM_HANDOFF_PACKET: validRoomArgs refuses view unless enabled.
+    const context = readComposedRoomContext(store, secret, roomId, {});
+    const since = decisionWindowStart(store.now?.() ?? Date.now());
+    const decisions = collectDecisions(after => store.eventsAfter(secret, roomId, after, 100, { types: [...DECISION_TYPES], since }));
+    return withContentTrust(buildHandoffPacket({ context: { ...context, roomId }, decisions, now: store.now?.() ?? Date.now() }));
+  }
   if (name === "get_room_context") {
     const context = readComposedRoomContext(store, secret, roomId, {
       workAfter:args.work_after??"", sinceVersion: args.since_version === undefined ? null : args.since_version

@@ -105,6 +105,7 @@ optional.push("client/codex-runtime.mjs", "client/codex-shared-assistant.mjs", "
 optional.push("client/codex-host-status.mjs", "client/codex-supervisor.mjs");
 optional.push("src/agent-connection-readiness.js"); // Shared read-only setup/readiness projection.
 optional.push("client/codex-request-supervisor.mjs");
+optional.push("server/handoff-packet.mjs"); // grok/handoff-packet
 optional.push("scripts/agent-doctor.mjs");
 optional.push("scripts/bootstrap-agent-room.mjs");
 optional.push("client/request-notices.mjs");

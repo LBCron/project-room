@@ -10,7 +10,7 @@ import { logger } from "./redact.mjs";
 export async function selectAgent(options, { env = process.env, onFailure = () => {} } = {}) {
   const list = candidates({ agent: options.agent, agentCmd: options.agentCmd, env });
   for (const entry of list) {
-    const result = await probe(entry, { cwd: options.cwd ?? process.cwd(), env, executionReady: true, timeoutMs: entry.command === "npx" ? 120000 : 10000 });
+    const result = await probe(entry, { cwd: options.cwd ?? process.cwd(), env, mode: options.mode, executionReady: true, timeoutMs: entry.command === "npx" ? 120000 : 10000 });
     if (result.ok) return entry;
     onFailure(result);
   }

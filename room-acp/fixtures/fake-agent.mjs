@@ -35,7 +35,15 @@ const peer = createPeer({
       }
       const sessionId = `fake-${process.pid}-${++counter}`; sessions.set(sessionId, []); return { sessionId }; }
     if (method === "session/load") { if (mode === "no-loadSession") throw Object.assign(new Error("loadSession unsupported"), { code: -32601 }); sessions.set(params.sessionId, sessions.get(params.sessionId) ?? []); return null; }
-    if (method === "session/set_mode") return null;
+    if (method === "session/set_mode") {
+      if (process.env.FAKE_ACP_TRACE) appendFileSync(process.env.FAKE_ACP_TRACE, `mode:${params.modeId}\n`);
+      if (mode === "mode-rejected") throw Object.assign(new Error("Requested session mode is unavailable"), { code: -32602 });
+      if (mode === "mode-permission") {
+        const answer = await peer.request("session/request_permission", { sessionId: params.sessionId, toolCall: { toolCallId: "mode", title: "Change session permissions", kind: "execute" }, options: [{ optionId: "allow_once", kind: "allow_once", name: "Allow" }] });
+        if (process.env.FAKE_ACP_TRACE) appendFileSync(process.env.FAKE_ACP_TRACE, `permission:${answer?.outcome?.outcome}\n`);
+      }
+      return null;
+    }
     if (method === "session/prompt") {
       const text = textOf(params.prompt);
       sessions.get(params.sessionId)?.push(text);

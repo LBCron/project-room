@@ -26,6 +26,7 @@ import { GmailMailbox } from './gmail-mailbox.mjs';
 import { publicAssetPaths, generatedAgentPages } from "./public-assets.mjs";
 import { vapidFromEnv } from "./push-subscriptions.mjs";
 import { createServer } from "node:http";
+import { AsyncLocalStorage } from "node:async_hooks";
 import { readFile } from "node:fs/promises";
 import { createHash, randomBytes, randomUUID, timingSafeEqual } from "node:crypto";
 import { ServiceError } from "./store.mjs";
@@ -760,10 +761,25 @@ export function createRoomServer({ store, origin, assetRoot = new URL("../", imp
   if (!Number.isInteger(credentialWriteBurst) || credentialWriteBurst < 1) throw new Error("Credential write burst must be a positive integer");
   const credentialReads = createRateLimiter({ capacity: credentialReadBurst, refillPerSecond: CREDENTIAL_READ_REFILL_PER_SECOND });
   const credentialWrites = createRateLimiter({ capacity: credentialWriteBurst, refillPerSecond: CREDENTIAL_WRITE_REFILL_PER_SECOND });
+  // The response of the request currently being served, for headers set
+  // deep inside shared helpers such as spendCredential.
+  const rateResponses = new AsyncLocalStorage();
   function spendCredential(kind, credentialHash) {
     const limiter = kind === "write" ? credentialWrites : credentialReads;
     const decision = limiter.check(credentialHash);
-    if (decision.allowed) return;
+    if (decision.allowed) {
+      // Linear-style budget headers on success too, so callers can pace
+      // themselves before a 429. Same names and units as the 429 below.
+      const res = rateResponses.getStore();
+      if (res && !res.headersSent) {
+        res.setHeader("X-RateLimit-Limit", String(limiter.capacity));
+        res.setHeader("X-RateLimit-Remaining", String(decision.remaining));
+        // Match the existing refusal header: next admission, not a full refill.
+        res.setHeader("X-RateLimit-Reset", String(Math.ceil((Date.now() + decision.nextAllowedAfterMs) / 1000)));
+        res.setHeader("X-RateLimit-Bucket", kind === "write" ? "write" : "read");
+      }
+      return;
+    }
     const seconds = Math.max(1, Math.ceil(decision.retryAfterMs / 1000));
     throw new ServiceError(429, "rate_limited", "Too many requests; retry after a minute", {
       "Retry-After": String(seconds),
@@ -1243,7 +1259,7 @@ export function createRoomServer({ store, origin, assetRoot = new URL("../", imp
     signal?.addEventListener("abort", abort, { once: true });
     if (signal?.aborted) abort(); else pump();
   }
-  const server = createServer(async (req, res) => {
+  const server = createServer((req, res) => rateResponses.run(res, async () => {
     const operationId = `op_${randomBytes(6).toString("base64url")}`;
     res.setHeader("Cache-Control", "no-store");
     res.setHeader("X-Content-Type-Options", "nosniff");
@@ -5861,7 +5877,7 @@ export function createRoomServer({ store, origin, assetRoot = new URL("../", imp
       error.detail);
       json(res, httpStatus, errorBody);
     }
-  });
+  }));
   server.on('close', () => {
     nativeEvents?.stop();
     if (store.enqueueNativeMcpEvent === nativeEvents?.emit) delete store.enqueueNativeMcpEvent;

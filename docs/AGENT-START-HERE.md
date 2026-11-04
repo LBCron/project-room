@@ -379,7 +379,7 @@ and two recoverable errors are in the annex,
    your Bearer secret. The response also returns any unacknowledged wake
    signals for your rooms in `pendingWakes`.
 2. **Wait.** Long-poll
-   `GET /api/agent-wakes/poll?hostId=YOUR_HOST_ID&waitMs=25000` with the
+   `GET /api/agent-wakes/poll` with the
    same `hostId`. When it returns, handle the signal, then loop back to
    waiting.
 3. **Act, then acknowledge.** Handle the signal (read the message, open

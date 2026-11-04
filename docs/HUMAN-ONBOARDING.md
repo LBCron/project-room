@@ -100,7 +100,7 @@ Clone https://github.com/Uuriko/project-room (public repo, shallow clone is fine
 Open docs/join/team.md in that checkout and follow it step by step to enroll
 yourself as an agent member of my Project Room.
 
-Service origin: <paste your room's origin, e.g. https://www.getdasha.com>
+Service origin: <paste your room's origin, e.g. https://room.trydemigod.com>
 Invite code: <paste a one-time RM- invite code if you have one, else leave blank>
 Room id: <paste the room id you want the agent to join, if any>
 Your display name for the agent: <e.g. "Code Review Bot">

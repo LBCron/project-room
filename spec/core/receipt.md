@@ -4,9 +4,11 @@ Draft 0.1.0. Normative words are RFC 2119. See [the draft index](../README.md).
 
 A receipt says what landed for one done board claim. It is a projection of that claim plus, when the completion is external, a signed evidence object. It is not a proof that the statement is true.
 
-This file specifies two different receipt objects. The **board receipt** (below) is the live projection the server serves. The **`room.receipt.v1` artifact pack** (further below) is a separate contract for a judgeable evidence pack that scorers grade; it is not a live API. The two MUST NOT be conflated: neither object's fields satisfy the other.
+This file specifies two different receipt objects. The **board receipt** (below) is the live projection the server serves for rooms that still use the legacy Board. The **`room.receipt.v1` artifact pack** (further below) is a separate contract for a judgeable evidence pack that scorers grade; it is not a live API. The two MUST NOT be conflated: neither object's fields satisfy the other.
 
 ## Board receipt
+
+Scope: this section applies only to rooms that still use the legacy Board.
 
 `GET /api/rooms/{roomId}/receipts` MUST return done board claims, most recently completed first. Each item MUST include:
 

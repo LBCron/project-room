@@ -917,7 +917,7 @@ export class AgentHeartbeats {
           event: "acked", door, kind: "work", subjectId: agentId });
         acknowledged.push(signalId);
       }
-      if (acknowledged.length > 0) { try { this.store.agentPlugin?.noteWakeRead?.(agentId, roomId); } catch { /* wake adapters are advisory */ } }
+      if (acknowledged.length > 0) { try { this.store.agentPlugin?.noteWakeAcknowledged?.(agentId, roomId, acknowledged); } catch { /* wake adapters are advisory */ } }
       return Object.freeze({ acknowledged: Object.freeze(acknowledged) });
     });
   }

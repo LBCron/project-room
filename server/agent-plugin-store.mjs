@@ -1665,8 +1665,12 @@ export class AgentPluginStore {
     return sent;
   }
 
-  // The agent acked its wake: stop re-waking that (agent, room).
+  // Explicit whole-room read; signal acknowledgements use the separate API below.
   noteWakeRead(identityId, roomId) { this.wakeAdapters?.coalescer?.markRead(identityId, roomId ?? null); }
+
+  noteWakeAcknowledged(identityId, roomId, signalIds) {
+    this.wakeAdapters?.coalescer?.markAcknowledged(identityId, roomId ?? null, signalIds);
+  }
 
   setDispatchKick(fn) {
     this.dispatchKick = typeof fn === "function" ? fn : null;

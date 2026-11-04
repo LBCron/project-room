@@ -51,3 +51,27 @@ test('assignment-only heartbeat acknowledgement stops scheduled rewake',async t=
  assert.deepEqual(result.acknowledged,[wake.signalId]);assert.equal(f.adapters.coalescer.status(id,'commons'),'acked');
  assert.equal(f.alarm(),null);f.advance(300000);await job.run(f.store,f.ctx);assert.equal(f.calls.length,1);
 });
+
+test('late heartbeat ack of old signal preserves the fresh coalesced generation until its own ack',async t=>{
+ const f=fixture(t),agentId=f.identity.identityId,hb=f.store.agentHeartbeats;
+ hb.heartbeat({agentId,hostId:'reader',mode:'pull-only'});
+ const enqueue=messageId=>hb.enqueueWake({agentId,kind:'mention',roomId:'commons',messageId}).signal;
+ const s1=enqueue('s1');f.offer(s1.signalId);await job.run(f.store,f.ctx);
+ f.advance(1);const s2=enqueue('s2');assert.equal(f.offer(s2.signalId).coalesced,true);
+ const wrongRoom=hb.ackWakes({agentId,signalIds:[s2.signalId],roomId:'other'});
+ assert.deepEqual(wrongRoom.acknowledged,[]);
+ assert.deepEqual(hb.ackWakes({agentId,signalIds:[s1.signalId],roomId:'commons'}).acknowledged,[s1.signalId]);
+ assert.equal(f.adapters.coalescer.status(agentId,'commons'),'pending','old ack cannot consume newer generation');
+ assert.equal(f.alarm(),f.now()+299999);
+ f.advance(299999);await job.run(f.store,f.ctx);
+ assert.equal(f.calls.length,2);assert.equal(f.calls.at(-1).data.signal.signalId,s2.signalId);
+ assert.equal(hb.pendingWakes(agentId).some(w=>w.signalId===s2.signalId),true);
+ // Explicit room scope is retained even if a caller supplies an ID also
+ // present in another in-memory entry; no whole-agent clearing by accident.
+ f.adapters.coalescer.offer(agentId,{roomId:'other',signalId:s2.signalId});
+ assert.deepEqual(hb.ackWakes({agentId,signalIds:[s2.signalId],roomId:'commons'}).acknowledged,[s2.signalId]);
+ assert.equal(f.adapters.coalescer.status(agentId,'commons'),'acked');
+ assert.equal(f.adapters.coalescer.status(agentId,'other'),'pending');
+ f.store.agentPlugin.noteWakeRead(agentId,'other');assert.equal(f.alarm(),null,'explicit whole-room read remains separate');
+ f.advance(300000);await job.run(f.store,f.ctx);assert.equal(f.calls.length,2);
+});

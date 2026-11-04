@@ -83,12 +83,21 @@ export class WakeCoalescer {
     this.evict();
     return Object.freeze({ send: true, count });
   }
-  // The agent read its inbox (heartbeat ack / cursor advance): stop re-waking.
+  // Explicit whole-room read/cursor advance: stop re-waking. Signal acks
+  // use markAcknowledged so an old ack cannot clear a newer generation.
   // A null roomId (an ack that spans rooms) clears every room for the agent.
   markRead(agentId, roomId = null) {
     for (const entry of this.keys.values()) {
       if (entry.agentId !== agentId) continue;
       if (roomId != null && entry.roomId !== roomId) continue;
+      entry.read = true; entry.pending = 0;
+    }
+  }
+  markAcknowledged(agentId, roomId, signalIds) {
+    const acknowledged = new Set(signalIds);
+    for (const entry of this.keys.values()) {
+      if (entry.agentId !== agentId || (roomId != null && entry.roomId !== roomId)) continue;
+      if (!acknowledged.has(entry.lastSignal?.signalId)) continue;
       entry.read = true; entry.pending = 0;
     }
   }

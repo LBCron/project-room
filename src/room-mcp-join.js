@@ -77,6 +77,8 @@ export const HOSTED_ROOM_MCP_TOOLS = Object.freeze([
   "squads_update_members",
   "squads_disband",
   "room_map",
+  // Flag ROOM_HANDOFF_PACKET (off by default); mirrors server/handoff-packet.mjs.
+  ...(/^(1|true|on)$/i.test(String(globalThis.process?.env?.ROOM_HANDOFF_PACKET ?? "").trim()) ? ["room_handoff_packet"] : []),
   "inbox_put_attachment",
   "inbox_list_attachments",
   "inbox_get_attachment",

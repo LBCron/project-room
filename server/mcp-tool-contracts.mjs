@@ -1,3 +1,4 @@
+import { handoffPacketEnabled } from "./handoff-packet.mjs";
 // AUX-08: on the full MCP profile, each front-door tool (the core and lean
 // lists) states its access, its cost and its REST twin in the description, so an agent
 // that reads only tools/list knows who may call it, what it costs and how to
@@ -102,6 +103,8 @@ export const MCP_TOOL_CONTRACTS = Object.freeze({
   room_submit_text_result: { access: `write, assigned room member with complete_work; write mode also needs write authority and an active claim; hidden from guest and read-only-tier agents`, cost: WRITE, rest: `${COMMANDS} (work.completed)` },
   room_supersede_work: { access: `write, room member with steer and Board write access; hidden from guest and read-only-tier agents`, cost: WRITE, rest: `${COMMANDS} (work.superseded)` },
   room_map: { access: `read, ${MEMBER}`, cost: READ, rest: "GET /api/rooms/{roomId}/map/query" }
+  // Flag ROOM_HANDOFF_PACKET (off by default): contract exists only when listed.
+  ,...(handoffPacketEnabled() ? { room_handoff_packet: { access: `read, ${MEMBER}`, cost: READ, rest: "none; composes get_room_context and decision events" } } : {})
 });
 
 export function mcpToolContractLine(name) {

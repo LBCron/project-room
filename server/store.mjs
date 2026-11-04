@@ -6765,7 +6765,7 @@ this.slaBreachAlerts = new SlaBreachAlertJournal(this); // Task 26: durable in-a
     // bond proposals, peer messages, DM requests) are current state, not a
     // log, and always ride in full. after=0 keeps the legacy response.
     if (after!==undefined&&(!Number.isSafeInteger(after) || after < 0)) fail(422, "invalid_inbox_cursor", "After must be a sequence number of 0 or more");
-    if(isCurrentRoom(this.db,roomId))return readCurrentNativeInbox(this,token,roomId,{limit,after,olderCursor,expectedSessionBinding});
+    if(isCurrentRoom(this.db,roomId))return readCurrentNativeInbox(this,token,roomId,{limit,after,olderCursor,expectedSessionBinding,skipUnaddressed:true});
     if(olderCursor!==undefined)fail(422,"invalid_inbox_cursor","Older inbox continuation requires a native room");
     after??=0;
     // RC-2026-09-18-013: the first per-room collab access lazily replays the
@@ -7341,6 +7341,14 @@ this.slaBreachAlerts = new SlaBreachAlertJournal(this); // Task 26: durable in-a
           : pinEvent ? { ...command.data, pinDmPartyPolicyVersion: PIN_DM_PARTY_POLICY_VERSION }
           : command.data
       });
+      // Observed transport only, never a runner/capability or ownership claim.
+      // Public command validation rejects this reserved top-level field. Keep
+      // it outside data and projected messages; exact retries returned above
+      // retain their original event, including an absent legacy annotation.
+      if (command.type === T.MESSAGE_POSTED && auth.member.kind === "agent") {
+        incoming.deliverySource = auth.kind === "oauth-agent" ? "v1:oauth_connection"
+          : listenerToken !== undefined ? "v1:leased_api" : "v1:api";
+      }
       // A display name is checked before the reducer stores it. Exact
       // duplicates stay allowed: identity link already accepts two members
       // with the same spelling. Reserved labels, confusable spellings, and

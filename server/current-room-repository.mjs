@@ -37,6 +37,11 @@ const serializeCurrentCarrier = (revision, headHash) =>
   JSON.stringify({normalizedCurrent:{version:1,headRevision:revision,headHash}});
 const corrupt = message => { throw Error('current_room_corrupt: ' + message); };
 const refuse = message => { throw new ServiceError(409,'current_room_context_unavailable',message); };
+// Internal distinction only: callers retain the existing public refusal unless
+// an authenticated aggregate reader explicitly maps its exhausted quota.
+export class CurrentReadBudgetExceeded extends ServiceError {
+  constructor() { super(409, 'current_room_context_unavailable', 'Current record context exceeds bounded input; use a smaller addressed request'); }
+}
 const MAX_INPUT = 256 * 1024, MAX_RECORD = 128 * 1024;
 // One cumulative canonical-message input reservation per current read scope.
 // The body occurs twice: UTF-8 text (<=3 bytes/unit) and JSON (<=6 bytes/unit).
@@ -286,7 +291,7 @@ const budget = (maxRecords=200) => ({bytes:0,records:0,maxRecords,receipts:new M
 function charge(b,n,rows=1) {
   if(!Number.isSafeInteger(n)||n<0)corrupt('invalid scalar size');
   b.bytes+=n;b.records+=rows;
-  if(b.bytes>MAX_INPUT||b.records>(b.maxRecords??200))refuse('Current record context exceeds bounded input; use a smaller addressed request');
+  if(b.bytes>MAX_INPUT||b.records>(b.maxRecords??200))throw new CurrentReadBudgetExceeded();
 }
 export const chargeCurrentReadBudget=(b,bytes,records=1)=>charge(b,bytes,records);
 export const remainingCurrentReadBytes=b=>Math.max(0,MAX_INPUT-(b?.bytes??0));

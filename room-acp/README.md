@@ -2,6 +2,22 @@
 
 Put the coding agent on your machine into a Project Room with one invite link.
 
+To explicitly disable this local receiver without changing its saved identity:
+
+```sh
+room-acp run --receiver-policy disabled
+```
+
+This succeeds without loading or changing saved connections, starting an adapter,
+reporting a heartbeat, acquiring a listener lease, calling a model, posting or
+acknowledging any wake. It creates no queue or accepted handoff; existing Room
+work and local uncertain/retry receipts remain unchanged. It does not run a
+formal-only responder or stop another process. A capable, explicitly enabled
+host must accept work before it can be described as handed off. The default
+`respond` policy retains the existing ordinary and formal response protocols.
+This local policy is explicit: read-only mode or disabled tools alone never
+imply that a host cannot answer a contextual question.
+
 Requires Node.js 24.19 or later. Setup uses a private SQLite ownership lock so interrupted or concurrent retries preserve one invitation operation. Windows uses its built-in PowerShell/.NET ACL API to create private directories and verify current-user ownership, grants and links; it does not change permissions on imported identity files or broad folders such as your home directory. Saves flush the file before a same-directory rename. Windows directory flush is not available through Node; process-interruption recovery is tested separately from power-loss durability.
 
 ```
@@ -11,12 +27,17 @@ npx -y --allow-remote=root --package=https://room.trydemigod.com/room-acp.tgz ro
 The per-command `--allow-remote=root` lets npm fetch this explicitly selected
 Room package URL, including on npm 12. It does not change your global npm settings.
 
-room-acp first checks for a working Agent Client Protocol (ACP) adapter and opens a session without sending a model prompt. If
+room-acp first checks for a working Agent Client Protocol (ACP) adapter and opens a session without sending a model prompt. If you pass `--mode`, that exact adapter mode must also be accepted before the invitation is used; a refusal or permission request leaves it unused. If
 none is available, it explains the setup and leaves the invitation unused.
 Once the adapter responds, it redeems the invite, saves the room credential in
 a private file (`~/.config/room-acp`, mode 0600 on macOS/Linux or a verified private Windows ACL; it is never printed), and listens. When someone it answers to
 mentions it in the Room, it runs one turn of your agent in that thread and posts
 the reply back into the thread.
+
+Opening a session does not prove that repository writes or commands are allowed.
+The adapter's selected mode, its host sandbox and the instructions in `--cwd`
+still govern execution. Use an already authorized repository workspace and a
+mode supported by that adapter; Room access does not change host permissions.
 
 If a redemption or credential save is interrupted, retry the same invitation with the same name and agent options. Setup keeps its private operation receipt, recovers a room-scoped credential through the existing authenticated rotation endpoint, and saves the connection atomically. It does not create a replacement member. A completed retry checks the saved membership; logout does not recover a forgotten credential from an old invite.
 
@@ -319,3 +340,23 @@ Synthetic actual-HTTP measurement across ten fresh batches: full-thread refusals
 poll and heartbeat calls are excluded from those per-turn totals. The retained
 fresh authorization checks still cost seven requests per warm singleton batch;
 the parked-thread fact alone does not solve backlog request amplification.
+
+### Explicit notification-only cloud receiver
+
+`room-acp run --receiver-policy notify-cloud --notify-config /absolute/private/cloud.config --room ROOM_ID`
+
+This is an alternate receive role in the same local service. It never starts an ACP adapter or model, reads a thread/body, takes an execution/listener lease, posts to Room, acknowledges a wake, claims work, or closes a formal request. It calls the existing `room_wait_for_attention` tool with the saved credential and forwards only validated room/message/sequence pointers to an operator-selected **existing** cloud session. Existing access and MCP room/read scopes are required; the receiver does not grant them. Default `respond` and explicit `disabled` behavior are unchanged.
+
+The config must be an owner-private, non-symlink file. Its only fields are an absolute `executable` path, the existing `sessionId`, and an explicit nonnegative integer `bootstrapAfter` for the first start. For example, replace the placeholders in this private file:
+
+```json
+{"executable":"/absolute/path/to/claude","sessionId":"session_REPLACE_WITH_EXISTING_SESSION","bootstrapAfter":2159}
+```
+
+There is no automatic history start or head selection. `bootstrapAfter` selects new source notifications after that sequence; it **does not** clear older formal obligations or certify standing work/global attention complete. Check older obligations separately before choosing a new-only bootstrap. Existing cursor state wins over a later config bootstrap value. Changing target/session creates a different receiver scope and again requires an explicit bootstrap.
+
+One private SQLite owner per normalized saved API base (including its trusted path prefix)/room/member/configured target prevents simultaneous local couriers. The server permits one attention wait per room/member; another wait supersedes the previous generation. A superseded/auth/binding refusal stops this receiver rather than fighting the other host. This is not a globally verified capable-host registration or an execution handoff.
+
+Quiet waits use the shipped 120-second server hold with a 135-second HTTP deadline. Catch-up requests and immediate burst follow-ups are paced at least 2.5 seconds apart and retain existing HTTP 429 cooldown. Only when a ready response reports incomplete source coverage, at most three timeout-zero follow-ups coalesce into one immutable batch of at most 16 unique pointers. A head-complete response sends immediately; repeated message IDs across later frames retain their newest sequence. Server `nextRead` and all text are discarded. Imported mentions without routing metadata retain the existing attention-reader limitation.
+
+The private notification journal freezes the exact batch and source frontier **before** invoking the CLI. Accepted and unknown provider outcomes are retained before the discovery cursor advances. Restart reuses that exact batch; an ambiguous send is never automatically resent. Source-batch actuator receipts retain the exact pointers for manual reconciliation under `notify-state`. Do not remove journals to force a retry: provider acceptance means queued notification only, not delivery/read/execution/result. A timeout or unknown outcome requires inspecting the original configured session and private receipt. No secret, session ID, message body or provider output is printed.

@@ -1,0 +1,15 @@
+{
+  "baseline": "924492a4143b59bb6c663be4d16977668dcf8185",
+  "composedSource": "b24e3628e9f03aa708c394896206a56b9c490a8e",
+  "node": "24.22.1",
+  "command": "/Users/johnpotter/.local/bin/node cloudflare/receipt-5862-local-probe.mjs",
+  "harness": "Existing cloudflare/public-work-claims.check.mjs ProjectRoom subclass+esbuild+Miniflare SQLite pattern; disposable fixture setup only. Actual entry and super.fetch served all36 requests. One sequential Node process.",
+  "results": "Baseline mirror-only+real owner event false: HTML/JSON/SVG200 with SYNTHETIC-WORKER-5862; API/artifact404; PNG500. Composed same: six404 no marker. Source-only baseline API/artifact200, other404; composed six404. Both-row public positive control: five200 with marker on both revisions; PNG500 internal_error on both.",
+  "limitation": "PNG successful rendering is unqualified; actual HTTP500 generic internal_error gives no root cause. Synthetic row deletion, no naturally occurring or production exposure established. No unpublish matrix rerun.",
+  "counts": {
+    "requests": 36,
+    "composedRefusals": 12,
+    "publicPositivePass": 10,
+    "publicPositiveUnqualifiedPNG": 2
+  }
+}

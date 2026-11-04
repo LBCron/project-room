@@ -1,0 +1,281 @@
+[
+  {
+    "label": "baseline",
+    "state": "both",
+    "off": false,
+    "seed": {
+      "id": "pwr_aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "marker": "SYNTHETIC-WORKER-5862",
+      "source": 1,
+      "mirror": 1,
+      "setting": {
+        "enabled": 1
+      }
+    },
+    "faces": [
+      {
+        "path": "/receipts/ID",
+        "status": 200,
+        "marker": true
+      },
+      {
+        "path": "/receipts/ID.json",
+        "status": 200,
+        "marker": true
+      },
+      {
+        "path": "/receipts/ID/og.png",
+        "status": 500,
+        "marker": false,
+        "preview": "{\"error\":{\"code\":\"internal_error\",\"message\":\"Service could not complete the request; no success is claimed\"},\"status\":\"failed\",\"reason\":\"internal_error\",\"hint\":\"No success is claimed. Reconcile or retry the exact command.\",\"next\":[{\"tool\":\"room_check"
+      },
+      {
+        "path": "/receipts/ID/badge.svg",
+        "status": 200,
+        "marker": true
+      },
+      {
+        "path": "/api/public-work/receipts/ID",
+        "status": 200,
+        "marker": true
+      },
+      {
+        "path": "/api/public-work/receipts/ID/artifact",
+        "status": 200,
+        "marker": true
+      }
+    ]
+  },
+  {
+    "label": "baseline",
+    "state": "mirror-only",
+    "off": true,
+    "seed": {
+      "id": "pwr_aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "marker": "SYNTHETIC-WORKER-5862",
+      "source": 0,
+      "mirror": 1,
+      "setting": {
+        "enabled": 0
+      }
+    },
+    "faces": [
+      {
+        "path": "/receipts/ID",
+        "status": 200,
+        "marker": true
+      },
+      {
+        "path": "/receipts/ID.json",
+        "status": 200,
+        "marker": true
+      },
+      {
+        "path": "/receipts/ID/og.png",
+        "status": 500,
+        "marker": false,
+        "preview": "{\"error\":{\"code\":\"internal_error\",\"message\":\"Service could not complete the request; no success is claimed\"},\"status\":\"failed\",\"reason\":\"internal_error\",\"hint\":\"No success is claimed. Reconcile or retry the exact command.\",\"next\":[{\"tool\":\"room_check"
+      },
+      {
+        "path": "/receipts/ID/badge.svg",
+        "status": 200,
+        "marker": true
+      },
+      {
+        "path": "/api/public-work/receipts/ID",
+        "status": 404,
+        "marker": false
+      },
+      {
+        "path": "/api/public-work/receipts/ID/artifact",
+        "status": 404,
+        "marker": false
+      }
+    ]
+  },
+  {
+    "label": "baseline",
+    "state": "source-only",
+    "off": false,
+    "seed": {
+      "id": "pwr_aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "marker": "SYNTHETIC-WORKER-5862",
+      "source": 1,
+      "mirror": 0,
+      "setting": {
+        "enabled": 1
+      }
+    },
+    "faces": [
+      {
+        "path": "/receipts/ID",
+        "status": 404,
+        "marker": false
+      },
+      {
+        "path": "/receipts/ID.json",
+        "status": 404,
+        "marker": false
+      },
+      {
+        "path": "/receipts/ID/og.png",
+        "status": 404,
+        "marker": false
+      },
+      {
+        "path": "/receipts/ID/badge.svg",
+        "status": 404,
+        "marker": false
+      },
+      {
+        "path": "/api/public-work/receipts/ID",
+        "status": 200,
+        "marker": true
+      },
+      {
+        "path": "/api/public-work/receipts/ID/artifact",
+        "status": 200,
+        "marker": true
+      }
+    ]
+  },
+  {
+    "label": "composed",
+    "state": "both",
+    "off": false,
+    "seed": {
+      "id": "pwr_aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "marker": "SYNTHETIC-WORKER-5862",
+      "source": 1,
+      "mirror": 1,
+      "setting": {
+        "enabled": 1
+      }
+    },
+    "faces": [
+      {
+        "path": "/receipts/ID",
+        "status": 200,
+        "marker": true
+      },
+      {
+        "path": "/receipts/ID.json",
+        "status": 200,
+        "marker": true
+      },
+      {
+        "path": "/receipts/ID/og.png",
+        "status": 500,
+        "marker": false,
+        "preview": "{\"error\":{\"code\":\"internal_error\",\"message\":\"Service could not complete the request; no success is claimed\"},\"status\":\"failed\",\"reason\":\"internal_error\",\"hint\":\"No success is claimed. Reconcile or retry the exact command.\",\"next\":[{\"tool\":\"room_check"
+      },
+      {
+        "path": "/receipts/ID/badge.svg",
+        "status": 200,
+        "marker": true
+      },
+      {
+        "path": "/api/public-work/receipts/ID",
+        "status": 200,
+        "marker": true
+      },
+      {
+        "path": "/api/public-work/receipts/ID/artifact",
+        "status": 200,
+        "marker": true
+      }
+    ]
+  },
+  {
+    "label": "composed",
+    "state": "mirror-only",
+    "off": true,
+    "seed": {
+      "id": "pwr_aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "marker": "SYNTHETIC-WORKER-5862",
+      "source": 0,
+      "mirror": 1,
+      "setting": {
+        "enabled": 0
+      }
+    },
+    "faces": [
+      {
+        "path": "/receipts/ID",
+        "status": 404,
+        "marker": false
+      },
+      {
+        "path": "/receipts/ID.json",
+        "status": 404,
+        "marker": false
+      },
+      {
+        "path": "/receipts/ID/og.png",
+        "status": 404,
+        "marker": false
+      },
+      {
+        "path": "/receipts/ID/badge.svg",
+        "status": 404,
+        "marker": false
+      },
+      {
+        "path": "/api/public-work/receipts/ID",
+        "status": 404,
+        "marker": false
+      },
+      {
+        "path": "/api/public-work/receipts/ID/artifact",
+        "status": 404,
+        "marker": false
+      }
+    ]
+  },
+  {
+    "label": "composed",
+    "state": "source-only",
+    "off": false,
+    "seed": {
+      "id": "pwr_aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "marker": "SYNTHETIC-WORKER-5862",
+      "source": 1,
+      "mirror": 0,
+      "setting": {
+        "enabled": 1
+      }
+    },
+    "faces": [
+      {
+        "path": "/receipts/ID",
+        "status": 404,
+        "marker": false
+      },
+      {
+        "path": "/receipts/ID.json",
+        "status": 404,
+        "marker": false
+      },
+      {
+        "path": "/receipts/ID/og.png",
+        "status": 404,
+        "marker": false
+      },
+      {
+        "path": "/receipts/ID/badge.svg",
+        "status": 404,
+        "marker": false
+      },
+      {
+        "path": "/api/public-work/receipts/ID",
+        "status": 404,
+        "marker": false
+      },
+      {
+        "path": "/api/public-work/receipts/ID/artifact",
+        "status": 404,
+        "marker": false
+      }
+    ]
+  }
+]

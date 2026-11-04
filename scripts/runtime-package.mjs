@@ -453,6 +453,7 @@ optional.push("server/trial-task-store.mjs", "server/trial-tasks.mjs", "server/v
 
 optional.push("src/work-dependencies.js", "src/work-reducers.js", "src/message-reducers.js", "src/spend-pricing-ui.js", "src/polls.js", "src/account-client.js");
 optional.push("src/entry.js", "src/signin-entry.js", "src/signin-navigation.js");
+optional.push("src/message-query.js"); // room_read_messages keyword filter, shared by hosted MCP and the stdio client
 optional.push("server/sql-binds.mjs"); // shared Worker-safe SQL list chunks imported by fleet, wakes, needs-me and restore
 optional.push("server/sql-write-classification.mjs"); // shared by Node cache invalidation and Workers storage
 optional.push("server/html-escape.mjs", "src/html-escape.js"); // one HTML escape, re-exported for server callers

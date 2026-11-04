@@ -41,7 +41,7 @@ export function downloadPageHtml() {
 <style>
 :root{color-scheme:dark;${DARK_DECLARATIONS}}
 body{margin:0;background:var(--bg);color:var(--text);font:17px/1.55 var(--font-sans)}
-main{max-width:40rem;margin:0 auto;padding:2rem 1.25rem 4rem}
+main{max-width:40rem;overflow-wrap:anywhere;margin:0 auto;padding:2rem 1.25rem 4rem}
 h1{font-size:1.6rem;line-height:1.2;margin:0 0 1rem}
 h2{font-size:1.1rem;margin:1.75rem 0 .4rem}
 a{color:var(--blue);min-height:24px;display:inline-block;padding:.25rem 0}

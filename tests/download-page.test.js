@@ -60,3 +60,8 @@ test("setup skill and the short agent index state that there is no public Mac ap
   assert.ok(packet.includes(RUNTIME_RELEASE_URL));
   assert.equal(JSON.parse(readFileSync(new URL("../package.json", import.meta.url), "utf8")).version, PACKAGE_VERSION);
 });
+
+test("download page wraps the 40-char deployed SHA at 390 px instead of overflowing", () => {
+  const html = downloadPageHtml();
+  assert.match(html, /main\{[^}]*overflow-wrap:anywhere/);
+});

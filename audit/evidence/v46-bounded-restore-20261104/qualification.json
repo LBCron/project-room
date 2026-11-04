@@ -25,6 +25,25 @@
       "pass": 220,
       "fail": 5,
       "note": "Five stale historical/source expectations separately owned and repaired; this is not a final full-suite pass."
+    },
+    "offlinePackagedNativeRestore": {
+      "pass": 1,
+      "fail": 0,
+      "sourceCommit": "b8d6ec474872af029e3741e6165458be1025e160",
+      "actualNative": true,
+      "coldReady": true,
+      "exactRetry": true,
+      "nativeWorkExactRetry": true,
+      "acceptedNativeWorkCapacity": true,
+      "scheduledRestarts": 49,
+      "archiveUnchanged": true,
+      "wholeRecoveryBounded": false,
+      "qualification": "bounded continuation retained, original final audit still monolithic as before"
+    },
+    "contractCiMode": {
+      "pass": true,
+      "command": "CI=1 node scripts/check.mjs",
+      "note": "Syntax, journey, no-shadow, OpenAPI, schema docs, lint, secrets, routes, wiki, catalogs and other contract gates; no automatic duplicate full unit run"
     }
   },
   "independentSourceReview": {

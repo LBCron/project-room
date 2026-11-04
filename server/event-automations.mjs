@@ -25,7 +25,6 @@ const SCHEMA = `
     claim_id TEXT, result TEXT NOT NULL, PRIMARY KEY (rule_id, event_id));`;
 const ensure = db => db.exec(SCHEMA);
 export const automationsEnabled = (env = process.env) => env?.ROOM_AUTOMATIONS === "1";
-export const MAX_RULES_PER_ROOM = 20;
 export const AUTOMATION_TAG = "automation";
 const CLAIM_KINDS = ["work", "land", "deploy"];
 const STATES = ["unclaimed", "claimed", "in_progress", "blocked", "delivered", "done", "closed"]; // server/work-claims.mjs STATES
@@ -74,8 +73,6 @@ export function matches(trigger, data, tags = []) {
 
 export function createRule(db, { roomId, name, trigger, action, template = null, createdBy, now = Date.now() }) {
   ensure(db);
-  const count = db.prepare("SELECT COUNT(*) AS n FROM room_automations WHERE room_id = ?").get(roomId).n;
-  if (count >= MAX_RULES_PER_ROOM) return { error: "too_many_rules" };
   const ruleId = `au_${randomBytes(9).toString("base64url")}`;
   db.prepare("INSERT INTO room_automations (rule_id, room_id, name, template, trigger_json, action_json, enabled, created_by, created_at) VALUES (?, ?, ?, ?, ?, ?, 0, ?, ?)")
     .run(ruleId, roomId, name, template, JSON.stringify(trigger), JSON.stringify(action), createdBy, now);

@@ -36,7 +36,7 @@ export async function postAutomationsAdmin(ctx) {
     rule = { name: template.name, trigger: template.trigger, action: template.action(member.id), template: data.template };
   } else if (data.create && typeof data.create === "object") {
     const { name, trigger, action } = data.create;
-    if (typeof name !== "string" || name.trim().length === 0 || name.length > 80) ctx.reject(422, "invalid_name", "name must be 1..80 characters");
+    if (typeof name !== "string" || name.trim().length === 0) ctx.reject(422, "invalid_name", "name must be a non-empty string");
     if (!validTrigger(trigger)) ctx.reject(422, "invalid_trigger", "trigger needs at least one of actions, kinds, states, tags with known values");
     if (!validAction(action, members)) ctx.reject(422, "invalid_action", "action must be {type:'wake', member, brief} or {type:'open_task', title, assignee?} naming active members");
     rule = { name: name.trim(), trigger, action };

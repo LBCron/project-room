@@ -35,3 +35,8 @@ test('unrelated objects and read intents do not suggest message or completion wr
     assert.equal(closestToolName(name, NAMES), null, name);
   }
 });
+
+test('claim verbs do not infer unrelated database, payment or money operations', () => {
+  for (const name of ['room_drop_database', 'room_release_payment', 'room_take_money'])
+    assert.equal(closestToolName(name, NAMES), null, name);
+});

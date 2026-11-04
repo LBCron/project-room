@@ -64,8 +64,8 @@ export const MCP_AUTH_MESSAGE = "Room tools need Authorization: Bearer with your
 const INTENT_VERBS = Object.freeze([
   [/(^|_)(decisions?|rules|charter|handoff_packet)(_|$)/, ["get_room_context", "room_list_events"]],
   [/^(?:room_)?(?:close|finish|complete|done|resolve)(?:_(?:work|task|tasks|claim|claims))?$/, ["room_record_completion", "room_submit_text_result"]],
-  [/(^|_)(unclaim|unlock|drop|abandon|release)(_|$)/, ["room_release_claim", "room_claim"]],
-  [/(^|_)(take|grab|lock|reserve|acquire|claim)(_|$)/, ["room_claim", "room_acquire_claim"]],
+  [/^(?:room_)?(?:unclaim|unlock|drop|abandon|release)(?:_(?:work|task|tasks|claim|claims|scope|paths))?$/, ["room_release_claim", "room_claim"]],
+  [/^(?:room_)?(?:take|grab|lock|reserve|acquire|claim)(?:_(?:work|task|tasks|claim|claims|scope|paths))?$/, ["room_claim", "room_acquire_claim"]],
   [/^(?:room_)?(?:answer|respond|reply)(?:_(?:message|mention|request))?$/, ["room_reply"]],
   [/^(?:room_)?(?:request_)?review(?:_(?:work|task|claim))?$/, ["room_request_reply", "room_handoff"]],
   [/(^|_)(get|fetch|read|list)_(messages|history|chat)(_|$)/, ["room_read_messages"]],

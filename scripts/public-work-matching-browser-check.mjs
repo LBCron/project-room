@@ -132,6 +132,7 @@ test('an empty bounded recommendation page recovers failed fresh and continuatio
   }
   await f.page.goto(`${f.origin}/offers`); await f.page.locator('#find-work-form [type=submit]').click();
   await f.page.locator('#more-matches').waitFor({ state: 'visible' }); assert.equal(await f.page.locator('[data-match-offer]').count(), 0);
+  assert.match(await f.page.locator('#find-work-status').textContent(), /No matches in this set.*Try next tasks/i);
   let interruptNext = true;
   const inputs = [];
   await f.page.route('**/api/public-work/match', async route => {

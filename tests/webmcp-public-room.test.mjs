@@ -11,6 +11,15 @@ test('registers a current public read tool with matching CSP and no credentials'
 test('a previously discovered tool does not return stale content after owner unpublishes',async t=>{const f=fixture(t);await f.registered[0].execute({});f.s.command(f.key,'public-test',{id:'unpublish',type:'room.public_page_set',data:{enabled:false}});const result=await f.registered[0].execute({});assert.equal(result.error,'public_room_unavailable');assert.equal(result.tasks,undefined);});
 test('unsupported browsers keep the normal page without a tool',t=>{const f=fixture(t,false);assert.equal(f.registered.length,0);});
 
+test('join guidance follows current owner admission without exposing a token',async t=>{
+ const f=fixture(t),tool=f.registered[0];
+ const before=await tool.execute({});assert.equal(before.roomId,'public-test');assert.equal(before.admission,'approval_required');assert.equal(before.joinAction,null);assert.equal(before.executionGranted,false);
+ f.s.command(f.key,'public-test',{id:'open-join',type:'room.join_link_set',data:{enabled:true}});
+ const open=await tool.execute({});assert.equal(open.admission,'open');assert.equal(open.joinAction.tool,'room_join');assert.equal(open.joinAction.arguments.roomId,'public-test');assert.equal(open.executionGranted,false);
+ f.s.command(f.key,'public-test',{id:'close-join',type:'room.join_link_set',data:{enabled:false}});
+ const closed=await tool.execute({});assert.equal(closed.admission,'approval_required');assert.equal(closed.joinAction,null);assert.equal(JSON.stringify(closed).includes('/#join/'),false);
+});
+
 test('tool forwards cancellation to the public fetch',async t=>{const f=fixture(t),controller=new AbortController();await f.registered[0].execute({}, {signal:controller.signal});assert.equal(f.calls[0].opts.signal,controller.signal);});
 
 test('cancelling an in-flight public read closes its network request',async t=>{

@@ -1,3 +1,4 @@
+import { digestMessagePage } from "../src/message-digest.js";
 import { validWorkPage } from "../server/work-list-page.mjs";
 import { workTemplate, WORK_TEMPLATES } from "../src/work-templates.js";
 import { roomTemplate, ROOM_TEMPLATES } from "../src/room-templates.js";
@@ -624,7 +625,8 @@ export class RoomAgentClient {
   // latest:true returns the latest messages in chronological order
   // (GET /conversation parity). next is the newest sequence, so following it
   // as after does not repeat the page. hasMore means older messages exist.
-  async roomMessages({ after = 0, limit = 50, latest = false, signal } = {}) {
+  async roomMessages({ after = 0, limit = 50, latest = false, view = "full", signal } = {}) {
+    if (!["full", "digest"].includes(view)) throw new Error("Choose full or digest message view");
     const fetchPage = (cursor, pageLimit) => this.#request(`/events?after=${cursor}&limit=${pageLimit}`, undefined, signal);
     const mapMessage = ({ sequence, event }) => ({
       sequence, eventId: event.id, messageId: event.data?.messageId ?? event.id, from: event.actorId, at: event.at,
@@ -648,12 +650,13 @@ export class RoomAgentClient {
     const { messages, next, hasMore } = await paginateRoomMessages(fetchPage, { after, limit, latest, end, mapMessage });
     const mapped = messages.map(message => markIfOther(message, this.#memberId, message.from));
     const cursor = latest ? latestSnapshotPage(mapped, after, hasMore) : { next, hasMore };
-    return withContentTrust({
+    const page = withContentTrust({
       roomId: this.#roomId,
       messages: mapped,
       next: cursor.next,
       hasMore: cursor.hasMore,
     });
+    return view === "digest" ? digestMessagePage(page, this.#memberId) : page;
   }
   async replyRead(name, args = {}, { signal } = {}) {
     const route = replyRoute(name);
@@ -1506,8 +1509,22 @@ export class RoomAgentClient {
         throw error;
       }
       if(listing?.roomId!==this.#roomId||listing.member?.id!==this.#memberId||listing.viewerId!==this.#memberId
-        ||listing.viewerAccountId!==null||listing.viewerAuthEpoch!==null||listing.viewerSessionBinding!==null||listing.viewerSessionRevision!==null||!Array.isArray(listing.work)
-        ||!listing.page||typeof listing.page.hasMore!=='boolean'||listing.page.hasMore!==Boolean(listing.page.nextRead)
+        ||listing.viewerAccountId!==null||listing.viewerAuthEpoch!==null||listing.viewerSessionBinding!==null||listing.viewerSessionRevision!==null)
+        throw new RoomClientError(200,'invalid_response','Room returned an invalid work listing');
+      if(listing.status==='selection_unavailable') {
+        const next=listing.nextRead,selection=listing.selection;
+        const validPointer=(pointer,selectedFocus)=>pointer?.tool==='room_list_work'&&pointer.arguments?.roomId===this.#roomId
+          &&pointer.arguments?.focus===selectedFocus&&Object.keys(pointer.arguments).every(key=>['roomId','focus'].includes(key));
+        if(focus!=='help_wanted'||listing.contractVersion!==1||selection?.available!==false||selection.requestedFocus!==focus
+          ||selection.reason!=='current_help_index_unavailable'||typeof selection.guidance!=='string'||!selection.guidance.trim()
+          ||['work','replyRequests','page','nextCursor','totalWork','totalReplyRequests'].some(key=>Object.hasOwn(listing,key))
+          ||listing.scope?.kind!=='room'||listing.scope?.externalExecution!==false||!validPointer(next,'needs_me')
+          ||!Array.isArray(listing.alternatives)||listing.alternatives.length!==1||!validPointer(listing.alternatives[0],'all'))
+          throw new RoomClientError(200,'invalid_response','Room returned an invalid unavailable-selection pointer');
+        return listing;
+      }
+      if(!Array.isArray(listing.work)||!listing.page||typeof listing.page.hasMore!=='boolean'
+        ||listing.page.hasMore!==Boolean(listing.page.nextRead)
         ||(listing.page.nextRead&&listing.page.nextRead.arguments?.roomId!==this.#roomId))
         throw new RoomClientError(200,'invalid_response','Room returned an invalid work listing');
       return listing;

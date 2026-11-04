@@ -1,4 +1,4 @@
-import { isCurrentRoom, readCurrentHead,readCurrentMessage,readCurrentHistoryFloor,chargeCurrentReadBudget, readCurrentRecord, currentConversationRows, currentMessageMayBeVisible, withCurrentReadContext } from './current-room-repository.mjs';
+import { CurrentReadBudgetExceeded, isCurrentRoom, readCurrentHead,readCurrentMessage,readCurrentHistoryFloor,chargeCurrentReadBudget, readCurrentRecord, currentConversationRows, currentMessageMayBeVisible, withCurrentReadContext } from './current-room-repository.mjs';
 import { hasMessageAuthority } from './message-authority.mjs';
 import { messageRepository } from './message-repository.mjs';
 import { createHash, createCipheriv, createDecipheriv, randomBytes } from "node:crypto";
@@ -326,6 +326,7 @@ export function readCurrentMessageThread(store, token, roomId, messageId, expect
     if (!currentMessageMayBeVisible(store.db, roomId, messageId, auth.member.id, b, floor)) fail(404, 'message_not_found', 'Message not found');
     const selected = readCurrentMessage(store.db, roomId, messageId, b);
     if (!visible(selected?.value)) fail(404, 'message_not_found', 'Message not found');
+    try {
     const family = selected.row.thread_root_id ?? messageId;
     const indexes = store.db.prepare("SELECT name,sql FROM sqlite_master WHERE type='index' AND name IN (?,?,?)").all(...THREAD_VISIBILITY_INDEXES.map(index=>index.name));
     chargeCurrentReadBudget(b,indexes.reduce((n,index)=>n+Buffer.byteLength(index.sql??'')+64,0),indexes.length);
@@ -373,5 +374,13 @@ export function readCurrentMessageThread(store, token, roomId, messageId, expect
     const replyRequest = request && [request.requesterId, request.recipientId].includes(auth.member.id)
       ? {id:request.id, requesterId:request.requesterId, recipientId:request.recipientId, status:request.status} : null;
     return withContentTrust({ roomId, thread: stampThread(thread, auth.member.id), ...(replyRequest ? {replyRequest} : {}) });
+    } catch (error) {
+      // Only aggregate quota exhaustion after the selected message and viewer
+      // were authenticated is a too-large thread. Integrity and entity
+      // geometry refusals retain their original failures.
+      if (error instanceof CurrentReadBudgetExceeded)
+        fail(413, 'current_thread_too_large', 'Selected thread exceeds bounded context; request a smaller selected message');
+      throw error;
+    }
   }));
 }

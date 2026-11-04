@@ -1,7 +1,8 @@
 // The bridge loop: lease the room's wake queue, long-poll for mentions,
 // run each thread's turn on the local ACP agent, post the reply in the
-// thread, then ack the wakes. Wakes are acked only after the reply posts,
-// so a crash before posting means the Room re-delivers them.
+// thread, then ack the wakes. Wakes are acked after the reply posts or a
+// successful ordinary empty turn has a persisted silent disposition.
+// Incomplete execution stays available for explicit recovery.
 import { createHash, randomUUID } from "node:crypto";
 import { mkdirSync, readFileSync, writeFileSync, renameSync, linkSync, unlinkSync } from "node:fs";
 import { join } from "node:path";
@@ -40,6 +41,7 @@ export const CLAIM_WAKE_REASONS = Object.freeze(["assigned"]);
 export const TERMINAL_CLAIM_STATES = Object.freeze(["done", "closed"]);
 export const CLAIM_KEY = "work-claim:";
 export const MAX_CLAIM_NOTE = 1500;
+export const ORDINARY_REPLY_WINDOW_MS = 60000;
 // The person who put the claim on the Board is who asked for the work.
 export const claimRequester = claim => (claim?.history ?? []).find(entry => entry?.action === "created")?.agentId ?? null;
 
@@ -90,6 +92,10 @@ class TurnReceipts {
         receipt.phase === "linked" && !/^[a-f0-9]{64}$/.test(receipt.groupKey)) throw new Error("Invalid execution receipt; manual recovery required");
     return receipt;
   }
+  find(key) {
+    if (!this.dir && !this.memory.has(key)) return undefined;
+    try { return this.read(key); } catch (error) { if (error.code === 'ENOENT') return undefined; throw error; }
+  }
   save(key, receipt) {
     if (!this.dir) { this.memory.set(key, receipt); return; }
     const path = join(this.dir, key + ".json"), temporary = path + "." + randomUUID() + ".tmp";
@@ -98,21 +104,44 @@ class TurnReceipts {
   }
 }
 
+// Only a completed, activity-free ordinary turn may elect silence. Formal
+// requests use their separate obligatory answered/declined/pending contract.
+function ordinaryTurn(recorder, stopReason) {
+  let value;
+  try { value = JSON.parse(recorder.text); } catch { /* Plaintext hosts remain supported. */ }
+  const structured = value && typeof value === 'object' && !Array.isArray(value)
+    && Object.keys(value).length === 2 && Object.hasOwn(value, 'outcome') && Object.hasOwn(value, 'body');
+  const noReply = structured && value.outcome === 'no_reply' && value.body === '';
+  const activityFree = recorder.tools instanceof Map && recorder.tools.size === 0
+    && (recorder.plan === undefined || Array.isArray(recorder.plan) && recorder.plan.length === 0);
+  const silent = stopReason === 'end_turn' && activityFree
+    && (noReply || typeof recorder.text === 'string' && !recorder.text.trim());
+  if (silent) return {silent:true};
+  if (structured && value.outcome === 'answered' && typeof value.body === 'string' && value.body.trim())
+    return {silent:false, recorder:{...recorder, text:value.body}};
+  if (noReply) return {silent:false, recorder:{...recorder,
+    text:'No-reply was not accepted because this turn contained activity or did not finish successfully. Inspect the local turn before treating it as complete.'}};
+  return {silent:false, recorder};
+}
+
 export class Bridge {
   constructor({ connection, candidate, cwd, env, mode = null, respondTo = "anyone", maxSessions = 4, waitMs = 25000, cadenceSeconds = 30, fetchImpl = fetch, log = () => {}, host = null, persistSessions = true, restartDelayMs = 1000, minPollIntervalMs = 2500, permissionTimeoutMs = DEFAULT_PERMISSION_TIMEOUT_MS, permissionPollMs = 1500, permissionApproverId = connection.permissionApproverId ?? null }) {
     this.connection = connection; this.respondTo = respondTo; this.waitMs = waitMs; this.cadenceSeconds = cadenceSeconds; this.log = log;
-    this.room = new RoomClient({ apiBase: connection.apiBase, roomId: connection.roomId, memberId: connection.memberId, credential: connection.credential, fetchImpl });
+    this.controller = new AbortController();
+    this.room = new RoomClient({ signal:this.controller.signal, apiBase: connection.apiBase, roomId: connection.roomId, memberId: connection.memberId, credential: connection.credential, fetchImpl });
     this.claimReceipts = new TurnReceipts(connection, env, persistSessions);
     this.chatReceipts = new TurnReceipts(connection, env, persistSessions, "chat-turns");
+    this.parkedThreads = new TurnReceipts(connection, env, persistSessions, "chat-blocked-threads");
+    this.replyWindows = new TurnReceipts(connection, env, persistSessions, "chat-reply-windows");
     this.sessionMap = new SessionMap({ roomId: connection.roomId, hostId: connection.hostId, env, persist: persistSessions });
     this.host = host ?? new AgentHost({ candidate, cwd, env, mode, log, savedSessions: this.sessionMap, onPermission: request => this.onPermission(request) });
     this.permissionApproverId = permissionApproverId;
     this.permissionTimeoutMs = permissionTimeoutMs; this.permissionPollMs = permissionPollMs;
-    this.restartDelayMs = restartDelayMs; this.minPollIntervalMs = minPollIntervalMs; this.lastPollAt = 0; this.wakeCursor = null; this.crashes = []; this.pausedUntil = 0; this.ready = null;
+    this.restartDelayMs = restartDelayMs; this.minPollIntervalMs = minPollIntervalMs; this.lastPollAt = 0; this.wakeCursor = null; this.freshWakeDiscovery = false; this.crashes = []; this.pausedUntil = 0; this.ready = null;
     this.queue = new ThreadQueue({ concurrency: maxSessions, run: (threadKey, batch) => this.turn(threadKey, batch) });
     this.host.onExit?.(info => this.onAgentExit(info));
     this.approverController = new AbortController();
-    this.fencingToken = null; this.seen = new Set(); this.controller = new AbortController(); this.stats = { turns: 0, posted: 0, acked: 0, skipped: 0 };
+    this.fencingToken = null; this.seen = new Set(); this.stats = { turns: 0, posted: 0, acked: 0, skipped: 0 };
   }
 
   // Agent process died: restart with backoff; CRASH_LIMIT crashes inside
@@ -203,7 +232,7 @@ export class Bridge {
             ownerId:authority.ownerId,respondTo:this.respondTo}) ? 'allowed' : 'denied']));
   }
 
-  async authorized({ messageIds, claimId } = {}) {
+  async authorized({ messageIds, claimId, requireRunnable = false } = {}) {
     if (this.controller.signal.aborted) throw new Error("bridge stopped");
     if (!claimId) {
       // Old receipts lack original source IDs; they cannot authorize disclosure.
@@ -221,7 +250,8 @@ export class Bridge {
     if (claimRequester(claim) !== requester || authority.unresolved.has(requester))
       throw new RoomError(409, 'authority_member_unresolved', 'Claim requester changed or is unresolved; retry with fresh authority');
     return Boolean(authority.members[this.connection.memberId] && authority.me.active !== false
-      && claim?.owner === authority.me.id && mayTalk({authorId:requester,members:authority.members,
+      && claim?.owner === authority.me.id && (!requireRunnable || !TERMINAL_CLAIM_STATES.includes(claim.state))
+      && mayTalk({authorId:requester,members:authority.members,
         me:authority.me,ownerId:authority.ownerId,respondTo:this.respondTo}));
   }
 
@@ -231,6 +261,10 @@ export class Bridge {
     if (this.fencingToken && Date.now() < this.leaseRenewAt) return true;
     const value = await this.room.heartbeat({ hostId: this.connection.hostId, cadenceSeconds: this.cadenceSeconds });
     this.fencingToken = value?.listener?.acquired ? value.listener.fencingToken : null;
+    const selection = value?.wakeSelection;
+    this.freshWakeDiscovery = Boolean(this.queue.concurrency > 1 && this.fencingToken && selection?.version === 1 && selection.newest === true
+      && selection.roomId === this.connection.roomId && Object.keys(selection).sort().join(',') === 'newest,roomId,version');
+    this.queue.reservePriority(this.freshWakeDiscovery && this.queue.concurrency > 1 ? 1 : 0);
     this.room.listenerToken = this.fencingToken;
     const expires = Number(value?.listener?.leaseExpiresAt);
     this.leaseRenewAt = Math.min(Date.now() + this.cadenceSeconds * 1000 / 2, Number.isFinite(expires) ? expires - 20000 : Infinity);
@@ -245,6 +279,11 @@ export class Bridge {
   }
 
   stopForContextLimit(error) {
+    if (error instanceof RoomError && error.status === 409 && error.code === "wake_scope_unavailable") {
+      this.stopReason = "context_unavailable";
+      this.log("Room did not confirm the selected wake scope. Upgrade the server and check the saved room before restarting; foreign wakes remain unacknowledged.");
+      this.stop(); return true;
+    }
     if (!(error instanceof RoomError) || !(error.status === 413 && ['current_thread_too_large','formal_context_too_large'].includes(error.code)
       || error.status === 409 && ['selected_message_context_unavailable','selected_authority_unavailable'].includes(error.code))) return false;
     if (this.stopReason !== "context_unavailable") {
@@ -260,29 +299,43 @@ export class Bridge {
     catch (error) { this.stopForContextLimit(error); throw error; }
   }
 
-  async threadRoot(messageId) {
+  async threadRoot(messageId, {selection = false} = {}) {
     let selected = await this.readThread(messageId, {selected:true});
     for (let hops = 0; selected.thread.replyToId && hops < 5; hops++) {
       if (selected.replyRequest?.recipientId === this.connection.memberId) break;
       selected = await this.readThread(selected.thread.replyToId, {selected:true});
     }
-    return selected.thread;
+    return selection ? selected : selected.thread;
   }
 
   // Route one wake signal into the queue, or ack it as not for us.
-  async accept(signal) {
+  async accept(signal, {priority = false} = {}) {
     if (this.seen.has(signal.signalId)) return;
     this.seen.add(signal.signalId);
     try {
       if (signal.workClaim) { await this.acceptClaim(signal); return; }
       if (!signal.messageId || !["mention", "dm", "reply", "direct"].includes(signal.kind)) { await this.ack([signal.signalId]); this.stats.skipped++; return; }
-      const message = (await this.readThread(signal.messageId, {selected:true})).thread;
+      const selected = await this.readThread(signal.messageId, {selected:true});
+      const message = selected.thread;
       // Routing does not authorize execution. The queued turn checks all
       // actual stored request authors against a fresh selected authority read.
-      const root = message.replyToId ? await this.threadRoot(message.id) : message;
+      const rootSelection = message.replyToId ? await this.threadRoot(message.id, {selection:true}) : selected;
+      const root = rootSelection.thread;
       // An "@agent allow" answer to a pending permission ask is not a new turn.
       if (this.permissions?.isPending(root.id) && decisionOf(message.body)) { await this.ack([signal.signalId]); return; }
-      this.queue.push(root.id, { signalId: signal.signalId, messageId: message.id, author: message.author ?? message.authorId, body: message.body });
+      let eligible = priority === true && this.freshWakeDiscovery && this.queue.concurrency > 1
+        && !rootSelection.replyRequest && root.requestKind !== "reply"
+        && Number.isSafeInteger(signal.createdAt) && signal.createdAt >= 0
+        && typeof signal.signalId === 'string' && signal.signalId.length > 0 && signal.signalId.length <= 128
+        && !this.chatReceipts.find(this.chatReceipts.key(signal.signalId));
+      if (eligible) {
+        const fact = this.readParkedThread(root.id);
+        if (fact?.rootHash === createHash('sha256').update(JSON.stringify(root)).digest('hex')) eligible = false;
+      }
+      if (eligible) eligible = (await this.messageAuthority([message.id])).get(message.id) === 'allowed';
+      const added = this.queue.push(root.id, { signalId: signal.signalId, messageId: message.id, author: message.author ?? message.authorId, body: message.body },
+        {priority:eligible, priorityPosition:eligible ? {createdAt:signal.createdAt, signalId:signal.signalId} : null});
+      return added && eligible;
     } catch (error) { this.seen.delete(signal.signalId); throw error; }
   }
 
@@ -290,7 +343,23 @@ export class Bridge {
   // claim note so it lands in that claim's thread.
   async acceptClaim(signal) {
     if (!CLAIM_WAKE_REASONS.includes(signal.reason)) { await this.ack([signal.signalId]); this.stats.skipped++; return; }
-    const claim = await this.room.claim(signal.workClaim);
+    let claim;
+    try { claim = await this.room.claim(signal.workClaim); }
+    catch (error) {
+      if (!(error instanceof RoomError) || error.status !== 404 || error.code !== 'work_claim_not_found') throw error;
+      // A definitive absent claim must not strand unrelated current wakes.
+      // Recheck room access and the listener before retiring this old signal.
+      const authority = await this.refreshRoom();
+      await this.assertListener();
+      if (signal.roomId !== this.connection.roomId || !authority.members[this.connection.memberId] || authority.me.active === false)
+        throw new RoomError(403, 'access_denied', 'Missing claim wake is not bound to this active room member');
+      const {receipt} = this.claimReceipts.begin(signal.signalId, {phase:'discarded', disposition:'claim_missing'});
+      if (!['posted', 'discarded'].includes(receipt.phase)) {
+        this.log(`claim ${signal.workClaim} is missing; retained ${receipt.phase} execution for inspection without acknowledgement`);
+        return;
+      }
+      await this.ack([signal.signalId]); this.stats.skipped++; return;
+    }
     if (TERMINAL_CLAIM_STATES.includes(claim?.state)) {
       this.log(`ignored claim ${signal.workClaim} (${signal.reason}): claim is ${claim.state} (terminal)`);
       await this.ack([signal.signalId]); this.stats.skipped++; return;
@@ -326,11 +395,18 @@ export class Bridge {
           await this.agentReady();
           if (this.controller.signal.aborted) return;
           const { sessionId } = await this.host.session(threadKey);
-          if (!(await this.authorized({ claimId }))) { await this.ack(signalIds); return; }
+          // Queueing and session startup can outlive the assignment. Check
+          // runnable state here without blocking results already in progress.
+          if (!(await this.authorized({ claimId, requireRunnable: true }))) {
+            receipt = { phase: "discarded", requestId: receipt.requestId };
+            this.claimReceipts.save(key, receipt);
+            await this.ack(signalIds); return;
+          }
           const { recorder, stopReason } = await this.host.prompt(threadKey, buildClaimPrompt({ roomTitle: this.title, claim: item.claim, author: item.author }), { sessionId });
           body = renderTurn(recorder, { stopReason });
           this.stats.turns++;
         } catch (error) {
+          if (receipt.phase === "discarded") throw error; // Retry ACK without creating a result.
           this.log(`claim turn failed: ${error.message}`);
           if (this.controller.signal.aborted) return;
           body = renderTurn({ text: "", tools: new Map() }, { error: error.message });
@@ -415,6 +491,24 @@ export class Bridge {
     }
   }
 
+  readParkedThread(threadKey) {
+    const fact = this.parkedThreads.find(this.parkedThreads.key(threadKey));
+    if (fact === undefined) return undefined;
+    const path = `/api/rooms/${encodeURIComponent(this.connection.roomId)}/messages/${encodeURIComponent(threadKey)}/thread?view=message`;
+    if (fact.phase !== 'queued' || fact.version !== 1 || fact.code !== 'current_thread_too_large'
+      || fact.roomId !== this.connection.roomId || fact.memberId !== this.connection.memberId || fact.threadKey !== threadKey
+      || typeof fact.observedRequestId !== 'string' || !fact.observedRequestId || !/^[a-f0-9]{64}$/.test(fact.rootHash)
+      || fact.selectedRead?.method !== 'GET' || fact.selectedRead.path !== path)
+      throw Error('Invalid parked thread fact; manual recovery required');
+    return fact;
+  }
+
+  parkChatBatch(key, receipt, selectedRead) {
+    this.chatReceipts.save(key, {...receipt, contextBlocked:{version:1,
+      code:'current_thread_too_large', roomId:this.connection.roomId, threadKey:receipt.threadKey,
+      requestId:receipt.requestId, selectedRead}});
+  }
+
   async executeQueuedChatReceipt(key, receipt) {
     // Repair a crash during the per-signal link writes. An unlinked queued
     // sibling has never executed and can join this group. A sibling already
@@ -450,13 +544,51 @@ export class Bridge {
     await this.agentReady();
     if (this.controller.signal.aborted) return;
     const selected = await this.readThread(receipt.threadKey, {selected:true});
-    const formal = selected.replyRequest?.recipientId === this.connection.memberId
+    let formal = selected.replyRequest?.recipientId === this.connection.memberId
       ? await readCompleteRequest(this.room, receipt.threadKey) : null;
     if (formal && (formal.request.status !== 'open' || formal.current?.actions?.answer !== true)) {
       this.chatReceipts.save(key, {...receipt, phase:'discarded'}); return;
     }
-    const thread = formal ? selected.thread : (await this.readThread(receipt.threadKey)).thread;
+    let thread = selected.thread;
+    if (!formal) {
+      // A fact is only a conservative context refusal, never cached authority.
+      // Source-author/listener checks above and this selected classification are fresh for every new batch.
+      const rootHash = createHash('sha256').update(JSON.stringify(selected.thread)).digest('hex');
+      const fact = !selected.replyRequest ? this.readParkedThread(receipt.threadKey) : undefined;
+      if (fact?.rootHash === rootHash) {
+        this.parkChatBatch(key, receipt, fact.selectedRead);
+        return;
+      }
+      try { thread = (await this.room.thread(receipt.threadKey)).thread; }
+      catch (error) {
+        // This ordinary batch has not started a model/session. Preserve its
+        // exact inputs without ACK, rather than stopping independent threads.
+        if (error instanceof RoomError && error.status === 413 && error.code === 'current_thread_too_large') {
+          const selectedRead = {method:'GET', path:`/api/rooms/${encodeURIComponent(this.connection.roomId)}/messages/${encodeURIComponent(receipt.threadKey)}/thread?view=message`};
+          this.parkChatBatch(key, receipt, selectedRead);
+          if (!selected.replyRequest) {
+            const observed = {phase:'queued', version:1, code:error.code, roomId:this.connection.roomId,
+              memberId:this.connection.memberId, threadKey:receipt.threadKey, rootHash,
+              observedRequestId:receipt.requestId, selectedRead};
+            const saved = this.parkedThreads.begin(receipt.threadKey, observed);
+            if (!saved.fresh) this.parkedThreads.save(saved.key, {...saved.receipt, ...observed});
+          }
+          this.log(`Ordinary thread ${receipt.threadKey} parked (${error.code}); ${receipt.signalIds.length} wakes remain unacknowledged. Selected review: GET ${selectedRead.path}. Message IDs are retained in the queued receipt.`);
+          return;
+        }
+        this.stopForContextLimit(error);
+        throw error;
+      }
+    }
     const {sessionId, created} = await this.host.session(receipt.threadKey);
+    if (formal) {
+      // Session startup may wait while the requester cancels or adds context.
+      // Only the fresh complete request can authorize and prepare this turn.
+      formal = await readCompleteRequest(this.room, receipt.threadKey);
+      if (formal.request.status !== 'open' || formal.current?.actions?.answer !== true) {
+        this.chatReceipts.save(key, {...receipt, phase:'discarded'}); return;
+      }
+    }
     if (!(await this.authorized({messageIds:receipt.messageIds}))) {
       this.chatReceipts.save(key, {...receipt, phase:'discarded'}); return;
     }
@@ -465,7 +597,7 @@ export class Bridge {
       : buildPrompt({roomTitle:this.title, thread, wakes, firstTurn:created});
     const started = {...receipt, phase:'started', ...(formal ? {formalContext:formal} : {})};
     this.chatReceipts.save(key, started);
-    let body, formalDelivery;
+    let body, formalDelivery, formalPending, formalDraft, silent = false;
     try {
       const {recorder, stopReason} = await this.host.prompt(receipt.threadKey, prompt, {sessionId});
       this.stats.turns++;
@@ -473,7 +605,12 @@ export class Bridge {
         const delivery = prepareFormalDelivery(formal, recorder.text, stopReason);
         body = delivery.kind === 'formal' ? delivery.recipe.command.data.body : delivery.body;
         if (delivery.kind === 'formal') formalDelivery = delivery;
-      } else body = renderTurn(recorder, {stopReason});
+        else { formalPending = delivery.pendingReason; formalDraft = delivery.draft; }
+      } else {
+        const outcome = ordinaryTurn(recorder, stopReason);
+        silent = outcome.silent;
+        if (!silent) body = renderTurn(outcome.recorder, {stopReason});
+      }
     } catch (error) {
       this.log(`turn failed: ${error.message}`);
       if (this.controller.signal.aborted) return;
@@ -484,7 +621,41 @@ export class Bridge {
     // Drop the input copy after execution, retaining it only for an interrupted
     // started receipt that may need local inspection.
     const {formalContext:_context, wakes:_wakes, ...result} = started;
-    this.chatReceipts.save(key, {...result, phase:'result', body, ...(formalDelivery ? {formalDelivery} : {})});
+    // Reuse the terminal ACK-only phase so an older reader cannot replay a
+    // silent turn as new work. The explicit disposition records why no post exists.
+    this.chatReceipts.save(key, silent ? {...result, phase:'discarded', disposition:'silent'}
+      : {...result, phase:'result', body, ordinaryChat:!formal, ...(formalDelivery ? {formalDelivery} : {}),
+        ...(formalPending ? {formalPending} : {}), ...(formalDraft ? {formalDraft} : {})});
+  }
+
+  // One addressed local reservation per existing seat/thread. This is not a
+  // server-wide chat limit. Listener fencing supplies the single active bridge.
+  reserveOrdinaryReply(receipt, now = Date.now()) {
+    const valid = window => window && window.version === 1 && window.threadKey === receipt.threadKey
+      && typeof window.operationId === 'string' && window.operationId.length > 0
+      && Number.isSafeInteger(window.reservedAt) && window.reservedAt >= 0;
+    if (receipt.ordinaryReplyWindow !== undefined) {
+      if (!valid(receipt.ordinaryReplyWindow) || receipt.ordinaryReplyWindow.operationId !== receipt.requestId)
+        throw Error('Invalid ordinary reply reservation; manual recovery required');
+      // An uncertain send always retries its exact operation, even after a later
+      // window has been reserved. The Room command id deduplicates that retry.
+      return {allowed:true, window:receipt.ordinaryReplyWindow};
+    }
+    if (!Number.isSafeInteger(now) || now < 0) throw Error('Invalid ordinary reply clock');
+    const proposed = {version:1, threadKey:receipt.threadKey, operationId:receipt.requestId, reservedAt:now};
+    const saved = this.replyWindows.begin(receipt.threadKey, {...proposed, phase:'started'});
+    if (!valid(saved.receipt)) throw Error('Invalid ordinary reply window; manual recovery required');
+    let window = saved.receipt;
+    if (window.operationId !== receipt.requestId) {
+      if (now < window.reservedAt + ORDINARY_REPLY_WINDOW_MS)
+        return {allowed:false, nextEligibleAt:window.reservedAt + ORDINARY_REPLY_WINDOW_MS};
+      window = {...window, ...proposed};
+      this.replyWindows.save(saved.key, window);
+    }
+    // The first reservation is durable before the operation's authorization is
+    // saved. A crash between those saves recovers through the matching op id.
+    return {allowed:true, window:{version:1, threadKey:window.threadKey,
+      operationId:window.operationId, reservedAt:window.reservedAt}};
   }
 
   async deliverChatReceipt(key) {
@@ -492,6 +663,16 @@ export class Bridge {
     if (receipt.phase==='linked') return this.deliverChatReceipt(receipt.groupKey);
     if (receipt.phase==='needs_review') return;
     if (receipt.phase === 'queued') {
+      if (receipt.contextBlocked !== undefined) {
+        const blocked = receipt.contextBlocked;
+        const path = `/api/rooms/${encodeURIComponent(this.connection.roomId)}/messages/${encodeURIComponent(receipt.threadKey)}/thread?view=message`;
+        if (!blocked || blocked.version !== 1 || blocked.code !== 'current_thread_too_large'
+          || blocked.roomId !== this.connection.roomId || blocked.threadKey !== receipt.threadKey
+          || blocked.requestId !== receipt.requestId || blocked.selectedRead?.method !== 'GET'
+          || blocked.selectedRead.path !== path)
+          throw Error('Invalid blocked context receipt; manual recovery required');
+        return; // No full-context reload, model turn, POST or ACK on replay.
+      }
       await this.executeQueuedChatReceipt(key, receipt);
       receipt = this.chatReceipts.read(key);
       if (receipt.phase === 'queued') return;
@@ -506,6 +687,18 @@ export class Bridge {
         const { body: _body, formalDelivery:_delivery, ...discarded } = receipt;
         receipt = { ...discarded, phase: "discarded" };
         this.chatReceipts.save(key, receipt);
+      }
+      if (receipt.phase === 'result' && receipt.ordinaryChat === true) {
+        const reservation = this.reserveOrdinaryReply(receipt);
+        if (!reservation.allowed) {
+          receipt = {...receipt, phase:'discarded', disposition:'reply_window_limited',
+            replyWindowLimitedUntil:reservation.nextEligibleAt};
+          this.chatReceipts.save(key, receipt); // Retain the result locally; no hidden model/tool rerun.
+          this.log('Automatic ordinary reply limited to one per thread per 60 seconds; result retained locally and wake acknowledged.');
+        } else if (receipt.ordinaryReplyWindow === undefined) {
+          receipt = {...receipt, ordinaryReplyWindow:reservation.window};
+          this.chatReceipts.save(key, receipt); // Before POST; exact ambiguous retries remain authorized.
+        }
       }
       if (receipt.phase === "result") {
         if (receipt.formalDelivery && !receipt.formalReview) {
@@ -541,6 +734,39 @@ export class Bridge {
     }
   }
 
+  async pacePoll() {
+    const gap = this.lastPollAt + this.minPollIntervalMs - Date.now();
+    if (gap > 0) await sleep(gap, this.controller.signal);
+    if (this.controller.signal.aborted) return false;
+    this.lastPollAt = Date.now(); return true;
+  }
+
+  async discoverRecent() {
+    if (!this.freshWakeDiscovery || !(await this.pacePoll())) return;
+    let recent;
+    try {
+      recent = await this.room.poll({hostId:this.connection.hostId, waitMs:0, order:'newest', signal:this.controller.signal});
+    } catch (error) {
+      // Head selection is optional. A transport outage on this path must not
+      // prevent the independent oldest traversal. Access/binding refusals and
+      // the identity-wide429 cooldown still take the normal outer retry path.
+      if (!this.controller.signal.aborted && error instanceof RoomError && [0,502,503,504].includes(error.status)) {
+        this.log('recent wake transport unavailable; continuing oldest recovery');
+        if (error.retryAfterMs !== null) await sleep(error.retryAfterMs, this.controller.signal);
+        return;
+      }
+      throw error;
+    }
+    // A bounded head peek is not a completion frontier. Keep the oldest cursor
+    // independent; only its original traversal accounts for the entire journal.
+    for (const signal of recent.pendingWakes ?? []) {
+      if (this.controller.signal.aborted) return;
+      // Select only the newest eligible ordinary root. Seen, parked, formal,
+      // unknown and uncertain entries do not consume this designation.
+      if (await this.accept(signal, {priority:true})) break;
+    }
+  }
+
   async pollOnce() {
     if (!(await this.lease())) { await sleep(5000, this.controller.signal); return; }
     // Drain every queued page in this cycle: signals on later pages are
@@ -554,12 +780,11 @@ export class Bridge {
       if (this.controller.signal.aborted) return;
       // Every page is an HTTP poll and counts toward the identity's 30/min
       // limit. Pace continuation pages too, without losing their cursor.
-      const gap = this.lastPollAt + this.minPollIntervalMs - Date.now();
-      if (gap > 0) await sleep(gap, this.controller.signal);
-      if (this.controller.signal.aborted) return;
-      // A multi-page traversal may outlast a lease renewal interval.
+      // Renew before either selection after a potentially long routed page.
       if (page > 0 && !(await this.lease())) return;
-      this.lastPollAt = Date.now();
+      await this.discoverRecent();
+      if (this.controller.signal.aborted) return;
+      if (!(await this.pacePoll())) return;
       const value = await this.room.poll({ hostId: this.connection.hostId, waitMs: page === 0 && cursor === null ? this.waitMs : 0, signal: this.controller.signal, cursor });
       const wakes = value?.pendingWakes ?? [];
       for (const signal of wakes) {

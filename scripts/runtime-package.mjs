@@ -55,6 +55,8 @@ const required = [...v8Assets, "server.mjs", "package.json", "package-lock.json"
 // Historical v8 packages predate these files. Literal-import closure below makes
 // them mandatory when the selected source imports them, without rewriting history.
 const optional = ["server/account-agent-enrollment.mjs", "server/agent-sponsor-transfer.mjs", "server/diagnostics.mjs", "server/maintenance.mjs", "server/recovery.mjs", "client/agent-connection.mjs", "server/agent-connections.mjs", "src/agent-connections.js", "src/agent-error.mjs", "client/mcp-stdio.mjs", "client/work-preparation.mjs", "scripts/agent-mcp.mjs", "client/work-actions.mjs", "server/work-discussion.mjs", "server/text-results.mjs", "client/attention-inbox.mjs"];
+// Pure digest presentation shared by hosted and stdio message readers.
+optional.push("src/message-digest.js");
 optional.push("server/historical-replay-contract.mjs"); // Shared exact-prefix historical receipt evidence.
 optional.push("src/workspace-navigation.js");
 // Historical release packaging still verifies these files when the selected
@@ -169,6 +171,7 @@ optional.push("server/mcp-tool-contracts.mjs"); // AUX-08 access/cost/REST twin 
 optional.push("cloudflare/mcp-event-transport.mjs"); // Restricted native Events transport imported by the packaged Worker.
 optional.push("server/mcp-oauth.mjs", "server/mcp-modern.mjs", "server/mcp-events-runtime.mjs", "server/native-mention-context.mjs", "server/mcp-event-subscriptions.mjs", "server/mcp-events-wire.mjs", "server/mcp-invite-oauth.mjs", "server/routes/mcp-invite-oauth.mjs", "server/listener-fence.mjs"); // Native OAuth principals and local runtime fencing.
 optional.push("server/mcp-room-profile.mjs"); // authenticated hosted MCP room tools (imported by server/http.mjs)
+optional.push("server/attention-wait.mjs"); // bounded cancellable hosted attention wait
 optional.push("server/mcp-request-defaults.mjs"); // pinned API-key roomId defaults for hosted MCP calls (imported by server/mcp-room-profile.mjs and server/mcp-full-profile.mjs)
 optional.push("client/request-id.mjs"); // deterministic transport request IDs (imported by client/mcp-stdio.mjs, work-actions, help-actions, and reply-actions)
 optional.push("server/spend-grants.mjs"); // spend-primitive MVP: per-agent spend grants + charge-then-forward (imported by server/mcp-room-profile.mjs, server/mcp-full-profile.mjs, server/http.mjs)
@@ -475,7 +478,7 @@ optional.push("server/current-legacy-work-gate.mjs", "server/current-room-archiv
   "server/current-reply-reader.mjs", "server/current-work-list.mjs", "server/current-work-privacy.mjs", "server/current-work-summary.mjs", "server/current-work-capacity.mjs",
   "server/replay-canonical-h.mjs", "server/replay-canonical-plan.mjs", "server/restore-admission.mjs", "src/current-record-context.js");
 optional.push("server/restore-result-envelope.mjs", "server/recovery-report-cleanup.mjs", "server/recovery-report-continuation.mjs", "server/recovery-report-source.mjs", "server/recovery-report-snapshot.mjs", "server/recovery-report-stage.mjs", "server/recovery-report-scope.mjs", "server/recovery-reminder-consumption.mjs", "server/recovery-share-links.mjs", "server/share-link-evidence.mjs", "server/restore-cleanup.mjs", "server/recovery-invitation-continuation.mjs", "server/recovery-work-help.mjs", "server/recovery-reply-continuation.mjs", "server/recovery-reply-rules.mjs", "src/claim-overlap.js", "server/recovery-charter-continuation.mjs", "server/recovery-text-results.mjs", "server/recovery-reminder-rules.mjs", "server/recovery-reminder-continuation.mjs", "src/default-channel-state.js", "server/recovery-census-continuation.mjs", "server/recovery-engine-continuation.mjs", "server/recovery-history-entry.mjs", "server/recovery-checkpoint-seed.mjs", "server/recovery-replay-continuation.mjs", "server/recovery-replay-order.mjs", "server/recovery-replay-step.mjs", "server/recovery-replay-value.mjs", "server/work-item-state.mjs"); // existing resumable independent restore audit phases
-optional.push("server/inbox-next.mjs", "server/current-needs-me.mjs", "server/current-native-inbox.mjs", "server/current-inbox-indexes.mjs", "server/current-inbox-discovery.mjs", "server/replay-mirror-retirement.mjs"); // existing bounded current serving modules
+optional.push("server/inbox-next.mjs", "server/current-needs-me.mjs", "server/current-native-inbox.mjs", "server/inbox-skip-diagnostics.mjs", "server/current-inbox-indexes.mjs", "server/current-inbox-discovery.mjs", "server/replay-mirror-retirement.mjs"); // existing bounded current serving modules
 export const allowed = new Set([...required, ...optional, ...historicalAssets]);
 const sha256 = bytes => createHash("sha256").update(bytes).digest("hex");
 // The contract stays exact: any mismatch fails. Each failure now names the

@@ -29,7 +29,7 @@ import { uiText } from './strings.js';
 // the rest follow HOSTED_ROOM_MCP_TOOLS order.
 export const MCP_TOOL_META = Object.freeze([
   { name: "room_needs_me", core: true, blurb: "Cross-room attention and messages. Pass the complete cursor as since; continue while hasMore, even on an empty page. Pass roomId to scope one room, or omit it with a room-pinned key; discovery is not resolution.", focus: ["common"] },
-  { name: "room_read_messages", core: true, blurb: "Read room messages oldest first. latest:true returns the newest messages. Pass roomId, or omit it with a room-pinned key.", focus: ["conversation"] },
+  { name: "room_read_messages", core: true, blurb: "Read room messages oldest first. latest:true returns newest messages; view:digest retains directed/reply context and groups other headlines, same cursor. Pass roomId, or omit it with a room-pinned key.", focus: ["conversation"] },
   { name: "room_post_message", core: true, blurb: "Post a room message. Optional replyToId.", focus: ["common"] },
   { name: "room_reply", core: true, blurb: "Reply under a room message. Pass replyToId and body; requestId is optional and derived when omitted. Ordinary replies do not close formal requests.", focus: ["common"] },
   { name: "room_list_requests", core: true, blurb: "List formal requests by direction and status (defaults incoming/open). Follow nextReads and finish selected context before responding. Reads do not close requests.", focus: ["common"] },
@@ -72,6 +72,7 @@ export const MCP_TOOL_META = Object.freeze([
   { name: "room_read_work_discussion", focus: ["work", "review"] },
   { name: "room_post_draft", focus: ["work"] },
   { name: "room_read_inbox", focus: ["conversation"] },
+  { name: "room_wait_for_attention", focus: ["conversation", "automation"] },
   { name: "room_link_work_claim_pr", focus: ["work"] },
   { name: "room_begin_work", focus: ["work"] },
   { name: "room_submit_text_result", focus: ["work"] },

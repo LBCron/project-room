@@ -16,7 +16,7 @@ import { dmEventVisibility, dmConsentEventVisible } from "./dm-event-visibility.
 import { recordedReceiptsOptOut } from "./public-visibility.mjs";
 import { publicPageCsp } from "./public-search.mjs";
 // JDOT-PUBLIC-CSP-RUM end
-import { acceptPrefersHtml, publicHtmlNotFoundPath, publicSearchAssets, publicSearchCanonical, publicSearchMarketingPolicy, publicSearchPageCsp, publicSearchSitemap, PUBLIC_NOT_FOUND_HTML, PUBLIC_PAGE_LASTMOD, reviewedPublicSearchPaths } from "./public-search.mjs";
+import { acceptPrefersHtml, compareIndexRedirect, publicHtmlNotFoundPath, publicSearchAssets, publicSearchCanonical, publicSearchMarketingPolicy, publicSearchPageCsp, publicSearchSitemap, PUBLIC_NOT_FOUND_HTML, PUBLIC_PAGE_LASTMOD, reviewedPublicSearchPaths } from "./public-search.mjs";
 import { readConversation, readMessageContext } from "./conversation-sync.mjs";
 import { readRoomSnapshot } from "./snapshot-window.mjs";
 import { readRoomAuthorityView } from "./room-authority-view.mjs";
@@ -280,6 +280,7 @@ const accountView = auth => ({
   account: auth.account ? { id: auth.account.id, revision: auth.account.revision, authEpoch: auth.account.authEpoch } : null,
   csrf: auth.csrf,
   sessionBinding: auth.sessionBinding,
+  ...(auth.credentialScope === 'account-session' && auth.draftRecoveryLineage ? {draftRecoveryLineage: auth.draftRecoveryLineage} : {}),
   sessionRevision: auth.sessionRevision,
   expiresAt: auth.expiresAt,
   authenticatedUntil: auth.authenticatedUntil ?? null
@@ -291,6 +292,7 @@ const sessionView = auth => ({
   roomId: auth.roomId,
   csrf: auth.csrf,
   sessionBinding: auth.sessionBinding,
+  ...(auth.credentialScope === 'account-session' && auth.draftRecoveryLineage ? {draftRecoveryLineage: auth.draftRecoveryLineage} : {}),
   sessionRevision: auth.sessionRevision ?? null,
   credentialKind: auth.kind,
   expiresAt: auth.expiresAt
@@ -777,6 +779,7 @@ export function createRoomServer({ store, origin, assetRoot = new URL("../", imp
   if (nativeEvents) store.enqueueNativeMcpEvent = nativeEvents.emit;
   const hostedRoomMcp = createHostedRoomMcp(store, {
     nativeHandler: nativeEvents?.handler,
+    nativeStatus: nativeEvents?.status,
     agentRooms, oauthProvider: oauthResource ? oauthProvider : null, inviteOAuthProvider: inviteOAuth?.provider, oauthResource,
     spendCredential: (secret, kind) => spendCredential(kind, rateHash(secret)),
   });
@@ -1347,7 +1350,7 @@ export function createRoomServer({ store, origin, assetRoot = new URL("../", imp
             // accepted), matching bearer()/carriesBearer() above.
             && /^bearer (?:pri_|rak_)/i.test(req.headers.authorization);
           const text = await readText(req, fileBody ? mcpAttachmentBodyBytes : JSON_BODY_BYTES, () => new ServiceError(413, "too_large", "Request is too large"));
-          return writeRoomMcpNode(req, res, url, { bodyText: text, roomMcp: hostedRoomMcp, remoteAddress, oauthMetadataUrl });
+          return writeRoomMcpNode(req, res, url, { bodyText: text, roomMcp: hostedRoomMcp, remoteAddress, oauthMetadataUrl, signal: resolveRequestSignal() });
         }
         return writeRoomMcpNode(req, res, url);
       }
@@ -1547,7 +1550,7 @@ export function createRoomServer({ store, origin, assetRoot = new URL("../", imp
           const { token: freshSlotToken, session: loggedIn } = store.loginAccountSessionWithMethod(completed.slotToken, linked.accountId,
             completed.expectedRevision, { method: { kind: "oauth", ref: linked.methodRef },
               revokeRoomToken: oldRoomToken && tokenPattern.test(oldRoomToken) ? oldRoomToken : null,
-              rotateSlot: true });
+              rotateSlot: true, renewBrowserSession: true });
           setCookie(res, accountCookieName, freshSlotToken, Math.max(0, Math.floor((loggedIn.expiresAt - store.now()) / 1000)));
           const firstRoom = store.db.prepare("SELECT room_id FROM member_accounts WHERE account_id=? ORDER BY room_id LIMIT 1")
             .get(linked.accountId);
@@ -1724,7 +1727,7 @@ export function createRoomServer({ store, origin, assetRoot = new URL("../", imp
           // QAS-702 (RC-2026-09-19-069): mint a fresh slot token on login and
           // invalidate the pre-login one — see the Google path above.
           const { token: freshSlotToken, session: loggedIn } = store.loginAccountSessionWithMethod(pending.sessionToken, linked.accountId,
-            pending.sessionRevision, { method: { kind: "oauth", ref: linked.methodRef }, rotateSlot: true });
+            pending.sessionRevision, { method: { kind: "oauth", ref: linked.methodRef }, rotateSlot: true, renewBrowserSession: true });
           setCookie(res, accountCookieName, freshSlotToken,
             Math.max(0, Math.floor((loggedIn.expiresAt - store.now()) / 1000)));
           if (githubWantsHtml) return githubHtml(githubLanding(linked.accountId));
@@ -2619,6 +2622,11 @@ export function createRoomServer({ store, origin, assetRoot = new URL("../", imp
       }
       if (acquisition) reject(405, "method_not_allowed", "Method not allowed");
       // --- end GR2 ---
+      const compareTarget = ["GET", "HEAD"].includes(req.method) ? compareIndexRedirect(url.pathname) : null;
+      if (compareTarget) {
+        res.writeHead(301, { Location: compareTarget });
+        return res.end();
+      }
       if (assets.has(url.pathname) && ["GET", "HEAD"].includes(req.method)) {
         const [path, type] = assets.get(url.pathname);
         let data = null;
@@ -2789,7 +2797,7 @@ export function createRoomServer({ store, origin, assetRoot = new URL("../", imp
           // token is dead on success; on failure nothing is upgraded.
           const { token: freshSlotToken, session: loggedIn } = store.loginAccountSession(slotToken, data.accountAccessKey, data.expectedSessionRevision, {
             revokeRoomToken: oldRoomToken && tokenPattern.test(oldRoomToken) ? oldRoomToken : null,
-            rotateSlot: true
+            rotateSlot: true, renewBrowserSession: true
           });
           setCookie(res, accountCookieName, freshSlotToken, Math.max(0, Math.floor((loggedIn.expiresAt - store.now()) / 1000)));
           return json(res, 201, sessionAccountView(loggedIn));
@@ -2861,7 +2869,7 @@ export function createRoomServer({ store, origin, assetRoot = new URL("../", imp
         // never authenticate after the redeem.
         const { token: freshSlotToken, session: loggedIn } = store.loginAccountSessionWithMethod(redeemToken, accountId, data.sessionRevision, {
           method: { kind: "recovery-code", ref: method ? method.id : "recovery-code-set" },
-          rotateSlot: true
+          rotateSlot: true, renewBrowserSession: true
         });
         setCookie(res, accountCookieName, freshSlotToken, Math.max(0, Math.floor((loggedIn.expiresAt - store.now()) / 1000)));
         return json(res, 200, { remaining: redemption.remaining, session: sessionAccountView(loggedIn) });

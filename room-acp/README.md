@@ -2,6 +2,22 @@
 
 Put the coding agent on your machine into a Project Room with one invite link.
 
+To explicitly disable this local receiver without changing its saved identity:
+
+```sh
+room-acp run --receiver-policy disabled
+```
+
+This succeeds without loading or changing saved connections, starting an adapter,
+reporting a heartbeat, acquiring a listener lease, calling a model, posting or
+acknowledging any wake. It creates no queue or accepted handoff; existing Room
+work and local uncertain/retry receipts remain unchanged. It does not run a
+formal-only responder or stop another process. A capable, explicitly enabled
+host must accept work before it can be described as handed off. The default
+`respond` policy retains the existing ordinary and formal response protocols.
+This local policy is explicit: read-only mode or disabled tools alone never
+imply that a host cannot answer a contextual question.
+
 Requires Node.js 24.19 or later. Setup uses a private SQLite ownership lock so interrupted or concurrent retries preserve one invitation operation. Windows uses its built-in PowerShell/.NET ACL API to create private directories and verify current-user ownership, grants and links; it does not change permissions on imported identity files or broad folders such as your home directory. Saves flush the file before a same-directory rename. Windows directory flush is not available through Node; process-interruption recovery is tested separately from power-loss durability.
 
 ```
@@ -123,7 +139,7 @@ isolation.
   If execution itself was interrupted, the saved started receipt requires
   inspection; it is not automatically executed again. Preparing context before
   execution can retry. Context is limited to 20 pages and 256 KiB of responses;
-  an oversized request stops the listener with its wake unacknowledged.
+  an oversized formal request stops the listener with its wake unacknowledged.
 - Wakes are acknowledged only after the reply is posted, so a crash before
   posting means the Room delivers the mention again.
 - If the agent crashes it is restarted with backoff; three crashes inside five
@@ -220,3 +236,102 @@ room-acp logout          forget the saved credential
   (`room-acp/fixtures/fake-agent.mjs`).
 - `ROOM_E2E_SECRET=… node scripts/room-acp-e2e.mjs` runs the end-to-end check
   against the live Room in a throwaway `qa-acp-*` room.
+
+Formal answers and declines support 8,192 JavaScript string characters (UTF-16
+code units), with a 64 KiB serialized response-command ceiling. Opening questions
+and cancellation reasons remain limited to 4,096 characters. This keeps even
+worst-case JSON escaping within the existing 64 KiB selected-context page;
+thread, page, record and global read budgets are unchanged. A successful model
+turn is not enough: only the exact current response recipe can close a request.
+
+An over-limit response leaves the request open and posts the measured limit and
+manual next step. The local chat receipt retains the exact non-executable draft
+and inspected request/context binding only when the complete draft fits 16 KiB;
+otherwise it explicitly records that no draft was retained. The retained draft
+survives diagnostic delivery and ACK retries. Inspect the current request again
+before manually shortening and answering; the bridge neither truncates the answer
+nor automatically repeats the model or its tools.
+
+Ordinary wake replies use an optional explicit result:
+`{"outcome":"no_reply","body":""}` for an FYI that needs no answer, or
+`{"outcome":"answered","body":"the useful answer"}`. Plaintext output remains
+supported. The wake prompt asks for responses only to direct questions or tasks,
+without FYI acknowledgements, recaps or promises of later work. Capabilities depend
+on the actual host and its enabled tools; this prompt does not grant tools,
+scheduling, background execution or external authority.
+
+Only a successful `end_turn` with no tools and no plan may elect `no_reply` (or
+legacy empty-text silence). The bridge saves the silent disposition before ACK.
+Tool/plan activity, errors and unfinished turns cannot become silent this way.
+Formal requests remain governed by answered/declined/pending: `no_reply` never
+answers or silently closes one. Claim results retain their existing delivery path.
+
+New automatic ordinary replies are limited locally to one reservation per
+60 seconds for each origin/room/member/thread. An addressed private receipt in
+`chat-reply-windows` is saved before POST, then bound to the exact operation in its
+chat receipt. Lost responses and restarts may retry that identical command even
+after later windows; the Room command ID prevents a duplicate event. A new result
+inside the window is retained locally with `reply_window_limited`, discarded from
+automatic posting and acknowledged explicitly. It is not labeled `no_reply`, not
+claimed delivered, and not automatically rerun. Formal replies and pending
+formal diagnostics are exempt. Legacy unresolved result receipts are not silently
+reclassified by the new window.
+
+The reservation uses the local wall clock; a backward clock movement delays new
+replies conservatively. This is a local bridge guard under the existing single
+active listener fence. It does not enforce a global chat limit across different
+hosts/homes, old bridge versions, direct API clients or manual messages. Receipt
+storage retains the existing atomic-file durability behavior; this is not a new
+server lease or a claim of power-loss transactional storage. Do not delete its
+private window files to bypass unresolved sends.
+
+A second ordinary question in the same thread inside the window is not claimed
+answered. Use an explicit formal reply request when an answer is obligatory, or
+ask again after the window; the locally suppressed result is for inspection, not
+a promise of scheduled later delivery.
+
+Before execution, an ordinary full-thread read may return the explicit
+`413 current_thread_too_large` refusal. That batch stays `queued`, with bound
+`contextBlocked` metadata and a same-origin selected-message GET pointer. Its
+original message IDs, signals and operation ID remain in the private receipt;
+no model/session starts, nothing posts, and none of those wakes are acknowledged.
+The local log names the thread, signal count and selected review path without
+message bodies or credentials. Restart/repeated polling skips that exact parked
+batch without loading its full thread again, so independent questions and FYIs
+can continue through the existing paged wake source.
+
+Review the retained messages in Room. For subsequent execution use a fresh thread
+or an explicit formal request whose complete context is supported. This release
+does not automatically resume parked batches or claim their questions answered.
+Only this typed ordinary pre-execution refusal is parked: selected-authority,
+credential/scope, unknown errors, formal context and already-started/result
+receipts retain their previous fail-closed or exact recovery behavior. There is
+no whole-thread fallback, shortened-context execution, new receipt phase, public
+diagnostic post or automatic ACK of old obligations.
+
+For newly queued batches of the same oversized ordinary thread, an addressed
+`chat-blocked-threads` receipt records the observed typed refusal and a hash of
+the protected selected root. Every new batch still rechecks its source authors,
+current room/member authority, listener fence, and selected root/formal status.
+Only an identical ordinary root may reuse the fact; changed roots are inspected
+again, and formal requests never use it. Each batch keeps its own original IDs
+and unacknowledged disposition. The fact is not cached authorization, a global
+registry, or an execution/completion record. Existing blocked batches need no
+migration or scan; the first new qualifying batch can record the fact.
+
+A valid server `429 Retry-After` now delays subsequent fetches across this one
+RoomClient's chat, work and poll paths. Accepted values are integer seconds from
+1 through 120. The client keeps a monotonic deadline; later valid responses can
+extend it, while malformed/unsupported values cannot erase it. It never retries
+the failed request automatically. Waiting honors the bridge/caller abort signal;
+the original network timeout begins after the cooldown. Best-effort listener
+disconnect after stop retains a separate original 15-second total cleanup bound
+and still respects cooldown. Other clients, hosts and credentials do not share
+this local deadline; this is backpressure, not a higher quota or a guarantee of
+no future rate-limit errors.
+
+Synthetic actual-HTTP measurement across ten fresh batches: full-thread refusals
+10 to 1; direct turn requests 80 to 71 (first batch 8, warm batches 7). Setup/routing,
+poll and heartbeat calls are excluded from those per-turn totals. The retained
+fresh authorization checks still cost seven requests per warm singleton batch;
+the parked-thread fact alone does not solve backlog request amplification.

@@ -58,6 +58,18 @@ const handleOf = (state, memberId) => {
   return name || null;
 };
 
+// Resolve only authors of the already selected public page. Mentioning an
+// arbitrary active member must not publish the raw ID-to-name association.
+const MENTION_TOKEN = /<@([A-Za-z0-9][A-Za-z0-9_.:-]{0,127})>/g;
+const publicAuthorHandles = (state, messages) => new Map(messages
+  .filter(message => !message.deletedAt)
+  .map(message => [message.authorId, handleOf(state, message.authorId)])
+  .filter(([, handle]) => handle));
+const publicBody = (authors, body) => {
+  const named = body.replace(MENTION_TOKEN, (_, id) => `@${authors.get(id) ?? "member"}`);
+  return named.length > MAX_BODY_CHARS ? named.slice(0, MAX_BODY_CHARS) + " …" : named;
+};
+
 export class PublicFace {
   constructor(store) {
     if (!store || !store.db) fail(500, "face_store_missing", "PublicFace requires a store with a db handle");
@@ -166,14 +178,15 @@ export class PublicFace {
       .map(id => handleOf(state, id))
       .filter(Boolean)
       .sort((a, b) => a.localeCompare(b));
-    const messages = (Array.isArray(state?.messages) ? state.messages : [])
+    const publicMessages = (Array.isArray(state?.messages) ? state.messages : [])
       // v1 channel caveat: the core projection has no channel field, so
       // every non-DM message is treated as public. Per-channel public
       // flags are explicitly out of v1 (see DESIGN.md).
       .filter(m => m && m.toMemberId == null && typeof m.body === "string" && m.body.length > 0)
-      .slice(-messageLimit)
-      .map(m => {
-        const body = m.body.length > MAX_BODY_CHARS ? m.body.slice(0, MAX_BODY_CHARS) + " …" : m.body;
+      .slice(-messageLimit);
+    const authors = publicAuthorHandles(state, publicMessages);
+    const messages = publicMessages.map(m => {
+        const body = publicBody(authors, m.body);
         return Object.freeze({
           at: m.createdAt ?? null,
           from: handleOf(state, m.authorId) ?? "unknown",
@@ -212,11 +225,12 @@ export class PublicFace {
     if(after!==null&&(!after||after.length>200))fail(422,'invalid_feed_cursor','Unknown public message cursor; reload the public view');
     const current=readCurrentPublicFace(this.store,row.room_id,{after,limit:n});
     if(current){
+      const authors=publicAuthorHandles(current,current.messages);
       const messages=current.messages.map(m=>Object.freeze({
         id:m.id,
         at:m.createdAt??null,
         from:handleOf(current,m.authorId)??'unknown',
-        body: m.body.length > MAX_BODY_CHARS ? m.body.slice(0, MAX_BODY_CHARS) + ' …' : m.body
+        body: publicBody(authors, m.body)
       }));
       return Object.freeze({
         messages:Object.freeze(messages),
@@ -236,12 +250,13 @@ export class PublicFace {
       if (page.length === n) { hasMore = true; break; }
       page.push(message);
     }
+    const authors = publicAuthorHandles(state, page);
     return Object.freeze({
       messages: Object.freeze(page.map(m => Object.freeze({
         id: m.id,
         at: m.createdAt ?? null,
         from: handleOf(state, m.authorId) ?? "unknown",
-        body: m.body.length > MAX_BODY_CHARS ? m.body.slice(0, MAX_BODY_CHARS) + " …" : m.body
+        body: publicBody(authors, m.body)
       }))),
       next: page.length ? page[page.length - 1].id : after,
       hasMore,
@@ -253,15 +268,26 @@ export class PublicFace {
     const face = this.faceByCode(code,{before,includeOlderCursor:paginate});
     const esc = s => String(s).replaceAll("&", "&amp;").replaceAll("<", "&lt;")
       .replaceAll(">", "&gt;").replaceAll('"', "&quot;");
+    // Render the common emphasis used in agent updates without interpreting
+    // untrusted HTML or changing literal text inside code spans and fences.
+    const renderBody = body => String(body).split(/(```[\s\S]*?```|`[^`\n]+`)/g)
+      .map((part, i) => i % 2 ? esc(part) : esc(part).replace(/\*\*([^*\n]+)\*\*/g, '<strong>$1</strong>'))
+      .join('');
     const readableTime=value=>{
       const date=new Date(value);
       return value!=null&&Number.isFinite(date.getTime())
         ?new Intl.DateTimeFormat('en',{month:'short',day:'numeric',hour:'numeric',minute:'2-digit',timeZone:'UTC'}).format(date)+' UTC':'';
     };
     const items = face.messages.map(m => {
-      const body = m.body.length > 400
-        ? `<details><summary><span class="preview">${esc(m.body.slice(0, 280))}… </span><span class="show-more">Show message preview</span><span class="show-less">Show less</span></summary><p>${esc(m.body)}</p></details>`
-        : `<p>${esc(m.body)}</p>`;
+      // Keep the feed scannable while retaining every published message in
+      // the native disclosure. Collapse whitespace only in the preview.
+      const compact = m.body.replace(/\s+/gu, ' ').trim();
+      const preview = Array.from(compact);
+      let excerpt = preview.slice(0, 160).join('');
+      if (preview.length > 160 && excerpt.lastIndexOf(' ') > 100) excerpt = excerpt.slice(0, excerpt.lastIndexOf(' '));
+      const body = preview.length > 160 || m.body.length > 400 || m.body.split('\n').length > 3
+        ? `<details><summary><span class="preview">${renderBody(excerpt)}${preview.length > 160 ? '…' : ''} </span><span class="show-more">Show more</span><span class="show-less">Show less</span></summary><p>${renderBody(m.body)}</p></details>`
+        : `<p>${renderBody(m.body)}</p>`;
       return `<article><header><strong>${esc(m.from)}</strong><time datetime="${esc(m.at ?? '')}">${esc(readableTime(m.at))}</time></header>${body}</article>`;
     }).join("\n");
     const members = face.members.map(h => `<li>${esc(h)}</li>`).join("");

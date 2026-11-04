@@ -21,12 +21,13 @@ export function boardClaimToolsEnabled(env = globalThis.process?.env ?? {}) {
 const text = (max) => ({ type: "string", minLength: 1, maxLength: max });
 export const boardClaimToolDefinitions = () => [
   { name: BOARD_WORK_CLAIM_TOOL,
-    description: "Board task by claimId. take: claim with a lease. finish: deliver with a note (done if review allows). plan: set plan {priority,estimate,dueAt,cycleId,milestone}; null clears. REST rules.",
-    inputSchema: { type: "object", additionalProperties: false, required: ["roomId", "claimId", "op"], properties: {
+    description: "Board task. take: claim. finish: deliver+note. plan: set plan {priority,estimate,dueAt,cycleId,milestone,...}, null clears. list: query = GET work-claims params.",
+    inputSchema: { type: "object", additionalProperties: false, required: ["roomId", "op"], properties: {
       roomId: { type: "string", maxLength: 128 },
       claimId: { type: "string", pattern: CLAIM_ID.source },
-      op: { type: "string", enum: ["take", "finish", "plan"] },
+      op: { type: "string", enum: ["take", "finish", "plan", "list"] },
       plan: { type: "object" },
+      query: { type: "object" },
       note: { ...text(4000) },
       files: { type: "array", maxItems: 64, items: text(512) },
       state: { type: "string", enum: ["delivered", "done"] } } },
@@ -34,7 +35,17 @@ export const boardClaimToolDefinitions = () => [
 ];
 
 export function validBoardClaimArgs(name, args) {
-  if (name !== BOARD_WORK_CLAIM_TOOL || !args || typeof args !== "object" || !CLAIM_ID.test(String(args.claimId ?? ""))) return false;
+  if (name !== BOARD_WORK_CLAIM_TOOL || !args || typeof args !== "object") return false;
+  if (args.op === "list") {
+    // Same params as GET /work-claims (state, queue, view, limit, cursor and,
+    // with their flags, planning filters, sort, savedView, groupBy). The REST
+    // list route validates them; here only flat scalar values are accepted.
+    const q = args.query;
+    return Object.keys(args).every(k => k === "op" || k === "query")
+      && (q === undefined || q !== null && typeof q === "object" && !Array.isArray(q)
+        && Object.values(q).every(v => ["string", "number"].includes(typeof v)));
+  }
+  if (!CLAIM_ID.test(String(args.claimId ?? ""))) return false;
   const str = (v, max) => v === undefined || typeof v === "string" && v.trim().length > 0 && v.length <= max;
   if (args.op === "take") {
     const allowed = new Set(["claimId", "op", "note", "files"]);
@@ -72,6 +83,20 @@ export function boardClaimSteps(_name, args, current) {
 // at the first refusal and returns it with the step that refused.
 export async function runBoardClaimTool({ handleWorkClaims, store, roomId, auth, reauthorize, name, args }) {
   const registry = store.workClaims;
+  if (args.op === "list") {
+    const url = new URL(`http://room.invalid/api/rooms/${encodeURIComponent(roomId)}/work-claims`);
+    for (const [k, v] of Object.entries(args.query ?? {})) url.searchParams.set(k, String(v));
+    let out = null;
+    const reject = (status, code, message) => { const e = new Error(message); e.status = status; e.code = code; e.body = { code, message }; throw e; };
+    try {
+      await handleWorkClaims({ req: { method: "GET", headers: {} }, res: {}, url, store, roomId, auth, workClaimRoute: "list",
+        workClaimId: null, registry, reauthorize, helpers: { json: (_res, status, value) => { out = { status, value }; }, reject, body: async () => ({}) } });
+    } catch (error) {
+      if (!Number.isInteger(error?.status)) throw error;
+      out = { status: error.status, value: error.body ?? { code: error.code, message: error.message } };
+    }
+    return out && out.status < 400 ? { isError: false, value: out.value } : { isError: true, value: { status: out?.status ?? 500, ...(out?.value ?? {}), step: "list" } };
+  }
   const item = registry.get(roomId, args.claimId);
   if (!item) return { isError: true, value: { status: 404, code: "work_claim_not_found",
     message: `No Board work claim "${args.claimId}" in this room`, next: [{ tool: "room_read_board", arguments: { roomId } }] } };

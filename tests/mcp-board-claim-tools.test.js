@@ -77,3 +77,22 @@ test("op plan forwards planning fields to the REST update route, with no new sch
     [["update", { dueAt: "2030-01-01T00:00:00Z" }]]);
   assert.ok(JSON.stringify(boardClaimToolDefinitions()).length <= 848);
 });
+
+test("op list returns Board tasks through the REST list route; query is flat params", { skip: !ON }, async () => {
+  const { validBoardClaimArgs } = await import("../server/board-claim-tools.mjs");
+  assert.equal(validBoardClaimArgs("room_work_claim", { op: "list", query: { state: "unclaimed", limit: 5 } }), true);
+  assert.equal(validBoardClaimArgs("room_work_claim", { op: "list", query: { state: ["x"] } }), false);
+  assert.equal(validBoardClaimArgs("room_work_claim", { op: "list", claimId: "w1" }), false);
+  const w = await world();
+  try {
+    for (const id of ["l1", "l2"]) assert.equal((await w.rest(w.f.keys.owner, "/api/rooms/commons/work-claims", { id, title: id, note: "n" })).status, 201);
+    const a = w.agent("Lister");
+    const all = await w.rpc(a, "tools/call", { name: "room_work_claim", arguments: { op: "list", roomId: "commons" } });
+    assert.notEqual(all.result.isError, true, JSON.stringify(all));
+    assert.deepEqual(body(all).claims.map(c => c.id).filter(id => id.startsWith("l")).sort(), ["l1", "l2"]);
+    const one = await w.rpc(a, "tools/call", { name: "room_work_claim", arguments: { op: "list", roomId: "commons", query: { limit: 1 } } });
+    assert.equal(body(one).claims.length, 1);
+    const bad = await w.rpc(a, "tools/call", { name: "room_work_claim", arguments: { op: "list", roomId: "commons", query: { sort: "nope" } } });
+    assert.ok(bad.error || bad.result?.isError);
+  } finally { await w.close(); }
+});

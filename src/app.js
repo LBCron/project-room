@@ -67,6 +67,7 @@ import { installHumanExperience } from "./human-experience.js";
 import { createSpendPricingKillSwitch } from "./spend-pricing-ui.js";
 import "./entry-started.js";
 import { consumeBoardDeepLink } from "./board-deeplink.js";
+import { installWebMcp } from "./webmcp.js";
 export function startApp({ accountClient = new AccountClient(), signedIn = false, restoreRoomSession = false } = {}) {
 const bodyHtmlCache = createBodyHtmlCache();
 
@@ -774,6 +775,8 @@ const client = new RoomClient({
     });
   }
 });
+// WebMCP page tools (on by default; no-op when the browser has no modelContext).
+installWebMcp({ client, getMarker: () => roomCursor });
 const ownerOffersUI = installOwnerProjectOffers({ client, getState: () => state, getSession: () => session, host: $(".room-more-actions") });
 const briefView = new ReturnBrief(client, {
   onChange: renderReturnBrief,

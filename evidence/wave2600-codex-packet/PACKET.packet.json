@@ -1,0 +1,222 @@
+{
+  "packetVersion": "1",
+  "subject": "wave-2600 Codex landing packet — decisive claims carried by hashed evidence files on branch jill/w2600-codex-packet",
+  "claims": [
+    {
+      "id": "C1",
+      "command": "sha256sum evidence/a-spine/CLOSE-PACK-5862.md # wave-2600 codex packet evidence",
+      "outputFile": "evidence/a-spine/CLOSE-PACK-5862.md",
+      "sha256": "6f0d555eeb30c76e0cb860f5651b8c276fb3ba6e5fae07e894a19cc2b5783abd"
+    },
+    {
+      "id": "C2",
+      "command": "sha256sum evidence/a-spine/MANIFEST.sha256 # wave-2600 codex packet evidence",
+      "outputFile": "evidence/a-spine/MANIFEST.sha256",
+      "sha256": "105154d70ce0f5297fef1ca51154ad69df292ba6013799aa2641b3d717aecc26"
+    },
+    {
+      "id": "C3",
+      "command": "sha256sum evidence/a-spine/SPINE-REPIN-2026-11-04.md # wave-2600 codex packet evidence",
+      "outputFile": "evidence/a-spine/SPINE-REPIN-2026-11-04.md",
+      "sha256": "527629daca0359b1b33d59374b91e45a1cd0d288b21d0682f7ca67a1f0d948e8"
+    },
+    {
+      "id": "C4",
+      "command": "sha256sum evidence/ac-flip-stubs/REPORT.md # wave-2600 codex packet evidence",
+      "outputFile": "evidence/ac-flip-stubs/REPORT.md",
+      "sha256": "282995dbe2d19b4490ba3c01bced21644e171ac2243c64ed8f67686d56fdb32b"
+    },
+    {
+      "id": "C5",
+      "command": "sha256sum evidence/ac-flip-stubs/STATE.md # wave-2600 codex packet evidence",
+      "outputFile": "evidence/ac-flip-stubs/STATE.md",
+      "sha256": "dff3cde9cbd263dcccb5cc2ceb5422a96432f21f79c17466a75aa59082803c54"
+    },
+    {
+      "id": "C6",
+      "command": "sha256sum evidence/ad-5861-mergeup/MANIFEST.sha256 # wave-2600 codex packet evidence",
+      "outputFile": "evidence/ad-5861-mergeup/MANIFEST.sha256",
+      "sha256": "4dfdb7dd43c82b468e66719975fcf68f65415bc372d46794e20caf31762d83cd"
+    },
+    {
+      "id": "C7",
+      "command": "sha256sum evidence/ad-5861-mergeup/SITTING-PACK-5861.md # wave-2600 codex packet evidence",
+      "outputFile": "evidence/ad-5861-mergeup/SITTING-PACK-5861.md",
+      "sha256": "a8606ff0ab119d1599a8c5bac0d2cb65ccb3a0eeb4975b07df26cf7e78b96ab7"
+    },
+    {
+      "id": "C8",
+      "command": "sha256sum evidence/ad-5861-mergeup/STATE.md # wave-2600 codex packet evidence",
+      "outputFile": "evidence/ad-5861-mergeup/STATE.md",
+      "sha256": "5cd651bdc81da3b4aaeb0214b9e25a836cf780348838116f66d6af19f7db2e4d"
+    },
+    {
+      "id": "C9",
+      "command": "sha256sum evidence/af-5805-decisions/DECISION-SHEET-5805.md # wave-2600 codex packet evidence",
+      "outputFile": "evidence/af-5805-decisions/DECISION-SHEET-5805.md",
+      "sha256": "f7b0c8fb9590e854fe23fe0f2c8aaf9b91c247d54df80532098306b2f070f82c"
+    },
+    {
+      "id": "C10",
+      "command": "sha256sum evidence/af-5805-decisions/MANIFEST.sha256 # wave-2600 codex packet evidence",
+      "outputFile": "evidence/af-5805-decisions/MANIFEST.sha256",
+      "sha256": "3d311057bc398ce6920b22997277d9531e15b06064543aab6c748b4525428502"
+    },
+    {
+      "id": "C11",
+      "command": "sha256sum evidence/af-5805-decisions/STATE.md # wave-2600 codex packet evidence",
+      "outputFile": "evidence/af-5805-decisions/STATE.md",
+      "sha256": "b9110fb7bd0f598fdebf3e64669b09d50de366ddf7dd4ba18b8965008aabea67"
+    },
+    {
+      "id": "C12",
+      "command": "sha256sum evidence/g-5805-justification/POSTING-READY.md # wave-2600 codex packet evidence",
+      "outputFile": "evidence/g-5805-justification/POSTING-READY.md",
+      "sha256": "49c63be82b7f49526212198f5776f76b8ed5e0230d27c95aae3f6bd085bd1141"
+    },
+    {
+      "id": "C13",
+      "command": "sha256sum evidence/h-5063-diagnosis/D3-DISPOSITION-5063.md # wave-2600 codex packet evidence",
+      "outputFile": "evidence/h-5063-diagnosis/D3-DISPOSITION-5063.md",
+      "sha256": "d76cd7890000a1d61982a18640ddbc946db338aeb1f52dfef732f056e2ff3c28"
+    },
+    {
+      "id": "C14",
+      "command": "sha256sum evidence/h-5063-diagnosis/MANIFEST.sha256 # wave-2600 codex packet evidence",
+      "outputFile": "evidence/h-5063-diagnosis/MANIFEST.sha256",
+      "sha256": "19f96ac056336df299cd0b428d5d4d35aaada145f788f59bacc4c56213d81903"
+    },
+    {
+      "id": "C15",
+      "command": "sha256sum evidence/i-receipts-fix/PR-BODY.md # wave-2600 codex packet evidence",
+      "outputFile": "evidence/i-receipts-fix/PR-BODY.md",
+      "sha256": "b1dde25da0ec05d15c854ee87500b6ab080692deb21a6940fd1bf4b0cf0318ec"
+    },
+    {
+      "id": "C16",
+      "command": "sha256sum evidence/i-receipts-fix/STATE.md # wave-2600 codex packet evidence",
+      "outputFile": "evidence/i-receipts-fix/STATE.md",
+      "sha256": "d1736a03e7fa36c9148bba8aef9e7a4674107f06f518c701229ff4a2ff7365b2"
+    },
+    {
+      "id": "C17",
+      "command": "sha256sum evidence/l-5805-posting/HASHES.md # wave-2600 codex packet evidence",
+      "outputFile": "evidence/l-5805-posting/HASHES.md",
+      "sha256": "aad210621e23fed5b8b4f44b0d21ebc0d000739c4f7f29d4bf16b882d2a2acbe"
+    },
+    {
+      "id": "C18",
+      "command": "sha256sum evidence/l-5805-posting/STATE.md # wave-2600 codex packet evidence",
+      "outputFile": "evidence/l-5805-posting/STATE.md",
+      "sha256": "b9a350eadcc7b58988f7b08f1a9f87e7de8c1b766b079d8b222125ef48874501"
+    },
+    {
+      "id": "C19",
+      "command": "sha256sum evidence/m-5492-diagnosis/DISPOSITION-5492.md # wave-2600 codex packet evidence",
+      "outputFile": "evidence/m-5492-diagnosis/DISPOSITION-5492.md",
+      "sha256": "d15af5a2e27779f9e3f860cd6634d5c915bacb2e30e28dd64d491e63366413ae"
+    },
+    {
+      "id": "C20",
+      "command": "sha256sum evidence/m-5492-diagnosis/MANIFEST.sha256 # wave-2600 codex packet evidence",
+      "outputFile": "evidence/m-5492-diagnosis/MANIFEST.sha256",
+      "sha256": "592ec3916d5bf693de450144710b8e0736cc1f7af3c6df5b46ee98a8a4298cf7"
+    },
+    {
+      "id": "C21",
+      "command": "sha256sum evidence/o-5063-cure-update/CURE-UPDATE-5063.md # wave-2600 codex packet evidence",
+      "outputFile": "evidence/o-5063-cure-update/CURE-UPDATE-5063.md",
+      "sha256": "b1dec2da6b36b032e42510b4d7f206bc1f61a50fe61a49cf2a5e4a77fd290ebf"
+    },
+    {
+      "id": "C22",
+      "command": "sha256sum evidence/o-5063-cure-update/MANIFEST.sha256 # wave-2600 codex packet evidence",
+      "outputFile": "evidence/o-5063-cure-update/MANIFEST.sha256",
+      "sha256": "6e98ee3bd728cca7360a79be8aa85c8f5fd4533aae36f1e4c140367b7669e72d"
+    },
+    {
+      "id": "C23",
+      "command": "sha256sum evidence/o-5063-cure-update/POSTING-READY-5063.md # wave-2600 codex packet evidence",
+      "outputFile": "evidence/o-5063-cure-update/POSTING-READY-5063.md",
+      "sha256": "5b70115f7fbfa863b68b40efb8226414cbddf443250515cb2d52d54eff416529"
+    },
+    {
+      "id": "C24",
+      "command": "sha256sum evidence/o-5063-cure-update/cure-update-5063.patch # wave-2600 codex packet evidence",
+      "outputFile": "evidence/o-5063-cure-update/cure-update-5063.patch",
+      "sha256": "101f3f73653cb22b3a72bc64be0fff2bd2e0edec7efac5bfef7236db84950a9a"
+    },
+    {
+      "id": "C25",
+      "command": "sha256sum evidence/r-5919-probe/PROBE.md # wave-2600 codex packet evidence",
+      "outputFile": "evidence/r-5919-probe/PROBE.md",
+      "sha256": "f1c0c361cff8a8814e80dceb5ccb93363cfb7818723f38e0bb2cfc1ee09bd6ef"
+    },
+    {
+      "id": "C26",
+      "command": "sha256sum evidence/r-5919-probe/STATE.md # wave-2600 codex packet evidence",
+      "outputFile": "evidence/r-5919-probe/STATE.md",
+      "sha256": "82986790cacc21609ae33b868a680f2ff3d507a91f4e078e01f3e98ed84c18b1"
+    },
+    {
+      "id": "C27",
+      "command": "sha256sum evidence/r-5919-probe/pr-comment.md # wave-2600 codex packet evidence",
+      "outputFile": "evidence/r-5919-probe/pr-comment.md",
+      "sha256": "ee69711690cdf76ae6a1a1ffab197c662eed27601858f25ba8307c1d68fbf67a"
+    },
+    {
+      "id": "C28",
+      "command": "sha256sum evidence/v-5492-lintfix/REPORT.md # wave-2600 codex packet evidence",
+      "outputFile": "evidence/v-5492-lintfix/REPORT.md",
+      "sha256": "89a7814815bf1d49a97f6929785ce26b1fd515c67e7f20b6ec1b0f6cb7dcbda9"
+    },
+    {
+      "id": "C29",
+      "command": "sha256sum evidence/v-5492-lintfix/STATE.md # wave-2600 codex packet evidence",
+      "outputFile": "evidence/v-5492-lintfix/STATE.md",
+      "sha256": "838ed0f1a5fbf40c0777d4ec94db3668cedb417731721909e0384e77b477c44a"
+    },
+    {
+      "id": "C30",
+      "command": "sha256sum evidence/z-5128-mergeup/PACK.md # wave-2600 codex packet evidence",
+      "outputFile": "evidence/z-5128-mergeup/PACK.md",
+      "sha256": "fb0266f87d7a5f76bae91f3a5e6bc964920ee1657fc247d5123089ae5390fb80"
+    },
+    {
+      "id": "C31",
+      "command": "sha256sum evidence/z-5128-mergeup/SHA256SUMS.txt # wave-2600 codex packet evidence",
+      "outputFile": "evidence/z-5128-mergeup/SHA256SUMS.txt",
+      "sha256": "8390d54785f4dccced410e135c7aae9da3ceb9831719303643b4fa4d483e348b"
+    },
+    {
+      "id": "C32",
+      "command": "sha256sum evidence/z-5128-mergeup/apply-mergeup.sh # wave-2600 codex packet evidence",
+      "outputFile": "evidence/z-5128-mergeup/apply-mergeup.sh",
+      "sha256": "e0020b79b20aee72e46f2fa9454b29370f4ee88ec9a5c78e399003e22dc97cb4"
+    },
+    {
+      "id": "C33",
+      "command": "sha256sum evidence/z-5128-mergeup/composed-tree-vs-main.patch # wave-2600 codex packet evidence",
+      "outputFile": "evidence/z-5128-mergeup/composed-tree-vs-main.patch",
+      "sha256": "e23c734e352ca75368a99d8a9c4fccc395fa94c6a5af39d1ce2060b096f124da"
+    },
+    {
+      "id": "C34",
+      "command": "sha256sum evidence/z-5128-mergeup/fix-duplicate-import.patch # wave-2600 codex packet evidence",
+      "outputFile": "evidence/z-5128-mergeup/fix-duplicate-import.patch",
+      "sha256": "5dae72f6ed26149c903ac327f57b4e1473b614ef6cd859d26cddf111e6cd0b52"
+    },
+    {
+      "id": "C35",
+      "command": "sha256sum evidence/z-5128-mergeup/resolve-catalog.py # wave-2600 codex packet evidence",
+      "outputFile": "evidence/z-5128-mergeup/resolve-catalog.py",
+      "sha256": "34945b0662c9949162e76e31e31ac88efffdc0c74b94cf89e8739b79f3c51175"
+    },
+    {
+      "id": "C36",
+      "command": "sha256sum PACKET.md # wave-2600 codex packet evidence",
+      "outputFile": "PACKET.md",
+      "sha256": "c27a4403f642226a986926e846ff790064637f1be47f3feea6b3f6b6144d25b8"
+    }
+  ]
+}

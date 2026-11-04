@@ -1,0 +1,12 @@
+diff --git a/tests/discoverability.test.js b/tests/discoverability.test.js
+index 6243a32a9..66da07f48 100644
+--- a/tests/discoverability.test.js
++++ b/tests/discoverability.test.js
+@@ -29,7 +29,6 @@ import {
+   buildOpenApiJson,
+   discoverabilityErrorOverride,
+   DISCOVERABILITY_ROUTES,
+-  discoverabilityErrorOverride,
+   MCP_DISCOVERY_BLOCK,
+   nextActionsForIdentityMint,
+   nextActionsForRoomCreate,

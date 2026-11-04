@@ -1,0 +1,51 @@
+diff --git a/server/work-claim-routes.mjs b/server/work-claim-routes.mjs
+index c29e5656b..c76888144 100644
+--- a/server/work-claim-routes.mjs
++++ b/server/work-claim-routes.mjs
+@@ -44,7 +44,7 @@ import {
+   renewWork, roomWorkClaimConfig, closeWhenLive, isReceiptTag, ClaimError, REVIEW_POLICIES, CLAIM_KINDS,
+   claimUpdatedAt, ACTIVE_CLAIM_STATES, MAX_LEASE_HOURS, STATES, summarizeClaimHistory, isHardWork,
+   walkProvenance, flagPremiseInvalid, clearPremiseFlag, closeWork, isTerminalClaimState, claimHistoryLength,
+-  updateRequestDigest, requestReplayVerdict, bindReviewerRequestOutcome, reviewerRequestOutcome, reviewerReadingAckMatches, hasCurrentReview,
++  updateRequestDigest, requestReplayVerdict, bindReviewerRequestOutcome, reviewerRequestOutcome, reviewerReadingAckMatches, hasCurrentReview, currentReviewOf,
+   openClaimCount, STALE_UNCLAIMED_DAYS,
+ } from "./work-claims.mjs";
+ import { findDuplicates, DuplicateError } from "./work-duplicates.mjs";
+@@ -1592,8 +1592,18 @@ function handleWorkClaimsCore({ req, res, url, store, roomId, auth, workClaimRou
+             `Review policy "self_attested" not satisfied for "${item.id}": only the owner may attest this work`);
+         }
+         if (!canCloseWork(item, caller, { policy })) {
+-          reject(403, "work_review_rejected",
+-            `Review policy "self_attested" not satisfied for "${item.id}": only the owner may attest this work`);
++          // #3546 legacy reviewer completion (the needs-me queue's suggested
++          // done call): on a delivered item, the reviewer who recorded a
++          // current approve verdict completes it as the review's second
++          // half — a review action, not a self-attested holder finish.
++          // The F2 refusal still stands for any caller with no current
++          // approve review recorded (UT2 05-03 F2 cure-update, wave-2600).
++          const reviewerCompletion = item.state === "delivered"
++            && currentReviewOf(item, caller)?.verdict === "approve";
++          if (!reviewerCompletion) {
++            reject(403, "work_review_rejected",
++              `Review policy "self_attested" not satisfied for "${item.id}": only the owner may attest this work`);
++          }
+         }
+       } else {
+         const reviewer = caller;
+diff --git a/tests/work-claim-conflict-hint.test.js b/tests/work-claim-conflict-hint.test.js
+index fe6ab9df4..0bd6f2ae4 100644
+--- a/tests/work-claim-conflict-hint.test.js
++++ b/tests/work-claim-conflict-hint.test.js
+@@ -101,7 +101,11 @@ const runOwnerRoute = ({ route, id, body = {}, memberId, registry }) => handleWo
+   req: { method: "POST", body }, res: {}, url: {}, roomId: "room1",
+   store: { roomAuthority: () => ({ ownerId: "owner1", members: {
+     owner1: { id: "owner1", kind: "agent", active: true, permissions: [] },
+-    quill: { id: "quill", kind: "agent", active: true, permissions: ["verify"] },
++    // quill is the holder in these tests: UT2 05-03 F1 requires accept_work
++    // to claim, so the holder fixture grants it alongside verify (same
++    // adaptation the cure already made in runRoute above; assertions and
++    // the DC1-A1 copy expectations are untouched).
++    quill: { id: "quill", kind: "agent", active: true, permissions: ["verify", "accept_work", "complete_work"] },
+     grok: { id: "grok", kind: "agent", active: true, permissions: ["accept_work", "complete_work"] },
+   } }) },
+   auth: fakeAuth(memberId), workClaimRoute: route, workClaimId: id,

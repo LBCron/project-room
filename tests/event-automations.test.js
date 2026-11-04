@@ -92,3 +92,8 @@ test('admin route: owner only, flag-gated after auth, template creates a disable
   assert.equal((await admin({ delete: rule.ruleId })).status, 200);
   assert.equal((await admin({ enable: rule.ruleId })).status, 404);
 });
+
+test('trigger states are the real claim states', () => {
+  assert.equal(validTrigger({ states: ['closed', 'unclaimed'] }), true);
+  assert.equal(validTrigger({ states: ['cancelled'] }), false);
+});

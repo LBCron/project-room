@@ -28,7 +28,7 @@ export const automationsEnabled = (env = process.env) => env?.ROOM_AUTOMATIONS =
 export const MAX_RULES_PER_ROOM = 20;
 export const AUTOMATION_TAG = "automation";
 const CLAIM_KINDS = ["work", "land", "deploy"];
-const STATES = ["open", "claimed", "in_progress", "blocked", "delivered", "done", "released", "cancelled"];
+const STATES = ["unclaimed", "claimed", "in_progress", "blocked", "delivered", "done", "closed"]; // server/work-claims.mjs STATES
 const TAG = /^[a-z0-9_-]{1,40}$/;
 
 // First built-in template. A deploy claim reaching done (live revision

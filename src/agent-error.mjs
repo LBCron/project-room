@@ -1103,9 +1103,17 @@ export function agentErrorAx({ httpStatus = 0, code = "request_failed", message 
       hint: cap
         ? "Only the room owner can set the per-member claim cap. Ask the owner to set it."
         : "Work claims need a contribute, review, or collaborate profile. Ask the room owner to grant one.",
-      next: [tool("room_check_access"), command(cap
-        ? "Ask the room owner to set the per-member claim cap."
-        : "Ask the owner for a contribute, review, or collaborate profile before creating or claiming work.")]
+      next: cap
+        ? [tool("room_check_access"), command("Ask the room owner to set the per-member claim cap.")]
+        // FUNNEL-FIXES C2: the core-MCP room_claim refusal (the store's
+        // claim.acquired gate renders through here) carries the same gate
+        // legs as the REST refusal — contribute invite, the permission
+        // request with its tokens and 7-day undecided expiry, and the
+        // public-work match that needs no room profile.
+        : [tool("room_check_access"),
+          command("Ask the owner for a contribute, review, or collaborate profile before creating or claiming work."),
+          command("Request the accept_work and complete_work permissions through the access-request path; requests expire undecided after 7 days."),
+          path("/api/public-work/match")]
     };
   }
   if (httpStatus === 403 || ["access_denied", "owner_required", "host_denied", "proxy_denied", "csrf_denied"].includes(reasonCode)) {

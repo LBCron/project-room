@@ -1,3 +1,4 @@
+import {supportsSealedRestoreSource} from './restore-admission.mjs';
 import {REPLAY_SKIPPED_TABLES,isExportSecretColumn} from './room-export.mjs';
 // Loader-produced result facts. This is part of the existing source seal,
 // never an imported grant or an operator-supplied verification certificate.
@@ -7,7 +8,7 @@ const exact=(value,keys)=>value&&typeof value==='object'&&!Array.isArray(value)&
 const count=value=>Number.isSafeInteger(value)&&value>=0;
 export function validateRestoreResultMetadata(value,seal){
  if(!exact(value,['version','tables','contentVerification','writeProofs','skippedTables','sanitizedCells','transport','resumed'])||value.version!==1||!count(value.tables)||value.contentVerification!=='full'||typeof value.resumed!=='boolean')fail();
- if(!exact(value.writeProofs,['sourceSchemaVersion','metadataProofsAdded','historicalVerification'])||value.writeProofs.sourceSchemaVersion!==45||value.writeProofs.metadataProofsAdded!==0||value.writeProofs.historicalVerification!=='unchanged')fail();
+ if(!exact(value.writeProofs,['sourceSchemaVersion','metadataProofsAdded','historicalVerification'])||(!supportsSealedRestoreSource(value.writeProofs.sourceSchemaVersion)||value.writeProofs.sourceSchemaVersion!==seal.sourceSchemaVersion)||value.writeProofs.metadataProofsAdded!==0||value.writeProofs.historicalVerification!=='unchanged')fail();
  const dictionary=(object,visit,allowed=key=>seal.inventory.includes(key))=>{if(!object||typeof object!=='object'||Array.isArray(object))fail();for(const [key,entry]of Object.entries(object)){if(!ident.test(key)||!allowed(key))fail();visit(key,entry);}};
  dictionary(value.skippedTables,(_table,n)=>{if(!count(n))fail();},key=>key.startsWith('_cf_')||REPLAY_SKIPPED_TABLES.includes(key)||key==='public_work_claim_writer_permit');
  dictionary(value.sanitizedCells,(table,columns)=>{if(!columns||typeof columns!=='object'||Array.isArray(columns))fail();const known=seal.tables.find(t=>t.name===table)?.columns;for(const [column,n]of Object.entries(columns))if(!ident.test(column)||!known?.includes(column)||(!isExportSecretColumn(table,column)&&!(table==='mcp_event_subscriptions'&&column==='state'))||!count(n))fail();});

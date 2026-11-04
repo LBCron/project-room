@@ -4,7 +4,9 @@ import { build } from 'esbuild';
 import { Miniflare } from 'miniflare';
 import { mkdtemp, mkdir, writeFile, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
-import { resolve, join } from 'node:path';
+import { join } from 'node:path';
+import { fileURLToPath } from 'node:url';
+const repository=fileURLToPath(new URL('../',import.meta.url));
 import { execFileSync } from 'node:child_process';
 const BASELINE='2075f27e897c9843048012559f457bf11607d884';
 const quote=JSON.stringify;
@@ -15,7 +17,7 @@ test('actual v45 Native storage cold-upgrades, preserves connections and refuses
  try {
   const old=join(temp,'prior');await mkdir(old);
   const archive=join(temp,'prior.tar');
-  execFileSync('git',['archive','--format=tar','--output',archive,BASELINE]);
+  execFileSync('git',['archive','--format=tar','--output',archive,BASELINE],{cwd:repository});
   execFileSync('tar',['-xf',archive,'-C',old]);
   const fixture=(root,upgraded)=>`
 import {DurableObject} from 'cloudflare:workers';
@@ -51,7 +53,7 @@ export default {fetch(request,env){return env.ROOM.getByName('same-storage').fet
    const entry=join(temp,upgraded?'after.mjs':'before.mjs');await writeFile(entry,fixture(root,upgraded));
    return (await build({entryPoints:[entry],bundle:true,write:false,format:'esm',platform:'neutral',external:['node:*','cloudflare:*']})).outputFiles[0].text;
   };
-  const before=await bundle(old,false),after=await bundle(resolve('.'),true);
+  const before=await bundle(old,false),after=await bundle(repository,true);
   const options=script=>({modules:true,script,compatibilityDate:'2026-07-30',compatibilityFlags:['nodejs_compat'],durableObjectsPersist:join(temp,'persist'),durableObjects:{ROOM:{className:'UpgradeRoom',useSQLite:true}}});
   mf=new Miniflare(options(before));
   let response=await mf.dispatchFetch('https://room.example/seed');assert.equal(response.status,200,await response.clone().text());const seeded=await response.json();assert.equal(seeded.version,45);

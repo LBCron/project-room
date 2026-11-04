@@ -37,7 +37,7 @@ import { messageRepository } from "./message-repository.mjs";
 // 409; unknown ids as 404. Unknown errors are rethrown for the generic 500
 // path — never wrapped, so no internal detail leaks.
 import {
-  createWork, claimWork, updateWork, releaseWork, appendWorkPullRequest, attestWork, recordReview, reassignWork, releaseExpired, canCloseWork,
+  createWork, claimWork, updateWork, releaseWork, delegateWork, claimDelegateEnabled, appendWorkPullRequest, attestWork, recordReview, reassignWork, releaseExpired, canCloseWork,
   renewWork, roomWorkClaimConfig, closeWhenLive, isReceiptTag, ClaimError, REVIEW_POLICIES, CLAIM_KINDS,
   claimUpdatedAt, ACTIVE_CLAIM_STATES, MAX_LEASE_HOURS, STATES, summarizeClaimHistory, isHardWork,
   walkProvenance, flagPremiseInvalid, clearPremiseFlag, closeWork, isTerminalClaimState, claimHistoryLength,
@@ -1709,6 +1709,29 @@ function handleWorkClaimsCore({ req, res, url, store, roomId, auth, workClaimRou
       wakeMemberId: target, wakeReason: "assigned"
     });
     return json(res, 200, reassigned);
+  }
+  if (workClaimRoute === "delegate" && req.method === "POST") {
+    if (!claimDelegateEnabled()) reject(404, "not_found", "Claim delegation is not enabled on this server");
+    const data = body(req);
+    if (!shape(data, { required: ["delegate"], optional: ["note"] })) invalidInput(reject, "{delegate: memberId|null, note?}");
+    const item = load(claimIdOf(reject, workClaimId));
+    const authority = authorityOver(item);
+    const target = data.delegate;
+    if (target !== null) {
+      const members = store.roomAuthority(roomId).members ?? {};
+      const member = typeof target === "string" && Object.hasOwn(members, target) ? members[target] : null;
+      if (!member || member.active === false) {
+        reject(422, "work_delegate_unknown_member", `delegate "${typeof target === "string" ? target : "?"}" is not an active member of this room`);
+      }
+    }
+    requireEventBudget();
+    const note = text("note", data.note, { multiline: true });
+    let delegated;
+    try { delegated = delegateWork(item, caller, target, { note, now: nowMs, authority }); }
+    catch (error) { if (error instanceof ClaimError) reject(422, error.code, error.message); throw error; }
+    commit(delegated, "delegated", target === null ? {} : {
+      attention: "assigned", attentionMemberId: target, wakeMemberId: target, wakeReason: "assigned" });
+    return json(res, 200, delegated);
   }
   if (workClaimRoute === "renew" && req.method === "POST") {
     // Lease-renewal check-ins: the owner extends their claim's lease only by

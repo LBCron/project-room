@@ -897,7 +897,9 @@ export const workOf = value => {
   const readingAcks = readingAcksOf(value.readingAcks);
   const requestOutcomes = requestOutcomesOf(value.requestOutcomes);
   return { id: value.id, title: value.title ?? value.id, state: value.state ?? "unclaimed",
-    owner: value.owner ?? null, history: Array.isArray(value.history) ? value.history : [],
+    owner: value.owner ?? null,
+    ...(typeof value.delegate === "string" && value.delegate.length > 0 && value.delegate.length <= 128 ? { delegate: value.delegate } : {}),
+    history: Array.isArray(value.history) ? value.history : [],
     readingAcks,
     ...(requestOutcomes !== null ? { requestOutcomes } : {}),
     ...(historyOmitted > 0 ? { historyOmitted } : {}),
@@ -1663,6 +1665,23 @@ export function reassignWork(work, agentId, newOwner, { expectedClaimedAt, expec
   return withHistory({ ...item, ...claim, ...round, owner: target, attestations: Object.freeze([]), reviews: Object.freeze([]) },
     atMs, agent, `reassigned:${target}`, note);
 }
+// Linear-parity delegation: the owner stays accountable while a delegate
+// (usually an agent) does the work, so stale or blocked work always has a
+// human or lead to escalate to. Only the owner (or room authority) sets or
+// clears the delegate; terminal claims are immutable. Pass null to clear.
+export function delegateWork(work, agentId, delegateId, { note, now, authority = false } = {}) {
+  const item = workOf(work), agent = agentOf(agentId), atMs = nowMsOf(now);
+  check(authority === true || (item.owner !== null && item.owner === agent), `work "${item.id}" is owned by ${item.owner ?? "nobody"} — only the owner can set its delegate`);
+  check(!isTerminalClaimState(item.state), `work "${item.id}" is ${item.state} and immutable`);
+  if (delegateId === null) {
+    const { delegate: _gone, ...rest } = item;
+    return withHistory(rest, atMs, agent, "undelegated", note);
+  }
+  const target = agentOf(delegateId);
+  check(target !== item.owner, "the delegate must differ from the owner");
+  return withHistory({ ...item, delegate: target }, atMs, agent, `delegated:${target}`, note);
+}
+export const claimDelegateEnabled = (env = process.env) => env?.ROOM_CLAIM_DELEGATE === "1";
 // True when the item holds an active claim whose lease has lapsed. Items
 // without a lease, and items not under claim, never expire.
 export function isLeaseExpired(work, now) {

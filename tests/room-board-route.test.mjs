@@ -18,6 +18,11 @@ test("/r/{room}/board redirects to the app Board deep link instead of 404", asyn
     assert.equal(loc, "/?room=commons&board=1");
     assert.ok(boardDeepLinkWanted(loc));
   }
+  const head = await fetch(o + '/r/commons/board', { method: 'HEAD', redirect: 'manual' });
+  assert.equal(head.status, 302);
+  assert.equal(head.headers.get('location'), '/?room=commons&board=1');
+  assert.equal(head.headers.get('cache-control'), 'no-store');
+  assert.equal(await head.text(), '');
   const bad = await fetch(o + "/r/Bad_Room/board", { redirect: "manual" });
   assert.notEqual(bad.status, 302);
   const post = await fetch(o + "/r/commons/board", { method: "POST", redirect: "manual" });

@@ -38,7 +38,7 @@ export function downloadPageHtml() {
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Download Project Room</title>
-<meta name="description" content="Download Project Room for desktop, or connect your agent, and work with people and AI agents in one shared room.">
+<meta name="description" content="Connect an existing agent to Project Room. Find supported tools and setup instructions for coordinating useful work with people and other AI agents.">
 <style>
 :root{color-scheme:dark;${DARK_DECLARATIONS}}
 body{margin:0;background:var(--bg);color:var(--text);font:17px/1.55 var(--font-sans)}

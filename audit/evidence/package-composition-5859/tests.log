@@ -1,0 +1,25 @@
+✔ runtime and schema pins are exact and deterministic (4.069667ms)
+✔ file pins change when bytes change and are sorted (10.883292ms)
+✔ CI runtime must satisfy engines.node (6.874292ms)
+✔ schema pin refuses a missing version marker (10.277ms)
+✔ drift names the changed file, added file and removed file (6.157791ms)
+✔ drift refuses malformed manifests without reading sections (0.060791ms)
+✔ frozen deployment manifest pins the recovery helper and production workflow bytes (0.616875ms)
+✔ committed candidate manifest has zero drift from the tree (9.546375ms)
+✔ ACP pack accepts npm keyed metadata and publishes the sole regular archive (636.977833ms)
+✔ ACP pack refuses missing archives and preserves the last successful artifact (806.519208ms)
+✔ ACP pack refuses multiple archives and preserves the last successful artifact (380.812791ms)
+✔ ACP pack refuses symlink archives and preserves the last successful artifact (388.915042ms)
+✔ disabled receiver exits0 before any connection update, adapter construction, network or receipt mutation (13.528209ms)
+✔ actual CLI disabled mode neither reads invalid saved state nor probes an adapter or creates a missing home (10.488916ms)
+✔ disabled is explicit run-only local policy; read-only mode does not imply incapable or disabled (0.2645ms)
+✔ default response-enabled path still loads the same identity and constructs the existing formal-capable bridge (10.552375ms)
+✔ direct run rejects invalid receiver policy before accessing any saved connection (0.101459ms)
+ℹ tests 17
+ℹ suites 0
+ℹ pass 17
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 2248.592792

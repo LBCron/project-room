@@ -1,0 +1,49 @@
+{
+  "base": "7d2609f6c086a342af68799fff5aa38dcc1574d9",
+  "prHead": "7b56e13fdaa008ed8efa6f64e5c214b6f2a98734",
+  "composedSource": "3b2b18f0aa00ebe93fa20a37371ee3cb1e1cee14",
+  "node": "v24.22.1",
+  "conflicts": [
+    "scripts/CANDIDATE-MANIFEST.json"
+  ],
+  "resolution": "Retained courier manifest, regenerated; only room-acp/package.json digest changed from courier base",
+  "courierSourceReadmeAndRuntimePackageDiff": "empty",
+  "tarball": {
+    "path": ".tmp/room-acp-0.1.0.tgz",
+    "sha256": "bc9cf49fe236d7ce7eb638da40b91a29b6422ba4ff472e95deb25cb6907193b0",
+    "size": 62066,
+    "unpackedSize": 203125,
+    "files": 25
+  },
+  "validation": {
+    "importedModules": 23,
+    "packedSourceByteParity": true,
+    "helpExit": 0,
+    "disabledExit": 0,
+    "missingNotifyConfigCliExit": 2,
+    "receiverConfigRefusals": [
+      "absent",
+      "missing file",
+      "invalid shape"
+    ],
+    "networkCalls": 0,
+    "notifierConstructions": 0,
+    "journalOpens": 0,
+    "connectionReads": 0,
+    "credentialHomeCreated": false,
+    "focusedTests": 17,
+    "failures": 0,
+    "skipped": 0
+  },
+  "commands": [
+    "PATH=/Users/johnpotter/.local/bin:$PATH npm --cache <checkout>/.tmp/npm-cache pack ./room-acp --ignore-scripts --offline --json --pack-destination <checkout>/.tmp",
+    "/Users/johnpotter/.local/bin/node audit/evidence/package-composition-5859/probe.mjs",
+    "TMPDIR=<checkout>/.tmp /Users/johnpotter/.local/bin/node --test tests/candidate-manifest.test.js tests/room-acp-pack-npm.test.js tests/room-acp-receiver-disabled.test.mjs"
+  ],
+  "limits": [
+    "Offline qualification only, no publication/deployment",
+    "Invalid configuration tested at unpacked receiver entry; no saved connection needed",
+    "Initial harness expected usage exit1; corrected to documented CLI exit2 before final passing probe",
+    "No full-suite or general PR5859 runtime qualification claimed"
+  ]
+}

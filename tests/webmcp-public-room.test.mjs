@@ -2,6 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import {runInNewContext} from 'node:vm';
 import {createHash} from 'node:crypto';
+import {createServer} from 'node:http';
 import {RoomStore} from '../server/store.mjs';
 import {initialRoom} from '../server/bootstrap.mjs';
 import {publicRoomView,PUBLIC_ROOM_SETUP_CSP} from '../server/public-rooms.mjs';
@@ -11,5 +12,21 @@ test('a previously discovered tool does not return stale content after owner unp
 test('unsupported browsers keep the normal page without a tool',t=>{const f=fixture(t,false);assert.equal(f.registered.length,0);});
 
 test('tool forwards cancellation to the public fetch',async t=>{const f=fixture(t),controller=new AbortController();await f.registered[0].execute({}, {signal:controller.signal});assert.equal(f.calls[0].opts.signal,controller.signal);});
+
+test('cancelling an in-flight public read closes its network request',async t=>{
+ const f=fixture(t);let arrived,closed;
+ const requestArrived=new Promise(resolve=>{arrived=resolve;});
+ const requestClosed=new Promise(resolve=>{closed=resolve;});
+ const server=createServer((_req,res)=>{res.on('close',closed);arrived();});
+ await new Promise(resolve=>server.listen(0,'127.0.0.1',resolve));
+ t.after(()=>{server.closeAllConnections();server.close();});
+ const registered=[],elements={'copy-room-setup':{addEventListener(){}},'room-setup-prompt':{},'room-setup-copy-status':{}};
+ const context={document:{getElementById:id=>elements[id],modelContext:{registerTool:x=>registered.push(x)}},location:{origin:`http://127.0.0.1:${server.address().port}`,pathname:'/r/public-test',search:''},URL,URLSearchParams,Promise,fetch};
+ runInNewContext(f.script,context);
+ const controller=new AbortController(),pending=registered[0].execute({}, {signal:controller.signal});
+ await requestArrived;controller.abort();
+ await assert.rejects(pending,error=>error.name==='AbortError');
+ await requestClosed;
+});
 
 test('WebMCP cursor pages return all published tasks and no private tasks',async t=>{const f=fixture(t);for(let i=0;i<7;i++){for(const visibility of ['public','private']){const id=visibility+'-'+i;f.s.command(f.key,'public-test',{id:'propose-'+id,type:'work.proposed',data:{workItemId:id,title:id,definitionOfDone:'task',accountableMemberId:'owner',mode:'read',ownerDecisionRequired:false,independentVerificationRequired:false}});if(visibility==='public')f.s.command(f.key,'public-test',{id:'publish-'+id,type:'work.public_set',data:{workItemId:id,enabled:true}});}}const tool=f.registered[0],ids=[];let after;do{const value=await tool.execute(after?{after}:{});ids.push(...value.tasks.map(x=>x.id));after=value.coverage.tasks.nextAfter;}while(after);assert.deepEqual(ids,Array.from({length:7},(_,i)=>'public-'+i));await assert.rejects(tool.execute({after:'x'.repeat(2049)}),/Invalid public task cursor/);});

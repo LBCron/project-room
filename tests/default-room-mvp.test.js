@@ -242,7 +242,7 @@ test("leaving a room resets all three on-demand features", { timeout: 120000 }, 
 });
 
 test("a pairing import in flight at room reset does not install into the next room", { timeout: 120000 }, async t => {
-  const { f, page, errors, paths } = await harness(t, 1280);
+  const { f, page, errors } = await harness(t, 1280);
   let release; const gate = new Promise(resolve => { release = resolve; });
   let markHit; const hit = new Promise(resolve => { markHit = resolve; });
   await page.route("**/src/pairing-ui.js*", async route => { markHit(); await gate; await route.continue(); });

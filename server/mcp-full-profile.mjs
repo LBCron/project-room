@@ -110,7 +110,7 @@ async function roomMessages(store, secret, roomId, args, memberId) {
   const { messages, next, hasMore } = await paginateRoomMessages(fetchPage, {
     after, limit, latest,
     // Backward walk needs the log head; the bound is exclusive, so +1.
-    end: latest ? store.roomAuthority(roomId).sequence + 1 : null,
+    end: latest ? store.headSequence(roomId) + 1 : null,
     mapMessage,
   });
   const mapped = messages.map(message => markIfOther(message, memberId, message.from));

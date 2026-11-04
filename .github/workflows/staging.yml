@@ -71,7 +71,7 @@ jobs:
           WRANGLER_SEND_METRICS: "false"
         run: |
           set -o pipefail
-          pnpm exec wrangler deploy --env staging --keep-vars | tee "$RUNNER_TEMP/wrangler-deploy.txt"
+          pnpm exec wrangler deploy --durable-objects-code-update-mode 'deferred 60s' --env staging --keep-vars | tee "$RUNNER_TEMP/wrangler-deploy.txt"
           node --input-type=module -e '
             import { readFileSync } from "node:fs";
             const config = JSON.parse(readFileSync("wrangler.jsonc", "utf8"));

@@ -241,7 +241,7 @@ export function renderReceiptDetailHtml(receipt, { verification = null } = {}) {
     ? `<div><dt>Room</dt><dd>${escapeHtml(receipt.room.title)}</dd></div>`
     : receipt.room?.id
       ? `<div><dt>Room</dt><dd>${escapeHtml(receipt.room.id)}</dd></div>`
-      : "";
+      : `<div><dt>Room</dt><dd>Not named on this public record</dd></div>`;
   const pr = receipt.pullRequest
     ? `<div><dt>Pull request</dt><dd><a href="${escapeHtml(receipt.pullRequest)}">${escapeHtml(prPhrase(receipt.pullRequest))}</a></dd></div>`
     : "";
@@ -430,6 +430,11 @@ const publicJson = receipt => ({
   ...(receipt.source === "public-work" ? { artifactUrl: `/api/public-work/receipts/${encodeURIComponent(receipt.id)}/artifact` } : {}),
   provenance: provenNoteOf(receipt),
   recheckNote: RECHECK_NOTE,
+  // Room-naming statement (parity K4): when the room is not named on
+  // this public record, both faces say so — the HTML detail carries
+  // the "Not named on this public record" Room row. `room` itself
+  // stays null; no room id or title is exposed for an unlisted room.
+  ...(receipt.room ? {} : { roomNote: "The room is not named on this public record." }),
 });
 
 export function receiptsListJson(page) {

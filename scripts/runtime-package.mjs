@@ -189,6 +189,7 @@ optional.push("server/land-queue.mjs"); // per-room pull-request land queue (imp
 optional.push("server/mcp-full-profile.mjs"); // stdio-equivalent hosted MCP tools (imported by server/mcp-room-profile.mjs)
 optional.push("server/agent-identities.mjs");
 optional.push("server/owner-delegates.mjs"); // Owner-delegate authority (imported by server/store.mjs; delegate flag consumed by server/guest-agent-links.mjs, server/guest-invites.mjs, server/agent-invites.mjs, server/access-review.mjs, server/agent-connections.mjs)
+optional.push("server/board-claim-tools.mjs"); // grok/board-claim-tools new modules
 optional.push("server/display-name-guard.mjs"); // Identity mint/link guard is part of the runtime import closure.
 optional.push("server/agent-invites.mjs");
 optional.push("server/approval-tokens.mjs");

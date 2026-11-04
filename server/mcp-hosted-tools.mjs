@@ -19,6 +19,7 @@ const commandIdField = { ...idField, description: "Client command id. Stable acr
 const bondIdField = { ...idField, description: "Bond id from bond_propose or bond_list." };
 const scopesField = { type: "array", items: { type: "string", enum: [...BOND_SCOPES] }, minItems: 1, maxItems: BOND_SCOPES.length };
 
+import { boardClaimToolsEnabled, boardClaimToolDefinitions } from "./board-claim-tools.mjs";
 import { handoffPacketEnabled } from "./handoff-packet.mjs";
 
 export const hostedRoomTools = [
@@ -242,7 +243,9 @@ export const hostedRoomTools = [
     to: { type: "string", minLength: 1, maxLength: 300, description: "End symbol or file for map.path." },
     repo: { type: "string", minLength: 3, maxLength: 200, description: "owner/name. Defaults to the room's newest map." }
   }, ["roomId", "op"]))
-
+,
+  // Flag ROOM_BOARD_CLAIM_TOOLS (off by default): take and finish Board tasks.
+  ...(boardClaimToolsEnabled() ? boardClaimToolDefinitions() : [])
 ];
 
 export const hostedInboxTools = [

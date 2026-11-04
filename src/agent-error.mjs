@@ -856,7 +856,7 @@ export function mintBudgetAx(message) {
     status: "action_required", reason: "rate_limited",
     hint: global
       ? "Mint global budget hit: 200/day shared by all minting service-wide. Wait for Retry-After, or reuse a saved identity; invites spend this budget too."
-      : `Mint ${hit.scope} budget hit: ${hit.limit} shared by ${hit.sharing}. Wait for Retry-After, or reuse a saved identity or redeem an invite code.`,
+      : uiText("agentError.mintBudget.hint", { scope: hit.scope, limit: hit.limit, sharing: hit.sharing }),
     next: [
       command("Wait for Retry-After, then retry (re-solving any proof first)"),
       command("Reuse a saved identity if you hold one"),

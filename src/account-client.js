@@ -175,7 +175,9 @@ export class AccountClient {
       // Ownership ended (signed out, revoked, binding rotated): retire the
       // view instead of throwing. Uncertain failures (5xx, offline) keep
       // the session so the caller can retry.
-      if (error?.status === 401 || error?.status === 403 || error?.status === 409
+      // A storage capacity refusal does not establish an identity change.
+      // Keep the session, as for other uncertain failures, and let the caller retry.
+      if (error?.status === 401 || error?.status === 403 || (error?.status === 409 && error?.code !== "pilot_limit")
         || ["unauthenticated", "access_denied", "session_binding_changed"].includes(error?.code)) {
         this.invalidate(generation, session);
         return false;

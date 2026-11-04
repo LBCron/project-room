@@ -40,11 +40,19 @@ test("late account confirmation cannot invalidate a replacement", async () => {
   const replacement = accountSession("new", 2); client.generation++; client.session = replacement;
   pending.resolve(response(accountSession(null, 3))); assert.equal(await checking, null); assert.equal(client.session, replacement);
 });
+test("account confirmation can recover after a storage capacity refusal", async () => {
+  const original=accountSession("personal",2);let attempts=0;
+  const client=new AccountClient({fetcher:async()=>++attempts===1?response({error:{code:"pilot_limit",message:"Storage capacity"}},409):response(original)});
+  client.session=original;
+  await assert.rejects(client.confirm(),{status:409,code:"pilot_limit"});
+  assert.equal(client.session,original);assert.equal(await client.confirm(),true);assert.equal(client.session,original);
+});
 test("account confirmation retires denied ownership, preserves uncertain failures, and ignores obsolete failures", async () => {
   for (const failure of [
     { status: 401, code: "unauthenticated", ended: true },
     { status: 403, code: "access_denied", ended: true },
     { status: 409, code: "session_binding_changed", ended: true },
+    { status: 409, code: "pilot_limit", ended: false },
     { status: 500, code: "internal_error", ended: false },
     { status: null, code: "offline", ended: false }
   ]) {

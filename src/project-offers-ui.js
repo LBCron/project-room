@@ -6,7 +6,7 @@ const apiPath = path => ['getdasha.com', 'www.getdasha.com'].includes(location.h
 const escape = value => String(value ?? '').replace(/[&<>"']/g, char => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[char]));
 const validId = value => typeof value === 'string' && /^[A-Za-z0-9][A-Za-z0-9_.:-]{0,127}$/.test(value) && !['constructor', 'prototype', '__proto__'].includes(value);
 const list = $('#offer-list'), detail = $('#offer-detail'), listStatus = $('#list-status');
-let offers = [], cursor = null, listFlight = null, detailFlight = null, selectedId = null, briefText = '';
+let offers = [], cursor = null, listFlight = null, detailFlight = null, selectedId = null, matchSelectionId = null, briefText = '';
 const reviewLabels = { human: 'Human review', agent: 'Agent review', human_with_agent_review: 'Human + agent review' };
 function amount(reward) {
   if (reward.kind === 'unpaid') return 'Unpaid';
@@ -167,9 +167,10 @@ function closeDetail(recordHistory = true) {
   detailFlight?.abort(); document.body.classList.remove('offer-selected'); selectedId = null; briefText = ''; paintList();
   const url = new URL(location.href); url.searchParams.delete('offer'); if (recordHistory) window.history.pushState(null, '', url);
   detail.innerHTML = '<div class="detail-empty"><h2 id="detail-title">Choose an offer</h2></div>';
-  (list.querySelector(`[data-offer="${previousId}"]`) || list.querySelector('button'))?.focus();
+  const match = matchSelectionId === previousId ? document.querySelector(`#find-work-results [data-match-offer="${previousId}"]`) : null;
+  (match || list.querySelector(`[data-offer="${previousId}"]`) || list.querySelector('button'))?.focus();
 }
-list.addEventListener('click', event => { const button = event.target.closest('[data-offer]'); if (button) void select(button.dataset.offer); });
+list.addEventListener('click', event => { const button = event.target.closest('[data-offer]'); if (button) { matchSelectionId = null; void select(button.dataset.offer); } });
 $('#refresh-offers').addEventListener('click', () => void loadList(false, true));
 $('#more-offers').addEventListener('click', () => void loadList(true));
 detail.addEventListener('click', async event => {
@@ -241,7 +242,7 @@ matchForm.addEventListener('input', clearMatches); matchForm.addEventListener('c
 matchForm.addEventListener('submit', event => { event.preventDefault(); void findMatches(); });
 $('#more-matches').addEventListener('click', () => { if (matchAfter) void findMatches(true); });
 $('#find-work-results').addEventListener('click', async event => {
-  const offer = event.target.closest('[data-match-offer]'); if (offer) { void select(offer.dataset.matchOffer); return; }
+  const offer = event.target.closest('[data-match-offer]'); if (offer) { matchSelectionId = offer.dataset.matchOffer; void select(offer.dataset.matchOffer); return; }
   const button = event.target.closest('[data-copy-claim]'); if (!button) return;
   const field = button.closest('li').querySelector('textarea'), flight = matchFlight; button.disabled = true;
   try {

@@ -177,6 +177,7 @@
     "src/strings.js": "sha256:16d9742fc2ef6f0e9dad2e933857a4c120bc923dc3a71ec86e255c0aa7561615",
     "src/styles.css": "sha256:14481df1f09875c7a8582416494767e42a2b0ace00d3d7181d1de08cae794d45",
     "src/updates-ui.js": "sha256:24f6b07817377f05f0ae6763b4cee30fa0217490b1be1a1ea6259dc42fd348e2",
+    "src/webmcp.js": "sha256:e5c2266cc8d3f471d8dddf117d9821425f91fe0967b3446b94f646b919be51d8",
     "src/work-announcements.js": "sha256:18fe08703df19663b853712933eb64fd448cc2905b0cb9154d015b27ddf51633",
     "src/work-dependencies.js": "sha256:7b150cc0b54a271cd4c5f70e73ab7f354ba8e3cabc6dc60e22fc696c3f0563af",
     "src/work-help.js": "sha256:5a7795f5ea12f5f16ab16efe3b978c9945928e46afd801446938bdd5914ef5ac",

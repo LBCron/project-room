@@ -1,3 +1,4 @@
+import {STORE_SCHEMA_VERSION} from '../server/writer-fence.mjs';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {createHash} from 'node:crypto';
@@ -113,14 +114,14 @@ test('ordinary append source guard uses a single primary-key control lookup desp
   assert.equal(db.prepare("SELECT count(*) AS n FROM message_replay_units WHERE domain='message'").get().n,17405);
 });
 
-test('current version-45 registered writer preserves H and prospectively binds its legacy append',t=>{
+test('current registered schema writer preserves H and prospectively binds its legacy append',t=>{
   const directory=mkdtempSync(join(tmpdir(),'replay-old44-')),path=join(directory,'room.sqlite');t.after(()=>rmSync(directory,{recursive:true,force:true}));
   let s=new RoomStore(path);s.initialize(initialRoom());s.db.exec(replayCutoverSchema());
   const input={roomId:'commons',requestId:'old44-capture',expectedHead:s.headSequence('commons'),reason:'Synthetic compatibility'};
   const captured=captureReplayWitness(s,input),before=s.db.prepare('SELECT * FROM message_replay_units ORDER BY generation,domain,unit_key').all();s.close();
   s=new RoomStore(path);try{
-    assert.equal(s.db.prepare('PRAGMA user_version').get().user_version,45);
-    const key=s.issueAccessKey('commons','owner');s.command(key,'commons',{id:'old44-post',type:'message.posted',data:{messageId:'old44-post',body:'A valid version-45 post'}});
+    assert.equal(s.db.prepare('PRAGMA user_version').get().user_version,STORE_SCHEMA_VERSION);
+    const key=s.issueAccessKey('commons','owner');s.command(key,'commons',{id:'old44-post',type:'message.posted',data:{messageId:'old44-post',body:'A valid current-schema post'}});
     for(const row of before)assert.deepEqual(s.db.prepare('SELECT * FROM message_replay_units WHERE room_id=? AND generation=? AND domain=? AND unit_key=?').get(row.room_id,row.generation,row.domain,row.unit_key),row);
     assert.equal(s.db.prepare("SELECT count(*) n FROM message_replay_units WHERE domain='tail-event'").get().n,1);
     assert.equal(advanceReplayWitness(s,{roomId:'commons',generation:captured.generation,expectedBytes:0,requestId:'old44-hash'}).phase,'witness_verified');

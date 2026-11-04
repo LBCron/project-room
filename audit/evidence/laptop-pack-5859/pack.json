@@ -1,0 +1,131 @@
+[
+  {
+    "id": "room-acp@0.1.0",
+    "name": "room-acp",
+    "version": "0.1.0",
+    "size": 55131,
+    "unpackedSize": 183067,
+    "shasum": "dd5048f0d7008a54e84c1118a8bf603b028326b0",
+    "integrity": "sha512-UjwesLztn8/KGhlPZxm81aqy/k0D2QAp3T7FdQJeDupTMROI9OK5FrzoNK8yqbMaVh73xryCzQNhAUv/xKIkeg==",
+    "filename": "room-acp-0.1.0.tgz",
+    "files": [
+      {
+        "path": "README.md",
+        "size": 22129,
+        "mode": 420
+      },
+      {
+        "path": "package.json",
+        "size": 800,
+        "mode": 420
+      },
+      {
+        "path": "src/agent-host.mjs",
+        "size": 5568,
+        "mode": 420
+      },
+      {
+        "path": "src/agents.mjs",
+        "size": 8480,
+        "mode": 420
+      },
+      {
+        "path": "src/args.mjs",
+        "size": 4202,
+        "mode": 420
+      },
+      {
+        "path": "src/bridge.mjs",
+        "size": 49398,
+        "mode": 420
+      },
+      {
+        "path": "src/cli.mjs",
+        "size": 6032,
+        "mode": 420
+      },
+      {
+        "path": "src/credentials.mjs",
+        "size": 2162,
+        "mode": 420
+      },
+      {
+        "path": "src/formal-delivery.mjs",
+        "size": 7186,
+        "mode": 420
+      },
+      {
+        "path": "src/import-identity.mjs",
+        "size": 11173,
+        "mode": 420
+      },
+      {
+        "path": "src/join.mjs",
+        "size": 13603,
+        "mode": 420
+      },
+      {
+        "path": "src/jsonrpc.mjs",
+        "size": 2895,
+        "mode": 420
+      },
+      {
+        "path": "src/link.mjs",
+        "size": 4050,
+        "mode": 420
+      },
+      {
+        "path": "src/permission.mjs",
+        "size": 5672,
+        "mode": 420
+      },
+      {
+        "path": "src/private-files.mjs",
+        "size": 9396,
+        "mode": 420
+      },
+      {
+        "path": "src/private-state.mjs",
+        "size": 1437,
+        "mode": 420
+      },
+      {
+        "path": "src/prompt.mjs",
+        "size": 3374,
+        "mode": 420
+      },
+      {
+        "path": "src/queue.mjs",
+        "size": 4191,
+        "mode": 420
+      },
+      {
+        "path": "src/redact.mjs",
+        "size": 837,
+        "mode": 420
+      },
+      {
+        "path": "src/render.mjs",
+        "size": 2697,
+        "mode": 420
+      },
+      {
+        "path": "src/room.mjs",
+        "size": 13477,
+        "mode": 420
+      },
+      {
+        "path": "src/run.mjs",
+        "size": 3161,
+        "mode": 420
+      },
+      {
+        "path": "src/sessions.mjs",
+        "size": 1147,
+        "mode": 420
+      }
+    ],
+    "entryCount": 23,
+    "bundled": []
+  }
+]

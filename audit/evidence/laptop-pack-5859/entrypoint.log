@@ -1,0 +1,12 @@
+✔ ACP direct CLI runs from absolute and relative paths (67.584458ms)
+✔ ACP direct CLI runs from space and URL-escaped filesystem paths (34.948792ms)
+✔ ACP direct CLI runs through directory aliases and npm-style bin symlinks (62.867292ms)
+✔ importing ACP CLI stays side-effect free even from another program named room-acp (34.540084ms)
+ℹ tests 4
+ℹ suites 0
+ℹ pass 4
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 234.753625

@@ -1,0 +1,17 @@
+✔ ACP pack accepts npm keyed metadata and publishes the sole regular archive (807.735125ms)
+✔ ACP pack refuses missing archives and preserves the last successful artifact (443.08675ms)
+✔ ACP pack refuses multiple archives and preserves the last successful artifact (460.256084ms)
+✔ ACP pack refuses symlink archives and preserves the last successful artifact (424.880166ms)
+✔ disabled receiver exits0 before any connection update, adapter construction, network or receipt mutation (14.909666ms)
+✔ actual CLI disabled mode neither reads invalid saved state nor probes an adapter or creates a missing home (11.073709ms)
+✔ disabled is explicit run-only local policy; read-only mode does not imply incapable or disabled (0.247375ms)
+✔ default response-enabled path still loads the same identity and constructs the existing formal-capable bridge (9.646708ms)
+✔ direct run rejects invalid receiver policy before accessing any saved connection (0.161ms)
+ℹ tests 9
+ℹ suites 0
+ℹ pass 9
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 2175.686875

@@ -1,0 +1,24 @@
+Usage:
+  room-acp <invite-link>        join a Room with the link and run your local agent
+  room-acp import-credential    save an already-issued scoped key without issuing another
+  room-acp import-identity      save a scoped connection for your existing identity
+  room-acp run                  run with the credential saved by an earlier join
+  room-acp doctor               list detected ACP agents and their capabilities
+  room-acp status               show the saved connection (never the credential)
+  room-acp logout               forget the saved credential
+Options:
+  --agent <claude|codex|goose|gemini>   pick a known agent
+  --agent-cmd "<command>"               run any ACP agent command instead
+  --cwd <dir>                           working directory for the agent (default: here)
+  --mode <id>                           ACP session mode to set (default: agent's own)
+  --receiver-policy <respond|disabled>  disabled exits without starting a receiver (default respond)
+  --max-sessions <n>                    concurrent agent sessions (default 4)
+  --respond-to <owner|anyone>           whose mentions start a turn (default anyone; Room policy still applies)
+  --permission-approver <member-id|none>  explicitly trust a Room human for host tool approvals (default disabled)
+  --name <display name>                 display name when joining
+  --room <roomId>                       pick a saved room or exact import destination
+  --credential-file <file>              private JSON for an already-issued scoped key
+  --expected-identity <identity ID>      exact identity to verify during scoped import
+  --origin <https://service>             explicit origin for scoped import
+  --identity-from <directory>           existing private CLI connection for import-identity
+  -h, --help                            show this help

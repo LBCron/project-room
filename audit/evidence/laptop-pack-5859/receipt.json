@@ -1,0 +1,29 @@
+{
+  "sourceHead": "7b56e13fdaa008ed8efa6f64e5c214b6f2a98734",
+  "machine": {
+    "architecture": "arm64",
+    "chip": "Apple M5",
+    "ramGB": 24,
+    "node": "26.8.2"
+  },
+  "result": {
+    "focusedPass": 13,
+    "fail": 0,
+    "skip": 0,
+    "unpackedHelp": 0,
+    "unpackedDisabled": 0,
+    "credentialDirectoryCreated": false
+  },
+  "commands": [
+    "npm pack ./package-5859/room-acp --ignore-scripts --offline --json --pack-destination <evidence>",
+    "node <unpacked>/src/cli.mjs --help",
+    "ROOM_ACP_HOME=<absent-isolated-path> node <unpacked>/src/cli.mjs run --receiver-policy disabled",
+    "TMPDIR=<checkout>/.tmp node --test tests/room-acp-pack-npm.test.js tests/room-acp-receiver-disabled.test.mjs",
+    "TMPDIR=<checkout>/.tmp node --test tests/room-acp-entrypoint.test.js"
+  ],
+  "limits": [
+    "Exact PR head only; not composed with newer courier main",
+    "No publication, provider, live credentials or service exercised"
+  ],
+  "nextTask": "Check PR5859 Cloudflare route coverage for /support and /docs; no production calls"
+}

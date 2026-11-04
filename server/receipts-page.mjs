@@ -407,7 +407,14 @@ const publicJson = receipt => ({
   ...(receipt.state ? { state: receipt.state } : {}),
   ...(receipt.checksReported ? { checksReported: receipt.checksReported } : {}),
   ...(receipt.executedChecks ? { executedChecks: receipt.executedChecks } : {}),
-  ...(receipt.review ? { review: receipt.review } : {}),
+  // The review block's two axes, labelled on this face as the HTML
+  // face labels them in prose (receipt detail, "Recorded check
+  // verdict" row): the check's verdict is not the delivery outcome.
+  // Serializer-level annotation only — the composed review record in
+  // public-read-model keeps its pinned field set.
+  ...(receipt.review ? { review: receipt.review.verificationVerdict
+    ? { ...receipt.review, verdictScope: "recorded check verdict; it does not override the delivery outcome" }
+    : receipt.review } : {}),
   ...(receipt.lot ? { lot: receipt.lot } : {}),
   // The work receipt's payout cross-reference (#3781): the read model
   // sets these two fields on a paid work receipt only; a receipt with

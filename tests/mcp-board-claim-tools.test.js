@@ -67,3 +67,13 @@ test("finish refuses unknown fields and a missing note", { skip: !ON }, async ()
     assert.ok(r2.error || r2.result?.isError);
   } finally { await w.close(); }
 });
+
+test("op plan forwards planning fields to the REST update route, with no new schema bytes over 848", async () => {
+  const { validBoardClaimArgs, boardClaimSteps, boardClaimToolDefinitions } = await import("../server/board-claim-tools.mjs");
+  assert.equal(validBoardClaimArgs("room_work_claim", { claimId: "w1", op: "plan", plan: { priority: 1, milestone: null } }), true);
+  assert.equal(validBoardClaimArgs("room_work_claim", { claimId: "w1", op: "plan", plan: {} }), false);
+  assert.equal(validBoardClaimArgs("room_work_claim", { claimId: "w1", op: "plan", plan: { priority: 1 }, note: "x" }), false);
+  assert.deepEqual(boardClaimSteps("room_work_claim", { op: "plan", plan: { dueAt: "2030-01-01T00:00:00Z" } }, "claimed"),
+    [["update", { dueAt: "2030-01-01T00:00:00Z" }]]);
+  assert.ok(JSON.stringify(boardClaimToolDefinitions()).length <= 848);
+});

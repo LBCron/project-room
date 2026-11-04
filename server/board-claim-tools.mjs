@@ -21,11 +21,12 @@ export function boardClaimToolsEnabled(env = globalThis.process?.env ?? {}) {
 const text = (max) => ({ type: "string", minLength: 1, maxLength: max });
 export const boardClaimToolDefinitions = () => [
   { name: BOARD_WORK_CLAIM_TOOL,
-    description: "Board task by claimId. op take: claim it with a lease (optional files). op finish: deliver one you hold with a note (state done only if review policy allows). Rules and caps match the REST work-claims claim and update routes.",
+    description: "Board task by claimId. take: claim with a lease. finish: deliver with a note (done if review allows). plan: set plan {priority,estimate,dueAt,cycleId,milestone}; null clears. REST rules.",
     inputSchema: { type: "object", additionalProperties: false, required: ["roomId", "claimId", "op"], properties: {
       roomId: { type: "string", maxLength: 128 },
       claimId: { type: "string", pattern: CLAIM_ID.source },
-      op: { type: "string", enum: ["take", "finish"] },
+      op: { type: "string", enum: ["take", "finish", "plan"] },
+      plan: { type: "object" },
       note: { ...text(4000) },
       files: { type: "array", maxItems: 64, items: text(512) },
       state: { type: "string", enum: ["delivered", "done"] } } },
@@ -45,6 +46,13 @@ export function validBoardClaimArgs(name, args) {
     return Object.keys(args).every(k => allowed.has(k)) && typeof args.note === "string" && str(args.note, 4000)
       && (args.state === undefined || args.state === "delivered" || args.state === "done");
   }
+  if (args.op === "plan") {
+    // Planning fields (#5889, ROOM_BOARD_PLANNING_FIELDS): the REST update
+    // route type-checks them and 422s when the flag is off.
+    const allowed = new Set(["claimId", "op", "plan"]);
+    return Object.keys(args).every(k => allowed.has(k)) && args.plan !== null && typeof args.plan === "object"
+      && !Array.isArray(args.plan) && Object.keys(args.plan).length > 0;
+  }
   return false;
 }
 
@@ -53,6 +61,7 @@ export function boardClaimSteps(_name, args, current) {
   if (args.op === "take") {
     return [["claim", { ...(args.note ? { note: args.note } : {}), ...(args.files ? { files: args.files } : {}) }]];
   }
+  if (args.op === "plan") return [["update", { ...args.plan }]];
   const steps = [];
   if (current === "claimed") steps.push(["update", { state: "in_progress" }]);
   steps.push(["update", { state: args.state ?? "delivered", note: args.note }]);

@@ -47,6 +47,7 @@ import { HEALTH_PROBE_TIMEOUT_MS, createHealthProbe, healthLivenessResponse, rea
 import { exportNdjsonStream, operatorExportResponse } from '../server/room-export.mjs';
 import { operatorRestoreResponse, operatorRestoreFromBackupResponse } from '../server/restore-ndjson.mjs';
 import { flushRoomGuide, installGuideCommandHook } from '../server/room-guide.mjs';
+import { createWakeAdapters } from '../server/wake-adapters.mjs';
 
 // One probe per isolate. Concurrent health checks during a cold start share
 // it; a finished probe does not cache, so the next check sees a fresh answer.
@@ -206,6 +207,7 @@ export class ProjectRoom extends DurableObject {
       });
     });
     this.store.featureEnv = env;
+    this.store.agentPlugin.setWakeAdapters?.(createWakeAdapters({ env }));
     if(!restoring) { bootstrapRoom(this.store, env);this.store.landQueue.configure({ env }); }
     // Google sign-in is optional: unconfigured or misconfigured credentials
     // disable the /api/auth/google routes (503) instead of breaking the room.

@@ -22,6 +22,12 @@ test('a rejected WebMCP registration does not break the page script',async t=>{
  assert.doesNotThrow(()=>runInNewContext(f.script,context));
  await new Promise(resolve=>setImmediate(resolve));
 });
+test('an incompatible public response returns an actionable tool error',async t=>{
+ const f=fixture(t,false),registered=[],elements={'copy-room-setup':{addEventListener(){}},'room-setup-prompt':{},'room-setup-copy-status':{}};
+ const context={document:{getElementById:id=>elements[id],modelContext:{registerTool:x=>registered.push(x)}},location:{origin:'https://example.test',pathname:'/r/public-test',search:''},URL,URLSearchParams,Promise,fetch:async()=>({ok:true,json:async()=>({schema:'unknown'})})};
+ runInNewContext(f.script,context);
+ const result=await registered[0].execute({});assert.equal(result.error,'unexpected_public_room_response');assert.match(result.message,/Try again/);
+});
 
 test('join guidance follows current owner admission without exposing a token',async t=>{
  const f=fixture(t),tool=f.registered[0];
@@ -50,4 +56,4 @@ test('cancelling an in-flight public read closes its network request',async t=>{
  await requestClosed;
 });
 
-test('WebMCP cursor pages return all published tasks and no private tasks',async t=>{const f=fixture(t);for(let i=0;i<7;i++){for(const visibility of ['public','private']){const id=visibility+'-'+i;f.s.command(f.key,'public-test',{id:'propose-'+id,type:'work.proposed',data:{workItemId:id,title:id,definitionOfDone:'task',accountableMemberId:'owner',mode:'read',ownerDecisionRequired:false,independentVerificationRequired:false}});if(visibility==='public')f.s.command(f.key,'public-test',{id:'publish-'+id,type:'work.public_set',data:{workItemId:id,enabled:true}});}}const tool=f.registered[0],ids=[];let after;do{const value=await tool.execute(after?{after}:{});ids.push(...value.tasks.map(x=>x.id));after=value.coverage.tasks.nextAfter;}while(after);assert.deepEqual(ids,Array.from({length:7},(_,i)=>'public-'+i));await assert.rejects(tool.execute({after:'x'.repeat(2049)}),/Invalid public task cursor/);});
+test('WebMCP cursor pages return all published tasks and no private tasks',async t=>{const f=fixture(t);for(let i=0;i<7;i++){for(const visibility of ['public','private']){const id=visibility+'-'+i;f.s.command(f.key,'public-test',{id:'propose-'+id,type:'work.proposed',data:{workItemId:id,title:id,definitionOfDone:'task',accountableMemberId:'owner',mode:'read',ownerDecisionRequired:false,independentVerificationRequired:false}});if(visibility==='public')f.s.command(f.key,'public-test',{id:'publish-'+id,type:'work.public_set',data:{workItemId:id,enabled:true}});}}const tool=f.registered[0],ids=[];let after;do{const value=await tool.execute(after?{after}:{});ids.push(...value.tasks.map(x=>x.id));after=value.coverage.tasks.nextAfter;}while(after);assert.deepEqual(ids,Array.from({length:7},(_,i)=>'public-'+i));const invalid=await tool.execute({after:'x'.repeat(2049)});assert.equal(invalid.error,'invalid_cursor');assert.match(invalid.message,/omit after/);});

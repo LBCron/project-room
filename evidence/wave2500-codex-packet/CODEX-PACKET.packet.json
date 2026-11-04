@@ -1,0 +1,72 @@
+{
+  "packetVersion": "1",
+  "subject": "wave-2500 cohort-09 Codex landing packet — decisive claims carried by lane evidence files",
+  "claims": [
+    {
+      "id": "C1",
+      "command": "sha256sum lane-01.md # spine table heads/trees (lane-01)",
+      "outputFile": "lane-01.md",
+      "sha256": "32bb3ecb3900a9b820d1b63fd52895ae30ef874340199b4c33b55328470f0c22"
+    },
+    {
+      "id": "C2",
+      "command": "sha256sum lane-02.md # Codex-only deploy acts in order (lane-02)",
+      "outputFile": "lane-02.md",
+      "sha256": "3b87ba9779c1ae5502eca83b0aae163568ab843e748bf331a30947b5c7da38d5"
+    },
+    {
+      "id": "C3",
+      "command": "sha256sum lane-03.md # pre-act journal inventory (lane-03)",
+      "outputFile": "lane-03.md",
+      "sha256": "5fca3e7b94e5c620823ef1cd0b819721cf55ee5135ab0662f87616fbd18fbf62"
+    },
+    {
+      "id": "C4",
+      "command": "sha256sum lane-04.md # five decisions from proposal v2 (lane-04)",
+      "outputFile": "lane-04.md",
+      "sha256": "ca56be89a0259108515a83da0496c3eddd90798dd3d561e803686e7a7591f9a2"
+    },
+    {
+      "id": "C5",
+      "command": "sha256sum lane-05.md # Batch A and next batches position (lane-05)",
+      "outputFile": "lane-05.md",
+      "sha256": "898136cecf145c59056782238753e79a66a14b687b9ff4bd64fc1c13c7ed9fd3"
+    },
+    {
+      "id": "C6",
+      "command": "sha256sum lane-06.md # required-checks proposal as filed (lane-06)",
+      "outputFile": "lane-06.md",
+      "sha256": "a458fc6ffee3d6f975acbc688483780337e8072d14302d4fee446a0091efdf7d"
+    },
+    {
+      "id": "C7",
+      "command": "sha256sum lane-07.md # delivery blocker and branch-rail fallback (lane-07)",
+      "outputFile": "lane-07.md",
+      "sha256": "3b29403d24aada593e4ae97e81170458efcdd99f45dc445708401bb36801589c"
+    },
+    {
+      "id": "C8",
+      "command": "sha256sum lane-08.md # gates exceptions conflicts (lane-08)",
+      "outputFile": "lane-08.md",
+      "sha256": "8da2eab216ee97bc03a4b25ff2e11b3c7f68fa97ff73e9933f423e858a8df4b7"
+    },
+    {
+      "id": "C9",
+      "command": "sha256sum lane-09.md # per-flip verification and reconciliation asks (lane-09)",
+      "outputFile": "lane-09.md",
+      "sha256": "89756961e201026d0aabfee1ad0364de25784e3af1f795d038a7fd0572aebdec"
+    },
+    {
+      "id": "C10",
+      "command": "sha256sum lane-10.md # non-author consistency falsifier grades (lane-10)",
+      "outputFile": "lane-10.md",
+      "sha256": "926d4bac497a2327e8ff80cd13c5b64bab06394ee07eb193fd41d2bbc640a8b9"
+    },
+    {
+      "id": "C11",
+      "command": "sha256sum CODEX-PACKET.md # the consolidated packet itself (CODEX-PACKET.md)",
+      "outputFile": "CODEX-PACKET.md",
+      "sha256": "2920c86e0ff3ec5c1ab628c5ae3470f06bf5db0d04a5b75706ac9ea5cb5772a2"
+    }
+  ]
+}

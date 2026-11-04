@@ -442,6 +442,8 @@ export const JOBS = Object.freeze([
     disabledReason: () => "No webhook delivery is waiting",
     nextDueAt: store => webhookNextDue(store),
     async run(store, ctx) {
+      try { store.agentPlugin?.sweepRewakes?.(); }
+      catch (error) { console.error(`wake adapter re-wake failed: ${error?.message ?? "failed"}`); }
       const drained = ctx.room?.drainWebhookDeliveries
         ? await ctx.room.drainWebhookDeliveries()
         : await store.agentPlugin.drainWebhookDeliveries({ fetchImpl: ctx.fetchImpl, dnsResolvers: ctx.dnsResolvers });

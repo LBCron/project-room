@@ -367,6 +367,7 @@ optional.push("offline.html", "icons/icon-192.png", "icons/icon-512.png", "icons
 optional.push("compare/project-room-vs-slack.html", "compare/project-room-vs-discord.html", "compare/agent-collaboration-tool.html", "compare/multi-agent-workspace.html", "compare/ai-agent-coordination.html", "compare/project-room-vs-agent-room.html"); // AEO buyer-intent pages (public assets)
 optional.push("og/home.png", "og/about.png", "og/offers.png", "og/compare.png", "og/receipts.png"); // GR1 static share images
 optional.push("og/fonts/Inter-Regular.ttf", "og/fonts/Inter-Regular.woff2", "og/fonts/OFL.txt"); // sign-in wordmark font (src/styles.css @font-face)
+optional.push("server/board-views.mjs", "server/routes/board-views.mjs"); // Board saved views (imported by work-claim-routes and the route table)
 optional.push("src/join.js"); // Join page logic (public asset, imported by join.html)
 optional.push("src/agent-signin-page.js"); // Agent sign-in page logic (public asset, imported by agent-signin.html)
 optional.push("src/join-watchdog.js"); // Join page loader watchdog (public asset, loaded by join.html)

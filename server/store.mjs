@@ -8,7 +8,7 @@ import {ensureDefaultChannelState} from '../src/default-channel-state.js';
 import {readCurrentEventWindow,currentEventRedactionMessages} from './current-room-events.mjs';
 import { assertRestoreAdmitted, restorePending, verifyRestoreControl } from './restore-admission.mjs';
 import {readCurrentWorkListing} from './current-work-list.mjs';
-import { CURRENT_ROOM_SCHEMA, CURRENT_ROOM_GUARDS, upgradeUnusedCurrentFormat5, currentInviteContext, initializeCurrentRoom, currentRoomAuthority, isCurrentRoom, currentDmConsentEventContext, currentCommandContext, prepareCurrentWrite, withCurrentServingWriter, readCurrentRecord, readCurrentHistoryFloor, withCurrentReadContext, readCurrentSelectedWorkState, readCurrentOverviewWindow, currentVisibleHorizon, readCurrentPrivateWorkParties, readCurrentHead, currentConversationRows, chargeCurrentReadBudget } from './current-room-repository.mjs';
+import { CURRENT_ROOM_SCHEMA, CURRENT_ROOM_GUARDS, upgradeUnusedCurrentFormat5, currentInviteContext, initializeCurrentRoom, currentRoomAuthority, currentRoomOwnerAuthority, isCurrentRoom, currentDmConsentEventContext, currentCommandContext, prepareCurrentWrite, withCurrentServingWriter, readCurrentRecord, readCurrentHistoryFloor, withCurrentReadContext, readCurrentSelectedWorkState, readCurrentOverviewWindow, currentVisibleHorizon, readCurrentPrivateWorkParties, readCurrentHead, currentConversationRows, chargeCurrentReadBudget } from './current-room-repository.mjs';
 import {bindReplayAppend} from './replay-cutover.mjs';
 import { savedHistoricalReplayCheckpoint } from './historical-replay-contract.mjs';
 import { bootstrapLegacyWriteProofs, configureWriteIntegrity, beginWriteProofFrame, endWriteProofFrame, publishProjectionWrites, projectionDigest, projectionContentHash, servingContentProof, servingProofDrift, assertProjectionWrite, assertMessageWrite, recordMessageWrite, withVerifiedRoomReconstruction } from './write-integrity.mjs';
@@ -4172,6 +4172,13 @@ this.slaBreachAlerts = new SlaBreachAlertJournal(this); // Task 26: durable in-a
       return out;
     });
   }
+  // Owner id without the full member census (which exhausts the shared current
+  // read budget in rooms of ~20+ members). Legacy rooms keep roomAuthority.
+  roomOwnerId(roomId) {
+    if(!this._restoreOpening)assertRestoreAdmitted(this.db);
+    const current = currentRoomOwnerAuthority(this.db, roomId);
+    return current ? current.ownerId : this.roomAuthority(roomId)?.ownerId;
+  }
   roomAuthority(roomId, { includeHistory = false, memberId = null } = {}) {
     if(!this._restoreOpening)assertRestoreAdmitted(this.db);
     const current = currentRoomAuthority(this.db, roomId, { memberId });
@@ -6136,7 +6143,7 @@ this.slaBreachAlerts = new SlaBreachAlertJournal(this); // Task 26: durable in-a
   importEvents(token, roomId, lines, expectedSessionBinding = null) {
     return this.transaction(() => {
       const auth = this.authenticate(token, roomId, expectedSessionBinding);
-      const { ownerId } = this.roomAuthority(roomId);
+      const ownerId = this.roomOwnerId(roomId);
       if (auth.member.id !== ownerId) fail(403, "owner_required", "Only the room owner can import history");
       const previous = this.room(roomId).state;
       refuseArchivedWrite(previous);

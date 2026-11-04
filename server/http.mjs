@@ -4348,7 +4348,7 @@ export function createRoomServer({ store, origin, assetRoot = new URL("../", imp
             || (params.has("auth") && !["room", "account"].includes(params.get("auth")))
             || ["x-project-room-help-context", "x-project-room-offer-context", "x-project-room-audit-view"].some(key => req.headers[key] !== undefined))
           reject(422, "invalid_snapshot_view", "Choose a supported snapshot view");
-        const { ownerId } = store.roomAuthority(roomId);
+        const ownerId = store.roomOwnerId(roomId);
         const member = auth.member;
         return json(res, 200, {
           snapshotView: "identity", snapshotVersion: 1, roomId,
@@ -5289,7 +5289,7 @@ export function createRoomServer({ store, origin, assetRoot = new URL("../", imp
         // credential no longer authenticates (401). The active check below
         // is defensive only.
         if (member.active === false) reject(409, "already_inactive", "Membership is already inactive");
-        if (store.roomAuthority(roomId).ownerId === member.id)
+        if (store.roomOwnerId(roomId) === member.id)
           reject(403, "owner_cannot_deactivate", "The room owner cannot deactivate its own membership; transfer ownership first");
         const result = store.command(selected.token, roomId, {
           id: randomUUID(), type: "member.access_changed",
@@ -5503,7 +5503,7 @@ export function createRoomServer({ store, origin, assetRoot = new URL("../", imp
       // (room-key or account cookie), or an owner/owner-appointed admin on its
       // agent identity bearer. Room keys presented as bearers remain excluded.
       if ((route === "share-links" || route === "share-links-cancel") && selected.bearer
-        && !(auth.kind === "identity" && (store.roomAuthority(roomId).ownerId === auth.member?.id
+        && !(auth.kind === "identity" && (store.roomOwnerId(roomId) === auth.member?.id
           || auth.member?.delegatedAdmin === true && auth.member.permissions.includes("manage_members")))) {
         reject(403, "access_denied", "Invitation links require a signed-in browser session");
       }

@@ -508,7 +508,7 @@ function callBountyTool(store, secret, roomId, auth, name, rest) {
       // Catalog visibility can span rooms. Write authority belongs to the
       // target room and must be checked inside the mutation/replay fence.
       enforceAutonomyTierForAction({ db: store.db, roomId,
-        state: { room: { ownerId: store.roomAuthority(roomId).ownerId } },
+        state: { room: { ownerId: store.roomOwnerId(roomId) } },
         actor: current.member, action: route });
       // F-X4-1: bounty claim/submit enforce the board's work-permission
       // gate, identical to the HTTP route (same helper, same refusal),

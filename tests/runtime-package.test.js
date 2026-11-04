@@ -11,6 +11,7 @@ import { createRuntimePackage, verifyRuntimePackage, verifyRuntimeImports, verif
 import { importClosure } from "../scripts/runtime-import-closure.mjs";
 import { assetPaths } from "../cloudflare/build-assets.mjs";
 import { candidateRuntimeFixture } from "../scripts/candidate-runtime-fixture.mjs";
+import { STORE_SCHEMA_VERSION } from "../server/writer-fence.mjs";
 import { frozenRecoveryFixture } from "../scripts/frozen-runtime-fixture.mjs";
 
 const repository = fileURLToPath(new URL("../", import.meta.url));
@@ -212,13 +213,14 @@ test("exact-commit runtime package verifies cold, excludes private state and pre
   {
     const damaged = join(directory, "unsupported-schema"); cpSync(destination, damaged, { recursive: true });
     const relative = "server/writer-fence.mjs", path = join(damaged, relative);
-    const source = readFileSync(path, "utf8").replace(/STORE_SCHEMA_VERSION = \d+/, "STORE_SCHEMA_VERSION = 46");
+    const unsupportedSchema = Math.max(46, STORE_SCHEMA_VERSION) + 1;
+    const source = readFileSync(path, "utf8").replace(/STORE_SCHEMA_VERSION = \d+/, `STORE_SCHEMA_VERSION = ${unsupportedSchema}`);
     writeFileSync(path, source);
     const manifestPath = join(damaged, "runtime-manifest.json"), manifest = JSON.parse(readFileSync(manifestPath));
     const entry = manifest.files.find(file => file.path === relative);
     entry.bytes = Buffer.byteLength(source); entry.sha256 = createHash("sha256").update(source).digest("hex");
     writeFileSync(manifestPath, JSON.stringify(manifest));
-    assert.throws(() => verifyRuntimePackage(damaged), /unsupported store schema 46/);
+    assert.throws(() => verifyRuntimePackage(damaged), new RegExp(`unsupported store schema ${unsupportedSchema}`));
   }
 
   for (const fault of ["missing", "changed", "extra", "symlink", "duplicate", "partial", "empty-directory"]) {
@@ -334,12 +336,12 @@ test("project preflight composes dependency, coverage and runtime checks", () =>
 });
 
 
-test("offline schema45 archive cold-serves nonempty native work and refuses an omitted dependency", t => {
+test("offline current-schema archive cold-serves nonempty native work and refuses an omitted dependency", t => {
   const directory = mkdtempSync(join(tmpdir(), "room-package-current-"));
   t.after(() => rmSync(directory, { recursive: true, force: true }));
   const commit = execFileSync("git", ["rev-parse", "HEAD"], { cwd: repository, encoding: "utf8" }).trim();
   const destination = join(directory, "runtime"), receipt = createRuntimePackage({repository,commit,destination});
-  assert.equal(receipt.schemaVersion,45);
+  assert.equal(receipt.schemaVersion,STORE_SCHEMA_VERSION);
   const program = `
     import {RoomStore} from ${JSON.stringify(pathToFileURL(join(destination,"server/store.mjs")).href)};
     import {initialRoom} from ${JSON.stringify(pathToFileURL(join(destination,"server/bootstrap.mjs")).href)};

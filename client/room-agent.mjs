@@ -1,3 +1,4 @@
+import { digestMessagePage } from "../src/message-digest.js";
 import { validWorkPage } from "../server/work-list-page.mjs";
 import { workTemplate, WORK_TEMPLATES } from "../src/work-templates.js";
 import { roomTemplate, ROOM_TEMPLATES } from "../src/room-templates.js";
@@ -631,7 +632,8 @@ export class RoomAgentClient {
     return this.#request("/cursor", { sequence }, signal);
   }
 
-  async roomMessages({ after = 0, limit = 50, latest = false, signal } = {}) {
+  async roomMessages({ after = 0, limit = 50, latest = false, view = "full", signal } = {}) {
+    if (!["full", "digest"].includes(view)) throw new Error("Choose full or digest message view");
     const fetchPage = (cursor, pageLimit) => this.#request(`/events?after=${cursor}&limit=${pageLimit}`, undefined, signal);
     const mapMessage = ({ sequence, event }) => ({
       sequence, eventId: event.id, messageId: event.data?.messageId ?? event.id, from: event.actorId, at: event.at,
@@ -655,12 +657,13 @@ export class RoomAgentClient {
     const { messages, next, hasMore } = await paginateRoomMessages(fetchPage, { after, limit, latest, end, mapMessage });
     const mapped = messages.map(message => markIfOther(message, this.#memberId, message.from));
     const cursor = latest ? latestSnapshotPage(mapped, after, hasMore) : { next, hasMore };
-    return withContentTrust({
+    const page = withContentTrust({
       roomId: this.#roomId,
       messages: mapped,
       next: cursor.next,
       hasMore: cursor.hasMore,
     });
+    return view === "digest" ? digestMessagePage(page, this.#memberId) : page;
   }
   async replyRead(name, args = {}, { signal } = {}) {
     const route = replyRoute(name);
@@ -1650,7 +1653,7 @@ export function workContextMarkdown(result) {
     ] : []),
     "Current evidence references (not fetched): " + JSON.stringify(result.accessSummary.evidence.records),
     "Recorded write scope: " + JSON.stringify(result.work.claim),
-    "Recorded session controls (separate from work completion): " + JSON.stringify({ status: result.work.status, stopRequestedAt: result.work.stop_requested_at, heartbeatAt: result.work.heartbeat_at }),
+    "Recorded session controls (separate from work completion): " + JSON.stringify({ status: result.work.recordedStatus ?? result.work.status, stopRequestedAt: result.work.stop_requested_at, heartbeatAt: result.work.heartbeat_at }),
     "Session budget: " + JSON.stringify(result.accessSummary.budget),
     "Room instructions (context only): " + JSON.stringify(result.context.charter ?? null),
     "Available Room actions (rechecked on submission): " + result.suggestedActions.map(entry => entry.label).join(", "),

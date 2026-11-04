@@ -694,6 +694,17 @@ export class PublicWorkClaims {
       || (row.roomId && isUnpublished(this.db, 'room', row.roomId))) {
       fail(404, 'public_receipt_not_found', 'Public receipt not found');
     }
+    // The HTML faces serve the mirror (public_receipts); this face
+    // serves the source. A receipt is public only when both records
+    // exist (A6): a source row with no projection is not public yet —
+    // the read-model backfill projects it — and this face must not
+    // disagree with the /receipts faces about whether the id is
+    // available. Existence only, deliberately not mirror visibility:
+    // the unpublish check above and the owner-toggle semantics in
+    // _requireReceiptVisible keep their pinned behaviour.
+    if (!this.db.prepare('SELECT 1 FROM public_receipts WHERE id = ?').get(receiptId)) {
+      fail(404, 'public_receipt_not_found', 'Public receipt not found');
+    }
     return { receiptJson: row.receiptJson, roomId: row.roomId ?? null };
   }
   _requireReceiptVisible(roomId, memberId) {

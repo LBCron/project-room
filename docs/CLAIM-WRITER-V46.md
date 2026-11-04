@@ -1,6 +1,6 @@
 # Claim writer v46 release boundary
 
-v45 claim decoders discard delegate, approvalHold and planning. An ordinary old note update can erase both. v46 adds a versioned fence to work_claims and retains these fields (including project/initiative planning metadata) and their approval/review/lifecycle invariants in the existing state machine. It exposes no new route, scope, key or enabled feature. Accounts, credentials and room history stay in place.
+v45 claim decoders discard delegate, approvalHold and planning. An ordinary old note update can erase those fields. v46 adds a versioned fence to work_claims and retains these fields (including project/initiative planning metadata) and their approval/review/lifecycle invariants in the existing state machine. It exposes no new route, scope, key or enabled feature. Accounts, credentials and room history stay in place.
 
 Release the compatible foundation first. Qualify its actual v45-to-v46 Native upgrade and staging smoke, then deploy and smoke production before adding opt-in routes. Subsequent feature releases have this production-verified v46 source as a compatible fallback. Keep the existing admission, schema-floor and smoke gates.
 

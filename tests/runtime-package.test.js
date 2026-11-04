@@ -11,6 +11,7 @@ import { createRuntimePackage, verifyRuntimePackage, verifyRuntimeImports, verif
 import { importClosure } from "../scripts/runtime-import-closure.mjs";
 import { assetPaths } from "../cloudflare/build-assets.mjs";
 import { candidateRuntimeFixture } from "../scripts/candidate-runtime-fixture.mjs";
+import { STORE_SCHEMA_VERSION } from "../server/writer-fence.mjs";
 import { frozenRecoveryFixture } from "../scripts/frozen-runtime-fixture.mjs";
 
 const repository = fileURLToPath(new URL("../", import.meta.url));
@@ -334,12 +335,12 @@ test("project preflight composes dependency, coverage and runtime checks", () =>
 });
 
 
-test("offline schema45 archive cold-serves nonempty native work and refuses an omitted dependency", t => {
+test("offline current-schema archive cold-serves nonempty native work and refuses an omitted dependency", t => {
   const directory = mkdtempSync(join(tmpdir(), "room-package-current-"));
   t.after(() => rmSync(directory, { recursive: true, force: true }));
   const commit = execFileSync("git", ["rev-parse", "HEAD"], { cwd: repository, encoding: "utf8" }).trim();
   const destination = join(directory, "runtime"), receipt = createRuntimePackage({repository,commit,destination});
-  assert.equal(receipt.schemaVersion,45);
+  assert.equal(receipt.schemaVersion,STORE_SCHEMA_VERSION);
   const program = `
     import {RoomStore} from ${JSON.stringify(pathToFileURL(join(destination,"server/store.mjs")).href)};
     import {initialRoom} from ${JSON.stringify(pathToFileURL(join(destination,"server/bootstrap.mjs")).href)};

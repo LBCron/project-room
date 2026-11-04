@@ -10,8 +10,11 @@
 //
 // OFF unless ROOM_INBOUND_HOOKS=1: both routes answer 404. Payload text is
 // stored as task title/note only — it is data, never instructions, and is
-// never echoed back. The signing secret is returned once at creation.
-import { createHash, createHmac, randomBytes, timingSafeEqual } from "node:crypto";
+// never echoed back. The signing secret is returned once at creation and is
+// stored only as AES-256-GCM ciphertext under a key derived (HKDF-SHA256)
+// from the Worker secret ROOM_INBOUND_HOOK_KEY, bound to the hook id. With the
+// flag on and no key, create and delivery fail closed (503).
+import { createCipheriv, createDecipheriv, createHash, createHmac, hkdfSync, randomBytes, timingSafeEqual } from "node:crypto";
 import { eventSigningKey } from "./mcp-events-wire.mjs";
 import { createWork, claimWork } from "./work-claims.mjs";
 import { emitWorkClaimEvent, enqueueClaimWake } from "./work-claim-events.mjs";
@@ -30,17 +33,48 @@ const ID = /^[A-Za-z0-9_-]{1,128}$/;
 export const inboundHooksEnabled = (env = process.env) => env?.ROOM_INBOUND_HOOKS === "1";
 const ensure = db => db.exec(SCHEMA);
 
-export function createInboundHook(db, { roomId, targetMember, createdBy, now = Date.now() }) {
+export class InboundKeyMissing extends Error {}
+function hookKey(env) {
+  const raw = env?.ROOM_INBOUND_HOOK_KEY;
+  if (typeof raw !== "string" || raw.length < 32) throw new InboundKeyMissing("inbound hook key unavailable");
+  return Buffer.from(hkdfSync("sha256", raw, "room-inbound-hooks", "room-inbound-hook-secret-v1", 32));
+}
+export function sealSecret(secret, hookId, env = process.env) {
+  const iv = randomBytes(12);
+  const c = createCipheriv("aes-256-gcm", hookKey(env), iv).setAAD(Buffer.from(hookId));
+  const ct = Buffer.concat([c.update(secret, "utf8"), c.final()]);
+  return `v1:${Buffer.concat([iv, ct, c.getAuthTag()]).toString("base64url")}`;
+}
+export function openSecret(sealed, hookId, env = process.env) {
+  if (typeof sealed !== "string" || !sealed.startsWith("v1:")) return null;
+  const buf = Buffer.from(sealed.slice(3), "base64url");
+  if (buf.length < 29) return null;
+  const d = createDecipheriv("aes-256-gcm", hookKey(env), buf.subarray(0, 12)).setAAD(Buffer.from(hookId));
+  d.setAuthTag(buf.subarray(buf.length - 16));
+  try { return Buffer.concat([d.update(buf.subarray(12, buf.length - 16)), d.final()]).toString("utf8"); } catch { return null; }
+}
+
+export function createInboundHook(db, { roomId, targetMember, createdBy, now = Date.now(), env = process.env }) {
   ensure(db);
   const hookId = `ih_${randomBytes(12).toString("base64url")}`;
   const secret = `whsec_${randomBytes(32).toString("base64")}`;
   db.prepare("INSERT INTO room_inbound_hooks (hook_id, room_id, secret, target_member, created_by, created_at) VALUES (?, ?, ?, ?, ?, ?)")
-    .run(hookId, roomId, secret, targetMember, createdBy, now);
+    .run(hookId, roomId, sealSecret(secret, hookId, env), targetMember, createdBy, now);
   return { hookId, secret, path: `/api/inbound/${hookId}` };
 }
 export function revokeInboundHook(db, { roomId, hookId, now = Date.now() }) {
   ensure(db);
   return db.prepare("UPDATE room_inbound_hooks SET revoked_at = ? WHERE hook_id = ? AND room_id = ? AND revoked_at IS NULL").run(now, hookId, roomId).changes > 0;
+}
+// Owner listing: never includes the secret or its ciphertext.
+export function listInboundHooks(db, { roomId }) {
+  ensure(db);
+  return db.prepare(`SELECT h.hook_id, h.target_member, h.created_by, h.created_at, h.revoked_at,
+      (SELECT COUNT(*) FROM room_inbound_deliveries d WHERE d.hook_id = h.hook_id) AS deliveries,
+      (SELECT MAX(at) FROM room_inbound_deliveries d WHERE d.hook_id = h.hook_id) AS last_delivery_at
+    FROM room_inbound_hooks h WHERE h.room_id = ? ORDER BY h.created_at DESC LIMIT 100`).all(roomId)
+    .map(r => ({ hookId: r.hook_id, path: `/api/inbound/${r.hook_id}`, target: r.target_member, createdBy: r.created_by,
+      createdAt: r.created_at, revokedAt: r.revoked_at ?? null, deliveries: r.deliveries, lastDeliveryAt: r.last_delivery_at ?? null }));
 }
 function hookOf(db, hookId) {
   ensure(db);
@@ -111,7 +145,10 @@ export async function postInboundHook(ctx, { env = process.env, now = Date.now()
   const hook = typeof hookId === "string" && ID.test(hookId) ? hookOf(ctx.store.db, hookId) : null;
   if (!hook) ctx.reject(404, "not_found", "Not found");
   const text = await ctx.readText(ctx.req, INBOUND_BODY_LIMIT, () => ctx.reject(413, "too_large", "Request is too large"));
-  const bad = verifyInbound({ secret: hook.secret, headers: ctx.req.headers, body: text, nowS: Math.floor(now / 1000) });
+  let secret;
+  try { secret = openSecret(hook.secret, hook.hook_id, env); } catch (e) { if (e instanceof InboundKeyMissing) ctx.reject(503, "inbound_hooks_unavailable", "Inbound hooks are not configured"); throw e; }
+  if (!secret) ctx.reject(401, "webhook_signature", "unverifiable");
+  const bad = verifyInbound({ secret, headers: ctx.req.headers, body: text, nowS: Math.floor(now / 1000) });
   if (bad) ctx.reject(401, "webhook_signature", bad);
   const task = taskFromEvent(text);
   if (task.error) ctx.reject(422, task.error, "Expected an MCP Events payload {eventId, name, timestamp, data:{title, body?, url?}}");

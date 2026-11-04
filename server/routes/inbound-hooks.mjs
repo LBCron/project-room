@@ -1,8 +1,8 @@
 // Inbound task hooks (Linear-parity). OFF unless ROOM_INBOUND_HOOKS=1.
 // POST /api/rooms/{roomId}/inbound-hooks — room owner creates {target} or
-//   revokes {revoke: hookId}. The whsec_ secret is returned once, on create.
+//   revokes {revoke: hookId}, or lists {list: true} (no secrets). The whsec_ secret is returned once, on create.
 // POST /api/inbound/{hookId} — signed MCP Events delivery opens a Board task.
-import { createInboundHook, revokeInboundHook, inboundHooksEnabled, postInboundHook } from "../inbound-task-hooks.mjs";
+import { createInboundHook, revokeInboundHook, listInboundHooks, inboundHooksEnabled, postInboundHook, InboundKeyMissing } from "../inbound-task-hooks.mjs";
 import { ownMember } from "../../src/events.js";
 
 export async function postInboundHookAdmin(ctx) {
@@ -17,13 +17,16 @@ export async function postInboundHookAdmin(ctx) {
   if (!inboundHooksEnabled()) ctx.reject(404, "not_found", "Not found");
   const authority = ctx.store.roomAuthority(roomId);
   if (authority.ownerId !== auth.member.id) ctx.reject(403, "owner_only", "Only the room owner can manage inbound hooks");
-  const data = await ctx.body(ctx.req, { fields: ["target", "revoke"], unknownCode: "invalid_body" });
+  const data = await ctx.body(ctx.req, { fields: ["target", "revoke", "list"], unknownCode: "invalid_body" });
+  if (data.list === true) return ctx.json(ctx.res, 200, { ok: true, hooks: listInboundHooks(ctx.store.db, { roomId }) });
   if (typeof data.revoke === "string") {
     return ctx.json(ctx.res, 200, { ok: true, revoked: revokeInboundHook(ctx.store.db, { roomId, hookId: data.revoke }) });
   }
   const target = ownMember(authority.members ?? {}, typeof data.target === "string" ? data.target : auth.member.id);
   if (!target || target.active === false) ctx.reject(422, "unknown_member", "target must be an active room member");
-  const hook = createInboundHook(ctx.store.db, { roomId, targetMember: target.id, createdBy: auth.member.id });
+  let hook;
+  try { hook = createInboundHook(ctx.store.db, { roomId, targetMember: target.id, createdBy: auth.member.id }); }
+  catch (e) { if (e instanceof InboundKeyMissing) ctx.reject(503, "inbound_hooks_unavailable", "Inbound hooks are not configured"); throw e; }
   return ctx.json(ctx.res, 201, { ok: true, ...hook, target: target.id });
 }
 

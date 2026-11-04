@@ -58,10 +58,16 @@ export const MCP_AUTH_MESSAGE = "Room tools need Authorization: Bearer with your
 // Usage report 2026-11-03: edit distance sent `room_close_work` to
 // `room_block_work` (the opposite intent). Verb synonyms map a guessed name to
 // the tool that does that job, but only when that tool is actually offered.
+// Order matters: the first matching row wins (release before claim, decisions
+// before generic reads). Harness 2026-11-03: 18 guessed names, 11 -> 17 hits.
 const INTENT_VERBS = Object.freeze([
+  [/(^|_)(decisions?|rules|charter|handoff_packet)(_|$)/, ["room_handoff_packet", "room_list_events", "get_room_context"]],
   [/(^|_)(close|finish|complete|done|resolve)(_|$)/, ["room_record_completion", "room_submit_text_result"]],
-  [/(^|_)(take|grab|lock|reserve|acquire)(_|$)/, ["room_claim", "room_acquire_claim"]],
-  [/(^|_)(unclaim|unlock|drop|abandon)(_|$)/, ["room_release_claim", "room_claim"]],
+  [/(^|_)(unclaim|unlock|drop|abandon|release)(_|$)/, ["room_release_claim", "room_claim"]],
+  [/(^|_)(take|grab|lock|reserve|acquire|claim)(_|$)/, ["room_claim", "room_acquire_claim"]],
+  [/(^|_)(answer|respond|reply)(_|$)/, ["room_reply"]],
+  [/(^|_)review(_|$)/, ["room_request_reply", "room_handoff"]],
+  [/(^|_)(get|fetch|read|list)_(messages|history|chat)(_|$)/, ["room_read_messages"]],
   [/(^|_)(send|say|write|chat)(_|$)/, ["room_post_message"]],
   [/(^|_)(inbox|mentions|notifications|unread)(_|$)/, ["room_needs_me", "room_read_inbox"]],
   [/(^|_)(board|tasks|todo)(_|$)/, ["room_list_work"]]

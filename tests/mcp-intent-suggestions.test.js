@@ -29,3 +29,9 @@ test("harness misses: claim, release, answer, read messages, review, decisions",
   assert.equal(closestToolName("room_request_review", NAMES), "room_request_reply");
   assert.equal(closestToolName("room_read_decisions", NAMES), "get_room_context", "decisions live in get_room_context view:handoff (#5866)");
 });
+
+test('unrelated objects and read intents do not suggest message or completion writes', () => {
+  for (const name of ['room_send_invoice', 'room_write_file', 'room_close_connection', 'room_read_reply', 'room_get_review']) {
+    assert.equal(closestToolName(name, NAMES), null, name);
+  }
+});

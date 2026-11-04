@@ -63,13 +63,13 @@ export const MCP_AUTH_MESSAGE = "Room tools need Authorization: Bearer with your
 // before generic reads). Harness 2026-11-03: 18 guessed names, 11 -> 17 hits.
 const INTENT_VERBS = Object.freeze([
   [/(^|_)(decisions?|rules|charter|handoff_packet)(_|$)/, ["get_room_context", "room_list_events"]],
-  [/(^|_)(close|finish|complete|done|resolve)(_|$)/, ["room_record_completion", "room_submit_text_result"]],
+  [/^(?:room_)?(?:close|finish|complete|done|resolve)(?:_(?:work|task|tasks|claim|claims))?$/, ["room_record_completion", "room_submit_text_result"]],
   [/(^|_)(unclaim|unlock|drop|abandon|release)(_|$)/, ["room_release_claim", "room_claim"]],
   [/(^|_)(take|grab|lock|reserve|acquire|claim)(_|$)/, ["room_claim", "room_acquire_claim"]],
-  [/(^|_)(answer|respond|reply)(_|$)/, ["room_reply"]],
-  [/(^|_)review(_|$)/, ["room_request_reply", "room_handoff"]],
+  [/^(?:room_)?(?:answer|respond|reply)(?:_(?:message|mention|request))?$/, ["room_reply"]],
+  [/^(?:room_)?(?:request_)?review(?:_(?:work|task|claim))?$/, ["room_request_reply", "room_handoff"]],
   [/(^|_)(get|fetch|read|list)_(messages|history|chat)(_|$)/, ["room_read_messages"]],
-  [/(^|_)(send|say|write|chat)(_|$)/, ["room_post_message"]],
+  [/^(?:room_)?(?:send|say|write|chat)(?:_(?:message|messages|chat))?$/, ["room_post_message"]],
   [/(^|_)(inbox|mentions|notifications|unread)(_|$)/, ["room_needs_me", "room_read_inbox"]],
   [/(^|_)(board|tasks|todo)(_|$)/, ["room_list_work"]]
 ]);

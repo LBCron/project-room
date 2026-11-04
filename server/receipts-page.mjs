@@ -414,9 +414,11 @@ const publicJson = receipt => ({
   // no journal lot row carries neither, and none is forged here.
   ...(receipt.lotId ? { lotId: receipt.lotId } : {}),
   ...(receipt.settlement ? { settlement: receipt.settlement } : {}),
-  // Parity fields (additive; no existing field changes): the honesty
-  // note the HTML face carries in its JSON-LD and body, and the
+  // Parity fields (additive; no existing field changes): the artifact
+  // locator the HTML face links for every public-work receipt, the
+  // honesty note the HTML face carries in its JSON-LD and body, and the
   // stored-record recheck warning the HTML banner carries.
+  ...(receipt.source === "public-work" ? { artifactUrl: `/api/public-work/receipts/${encodeURIComponent(receipt.id)}/artifact` } : {}),
   provenance: provenNoteOf(receipt),
   recheckNote: RECHECK_NOTE,
 });

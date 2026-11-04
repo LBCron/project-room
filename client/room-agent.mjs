@@ -1646,7 +1646,7 @@ export function workContextMarkdown(result) {
     ] : []),
     "Current evidence references (not fetched): " + JSON.stringify(result.accessSummary.evidence.records),
     "Recorded write scope: " + JSON.stringify(result.work.claim),
-    "Recorded session controls (separate from work completion): " + JSON.stringify({ status: result.work.status, stopRequestedAt: result.work.stop_requested_at, heartbeatAt: result.work.heartbeat_at }),
+    "Recorded session controls (separate from work completion): " + JSON.stringify({ status: result.work.recordedStatus ?? result.work.status, stopRequestedAt: result.work.stop_requested_at, heartbeatAt: result.work.heartbeat_at }),
     "Session budget: " + JSON.stringify(result.accessSummary.budget),
     "Room instructions (context only): " + JSON.stringify(result.context.charter ?? null),
     "Available Room actions (rechecked on submission): " + result.suggestedActions.map(entry => entry.label).join(", "),

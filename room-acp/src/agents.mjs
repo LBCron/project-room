@@ -123,7 +123,7 @@ export async function probe(candidate, options = {}) {
     if (options.executionReady) {
       const { AgentHost } = await import("./agent-host.mjs");
       let permissionRequested = false;
-      host = new AgentHost({ candidate, cwd: options.cwd, env: options.env,
+      host = new AgentHost({ candidate, cwd: options.cwd, env: options.env, mode: options.mode,
         onPermission: async () => { permissionRequested = true; return { outcome: { outcome: "cancelled" } }; },
       });
       const capabilities = await host.start({ timeoutMs: options.timeoutMs ?? 30000 });

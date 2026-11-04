@@ -3,6 +3,7 @@
 // callers can pace themselves before they are refused).
 import test from "node:test";
 import assert from "node:assert/strict";
+import { request } from "node:http";
 import { RoomStore } from "../server/store.mjs";
 import { createRoomServer } from "../server/http.mjs";
 import { initialRoom } from "../server/bootstrap.mjs";
@@ -29,7 +30,26 @@ async function serve(t, options = {}) {
     headers: { authorization: `Bearer ${ada.secret}`, "content-type": "application/json", accept: "application/json, text/event-stream" },
     body: JSON.stringify({ jsonrpc: "2.0", id: n++, method: "tools/call", params: { name, arguments: { roomId: "ada-den", ...args } } }) });
   const getOwner = path => fetch(origin + path, { headers: { authorization: `Bearer ${owner}` } });
-  return { origin, get, getOwner, post, mcp };
+  const beginMcp = () => {
+    const payload = JSON.stringify({ jsonrpc: "2.0", id: "held-body", method: "tools/call",
+      params: { name: "room_check_access", arguments: { roomId: "ada-den" } } });
+    let pending;
+    const response = new Promise((resolve, reject) => {
+      pending = request(origin + "/mcp", { method: "POST", headers: {
+        authorization: `Bearer ${ada.secret}`, "content-type": "application/json",
+        accept: "application/json, text/event-stream", "content-length": Buffer.byteLength(payload),
+      } }, res => {
+        const chunks = [];
+        res.on("data", chunk => chunks.push(chunk));
+        res.on("end", () => resolve({ status: res.statusCode, headers: res.headers, body: Buffer.concat(chunks).toString() }));
+        res.on("error", reject);
+      });
+      pending.on("error", reject);
+      pending.write(payload.slice(0, -1));
+    });
+    return { response, finish: () => pending.end(payload.slice(-1)) };
+  };
+  return { origin, server, get, getOwner, post, mcp, beginMcp };
 }
 const budget = response => ["limit", "remaining", "reset", "bucket"].map(k => response.headers.get(`x-ratelimit-${k}`));
 
@@ -67,6 +87,22 @@ test("overlapping requests keep credential and read/write response budgets isola
   assert.equal(refused.status, 429);
   assert.equal(refused.headers.get("x-ratelimit-remaining"), "0");
   assert.equal((await getOwner(path)).headers.get("x-ratelimit-remaining"), "2");
+});
+
+test("MCP response budget survives a body await while another request completes", { timeout: 5000 }, async t => {
+  const { server, post, beginMcp } = await serve(t);
+  const arrived = new Promise(resolve => server.once("request", resolve));
+  const held = beginMcp();
+  await arrived; // The real handler is now waiting for the final body byte.
+  const other = await post("complete a different credential's request first");
+  assert.equal(other.status, 201, await other.text());
+  assert.equal(other.headers.get("x-ratelimit-bucket"), "write");
+  held.finish();
+  const response = await held.response;
+  assert.equal(response.status, 200, response.body);
+  assert.equal(response.headers["x-ratelimit-bucket"], "read");
+  assert.equal(response.headers["x-ratelimit-limit"], "4");
+  assert.equal(response.headers["x-ratelimit-remaining"], "3");
 });
 
 test("writes report the write bucket separately from reads", async t => {

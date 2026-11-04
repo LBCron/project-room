@@ -1000,7 +1000,8 @@
         "readOnlyHint": false,
         "destructiveHint": false,
         "idempotentHint": true,
-        "openWorldHint": false
+        "openWorldHint": false,
+        "title": "Mark Caught Up"
       }
     },
     "room_mcp_snippet": {

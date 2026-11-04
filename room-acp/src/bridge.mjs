@@ -92,6 +92,10 @@ class TurnReceipts {
         receipt.phase === "linked" && !/^[a-f0-9]{64}$/.test(receipt.groupKey)) throw new Error("Invalid execution receipt; manual recovery required");
     return receipt;
   }
+  find(key) {
+    if (!this.dir && !this.memory.has(key)) return undefined;
+    try { return this.read(key); } catch (error) { if (error.code === 'ENOENT') return undefined; throw error; }
+  }
   save(key, receipt) {
     if (!this.dir) { this.memory.set(key, receipt); return; }
     const path = join(this.dir, key + ".json"), temporary = path + "." + randomUUID() + ".tmp";
@@ -123,19 +127,21 @@ function ordinaryTurn(recorder, stopReason) {
 export class Bridge {
   constructor({ connection, candidate, cwd, env, mode = null, respondTo = "anyone", maxSessions = 4, waitMs = 25000, cadenceSeconds = 30, fetchImpl = fetch, log = () => {}, host = null, persistSessions = true, restartDelayMs = 1000, minPollIntervalMs = 2500, permissionTimeoutMs = DEFAULT_PERMISSION_TIMEOUT_MS, permissionPollMs = 1500, permissionApproverId = connection.permissionApproverId ?? null }) {
     this.connection = connection; this.respondTo = respondTo; this.waitMs = waitMs; this.cadenceSeconds = cadenceSeconds; this.log = log;
-    this.room = new RoomClient({ apiBase: connection.apiBase, roomId: connection.roomId, memberId: connection.memberId, credential: connection.credential, fetchImpl });
+    this.controller = new AbortController();
+    this.room = new RoomClient({ signal:this.controller.signal, apiBase: connection.apiBase, roomId: connection.roomId, memberId: connection.memberId, credential: connection.credential, fetchImpl });
     this.claimReceipts = new TurnReceipts(connection, env, persistSessions);
     this.chatReceipts = new TurnReceipts(connection, env, persistSessions, "chat-turns");
+    this.parkedThreads = new TurnReceipts(connection, env, persistSessions, "chat-blocked-threads");
     this.replyWindows = new TurnReceipts(connection, env, persistSessions, "chat-reply-windows");
     this.sessionMap = new SessionMap({ roomId: connection.roomId, hostId: connection.hostId, env, persist: persistSessions });
     this.host = host ?? new AgentHost({ candidate, cwd, env, mode, log, savedSessions: this.sessionMap, onPermission: request => this.onPermission(request) });
     this.permissionApproverId = permissionApproverId;
     this.permissionTimeoutMs = permissionTimeoutMs; this.permissionPollMs = permissionPollMs;
-    this.restartDelayMs = restartDelayMs; this.minPollIntervalMs = minPollIntervalMs; this.lastPollAt = 0; this.wakeCursor = null; this.crashes = []; this.pausedUntil = 0; this.ready = null;
+    this.restartDelayMs = restartDelayMs; this.minPollIntervalMs = minPollIntervalMs; this.lastPollAt = 0; this.wakeCursor = null; this.freshWakeDiscovery = false; this.crashes = []; this.pausedUntil = 0; this.ready = null;
     this.queue = new ThreadQueue({ concurrency: maxSessions, run: (threadKey, batch) => this.turn(threadKey, batch) });
     this.host.onExit?.(info => this.onAgentExit(info));
     this.approverController = new AbortController();
-    this.fencingToken = null; this.seen = new Set(); this.controller = new AbortController(); this.stats = { turns: 0, posted: 0, acked: 0, skipped: 0 };
+    this.fencingToken = null; this.seen = new Set(); this.stats = { turns: 0, posted: 0, acked: 0, skipped: 0 };
   }
 
   // Agent process died: restart with backoff; CRASH_LIMIT crashes inside
@@ -255,6 +261,10 @@ export class Bridge {
     if (this.fencingToken && Date.now() < this.leaseRenewAt) return true;
     const value = await this.room.heartbeat({ hostId: this.connection.hostId, cadenceSeconds: this.cadenceSeconds });
     this.fencingToken = value?.listener?.acquired ? value.listener.fencingToken : null;
+    const selection = value?.wakeSelection;
+    this.freshWakeDiscovery = Boolean(this.queue.concurrency > 1 && this.fencingToken && selection?.version === 1 && selection.newest === true
+      && selection.roomId === this.connection.roomId && Object.keys(selection).sort().join(',') === 'newest,roomId,version');
+    this.queue.reservePriority(this.freshWakeDiscovery && this.queue.concurrency > 1 ? 1 : 0);
     this.room.listenerToken = this.fencingToken;
     const expires = Number(value?.listener?.leaseExpiresAt);
     this.leaseRenewAt = Math.min(Date.now() + this.cadenceSeconds * 1000 / 2, Number.isFinite(expires) ? expires - 20000 : Infinity);
@@ -289,29 +299,43 @@ export class Bridge {
     catch (error) { this.stopForContextLimit(error); throw error; }
   }
 
-  async threadRoot(messageId) {
+  async threadRoot(messageId, {selection = false} = {}) {
     let selected = await this.readThread(messageId, {selected:true});
     for (let hops = 0; selected.thread.replyToId && hops < 5; hops++) {
       if (selected.replyRequest?.recipientId === this.connection.memberId) break;
       selected = await this.readThread(selected.thread.replyToId, {selected:true});
     }
-    return selected.thread;
+    return selection ? selected : selected.thread;
   }
 
   // Route one wake signal into the queue, or ack it as not for us.
-  async accept(signal) {
+  async accept(signal, {priority = false} = {}) {
     if (this.seen.has(signal.signalId)) return;
     this.seen.add(signal.signalId);
     try {
       if (signal.workClaim) { await this.acceptClaim(signal); return; }
       if (!signal.messageId || !["mention", "dm", "reply", "direct"].includes(signal.kind)) { await this.ack([signal.signalId]); this.stats.skipped++; return; }
-      const message = (await this.readThread(signal.messageId, {selected:true})).thread;
+      const selected = await this.readThread(signal.messageId, {selected:true});
+      const message = selected.thread;
       // Routing does not authorize execution. The queued turn checks all
       // actual stored request authors against a fresh selected authority read.
-      const root = message.replyToId ? await this.threadRoot(message.id) : message;
+      const rootSelection = message.replyToId ? await this.threadRoot(message.id, {selection:true}) : selected;
+      const root = rootSelection.thread;
       // An "@agent allow" answer to a pending permission ask is not a new turn.
       if (this.permissions?.isPending(root.id) && decisionOf(message.body)) { await this.ack([signal.signalId]); return; }
-      this.queue.push(root.id, { signalId: signal.signalId, messageId: message.id, author: message.author ?? message.authorId, body: message.body });
+      let eligible = priority === true && this.freshWakeDiscovery && this.queue.concurrency > 1
+        && !rootSelection.replyRequest && root.requestKind !== "reply"
+        && Number.isSafeInteger(signal.createdAt) && signal.createdAt >= 0
+        && typeof signal.signalId === 'string' && signal.signalId.length > 0 && signal.signalId.length <= 128
+        && !this.chatReceipts.find(this.chatReceipts.key(signal.signalId));
+      if (eligible) {
+        const fact = this.readParkedThread(root.id);
+        if (fact?.rootHash === createHash('sha256').update(JSON.stringify(root)).digest('hex')) eligible = false;
+      }
+      if (eligible) eligible = (await this.messageAuthority([message.id])).get(message.id) === 'allowed';
+      const added = this.queue.push(root.id, { signalId: signal.signalId, messageId: message.id, author: message.author ?? message.authorId, body: message.body },
+        {priority:eligible, priorityPosition:eligible ? {createdAt:signal.createdAt, signalId:signal.signalId} : null});
+      return added && eligible;
     } catch (error) { this.seen.delete(signal.signalId); throw error; }
   }
 
@@ -467,6 +491,24 @@ export class Bridge {
     }
   }
 
+  readParkedThread(threadKey) {
+    const fact = this.parkedThreads.find(this.parkedThreads.key(threadKey));
+    if (fact === undefined) return undefined;
+    const path = `/api/rooms/${encodeURIComponent(this.connection.roomId)}/messages/${encodeURIComponent(threadKey)}/thread?view=message`;
+    if (fact.phase !== 'queued' || fact.version !== 1 || fact.code !== 'current_thread_too_large'
+      || fact.roomId !== this.connection.roomId || fact.memberId !== this.connection.memberId || fact.threadKey !== threadKey
+      || typeof fact.observedRequestId !== 'string' || !fact.observedRequestId || !/^[a-f0-9]{64}$/.test(fact.rootHash)
+      || fact.selectedRead?.method !== 'GET' || fact.selectedRead.path !== path)
+      throw Error('Invalid parked thread fact; manual recovery required');
+    return fact;
+  }
+
+  parkChatBatch(key, receipt, selectedRead) {
+    this.chatReceipts.save(key, {...receipt, contextBlocked:{version:1,
+      code:'current_thread_too_large', roomId:this.connection.roomId, threadKey:receipt.threadKey,
+      requestId:receipt.requestId, selectedRead}});
+  }
+
   async executeQueuedChatReceipt(key, receipt) {
     // Repair a crash during the per-signal link writes. An unlinked queued
     // sibling has never executed and can join this group. A sibling already
@@ -507,7 +549,37 @@ export class Bridge {
     if (formal && (formal.request.status !== 'open' || formal.current?.actions?.answer !== true)) {
       this.chatReceipts.save(key, {...receipt, phase:'discarded'}); return;
     }
-    const thread = formal ? selected.thread : (await this.readThread(receipt.threadKey)).thread;
+    let thread = selected.thread;
+    if (!formal) {
+      // A fact is only a conservative context refusal, never cached authority.
+      // Source-author/listener checks above and this selected classification are fresh for every new batch.
+      const rootHash = createHash('sha256').update(JSON.stringify(selected.thread)).digest('hex');
+      const fact = !selected.replyRequest ? this.readParkedThread(receipt.threadKey) : undefined;
+      if (fact?.rootHash === rootHash) {
+        this.parkChatBatch(key, receipt, fact.selectedRead);
+        return;
+      }
+      try { thread = (await this.room.thread(receipt.threadKey)).thread; }
+      catch (error) {
+        // This ordinary batch has not started a model/session. Preserve its
+        // exact inputs without ACK, rather than stopping independent threads.
+        if (error instanceof RoomError && error.status === 413 && error.code === 'current_thread_too_large') {
+          const selectedRead = {method:'GET', path:`/api/rooms/${encodeURIComponent(this.connection.roomId)}/messages/${encodeURIComponent(receipt.threadKey)}/thread?view=message`};
+          this.parkChatBatch(key, receipt, selectedRead);
+          if (!selected.replyRequest) {
+            const observed = {phase:'queued', version:1, code:error.code, roomId:this.connection.roomId,
+              memberId:this.connection.memberId, threadKey:receipt.threadKey, rootHash,
+              observedRequestId:receipt.requestId, selectedRead};
+            const saved = this.parkedThreads.begin(receipt.threadKey, observed);
+            if (!saved.fresh) this.parkedThreads.save(saved.key, {...saved.receipt, ...observed});
+          }
+          this.log(`Ordinary thread ${receipt.threadKey} parked (${error.code}); ${receipt.signalIds.length} wakes remain unacknowledged. Selected review: GET ${selectedRead.path}. Message IDs are retained in the queued receipt.`);
+          return;
+        }
+        this.stopForContextLimit(error);
+        throw error;
+      }
+    }
     const {sessionId, created} = await this.host.session(receipt.threadKey);
     if (formal) {
       // Session startup may wait while the requester cancels or adds context.
@@ -591,6 +663,16 @@ export class Bridge {
     if (receipt.phase==='linked') return this.deliverChatReceipt(receipt.groupKey);
     if (receipt.phase==='needs_review') return;
     if (receipt.phase === 'queued') {
+      if (receipt.contextBlocked !== undefined) {
+        const blocked = receipt.contextBlocked;
+        const path = `/api/rooms/${encodeURIComponent(this.connection.roomId)}/messages/${encodeURIComponent(receipt.threadKey)}/thread?view=message`;
+        if (!blocked || blocked.version !== 1 || blocked.code !== 'current_thread_too_large'
+          || blocked.roomId !== this.connection.roomId || blocked.threadKey !== receipt.threadKey
+          || blocked.requestId !== receipt.requestId || blocked.selectedRead?.method !== 'GET'
+          || blocked.selectedRead.path !== path)
+          throw Error('Invalid blocked context receipt; manual recovery required');
+        return; // No full-context reload, model turn, POST or ACK on replay.
+      }
       await this.executeQueuedChatReceipt(key, receipt);
       receipt = this.chatReceipts.read(key);
       if (receipt.phase === 'queued') return;
@@ -652,6 +734,39 @@ export class Bridge {
     }
   }
 
+  async pacePoll() {
+    const gap = this.lastPollAt + this.minPollIntervalMs - Date.now();
+    if (gap > 0) await sleep(gap, this.controller.signal);
+    if (this.controller.signal.aborted) return false;
+    this.lastPollAt = Date.now(); return true;
+  }
+
+  async discoverRecent() {
+    if (!this.freshWakeDiscovery || !(await this.pacePoll())) return;
+    let recent;
+    try {
+      recent = await this.room.poll({hostId:this.connection.hostId, waitMs:0, order:'newest', signal:this.controller.signal});
+    } catch (error) {
+      // Head selection is optional. A transport outage on this path must not
+      // prevent the independent oldest traversal. Access/binding refusals and
+      // the identity-wide429 cooldown still take the normal outer retry path.
+      if (!this.controller.signal.aborted && error instanceof RoomError && [0,502,503,504].includes(error.status)) {
+        this.log('recent wake transport unavailable; continuing oldest recovery');
+        if (error.retryAfterMs !== null) await sleep(error.retryAfterMs, this.controller.signal);
+        return;
+      }
+      throw error;
+    }
+    // A bounded head peek is not a completion frontier. Keep the oldest cursor
+    // independent; only its original traversal accounts for the entire journal.
+    for (const signal of recent.pendingWakes ?? []) {
+      if (this.controller.signal.aborted) return;
+      // Select only the newest eligible ordinary root. Seen, parked, formal,
+      // unknown and uncertain entries do not consume this designation.
+      if (await this.accept(signal, {priority:true})) break;
+    }
+  }
+
   async pollOnce() {
     if (!(await this.lease())) { await sleep(5000, this.controller.signal); return; }
     // Drain every queued page in this cycle: signals on later pages are
@@ -665,12 +780,11 @@ export class Bridge {
       if (this.controller.signal.aborted) return;
       // Every page is an HTTP poll and counts toward the identity's 30/min
       // limit. Pace continuation pages too, without losing their cursor.
-      const gap = this.lastPollAt + this.minPollIntervalMs - Date.now();
-      if (gap > 0) await sleep(gap, this.controller.signal);
-      if (this.controller.signal.aborted) return;
-      // A multi-page traversal may outlast a lease renewal interval.
+      // Renew before either selection after a potentially long routed page.
       if (page > 0 && !(await this.lease())) return;
-      this.lastPollAt = Date.now();
+      await this.discoverRecent();
+      if (this.controller.signal.aborted) return;
+      if (!(await this.pacePoll())) return;
       const value = await this.room.poll({ hostId: this.connection.hostId, waitMs: page === 0 && cursor === null ? this.waitMs : 0, signal: this.controller.signal, cursor });
       const wakes = value?.pendingWakes ?? [];
       for (const signal of wakes) {

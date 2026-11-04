@@ -1,3 +1,4 @@
+import { digestMessagePage } from "../src/message-digest.js";
 import {redactSelectedEventPage} from './current-room-events.mjs';
 import { resolveNamedReviewers, hasCurrentReview } from "./work-claims.mjs";
 import { RoomAssistant } from "./room-assistant.mjs";
@@ -113,10 +114,34 @@ async function roomMessages(store, secret, roomId, args, memberId) {
   });
   const mapped = messages.map(message => markIfOther(message, memberId, message.from));
   const cursor = latest ? latestSnapshotPage(mapped, after, hasMore) : { next, hasMore };
-  return withContentTrust({
+  // History hint: a cold read (no after, not latest) starts at the oldest
+  // event. Point at the caller's existing catch-up marker so a joining or
+  // woken agent can skip history it already handled. Uses the saved
+  // marker point lookup; no counts, no new summary, and reading does not acknowledge.
+  const catchUp = args.after === undefined && !latest ? catchUpHint(store, roomId, memberId) : null;
+  const page = withContentTrust({
     roomId, messages: mapped,
     next: cursor.next, hasMore: cursor.hasMore,
+    ...(catchUp ? { catchUp } : {}),
   });
+  return args.view === "digest" ? digestMessagePage(page, memberId) : page;
+}
+
+// Bounded: one cursors point lookup plus the protected history floor. No
+// event-suffix scan (catchUpCursor skips the caller's own-authored run, which
+// walks history); the follow-up read simply includes those own messages.
+export function catchUpHint(store, roomId, memberId) {
+  let after;
+  try {
+    const stored = store.db.prepare("SELECT sequence FROM cursors WHERE room_id=? AND member_id=?").get(roomId, memberId)?.sequence ?? 0;
+    const floor = store.historyFloor(roomId, memberId);
+    after = Math.max(stored, floor ? floor.sequence - 1 : 0);
+  } catch { return null; }
+  if (!Number.isSafeInteger(after) || after <= 0) return null;
+  return {
+    after, source: "saved_catch_up_marker", acknowledges: false,
+    nextRead: { tool: "room_read_messages", arguments: { roomId, after } },
+  };
 }
 
 function replyRead(store, secret, roomId, name, args) {

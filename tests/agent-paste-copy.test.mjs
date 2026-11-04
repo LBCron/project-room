@@ -13,6 +13,7 @@ test('paste page has per-prompt copy controls and narrowly authorizes its script
     assert.ok(html.includes(`data-copy-prompt="${id}" hidden`));
     assert.ok(html.includes(`id="${id}-status" role="status"`));
   }
+  assert.match(html, /<details class="prompt-preview"><summary>View prompt<\/summary><textarea/);
   assert.ok(html.includes(`<script>${AGENT_PASTE_COPY_SCRIPT}</script>`));
   assert.ok(publicSearchPageCsp(PASTE_PAGE.docsPath, 'https://example.com').includes(`'sha256-${AGENT_PASTE_COPY_HASH}'`));
   assert.ok(!publicSearchPageCsp('/docs/agents', 'https://example.com').includes(AGENT_PASTE_COPY_HASH));
@@ -20,7 +21,8 @@ test('paste page has per-prompt copy controls and narrowly authorizes its script
 
 for (const available of [true, false]) test(`copy prompt ${available ? 'succeeds' : 'falls back to selection'}`, async () => {
   let click, copied, focused = false, selected = false;
-  const field = { value: 'the exact prompt', focus() { focused = true; }, select() { selected = true; } };
+  const preview = { open: false };
+  const field = { value: 'the exact prompt', closest: () => preview, focus() { focused = true; }, select() { selected = true; } };
   const status = { textContent: '' };
   const button = { dataset: { copyPrompt: 'prompt' }, hidden: true, disabled: false, addEventListener(_event, handler) { click = handler; } };
   const document = { querySelectorAll: () => [button], getElementById: id => id === 'prompt' ? field : status };
@@ -30,7 +32,7 @@ for (const available of [true, false]) test(`copy prompt ${available ? 'succeeds
   await click();
   assert.equal(button.disabled, false);
   if (available) { assert.equal(copied, field.value); assert.match(status.textContent, /^Copied/); }
-  else { assert.ok(focused && selected); assert.match(status.textContent, /^Copy the selected/); }
+  else { assert.ok(preview.open && focused && selected); assert.match(status.textContent, /^Copy the selected/); }
 });
 
 test('agent directory lists each local setup guide once', async () => {

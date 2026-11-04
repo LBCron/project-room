@@ -1,4 +1,5 @@
 import {createAccountAgentEnrollment} from './account-agent-enrollment.mjs';
+import { writeStoreRoute } from "./store-pages.mjs";
 import {renderLobbyAgentPastePage} from './agent-paste-copy.mjs';
 import {currentReturnBriefMessages} from './current-return-brief.mjs';
 import { readAccountRoomRow } from './room-lifecycle.mjs';
@@ -25,6 +26,7 @@ import { GmailMailbox } from './gmail-mailbox.mjs';
 import { publicAssetPaths, generatedAgentPages } from "./public-assets.mjs";
 import { vapidFromEnv } from "./push-subscriptions.mjs";
 import { createServer } from "node:http";
+import { AsyncLocalStorage } from "node:async_hooks";
 import { readFile } from "node:fs/promises";
 import { createHash, randomBytes, randomUUID, timingSafeEqual } from "node:crypto";
 import { ServiceError } from "./store.mjs";
@@ -280,6 +282,7 @@ const accountView = auth => ({
   account: auth.account ? { id: auth.account.id, revision: auth.account.revision, authEpoch: auth.account.authEpoch } : null,
   csrf: auth.csrf,
   sessionBinding: auth.sessionBinding,
+  ...(auth.credentialScope === 'account-session' && auth.draftRecoveryLineage ? {draftRecoveryLineage: auth.draftRecoveryLineage} : {}),
   sessionRevision: auth.sessionRevision,
   expiresAt: auth.expiresAt,
   authenticatedUntil: auth.authenticatedUntil ?? null
@@ -291,6 +294,7 @@ const sessionView = auth => ({
   roomId: auth.roomId,
   csrf: auth.csrf,
   sessionBinding: auth.sessionBinding,
+  ...(auth.credentialScope === 'account-session' && auth.draftRecoveryLineage ? {draftRecoveryLineage: auth.draftRecoveryLineage} : {}),
   sessionRevision: auth.sessionRevision ?? null,
   credentialKind: auth.kind,
   expiresAt: auth.expiresAt
@@ -757,10 +761,25 @@ export function createRoomServer({ store, origin, assetRoot = new URL("../", imp
   if (!Number.isInteger(credentialWriteBurst) || credentialWriteBurst < 1) throw new Error("Credential write burst must be a positive integer");
   const credentialReads = createRateLimiter({ capacity: credentialReadBurst, refillPerSecond: CREDENTIAL_READ_REFILL_PER_SECOND });
   const credentialWrites = createRateLimiter({ capacity: credentialWriteBurst, refillPerSecond: CREDENTIAL_WRITE_REFILL_PER_SECOND });
+  // The response of the request currently being served, for headers set
+  // deep inside shared helpers such as spendCredential.
+  const rateResponses = new AsyncLocalStorage();
   function spendCredential(kind, credentialHash) {
     const limiter = kind === "write" ? credentialWrites : credentialReads;
     const decision = limiter.check(credentialHash);
-    if (decision.allowed) return;
+    if (decision.allowed) {
+      // Linear-style budget headers on success too, so callers can pace
+      // themselves before a 429. Same names and units as the 429 below.
+      const res = rateResponses.getStore();
+      if (res && !res.headersSent) {
+        res.setHeader("X-RateLimit-Limit", String(limiter.capacity));
+        res.setHeader("X-RateLimit-Remaining", String(decision.remaining));
+        // Match the existing refusal header: next admission, not a full refill.
+        res.setHeader("X-RateLimit-Reset", String(Math.ceil((Date.now() + decision.nextAllowedAfterMs) / 1000)));
+        res.setHeader("X-RateLimit-Bucket", kind === "write" ? "write" : "read");
+      }
+      return;
+    }
     const seconds = Math.max(1, Math.ceil(decision.retryAfterMs / 1000));
     throw new ServiceError(429, "rate_limited", "Too many requests; retry after a minute", {
       "Retry-After": String(seconds),
@@ -1240,7 +1259,7 @@ export function createRoomServer({ store, origin, assetRoot = new URL("../", imp
     signal?.addEventListener("abort", abort, { once: true });
     if (signal?.aborted) abort(); else pump();
   }
-  const server = createServer(async (req, res) => {
+  const server = createServer((req, res) => rateResponses.run(res, async () => {
     const operationId = `op_${randomBytes(6).toString("base64url")}`;
     res.setHeader("Cache-Control", "no-store");
     res.setHeader("X-Content-Type-Options", "nosniff");
@@ -1276,6 +1295,8 @@ export function createRoomServer({ store, origin, assetRoot = new URL("../", imp
       if (url.pathname === "/.well-known/security.txt" || url.pathname === "/security.txt" || url.pathname === "/room/.well-known/security.txt") {
         return writeSecurityTxt(req, res);
       }
+      // Store listing prep: /support, /docs, OpenAI and Google domain verification (env only).
+      if (writeStoreRoute(req, res, url.pathname, process.env, expectedOrigin())) return;
       // A partial backup must not reach direct account/public/module routes or
       // cached auth fallbacks. Readiness has its own 503; minimal static and
       // liveness responses do not expose restored application state.
@@ -1548,7 +1569,7 @@ export function createRoomServer({ store, origin, assetRoot = new URL("../", imp
           const { token: freshSlotToken, session: loggedIn } = store.loginAccountSessionWithMethod(completed.slotToken, linked.accountId,
             completed.expectedRevision, { method: { kind: "oauth", ref: linked.methodRef },
               revokeRoomToken: oldRoomToken && tokenPattern.test(oldRoomToken) ? oldRoomToken : null,
-              rotateSlot: true });
+              rotateSlot: true, renewBrowserSession: true });
           setCookie(res, accountCookieName, freshSlotToken, Math.max(0, Math.floor((loggedIn.expiresAt - store.now()) / 1000)));
           const firstRoom = store.db.prepare("SELECT room_id FROM member_accounts WHERE account_id=? ORDER BY room_id LIMIT 1")
             .get(linked.accountId);
@@ -1725,7 +1746,7 @@ export function createRoomServer({ store, origin, assetRoot = new URL("../", imp
           // QAS-702 (RC-2026-09-19-069): mint a fresh slot token on login and
           // invalidate the pre-login one — see the Google path above.
           const { token: freshSlotToken, session: loggedIn } = store.loginAccountSessionWithMethod(pending.sessionToken, linked.accountId,
-            pending.sessionRevision, { method: { kind: "oauth", ref: linked.methodRef }, rotateSlot: true });
+            pending.sessionRevision, { method: { kind: "oauth", ref: linked.methodRef }, rotateSlot: true, renewBrowserSession: true });
           setCookie(res, accountCookieName, freshSlotToken,
             Math.max(0, Math.floor((loggedIn.expiresAt - store.now()) / 1000)));
           if (githubWantsHtml) return githubHtml(githubLanding(linked.accountId));
@@ -2795,7 +2816,7 @@ export function createRoomServer({ store, origin, assetRoot = new URL("../", imp
           // token is dead on success; on failure nothing is upgraded.
           const { token: freshSlotToken, session: loggedIn } = store.loginAccountSession(slotToken, data.accountAccessKey, data.expectedSessionRevision, {
             revokeRoomToken: oldRoomToken && tokenPattern.test(oldRoomToken) ? oldRoomToken : null,
-            rotateSlot: true
+            rotateSlot: true, renewBrowserSession: true
           });
           setCookie(res, accountCookieName, freshSlotToken, Math.max(0, Math.floor((loggedIn.expiresAt - store.now()) / 1000)));
           return json(res, 201, sessionAccountView(loggedIn));
@@ -2867,7 +2888,7 @@ export function createRoomServer({ store, origin, assetRoot = new URL("../", imp
         // never authenticate after the redeem.
         const { token: freshSlotToken, session: loggedIn } = store.loginAccountSessionWithMethod(redeemToken, accountId, data.sessionRevision, {
           method: { kind: "recovery-code", ref: method ? method.id : "recovery-code-set" },
-          rotateSlot: true
+          rotateSlot: true, renewBrowserSession: true
         });
         setCookie(res, accountCookieName, freshSlotToken, Math.max(0, Math.floor((loggedIn.expiresAt - store.now()) / 1000)));
         return json(res, 200, { remaining: redemption.remaining, session: sessionAccountView(loggedIn) });
@@ -5856,7 +5877,7 @@ export function createRoomServer({ store, origin, assetRoot = new URL("../", imp
       error.detail);
       json(res, httpStatus, errorBody);
     }
-  });
+  }));
   server.on('close', () => {
     nativeEvents?.stop();
     if (store.enqueueNativeMcpEvent === nativeEvents?.emit) delete store.enqueueNativeMcpEvent;

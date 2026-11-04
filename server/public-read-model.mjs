@@ -331,16 +331,26 @@ function insertReceipt(store, row) {
     JSON.stringify(Array.isArray(row.agentIds) ? row.agentIds : []));
 }
 
-function listedRoomFields(state, listed) {
+// The room's public directory title (public_rooms.title, itself the
+// slug when the room set no title — see the public_rooms insert below).
+// Read only for rooms that are listed: an unlisted room's title is not
+// directory data and is never borrowed for a receipt face.
+function directoryRoomTitle(store, roomId) {
+  try {
+    return cleanName(store.db.prepare("SELECT title FROM public_rooms WHERE slug=?").get(roomId)?.title ?? null);
+  } catch { return null; }
+}
+
+function listedRoomFields(store, state, listed) {
   if (!listed || !state?.room?.id) return { roomId: null, roomTitle: null };
-  return { roomId: state.room.id, roomTitle: cleanName(state.room.title) };
+  return { roomId: state.room.id, roomTitle: cleanName(state.room.title) ?? directoryRoomTitle(store, state.room.id) };
 }
 
 function optedInRows(store, state) {
   const roomId = state?.room?.id;
   if (!roomId || publicReceipts(state).enabled !== true) return [];
   const listed = isListed(store, roomId);
-  const room = listedRoomFields(state, listed);
+  const room = listedRoomFields(store, state, listed);
   const owner = credit(state, state.room?.ownerId);
   const href = startHref(owner?.name);
   // Credited member ids become identity ids through this room's links;
@@ -455,7 +465,7 @@ function touchPublicWorkListing(store, state) {
   const roomId = state?.room?.id;
   if (!roomId) return;
   const listed = isListed(store, roomId);
-  const title = listed ? cleanName(state.room?.title) : null;
+  const title = listed ? cleanName(state.room?.title) ?? directoryRoomTitle(store, roomId) : null;
   const href = startHref(listed ? credit(state, state.room?.ownerId)?.name : null);
   store.db.prepare(`UPDATE public_receipts SET room_id=?, room_title=?, start_href=?
     WHERE origin_room_id=? AND source='public-work'`).run(roomId, title, href, roomId);
@@ -752,7 +762,7 @@ export function projectPublicWorkReceipt(store, body, artifactSha256 = null) {
   if (listed) {
     try {
       const state = store.room(roomId).state;
-      roomTitle = cleanName(state?.room?.title);
+      roomTitle = cleanName(state?.room?.title) ?? directoryRoomTitle(store, roomId);
       ownerName = credit(state, state?.room?.ownerId)?.name ?? null;
     } catch { /* the room is gone; the receipt still publishes without its title */ }
   }

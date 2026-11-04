@@ -1,0 +1,32 @@
+{"event":"room.cold_start","clockSemantics":"runtime-dependent","durationMs":46,"integrity":"eager","phases":{"schema":{"ms":10,"rowsRead":0},"plugin":{"ms":19,"rowsRead":0},"fence":{"ms":10,"rowsRead":0},"verifies":{"ms":2,"rowsRead":0},"checksum":{"ms":0,"rowsRead":0}},"cpuMs":47,"heapBytes":29347912,"rooms":0,"sequences":0,"projectionBytes":0,"events":0}
+{"event":"room.store_initialized","initializationMs":47,"legacyColdStartMs":46,"clockSemantics":"runtime-dependent","cpuMeasured":false}
+{"phase":"before","counts":{"events":0,"wakes":0},"boardRows":0}
+{"phase":"all-runner","returned":0,"counts":{"events":0,"wakes":0}}
+{"phase":"direct-first","ids":["ade4aea1337eacd12d6f6469c58a1e315350e54f9a"],"counts":{"events":1,"wakes":1}}
+{"phase":"same-process-repeat","counts":{"events":1,"wakes":1}}
+{"event":"room.cold_start","clockSemantics":"runtime-dependent","durationMs":9,"integrity":"eager","phases":{"schema":{"ms":3,"rowsRead":0},"plugin":{"ms":2,"rowsRead":0},"fence":{"ms":2,"rowsRead":0},"verifies":{"ms":1,"rowsRead":0},"checksum":{"ms":0,"rowsRead":0}},"cpuMs":10,"heapBytes":38782776,"rooms":1,"sequences":5,"projectionBytes":1364,"events":5}
+{"event":"room.store_initialized","initializationMs":10,"legacyColdStartMs":9,"clockSemantics":"runtime-dependent","cpuMeasured":false}
+{"phase":"cold-before-repeat","counts":{"events":1,"wakes":1}}
+{"phase":"cold-after-repeat","counts":{"events":1,"wakes":1},"result":"PASS"}
+{"database":"/Users/johnpotter/Documents/Codex/2026-11-03/task/deadlines-5858/.tmp/deadline-restart-2IhYYc/room.sqlite"}
+node:internal/modules/run_main:107
+    triggerUncaughtException(
+    ^
+
+AssertionError [ERR_ASSERTION]: scheduled all-room runner must discover a room containing a due proposed assignment without Board claims
+
+0 !== 1
+
+    at file:///Users/johnpotter/Documents/Codex/2026-11-03/task/deadlines-5858/audit/evidence/deadline-restart-5858/probe.mjs:24:8
+    at ModuleJob.run (node:internal/modules/esm/module_job:561:25)
+    at async node:internal/modules/esm/loader:647:26
+    at async asyncRunEntryPointWithESMLoader (node:internal/modules/run_main:101:5) {
+  generatedMessage: false,
+  code: 'ERR_ASSERTION',
+  actual: 0,
+  expected: 1,
+  operator: 'strictEqual',
+  diff: 'simple'
+}
+
+Node.js v24.22.1

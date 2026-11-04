@@ -1,0 +1,11 @@
+{"event":"room.cold_start","clockSemantics":"runtime-dependent","durationMs":46,"integrity":"eager","phases":{"schema":{"ms":10,"rowsRead":0},"plugin":{"ms":18,"rowsRead":0},"fence":{"ms":10,"rowsRead":0},"verifies":{"ms":2,"rowsRead":0},"checksum":{"ms":0,"rowsRead":0}},"cpuMs":46,"heapBytes":29615936,"rooms":0,"sequences":0,"projectionBytes":0,"events":0}
+{"event":"room.store_initialized","initializationMs":46,"legacyColdStartMs":46,"clockSemantics":"runtime-dependent","cpuMeasured":false}
+{"phase":"before","counts":{"events":0,"wakes":0},"boardRows":1}
+{"phase":"all-runner","returned":1,"counts":{"events":1,"wakes":1}}
+{"phase":"direct-first","ids":["ade4aea1337eacd12d6f6469c58a1e315350e54f9a"],"counts":{"events":1,"wakes":1}}
+{"phase":"same-process-repeat","counts":{"events":1,"wakes":1}}
+{"event":"room.cold_start","clockSemantics":"runtime-dependent","durationMs":11,"integrity":"eager","phases":{"schema":{"ms":3,"rowsRead":0},"plugin":{"ms":2,"rowsRead":0},"fence":{"ms":2,"rowsRead":0},"verifies":{"ms":2,"rowsRead":0},"checksum":{"ms":0,"rowsRead":0}},"cpuMs":12,"heapBytes":24991384,"rooms":1,"sequences":5,"projectionBytes":1364,"events":5}
+{"event":"room.store_initialized","initializationMs":11,"legacyColdStartMs":11,"clockSemantics":"runtime-dependent","cpuMeasured":false}
+{"phase":"cold-before-repeat","counts":{"events":1,"wakes":1}}
+{"phase":"cold-after-repeat","counts":{"events":1,"wakes":1},"result":"PASS"}
+{"database":"/Users/johnpotter/Documents/Codex/2026-11-03/task/deadlines-5858/.tmp/deadline-restart-byb8TH/room.sqlite"}

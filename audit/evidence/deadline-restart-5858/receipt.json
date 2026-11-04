@@ -1,0 +1,23 @@
+{
+  "sourceHead": "7b901109eecc906027c42accf33737e9aa99d67d",
+  "node": "/Users/johnpotter/.local/bin/node v24.22.1",
+  "samePhysicalMacAsRoot": true,
+  "results": {
+    "restartDedup": "PASS: events1/wakes1 first, repeat, cold-before and cold-after",
+    "schedulerDiscovery": "FAIL: no Board rows -> all-runner returns0/events0/wakes0; direct runner1/1. Control unrelated Board row -> all-runner1/events1/wakes1",
+    "crossRoom": "FAIL: equal work IDs across rooms -> persisted events1/0. Control distinct IDs ->1/1"
+  },
+  "commands": [
+    "TMPDIR=<checkout>/.tmp /Users/johnpotter/.local/bin/node audit/evidence/deadline-restart-5858/probe.mjs",
+    "same command plus --with-unrelated-board-row",
+    "/Users/johnpotter/.local/bin/node audit/evidence/deadline-restart-5858/cross-room.mjs",
+    "same command plus --distinct-ids"
+  ],
+  "limits": [
+    "local synthetic SQLite only",
+    "No implementation changes; author coordination required",
+    "No live identity, provider, grant or browser calls",
+    "Initial fixture FK error corrected before recorded final repro"
+  ],
+  "artifacts": "logs plus local synthetic SQLite paths recorded in result/control logs"
+}

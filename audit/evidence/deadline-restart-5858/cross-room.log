@@ -1,0 +1,25 @@
+{"event":"room.cold_start","clockSemantics":"runtime-dependent","durationMs":42,"integrity":"eager","phases":{"schema":{"ms":10,"rowsRead":0},"plugin":{"ms":17,"rowsRead":0},"fence":{"ms":10,"rowsRead":0},"verifies":{"ms":2,"rowsRead":0},"checksum":{"ms":0,"rowsRead":0}},"cpuMs":43,"heapBytes":29554616,"rooms":0,"sequences":0,"projectionBytes":0,"events":0}
+{"event":"room.store_initialized","initializationMs":43,"legacyColdStartMs":42,"clockSemantics":"runtime-dependent","cpuMeasured":false}
+{"roomId":"room-a","ids":["ad78bf96d4702002c1d6d6eee06a9bce2b916a3c73"],"persisted":1}
+{"roomId":"room-b","ids":["ad78bf96d4702002c1d6d6eee06a9bce2b916a3c73"],"persisted":0}
+node:internal/modules/run_main:107
+    triggerUncaughtException(
+    ^
+
+AssertionError [ERR_ASSERTION]: independent rooms with equal local work IDs each need their deadline event
+
+1 !== 2
+
+    at file:///Users/johnpotter/Documents/Codex/2026-11-03/task/deadlines-5858/audit/evidence/deadline-restart-5858/cross-room.mjs:8:552
+    at ModuleJob.run (node:internal/modules/esm/module_job:561:25)
+    at async node:internal/modules/esm/loader:647:26
+    at async asyncRunEntryPointWithESMLoader (node:internal/modules/run_main:101:5) {
+  generatedMessage: false,
+  code: 'ERR_ASSERTION',
+  actual: 1,
+  expected: 2,
+  operator: 'strictEqual',
+  diff: 'simple'
+}
+
+Node.js v24.22.1

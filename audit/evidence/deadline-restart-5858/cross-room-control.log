@@ -1,0 +1,4 @@
+{"event":"room.cold_start","clockSemantics":"runtime-dependent","durationMs":45,"integrity":"eager","phases":{"schema":{"ms":11,"rowsRead":0},"plugin":{"ms":18,"rowsRead":0},"fence":{"ms":12,"rowsRead":0},"verifies":{"ms":2,"rowsRead":0},"checksum":{"ms":0,"rowsRead":0}},"cpuMs":46,"heapBytes":29554848,"rooms":0,"sequences":0,"projectionBytes":0,"events":0}
+{"event":"room.store_initialized","initializationMs":45,"legacyColdStartMs":45,"clockSemantics":"runtime-dependent","cpuMeasured":false}
+{"roomId":"room-a","ids":["ad052d945f38946190a82909a9094821337167ff74"],"persisted":1}
+{"roomId":"room-b","ids":["ad3550c9f359b430b3ab29d04a03f7ea5376501de1"],"persisted":1}

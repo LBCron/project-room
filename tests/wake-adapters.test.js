@@ -74,3 +74,24 @@ test("context pointer names where to read, and liveness moves pending -> unrespo
   now = 30 * 60_000; assert.equal(c.status("a", "r"), "stale");
   c.markRead("a", "r"); assert.equal(c.status("a", "r"), "acked");
 });
+
+test('a fresh coalesced generation has its own bounded retry budget and ack', () => {
+  let now = 0;
+  const c = new WakeCoalescer(() => now);
+  const signal = signalId => ({ roomId: 'r', signalId, reason: 'mention' });
+  c.offer('a', signal('old'));
+  for (now = 300000; now <= 600000; now += 300000) assert.equal(c.dueRewakes().length, 1);
+  now = 600001;
+  assert.equal(c.offer('a', signal('fresh')).send, false, 'keep the burst window');
+  const generationStatus = c.status('a', 'r');
+  now = 900001;
+  const next = c.dueRewakes();
+  assert.equal(next.length, 1); assert.equal(next[0].signal.signalId, 'fresh');
+  assert.equal(generationStatus, 'pending');
+  assert.equal(next[0].attempt, 1); assert.equal(next[0].count, 2);
+  now = 1200001; assert.equal(c.dueRewakes()[0].attempt, 2);
+  now = 1200002; c.offer('a', signal('fresh'));
+  now = 1500002; assert.equal(c.dueRewakes().length, 0, 'same signal does not renew exhausted retries');
+  now = 1500003; c.offer('a', signal('acked-next')); c.markRead('a', 'r');
+  now = 1800003; assert.equal(c.dueRewakes().length, 0, 'ack stops the new generation');
+});

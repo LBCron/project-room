@@ -69,6 +69,12 @@ export class WakeCoalescer {
     const k = this.key(agentId, signal.roomId);
     const entry = this.keys.get(k);
     if (entry && now - entry.sentAt < this.opts.windowMs) {
+      // A fresh signal owns a new retry/liveness budget even when its first
+      // delivery is coalesced behind the previous generation's last retry.
+      // Re-offering the same identified signal must not renew exhausted retries.
+      if (!signal.signalId || signal.signalId !== entry.lastSignal?.signalId) {
+        entry.rewakes = 0; entry.firstSentAt = now;
+      }
       entry.pending += 1; entry.lastSignal = signal; entry.read = false;
       return Object.freeze({ send: false, coalesced: true });
     }

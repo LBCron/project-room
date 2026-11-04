@@ -129,7 +129,7 @@ export function readCurrentWorkListing(store,secret,roomId,args={}) {
       const room=addressed?readCurrentRecord(store.db,roomId,'metadata','room',b):null;
       const source=addressed&&!saved.workDone?addressedWorkWindow(store,roomId,auth.member.id,room.ownerId,saved.workAfter,limit,b):null;
       const overview=addressed?{state:{members:{[auth.member.id]:auth.member},room,workItems:{}},workWindow:{nextAfter:source?.hasMore?source.after:null}}
-        :readCurrentOverviewWindow(store,roomId,{viewerId:auth.member.id,workAfter:saved.workAfter,limit:saved.workDone?1:limit});
+        :readCurrentOverviewWindow(store,roomId,{viewerId:auth.member.id,viewerAuthority:true,workAfter:saved.workAfter,limit:saved.workDone?1:limit});
       const member=ownMember(overview.state.members,auth.member.id),now=saved.at;
       const items=saved.workDone?[]:source?.items??Object.values(overview.state.workItems);
       const stepFor=item=>{const step=nextWorkStep(item,now,overview.state.room.ownerId);

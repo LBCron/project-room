@@ -772,5 +772,6 @@ export default {
   "agent.existing.unconfirmed": "Enrollment not confirmed. Retry the original request.",
   "offers.submittedUnavailable": "Submitted · not currently claimable",
   "offers.noMatchesThisSet": "No matches in this set. Try next tasks.",
-  "offers.noMoreMatches": "No more matching tasks."
+  "offers.noMoreMatches": "No more matching tasks.",
+  "offers.workTradeSearchUnavailable": "Work-trade search is not available yet."
 };

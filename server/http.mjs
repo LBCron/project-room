@@ -1364,10 +1364,13 @@ export function createRoomServer({ store, origin, assetRoot = new URL("../", imp
         if (req.method === "POST") {
           // Join traffic stays on the small JSON cap. A live identity secret
           // may stage one room file (base64, at most attachmentLimits.fileBytes).
+          // OAuth agents (oat_/iat_) get the same bound so a message up to
+          // MAX_MESSAGE_BODY_CHARS fits; without it claude.ai-connected
+          // agents were refused at 16 KiB, below the advertised body limit.
           const fileBody = typeof req.headers.authorization === "string"
             // RFC 7235: auth scheme is case-insensitive ("bearer"/"BEARER"
             // accepted), matching bearer()/carriesBearer() above.
-            && /^bearer (?:pri_|rak_)/i.test(req.headers.authorization);
+            && /^bearer (?:pri_|rak_|oat_|iat_)/i.test(req.headers.authorization);
           const text = await readText(req, fileBody ? mcpAttachmentBodyBytes : JSON_BODY_BYTES, () => new ServiceError(413, "too_large", "Request is too large"));
           return writeRoomMcpNode(req, res, url, { bodyText: text, roomMcp: hostedRoomMcp, remoteAddress, oauthMetadataUrl, signal: resolveRequestSignal() });
         }

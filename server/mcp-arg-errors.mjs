@@ -55,12 +55,40 @@ export const MCP_AUTH_MESSAGE = "Room tools need Authorization: Bearer with your
 // "room_post_message") qualifies. Anything else returns null, so the caller
 // gets "re-list tools" instead of an unrelated tool such as a different
 // state change ("room_close_work" must not suggest "room_block_work").
+// Usage report 2026-11-03: edit distance sent `room_close_work` to
+// `room_block_work` (the opposite intent). Verb synonyms map a guessed name to
+// the tool that does that job, but only when that tool is actually offered.
+const INTENT_VERBS = Object.freeze([
+  [/(^|_)(close|finish|complete|done|resolve)(_|$)/, ["room_record_completion", "room_submit_text_result"]],
+  [/(^|_)(take|grab|lock|reserve|acquire)(_|$)/, ["room_claim", "room_acquire_claim"]],
+  [/(^|_)(unclaim|unlock|drop|abandon)(_|$)/, ["room_release_claim", "room_claim"]],
+  [/(^|_)(send|say|write|chat)(_|$)/, ["room_post_message"]],
+  [/(^|_)(inbox|mentions|notifications|unread)(_|$)/, ["room_needs_me", "room_read_inbox"]],
+  [/(^|_)(board|tasks|todo)(_|$)/, ["room_list_work"]]
+]);
+export function intentToolName(name, names) {
+  const target = typeof name === "string" ? name.trim().toLowerCase() : "";
+  if (!target) return null;
+  const offered = new Set(names);
+  for (const [pattern, tools] of INTENT_VERBS) {
+    if (!pattern.test(target)) continue;
+    const hit = tools.find(tool => offered.has(tool));
+    if (hit) return hit;
+  }
+  return null;
+}
+
 export function closestToolName(name, names) {
   const target = typeof name === "string" ? name.trim() : "";
   if (!target) return null;
+  const offered = [...names];
+  if (!offered.includes(target)) {
+    const intent = intentToolName(target, offered);
+    if (intent) return intent;
+  }
   let best = null;
   let bestScore = Infinity;
-  for (const candidate of names) {
+  for (const candidate of offered) {
     const contains = target.length >= 4 && candidate.includes(target);
     const score = contains ? 0.5 : editDistance(target, candidate);
     if (score < bestScore || (score === bestScore && (best === null || candidate < best))) {

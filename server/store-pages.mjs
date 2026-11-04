@@ -3,7 +3,7 @@
 // from env (ROOM_OPENAI_DOMAIN_VERIFICATION, ROOM_GOOGLE_SITE_VERIFICATION);
 // nothing is committed, and an unset value is a plain 404.
 const ORIGIN_FALLBACK = "https://room.trydemigod.com";
-const TOKEN = /^[A-Za-z0-9_.:=-]{8,256}$/;
+const VERIFICATION_PATTERN = /^[A-Za-z0-9_.:=-]{8,256}$/;
 
 const esc = text => String(text).replaceAll("&", "&amp;").replaceAll("<", "&lt;").replaceAll(">", "&gt;").replaceAll('"', "&quot;");
 
@@ -43,13 +43,13 @@ export function storeRoute(pathname, env = {}, origin = ORIGIN_FALLBACK) {
   if (pathname === "/support") return { status: 200, type: "text/html; charset=utf-8", body: supportPageHtml(origin, env.ROOM_SUPPORT_EMAIL || null) };
   if (pathname === "/docs") return { status: 200, type: "text/html; charset=utf-8", body: docsPageHtml(origin) };
   if (pathname === "/.well-known/openai-apps-challenge") {
-    const token = String(env.ROOM_OPENAI_DOMAIN_VERIFICATION ?? "").trim();
-    return TOKEN.test(token) ? { status: 200, type: "text/plain; charset=utf-8", body: token } : notFound();
+    const verificationValue = String(env.ROOM_OPENAI_DOMAIN_VERIFICATION ?? "").trim();
+    return VERIFICATION_PATTERN.test(verificationValue) ? { status: 200, type: "text/plain; charset=utf-8", body: verificationValue } : notFound();
   }
   const google = /^\/(google[A-Za-z0-9]{8,64})\.html$/.exec(pathname);
   if (google) {
-    const token = String(env.ROOM_GOOGLE_SITE_VERIFICATION ?? "").trim().replace(/\.html$/, "");
-    return token && token === google[1] ? { status: 200, type: "text/html; charset=utf-8", body: `google-site-verification: ${token}.html` } : notFound();
+    const verificationValue = String(env.ROOM_GOOGLE_SITE_VERIFICATION ?? "").trim().replace(/\.html$/, "");
+    return verificationValue && verificationValue === google[1] ? { status: 200, type: "text/html; charset=utf-8", body: `google-site-verification: ${verificationValue}.html` } : notFound();
   }
   return null;
 }

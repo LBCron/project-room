@@ -90,6 +90,7 @@ optional.push("server/routes/room-window.mjs"); // windowed bootstrap and older-
 optional.push("server/room-bootstrap.mjs"); // one-read room open (imported by server/http.mjs and server/mcp-room-profile.mjs)
 optional.push("src/curiosity-rank.mjs"); // curiosity sort for room_list_work (imported by server/mcp-room-profile.mjs)
 optional.push("src/dm-consents.js"); // DM consent browser view-model + API helpers (imported by src/app.js)
+optional.push("server/wake-adapters.mjs"); // grok/wake-adapters new modules
 optional.push("src/friend-bond.js"); // Friend / Bond People chrome (imported by src/app.js and src/client.js)
 optional.push("src/error-copy.js"); // Human error copy (imported by src/client.js, src/friend-bond.js, src/operator-ui.js)
 optional.push("src/room-layout.js", "src/member-display-names.js", "src/result-reader.js", "src/clipboard.js", "src/result-comparison.js", "src/result-feedback.js", "src/result-availability.js");
@@ -455,6 +456,7 @@ optional.push("server/trial-task-store.mjs", "server/trial-tasks.mjs", "server/v
 
 optional.push("src/work-dependencies.js", "src/work-reducers.js", "src/message-reducers.js", "src/spend-pricing-ui.js", "src/polls.js", "src/account-client.js");
 optional.push("src/entry.js", "src/signin-entry.js", "src/signin-navigation.js");
+optional.push("src/message-query.js"); // room_read_messages keyword filter, shared by hosted MCP and the stdio client
 optional.push("server/sql-binds.mjs"); // shared Worker-safe SQL list chunks imported by fleet, wakes, needs-me and restore
 optional.push("server/sql-write-classification.mjs"); // shared by Node cache invalidation and Workers storage
 optional.push("server/html-escape.mjs", "src/html-escape.js"); // one HTML escape, re-exported for server callers

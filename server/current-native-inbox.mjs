@@ -178,7 +178,7 @@ export function readCurrentNativeInbox(store,secret,roomId,{limit=50,after,older
    cursor:{after:page.next,hasMore:page.hasMore,nextRead:conversationNext},older,
    attention:{pendingMentions:directMentions.map(({sequence,replyToId,from,private:isPrivate})=>({sequence,replyToId,from,private:isPrivate})),hasMore:page.hasMore,acknowledges:false,nextRead:conversationNext},
    coverage:{mode:'native_bounded',globalAttentionComplete:false,conversation:{direction:recent?'recent':'catch_up',examined:recent?older.examined:examined,through:page.next,complete:recent?!older.hasMore:!page.hasMore,...(!recent&&skipUnaddressed?{skippedUnaddressed}:{})},
-    work:{complete:false,nextRead:workNext,examined:discovery.examinedWork},requests:{complete:false,nextRead:workNext,examined:discovery.examinedRequests},
+    work:{complete:false,nextRead:workNext,examined:discovery.examinedWork},requests:{complete:false,nextRead:{tool:'room_list_requests',arguments:{roomId,direction:'incoming',status:'open'}},apiKeyRequiredScope:'rooms:read',examined:discovery.examinedRequests},
     standingMentions:{complete:false,nextRead:{tool:'room_read_inbox',arguments:{roomId,limit,after:0}}},
     peer:peer.coverage,
     omitted:['ambient fleet presentation','global unresolved-mention census'],

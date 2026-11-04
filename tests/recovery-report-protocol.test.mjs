@@ -12,7 +12,10 @@ test('genuine18 warm/prepared/cold operator refuses19 before suspension or progr
  const response=await operatorRestoreResponse(new Request(url,{method:'POST',headers:{Authorization:'Bearer '+token},body:exportNdjsonText(source.db)}),token,current),body=await response.json();assert.equal(response.status,202);const before=restoreProgress(current.db);
  let drops=0;const exec=held.db.exec.bind(held.db);held.db.exec=sql=>{if(sql.startsWith('DROP TRIGGER '))drops++;return exec(sql);};
  assert.throws(()=>prepared.run(),/restore|writer|schema/);assert.throws(()=>oldAdmission.withRestoreTransaction(held,()=>oldAdmission.withExactRestoreGuards(held.db,oldAdmission.RESTORE_CONTROL_GUARDS,()=>assert.fail('old scope opened'))),/reconciliation/);
- assert.throws(()=>{const cold=new OldStore(filename);try{cold.restoreStatus();}finally{cold.close();}},/reconciliation/);
+ // Cold schema45 code fails at the newer schema floor; warm admission checks above still exercise the protocol guard.
+ assert.throws(()=>new OldStore(filename),/Database schema is newer than this service/);
+ const sameFloor=current.db.prepare('UPDATE current_restore_admission SET latest_receipt=latest_receipt');
+ assert.throws(()=>sameFloor.run(),/restore admission|restore target|unsupported restore/i);
  const input={requestId:'old18-refused',restoreId:body.restoreId,sourceSeal:body.sourceSeal,expectedRevision:body.revision};const refused=await oldRestore.operatorRestoreResponse(new Request(url,{method:'POST',headers:{Authorization:'Bearer '+token,'Content-Type':'application/json'},body:JSON.stringify(input)}),token,held);assert.equal(refused.status,422);assert.equal(drops,0);assert.deepEqual(restoreProgress(current.db),before);
  const resumed=await operatorRestoreResponse(new Request(url,{method:'POST',headers:{Authorization:'Bearer '+token,'Content-Type':'application/json'},body:JSON.stringify(input)}),token,current);assert.equal(resumed.status,202);
 });

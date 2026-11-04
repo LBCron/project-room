@@ -2,7 +2,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import { readFileSync, mkdtempSync, mkdirSync, writeFileSync, rmSync } from "node:fs";
 import { execFileSync } from "node:child_process";
-import { join, dirname } from "node:path";
+import { join, dirname, resolve } from "node:path";
 import { tmpdir } from "node:os";
 import { parse } from "yaml";
 
@@ -54,13 +54,13 @@ test("persistent staging deploys only an explicitly dispatched candidate", () =>
   const steps = workflow.jobs.deploy.steps;
   const checkout = steps.find(step => step.uses?.startsWith("actions/checkout@"));
   assert.equal(checkout.with?.ref, undefined, "checkout must retain the explicitly selected workflow ref");
-  const directory = mkdtempSync(join(tmpdir(), "staging-argv-"));
+  const directory = mkdtempSync(join(resolve(tmpdir()), "staging-argv-"));
   try {
     const origin = JSON.parse(readFileSync(new URL("../cloudflare/wrangler.jsonc", import.meta.url), "utf8")).env.staging.vars.ROOM_ORIGIN;
     mkdirSync(join(directory, "bin")); mkdirSync(join(directory, "cloudflare"));
     writeFileSync(join(directory, "cloudflare", "wrangler.jsonc"), JSON.stringify({ env: { staging: { vars: { ROOM_ORIGIN: origin } } } }));
-    writeFileSync(join(directory, "bin", "pnpm"), `#!${process.execPath}\nconst fs=require('node:fs');fs.writeFileSync(process.env.ARGV_LOG,JSON.stringify(process.argv.slice(2)));console.log(${JSON.stringify(origin)});`, { mode: 0o755 });
-    execFileSync("/bin/bash", ["-c", steps.find(step => step.name === "Deploy isolated staging").run], {
+    writeFileSync(join(directory, "bin", "pnpm"), `#!${process.execPath}\nimport fs from 'node:fs';fs.writeFileSync(process.env.ARGV_LOG,JSON.stringify(process.argv.slice(2)));console.log(${JSON.stringify(origin)});`, { mode: 0o755 });
+    execFileSync("/bin/bash", ["-e", "-c", steps.find(step => step.name === "Deploy isolated staging").run], {
       cwd: join(directory, "cloudflare"), env: { PATH: join(directory, "bin") + ":" + dirname(process.execPath) + ":/usr/bin:/bin", RUNNER_TEMP: directory, ARGV_LOG: join(directory, "argv.json") }, stdio: "pipe"
     });
     const argv = JSON.parse(readFileSync(join(directory, "argv.json"), "utf8"));

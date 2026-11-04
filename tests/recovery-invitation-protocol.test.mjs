@@ -12,8 +12,12 @@ test('genuine protocol15 cold/preopened continuation and prepared writer refuse1
  const request=body=>new Request('https://room.example/api/operator/restore',{method:'POST',headers:{authorization:'Bearer '+token,...(typeof body==='string'?{}:{'content-type':'application/json'})},body:typeof body==='string'?body:JSON.stringify(body)});
  const response=await operatorRestoreResponse(request(exportNdjsonText(source.db)),token,current);assert.equal(response.status,202);const state=await response.json(),before=restoreProgress(current.db),input={restoreId:state.restoreId,sourceSeal:state.sourceSeal,expectedRevision:state.revision,requestId:'old15-denied'};let drops=0;const exec=held.db.exec.bind(held.db);held.db.exec=sql=>{if(/^DROP TRIGGER current_restore_/.test(sql))drops++;return exec(sql);};
  try{
-  assert.throws(()=>prepared.run(),/sealed|restore admission/);
-  assert.throws(()=>new OldStore(filename),/restore admission.*reconciliation/i);
+  // Genuine schema45 code cannot execute the installed v46 writer guard.
+  assert.throws(()=>prepared.run(),/no such function: project_room_writer_v46/);
+  // A compatible writer independently reaches the original restore seal.
+  const sameFloor=current.db.prepare("UPDATE credentials SET revoked=1 WHERE kind='access'");
+  assert.throws(()=>sameFloor.run(),/sealed|restore admission/);
+  assert.throws(()=>new OldStore(filename),/Database schema is newer than this service/);
   const oldResponse=await oldRestore.operatorRestoreResponse(request(input),token,held);assert.equal(oldResponse.status,422);assert.equal(drops,0);assert.deepEqual(restoreProgress(current.db),before);
   assert.equal((await operatorRestoreResponse(request(input),token,current)).status,202);
  }finally{held.db.exec=exec;}

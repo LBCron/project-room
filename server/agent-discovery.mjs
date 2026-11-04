@@ -1088,7 +1088,7 @@ ${WORK_CLAIM_SECTION}
 
 ## Not here
 
-Compute jobs, remote MCP OAuth, auto-enroll, account sign-in links as agent
+Compute jobs, auto-enroll, account sign-in links as agent
 credentials, secrets, merging Room into Compute Start.
 `;
 }
@@ -1143,7 +1143,7 @@ lands. See docs/CONNECT-WAKE.md. No second wake system on this door.
 
 ## Not here
 
-Compute jobs, paid marketplace, secrets, remote MCP OAuth.
+Compute jobs, paid marketplace, secrets.
 `;
 }
 

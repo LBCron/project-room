@@ -634,7 +634,7 @@ export class PublicWorkClaims {
         const candidates = page.tasks.filter(task => {
           // claimable (not just unclaimed): a task past its submission
           // deadline must not be recommended as claimable (#3707).
-          if (task.claim.state !== 'unclaimed' || !task.claimable) return false;
+          if (task.reward?.kind !== 'unpaid' || task.claim.state !== 'unclaimed' || !task.claimable) return false;
           return !releaseExpired(this.store.workClaims.list(task.namespaceId), this.store.now()).some(other =>
             other.id !== task.taskId && other.owner && other.files.some(path => task.files.some(file => overlaps(path, file))));
         }).map(task => {

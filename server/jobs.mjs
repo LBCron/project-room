@@ -113,9 +113,9 @@ function webhookDueAt(store) {
 function webhookNextDue(store) {
   const webhook = webhookDueAt(store);
   const missed = missedWakeDueAt(store);
-  if (webhook == null) return missed;
-  if (missed == null) return webhook;
-  return Math.min(webhook, missed);
+  const rewake = store.agentPlugin?.nextRewakeAt?.() ?? null;
+  const pending = [webhook, missed, rewake].filter(value => value != null);
+  return pending.length ? Math.min(...pending) : null;
 }
 
 function landDueAt(store, now) {

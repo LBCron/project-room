@@ -92,6 +92,16 @@ export class WakeCoalescer {
       entry.read = true; entry.pending = 0;
     }
   }
+  // Read-only scheduler horizon: exhausted/read entries must not keep a timer alive.
+  nextRewakeAt() {
+    let next = null;
+    for (const entry of this.keys.values()) {
+      if (entry.read || entry.rewakes >= this.opts.maxRewakes) continue;
+      const due = entry.sentAt + this.opts.rewakeAfterMs;
+      if (next === null || due < next) next = due;
+    }
+    return next;
+  }
   // Wakes that are still unread after rewakeAfterMs, each returned once per
   // interval, at most maxRewakes times. Merged signals ride the re-wake.
   dueRewakes() {

@@ -1052,6 +1052,9 @@ export class AgentPluginStore {
       const deliveries = [];
       const wakePing = buildWakePing({ agentId: identityId, signal });
       const eventId = signal?.signalId ?? null;
+      // Each bounded retry is a new delivery, while replaying that same
+      // signal/attempt still deduplicates against its durable journal row.
+      const retrySuffix = rewake ? `rewake:${rewake.attempt}` : null;
       // T2-L03a-C1: journal the signal's real room, not null. The drain's
       // dispatch-time membership re-check only fires for rows with a
       // room_id, so a null room disarmed it for every agent.wake delivery.
@@ -1061,7 +1064,7 @@ export class AgentPluginStore {
         try { events = JSON.parse(row.eventsJson); } catch { continue; }
         if (!events.includes(WAKE_PING_EVENT) && !events.includes("*")) continue;
         deliveries.push(this.buildWebhookDelivery(row.subscriptionId,
-          { eventType: WAKE_PING_EVENT, data: wakePing, eventId, roomId }));
+          { eventType: WAKE_PING_EVENT, data: wakePing, eventId, roomId, idempotencySuffix: retrySuffix }));
       }
       // Event-push: when the agent registered wakeable hosts with wakeUrls,
       // the same wake ping is also POSTed to each distinct wakeUrl via the
@@ -1079,7 +1082,7 @@ export class AgentPluginStore {
               : wakePing;
             deliveries.push(this.buildWebhookDelivery(deliveries[0].subscriptionId,
               { eventType: WAKE_PING_EVENT, data, eventId, roomId,
-                url: wake.wakeUrl, idempotencySuffix: `wake-url:${wake.hostId}` }));
+                url: wake.wakeUrl, idempotencySuffix: `wake-url:${wake.hostId}${retrySuffix ? `:${retrySuffix}` : ""}` }));
           } catch { /* skip invalid wakeUrl; the subscription-URL delivery still stands */ }
         }
       }
@@ -1645,6 +1648,10 @@ export class AgentPluginStore {
   // Install wake adapters (server/wake-adapters.mjs). Absent or disabled
   // means deliverWakePing behaves exactly as before.
   setWakeAdapters(adapters) { this.wakeAdapters = adapters ?? null; }
+
+  nextRewakeAt() {
+    return this.wakeAdapters?.enabled ? this.wakeAdapters.coalescer.nextRewakeAt() : null;
+  }
 
   // Re-send wakes whose inbox is still unread (ROOM_WAKE_ADAPTERS only).
   sweepRewakes() {

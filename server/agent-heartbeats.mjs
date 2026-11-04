@@ -911,13 +911,13 @@ export class AgentHeartbeats {
             event: "acked", door, kind: row?.kind ?? "", subjectId: agentId });
         }
       }
-      if (acknowledged.length > 0) { try { this.store.agentPlugin?.noteWakeRead?.(agentId, roomId); } catch { /* wake adapters are advisory */ } }
       const workAcked = this.store.workWakes?.ack(agentId, signalIds, roomId) ?? [];
       for (const signalId of workAcked) {
         recordWakeEvent(this.db, { at, roomId, store: "work",
           event: "acked", door, kind: "work", subjectId: agentId });
         acknowledged.push(signalId);
       }
+      if (acknowledged.length > 0) { try { this.store.agentPlugin?.noteWakeRead?.(agentId, roomId); } catch { /* wake adapters are advisory */ } }
       return Object.freeze({ acknowledged: Object.freeze(acknowledged) });
     });
   }

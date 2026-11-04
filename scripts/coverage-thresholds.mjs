@@ -366,7 +366,7 @@ export function listModuleFiles(root, dir, extraExclude = []) {
  * coverage is monotonic in the test set. Files with no coverage data count
  * as 0 covered lines (decay-catching).
  */
-export function evaluateModules(root, config, grouped) {
+function evaluateCoverage(root, config, coverageForFile) {
   const rootPrefix = pathToFileURL(root + sep).href;
   const results = {};
   for (const [name, mod] of Object.entries(config.modules)) {
@@ -379,15 +379,8 @@ export function evaluateModules(root, config, grouped) {
       const text = readFileSync(join(root, rel), "utf8");
       const coverableArr = coverableLines(text);
       const coverableCount = coverableArr.filter(Boolean).length;
-      const payloads = grouped.get(rootPrefix + rel);
-      const union = new Set();
-      if (payloads) {
-        for (const functions of payloads) {
-          for (const i of coveredLinesForPayload(text, functions)) union.add(i);
-        }
-      } else {
-        zeroCoverageFiles.push(rel);
-      }
+      const { union, seen } = coverageForFile(rootPrefix + rel, text);
+      if (!seen) zeroCoverageFiles.push(rel);
       const pct = coverableCount === 0 ? 100 : (100 * union.size) / coverableCount;
       covered += union.size;
       coverable += coverableCount;
@@ -410,6 +403,49 @@ export function evaluateModules(root, config, grouped) {
     };
   }
   return results;
+}
+
+/** Retained reference evaluator for already-grouped payloads. */
+export function evaluateModules(root, config, grouped) {
+  return evaluateCoverage(root, config, (url, text) => {
+    const payloads = grouped.get(url);
+    const union = new Set();
+    if (payloads) for (const functions of payloads) {
+      for (const line of coveredLinesForPayload(text, functions)) union.add(line);
+    }
+    return { union, seen: Boolean(payloads) };
+  });
+}
+
+/**
+ * Fold each payload into line sets immediately, preserving per-payload range
+ * semantics. Retained memory depends on configured source lines, not the
+ * number of test processes or their accumulated function/range records.
+ */
+export function evaluatePayloads(root, config, payloads) {
+  const rootPrefix = pathToFileURL(root + sep).href;
+  const files = new Map();
+  for (const mod of Object.values(config.modules)) {
+    for (const rel of listModuleFiles(root, mod.dir, mod.exclude || [])) {
+      const url = rootPrefix + rel;
+      if (!files.has(url)) files.set(url, {
+        text: readFileSync(join(root, rel), "utf8"), union: new Set(), seen: false,
+      });
+    }
+  }
+  let payloadCount = 0;
+  for (const payload of payloads) {
+    payloadCount++;
+    for (const [url, lists] of groupFunctionsByUrl([payload], root)) {
+      const file = files.get(url);
+      if (!file) continue;
+      file.seen = true;
+      for (const functions of lists) {
+        for (const line of coveredLinesForPayload(file.text, functions)) file.union.add(line);
+      }
+    }
+  }
+  return { payloadCount, results: evaluateCoverage(root, config, url => files.get(url)) };
 }
 
 /** Compare module percentages against thresholds. */
@@ -513,26 +549,11 @@ if (isMain) {
     }
   }
 
-  const payloads = readCoveragePayloads(coverageDir);
-  const grouped = new Map();
-  let payloadCount = 0;
-  for (const payload of payloads) {
-    payloadCount++;
-    const one = groupFunctionsByUrl([payload], ROOT);
-    for (const [url, list] of one) {
-      let target = grouped.get(url);
-      if (!target) {
-        target = [];
-        grouped.set(url, target);
-      }
-      target.push(...list);
-    }
-  }
+  const { payloadCount, results } = evaluatePayloads(ROOT, config, readCoveragePayloads(coverageDir));
   if (payloadCount === 0) {
     console.error(`coverage gate: no coverage data in ${coverageDir}`);
     process.exit(2);
   }
-  const results = evaluateModules(ROOT, config, grouped);
 
   if (opts.baseline) {
     const out = {};

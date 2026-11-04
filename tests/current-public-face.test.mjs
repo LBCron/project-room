@@ -27,10 +27,11 @@ test('actual normalized public endpoints require owner publication and expose on
  assert.deepEqual(page.body.coverage,{channel:'general',bounded:true,limit:8});
  assert.equal(readCurrentPublicFace(store,saved.roomId,{latest:true}).messages.at(-1).id,'public-17');
  assert.doesNotMatch(page.text,/PRIVATE HISTORY|OTHER CHANNEL|DELETED MUST|identityId|permissions/);
- const html=await call('/p/'+code);assert.equal(html.status,200);assert.match(html.text,/Useful &lt;public&gt; result/);assert.match(html.text,/Only the General channel/);
+ const html=await call('/p/'+code);assert.equal(html.status,200);assert.match(html.text,/Useful &lt;public&gt; result/);assert.match(html.text,/Only the General channel/);assert.doesNotMatch(html.text,/View open tasks/);
  assert.match((await call('/watch')).text,/No public lobby is published yet/,'an unlisted capability code is not enumerated as the official lobby');
  store.command(saved.owner,saved.roomId,{id:'publish-lobby',type:'room.public_page_set',data:{enabled:true}});
- const watch=await call('/watch');assert.equal(watch.status,200,watch.text);assert.match(watch.text,/Connect an agent/);assert.match(watch.text,/\/docs\/agents\/paste\?room=project-room-lobby/);
+ const watch=await call('/watch');assert.equal(watch.status,200,watch.text);assert.match(watch.text,/Connect an agent/);assert.match(watch.text,/\/docs\/agents\/paste\?room=project-room-lobby/);assert.match(watch.text,/href="\/r\/project-room-lobby#open-tasks">View open tasks/);
+ const lobby=await call('/r/project-room-lobby');assert.equal(lobby.status,200);assert.match(lobby.text,/<h2 id="open-tasks">Open tasks<\/h2>/);
  const ids=[];let after=null;
  for(let i=0;i<4;i++){const feed=await call('/api/public/rooms/'+code+'/feed'+(after?'?after='+after:''));assert.equal(feed.status,200,feed.text);ids.push(...feed.body.messages.map(m=>m.id));after=feed.body.next;if(!feed.body.hasMore)break;}
  assert.deepEqual(ids,Array.from({length:18},(_,i)=>'public-'+i));
@@ -79,3 +80,4 @@ test('invalid public history links have one safe recovery page',async t=>{
  const {store,saved,call}=await fixture(t),route='/api/rooms/'+saved.roomId+'/public-face';await call(route,{token:saved.owner,body:{enabled:true}});store.command(saved.owner,saved.roomId,{id:'publish-errors',type:'room.public_page_set',data:{enabled:true}});
  const pages=[];for(const id of ['private-0','other-channel','deleted','missing']){const r=await call('/watch?before='+id);assert.equal(r.status,422);assert.match(r.text,/This page is no longer available/);assert.match(r.text,/href="\/watch">Return to latest messages/);assert.doesNotMatch(r.text,/PRIVATE HISTORY|OTHER CHANNEL|DELETED MUST/);pages.push(r.text)}assert.ok(pages.every(x=>x===pages[0]));
 });
+test('owner withdrawing the room page immediately removes the watch task link and public feed',async t=>{const {store,saved,call}=await fixture(t);store.publicFace.enable(saved.roomId,'owner');store.command(saved.owner,saved.roomId,{id:'enable-room-for-watch',type:'room.public_page_set',data:{enabled:true}});const before=await call('/watch');assert.match(before.text,/View open tasks/);assert.match(before.text,/Useful &lt;public&gt; result/);store.command(saved.owner,saved.roomId,{id:'withdraw-room-for-watch',type:'room.public_page_set',data:{enabled:false}});const after=await call('/watch');assert.match(after.text,/No public lobby is published yet/);assert.doesNotMatch(after.text,/View open tasks|Useful &lt;public&gt; result|PRIVATE HISTORY/);const page=await call('/r/project-room-lobby');assert.equal(page.status,404);});

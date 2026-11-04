@@ -1,0 +1,162 @@
+[
+  {
+    "label": "baseline",
+    "assets": false,
+    "state": "both",
+    "off": false,
+    "seed": {
+      "id": "pwr_aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "marker": "SYNTHETIC-WORKER-5862",
+      "source": 1,
+      "mirror": 1,
+      "setting": {
+        "enabled": 1
+      }
+    },
+    "faces": [
+      {
+        "status": 500,
+        "contentType": "application/json; charset=utf-8",
+        "bytes": 486,
+        "signature": "7b226572726f7222",
+        "width": null,
+        "height": null,
+        "sha256": "029319a18d2633d02dc473da86b1b5c1f4f3ab463a9c99bdb12aa8332fcdbb97"
+      }
+    ],
+    "assetReads": []
+  },
+  {
+    "label": "baseline",
+    "assets": true,
+    "state": "both",
+    "off": false,
+    "seed": {
+      "id": "pwr_aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "marker": "SYNTHETIC-WORKER-5862",
+      "source": 1,
+      "mirror": 1,
+      "setting": {
+        "enabled": 1
+      }
+    },
+    "faces": [
+      {
+        "status": 200,
+        "contentType": "image/png",
+        "bytes": 60155,
+        "signature": "89504e470d0a1a0a",
+        "width": 1200,
+        "height": 630,
+        "sha256": "59cb8a76f7c54299cab5f3a845a060fe8667699f0a1d861dd12374c891ad996d"
+      }
+    ],
+    "assetReads": [
+      {
+        "path": "/og/atlas.json",
+        "bytes": 19041,
+        "sha256": "b13b325d2431d7957877804254cd981ff37c2a8719356e5998edc8cf4e5a9f9e"
+      },
+      {
+        "path": "/og/atlas-inter-24.png",
+        "bytes": 18234,
+        "sha256": "f89a7c8d51993f9bc311b3e8860e322857aa0bbb8382e3ca9315c9f24f037fed"
+      },
+      {
+        "path": "/og/atlas-inter-32.png",
+        "bytes": 25831,
+        "sha256": "c4ce4f00fe0d2cacf0aec58d5c49068f78bb9001d00c5e5fbbea9eb624c49249"
+      },
+      {
+        "path": "/og/atlas-inter-48.png",
+        "bytes": 42361,
+        "sha256": "bcdde5ac0d81cd506fed39697c5845ec07c6dafb20484586fe6c29d625bc03db"
+      },
+      {
+        "path": "/og/base-receipt.png",
+        "bytes": 17669,
+        "sha256": "c862c183bd940a1a903a55744b82c7b937a781e6b9175d7f7c566ffafa5952c5"
+      }
+    ]
+  },
+  {
+    "label": "composed",
+    "assets": false,
+    "state": "both",
+    "off": false,
+    "seed": {
+      "id": "pwr_aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "marker": "SYNTHETIC-WORKER-5862",
+      "source": 1,
+      "mirror": 1,
+      "setting": {
+        "enabled": 1
+      }
+    },
+    "faces": [
+      {
+        "status": 500,
+        "contentType": "application/json; charset=utf-8",
+        "bytes": 486,
+        "signature": "7b226572726f7222",
+        "width": null,
+        "height": null,
+        "sha256": "7c7ef7375956ee9952f08cdd8c19f22773f1d699ab4c4c828fdcc675b4bf0ee4"
+      }
+    ],
+    "assetReads": []
+  },
+  {
+    "label": "composed",
+    "assets": true,
+    "state": "both",
+    "off": false,
+    "seed": {
+      "id": "pwr_aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "marker": "SYNTHETIC-WORKER-5862",
+      "source": 1,
+      "mirror": 1,
+      "setting": {
+        "enabled": 1
+      }
+    },
+    "faces": [
+      {
+        "status": 200,
+        "contentType": "image/png",
+        "bytes": 60155,
+        "signature": "89504e470d0a1a0a",
+        "width": 1200,
+        "height": 630,
+        "sha256": "59cb8a76f7c54299cab5f3a845a060fe8667699f0a1d861dd12374c891ad996d"
+      }
+    ],
+    "assetReads": [
+      {
+        "path": "/og/atlas.json",
+        "bytes": 19041,
+        "sha256": "b13b325d2431d7957877804254cd981ff37c2a8719356e5998edc8cf4e5a9f9e"
+      },
+      {
+        "path": "/og/atlas-inter-24.png",
+        "bytes": 18234,
+        "sha256": "f89a7c8d51993f9bc311b3e8860e322857aa0bbb8382e3ca9315c9f24f037fed"
+      },
+      {
+        "path": "/og/atlas-inter-32.png",
+        "bytes": 25831,
+        "sha256": "c4ce4f00fe0d2cacf0aec58d5c49068f78bb9001d00c5e5fbbea9eb624c49249"
+      },
+      {
+        "path": "/og/atlas-inter-48.png",
+        "bytes": 42361,
+        "sha256": "bcdde5ac0d81cd506fed39697c5845ec07c6dafb20484586fe6c29d625bc03db"
+      },
+      {
+        "path": "/og/base-receipt.png",
+        "bytes": 17669,
+        "sha256": "c862c183bd940a1a903a55744b82c7b937a781e6b9175d7f7c566ffafa5952c5"
+      }
+    ]
+  }
+]

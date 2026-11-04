@@ -1,0 +1,23 @@
+{
+  "baseline": "924492a4143b59bb6c663be4d16977668dcf8185",
+  "composition": "b24e3628e9f03aa708c394896206a56b9c490a8e",
+  "command": "/Users/johnpotter/.local/bin/node cloudflare/receipt-5862-png-probe.mjs",
+  "node": "24.22.1",
+  "cause": "Original fixture omitted serviceBindings.ASSETS. ProjectRoom injected loader calls env.ASSETS.fetch. Constructor observation confirms undefined before and object after. Renderer uses committed atlas JSON, 3 atlas PNGs and base-receipt PNG, no wasm/external font runtime.",
+  "controls": "Both baseline and composition: original absent binding500; actual asset binding200 image/png 60155bytes1200x630. Only both-row/public PNG requested, four total served requests. Actual asset bytes read from corresponding revision; hashes logged. No renderer stub or production-source changes.",
+  "pngChecks": [
+    {
+      "revision": "baseline",
+      "allChunkCrcValid": true,
+      "decodedScanlineBytes": 3024630,
+      "sha256": "59cb8a76f7c54299cab5f3a845a060fe8667699f0a1d861dd12374c891ad996d"
+    },
+    {
+      "revision": "composed",
+      "allChunkCrcValid": true,
+      "decodedScanlineBytes": 3024630,
+      "sha256": "59cb8a76f7c54299cab5f3a845a060fe8667699f0a1d861dd12374c891ad996d"
+    }
+  ],
+  "limitation": "Local synthetic fixture, not proof of production asset availability; original500 logs retained."
+}

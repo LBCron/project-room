@@ -1,4 +1,7 @@
+import { withAgentSessions } from "./agent-session-state.mjs";
 import { readWorkItem } from "./work-repository.mjs";
+import { boardPlanningEnabled, PLANNING_FIELDS, PLANNING_QUERY, planningPatchOf, hasPlanningInput, applyPlanning, planningQueryOf, filterPlanning, sortPlanning, groupPlanning } from "./board-planning.mjs";
+import { boardViewsEnabled, getView, withSavedView } from "./board-views.mjs";
 import { assertListenerFence, LISTENER_TOKEN_HEADER } from "./listener-fence.mjs";
 import { messageRepository } from "./message-repository.mjs";
 // Work-claim HTTP routes (task RC-2026-09-18-041; receipts RC-2026-09-24-205).
@@ -442,22 +445,40 @@ export function buildWorkClaimPage(items, roomId, viewerId, query = new URLSearc
   const reject = (status, code, message) => { throw new ServiceError(status, code, message); };
   const params = query ?? new URLSearchParams();
   for (const key of params.keys()) {
-    if (!BOARD_QUERY.has(key) || params.getAll(key).length !== 1) {
+    const planningKey = boardPlanningEnabled() && PLANNING_QUERY.includes(key);
+    if ((!BOARD_QUERY.has(key) && !planningKey) || params.getAll(key).length !== 1) {
       invalidInput(reject, "a single queue, state, limit, cursor, or view query parameter");
     }
+  }
+  // Board planning fields: filters narrow the items; sort returns the first
+  // `limit` sorted items (a sorted page has no cursor).
+  let planningSort = null;
+  let groupBy = null;
+  if (boardPlanningEnabled() && PLANNING_QUERY.some(key => params.has(key))) {
+    const { query: pq, error } = planningQueryOf(params);
+    if (error) invalidInput(reject, error);
+    items = filterPlanning(items, pq);
+    planningSort = pq.sort ?? null;
+    groupBy = pq.groupBy ?? null;
   }
   const limit = boardLimitOf(reject, params.get("limit"));
   const cursor = params.has("cursor") ? boardCursorOf(reject, params.get("cursor")) : null;
   const view = params.get("view");
   if (view !== null && view !== "summary") invalidInput(reject, "view=summary");
+  if (planningSort !== null) {
+    if (params.has("cursor") || params.has("queue")) invalidInput(reject, "planning sort returns a top-N page without cursor or queue");
+    const state = params.get("state");
+    if (state !== null && !STATES.includes(state)) invalidInput(reject, `state one of ${STATES.join(", ")}`);
+  }
   const metadata = { roomId, source: "work-claims", evaluatedAt: new Date(nowMs).toISOString(),
     consistency: "live", limit, historyLimit: LIST_HISTORY_ENTRIES };
-  const present = page => {
+  const present = page => groupBy === null ? presentPage(page) : ({ ...presentPage(page), groupBy, groups: groupPlanning(page.claims, groupBy) });
+  const presentPage = page => {
     // #3661: every claim read carries the derived pull settlement state on
     // its pull record (verified / asserted / pending; link-less claims
     // keep pullRequest null, which reads as "none").
     const stamped = stampClaimPage({ ...metadata, ...page,
-      claims: page.claims.map(item => withPullSettlement(summarizeClaimHistory(item, LIST_HISTORY_ENTRIES))) }, viewerId);
+      claims: withAgentSessions(page.claims, nowMs).map(item => withPullSettlement(summarizeClaimHistory(item, LIST_HISTORY_ENTRIES))) }, viewerId);
     return view === "summary" ? withContentTrust({ ...stamped, claims: stamped.claims.map(summarizeBoardClaim) }) : stamped;
   };
   if (params.has("queue")) {
@@ -465,6 +486,11 @@ export function buildWorkClaimPage(items, roomId, viewerId, query = new URLSearc
     if (params.has("state")) invalidInput(reject, "either queue=ready or state, not both");
     if (cursor && (cursor.q !== "ready" || cursor.s !== undefined)) invalidInput(reject, "a cursor from a queue=ready page");
     return present({ ...pageReady(readyClaims(items), limit, cursor), queue: "ready", historyScope: "ready" });
+  }
+  if (planningSort !== null) {
+    const state = params.get("state");
+    const pool = state === null ? items.filter(item => !isTerminalClaimState(item.state)) : items.filter(item => item.state === state);
+    return present({ claims: sortPlanning(pool, planningSort).slice(0, limit), nextCursor: null, sort: planningSort, historyScope: state === null ? "open" : "state" });
   }
   if (cursor?.q === "ready") invalidInput(reject, "a cursor from a work-claims page");
   const state = params.has("state") ? params.get("state") : null;
@@ -1056,8 +1082,14 @@ function handleWorkClaimsCore({ req, res, url, store, roomId, auth, workClaimRou
   }
   if (workClaimRoute === "list" && req.method === "GET") {
     closeLiveClaims();
+    let listParams = url?.searchParams;
+    if (boardViewsEnabled() && listParams?.has("savedView")) {
+      const saved = getView(store.db, { roomId, viewId: listParams.get("savedView") });
+      if (!saved) reject(404, "unknown_view", "No such saved Board view in this room");
+      listParams = withSavedView(listParams, saved);
+    }
     return json(res, 200, withProjectMapOverlap(store, roomId, { ...buildWorkClaimPage(registry.list(roomId), roomId, caller,
-      url?.searchParams, nowMs), swept: sweptIds }));
+      listParams, nowMs), swept: sweptIds }));
   }
   if (workClaimRoute === "receipts" && req.method === "GET") {
     // RC-2026-09-24-205: receipts search. The room block already rejected
@@ -1169,7 +1201,7 @@ function handleWorkClaimsCore({ req, res, url, store, roomId, auth, workClaimRou
   }
   if (workClaimRoute === "create" && req.method === "POST") {
     const raw = body(req);
-    if (!shape(raw, { required: ["id"], optional: ["title", "reviewPolicy", "note", "tags", "files", "dependsOn", "parentClaimId", "evidenceRefs", "pullRequest", "pullRequests", "repo", "branch", "kind", "revision", "assignee", "squadId", "acceptanceCriteria"] })) invalidInput(reject, "{id, title?, reviewPolicy?, note?, tags?, files?, dependsOn?, parentClaimId?, evidenceRefs?, pullRequest?, pullRequests?, repo?, branch?, kind?, revision?, assignee?, squadId?, acceptanceCriteria?}");
+    if (!shape(raw, { required: ["id"], optional: ["title", "reviewPolicy", "note", "tags", "files", "dependsOn", "parentClaimId", "evidenceRefs", "pullRequest", "pullRequests", "repo", "branch", "kind", "revision", "assignee", "squadId", "acceptanceCriteria", ...(boardPlanningEnabled() ? PLANNING_FIELDS : [])] })) invalidInput(reject, "{id, title?, reviewPolicy?, note?, tags?, files?, dependsOn?, parentClaimId?, evidenceRefs?, pullRequest?, pullRequests?, repo?, branch?, kind?, revision?, assignee?, squadId?, acceptanceCriteria?}");
     requireWriter();
     requireEventBudget();
     const id = claimIdOf(reject, raw.id);
@@ -1200,7 +1232,10 @@ function handleWorkClaimsCore({ req, res, url, store, roomId, auth, workClaimRou
     // Pair rule: hard work defaults to a distinct reviewer, so it cannot close
     // without a non-owner APPROVE. An explicit reviewPolicy still wins.
     const reviewPolicy = data.reviewPolicy ?? (isHardWork({ tags: data.tags }) ? "distinct_member" : undefined);
+    const planning = boardPlanningEnabled() ? planningPatchOf(raw) : { patch: {} };
+    if (planning.error) invalidInput(reject, planning.error);
     let item = runPure(reject, () => createWork({ id, title: data.title, reviewPolicy, note: data.note, tags: data.tags, files: data.files, dependsOn: data.dependsOn, parentClaimId: data.parentClaimId, evidenceRefs: data.evidenceRefs, pullRequest: data.pullRequest, pullRequests: data.pullRequests, repo: data.repo, branch: data.branch, kind: data.kind, revision: data.revision, squadId: data.squadId, acceptanceCriteria: data.acceptanceCriteria }, { now: nowMs, agentId: caller }));
+    if (Object.keys(planning.patch).length) item = applyPlanning(item, planning.patch);
     if (assignee) {
       const held = registry.list(roomId).filter(entry => entry.owner === assignee && ACTIVE_CLAIM_STATES.includes(entry.state)).length;
       if (held >= config.maxMemberOpenClaims) {
@@ -1341,7 +1376,30 @@ function handleWorkClaimsCore({ req, res, url, store, roomId, auth, workClaimRou
       requiredReading: requiredReadingFor(item.kind) }));
   }
   if (workClaimRoute === "update" && req.method === "POST") {
-    const data = body(req);
+    const rawUpdate = body(req);
+    let planningPatch = null;
+    let data = rawUpdate;
+    if (boardPlanningEnabled() && hasPlanningInput(rawUpdate)) {
+      // Planning is not part of the existing requestId payload digest. Refuse
+      // this combination before mutation instead of replaying a different plan.
+      if (Object.hasOwn(rawUpdate, "requestId"))
+        reject(422, "invalid_claim_input", "Send a separate planning edit without requestId; requestId does not support planning fields.");
+      const { patch, error } = planningPatchOf(rawUpdate);
+      if (error) invalidInput(reject, error);
+      planningPatch = patch;
+      data = Object.fromEntries(Object.entries(rawUpdate).filter(([key]) => !PLANNING_FIELDS.includes(key)));
+      if (Object.keys(data).length === 0) {
+        // Planning-only edit: any room writer may set planning fields (Linear
+        // parity); terminal claims stay immutable.
+        requireWriter();
+        requireEventBudget();
+        const current = load(claimIdOf(reject, workClaimId));
+        if (isTerminalClaimState(current.state)) reject(409, "work_claim_terminal", `work "${current.id}" is ${current.state} and immutable`);
+        const saved = applyPlanning(current, planningPatch);
+        commit(saved, "state_changed", { coalesce: true, previousState: current.state });
+        return json(res, 200, saved);
+      }
+    }
     if (!shape(data, { optional: ["state", "note", "deliveryMode", "reviewedBy", "tags", "blobs", "readingAck", "parentClaimId", "evidenceRefs", "delivery", "requestId", "expectedClaimedAt", "expectedHistoryLength"] })) invalidInput(reject, "{state?, note?, deliveryMode?, reviewedBy?, tags?, blobs?, readingAck?, parentClaimId?, evidenceRefs?, delivery?, requestId?, expectedClaimedAt?, expectedHistoryLength?}");
     if (data.requestId !== undefined
       && (typeof data.requestId !== "string" || !CLAIM_ID_PATTERN.test(data.requestId))) {
@@ -1537,8 +1595,9 @@ function handleWorkClaimsCore({ req, res, url, store, roomId, auth, workClaimRou
     const result = data.requestId !== undefined && (sendBackCall || (verifyCall && policy !== "self_attested")) && item.owner !== caller
       ? runPure(reject, () => bindReviewerRequestOutcome(item, acked, caller, data.requestId, data.readingAck)) : acked;
     // Q3-A: a note-only update coalesces with this claim's last room event.
-    commit(result, "state_changed", { coalesce: data.state === undefined || data.state === item.state, previousState: item.state });
-    return json(res, 200, result);
+    const saved = planningPatch ? applyPlanning(result, planningPatch) : result;
+    commit(saved, "state_changed", { coalesce: data.state === undefined || data.state === item.state, previousState: item.state });
+    return json(res, 200, saved);
   }
   if (workClaimRoute === "review" && req.method === "POST") {
     // A verdict review is a record from someone other than the owner who

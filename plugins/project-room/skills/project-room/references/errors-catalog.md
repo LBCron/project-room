@@ -671,6 +671,7 @@ response's own `hint`/`next` when it names something more specific.
 | `invalid_quarantine_dismiss` | 422 | Choose the held message to dismiss. | fix+resend | Fix the refused fields named in the message; resend. Keep the same command id if the earlier send was uncertain. |
 | `invalid_quarantine_release` | 422 | Choose the held message to confirm. | fix+resend | Fix the refused fields named in the message; resend. Keep the same command id if the earlier send was uncertain. |
 | `invalid_quarantine_split` | 422 | ${field} must be a 1..${limit} character string | fix+resend | Fix the refused fields named in the message; resend. Keep the same command id if the earlier send was uncertain. |
+| `invalid_query` | 422 | Query must be an object of Board list params | fix+resend | Fix the refused input and resend. |
 | `invalid_quote` | 422 | Bounded decimal strings and currency required | fix+resend | Send placementValueMinor, trialHoursMax and hourlyRateMinor as bounded decimal strings and currency as a three-letter code. |
 | `invalid_rate_limit` | 500 | fail("invalid_rate_limit", message); }; export function createLimiter({ rate, burst, store } = {}) { check(typeof rate === "number" && rate > 0 && rat | no | No success is claimed. Reconcile before any retry. 5xx bodies carry errorId + fingerprint for the bug report. |
 | `invalid_ratelimit` | 500 | fail("invalid_ratelimit", message); }; // Create a rate limiter. now is an injectable clock (ms). export function createRateLimiter({ store, now, capa | no | No success is claimed. Reconcile before any retry. 5xx bodies carry errorId + fingerprint for the bug report. |
@@ -874,6 +875,7 @@ response's own `hint`/`next` when it names something more specific.
 | `not_found` | 404 | No such room or identity | re-list | Re-list the resource and use a current id. Do not guess ids. |
 | `not_member` | 403 | Member "${auth.member.id}" is not a member of room "${roomId} | no | room_check_access. Ask the owner for the missing permission. Do not retry the same call unchanged. |
 | `not_room_owner` | 403 | Only a room owner can attest an agent identity as verified | no | room_check_access. Ask the owner for the missing permission. Do not retry the same call unchanged. |
+| `not_view_creator` | 403 | Only the view's creator or the room owner can delete it | no | Do not retry; check the feature flag, permissions or target first. |
 | `note_contract_violation` | 500 | Channel payload carries internal material at ${hit} | no | No success is claimed. Reconcile before any retry. 5xx bodies carry errorId + fingerprint for the bug report. (Note: unmapped collab code → central 500.) |
 | `note_forbidden` | 403 | Only the original author may edit this note. | no | room_check_access. Ask the owner for the missing permission. Do not retry the same call unchanged. (Note: collab STATUS_BY_CODE.) |
 | `note_invalid` | 422 | fail("note_invalid", error.message); } }; const identity = (value, field) => { try { return identityOf(value, field); } catch (error) { fail("note_inv | fix+resend | Fix the refused fields named in the message; resend. Keep the same command id if the earlier send was uncertain. (Note: collab STATUS_BY_CODE.) |
@@ -1127,6 +1129,7 @@ response's own `hint`/`next` when it names something more specific.
 | `unknown_target` | 404 | No such room | re-list | Re-list the resource and use a current id. Do not guess ids. |
 | `unknown_template` | 422 | Template must be one of the named automation templates | fix+resend | Fix the refused input and resend. |
 | `unknown_version` | internal | receiptType must be exactly ${JSON.stringify(RECEIPT_TYPE_VETTING)} | n/a | converted to {ok:false} validation result; not an HTTP error (Note: converted to {ok:false} validation result; not an HTTP error.) |
+| `unknown_view` | 404 | No such saved Board view in this room | no | Do not retry; check the feature flag, permissions or target first. |
 | `unreadable_body` | 400 | Could not read the restore body | no | Operator only. Resend the request body in full. |
 | `unsupported_agent_scope` | 409 | This agent scope needs a separate reviewed connection | no | Re-check access and current work. If it repeats, report error.code and the full message to the room owner — this code has no mapped recovery. |
 | `unsupported_content` | 415 | Only HTML pages can be fetched | no | Re-check access and current work. If it repeats, report error.code and the full message to the room owner — this code has no mapped recovery. |

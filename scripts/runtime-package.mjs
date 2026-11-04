@@ -120,6 +120,7 @@ optional.push("server/inbox-threads.mjs"); // thread builder (imported by server
 optional.push("server/inbox-stitch.mjs"); // stitch key derivation + scoring (imported by server/inbox.mjs and server.mjs; pure)
 optional.push("server/inbox-stitch-store.mjs"); // hash-only stitch graph (imported by server/inbox.mjs; pure persistence, no imports beyond inbox-stitch.mjs)
 optional.push("server/inbox-spam.mjs"); // spam/phishing flagging (imported by server/inbox-import-guards.mjs; pure, no imports of its own)
+optional.push("server/assignment-deadlines.mjs"); // grok/assignment-deadlines new modules
 optional.push("server/notify-prefs.mjs"); // notification prefs + quiet hours (imported by server/inbox.mjs and server/inbox-import-guards.mjs; pure, no imports of its own)
 optional.push("server/thread-mutes.mjs"); // per-thread mutes (imported by server/store.mjs; pure, no imports of its own)
 optional.push("server/human-push.mjs"); // human browser push, mentions and DMs (imported by server/store.mjs)
@@ -254,7 +255,6 @@ optional.push("server/persisted-row.mjs"); // RC-2026-09-27-2730: replay-safe pe
 optional.push("server/claim-collisions.mjs");
 optional.push("server/agent-collisions.mjs"); // overlap alerts for live claims (imported by server/work-claim-routes.mjs)
 optional.push("server/work-claim-routes.mjs"); // RC-2026-09-18-041: work-claim HTTP routes (imported by server/http.mjs)
-optional.push("server/assignment-deadlines.mjs"); // grok/assignment-deadlines new modules
 optional.push("server/work-claim-events.mjs"); // work_claim.updated receipts (imported by server/work-claim-routes.mjs; imports src/events.js)
 optional.push("server/work-claim-integrity.mjs"); // SEC-2: Board input bounds, event budget and status cache (imported by server/work-claim-routes.mjs; imports src/display-name-guard.js via server/display-name-guard.mjs and server/store.mjs limits)
 optional.push("server/work-item-board.mjs"); // decision #10: workItems -> board claims migration core + write-path sync (imported by server/store.mjs)

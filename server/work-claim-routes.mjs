@@ -50,6 +50,7 @@ import { evaluateReceipt } from "./jev-receipts.mjs";
 import { findClaimCollisions } from "./claim-collisions.mjs";
 import { emitWorkClaimEvent, enqueueClaimWake, wakeNamedReviewers } from "./work-claim-events.mjs";
 import { alertLeaseRefusal, notifyClaimCollisions } from "./agent-collisions.mjs";
+import { notifyContractChanges } from "./contract-notices.mjs";
 import { noteProjectMapOverlap, publishProjectMapOverlap, withProjectMapOverlap } from "./project-map-store.mjs";
 import { noteReadyWork } from "./work-wants.mjs"; // BOARD-WAKE-2
 import { getActiveSquad } from "./squads.mjs"; // plan-squads: work offers target squads
@@ -732,6 +733,7 @@ export function linkWorkClaimPullRequest({ store, roomId, auth, claimId, data, r
     registry.set(roomId, linked);
     emitWorkClaimEvent(store, roomId, { actorId: current.member.id, item: linked, action: "state_changed", atMs: now });
     try { notifyClaimCollisions(store, roomId, linked); } catch (error) { console.error("collision alert failed:", error?.message ?? error); }
+    notifyContractChanges(store, roomId, linked);
     try { noteProjectMapOverlap(store, roomId, linked); } catch (error) { console.error("project map overlap failed:", error?.message ?? error); }
     return linked;
   };
@@ -950,6 +952,7 @@ function handleWorkClaimsCore({ req, res, url, store, roomId, auth, workClaimRou
     if (action === "created" || action === "released") noteReadyWork(store, roomId, item, { actorId: extra.actorId ?? caller, now: nowMs });
     if (action === "state_changed" || action === "claimed") wakeNamedReviewers(store, roomId, item, { actorId: extra.actorId ?? caller });
     try { notifyClaimCollisions(store, roomId, item); } catch (error) { console.error("collision alert failed:", error?.message ?? error); }
+    notifyContractChanges(store, roomId, item);
     try { noteProjectMapOverlap(store, roomId, item); } catch (error) { console.error("project map overlap failed:", error?.message ?? error); }
     return item;
   };

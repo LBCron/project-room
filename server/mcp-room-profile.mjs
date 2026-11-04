@@ -70,6 +70,7 @@ import { CONTENT_TRUST, stampAccessRequests, stampAttachmentGet, stampEvents, st
 import { resolveCatalogAgent, catalogCallDenial } from "./capability-visibility.mjs";
 import { listSquads, getSquad, createSquad, updateSquadMembers, disbandSquad } from "./squads.mjs"; // plan-squads: squad roster
 import { runRoomMap } from "./project-map-store.mjs";
+import { firstConnectTask } from "./first-connect-task.mjs";
 
 const object = value => value !== null && typeof value === "object" && !Array.isArray(value);
 
@@ -649,6 +650,7 @@ function dispatchRoomToolCall(store, secret, identity, name, args, agentRooms, s
         return {
         ...admission,
         ...(publicContext?{publicContext}:{}),
+        ...(()=>{if(admission.alreadyMember||admission.status!=='approved')return {};const firstTask=firstConnectTask(store,args.roomId);return firstTask?{firstTask}:{};})(),
         next: admission.next?.map(step => step.action === "activation-pack"
           ? { ...step, tool: "room_activation_pack", arguments: { roomId: args.roomId } } : step)
         };

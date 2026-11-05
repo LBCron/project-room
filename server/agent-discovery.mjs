@@ -1168,9 +1168,25 @@ const AI_CRAWLERS = Object.freeze([
   "Google-Extended", "CCBot", "Applebot-Extended"
 ]);
 
+// Disallow patterns for the test-pattern room slugs the sitemap never
+// lists (isTestPatternRoomSlug in server/public-read-model.mjs): the QA
+// namespaces by prefix, and the test/disposable/probe segment families by
+// wildcard. Defence in depth — a crawler that never reads the sitemap
+// still does not index the QA lab as the product's public face.
+const ROOM_TEST_DISALLOWS = Object.freeze([
+  "/r/qa-",
+  "/r/qa2700-",
+  "/r/qr-l01-",
+  "/r/test-",
+  "/r/*-test-",
+  "/r/*-disposable-",
+  "/r/*-probe-",
+]);
+
 export function robotsTxt() {
   return AI_CRAWLERS.map(bot => `User-agent: ${bot}\nAllow: /`).join("\n")
     + "\n\nUser-agent: *\nAllow: /llms.txt\nDisallow:\n"
+    + ROOM_TEST_DISALLOWS.map(path => `Disallow: ${path}\n`).join("")
     // ARD discovery hook: agents reading robots.txt find the ai-catalog.
     + `\nSitemap: ${ROOM_ORIGIN}/sitemap.xml\nAgentmap: ${ROOM_ORIGIN}/.well-known/ard.json\n`
     // llms.txt is the agent packet; name it for crawlers that read comments.

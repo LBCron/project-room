@@ -1358,12 +1358,29 @@ export function loadPublicRoom(store, slug, {workAfter = ''} = {}) {
   });
 }
 
+// A slug marks its room as a test/QA artefact — not a public room a stranger
+// should meet through search — when one of its hyphen-delimited segments
+// names it as test, QA, disposable, or a probe, or it sits in the qr-l01 QA
+// namespace. Segment equality, never substring: "contest", "qatar", and
+// "latest" all contain "test"/"qa" letters and stay listed. Exclusion is
+// from the sitemap only: the room still serves at its URL (loadPublicRoom is
+// untouched); it is simply not advertised to crawlers. robots.txt carries
+// matching Disallow patterns (robotsTxt in server/agent-discovery.mjs).
+const SITEMAP_TEST_SEGMENTS = new Set(["qa", "qa2700", "test", "disposable", "probe"]);
+const SITEMAP_TEST_PREFIXES = Object.freeze(["qr-l01-"]);
+export function isTestPatternRoomSlug(slug) {
+  if (typeof slug !== "string") return false;
+  if (SITEMAP_TEST_PREFIXES.some(prefix => slug.startsWith(prefix))) return true;
+  return slug.split("-").some(segment => SITEMAP_TEST_SEGMENTS.has(segment));
+}
+
 export function listPublicRoomSitemap(store, limit = 1000) {
   const cap = Number.isInteger(limit) && limit > 0 ? Math.min(limit, 1000) : 1000;
   return store.db.prepare("SELECT slug, set_at, receipts_enabled FROM public_rooms ORDER BY slug ASC LIMIT ?").all(cap)
     // List only slugs loadPublicRoom would serve: a valid slug, not
     // unpublished, and for a native room a published, unarchived page.
-    .filter(row => SLUG.test(row.slug) && !isUnpublished(store.db, "room", row.slug)
+    // Test-pattern slugs are never listed (isTestPatternRoomSlug above).
+    .filter(row => SLUG.test(row.slug) && !isTestPatternRoomSlug(row.slug) && !isUnpublished(store.db, "room", row.slug)
       && (!store.db.prepare("SELECT 1 FROM current_room_head WHERE room_id=?").get(row.slug)
         || currentPublicPageListed(store, row.slug)))
     .map(row => ({

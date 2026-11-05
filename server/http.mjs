@@ -18,7 +18,7 @@ import { dmEventVisibility, dmConsentEventVisible } from "./dm-event-visibility.
 import { recordedReceiptsOptOut } from "./public-visibility.mjs";
 import { publicPageCsp } from "./public-search.mjs";
 // JDOT-PUBLIC-CSP-RUM end
-import { acceptPrefersHtml, compareIndexRedirect, publicHtmlNotFoundPath, publicSearchAssets, publicSearchCanonical, publicSearchMarketingPolicy, publicSearchPageCsp, publicSearchSitemap, PUBLIC_NOT_FOUND_HTML, PUBLIC_PAGE_LASTMOD, reviewedPublicSearchPaths } from "./public-search.mjs";
+import { acceptPrefersHtml, compareIndexRedirect, publicHtmlNotFoundPath, publicSearchAssets, publicSearchCanonical, publicSearchMarketingPolicy, publicSearchPageCsp, publicSearchSitemap, PUBLIC_NOT_FOUND_HTML, reviewedPublicSearchPaths } from "./public-search.mjs";
 import { readConversation, readMessageContext } from "./conversation-sync.mjs";
 import { readRoomSnapshot } from "./snapshot-window.mjs";
 import { readRoomAuthorityView } from "./room-authority-view.mjs";
@@ -2519,12 +2519,15 @@ export function createRoomServer({ store, origin, assetRoot = new URL("../", imp
           .map(([path]) => path);
         const receiptEntries = listPublicReceiptSitemap(store).map(item => ({
           path: item.path,
-          lastmod: item.lastmod || PUBLIC_PAGE_LASTMOD,
+          // Real-or-omitted: a receipt keeps its own date; entries with no
+          // date of their own omit <lastmod> rather than claiming the
+          // serving build's date (see publicBuildLastmod in public-search.mjs).
+          lastmod: item.lastmod || null,
         }));
         const xml = publicSearchSitemap(ROOM_ORIGIN, [
-          ...available.map(path => ({ path, lastmod: PUBLIC_PAGE_LASTMOD })),
-          { path: "/receipts", lastmod: PUBLIC_PAGE_LASTMOD },
-          ...LEGAL_SITEMAP_PATHS.map(path => ({ path, lastmod: PUBLIC_PAGE_LASTMOD })),
+          ...available.map(path => ({ path, lastmod: null })),
+          { path: "/receipts", lastmod: null },
+          ...LEGAL_SITEMAP_PATHS.map(path => ({ path, lastmod: null })),
           ...receiptEntries,
           ...publicSitemapEntries(store), // GR2 templates, agents, and opted-in room pages
         ]);

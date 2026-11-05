@@ -12,7 +12,7 @@ import { RECEIPTS_PAGE_CSP } from "./receipts-page.mjs";
 import { roomSetupPrompt } from "../src/room-setup-prompt.js";
 import { CONTENT_TRUST } from "./content-trust.mjs";
 import { ROOM_ORIGIN } from "./agent-discovery.mjs";
-import { PUBLIC_PAGE_LASTMOD } from "./public-search.mjs";
+
 import { listRoomTemplates, getRoomTemplate } from "./templates.mjs";
 import { LEGAL_FOOTER_LINKS, reportHref } from "./legal-pages.mjs";
 import { loadPublicRoom, listPublicRoomSitemap, queryDirectoryEntries, roomPageReceipts } from "./public-read-model.mjs";
@@ -437,13 +437,16 @@ ${more}
 }
 
 export function publicSitemapEntries(store) {
+  // Sitemap <lastmod> is real-or-omitted: the template and agent directories
+  // carry no date of their own, so they omit the element instead of claiming
+  // the serving build's date (see publicBuildLastmod in public-search.mjs).
   const entries = [
-    { path: "/templates", lastmod: PUBLIC_PAGE_LASTMOD },
-    ...listRoomTemplates().map(template => ({ path: `/templates/${template.slug}`, lastmod: PUBLIC_PAGE_LASTMOD })),
-    { path: "/agents", lastmod: PUBLIC_PAGE_LASTMOD },
+    { path: "/templates", lastmod: null },
+    ...listRoomTemplates().map(template => ({ path: `/templates/${template.slug}`, lastmod: null })),
+    { path: "/agents", lastmod: null },
   ];
   for (const room of listPublicRoomSitemap(store)) {
-    const lastmod = typeof room.setAt === "string" && room.setAt.length >= 10 ? room.setAt.slice(0, 10) : PUBLIC_PAGE_LASTMOD;
+    const lastmod = typeof room.setAt === "string" && room.setAt.length >= 10 ? room.setAt.slice(0, 10) : null;
     entries.push({ path: `/r/${room.slug}`, lastmod });
     if (room.receiptsEnabled) entries.push({ path: `/r/${room.slug}/proof`, lastmod });
   }

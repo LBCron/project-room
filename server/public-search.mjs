@@ -26,15 +26,17 @@ const agentDocRoutes = Object.freeze([
   ...connectSnippets.map(tool => [tool.docsPath, tool.htmlFile]),
 ]);
 export const reviewedPublicSearchPaths = Object.freeze(["/", "/offers", "/about", ...comparePaths, "/receipts", ...agentDocRoutes.map(([path]) => path)]);
-// Sitemap <lastmod> fallback for entries that carry no date of their own
-// (static marketing pages, the template and agent directories, legal pages,
-// and any room or receipt entry whose stored date is missing): the date of
-// the build doing the serving. The deploy stamps BUILD_ID with the build's
-// ISO timestamp (scripts/stamp-version.mjs), and the static content a build
-// serves can last have changed at that build — never a hand-bumped date
-// nothing keeps true. An unstamped development build has no truthful date to
-// claim, so the fallback is null and the sitemap omits <lastmod> for those
-// entries: the element is optional, and an absent one is honest.
+// Sitemap <lastmod> policy: real-or-omitted. An entry carries the date it
+// owns — a receipt its creation date, a room its stored set date — and an
+// entry with no date of its own (static marketing pages, the template and
+// agent directories, legal pages, a room or receipt whose stored date is
+// missing) omits the element: it is optional, and an absent one is honest.
+// The sitemap no longer stamps dateless entries with the serving build's
+// date: a deploy that changed no static content still re-stamped every
+// static page, so the stamp said "changed today" on every deploy day
+// regardless of change. publicBuildLastmod still derives a stamped build's
+// date for callers that need the build's own date; it is not a lastmod
+// fallback any more.
 export function publicBuildLastmod(buildId = BUILD_ID) {
   if (typeof buildId !== "string") return null;
   const match = /^(\d{4}-\d{2}-\d{2})/.exec(buildId.trim());
@@ -154,7 +156,7 @@ export function publicSearchSitemap(origin, entries) {
   const escape = text => text.replaceAll("&", "&amp;").replaceAll("<", "&lt;").replaceAll('"', "&quot;");
   const rows = entries.map(entry => {
     const path = typeof entry === "string" ? entry : entry.path;
-    const lastmod = typeof entry === "string" ? PUBLIC_PAGE_LASTMOD : entry.lastmod;
+    const lastmod = typeof entry === "string" ? null : entry.lastmod;
     const loc = `<loc>${escape(new URL(path, origin).href)}</loc>`;
     const mod = lastmod ? `<lastmod>${escape(lastmod)}</lastmod>` : "";
     return `  <url>${loc}${mod}</url>`;

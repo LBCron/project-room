@@ -650,7 +650,7 @@ function deactivateBoundMembers(store, accountId) {
     const state = isCurrentRoom(store.db,roomId)?currentDeletionRoom(store,roomId,memberId).state:store.room(roomId).state;
     const member = ownMember(state.members,memberId);
     if (!member || member.active === false || isRoomArchived(state)) continue;
-    if (store.roomAuthority(roomId).ownerId === memberId) continue;
+    if (store.roomOwnerId(roomId) === memberId) continue;
     const key = store.issueAccessKey(roomId, memberId, 60000, accountId);
     store.command(key, roomId, {
       id: `account-delete-leave-${createHash("sha256").update(`${roomId}:${memberId}:${accountId}`).digest("hex").slice(0, 32)}`,
@@ -797,7 +797,7 @@ const EXECUTORS = {
       if (!lapse.stripTargets.length) continue;
       const current=isCurrentRoom(store.db,roomId);
       const state = current?currentDeletionRoom(store,roomId,memberId).state:store.room(roomId).state;
-      if (isRoomArchived(state) || store.roomAuthority(roomId).ownerId !== memberId) continue;
+      if (isRoomArchived(state) || store.roomOwnerId(roomId) !== memberId) continue;
       for (const target of lapse.stripTargets) {
         const member = current?withCurrentReadContext(store.db,roomId,()=>readCurrentRecord(store.db,roomId,'members',target.memberId)):ownMember(store.room(roomId).state.members,target.memberId);
         if (!member || member.active === false || !member.permissions.includes("invite_member")) continue;

@@ -33,7 +33,7 @@ export async function postBoardViews(ctx) {
   if (typeof data.delete === "string") {
     const view = getView(db, { roomId, viewId: data.delete });
     if (!view) ctx.reject(404, "unknown_view", "No such view in this room");
-    const ownerId = ctx.store.roomAuthority(roomId).ownerId;
+    const ownerId = ctx.store.roomOwnerId(roomId);
     if (view.createdBy !== auth.member.id && ownerId !== auth.member.id) ctx.reject(403, "not_view_creator", "Only the view's creator or the room owner can delete it");
     deleteView(db, { roomId, viewId: data.delete });
     return ctx.json(ctx.res, 200, { ok: true, viewId: data.delete, deleted: true });

@@ -498,6 +498,14 @@ export function currentRoomAuthority(db,roomId,{memberId=null}={}) {
   const b=contextBudgets.get(db)??budget(),head=readCurrentHead(db,roomId,b);if(!head)return null;
   return memberId===null?currentAuthorityFromHead(db,roomId,head,b):currentMemberAuthorityFromHead(db,roomId,head,b,memberId);
 }
+// Owner-only authority: protected head and room record, no member census.
+// For callers that need only ownerId/sequence; cost is constant in member count.
+export function currentRoomOwnerAuthority(db,roomId) {
+  const b=contextBudgets.get(db)??budget(),head=readCurrentHead(db,roomId,b);if(!head)return null;
+  const room=readCurrentRecord(db,roomId,'metadata','room',b);
+  if(!room||!validId(room.ownerId))corrupt('missing owner authority');
+  return {sequence:head.sequence,ownerId:room.ownerId};
+}
 // Explicit addressed authority: protected room/owner and this principal only.
 // Default roster callers retain their full-census contract and budget.
 function currentMemberAuthorityFromHead(db,roomId,head,b,memberId) {
@@ -686,7 +694,7 @@ function currentClaimAdmissionAt(store,roomId,actorId,item,command,b,instant) {
 }
 export function currentCommandContext(store,roomId,command,{actorId}={}) {
   const db=store.db,b=contextBudgets.get(db)??budget(),head=readCurrentHead(db,roomId,b);if(!head)return null;
-  if(['room.public_page_set','room.join_link_set'].includes(command.type))
+  if(['room.public_page_set','room.join_link_set','room.public_receipts_set'].includes(command.type))
     return currentInviteContext(store,roomId,{memberIds:[actorId],census:command.type==='room.public_page_set'&&command.data.enabled===true});
   // Membership additions and reactivation need the exact admitted roster for
   // capacity/name/authority checks, but no messages or unrelated work bodies.
@@ -1151,6 +1159,26 @@ export function currentConversationRows(store,roomId,{viewerId,limit,before,befo
     const available=streams.filter(stream=>stream.rows.length);if(!available.length)break;
     available.sort((a,c)=>c.rows[0].seq-a.rows[0].seq||Buffer.compare(Buffer.from(c.rows[0].message_id),Buffer.from(a.rows[0].message_id)));
     const row=available[0].rows.shift();if(seen.has(row.message_id))continue;seen.add(row.message_id);
+    if(floor) {
+      // PRIV-2 accounting: a candidate whose scalar creation instant is
+      // strictly before the reader's history floor is unreturnable by
+      // construction (messageInHistory can only deny it), so it is charged
+      // the scalar denial the addressed path already uses
+      // (currentMessageMayBeVisible: charge 256), not a full proof read of
+      // a body the reader may never see. The equal-instant tie-break and
+      // every returnable row stay on the authoritative proof path below.
+      // D4 guard (lane-11 rework): the scalar charge sits inside the same
+      // budget-error catch discipline as the loop's other throws (pin
+      // :1150/:1156/:1160) — if it exhausts the budget after at least one
+      // candidate has been examined (last set), the read degrades to the
+      // partial page with a continuation instead of hard-409ing.
+      try{
+        const at=db.prepare("SELECT CASE WHEN length(CAST(created_at AS BLOB))<=128 THEN created_at END AS at FROM messages WHERE room_id=? AND message_id=?").get(roomId,row.message_id)?.at;
+        charge(b,256);
+        const instant=typeof at==='string'?Date.parse(at):NaN,joined=Date.parse(floor.at);
+        if(Number.isFinite(instant)&&Number.isFinite(joined)&&instant<joined){examined++;last={position:row.seq,messageId:row.message_id};continue;}
+      }catch(error){if(error.code==='current_room_context_unavailable'&&last){interrupted=true;break;}throw error;}
+    }
     let source;
     try{source=readCurrentMessage(db,roomId,row.message_id,b);}
     catch(error){if(error.code==='current_room_context_unavailable'&&last){interrupted=true;break;}throw error;}
@@ -1424,12 +1452,18 @@ export function readCurrentReplyRequestWindow(store,roomId,{after='',limit=4}={}
   if(!after&&!hasMore&&requests.length!==head.counts.replyRequests)corrupt('complete request source membership differs');
   return {requests,examinedAfter,hasMore,total:head.counts.replyRequests};
 }
-export function readCurrentOverviewWindow(store,roomId,{workAfter='',limit=8,viewerId=null}={}) {
+// viewerAuthority: the Board work list needs only the owner's and viewer's
+// member records, so it uses the existing addressed authority
+// (currentMemberAuthorityFromHead) instead of the full member census, which
+// exhausted the shared 200-record/256KiB read budget in rooms with more than a
+// handful of members. Cost is O(page), not O(members).
+export function readCurrentOverviewWindow(store,roomId,{workAfter='',limit=8,viewerId=null,viewerAuthority=false}={}) {
   const db=store.db,b=contextBudgets.get(db)??budget(),head=readCurrentHead(db,roomId,b);if(!head)return null;
   if(typeof workAfter!=='string'||Buffer.byteLength(workAfter)>200||!Number.isInteger(limit)||limit<1||limit>8)refuse('Invalid bounded work context window');
-  const authority=currentAuthorityFromHead(db,roomId,head,b),room=readCurrentRecord(db,roomId,'metadata','room',b);
+  const scoped=viewerAuthority&&typeof viewerId==='string';
+  const authority=scoped?currentMemberAuthorityFromHead(db,roomId,head,b,viewerId):currentAuthorityFromHead(db,roomId,head,b),room=readCurrentRecord(db,roomId,'metadata','room',b);
   const state={room,members:authority.members,workItems:{},messages:[],pins:[]};
-  const pins=readCurrentRecord(db,roomId,'metadata','pins',b);if(pins!==undefined)state.pins=pins;
+  if(!scoped){const pins=readCurrentRecord(db,roomId,'metadata','pins',b);if(pins!==undefined)state.pins=pins;}
   const rows=db.prepare("SELECT record_key FROM current_room_record_proofs INDEXED BY current_work_summary_keys WHERE room_id=? AND domain='workSummary' AND present=1 AND record_key>? ORDER BY record_key LIMIT ?").all(roomId,workAfter,limit+1);
   charge(b,rows.reduce((n,row)=>n+Buffer.byteLength(row.record_key)+32,0),rows.length);
   let after=workAfter,returned=0;

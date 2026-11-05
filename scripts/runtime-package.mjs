@@ -196,6 +196,8 @@ optional.push("server/storage-limits.mjs"); // r56: storage value limit reported
 optional.push("server/needs-me.mjs"); // cross-room room_needs_me (imported by server/mcp-room-profile.mjs and server/http.mjs)
 optional.push("server/land-queue.mjs"); // per-room pull-request land queue (imported by server/store.mjs)
 optional.push("server/mcp-full-profile.mjs"); // stdio-equivalent hosted MCP tools (imported by server/mcp-room-profile.mjs)
+optional.push("server/experiments.mjs"); // EXP-1 flagged experiments, default off (imported by server/mcp-full-profile.mjs)
+optional.push("server/growth-experiments.mjs"); // experiment definitions (imported by server/experiments.mjs; node:crypto only)
 optional.push("server/agent-identities.mjs");
 optional.push("server/owner-delegates.mjs"); // Owner-delegate authority (imported by server/store.mjs; delegate flag consumed by server/guest-agent-links.mjs, server/guest-invites.mjs, server/agent-invites.mjs, server/access-review.mjs, server/agent-connections.mjs)
 optional.push("server/board-claim-tools.mjs"); // grok/board-claim-tools new modules

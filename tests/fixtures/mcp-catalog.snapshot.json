@@ -1355,7 +1355,7 @@
       }
     },
     "room_wait_for_attention": {
-      "inputSchema": "78d173c84d880973",
+      "inputSchema": "227c98a82ad2a4a2",
       "annotations": {
         "readOnlyHint": true,
         "destructiveHint": false,
@@ -2199,7 +2199,7 @@
       }
     },
     "room_wait_for_attention": {
-      "inputSchema": "78d173c84d880973",
+      "inputSchema": "227c98a82ad2a4a2",
       "annotations": {
         "readOnlyHint": true,
         "destructiveHint": false,
@@ -2633,7 +2633,7 @@
       }
     },
     "room_wait_for_attention": {
-      "inputSchema": "78d173c84d880973",
+      "inputSchema": "227c98a82ad2a4a2",
       "annotations": {
         "readOnlyHint": true,
         "destructiveHint": false,

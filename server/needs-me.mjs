@@ -1108,6 +1108,11 @@ export function collectNeedsMe(store, secret, { since, roomId: scopedRoom = null
   const landStart = {};
   const landIdStart = {};
   const native={...parsed.native},nativeCoverage=[];
+  // Inbound native cursor per current-room page (see suppressed-lease hold below).
+  // Native continuation is encrypted and independent of rooms[seq]; clamping
+  // rooms alone cannot rewind a multi-page native walk that suppressed leased
+  // items on earlier pages.
+  const nativeStart = {};
   let pendingBonds = null;
   const openWork = [];
   const reviewAsks = [];
@@ -1138,6 +1143,9 @@ export function collectNeedsMe(store, secret, { since, roomId: scopedRoom = null
       // classes plus one addressed work item and one request. Never slice a
       // returned source page and acknowledge its undisclosed remainder.
       if(MAX_ITEMS-items.length<14){hasMore=true;break;}
+      // Capture the inbound native token before this page advances it.
+      if (Object.hasOwn(native, link.roomId)) nativeStart[link.roomId] = native[link.roomId];
+      else nativeStart[link.roomId] = undefined;
       const page=readCurrentNeedsMePage(store,secret,link.roomId,{cursor:native[link.roomId],...(parsed.provided?{after:roomWatermark(parsed,link.roomId,store.headSequence(link.roomId),freshWindow)}:{}),freshWindow});
       items.push(...page.items);nativeCoverage.push({roomId:link.roomId,...page.coverage,complete:page.complete});
       if(page.cursor)native[link.roomId]=page.cursor;else delete native[link.roomId];
@@ -1250,7 +1258,6 @@ export function collectNeedsMe(store, secret, { since, roomId: scopedRoom = null
   // floor would follow the agent into a room it joins later and hide that
   // room's first mentions forever; without it, cursor.rooms/landIds keep the
   // delivered state exact and nothing replays.
-  const cursor = { rooms, land, landIds, ...(nativeCoverage.length||Object.keys(native).length?{native}:{}), ...(parsed.number !== null && hasMore ? { floor: parsed.number } : {}), ...(hasMore ? { roomAfter } : {}) };
   items.sort((a, b) => a.roomId.localeCompare(b.roomId) || b.seq - a.seq);
   // R327-1 (r6): tell a paused agent it is paused. Items stay readable (this
   // is a read surface) but carry paused:true; `paused` names each paused room
@@ -1275,6 +1282,7 @@ export function collectNeedsMe(store, secret, { since, roomId: scopedRoom = null
   // where this read started when a land item was suppressed. Replaying the
   // cursor after the lease lapses then returns the item if it is still open
   // (the first handler crashed); a handled item is retired as usual.
+  const suppressedRooms = new Set();
   for (const held of claim.suppressedItems ?? []) {
     if (held.kind === "land_queue") {
       if (held.roomId in landStart) {
@@ -1287,7 +1295,25 @@ export function collectNeedsMe(store, secret, { since, roomId: scopedRoom = null
     if (Number.isFinite(held.seq) && Number.isFinite(rooms[held.roomId])) {
       rooms[held.roomId] = Math.min(rooms[held.roomId], held.seq - 1);
     }
+    // Current-room native continuation advances an encrypted token across
+    // pages; rooms[seq] clamp alone cannot recover items suppressed on an
+    // earlier page. Hold native at this page's inbound token and keep the
+    // read incomplete so a post-lease replay returns still-open work.
+    if (Object.hasOwn(nativeStart, held.roomId)) {
+      suppressedRooms.add(held.roomId);
+      if (nativeStart[held.roomId] === undefined) delete native[held.roomId];
+      else native[held.roomId] = nativeStart[held.roomId];
+      hasMore = true;
+    }
   }
+  if (suppressedRooms.size) {
+    for (const cov of nativeCoverage) {
+      if (suppressedRooms.has(cov.roomId)) cov.complete = false;
+    }
+  }
+  // Build the cursor only after lease holds so floor/roomAfter/native match
+  // the final hasMore and any native rewind (r216 floor rule unchanged).
+  const cursor = { rooms, land, landIds, ...(nativeCoverage.length||Object.keys(native).length?{native}:{}), ...(parsed.number !== null && hasMore ? { floor: parsed.number } : {}), ...(hasMore ? { roomAfter } : {}) };
   // L1: returning a direct_ask from needs-me is delivery for poll agents.
   // Gate on claimSec>0 so ordinary GET /api/needs-me stays pure (tests + browsers);
   // MCP room_needs_me already passes claimSec=45 and gets auto-ack with the lease.

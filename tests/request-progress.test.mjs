@@ -5,7 +5,7 @@ import {initialRoom} from '../server/bootstrap.mjs';
 import {event} from '../src/events.js';
 import {auditRecovery} from '../server/recovery.mjs';
 import {deriveRequestState} from '../server/request-states.mjs';
-import {buildReplyCommand, validReplyArguments} from '../client/reply-actions.mjs';
+import {buildReplyCommand, validReplyArguments, replyTools} from '../client/reply-actions.mjs';
 
 // The recipient of a formal request can say where it stands, so the asker
 // sees acknowledged / working / needs_input / error without polling chat.
@@ -64,4 +64,20 @@ test('room_progress_request builds a reply_request.progressed command', () => {
   const command = buildReplyCommand({roomId: 'commons', memberId: 'helper'}, 'room_progress_request', args);
   assert.equal(command.type, 'reply_request.progressed');
   assert.deepEqual(command.data, {requestMessageId: 'ask', expectedRequestRevision: 0, progress: 'working', note: 'On it'});
+});
+
+test('a progress note is private to the request parties', t => {
+  const {s, keys, progress} = fixture(t, 'normalized-current-v1');
+  progress('helper', 'p-private', {progress: 'needs_input', note: 'PRIVATE-NOTE'});
+  const seen = who => JSON.stringify(s.eventsAfter(keys[who], 'commons', 0, 100));
+  assert.ok(seen('asker').includes('PRIVATE-NOTE'));
+  assert.ok(seen('helper').includes('PRIVATE-NOTE'));
+  for (const outsider of ['other', 'owner']) assert.equal(seen(outsider).includes('PRIVATE-NOTE'), false, outsider);
+  assert.equal(s.replyRequests.list(keys.other, 'commons', {direction: 'both', status: 'all'}).requests.some(r => r.id === 'ask'), false);
+});
+
+test('room_progress_request is not marked destructive', () => {
+  const tool = replyTools.find(entry => entry.name === 'room_progress_request');
+  assert.equal(tool.annotations.destructiveHint, false);
+  assert.equal(tool.annotations.readOnlyHint, false);
 });

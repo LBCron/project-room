@@ -39,7 +39,8 @@ const definitions = [
 ];
 const actions = new Map(definitions.map(([name, route, description, properties, required = Object.keys(properties)]) =>
   [name, { route, tool: { name, description, inputSchema: { type: "object", properties, required, additionalProperties: false },
-    annotations: { readOnlyHint: route !== null, destructiveHint: route === null, idempotentHint: true, openWorldHint: false } } }]));
+    // A progress report is a non-terminal status update, not a destructive write.
+    annotations: { readOnlyHint: route !== null, destructiveHint: route === null && name !== "room_progress_request", idempotentHint: true, openWorldHint: false } } }]));
 export const replyTools = [...actions.values()].map(action => action.tool);
 export const isReplyTool = name => actions.has(name);
 export const replyRoute = name => actions.get(name)?.route;

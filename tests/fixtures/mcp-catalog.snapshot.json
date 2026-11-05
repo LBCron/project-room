@@ -1078,7 +1078,7 @@
       "inputSchema": "0bbb8051b9753cf3",
       "annotations": {
         "readOnlyHint": false,
-        "destructiveHint": true,
+        "destructiveHint": false,
         "idempotentHint": true,
         "openWorldHint": false,
         "title": "Progress Request"
@@ -1760,7 +1760,7 @@
       "inputSchema": "0bbb8051b9753cf3",
       "annotations": {
         "readOnlyHint": false,
-        "destructiveHint": true,
+        "destructiveHint": false,
         "idempotentHint": true,
         "openWorldHint": false,
         "title": "Progress Request"
@@ -2122,7 +2122,7 @@
       "inputSchema": "0bbb8051b9753cf3",
       "annotations": {
         "readOnlyHint": false,
-        "destructiveHint": true,
+        "destructiveHint": false,
         "idempotentHint": true,
         "openWorldHint": false,
         "title": "Progress Request"
@@ -2354,7 +2354,7 @@
       "inputSchema": "0bbb8051b9753cf3",
       "annotations": {
         "readOnlyHint": false,
-        "destructiveHint": true,
+        "destructiveHint": false,
         "idempotentHint": true,
         "openWorldHint": false,
         "title": "Progress Request"
@@ -2586,7 +2586,7 @@
       "inputSchema": "0bbb8051b9753cf3",
       "annotations": {
         "readOnlyHint": false,
-        "destructiveHint": true,
+        "destructiveHint": false,
         "idempotentHint": true,
         "openWorldHint": false,
         "title": "Progress Request"

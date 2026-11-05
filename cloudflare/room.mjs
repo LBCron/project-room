@@ -208,6 +208,13 @@ export class ProjectRoom extends DurableObject {
       });
     });
     this.store.featureEnv = env;
+    // Operator auth reads process.env (server/operator-auth.mjs). On the
+    // Durable Object isolate the Wrangler secret is on `env` but may not appear
+    // on process.env; copy it so /api/operator/* can enable.
+    if (typeof env.ROOM_OPERATOR_TOKEN_SHA256 === 'string' && env.ROOM_OPERATOR_TOKEN_SHA256) {
+      const pe = (globalThis.process ??= { env: {} }).env ?? (globalThis.process.env = {});
+      if (!pe.ROOM_OPERATOR_TOKEN_SHA256) pe.ROOM_OPERATOR_TOKEN_SHA256 = env.ROOM_OPERATOR_TOKEN_SHA256;
+    }
     this.store.agentPlugin.setWakeAdapters?.(createWakeAdapters({ env }));
     if(!restoring) { bootstrapRoom(this.store, env);this.store.landQueue.configure({ env }); }
     // Google sign-in is optional: unconfigured or misconfigured credentials

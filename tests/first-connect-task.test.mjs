@@ -149,8 +149,8 @@ test('first-connect report measures agent joins against the 10-minute window',as
   // baseline taken at the same instants before our two joins.
   const now=Date.now()+60_000,later=now+11*60_000;
   const before=firstConnectReport(f.store.db,{now}),beforeLater=firstConnectReport(f.store.db,{now:later});
-  const join=async name=>{const who=f.store.identities.create(name);await f.call(who.secret,{roomId:f.roomId});return who;};
-  const quick=await join('Quick');await join('Quiet');
+  const addAgent=async name=>{const who=f.store.identities.create(name);await f.call(who.secret,{roomId:f.roomId});return who;};
+  const quick=await addAgent('Quick');await addAgent('Quiet');
   f.store.command(quick.secret,f.roomId,{id:'hello',type:'message.posted',data:{messageId:'hello',body:fillIntroBody('test triage')}});
   const live=firstConnectReport(f.store.db,{now}),after=firstConnectReport(f.store.db,{now:later});
   assert.deepEqual([live.joins-before.joins,live.success-before.success,live.pending-before.pending,live.byKind.post-before.byKind.post],[2,1,1,1]);

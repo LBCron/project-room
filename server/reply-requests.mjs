@@ -81,7 +81,7 @@ export class ReplyRequests {
       // exist. For a participant the private request's own event is
       // visible, so their horizon still reaches it.
       const evaluatedThrough = visibleSequenceHorizon(this.store.db, roomId, auth.member.id, room.sequence,
-        auth.member.id === this.store.roomAuthority(roomId).ownerId);
+        auth.member.id === this.store.roomOwnerId(roomId));
       return { evaluatedThrough, selection: { direction, status }, requests, nextReads };
     }, { requestsOnly: true });
   }

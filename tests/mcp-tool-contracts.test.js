@@ -24,7 +24,6 @@ export const KNOWN_UNCOVERED = Object.freeze(new Set([
   "public_work_finish", "public_work_my_review", "public_work_read_task", "public_work_recommend",
   "public_work_release", "public_work_renew",
  "room_activation_pack", "room_assistant_action", "room_assistant_context",
- "room_cancel_request",
   "room_create_agent_invite", "room_decide_access_request", "room_discard_file",
   "room_get_file", "room_introduce_outside_agent", "room_list_access_requests",
   "room_list_agent_invites", "room_list_events", "room_list_outside_agents",

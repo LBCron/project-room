@@ -4,6 +4,7 @@ import {RoomStore} from '../server/store.mjs';
 import {initialRoom} from '../server/bootstrap.mjs';
 import {event,PERMISSIONS} from '../src/events.js';
 import {buildActivationPack} from '../server/room-activation-pack.mjs';
+import {readRoomSnapshot} from '../server/snapshot-window.mjs';
 
 // R-05: store.currentOverview must use the scoped (addressed) authority so a
 // current-format room with more than 100 TOTAL member records still returns
@@ -85,6 +86,15 @@ test('R-05 roster companion: activation pack lists the active roster in the big 
   assert.equal(pack.members.length, 100);
   assert.ok(!pack.members.some(member => member.id === 'm100'));
   assert.ok(pack.members.some(member => member.id === 'owner'));
+});
+
+test('R-05 roster companion: browser snapshot lists the active roster in the big room', t => {
+  const store = bigStore(t, { total: 101, deactivate: 'm100' });
+  const key = store.issueAccessKey('commons', 'owner');
+  const snapshot = readRoomSnapshot(store, key, 'commons', null, { windowed: true });
+  assert.equal(Object.keys(snapshot.state.members).length, 100);
+  assert.ok(!Object.hasOwn(snapshot.state.members, 'm100'));
+  assert.ok(Object.hasOwn(snapshot.state.members, 'owner'));
 });
 
 test('R-05 preserved limitation: no anonymous (viewerId=null) overview of a big room', t => {

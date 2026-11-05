@@ -269,13 +269,14 @@ export class PublicWorkClaims {
       if (!this.available()) return { tasks: [], claimableCount: 0, nextCursor: null };
       const rows = this.db.prepare(`SELECT t.* FROM public_work_tasks t JOIN project_offers o ON o.offer_id=t.offer_id
         JOIN rooms r ON r.id=t.room_id WHERE o.status='published' AND r.archived_at IS NULL
-        AND o.version=t.terms_version AND (json_extract(o.terms,'$.reward.kind')='unpaid' OR (json_extract(o.terms,'$.reward.kind')='work_trade' AND json_extract(o.terms,'$.reward.unit')='credit')) ORDER BY t.offer_id`).all();
+        AND o.version=t.terms_version AND (json_extract(o.terms,'$.reward.kind')='unpaid' OR (json_extract(o.terms,'$.reward.kind')='work_trade' AND json_extract(o.terms,'$.reward.unit')='credit'))
+        AND (?1 IS NULL OR t.room_id=?1) ORDER BY t.offer_id`).all(roomId);
       // Claim state lives in the work-claims store and receipts, not in a
       // column SQL can order by, so packets are materialized before ordering.
       // Operator-unpublished rooms are dropped before materializing: their
       // packets (including submittedReceiptId) must never be built or served.
-      // roomId, when set, further scopes to that room (joined-room-first).
-      let tasks = rows.filter(row => !isUnpublished(this.db, 'room', row.room_id) && (roomId == null || row.room_id === roomId))
+      // roomId, when set, is applied in SQL above (joined-room-first).
+      let tasks = rows.filter(row => !isUnpublished(this.db, 'room', row.room_id))
         .map(row => this.packet(row, this.store.workClaims.get(row.namespace_key, row.offer_id), this.offer(row)));
       const claimableCount = tasks.filter(task => task.claimable).length;
       if (claimable) tasks = tasks.filter(task => task.claimable);

@@ -8,6 +8,7 @@ import {ensureDefaultChannelState} from '../src/default-channel-state.js';
 import {readCurrentEventWindow,currentEventRedactionMessages} from './current-room-events.mjs';
 import { assertRestoreAdmitted, restorePending, verifyRestoreControl } from './restore-admission.mjs';
 import {readCurrentWorkListing} from './current-work-list.mjs';
+import { isUnfilledIntroBody } from './first-connect-task.mjs';
 import {attentionWaitStatus} from './attention-wait.mjs';
 import { WRITE_GRANT_POLICY_VERSION } from '../src/work-reducers.js';
 import { CURRENT_ROOM_SCHEMA, CURRENT_ROOM_GUARDS, upgradeUnusedCurrentFormat5, currentInviteContext, initializeCurrentRoom, currentRoomAuthority, currentRoomOwnerAuthority, isCurrentRoom, currentDmConsentEventContext, currentCommandContext, prepareCurrentWrite, withCurrentServingWriter, readCurrentRecord, readCurrentHistoryFloor, withCurrentReadContext, readCurrentSelectedWorkState, readCurrentOverviewWindow, currentVisibleHorizon, readCurrentPrivateWorkParties, readCurrentHead, currentConversationRows, chargeCurrentReadBudget } from './current-room-repository.mjs';
@@ -7183,6 +7184,10 @@ this.slaBreachAlerts = new SlaBreachAlertJournal(this); // Task 26: durable in-a
       return withCurrentServingWriter(this.db,roomId,() => {
       // Exact replays of commands committed before the pause returned above.
       refusePausedAgentWrite(this, roomId, auth.member, command);
+      // Admission only (replay never reaches here): the first-connect intro
+      // must not be posted with its {{skill}} slot unfilled.
+      if ((command.type === T.MESSAGE_POSTED || command.type === T.DM_POSTED) && isUnfilledIntroBody(command.data?.body))
+        fail(422, "intro_slot_unfilled", "Replace {{skill}} with one concrete thing you can do before posting this intro.");
       // Live chat posts and replies only. The replay above, importEvents,
       // initialize, and projection replay do not reach this line.
       if (this.roomFlood.consume(roomId, auth.member.id, command.type)) {

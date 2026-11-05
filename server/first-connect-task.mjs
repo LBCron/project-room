@@ -30,6 +30,15 @@ export function isTemplateIntroBody(body) {
   return body.includes(INTRO_SKILL_SLOT) || body.includes("<one concrete skill>");
 }
 
+/**
+ * True only for the suggested intro posted with its slot still unfilled. Narrow
+ * on purpose: a message that merely mentions "{{skill}}" (say, while discussing
+ * this feature) is ordinary chat and must still post.
+ */
+export function isUnfilledIntroBody(body) {
+  return typeof body === "string" && body.trim() === INTRO_BODY_TEMPLATE;
+}
+
 /** Fill the required skill slot; returns null when skill is missing/blank. */
 export function fillIntroBody(skill) {
   if (typeof skill !== "string" || !skill.trim()) return null;
@@ -51,7 +60,9 @@ export function firstConnectSuccess({
   if (!Number.isFinite(joinedAt)) return { success: false, at: null, kind: null };
   const deadline = joinedAt + windowMs;
   const end = Math.min(deadline, now);
-  for (const event of events) {
+  // Earliest qualifying action wins whatever order the caller passes.
+  const ordered = [...events].sort((a, b) => (a?.at ?? Infinity) - (b?.at ?? Infinity));
+  for (const event of ordered) {
     const at = event?.at;
     if (!Number.isFinite(at) || at < joinedAt || at > end) continue;
     if (event.type === "claim") return { success: true, at, kind: "claim" };
@@ -96,14 +107,13 @@ function introTask(roomId) {
 
 export function firstConnectTask(store, roomId, { env = process.env, warn = console.warn } = {}) {
   if (!firstConnectTaskEnabled(env)) return null;
-  let starter = null;
+  let starter = null, fromBoard = false;
   try {
-    // Joined-room-first: only surface a public-work starter from this room.
-    starter = store.publicWorkClaims?.list?.({
-      limit: 1,
-      claimable: true,
-      roomId,
-    })?.tasks?.[0] ?? null;
+    // Joined-room-first: prefer a starter from this room, then fall back to
+    // the public board so an empty room still gets real work, not just the intro.
+    const list = options => store.publicWorkClaims?.list?.({ limit: 1, claimable: true, ...options })?.tasks?.[0] ?? null;
+    starter = list({ roomId });
+    if (!starter) { starter = list({}); fromBoard = Boolean(starter); }
   } catch (error) {
     logStarterListFailure(roomId, error, warn);
     starter = null;
@@ -117,8 +127,64 @@ export function firstConnectTask(store, roomId, { env = process.env, warn = cons
       done: "Claim it, do the work, and finish it with a result",
       nextRead: { tool: "public_work_read_task", arguments: { taskId: starter.taskId } },
       successMetric: FIRST_CONNECT_SUCCESS_METRIC,
-      note: "Suggestion only; nothing is claimed for you. Scoped to the room you just joined.",
+      scope: fromBoard ? "public_board" : "joined_room",
+      note: fromBoard
+        ? "Suggestion only; nothing is claimed for you. This room has no open public work, so this one is from the public board."
+        : "Suggestion only; nothing is claimed for you. From the room you just joined.",
     };
   }
   return introTask(roomId);
+}
+
+const JOIN_TYPES = ["member.added"];
+const POST_TYPES = ["message.posted", "dm.posted"];
+const CLAIM_TYPES = ["claim.acquired", "work.accepted", "work.started"];
+const REPORT_MAX_DAYS = 90;
+
+/**
+ * The 10-minute first-connect metric, measured from the recorded event log:
+ * each agent member added in the window, and whether its first post (not the
+ * unfilled intro template) or claim landed within 10 minutes. Read only. Runs
+ * the same before and after the flag, so the pre-flag numbers are a baseline.
+ */
+export function firstConnectReport(db, { now = Date.now(), days = 14 } = {}) {
+  if (!Number.isInteger(days) || days < 1 || days > REPORT_MAX_DAYS) throw Object.assign(new Error(`days must be 1..${REPORT_MAX_DAYS}`), { code: "invalid_days" });
+  const windowMs = FIRST_CONNECT_SUCCESS_METRIC.windowMs, since = new Date(now - days * 86_400_000).toISOString();
+  const types = [...JOIN_TYPES, ...POST_TYPES, ...CLAIM_TYPES];
+  const rows = db.prepare(`SELECT room_id AS roomId, json_extract(body,'$.type') AS type, json_extract(body,'$.actorId') AS actorId,
+      json_extract(body,'$.at') AS at, json_extract(body,'$.data.memberId') AS memberId, json_extract(body,'$.data.kind') AS kind,
+      json_extract(body,'$.data.body') AS text
+    FROM events WHERE json_extract(body,'$.type') IN (${types.map(() => "?").join(",")}) AND json_extract(body,'$.at') >= ?
+    ORDER BY room_id, sequence`).all(...types, since);
+  const joins = new Map(), actions = new Map();
+  for (const row of rows) {
+    const at = Date.parse(row.at);
+    if (!Number.isFinite(at)) continue;
+    if (JOIN_TYPES.includes(row.type)) {
+      if (row.kind === "agent" && typeof row.memberId === "string") {
+        const key = `${row.roomId}\0${row.memberId}`;
+        if (!joins.has(key)) joins.set(key, at);
+      }
+      continue;
+    }
+    if (typeof row.actorId !== "string") continue;
+    const key = `${row.roomId}\0${row.actorId}`;
+    if (!actions.has(key)) actions.set(key, []);
+    actions.get(key).push({ type: CLAIM_TYPES.includes(row.type) ? "claim" : "post", at, body: row.text });
+  }
+  const minutes = [];
+  const out = { windowMinutes: windowMs / 60000, days, joins: 0, success: 0, timeout: 0, pending: 0, byKind: { post: 0, claim: 0 } };
+  for (const [key, joinedAt] of joins) {
+    out.joins++;
+    const result = firstConnectSuccess({ joinedAt, events: actions.get(key) ?? [], now });
+    if (result.success) { out.success++; out.byKind[result.kind]++; minutes.push((result.at - joinedAt) / 60000); }
+    else if (now - joinedAt < windowMs) out.pending++;
+    else out.timeout++;
+  }
+  const decided = out.success + out.timeout;
+  minutes.sort((a, b) => a - b);
+  out.successRate = decided ? out.success / decided : null;
+  out.medianMinutesToAction = minutes.length ? minutes[Math.floor((minutes.length - 1) / 2)] : null;
+  out.readAt = now;
+  return out;
 }

@@ -11,7 +11,7 @@ import {createRoomServer} from '../server/http.mjs';
 import {
   firstConnectTask,firstConnectTaskEnabled,
   INTRO_BODY_TEMPLATE,INTRO_SKILL_SLOT,FIRST_CONNECT_SUCCESS_METRIC,
-  fillIntroBody,isTemplateIntroBody,firstConnectSuccess,
+  fillIntroBody,isTemplateIntroBody,firstConnectSuccess,isUnfilledIntroBody,firstConnectReport,
 } from '../server/first-connect-task.mjs';
 
 async function fixture(t){
@@ -64,14 +64,18 @@ test('prefers a claimable public-work starter in the joined room',()=>{
   assert.deepEqual(task.nextRead,{tool:'public_work_read_task',arguments:{taskId:'t_1'}});
   assert.deepEqual(task.successMetric,FIRST_CONNECT_SUCCESS_METRIC);
   assert.deepEqual(calls,[{limit:1,claimable:true,roomId:'r'}]);
+  assert.equal(task.scope,'joined_room');
 });
 
-test('joined-room-first: skips public work when the list is empty for this room',()=>{
-  const store={publicWorkClaims:{list:({roomId})=>({tasks:roomId==='other'?[{taskId:'t_x',title:'Elsewhere'}]:[]})}};
-  const task=firstConnectTask(store,'r',{env:{ROOM_FIRST_CONNECT_TASK:'1'}});
-  assert.equal(task.source,'intro');
-  assert.equal(task.roomId,'r');
-  assert.equal(task.action.arguments.roomId,'r');
+test('joined-room-first: an empty room falls back to the public board, then to the intro',()=>{
+  const calls=[];
+  const board={publicWorkClaims:{list:(args)=>{calls.push(args);return {tasks:args.roomId?[]:[{taskId:'t_x',title:'Elsewhere'}]};}}};
+  const task=firstConnectTask(board,'r',{env:{ROOM_FIRST_CONNECT_TASK:'1'}});
+  assert.equal(task.source,'public_work');assert.equal(task.taskId,'t_x');assert.equal(task.scope,'public_board');
+  assert.deepEqual(calls,[{limit:1,claimable:true,roomId:'r'},{limit:1,claimable:true}]);
+  const empty={publicWorkClaims:{list:()=>({tasks:[]})}};
+  const intro=firstConnectTask(empty,'r',{env:{ROOM_FIRST_CONNECT_TASK:'1'}});
+  assert.equal(intro.source,'intro');assert.equal(intro.action.arguments.roomId,'r');
 });
 
 test('starter-list failure logs structured warn and falls back to intro',()=>{
@@ -121,4 +125,35 @@ test('success metric: non-template post or claim within 10 minutes',()=>{
     {success:false,at:null,kind:null},
     'outside the 10-minute window'
   );
+});
+
+test('success metric takes the earliest qualifying action whatever the input order',()=>{
+  const joinedAt=1_000_000;
+  const result=firstConnectSuccess({joinedAt,now:joinedAt+600_000,events:[{type:'post',at:joinedAt+300_000,body:'later'},{type:'claim',at:joinedAt+60_000}]});
+  assert.deepEqual(result,{success:true,at:joinedAt+60_000,kind:'claim'});
+});
+
+test('an unfilled intro is refused at admission; a message that mentions the slot still posts',async t=>{
+  const f=await fixture(t);
+  const agent=f.store.identities.create('Newcomer');await f.call(agent.secret,{roomId:f.roomId});
+  assert.equal(isUnfilledIntroBody(INTRO_BODY_TEMPLATE),true);assert.equal(isUnfilledIntroBody(fillIntroBody('SQL reviews')),false);
+  const post=(id,body)=>f.store.command(agent.secret,f.roomId,{id,type:'message.posted',data:{messageId:id,body}});
+  assert.throws(()=>post('raw',INTRO_BODY_TEMPLATE),err=>err.code==='intro_slot_unfilled'||/intro_slot_unfilled|\{\{skill\}\}/.test(err.message));
+  assert.doesNotThrow(()=>post('filled',fillIntroBody('SQL reviews')));
+  assert.doesNotThrow(()=>post('talk','The template uses {{skill}} as its slot name.'));
+});
+
+test('first-connect report measures agent joins against the 10-minute window',async t=>{
+  const f=await fixture(t);
+  // The fixture's room creator is itself an agent member: compare against a
+  // baseline taken at the same instants before our two joins.
+  const now=Date.now()+60_000,later=now+11*60_000;
+  const before=firstConnectReport(f.store.db,{now}),beforeLater=firstConnectReport(f.store.db,{now:later});
+  const join=async name=>{const who=f.store.identities.create(name);await f.call(who.secret,{roomId:f.roomId});return who;};
+  const quick=await join('Quick');await join('Quiet');
+  f.store.command(quick.secret,f.roomId,{id:'hello',type:'message.posted',data:{messageId:'hello',body:fillIntroBody('test triage')}});
+  const live=firstConnectReport(f.store.db,{now}),after=firstConnectReport(f.store.db,{now:later});
+  assert.deepEqual([live.joins-before.joins,live.success-before.success,live.pending-before.pending,live.byKind.post-before.byKind.post],[2,1,1,1]);
+  assert.deepEqual([after.success-beforeLater.success,after.timeout-beforeLater.timeout,after.pending],[1,1,0]);
+  assert.throws(()=>firstConnectReport(f.store.db,{days:0}),{code:'invalid_days'});
 });

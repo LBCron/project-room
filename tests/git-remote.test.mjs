@@ -36,3 +36,23 @@ test("advertisement for empty repo", () => {
   assert.ok(out.endsWith("0000"));
   assert.throws(() => advertiseRefs("git-evil"));
 });
+
+test("status route answers 404 while ROOM_GIT_REMOTE is off and the phase when on", async () => {
+  const { GIT_REMOTE_ROUTES } = await import("../server/routes/git-remote.mjs");
+  const [row] = GIT_REMOTE_ROUTES;
+  const calls = [];
+  const ctx = { res: {}, json: (_res, status, body) => { calls.push({ status, body }); return true; } };
+  const prior = process.env.ROOM_GIT_REMOTE;
+  try {
+    delete process.env.ROOM_GIT_REMOTE;
+    row.handler(ctx);
+    process.env.ROOM_GIT_REMOTE = "1";
+    row.handler(ctx);
+  } finally {
+    if (prior === undefined) delete process.env.ROOM_GIT_REMOTE; else process.env.ROOM_GIT_REMOTE = prior;
+  }
+  assert.equal(calls[0].status, 404);
+  assert.equal(calls[0].body.error, "git_remote_disabled");
+  assert.equal(calls[1].status, 200);
+  assert.equal(calls[1].body.phase, 0);
+});

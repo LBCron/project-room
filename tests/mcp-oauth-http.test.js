@@ -202,7 +202,7 @@ test('native text schemas accept complete prose under substring and whole-string
   const f = await setup(t);
   const listed = await f.rpc('tools/list');
   const tools = listed.body.result.tools;
-  assert.equal(tools.length, 27, 'audit every advertised native tool, including acquire/release/renew, bounded attention wait and own catch-up marker');
+  assert.equal(tools.length, 30, 'audit every advertised native tool, including acquire/release/renew, bounded attention wait, own catch-up marker, cancelling your own ask, reporting ask progress and needs-me');
   const fields = [];
   const inspect = (schema, path) => {
     if (typeof schema?.pattern === 'string') {
@@ -556,4 +556,43 @@ test('OAuth agents can post a long message up to the advertised body limit; anon
   assert.equal(read.body.result.structuredContent.messages[0].body.length, 40000);
   const anonymous = await f.rpc('tools/call', { name: 'room_post_message', arguments: { body } }, null);
   assert.equal(anonymous.response.status, 413, 'no bearer: the small join cap still applies');
+});
+
+test('OAuth agents can cancel their own open request, and only their own', async t => {
+  const f = await setup(t);
+  const listed = await f.rpc('tools/list', {});
+  assert.ok(listed.body.result.tools.some(tool => tool.name === 'room_cancel_request'), 'chat:write grants list room_cancel_request');
+  const asked = await f.rpc('tools/call', { name: 'room_request_reply', arguments: { roomId: 'commons', toMemberId: 'owner', body: 'Can you confirm the plan?' } });
+  assert.notEqual(asked.body.result?.isError, true, JSON.stringify(asked.body).slice(0, 300));
+  const requestMessageId = asked.body.result.structuredContent.requestMessageId;
+  const cancelled = await f.rpc('tools/call', { name: 'room_cancel_request', arguments: { roomId: 'commons', requestMessageId, expectedRequestRevision: 0, reason: 'Superseded by a newer ask' } });
+  assert.notEqual(cancelled.body.result?.isError, true, JSON.stringify(cancelled.body).slice(0, 300));
+  assert.equal(cancelled.body.result.structuredContent.status, 'recorded');
+  const outgoing = await f.rpc('tools/call', { name: 'room_list_requests', arguments: { roomId: 'commons', direction: 'outgoing', status: 'cancelled' } });
+  assert.ok(outgoing.body.result.structuredContent.requests.some(request => request.id === requestMessageId && request.status === 'cancelled'));
+  const ownerAsk = f.store.command(f.ownerKey, 'commons', { id: 'owner-ask', type: 'message.posted', data: { messageId: 'owner-ask', toMemberId: 'friend-dot', requestKind: 'reply', body: 'Please review' } });
+  assert.ok(ownerAsk.sequence);
+  const refused = await f.rpc('tools/call', { name: 'room_cancel_request', arguments: { roomId: 'commons', requestMessageId: 'owner-ask', expectedRequestRevision: 0, reason: 'Not mine' } });
+  assert.equal(refused.body.result?.isError, true, 'a recipient cannot cancel the asker\'s request');
+  assert.equal(f.store.room('commons').state.replyRequests['owner-ask'].status, 'open');
+});
+
+for (const normalized of [false, true]) test(`OAuth agents can call room_needs_me for their own room (${normalized ? 'current' : 'legacy'})`, async t => {
+  const f = await setup(t, { normalized });
+  const listed = await f.rpc('tools/list', {});
+  assert.ok(listed.body.result.tools.some(tool => tool.name === 'room_needs_me'), 'chat:read + work:read grants list room_needs_me');
+  f.store.command(f.ownerKey, 'commons', { id: 'owner-ask-nm', type: 'message.posted', data: { messageId: 'owner-ask-nm', toMemberId: 'friend-dot', requestKind: 'reply', body: 'Please review the plan' } });
+  let since, found = [], pages = 0;
+  do {
+    const read = await f.rpc('tools/call', { name: 'room_needs_me', arguments: since === undefined ? {} : { since } });
+    assert.notEqual(read.body.result?.isError, true, JSON.stringify(read.body).slice(0, 400));
+    const value = read.body.result.structuredContent;
+    found.push(...value.items.map(item => item.id));
+    assert.ok(value.items.every(item => item.roomId === 'commons'), 'only the grant room');
+    since = value.hasMore ? value.cursor : undefined;
+    assert.ok(++pages < 20);
+  } while (since !== undefined);
+  assert.ok(found.includes('owner-ask-nm'), `the owner's formal ask is found: ${found}`);
+  const other = await f.rpc('tools/call', { name: 'room_needs_me', arguments: { roomId: 'someone-elses-room' } });
+  assert.equal(other.body.result?.isError ?? Boolean(other.body.error), true, 'a different room is refused');
 });

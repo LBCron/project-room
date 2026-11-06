@@ -1,3 +1,4 @@
+import { withInviteShare } from "./invite-share.mjs";
 import { withMcpCallLog } from "./mcp-call-log.mjs";
 import {publishedLobbyContext} from './current-public-face.mjs';
 import {waitForAttention} from './attention-wait.mjs';
@@ -70,6 +71,8 @@ import { CONTENT_TRUST, stampAccessRequests, stampAttachmentGet, stampEvents, st
 import { resolveCatalogAgent, catalogCallDenial } from "./capability-visibility.mjs";
 import { listSquads, getSquad, createSquad, updateSquadMembers, disbandSquad } from "./squads.mjs"; // plan-squads: squad roster
 import { runRoomMap } from "./project-map-store.mjs";
+import { firstConnectTask } from "./first-connect-task.mjs";
+import { statusHint } from "./status-digest.mjs";
 
 const object = value => value !== null && typeof value === "object" && !Array.isArray(value);
 
@@ -133,7 +136,7 @@ function failureValue(error) {
       : 422;
     return { status, code, message: error.message };
   }
-  return { status: 500, code: "internal", message: "Request could not be completed" };
+  return { status: 500, code: "internal", message: "The server hit an internal error and produced no result. Retry the request once; if it repeats, report code 'internal' with the request id." };
 }
 
 export function identityBearer(authorization) {
@@ -172,7 +175,7 @@ function validRoomArgs(name, args) {
   const selected = ROOM_TOOLS.find(entry => entry.name === name);
   if (!selected || !allowed(args, Object.keys(selected.inputSchema.properties), selected.inputSchema.required)) return false;
   if (args.roomId !== undefined && !validId(args.roomId)) return false;
-  if (name === 'room_wait_for_attention') return Number.isSafeInteger(args.after) && args.after >= 0 && (args.timeoutSec === undefined || Number.isInteger(args.timeoutSec) && args.timeoutSec >= 0 && args.timeoutSec <= 120);
+  if (name === 'room_wait_for_attention') return Number.isSafeInteger(args.after) && args.after >= 0 && (args.timeoutSec === undefined || Number.isInteger(args.timeoutSec) && args.timeoutSec >= 0 && args.timeoutSec <= 120) && (args.includeWork === undefined || typeof args.includeWork === 'boolean');
   if (name === "room_check_access" || name === "room_activation_pack") return true;
   if (name === "room_member_card") return validId(args.memberId);
   if (name === "squads_list") return true;
@@ -590,7 +593,7 @@ async function boardClaimCall(store, secret, name, args) {
 function dispatchRoomToolCall(store, secret, identity, name, args, agentRooms, signal) {
   if (BOARD_CLAIM_TOOLS.includes(name)) return boardClaimCall(store, secret, name, args);
   if (name === 'room_wait_for_attention') return waitForAttention(store, secret, args.roomId, {...args, signal});
-  if (name === "room_needs_me") return collectNeedsMe(store, secret, { since: args.since, roomId: args.roomId });
+  if (name === "room_needs_me") return collectNeedsMe(store, secret, { since: args.since, roomId: args.roomId, oauthIdentity: /^(oat|iat)_/.test(secret ?? "") ? identity : null, claimSec: args.claimSec ?? 0 });
   if (name === "room_create") {
     const request = {};
     for (const key of ["title", "purpose", "roomId", "kind", "displayName", "requestId", "visibility"]) {
@@ -649,6 +652,7 @@ function dispatchRoomToolCall(store, secret, identity, name, args, agentRooms, s
         return {
         ...admission,
         ...(publicContext?{publicContext}:{}),
+        ...(()=>{if(admission.alreadyMember||admission.status!=='approved')return {};const firstTask=firstConnectTask(store,args.roomId);return firstTask?{firstTask}:{};})(),
         next: admission.next?.map(step => step.action === "activation-pack"
           ? { ...step, tool: "room_activation_pack", arguments: { roomId: args.roomId } } : step)
         };
@@ -700,7 +704,16 @@ function dispatchRoomToolCall(store, secret, identity, name, args, agentRooms, s
   }
   if (name === "room_activation_pack") {
     const auth = store.authenticate(secret, roomId);
-    return buildActivationPack(store, roomId, auth.member.id, { boardList: memoizeBoardList(store) });
+    const pack = buildActivationPack(store, roomId, auth.member.id, { boardList: memoizeBoardList(store) });
+    // Who is actually around: an agent deciding whether to wait on someone
+    // needs their last action and host status, not only the roster.
+    let seen = null;
+    try { seen = new Map(store.presence(secret, roomId, []).members.map(member => [member.memberId, member])); } catch { seen = null; }
+    if (!seen) return pack;
+    return { ...pack, members: pack.members.map(member => {
+      const p = seen.get(member.id);
+      return { ...member, lastActedAt: p?.lastActedAt ?? null, hostStatus: p?.presence?.status ?? null, hostLastSeenAt: p?.lastSeenAt ?? null };
+    }) };
   }
   if (name === "room_member_card") {
     // plan-dir-card: the member chip's card over MCP. Same read as
@@ -781,7 +794,9 @@ function dispatchRoomToolCall(store, secret, identity, name, args, agentRooms, s
     const messageId = args.messageId ?? id;
     const data = { messageId, body: args.body, ...(args.replyToId === undefined ? {} : { replyToId: args.replyToId }),
       ...(args.workItemId === undefined ? {} : { workItemId: args.workItemId }) };
-    const receipt = commandReceipt(store, secret, roomId, { id, type: "message.posted", data }, "posted");
+    const posted = commandReceipt(store, secret, roomId, { id, type: "message.posted", data }, "posted");
+    const hint = statusHint(data);
+    const receipt = hint ? { ...posted, statusHint: hint } : posted;
     if (args.compact !== true) return receipt;
     return {
       contractVersion: 1, status: receipt.status, roomId: receipt.event.roomId,
@@ -789,7 +804,7 @@ function dispatchRoomToolCall(store, secret, identity, name, args, agentRooms, s
       actorId: receipt.event.actorId, sequence: receipt.sequence, duplicate: receipt.duplicate,
       currentStateVerified: false,
       ...Object.fromEntries(["replyToId", "workItemId", "toMemberId"].filter(key => receipt.event.data[key] !== undefined).map(key => [key, receipt.event.data[key]])),
-      ...Object.fromEntries(["note", "mentionWarnings"].filter(key => Object.hasOwn(receipt, key)).map(key => [key, receipt[key]]))
+      ...Object.fromEntries(["note", "mentionWarnings", "statusHint"].filter(key => Object.hasOwn(receipt, key)).map(key => [key, receipt[key]]))
     };
   }
   if (name === "room_list_work") return listRoomWork(store, secret, args);
@@ -825,7 +840,7 @@ function dispatchRoomToolCall(store, secret, identity, name, args, agentRooms, s
     for (const key of ["profile", "permissions", "ownerEquivalent", "expiresInMinutes", "displayName"]) {
       if (args[key] !== undefined) request[key] = args[key];
     }
-    return store.invites.create(secret, roomId, request);
+    return withInviteShare(store.invites.create(secret, roomId, request));
   }
   if (name === "room_list_agent_invites") return { roomId, invites: store.invites.list(secret, roomId) };
   if (name === "room_revoke_agent_invite") return store.invites.revoke(secret, roomId, args.inviteId);
@@ -856,7 +871,7 @@ function dispatchRoomToolCall(store, secret, identity, name, args, agentRooms, s
     const built = friendBondCommand("dm", { to: args.to, body: args.body, messageId: args.messageId });
     return commandReceipt(store, secret, roomId, { id: args.id, type: built.type, data: built.data }, "posted");
   }
-  throw new ServiceError(500, "internal", "Request could not be completed");
+  throw new ServiceError(500, "internal", "The server hit an internal error and produced no result. Retry the request once; if it repeats, report code 'internal' with the request id.");
 }
 
 function callInboxTool(store, identity, name, args) {
@@ -870,7 +885,7 @@ function callInboxTool(store, identity, name, args) {
   if (name === "inbox_list_attachments") return store.inboxAttachments.list(identityId);
   if (name === "inbox_get_attachment") return stampAttachmentGet(store.inboxAttachments.get(identityId, args.id), identityId, null);
   if (name === "inbox_discard_attachment") return store.inboxAttachments.discard(identityId, args.id);
-  throw new ServiceError(500, "internal", "Request could not be completed");
+  throw new ServiceError(500, "internal", "The server hit an internal error and produced no result. Retry the request once; if it repeats, report code 'internal' with the request id.");
 }
 
 function commandReceipt(store, secret, roomId, command, status) {
@@ -1020,7 +1035,7 @@ async function callWakeTool(store, secret, identity, name, args) {
   if (name === "webhook_unsubscribe") {
     return store.agentPlugin.unsubscribeWebhook({ identityId: agentId, subscriptionId: args.subscriptionId });
   }
-  throw new ServiceError(500, "internal", "Request could not be completed");
+  throw new ServiceError(500, "internal", "The server hit an internal error and produced no result. Retry the request once; if it repeats, report code 'internal' with the request id.");
 }
 
 const BASE64_TOOLS = new Set(["room_put_file", "inbox_put_attachment"]);

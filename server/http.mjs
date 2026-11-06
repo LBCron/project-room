@@ -1,3 +1,4 @@
+import { connectFunnelEnabled, createConnectFunnel } from "./connect-funnel.mjs";
 import {createAccountAgentEnrollment} from './account-agent-enrollment.mjs';
 import { writeStoreRoute } from "./store-pages.mjs";
 import {renderLobbyAgentPastePage} from './agent-paste-copy.mjs';
@@ -341,6 +342,12 @@ const JSON_BODY_BYTES = 16384;
 const rateHash = value => createHash("sha256").update(String(value)).digest("hex");
 // A lagging stream that still has not drained its final event by now is dropped.
 const STREAM_DRAIN_GRACE_MS = 5000;
+// Stream admission (R-16.5): the server-wide ceiling bounds total SSE load;
+// the per-room share keeps any single room from holding more than half of
+// the pool, so one fully-watched room cannot refuse streams to every other
+// room. The per-credential cap at the admission check stays at 3.
+const STREAM_POOL_LIMIT = 100;
+const STREAM_PER_ROOM_LIMIT = 50;
 // Least-recently-used bookkeeping for small internal caches (channel senders).
 // Returns the cached value for key, marking it most-recently-used; when key is
 // absent, makeValue() builds it, the least-recently-used entry is evicted at
@@ -594,6 +601,8 @@ export function createRoomServer({ store, origin, assetRoot = new URL("../", imp
   const oauthResource = mcpOAuthClients.length ? new URL("/mcp", origin).href : null;
   if (oauthResource) mcpOAuthResourceMetadata(oauthResource, origin);
   const accountAgentEnrollment = createAccountAgentEnrollment({store,resource:oauthResource,preferences:mcpOAuthClients,enabled:accountAgentEnrollmentEnabled===true&&Boolean(oauthResource)});
+  // ROOM_CONNECT_FUNNEL (off): aggregate-only connect funnel in /api/health.
+  const connectFunnel = connectFunnelEnabled() && store?.db ? createConnectFunnel({ db: store.db }) : null;
   const oauthMetadataUrl = oauthResource ? new URL("/.well-known/oauth-protected-resource/mcp", origin).href : null;
   const mcpClientIds = new Set(mcpOAuthClients.map(client => client.clientId));
   const mcpRedirects = new Set(mcpOAuthClients.flatMap(client => client.redirectUris));
@@ -1095,7 +1104,12 @@ export function createRoomServer({ store, origin, assetRoot = new URL("../", imp
   function stream(req, res, token, roomId, after, auth, operationId) {
     const binding = auth.sessionBinding;
     store.eventsAfter(token, roomId, after, 100, binding);
-    if (streams.size >= 100 || [...streams].filter(item => item.credentialHash === auth.credentialHash).length >= 3) reject(429, "stream_limit", "Close another room connection before opening more");
+    let sameCredential = 0, sameRoom = 0;
+    for (const item of streams) {
+      if (item.credentialHash === auth.credentialHash) sameCredential++;
+      if (item.roomId === roomId) sameRoom++;
+    }
+    if (streams.size >= STREAM_POOL_LIMIT || sameRoom >= STREAM_PER_ROOM_LIMIT || sameCredential >= 3) reject(429, "stream_limit", "Close another room connection before opening more");
     res.writeHead(200, { "Content-Type": "text/event-stream", "Connection": "keep-alive", "X-Accel-Buffering": "no" });
     res.flushHeaders();
     const entry = { credentialHash: auth.credentialHash, sessionBinding: binding, memberId: auth.member.id, roomId, res };
@@ -1372,7 +1386,7 @@ export function createRoomServer({ store, origin, assetRoot = new URL("../", imp
             // accepted), matching bearer()/carriesBearer() above.
             && /^bearer (?:pri_|rak_|oat_|iat_)/i.test(req.headers.authorization);
           const text = await readText(req, fileBody ? mcpAttachmentBodyBytes : JSON_BODY_BYTES, () => new ServiceError(413, "too_large", "Request is too large"));
-          return writeRoomMcpNode(req, res, url, { bodyText: text, roomMcp: hostedRoomMcp, remoteAddress, oauthMetadataUrl, signal: resolveRequestSignal() });
+          return writeRoomMcpNode(req, res, url, { bodyText: text, roomMcp: hostedRoomMcp, remoteAddress, oauthMetadataUrl, signal: resolveRequestSignal(), connectFunnel });
         }
         return writeRoomMcpNode(req, res, url);
       }
@@ -1454,7 +1468,7 @@ export function createRoomServer({ store, origin, assetRoot = new URL("../", imp
         streams,
       })) return;
       if ((url.pathname === "/api/health" || url.pathname === "/api/health/" || isHealthAliasPath(inboundPath) || isHealthAliasPath(url.pathname)) && ["GET", "HEAD"].includes(req.method)) {
-        return json(res, 200, { status: "ok", mode: serviceMode, emailVerification, ...deploymentField }, req.method === "HEAD");
+        return json(res, 200, { status: "ok", mode: serviceMode, emailVerification, ...deploymentField, ...(connectFunnel ? { connectFunnel: connectFunnel.summary() } : {}) }, req.method === "HEAD");
       }
       if (url.pathname === "/api/version" && ["GET", "HEAD"].includes(req.method)) {
         // r56: the store's SQLite value limit (read-only probe) tells which
@@ -3163,9 +3177,16 @@ export function createRoomServer({ store, origin, assetRoot = new URL("../", imp
         // score the join, journal the would-be decision, admit anyway.
         jevShadowAdmission("share-link:join-agent", { roomId: result.roomId, identityId: result.identityId,
           displayName: data.displayName, card: null });
-        // Burs-IA steal A1: a guest join is a cold-start step — the response
-        // is self-describing. Guests get read+chat only, so the guidance is
-        // orientation + hello, never work claims or admin moves.
+        // Burs-IA steal A1: a link join is a cold-start step — the response
+        // is self-describing. The scope sentence states the seat actually
+        // granted (#3961): a guest link seats read+chat only, while member
+        // and co_admin links seat working permissions the joiner really
+        // holds — the guidance names them from the grant itself, never
+        // the guest text.
+        const granted = Array.isArray(result.permissions) ? result.permissions : [];
+        const scope = granted.length
+          ? `Your seat grants ${granted.join(", ")} — work claims are in scope with exactly those permissions; member administration and room decisions stay out of scope, as they are not granted by a link.`
+          : "Your guest pass grants read+chat; work claims, polls, and admin are out of scope.";
         const guestRoom = `/api/rooms/${encodeURIComponent(result.roomId)}`;
         return json(res, result.duplicate ? 200 : 201, {
           ...result,
@@ -3173,7 +3194,7 @@ export function createRoomServer({ store, origin, assetRoot = new URL("../", imp
             Object.freeze({ action: "see-who-is-around", method: "GET", path: `${guestRoom}/presence`,
               description: "Orient: list the room's members, who is online, and who is holding which work sessions." }),
             Object.freeze({ action: "say-hello", method: "POST", path: `${guestRoom}/commands`,
-              description: "Say hello: { id: <uuid>, type: \"message.posted\", data: { messageId: <uuid>, body } }. Your guest pass grants read+chat; work claims, polls, and admin are out of scope." }),
+              description: `Say hello: { id: <uuid>, type: \"message.posted\", data: { messageId: <uuid>, body } }. ${scope}` }),
           ],
           nextActions: nextActionsForInviteRedeem(result.roomId),
         });
@@ -3840,7 +3861,9 @@ export function createRoomServer({ store, origin, assetRoot = new URL("../", imp
           catch { reject(422, "invalid_cursor", "since must be a sequence number or a cursor object"); }
         }
         const roomId = url.searchParams.has("roomId") ? url.searchParams.get("roomId") : undefined;
-        return json(res, 200, collectNeedsMe(store, secret, { since, roomId }), req.method === "HEAD");
+        const claimSecRaw = url.searchParams.get("claimSec");
+        const claimSec = claimSecRaw == null || claimSecRaw === "" ? undefined : Number(claimSecRaw);
+        return json(res, 200, collectNeedsMe(store, secret, { since, roomId, claimSec }), req.method === "HEAD");
       }
       if (url.pathname === "/api/needs-me") {
         reject(405, "method_not_allowed", "Method not allowed", { Allow: "GET" });
@@ -4348,7 +4371,7 @@ export function createRoomServer({ store, origin, assetRoot = new URL("../", imp
             || (params.has("auth") && !["room", "account"].includes(params.get("auth")))
             || ["x-project-room-help-context", "x-project-room-offer-context", "x-project-room-audit-view"].some(key => req.headers[key] !== undefined))
           reject(422, "invalid_snapshot_view", "Choose a supported snapshot view");
-        const { ownerId } = store.roomAuthority(roomId);
+        const ownerId = store.roomOwnerId(roomId);
         const member = auth.member;
         return json(res, 200, {
           snapshotView: "identity", snapshotVersion: 1, roomId,
@@ -5289,7 +5312,7 @@ export function createRoomServer({ store, origin, assetRoot = new URL("../", imp
         // credential no longer authenticates (401). The active check below
         // is defensive only.
         if (member.active === false) reject(409, "already_inactive", "Membership is already inactive");
-        if (store.roomAuthority(roomId).ownerId === member.id)
+        if (store.roomOwnerId(roomId) === member.id)
           reject(403, "owner_cannot_deactivate", "The room owner cannot deactivate its own membership; transfer ownership first");
         const result = store.command(selected.token, roomId, {
           id: randomUUID(), type: "member.access_changed",
@@ -5502,10 +5525,15 @@ export function createRoomServer({ store, origin, assetRoot = new URL("../", imp
       // Invitation links are administered from a signed-in browser session
       // (room-key or account cookie), or an owner/owner-appointed admin on its
       // agent identity bearer. Room keys presented as bearers remain excluded.
+      // The refusal names the caller's actual gap (#3961): an identity bearer
+      // is refused for authority, not session type — agents administer links
+      // over this same auth when they hold it.
       if ((route === "share-links" || route === "share-links-cancel") && selected.bearer
-        && !(auth.kind === "identity" && (store.roomAuthority(roomId).ownerId === auth.member?.id
+        && !(auth.kind === "identity" && (store.roomOwnerId(roomId) === auth.member?.id
           || auth.member?.delegatedAdmin === true && auth.member.permissions.includes("manage_members")))) {
-        reject(403, "access_denied", "Invitation links require a signed-in browser session");
+        reject(403, "access_denied", auth.kind === "identity"
+          ? "Invitation links are administered by the room owner or an owner-appointed admin holding manage_members — this identity holds neither"
+          : "Invitation links require a signed-in browser session");
       }
       if (route === "share-links" && req.method === "GET") return json(res, 200, store.shareLinks.list(selected.token, roomId, fence));
       if (route === "share-links" && req.method === "POST") {

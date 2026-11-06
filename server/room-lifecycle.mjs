@@ -175,7 +175,7 @@ export function createAccountRoom(store, token, binding, request) {
       activeMemberships += 1;
       const origin = store.db.prepare("SELECT origin FROM member_accounts WHERE room_id=? AND account_id=?").get(room_id, accountId)?.origin;
       if (origin === GROWTH_ROOM_ORIGIN) return false;
-      return member.id === store.roomAuthority(room_id).ownerId || member.permissions.includes("manage_members");
+      return member.id === store.roomOwnerId(room_id) || member.permissions.includes("manage_members");
     });
     const naturallyAdministers = activeMemberships === 0 || administers;
     if (!naturallyAdministers) {

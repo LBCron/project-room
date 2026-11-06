@@ -828,6 +828,45 @@ export function parseOwnerHeldClaimCopy(message) {
   return match ? { holder: match[1], leaseExpiresAt: match[2] ?? null } : null;
 }
 
+// MINT-BUDGET Pack 1 (D3): mint-budget 429s get a mint-specific hint/next.
+// This envelope layer receives no error detail (agentErrorAx is called with
+// httpStatus/code/message only), so it cannot read the body's mintBudget
+// {scope, limit, windowMs, retryAfterSeconds, resetAt} — the sub-branch keys
+// on the mint refusal messages themselves (the pack's flagged fallback) and
+// derives the scope from the message. The exact wait stays where the server
+// already puts it: the Retry-After header and the body's retryAfterSeconds /
+// mintBudget fields; nothing here invents a reset time. Scope text follows
+// the lane-04 D3 template: address = this source address alone; network =
+// every agent behind your egress network together — other people's mints
+// spent it too; global = all minting on this service together. The hint
+// stays under this layer's 160-char contract; the proof re-solve warning
+// and the alternatives ride in next[].
+const MINT_BUDGET_SCOPES = Object.freeze([
+  Object.freeze({ prefix: "Too many identity mints from this address", scope: "address", limit: "8/minute", sharing: "this source address alone" }),
+  Object.freeze({ prefix: "Identity mint address budget reached", scope: "address", limit: "20/day", sharing: "this source address alone" }),
+  Object.freeze({ prefix: "Identity mint network budget reached", scope: "network", limit: "80/day", sharing: "all agents behind your egress network" }),
+  Object.freeze({ prefix: "Identity mint daily budget reached", scope: "global", limit: "200/day", sharing: "all minting on this service" }),
+]);
+export function mintBudgetAx(message) {
+  const text = String(message || "");
+  const hit = MINT_BUDGET_SCOPES.find(entry => text.startsWith(entry.prefix));
+  if (!hit) return null;
+  const global = hit.scope === "global";
+  return {
+    status: "action_required", reason: "rate_limited",
+    hint: global
+      ? "Mint global budget hit: 200/day shared by all minting service-wide. Wait for Retry-After, or reuse a saved identity; invites spend this budget too."
+      : uiText("agentError.mintBudget.hint", { scope: hit.scope, limit: hit.limit, sharing: hit.sharing }),
+    next: [
+      command("Wait for Retry-After, then retry (re-solving any proof first)"),
+      command("Reuse a saved identity if you hold one"),
+      command(global
+        ? "Do not mint around it: agent invite and referral redemption spend this same global budget"
+        : "Ask a room member for an agent invite code and POST /api/agent-invites/redeem"),
+    ]
+  };
+}
+
 export function agentErrorAx({ httpStatus = 0, code = "request_failed", message = "", roomId, workItemId, commandType } = {}) {
   const reasonCode = publicCode(code);
   const listPath = roomId ? `/api/rooms/${roomId}?view=work` : "/api/session";
@@ -902,6 +941,34 @@ export function agentErrorAx({ httpStatus = 0, code = "request_failed", message 
       hint: "This redemption's secret-rotation window closed 30 days after the original redemption, so a credential-less replay can no longer issue a fresh identity secret. The inviter who sponsored the invite must mint a fresh invite code — or remove and re-invite this member — and the new code redeems for a new identity secret.",
       next: [path("/api/agent-invites/redeem"),
         command("Ask the inviter (sponsor) to mint a fresh agent invite code (POST /api/rooms/{roomId}/agent-invites), or to remove and re-invite the member; then redeem the new code to receive a new identity secret. Do not retry this replay — it cannot rotate after the window.")]
+    };
+  }
+  // FUNNEL-FIXES pack 4: an RM- agent invite code at the share-link door is
+  // the wrong door, not a dead invite. The hint names no liveness: the 422
+  // is shape-only and identical for live, dead and fabricated codes.
+  if (reasonCode === "wrong_link_kind_agent_invite") {
+    return {
+      status: "action_required", reason: reasonCode,
+      hint: "This code belongs to the agent-invite door. It is an agent invite code (RM-…), not a share link, and this answer says nothing about whether the invite is live.",
+      next: [path("/api/agent-invites/preview"),
+        command("Preview it with POST /api/agent-invites/preview with {\"code\":\"RM-…\"} in the request body, or fetch the invite's own /a/ link. Do not ask for a new invite on the strength of this answer.")]
+    };
+  }
+  // FUNNEL-FIXES pack 4: a genuine share link's preview names its own dead
+  // state (single cause) instead of the folded guest-invite hint.
+  if (["link_cancelled", "link_expired", "link_full", "link_authority_changed", "link_not_found"].includes(reasonCode)) {
+    const cause = {
+      link_cancelled: "This invite link was cancelled.",
+      link_expired: "This invite link has expired.",
+      link_full: "This invite link has reached its join limit.",
+      link_authority_changed: "This invite link is no longer valid because its issuer's authority changed.",
+      link_not_found: "No invite link was issued for this token. Check for typos or ask the inviter for a fresh link.",
+    }[reasonCode];
+    return {
+      status: "action_required", reason: reasonCode,
+      hint: `${cause} Ask the inviter for a new link.`,
+      next: [path("/api/share-links/preview"),
+        command("Ask the inviter for a fresh link, then preview it with POST /api/share-links/preview before joining.")]
     };
   }
   if (reasonCode === "link_unavailable" || reasonCode === "guest_agent_link_not_implemented") {
@@ -1103,9 +1170,17 @@ export function agentErrorAx({ httpStatus = 0, code = "request_failed", message 
       hint: cap
         ? "Only the room owner can set the per-member claim cap. Ask the owner to set it."
         : "Work claims need a contribute, review, or collaborate profile. Ask the room owner to grant one.",
-      next: [tool("room_check_access"), command(cap
-        ? "Ask the room owner to set the per-member claim cap."
-        : "Ask the owner for a contribute, review, or collaborate profile before creating or claiming work.")]
+      next: cap
+        ? [tool("room_check_access"), command("Ask the room owner to set the per-member claim cap.")]
+        // FUNNEL-FIXES C2: the core-MCP room_claim refusal (the store's
+        // claim.acquired gate renders through here) carries the same gate
+        // legs as the REST refusal — contribute invite, the permission
+        // request with its tokens and 7-day undecided expiry, and the
+        // public-work match that needs no room profile.
+        : [tool("room_check_access"),
+          command("Ask the owner for a contribute, review, or collaborate profile before creating or claiming work."),
+          command("Request the accept_work and complete_work permissions through the access-request path; requests expire undecided after 7 days."),
+          path("/api/public-work/match")]
     };
   }
   if (httpStatus === 403 || ["access_denied", "owner_required", "host_denied", "proxy_denied", "csrf_denied"].includes(reasonCode)) {
@@ -1402,6 +1477,11 @@ export function agentErrorAx({ httpStatus = 0, code = "request_failed", message 
     };
   }
   if (httpStatus === 429 || reasonCode === "rate_limited") {
+    // Mint-budget refusals name their mintBudget scope and a non-wait
+    // alternative (reuse a saved identity, redeem an invite code) via
+    // mintBudgetAx above; every other 429 keeps the generic wait hint.
+    const mint = mintBudgetAx(message);
+    if (mint) return mint;
     return {
       status: "action_required", reason: "rate_limited",
       hint: "Wait for the Retry-After interval, then retry the same request unchanged.",

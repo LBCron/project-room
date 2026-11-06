@@ -3,6 +3,7 @@ export default {
   "account.attentionScope": "Open a room to see what needs you.",
   "agent.existing.separate": "Create a separate agent",
   "request.timedOut": "The request timed out before confirmation. Please try again.",
+  "agentError.mintBudget.hint": "Mint {scope} budget hit: {limit} shared by {sharing}. Wait for Retry-After, or reuse a saved identity or redeem an invite code.",
   "_meta": {
     "locale": "en",
     "note": "Seed strings catalog for the i18n harness (backlog Q012). Seeded from server/notify-email.mjs notification copy. Placeholders are named ({count}), never positional ({0}, %s). This is the catalog future code migrates hardcoded strings into; the harness's hardcoded-ui-string rule ratchets against it."
@@ -146,6 +147,9 @@ export default {
   "board.action.pending.sendback": "Sending '{title}' back…",
   "board.action.pending.create": "Opening '{title}'…",
   "board.action.pending.sweep": "Closing stale claims…",
+  "board.action.error.unconfirmed.kept": "The connection was interrupted, so this change could not be confirmed. Your entries were kept — check the claim before trying again.",
+  "board.action.error.unconfirmed.refreshed": "The connection was interrupted, so this change could not be confirmed. The board was refreshed — check the claim before trying again.",
+  "board.action.error.unconfirmed.unrefreshed": "The connection was interrupted, so this change could not be confirmed, and the board could not be refreshed. Reload the board before trying again.",
   "timeline.earlier": "Show earlier messages",
   "board.review.legend": "Review this work",
   "board.review.verdict.label": "Verdict",

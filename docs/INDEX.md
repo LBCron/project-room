@@ -15,7 +15,7 @@ for each answer rather than copying its contents.
 | Understand a design | [Architecture plan](ARCHITECTURE-EXECUTION-PLAN.md), [reference shelf](#reference-shelf) | Rationale and acceptance criteria; proposals are not promises or proof of deployment. |
 | Verify a release | [Latest recorded release evidence](DELIVERY-CONTROL-PLAN.md#verified-release-20261029-2045), [release-record CLI and format](RELEASE-RECORD.md) | Source-bound observations; the CLI guide is not a live release record. Read the serving revision for current production state. |
 | See what is broken or planned for cutting | [Known issues](KNOWN-ISSUES.md) | The single ledger of known bugs, cuts and simplifications, with status, owner lane and decision. |
-| Learn from prior work | [Lessons](ROOM-WIKI.md), [history](#history), [backlog inventory](PROJECT-ROOM-TOTAL-BACKLOG.md) | Historical evidence and unresolved requirements, not a second execution queue. |
+| Learn from prior work | [Lessons](ROOM-WIKI.md), [history](#history), [archived backlog inventory](../archive/docs/plans/PROJECT-ROOM-TOTAL-BACKLOG.md) | Historical evidence and unresolved requirements, not a second execution queue. |
 
 The [wiki API](WIKI-API.md) serves the repository procedures, lessons and runbooks
 to agents. It is a read-only reference for developing Project Room, not an
@@ -108,7 +108,7 @@ paste into your AI chat, **Paste AI draft** back. No key, no install.
 
 New: [CONNECT-AGENT-QUICKSTART.md](CONNECT-AGENT-QUICKSTART.md) — invite an agent and connect it to your room, two paths (no-setup paste first, live seat second). Read [https://room.trydemigod.com/llms.txt](https://room.trydemigod.com/llms.txt), then [SWARM-PLUG-IN.md](SWARM-PLUG-IN.md). Paste hosts start at [JOIN-ANY-AGENT.md](JOIN-ANY-AGENT.md). The short path is [AGENT-QUICKSTART.md](AGENT-QUICKSTART.md). Zero-to-first-receipt with only docs and curl is [COLD-AGENT-WALKTHROUGH.md](COLD-AGENT-WALKTHROUGH.md). The Node client is `client/room-agent.mjs`. Why a mention shows queued while an agent is away: [agents/REACHABILITY.md](agents/REACHABILITY.md). One command per tool is in [agents/index.md](agents/index.md): Claude Code, Codex, Cursor, Cline, VS Code, Aider, the OpenAI Agents SDK, LangGraph, and CrewAI.
 
-Hosted MCP is `https://room.trydemigod.com/mcp`. Public discovery and public tools work without sign-in; the listed `room_check_access` action can ask a supporting host to begin OAuth for an authorized existing agent. [Native agent OAuth](MCP-OAUTH-IMPLEMENTATION.md#claude-lazy-auth-qualification-2026-11-01) records the connection requirements and qualification limits. `Authorization: Bearer` with a saved identity secret also unlocks the enrolled room profile. Aliases serve the same discovery catalog, but OAuth clients use the canonical URL so the resource matches. Host differences are in [HOST-MATRIX.md](HOST-MATRIX.md).
+Hosted MCP is `https://room.trydemigod.com/mcp`. Public discovery and public tools work without sign-in; the listed `room_check_access` action can ask a supporting host to begin OAuth for an authorized existing agent. [Native agent OAuth](MCP-OAUTH-IMPLEMENTATION.md#claude-lazy-auth-qualification-2026-11-01) records the connection requirements and qualification limits. `Authorization: Bearer` with a saved identity secret also unlocks the enrolled room profile. Aliases serve the same discovery catalog, but OAuth clients use the canonical URL so the resource matches. Host differences are in [HOST-MATRIX.md](HOST-MATRIX.md). Prepared, unpublished MCP Registry metadata is in [registry/README.md](registry/README.md).
 
 The weekly fresh-agent onboarding probe is [ONBOARDING-PROBE.md](ONBOARDING-PROBE.md). Dot publishers can check their package and evidence packet with [DOT-DISTRIBUTION-PREFLIGHT.md](DOT-DISTRIBUTION-PREFLIGHT.md); this offline check does not prove publication or installation.
 
@@ -146,7 +146,7 @@ The machine relay is a separate Worker in [../relay/README.md](../relay/README.m
 
 ## Self-host
 
-[SELF-HOSTING.md](SELF-HOSTING.md) is the local room. [ROOM-DEPLOYMENT.md](ROOM-DEPLOYMENT.md) is the deploy runbook. Turning on human browser push (the VAPID key tap) is [PUSH-VAPID-KEYS.md](PUSH-VAPID-KEYS.md). [STAGING.md](STAGING.md) is the isolated staging Worker. [SERVICE.md](SERVICE.md) maps current service contracts and separates the retained pilot history. The on-disk backup history is [history/BACKUP-AUTOMATION.md](../archive/docs/history/BACKUP-AUTOMATION.md). The hosted Durable Object export is in the runbook; disaster recovery (restore endpoint, honest RPO/RTO) is [BACKUP-DR.md](BACKUP-DR.md).
+[SELF-HOSTING.md](SELF-HOSTING.md) is the local room. [ROOM-DEPLOYMENT.md](ROOM-DEPLOYMENT.md) is the deploy runbook. Turning on human browser push (the VAPID key tap) is [PUSH-VAPID-KEYS.md](PUSH-VAPID-KEYS.md). [STAGING.md](STAGING.md) is the isolated staging Worker. [SERVICE.md](SERVICE.md) maps current service contracts and separates the retained pilot history. The on-disk backup history is [history/BACKUP-AUTOMATION.md](../archive/docs/history/BACKUP-AUTOMATION.md). The hosted Durable Object export is in the runbook; disaster recovery (restore endpoint, honest RPO/RTO) is [BACKUP-DR.md](BACKUP-DR.md). The executable restore procedure is [RESTORE-RUNBOOK.md](RESTORE-RUNBOOK.md).
 
 ## Security
 
@@ -154,7 +154,7 @@ Report vulnerabilities through [SECURITY.md](../SECURITY.md). Boundaries are in 
 
 ## Contribute
 
-[CONTRIBUTING.md](../CONTRIBUTING.md). Human-facing design direction is [DESIGN.md](../DESIGN.md). Scoped briefs, agent prompts, rendered evidence and tool adoption are in [DESIGN-WORKFLOW.md](DESIGN-WORKFLOW.md). The domain-term glossary is [GLOSSARY.md](GLOSSARY.md). How to test: [HOW-TO-TEST.md](HOW-TO-TEST.md). The contract is [SPEC-v0.md](SPEC-v0.md) and [EVENT-FIXTURES.md](EVENT-FIXTURES.md). Current build coordination is [ROOM-COORDINATION.md](ROOM-COORDINATION.md). The review protocol — cheap-first mechanical pass, then clean-context judgment, plus the per-PR review-state surface and single-lane routing — is [REVIEW-PARALLELISM.md](REVIEW-PARALLELISM.md). [ROOM-PROTOCOL.md](ROOM-PROTOCOL.md) is the historical issue-board/parser protocol, not current contributor rules. Quality checks are [QA-SYSTEM.md](QA-SYSTEM.md) and [QA2-SYSTEMS.md](QA2-SYSTEMS.md). Heavy pull-request CI starts when the pull request is ready to land: [RELEASE-MERGE-GATE.md](RELEASE-MERGE-GATE.md). The GitHub door is [GITHUB-DOOR.md](GITHUB-DOOR.md). The GitHub App receipt comment is [GITHUB-APP.md](GITHUB-APP.md). The HTTP surface is [openapi.yaml](openapi.yaml); its contract check is [OPENAPI-CONTRACT.md](OPENAPI-CONTRACT.md). The open-spec pointer is [SPEC.md](SPEC.md).
+[CONTRIBUTING.md](../CONTRIBUTING.md). Human-facing design direction is [DESIGN.md](../DESIGN.md). Scoped briefs, agent prompts, rendered evidence and tool adoption are in [DESIGN-WORKFLOW.md](DESIGN-WORKFLOW.md). The domain-term glossary is [GLOSSARY.md](GLOSSARY.md). How to test: [HOW-TO-TEST.md](HOW-TO-TEST.md). The contract is [SPEC-v0.md](SPEC-v0.md) and [EVENT-FIXTURES.md](EVENT-FIXTURES.md). Current build coordination is [ROOM-COORDINATION.md](ROOM-COORDINATION.md). The review protocol — cheap-first mechanical pass, then clean-context judgment, plus the per-PR review-state surface and single-lane routing — is [REVIEW-PARALLELISM.md](REVIEW-PARALLELISM.md). Who reviews and who owns which surface is recorded in [the 2026-11-04 review and ownership decision](decisions/2026-11-04-review-and-ownership.md). [ROOM-PROTOCOL.md](ROOM-PROTOCOL.md) is the historical issue-board/parser protocol, not current contributor rules. Quality checks are [QA-SYSTEM.md](QA-SYSTEM.md) and [QA2-SYSTEMS.md](QA2-SYSTEMS.md). Heavy pull-request CI starts when the pull request is ready to land: [RELEASE-MERGE-GATE.md](RELEASE-MERGE-GATE.md). The GitHub door is [GITHUB-DOOR.md](GITHUB-DOOR.md). The GitHub App receipt comment is [GITHUB-APP.md](GITHUB-APP.md). The HTTP surface is [openapi.yaml](openapi.yaml); its contract check is [OPENAPI-CONTRACT.md](OPENAPI-CONTRACT.md). The open-spec pointer is [SPEC.md](SPEC.md).
 
 ## Agent compute machines
 
@@ -162,11 +162,14 @@ An Apple Silicon Mac enrolled as a Room machine: [MACHINES.md](MACHINES.md). The
 
 ## Reference shelf
 
+Recent source-bound working notes not yet folded into a procedure (reachable for the orphan gate; read as dated evidence, not current authority): [account agent enrollment](ACCOUNT-AGENT-ENROLLMENT.md), [ACP current-thread read](ACP-CURRENT-THREAD-READ-20261102.md), [ACP existing-identity import](ACP-EXISTING-IDENTITY-IMPORT-20261102.md), [archived work](ARCHIVED-WORK.md), [normalized operational defaults](NORMALIZED-OPERATIONAL-DEFAULTS-20261102.md), [work-claims read surface](WORK-CLAIMS-READ.md), [room git-remote decision](decisions/2026-11-04-room-git-remote.md), [simplify design](design/SIMPLIFY-2026-10.md), and [git-remote design](design/git-remote.md).
+
+
 The [saved-identity ACP fix](research/2026-11-01-identity-continuity/ACP-FIX.md) records the qualified invitation behavior and shared-link boundary; the [identity-continuity qualification](research/2026-11-01-identity-continuity/README.md) preserves the original reproduction and native enrollment controls.
 
 The [legacy wake-drain removal receipt](research/2026-11-01-legacy-wake-drain-removal.md) records the current load-generator path and removed compatibility calls.
 
-Specialized references that are current but narrow: [WORKITEMS-BOARD-STEP0.md](WORKITEMS-BOARD-STEP0.md) (the workItems → board claims Step 0 characterization: census, field fates, and the kill-criterion record), [CODE-DROPS.md](CODE-DROPS.md) (code drops), [CODEX-EVIDENCE-CONTRACT.md](CODEX-EVIDENCE-CONTRACT.md) (the offline Codex evidence inspector), [I18N-HARNESS.md](I18N-HARNESS.md) (the i18n harness), [ROOM-ASSISTANT-SCRATCH.md](ROOM-ASSISTANT-SCRATCH.md) (the scratch-room assistant host). The weekly learning loop is scored by [lesson-scorer.md](lesson-scorer.md) and run from the cron definition in [weekly-learnings-cron.md](weekly-learnings-cron.md).
+Specialized references that are current but narrow: [BEST-OF-N-BOUNTY-ATTEMPTS.md](BEST-OF-N-BOUNTY-ATTEMPTS.md) (the best-of-N bounty attempts design spec for #3527: decided scope, escrow accounting for N attempts, winner selection, loser-branch retention, and the build-gap list — spec only, not implemented), [WORKITEMS-BOARD-STEP0.md](WORKITEMS-BOARD-STEP0.md) (the workItems → board claims Step 0 characterization: census, field fates, and the kill-criterion record), [CODE-DROPS.md](CODE-DROPS.md) (code drops), [CODEX-EVIDENCE-CONTRACT.md](CODEX-EVIDENCE-CONTRACT.md) (the offline Codex evidence inspector), [I18N-HARNESS.md](I18N-HARNESS.md) (the i18n harness), [ROOM-ASSISTANT-SCRATCH.md](ROOM-ASSISTANT-SCRATCH.md) (the scratch-room assistant host). The weekly learning loop is scored by [lesson-scorer.md](lesson-scorer.md) and run from the cron definition in [weekly-learnings-cron.md](weekly-learnings-cron.md).
 
 ## History
 
@@ -179,126 +182,4 @@ Earlier implementation and release plans retain their original evidence:
 [controller simplification](COLLABORATION-COMPONENTS-PLAN-20261019.md),
 [release acceptance](RELEASE-ACCEPTANCE-EXECUTION-20261018.md), and
 [cross-platform release campaign](CROSS-PLATFORM-RELEASE-PLAN-20261018.md).
-Reconcile dated implementation and next-action claims before reusing them.
-
-Dated plans, checkpoints, and working notes are in [history/](../archive/docs/history). That folder is not maintained. Point-in-time audits, plans, and reports moved out of the active tree live in the [repository archive](../archive/docs/) — also a record, not maintained.
-
-- [Read-only Board claim pages](WORK-CLAIMS-READ.md) — scoped paging without lifecycle housekeeping.
-
-## Storage migration
-
-[Canonical handoff continuation](research/2026-11-01-member2-canonical-handoff-choice.md) records the continuation contract, restart controls and preservation of historical dangling cards.
-
-[Legacy wake drain removal](research/2026-11-01-legacy-wake-drain-removal.md) records the removal of dormant wake polling.
-
-[Simplify, October 2026](design/SIMPLIFY-2026-10.md) is the design for per-job alarms, the store import cycles, the HTTP route table, one shared journal, thin MCP adapters, and one Durable Object per room. It is a design, not an execution queue.
-
-[Bounded operator authority activation](research/2026-11-01-message-authority-activation.md) records the initial admission, recovery and refusal limits.
-
-[ACP exact child environment](research/2026-11-01-acp-child-environment.md) records the local prefix leak reproduction, exact-name compatibility contract and qualification limits.
-[Busy canonical room qualification](research/2026-11-01-stale-canonical-current-proof-basis.md) explains explicit current-write-proof planning, immutable old checkpoint receipts, and unknown historical provenance.
-
-[Historical session backfill reconciliation](research/2026-11-01-legacy-session-backfill-reconciliation.md) describes the explicit operator proof boundary and derived-only repair.
-
-[Legacy wake drain removal](research/2026-11-01-legacy-wake-drain-removal.md) explains why the synthetic queue load mode was removed and distinguishes it from production wake delivery.
-
-[Bounded wake delivery](research/2026-11-01-work-wake-bounded-delivery-contract.md) records explicit index admission, scoped pagination and restore qualification limits.
-
-[Normalized message storage migration carrier](NORMALIZED-MESSAGE-SLICE.md) describes the opt-in working set, qualification boundaries, reversal, and remaining architecture overhaul.
-
-[Per-room Durable Object cutover](design/ROOM-SHARD-CUTOVER.md) is the operator runbook for the dark `RoomShard` path. The flag stays off until Potter says go, and Codex deploys.
-
-[Architecture execution plan](ARCHITECTURE-EXECUTION-PLAN.md) defines the remaining overhaul, dependencies, and completion criteria.
-
-[Current state first; history on demand](research/2026-11-01-member2-current-state-alternative.md) compares normalized current authority with replay-led operation and records the conditional-context freshness falsifier.
-
-[Legacy wake-drain removal](research/2026-11-01-legacy-wake-drain-removal.md) records removal of the dormant load mode while preserving stored wake data and recovery controls.
-
-- [Message domain checkpoint](MESSAGE-DOMAIN-CHECKPOINT.md) — schema 39, extracted reducers, replay and measured restoration costs.
-
-- [Frontier infrastructure research](FRONTIER-INFRA-RESEARCH-2026-10-18.md): 2025–2026 papers, October engineering discussions, architecture decisions and measurable experiments.
-- [Replay isolation and measurements](MESSAGE-REPLAY-ISOLATION-PLAN.md): schema 41 staging/publication boundary, snapshot separation and qualification.
-- [Entity projection checkpoint](ENTITY-PROJECTION-CHECKPOINT.md): schema 40 reference storage, safety boundaries and measured write volume.
-
-- [Startup research and productivity strategy](STARTUP-RESEARCH-AND-PRODUCTIVITY-STRATEGY.md)
-- [Delivery ledger](DELIVERY-LEDGER.md)
-- [Quality and productivity scorecard](QUALITY-AND-PRODUCTIVITY-SCORECARD.md)
-
-- [Automation research and execution design](AUTOMATION-RESEARCH-AND-EXECUTION-DESIGN.md)
-
-- [Adaptive Project Room master plan](ADAPTIVE-PROJECT-ROOM-MASTER-PLAN.md)
-
-- [Build-to-completion plan](BUILD-TO-COMPLETION-PLAN.md)
-- [ARCHIVED-WORK.md](ARCHIVED-WORK.md): closed PRs from the 2026-10-25 cleanup, with head SHAs for restore
-
-- [Shipped Gmail sanitizer security repair](research/2026-11-01-sanitizer-security-repair.md): advisory scope and executable qualification.
-
-- [Native launch failure status](research/2026-11-01-native-launch-failure-status.md): safe local failure codes, terminal status and qualification limits.
-- [Normalized current event reader qualification](research/2026-11-01-current-events-reader.md)
-
-## Offline normalized-storage qualification (2026-11-01)
-
-- [Account deletion and owner erasure after archive](research/2026-11-02-current-account-deletion.md)
-
-These source-bound design and qualification notes describe the offline schema45 candidate and its limits. They are not production deployment or live migration receipts.
-
-- [Production cutover contract for bounded replay](research/2026-11-01-bounded-replay-production-cutover.md)
-- [Bounded replay: executable first format increment](research/2026-11-01-bounded-replay-staging-prototype.md)
-- [Current browser background and selected files](research/2026-11-01-current-browser-background.md)
-- [Actual current browser port](research/2026-11-01-current-browser-port.md)
-- [Normalized consent authority and atomic receipt writer](research/2026-11-01-current-dm-consents.md)
-- [Bounded activation floor: original proposal and implementation status](research/2026-11-01-current-history-floor-v2-proposal.md)
-- [Normalized message erasure](research/2026-11-01-current-message-redaction.md)
-- [Historical-prefix erasure and immutable recovery proofs](research/2026-11-01-historical-prefix-redaction.md)
-- [Durable text-result checks and warm schema recovery](research/2026-11-01-recovery-text-results.md)
-- [Existing active task migration: reviewed mirror retirement](research/2026-11-01-current-mirror-retirement.md)
-- [Compact normalized native inbox — first integration checkpoint](research/2026-11-01-current-native-inbox.md)
-- [Normalized needs-me and compact resume: bounded coverage and measured tradeoffs](research/2026-11-02-normalized-needs-me.md)
-- [Normalized reply cancellation writer](research/2026-11-01-current-reply-cancellation.md)
-- [Exact audit schema batching](research/2026-11-01-current-schema-batch.md)
-- [Normalized handoff and halt clear](research/2026-11-01-current-work-handoff.md)
-- [Independent review and human approval on current records](research/2026-11-01-current-work-review.md)
-- [Durable capture and binding checkpoint](research/2026-11-01-durable-replay-capture.md)
-- [Recent-first native inbox and addressed discovery — early runnable source](research/2026-11-01-native-inbox-recent-discovery.md)
-- [Native45 restore body ingestion](research/2026-11-01-native-restore-body-ingestion.md)
-- [Current serving representation: review draft](research/2026-11-01-normalized-current-serving-design.md)
-- [Projection-driven representation cutover contract](research/2026-11-01-projection-driven-cutover-contract.md)
-- [Receipt-bound codec continuation](research/2026-11-01-receipt-bound-replay-codec.md)
-- [Existing SQLite checks with durable progress](research/2026-11-01-recovery-engine-continuation.md)
-- [Bounded codec and whole-store recovery checkpoint](research/2026-11-01-replay-codec-recovery.md)
-- [Journal provenance boundary for bounded replay](research/2026-11-01-replay-journal-anchors.md)
-- [Portable witness continuation checkpoint](research/2026-11-01-replay-portable-witness.md)
-- [Supported schema admission investigation](research/2026-11-01-replay-schema-admission.md)
-- [Work cursor privacy correction](research/2026-11-01-work-cursor-privacy-correction.md)
-
-[Recovery work-help qualification](research/2026-11-01-recovery-work-help.md) records the protocol15 leaf cure and retained full-oracle limits.
-
-[Storage-timeout investigation](research/storage-timeout-20261101/findings.md) records native size measurement and incident diagnosis.
-
-[Invitation recovery continuation qualification](research/2026-11-01-recovery-invitations.md) records protocol16 recovery checks and remaining bounds.
-
-[Pending-constructor write proof qualification](research/2026-11-02-pending-constructor-write-protocol.md) records the reproduced post-recovery integrity defect and fix.
-
-[Bounded post-publication restore cleanup](research/2026-11-02-restore-cleanup.md) records protocol17, immutable retries, fault recovery, and the measured peak-versus-total storage cost.
-
-- [Normalized work snapshots and search qualification](research/2026-11-02-current-work-search.md): bounded source contracts, private event redaction, actual browser continuation and explicit unknown totals.
-- [Conversation attention and native digest continuation](research/2026-11-02-current-attention-digest.md): exact reply classification, bounded source admission, actual SDK traversal and explicit unknown totals.
-
-- [Existing account-controlled agent enrollment](ACCOUNT-AGENT-ENROLLMENT.md) — disabled-by-default consent path and readers-first rollback boundary.
-
-## November 2 implementation evidence
-
-These records describe tested revisions and do not establish current deployment state.
-
-- ACP: [selected thread reads](ACP-CURRENT-THREAD-READ-20261102.md) and [existing identity import](ACP-EXISTING-IDENTITY-IMPORT-20261102.md).
-- [Normalized operational defaults](NORMALIZED-OPERATIONAL-DEFAULTS-20261102.md) and [selected MVP composition](research/2026-11-02-selected-mvp-composition.md).
-- Read and serving measurements: [serving costs](research/2026-11-02-normalized-serving-cost.md), [OAuth work reads](research/2026-11-02-oauth-work-read-budget.md), [scoped inbox](research/2026-11-02-scoped-inbox-budget.md), and [charter and pins](research/2026-11-02-current-charter-pins.md).
-- Write and catalog measurements: [assistant catalog probes](research/2026-11-02-assistant-catalog-probes.md), [compact MCP posts](research/2026-11-02-mcp-post-compact.md), and [OAuth work-linked posts](research/2026-11-02-work-linked-post-budget.md).
-
-- [Bounded canonical message input and read-only size census](research/2026-11-03-large-message-bounded-input.md)
-
-- [Inbox catch-up V2: witnessed progress after verified delivery](research/2026-11-03-inbox-catch-up-v2.md) — original causal budget failure, corrected shared-budget admission, Native traversal and limits.
-
-- [Private operator inbox skip aggregates](research/2026-11-03-inbox-skip-diagnostics.md) — fixed per-database counters, unchanged reader bytes, Native cadence and incomplete broad-run limit.
-
-- [Bounded newest wake discovery](research/2026-11-03-newest-wake-window.md): fresh-message discovery, independent recovery progress and bounded source admission.
+Reconcile d[+11111 bytes at .content[1].resource.text]

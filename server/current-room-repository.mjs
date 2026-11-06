@@ -494,9 +494,18 @@ export function initializeCurrentRoom(store,state,events,{adoptExisting=null}={}
     return roomId;
   });
 }
-export function currentRoomAuthority(db,roomId,{memberId=null}={}) {
+export function currentRoomAuthority(db,roomId,{memberId=null,activeOnly=false}={}) {
   const b=contextBudgets.get(db)??budget(),head=readCurrentHead(db,roomId,b);if(!head)return null;
-  return memberId===null?currentAuthorityFromHead(db,roomId,head,b):currentMemberAuthorityFromHead(db,roomId,head,b,memberId);
+  if(memberId!==null)return currentMemberAuthorityFromHead(db,roomId,head,b,memberId);
+  return activeOnly?currentActiveAuthorityFromHead(db,roomId,head,b):currentAuthorityFromHead(db,roomId,head,b);
+}
+// Owner-only authority: protected head and room record, no member census.
+// For callers that need only ownerId/sequence; cost is constant in member count.
+export function currentRoomOwnerAuthority(db,roomId) {
+  const b=contextBudgets.get(db)??budget(),head=readCurrentHead(db,roomId,b);if(!head)return null;
+  const room=readCurrentRecord(db,roomId,'metadata','room',b);
+  if(!room||!validId(room.ownerId))corrupt('missing owner authority');
+  return {sequence:head.sequence,ownerId:room.ownerId};
 }
 // Explicit addressed authority: protected room/owner and this principal only.
 // Default roster callers retain their full-census contract and budget.
@@ -513,6 +522,29 @@ function currentMemberAuthorityFromHead(db,roomId,head,b,memberId) {
     }
   }
   if(!Object.hasOwn(members,room.ownerId))corrupt('missing owner authority');
+  return {sequence:head.sequence,ownerId:room.ownerId,members,historyVisibility:room.historyVisibility??null,historyDefaultsVersion:room.historyDefaultsVersion??null};
+}
+// Active-roster authority (W3200 R-01): the roster presence serves. The full
+// census above counts TOTAL member records and refuses past 100, so a room
+// that churned past 101 records (join, deactivate, replace) lost presence
+// even at <=100 active members, although admission caps ACTIVE members at
+// 100. This variant selects active records in SQL (bounded: at most 101 keys
+// are ever read, deactivated records are never loaded or charged), then
+// verifies each selected record through readCurrentRecord's proof/hash
+// checks exactly like the census. The cap and refusal are unchanged: more
+// than 100 ACTIVE members refuses with the census's error shape.
+function currentActiveAuthorityFromHead(db,roomId,head,b) {
+  const room=readCurrentRecord(db,roomId,'metadata','room',b);
+  if(!room||!validId(room.ownerId))corrupt('missing owner authority');
+  const keys=db.prepare(`SELECT r.record_key FROM current_room_records r
+    JOIN current_room_record_proofs p ON p.room_id=r.room_id AND p.domain=r.domain AND p.record_key=r.record_key AND p.present=1
+    WHERE r.room_id=? AND r.domain='members' AND COALESCE(json_extract(r.payload,'$.active'),1)!=0
+    ORDER BY r.record_key LIMIT 101`).all(roomId);
+  charge(b,keys.reduce((n,row)=>n+Buffer.byteLength(row.record_key)+32,0),keys.length);
+  if(keys.length>100)refuse('Room authority requires bounded membership');
+  const members={};
+  for(const {record_key:key} of keys)Object.defineProperty(members,key,{value:readCurrentRecord(db,roomId,'members',key,b),enumerable:true,writable:true,configurable:true});
+  if(!Object.hasOwn(members,room.ownerId)&&readCurrentRecord(db,roomId,'members',room.ownerId,b)===undefined)corrupt('missing owner authority');
   return {sequence:head.sequence,ownerId:room.ownerId,members,historyVisibility:room.historyVisibility??null,historyDefaultsVersion:room.historyDefaultsVersion??null};
 }
 function currentAuthorityFromHead(db,roomId,head,b) {
@@ -588,7 +620,7 @@ export function readCurrentMessage(db,roomId,messageId,b=contextBudgets.get(db)?
   return {row,value};
 }
 
-const supported = new Set(['message.pinned','message.unpinned','member.sponsor_transferred','channel.created','work.public_set','capabilities.advertised','bond.propose','bond.accept','bond.decline','bond.revoke','bond.proposed','bond.activated','bond.revoked','dm.posted','claim.acquired','claim.renewed','claim.released','room.spend_pricing_set','room.spend_allowance_set','room.archived','room.exported','room.charter_updated','room.policy_set','room.trust_set','message.deleted','message.edited','work.superseded','ownership.transferred','reply_request.cancelled','work_claim.updated','message.posted','work.proposed','work.accepted','work.started','work.completed','work.handoff_recorded','work.halt_cleared','verification.recorded','owner.decision_recorded']);
+const supported = new Set(['message.pinned','message.unpinned','member.sponsor_transferred','channel.created','work.public_set','capabilities.advertised','bond.propose','bond.accept','bond.decline','bond.revoke','bond.proposed','bond.activated','bond.revoked','dm.posted','claim.acquired','claim.renewed','claim.released','room.spend_pricing_set','room.spend_allowance_set','room.archived','room.exported','room.charter_updated','room.policy_set','room.trust_set','message.deleted','message.edited','work.superseded','ownership.transferred','reply_request.cancelled','reply_request.progressed','work_claim.updated','message.posted','work.proposed','work.accepted','work.started','work.completed','work.handoff_recorded','work.halt_cleared','work.blocked','work.blocker_resolved','verification.recorded','owner.decision_recorded']);
 const contextBudgets = new WeakMap();
 export function withCurrentServingWriter(db,roomId,operation) {
   if(!isCurrentRoom(db,roomId) && !db.prepare("SELECT 1 FROM current_room_record_proofs WHERE room_id=? AND domain='migrationFence' AND record_key='active' AND present=1").get(roomId))return operation();
@@ -686,7 +718,7 @@ function currentClaimAdmissionAt(store,roomId,actorId,item,command,b,instant) {
 }
 export function currentCommandContext(store,roomId,command,{actorId}={}) {
   const db=store.db,b=contextBudgets.get(db)??budget(),head=readCurrentHead(db,roomId,b);if(!head)return null;
-  if(['room.public_page_set','room.join_link_set'].includes(command.type))
+  if(['room.public_page_set','room.join_link_set','room.public_receipts_set'].includes(command.type))
     return currentInviteContext(store,roomId,{memberIds:[actorId],census:command.type==='room.public_page_set'&&command.data.enabled===true});
   // Membership additions and reactivation need the exact admitted roster for
   // capacity/name/authority checks, but no messages or unrelated work bodies.
@@ -753,7 +785,7 @@ function commandContextFromHead(store,roomId,command,head,b,{readMessage,readWor
     const request=readCurrentRecord(db,roomId,'replyRequests',id,b);if(request!==undefined)(state.replyRequests??={})[id]=request;
   }
   let selectedRequest;
-  if(command.type==='reply_request.cancelled'&&typeof command.data.requestMessageId==='string'){
+  if(['reply_request.cancelled','reply_request.progressed'].includes(command.type)&&typeof command.data.requestMessageId==='string'){
     const id=command.data.requestMessageId;selectedRequest=readCurrentRecord(db,roomId,'replyRequests',id,b);
     if(selectedRequest!==undefined){
       const opening=loadMessage(id);
@@ -1103,7 +1135,7 @@ export function currentMessageMayBeVisible(db,roomId,messageId,viewerId,b=contex
   return false;
 }
 export function currentConversationRows(store,roomId,{viewerId,limit,before,beforeId,messageId,channelId,peerMemberId,floor,liveOnly=false}) {
-  if(limit>64)refuse('Current conversation pages support at most64 messages');
+  if(limit>100)refuse('Current conversation pages support at most 100 messages');
   const db=store.db,b=contextBudgets.get(db)??budget();
   if(messageId!==null) {
     // An unverified index may deny access, never grant it. Avoid loading a
@@ -1145,12 +1177,36 @@ export function currentConversationRows(store,roomId,{viewerId,limit,before,befo
     if(rows.length){stream.before=rows.at(-1).seq;stream.beforeId=rows.at(-1).message_id;}
   };
   const rows=[],seen=new Set();let examined=0,last=null,interrupted=false;
-  while(rows.length<limit&&examined<64) {
+  // The examined window must cover at least the requested page: with the old
+  // flat 64 cap a validated limit of 65..100 could never be filled even when
+  // every candidate was visible. The 64 floor keeps the historical bound for
+  // smaller pages, so existing small-limit callers are unchanged.
+  while(rows.length<limit&&examined<Math.max(64,limit)) {
     try{for(const stream of streams)refill(stream);}
     catch(error){if(error.code==='current_room_context_unavailable'&&last){interrupted=true;break;}throw error;}
     const available=streams.filter(stream=>stream.rows.length);if(!available.length)break;
     available.sort((a,c)=>c.rows[0].seq-a.rows[0].seq||Buffer.compare(Buffer.from(c.rows[0].message_id),Buffer.from(a.rows[0].message_id)));
     const row=available[0].rows.shift();if(seen.has(row.message_id))continue;seen.add(row.message_id);
+    if(floor) {
+      // PRIV-2 accounting: a candidate whose scalar creation instant is
+      // strictly before the reader's history floor is unreturnable by
+      // construction (messageInHistory can only deny it), so it is charged
+      // the scalar denial the addressed path already uses
+      // (currentMessageMayBeVisible: charge 256), not a full proof read of
+      // a body the reader may never see. The equal-instant tie-break and
+      // every returnable row stay on the authoritative proof path below.
+      // D4 guard (lane-11 rework): the scalar charge sits inside the same
+      // budget-error catch discipline as the loop's other throws (pin
+      // :1150/:1156/:1160) — if it exhausts the budget after at least one
+      // candidate has been examined (last set), the read degrades to the
+      // partial page with a continuation instead of hard-409ing.
+      try{
+        const at=db.prepare("SELECT CASE WHEN length(CAST(created_at AS BLOB))<=128 THEN created_at END AS at FROM messages WHERE room_id=? AND message_id=?").get(roomId,row.message_id)?.at;
+        charge(b,256);
+        const instant=typeof at==='string'?Date.parse(at):NaN,joined=Date.parse(floor.at);
+        if(Number.isFinite(instant)&&Number.isFinite(joined)&&instant<joined){examined++;last={position:row.seq,messageId:row.message_id};continue;}
+      }catch(error){if(error.code==='current_room_context_unavailable'&&last){interrupted=true;break;}throw error;}
+    }
     let source;
     try{source=readCurrentMessage(db,roomId,row.message_id,b);}
     catch(error){if(error.code==='current_room_context_unavailable'&&last){interrupted=true;break;}throw error;}
@@ -1387,6 +1443,29 @@ export function publishCurrentCandidate(store,head,{generation,qualificationRece
 export function admitCurrentCandidateBudget(db,b) { admitCurrentSchema(db,b); return b; }
 
 // Selected work context never opens the legacy room or unrelated work bodies.
+// Wake policy needs only the room record, the actor and target member records,
+// for a work wake that one item, and for a message wake that message and its
+// channel. The message and channel go through their witnessed readers so a
+// corrupt or witnessed-but-missing record throws and the delivery stays
+// pending, as the legacy whole-room read does. Bounded like any selected read.
+export function readCurrentWakePolicyState(store,roomId,memberIds,{workItemId=null,messageId=null}={}) {
+  const db=store.db,b=contextBudgets.get(db)??budget(),head=readCurrentHead(db,roomId,b);if(!head)return null;
+  const room=readCurrentRecord(db,roomId,'metadata','room',b);if(!room)corrupt('missing wake policy room authority');
+  const members=Object.create(null);
+  for(const id of new Set(memberIds.filter(id=>typeof id==='string'))){const member=readCurrentRecord(db,roomId,'members',id,b);if(member!==undefined)members[id]=member;}
+  const workItems=Object.create(null);
+  if(typeof workItemId==='string'){const item=readCurrentWorkItem(db,roomId,workItemId,b);if(item)workItems[workItemId]=item;}
+  const channels=Object.create(null);
+  if(typeof messageId==='string'){
+    const message=readCurrentMessage(db,roomId,messageId,b);
+    if(message){
+      const channelId=message.value?.channelId??'general',channel=readCurrentRecord(db,roomId,'channels',channelId,b);
+      if(channel===undefined)corrupt('wake message channel missing');
+      channels[channelId]=channel;
+    }
+  }
+  return {room,members,workItems,channels};
+}
 export function readCurrentSelectedWorkState(store,roomId,workId,viewerId,{includeOffers=false}={}) {
   const db=store.db,b=contextBudgets.get(db)??budget(),head=readCurrentHead(db,roomId,b);if(!head)return null;
   if(includeOffers)refuse('Cross-work offers require an indexed selected dependency context');
@@ -1424,12 +1503,18 @@ export function readCurrentReplyRequestWindow(store,roomId,{after='',limit=4}={}
   if(!after&&!hasMore&&requests.length!==head.counts.replyRequests)corrupt('complete request source membership differs');
   return {requests,examinedAfter,hasMore,total:head.counts.replyRequests};
 }
-export function readCurrentOverviewWindow(store,roomId,{workAfter='',limit=8,viewerId=null}={}) {
+// viewerAuthority: the Board work list needs only the owner's and viewer's
+// member records, so it uses the existing addressed authority
+// (currentMemberAuthorityFromHead) instead of the full member census, which
+// exhausted the shared 200-record/256KiB read budget in rooms with more than a
+// handful of members. Cost is O(page), not O(members).
+export function readCurrentOverviewWindow(store,roomId,{workAfter='',limit=8,viewerId=null,viewerAuthority=false}={}) {
   const db=store.db,b=contextBudgets.get(db)??budget(),head=readCurrentHead(db,roomId,b);if(!head)return null;
   if(typeof workAfter!=='string'||Buffer.byteLength(workAfter)>200||!Number.isInteger(limit)||limit<1||limit>8)refuse('Invalid bounded work context window');
-  const authority=currentAuthorityFromHead(db,roomId,head,b),room=readCurrentRecord(db,roomId,'metadata','room',b);
+  const scoped=viewerAuthority&&typeof viewerId==='string';
+  const authority=scoped?currentMemberAuthorityFromHead(db,roomId,head,b,viewerId):currentAuthorityFromHead(db,roomId,head,b),room=readCurrentRecord(db,roomId,'metadata','room',b);
   const state={room,members:authority.members,workItems:{},messages:[],pins:[]};
-  const pins=readCurrentRecord(db,roomId,'metadata','pins',b);if(pins!==undefined)state.pins=pins;
+  if(!scoped){const pins=readCurrentRecord(db,roomId,'metadata','pins',b);if(pins!==undefined)state.pins=pins;}
   const rows=db.prepare("SELECT record_key FROM current_room_record_proofs INDEXED BY current_work_summary_keys WHERE room_id=? AND domain='workSummary' AND present=1 AND record_key>? ORDER BY record_key LIMIT ?").all(roomId,workAfter,limit+1);
   charge(b,rows.reduce((n,row)=>n+Buffer.byteLength(row.record_key)+32,0),rows.length);
   let after=workAfter,returned=0;

@@ -136,7 +136,7 @@ function failureValue(error) {
       : 422;
     return { status, code, message: error.message };
   }
-  return { status: 500, code: "internal", message: "Request could not be completed" };
+  return { status: 500, code: "internal", message: "The server hit an internal error and produced no result. Retry the request once; if it repeats, report code 'internal' with the request id." };
 }
 
 export function identityBearer(authorization) {
@@ -593,7 +593,7 @@ async function boardClaimCall(store, secret, name, args) {
 function dispatchRoomToolCall(store, secret, identity, name, args, agentRooms, signal) {
   if (BOARD_CLAIM_TOOLS.includes(name)) return boardClaimCall(store, secret, name, args);
   if (name === 'room_wait_for_attention') return waitForAttention(store, secret, args.roomId, {...args, signal});
-  if (name === "room_needs_me") return collectNeedsMe(store, secret, { since: args.since, roomId: args.roomId, oauthIdentity: /^(oat|iat)_/.test(secret ?? "") ? identity : null });
+  if (name === "room_needs_me") return collectNeedsMe(store, secret, { since: args.since, roomId: args.roomId, oauthIdentity: /^(oat|iat)_/.test(secret ?? "") ? identity : null, claimSec: args.claimSec ?? 0 });
   if (name === "room_create") {
     const request = {};
     for (const key of ["title", "purpose", "roomId", "kind", "displayName", "requestId", "visibility"]) {
@@ -871,7 +871,7 @@ function dispatchRoomToolCall(store, secret, identity, name, args, agentRooms, s
     const built = friendBondCommand("dm", { to: args.to, body: args.body, messageId: args.messageId });
     return commandReceipt(store, secret, roomId, { id: args.id, type: built.type, data: built.data }, "posted");
   }
-  throw new ServiceError(500, "internal", "Request could not be completed");
+  throw new ServiceError(500, "internal", "The server hit an internal error and produced no result. Retry the request once; if it repeats, report code 'internal' with the request id.");
 }
 
 function callInboxTool(store, identity, name, args) {
@@ -885,7 +885,7 @@ function callInboxTool(store, identity, name, args) {
   if (name === "inbox_list_attachments") return store.inboxAttachments.list(identityId);
   if (name === "inbox_get_attachment") return stampAttachmentGet(store.inboxAttachments.get(identityId, args.id), identityId, null);
   if (name === "inbox_discard_attachment") return store.inboxAttachments.discard(identityId, args.id);
-  throw new ServiceError(500, "internal", "Request could not be completed");
+  throw new ServiceError(500, "internal", "The server hit an internal error and produced no result. Retry the request once; if it repeats, report code 'internal' with the request id.");
 }
 
 function commandReceipt(store, secret, roomId, command, status) {
@@ -1035,7 +1035,7 @@ async function callWakeTool(store, secret, identity, name, args) {
   if (name === "webhook_unsubscribe") {
     return store.agentPlugin.unsubscribeWebhook({ identityId: agentId, subscriptionId: args.subscriptionId });
   }
-  throw new ServiceError(500, "internal", "Request could not be completed");
+  throw new ServiceError(500, "internal", "The server hit an internal error and produced no result. Retry the request once; if it repeats, report code 'internal' with the request id.");
 }
 
 const BASE64_TOOLS = new Set(["room_put_file", "inbox_put_attachment"]);

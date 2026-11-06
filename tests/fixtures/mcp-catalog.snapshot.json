@@ -183,7 +183,7 @@
       }
     },
     "room_needs_me": {
-      "inputSchema": "e05fb8cf1ac6e40e",
+      "inputSchema": "cfb2179dbdcbd51a",
       "annotations": {
         "readOnlyHint": true,
         "destructiveHint": false,
@@ -1035,7 +1035,7 @@
       }
     },
     "room_needs_me": {
-      "inputSchema": "e05fb8cf1ac6e40e",
+      "inputSchema": "cfb2179dbdcbd51a",
       "annotations": {
         "readOnlyHint": true,
         "destructiveHint": false,
@@ -1072,6 +1072,16 @@
         "idempotentHint": true,
         "openWorldHint": false,
         "title": "Post Message"
+      }
+    },
+    "room_progress_request": {
+      "inputSchema": "0bbb8051b9753cf3",
+      "annotations": {
+        "readOnlyHint": false,
+        "destructiveHint": false,
+        "idempotentHint": true,
+        "openWorldHint": false,
+        "title": "Progress Request"
       }
     },
     "room_propose_work": {
@@ -1485,7 +1495,7 @@
       }
     },
     "webhook_subscribe": {
-      "inputSchema": "e75ddebd231d575d",
+      "inputSchema": "c1b5ffdc101f454f",
       "annotations": {
         "readOnlyHint": false,
         "destructiveHint": false,
@@ -1727,7 +1737,7 @@
       }
     },
     "room_needs_me": {
-      "inputSchema": "e05fb8cf1ac6e40e",
+      "inputSchema": "cfb2179dbdcbd51a",
       "annotations": {
         "readOnlyHint": true,
         "destructiveHint": false,
@@ -1754,6 +1764,16 @@
         "idempotentHint": true,
         "openWorldHint": false,
         "title": "Post Message"
+      }
+    },
+    "room_progress_request": {
+      "inputSchema": "0bbb8051b9753cf3",
+      "annotations": {
+        "readOnlyHint": false,
+        "destructiveHint": false,
+        "idempotentHint": true,
+        "openWorldHint": false,
+        "title": "Progress Request"
       }
     },
     "room_propose_work": {
@@ -2089,7 +2109,7 @@
       }
     },
     "room_needs_me": {
-      "inputSchema": "e05fb8cf1ac6e40e",
+      "inputSchema": "cfb2179dbdcbd51a",
       "annotations": {
         "readOnlyHint": true,
         "destructiveHint": false,
@@ -2106,6 +2126,16 @@
         "idempotentHint": true,
         "openWorldHint": false,
         "title": "Post Message"
+      }
+    },
+    "room_progress_request": {
+      "inputSchema": "0bbb8051b9753cf3",
+      "annotations": {
+        "readOnlyHint": false,
+        "destructiveHint": false,
+        "idempotentHint": true,
+        "openWorldHint": false,
+        "title": "Progress Request"
       }
     },
     "room_read_inbox": {
@@ -2321,7 +2351,7 @@
       }
     },
     "room_needs_me": {
-      "inputSchema": "e05fb8cf1ac6e40e",
+      "inputSchema": "cfb2179dbdcbd51a",
       "annotations": {
         "readOnlyHint": true,
         "destructiveHint": false,
@@ -2338,6 +2368,16 @@
         "idempotentHint": true,
         "openWorldHint": false,
         "title": "Post Message"
+      }
+    },
+    "room_progress_request": {
+      "inputSchema": "0bbb8051b9753cf3",
+      "annotations": {
+        "readOnlyHint": false,
+        "destructiveHint": false,
+        "idempotentHint": true,
+        "openWorldHint": false,
+        "title": "Progress Request"
       }
     },
     "room_read_request": {
@@ -2553,7 +2593,7 @@
       }
     },
     "room_needs_me": {
-      "inputSchema": "e05fb8cf1ac6e40e",
+      "inputSchema": "cfb2179dbdcbd51a",
       "annotations": {
         "readOnlyHint": true,
         "destructiveHint": false,
@@ -2570,6 +2610,16 @@
         "idempotentHint": true,
         "openWorldHint": false,
         "title": "Post Message"
+      }
+    },
+    "room_progress_request": {
+      "inputSchema": "0bbb8051b9753cf3",
+      "annotations": {
+        "readOnlyHint": false,
+        "destructiveHint": false,
+        "idempotentHint": true,
+        "openWorldHint": false,
+        "title": "Progress Request"
       }
     },
     "room_read_request": {
@@ -2673,7 +2723,7 @@
       }
     },
     "webhook_subscribe": {
-      "inputSchema": "e75ddebd231d575d",
+      "inputSchema": "c1b5ffdc101f454f",
       "annotations": {
         "readOnlyHint": false,
         "destructiveHint": false,
@@ -2927,7 +2977,7 @@
       }
     },
     "room_needs_me": {
-      "inputSchema": "e05fb8cf1ac6e40e",
+      "inputSchema": "cfb2179dbdcbd51a",
       "annotations": {
         "readOnlyHint": true,
         "destructiveHint": false,

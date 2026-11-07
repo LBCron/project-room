@@ -54,10 +54,14 @@ test('normalized receipts-on room: completion publishes one public receipt; opt-
   cmd('worker', 'a', 'work.accepted', {workItemId: 'task', expectedRevision: 0});
   cmd('worker', 's', 'work.started', {workItemId: 'task', expectedRevision: rev('task')});
   const body = 'Result text', post = cmd('worker', 'result', 'message.posted', {messageId: 'result', body, workItemId: 'task'});
-  const done = cmd('worker', 'c', 'work.completed', {workItemId: 'task', expectedRevision: rev('task'), evidenceKind: 'room_text', evidenceMessageId: 'result',
-    evidenceMessageEventId: post.event.id, evidenceVersion: textVersion(body), previousCompletionEventId: null, producerId: 'worker', summary: 'Saved', nextAction: 'Review'});
+  const completion = {workItemId: 'task', expectedRevision: rev('task'), evidenceKind: 'room_text', evidenceMessageId: 'result',
+    evidenceMessageEventId: post.event.id, evidenceVersion: textVersion(body), previousCompletionEventId: null, producerId: 'worker', summary: 'Saved', nextAction: 'Review'};
+  const done = cmd('worker', 'c', 'work.completed', completion);
   const id = publicWorkItemReceiptId('commons', 'task');
   assert.ok(s.db.prepare('SELECT 1 FROM public_receipts WHERE id=?').get(id), 'completion publishes');
+  // Idempotent: the exact retry is a duplicate receipt and leaves one row.
+  assert.equal(cmd('worker', 'c', 'work.completed', completion).duplicate, true);
+  assert.equal(s.db.prepare('SELECT count(*) n FROM public_receipts WHERE id=?').get(id).n, 1);
   cmd('checker', 'v', 'verification.recorded', {workItemId: 'task', expectedRevision: rev('task'), result: 'pass', completionEventId: done.event.id,
     evidenceVersion: textVersion(body), summary: 'Checked the saved text'});
   assert.equal(JSON.parse(s.db.prepare('SELECT body FROM work_entities WHERE work_id=?').get('task').body).verification.result, 'pass');
@@ -77,6 +81,11 @@ test('normalized receipts-on room: completion publishes one public receipt; opt-
 
   cmd('owner', 'receipts-off', T.ROOM_PUBLIC_RECEIPTS_SET, {enabled: false});
   assert.equal(s.db.prepare('SELECT count(*) n FROM public_receipts WHERE id=?').get(id).n, 0);
+  // Opt-out retry and a replayed completion retry do not resurrect the row.
+  assert.equal(cmd('owner', 'receipts-off', T.ROOM_PUBLIC_RECEIPTS_SET, {enabled: false}).duplicate, true);
+  assert.equal(cmd('worker', 'c', 'work.completed', completion).duplicate, true);
+  assert.equal(s.db.prepare('SELECT count(*) n FROM public_receipts WHERE id=?').get(id).n, 0);
+  assert.equal(s.db.prepare("SELECT enabled FROM room_public_receipts_setting WHERE room_id='commons'").get()?.enabled, 0);
   assert.equal((await fetch(`${origin}/receipts/${id}.json`)).status, 404);
   assert.doesNotThrow(() => auditRecovery(s));
 });

@@ -667,13 +667,17 @@ function syncNormalizedReceipts(store, { roomId, state, previous }) {
   const hasRecorded = !!recorded && typeof recorded.enabled === "boolean";
   const receiptsOn = publicReceipts(state).enabled === true;
   const receiptsWere = previous ? publicReceipts(previous).enabled === true : false;
-  const completed = receiptsOn ? Object.values(state.workItems ?? {}).filter(item => item?.state === "completed" && item.receipt
-    && typeof item.receipt === "object" && !(previous?.workItems?.[item.id]?.state === "completed"
-      && previous.workItems[item.id].receipt?.evidenceVersion === item.receipt.evidenceVersion)) : [];
+  // The sparse context holds only the items this command touched: each one
+  // that is completed with a receipt is (re)written, and one that left
+  // completion (a failed verification blocks it) loses its row, matching
+  // the legacy whole-room projection for those items.
+  const touched = receiptsOn ? Object.values(state.workItems ?? {}).filter(item => item && typeof item.id === "string") : [];
+  const completed = touched.filter(item => item.state === "completed" && item.receipt && typeof item.receipt === "object");
+  const withdrawn = touched.filter(item => !completed.includes(item) && previous?.workItems?.[item.id]?.state === "completed");
   let stored;
   try { stored = store.db.prepare("SELECT enabled FROM room_public_receipts_setting WHERE room_id=?").get(roomId); } catch { stored = undefined; }
   const mirrorSetting = hasRecorded ? !stored || stored.enabled !== (recorded.enabled ? 1 : 0) : !!stored;
-  if (!mirrorSetting && !(receiptsWere && !receiptsOn) && !completed.length) return;
+  if (!mirrorSetting && !(receiptsWere && !receiptsOn) && !completed.length && !withdrawn.length) return;
   const write = () => {
     if (mirrorSetting) {
       if (hasRecorded) store.db.prepare(`INSERT INTO room_public_receipts_setting (room_id, enabled) VALUES (?,?)
@@ -681,6 +685,7 @@ function syncNormalizedReceipts(store, { roomId, state, previous }) {
       else store.db.prepare("DELETE FROM room_public_receipts_setting WHERE room_id=?").run(roomId);
     }
     if (receiptsWere && !receiptsOn) store.db.prepare("DELETE FROM public_receipts WHERE origin_room_id=? AND source IN ('work-claim','work-item')").run(roomId);
+    for (const item of withdrawn) store.db.prepare("DELETE FROM public_receipts WHERE id=?").run(publicWorkItemReceiptId(roomId, item.id));
     if (!completed.length) return;
     const listed = isListed(store, roomId), room = listedRoomFields(store, state, listed);
     for (const item of completed) {

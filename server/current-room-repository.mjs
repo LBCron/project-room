@@ -760,7 +760,8 @@ function commandContextFromHead(store,roomId,command,head,b,{readMessage,readWor
   // single-row delta syncNormalizedReceipts writes (or withdraws, when a
   // failed verification blocks the item) for the item it touched. Starter rooms stay
   // refused: their guide reacts to posts with whole-room dependencies.
-  if(state.room.starterSeeded||state.room.publicReceipts?.enabled&&!RECEIPTS_ON_QUALIFIED.has(command.type))
+  const receiptsOn = state.room.publicReceipts?.enabled === true;
+  if (state.room.starterSeeded || (receiptsOn && !RECEIPTS_ON_QUALIFIED.has(command.type)))
     refuse('Published/starter room dependencies require qualification');
   const assistantScalar=db.prepare('SELECT length(CAST(value AS BLOB)) bytes FROM room_assistant_config WHERE room_id=?').get(roomId);
   if(assistantScalar&&(!Number.isSafeInteger(assistantScalar.bytes)||assistantScalar.bytes<2||assistantScalar.bytes>4096))refuse('Assistant configuration exceeds bounded context');

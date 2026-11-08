@@ -19,7 +19,7 @@ async function boot(t, viewport) {
   const server = createRoomServer({ store, streamInterval: 60 });
   await new Promise(resolve => server.listen(0, "127.0.0.1", resolve));
   const browser = await chromium.launch({ headless: true, ...(process.env.ROOM_TEST_CHROMIUM_PATH ? { executablePath: process.env.ROOM_TEST_CHROMIUM_PATH } : {}) });
-  const page = await (await browser.newContext({ viewport, reducedMotion: "reduce" })).newPage();
+  const page = await (await browser.newContext({ serviceWorkers: "block", viewport, reducedMotion: "reduce" })).newPage();
   t.after(async () => {
     await browser?.close(); server.closeStreams(); server.closeAllConnections();
     await new Promise(resolve => server.close(resolve)); store.close(); rmSync(directory, { recursive: true, force: true });
@@ -48,8 +48,9 @@ test("post-connect loss: Connected first, established stream killed, reconnect b
       .observe(document.querySelector("#connection-status"), { childList: true, characterData: true, subtree: true });
   });
   // 2. block any reconnect/refresh success, THEN terminate the established stream server-side
-  await page.route("**/api/rooms/commons/stream**", route => route.abort("failed"));
-  await page.route(url => url.pathname === "/api/rooms/commons", route => route.abort("failed")); // any read, windowed or full
+  let abortedStreams = 0, abortedReads = 0;
+  await page.route("**/api/rooms/commons/stream**", route => { abortedStreams++; return route.abort("failed"); });
+  await page.route(url => url.pathname === "/api/rooms/commons", route => { abortedReads++; return route.abort("failed"); }); // any read, windowed or full
   server.closeStreams();
   // 3. observe the transition to a non-operational label
   await page.waitForFunction(() => /Reconnecting|interrupted/.test(document.querySelector("#connection-status").textContent), null, { timeout: 15000 });
@@ -58,6 +59,7 @@ test("post-connect loss: Connected first, established stream killed, reconnect b
   assert.match(await page.locator("#connection-explanation").textContent(), /displayed history may be stale/);
   // 4. while the reconnect path stays blocked, it must never drift back to Connected
   await page.waitForTimeout(4000);
+  assert.ok(abortedStreams + abortedReads > 0, "a reconnect or refresh request reached the injected outage");
   const late = await status.textContent();
   assert.doesNotMatch(late, /^Connected/, "no silent return to Connected without evidence");
   const lossTransitions = await page.evaluate(() => window.connectionTransitions.filter(text => text.startsWith("Connection interrupted")));
@@ -78,11 +80,13 @@ for (const [label, viewport] of [["390px", { width: 390, height: 844 }], ["200pc
     const box = await sendButton.boundingBox();
     assert.ok(box && box.x >= 0 && box.x + box.width <= viewport.width, `Send control inside the ${viewport.width}px viewport`);
     // failure path: the composer-local error and the retry control are both in the viewport
-    await page.route("**/api/rooms/commons/commands", route => route.abort("failed"));
+    let abortedCommands = 0;
+    await page.route("**/api/rooms/commons/commands", route => { abortedCommands++; return route.abort("failed"); });
     await page.locator("#message-input").fill("reflow failure probe");
     await sendButton.click();
     const composerStatus = page.locator("#composer-status");
     await composerStatus.waitFor({ state: "visible" });
+    assert.ok(abortedCommands > 0, "the reflow command outage was injected");
     const errBox = await composerStatus.boundingBox();
     assert.ok(errBox && errBox.x >= 0 && errBox.x + errBox.width <= viewport.width, "composer error inside the viewport");
     assert.ok(await sendButton.isEnabled(), "retry control (Send) enabled beside the error");

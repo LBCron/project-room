@@ -31,7 +31,7 @@ test("A3/A4: keyboard disclosures, narrow composer, composer-local failure + ret
     await new Promise(resolve => server.close(resolve)); store.close(); rmSync(directory, { recursive: true, force: true });
   });
   browser = await chromium.launch({ headless: true, ...(process.env.ROOM_TEST_CHROMIUM_PATH ? { executablePath: process.env.ROOM_TEST_CHROMIUM_PATH } : {}) });
-  page = await (await browser.newContext({ viewport: { width: 390, height: 844 }, reducedMotion: "reduce" })).newPage();
+  page = await (await browser.newContext({ serviceWorkers: "block", viewport: { width: 390, height: 844 }, reducedMotion: "reduce" })).newPage();
   const errors = [];
   page.on("pageerror", error => errors.push(error.message));
   await page.goto(origin);
@@ -72,11 +72,13 @@ test("A3/A4: keyboard disclosures, narrow composer, composer-local failure + ret
   await page.getByText("line one", { exact: false }).waitFor();
 
   // A4: simulated failure leaves the draft intact with the error at the composer; Send retries.
-  await page.route("**/api/rooms/commons/commands", route => route.abort("failed"));
+  let abortedCommands = 0;
+  await page.route("**/api/rooms/commons/commands", route => { abortedCommands++; return route.abort("failed"); });
   await input.fill("send this through an outage");
   await page.locator('#message-form button[type="submit"]').click();
   const composerStatus = page.locator("#composer-status");
   await composerStatus.waitFor({ state: "visible" });
+  assert.ok(abortedCommands > 0, "the command outage was injected");
   assert.match(await composerStatus.textContent(), /Draft kept\. Send again to retry\./);
   assert.equal(await input.inputValue(), "send this through an outage", "draft intact after failure");
   assert.equal(await page.locator('#message-form button[type="submit"]').isEnabled(), true, "Send stays available as the retry");
@@ -108,14 +110,16 @@ test("A4: a stream that cannot connect is labeled reconnecting, never silently o
     await new Promise(resolve => server.close(resolve)); store.close(); rmSync(directory, { recursive: true, force: true });
   });
   browser = await chromium.launch({ headless: true, ...(process.env.ROOM_TEST_CHROMIUM_PATH ? { executablePath: process.env.ROOM_TEST_CHROMIUM_PATH } : {}) });
-  page = await (await browser.newContext({ viewport: { width: 390, height: 844 }, reducedMotion: "reduce" })).newPage();
+  page = await (await browser.newContext({ serviceWorkers: "block", viewport: { width: 390, height: 844 }, reducedMotion: "reduce" })).newPage();
   // The stream fails from the very first attempt - no race with a live connection.
-  await page.route("**/api/rooms/commons/stream**", route => route.abort("failed"));
+  let abortedStreams = 0;
+  await page.route("**/api/rooms/commons/stream**", route => { abortedStreams++; return route.abort("failed"); });
   await page.goto(origin);
   await page.locator("#auth-panel").waitFor({ state: "visible" });
   await signInFixture(page, owner);
   await page.locator("#main").waitFor({ state: "visible" });
   await page.waitForFunction(() => /Reconnecting|interrupted|unavailable/.test(document.querySelector("#connection-status").textContent), null, { timeout: 15000 });
+  assert.ok(abortedStreams > 0, "the initial stream outage was injected");
   const statusText = await page.locator("#connection-status").textContent();
   assert.doesNotMatch(statusText, /^Connected/, "a lost connection never reads as connected");
   await page.screenshot({ path: "test-results/a4-disconnected.png", fullPage: true });
